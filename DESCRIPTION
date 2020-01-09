@@ -1,0 +1,21 @@
+Package: cacoa
+Type: Package
+Title: Single Cell Comparative Analysis
+Version: 0.1.0
+Authors@R: c(person("Peter", "Kharchenko", email = "peter_kharchenko@hms.harvard.edu", role = c("aut", "cre")),
+             person("Viktor","Petukhov", email="viktor.s.petuhov@ya.ru", role="aut"),
+             person("Anna","Igolkina", email="igolkinaanna11@gmail.com", role="aut"),
+             person("Rasmus","Rydbirk", email="rasmus.rydbirk@regionh.dk", role="aut"),
+             person("Shenglin","Mei", email="Shenglin_mei@hms.harvard.edu", role="aut")
+             )
+Description: Comparative Analysis of Single Cell data
+License: GPL3
+Encoding: UTF-8
+LazyData: true
+Suggests: 
+    knitr
+VignetteBuilder: knitr
+Imports:
+  abind,
+  cowplot,
+  conos

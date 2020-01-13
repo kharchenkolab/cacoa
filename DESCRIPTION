@@ -1,21 +1,23 @@
 Package: cacoa
-Type: Package
-Title: Single Cell Comparative Analysis
-Version: 0.1.0
+Title: Case-Control Analysis tools for single-cell RNA-seq
+Version: 0.1
 Authors@R: c(person("Peter", "Kharchenko", email = "peter_kharchenko@hms.harvard.edu", role = c("aut", "cre")),
-             person("Viktor","Petukhov", email="viktor.s.petuhov@ya.ru", role="aut"),
-             person("Anna","Igolkina", email="igolkinaanna11@gmail.com", role="aut"),
-             person("Rasmus","Rydbirk", email="rasmus.rydbirk@regionh.dk", role="aut"),
-             person("Shenglin","Mei", email="Shenglin_mei@hms.harvard.edu", role="aut")
-             )
-Description: Comparative Analysis of Single Cell data
-License: GPL3
+             person("Viktor","Petukhov", email="viktor.s.petuhov@ya.ru", role="aut"))
+Description: Case-Control Analysis tools for signgle-cell RNA-seq
+License: GPL-3.0
 Encoding: UTF-8
 LazyData: true
-Suggests: 
-    knitr
-VignetteBuilder: knitr
 Imports:
-  abind,
-  cowplot,
-  conos
+    ggplot2,
+    magrittr,
+    igraph,
+    cowplot,
+    abind,
+    sccore
+RoxygenNote: 6.1.1
+Depends: 
+    Matrix
+Suggests: 
+    ggrastr (>= 0.1.7)
+Remotes: 
+    VPetukhov/ggrastr

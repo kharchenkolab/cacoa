@@ -2,7 +2,7 @@
 ##'
 ##' When using per-sample distance estimation (default, unless usr.aggregated.matrices=T), the distances for the cluster pairs that
 ##' are not seen sufficient number of times together (see min.samples) are set to NA.
-##' 
+##'
 ##' @title expression distance between clusters
 ##' @param con conos object
 ##' @param groups clustering factor
@@ -10,7 +10,7 @@
 ##' @param use.aggregated.matrices whether to simply aggregate all the molecules from all of the samples in which cluster appears (i.e. don't do aggregation of per-sample distance estimates, but just add all the data and measure the distance once)
 ##' @param use.single.cell.comparisons whether instead of adding up all molecules from a cluster in a given sample, instead compare n.cell draws of single cells (note: doesn't seem to work that well)
 ##' @param min.cluster.size minimum number of cells in a cluster (in a sample) for the distance to be estimated. default: 1
-##' @param min.samples minimum number of samples in which a given pair of clusters has been compared (i.e. the two clusters were present in sufficient size). default:1 
+##' @param min.samples minimum number of samples in which a given pair of clusters has been compared (i.e. the two clusters were present in sufficient size). default:1
 ##' @param max.n.cells maximum number of cells to take from a cluster (to avoid very large clusters,default: Inf)
 ##' @param aggr aggregation function (default: median)
 ##' @param n.cores number of cores
@@ -21,7 +21,7 @@
 cluster.expression.distances <- function(con,groups=NULL,dist='JS',n.cores=con$n.cores,min.cluster.size=1,min.samples=1,max.n.cells=Inf,aggr=median,return.details=FALSE,use.aggregated.matrices=FALSE,use.single.cell.comparisons=FALSE,n.cells=100) {
   # TODO: switch to abstracted accessor methods for con access
   if(is.null(groups)) {
-    if(is.null(con$clusters)) stop('no groups specified and no clusterings found') 
+    if(is.null(con$clusters)) stop('no groups specified and no clusterings found')
     groups <- as.factor(con$clusters[[1]]$groups)
   } else {
     groups <- as.factor(groups)
@@ -30,14 +30,14 @@ cluster.expression.distances <- function(con,groups=NULL,dist='JS',n.cores=con$n
   valid.dists <- c('JS','cor');
   if(!dist %in% valid.dists) stop(paste('only the following distance types are supported:',paste(valid.dists,collapse=', ')))
 
-  
+
   if(use.aggregated.matrices) {
     # in this case, we simply add all the counts from all the clusters into a common matrix and simply calculate distances on that
-    tc <- conos:::rawMatricesWithCommonGenes(con) %>% 
+    tc <- conos:::rawMatricesWithCommonGenes(con) %>%
       lapply(conos:::collapseCellsByType, groups=as.factor(groups), min.cell.count=0) %>%
       abind::abind(along=3) %>%
       apply(c(1,2),sum,na.rm=T)
-                
+
     if(dist=='JS') {
       tc <- t(tc/pmax(1,rowSums(tc)))
       tcd <- pagoda2:::jsDist(tc); dimnames(tcd) <- list(colnames(tc),colnames(tc));
@@ -52,8 +52,8 @@ cluster.expression.distances <- function(con,groups=NULL,dist='JS',n.cores=con$n
       return(tcd)
     }
   }
-  
-  
+
+
   # determine distance matrices for each sample
   dc <- abind::abind(conos:::papply(con$samples,function(s) {
     m <- s$misc$rawCounts
@@ -63,7 +63,7 @@ cluster.expression.distances <- function(con,groups=NULL,dist='JS',n.cores=con$n
     empty <- tt<min.cluster.size;
 
     if(use.single.cell.comparisons) { # sample individual cells and compare
-      
+
       tcd <- lapply(1:n.cells,function(i) {
         scn <- unlist(tapply(names(cl),cl,function(x) sample(x,1)))
         tc <- as.matrix(m[na.omit(as.character(scn)),,drop=F])
@@ -80,7 +80,7 @@ cluster.expression.distances <- function(con,groups=NULL,dist='JS',n.cores=con$n
         tcd[empty,] <- tcd[,empty] <- NA;
         tcd
       }) %>% abind::abind(along=3) %>% apply(c(1,2),median,na.rm=T)
-      
+
     } else { # aggregated clusters
       if(any(tt>max.n.cells)) { # need subsampling
         scn <- unlist(tapply(names(cl),cl,function(x) sample(x,min(max.n.cells,length(x)))))
@@ -96,7 +96,7 @@ cluster.expression.distances <- function(con,groups=NULL,dist='JS',n.cores=con$n
         tcd <- 1-cor(tc)
       }
     }
-    
+
     tcd[empty,] <- tcd[,empty] <- NA;
     diag(tcd) <- 0;
     # calculate how many cells there are
@@ -120,7 +120,7 @@ sn <- function(x) { names(x) <- x; x}
 
 # calculate magnitude of expression shifts between conditions for each cluster
 
-# 
+#
 ##' Calculate expression shift magnitudes of different clusters between conditions
 ##'
 ##' @param con conos object
@@ -134,13 +134,13 @@ sn <- function(x) { names(x) <- x; x}
 ##' @param n.subsamples number of samples to draw (default:100)
 ##' @param min.cells minimum number of cells per cluster/per sample to be included in the analysis
 ##' @param n.cores number of cores to use
-##' @param verbose 
+##' @param verbose
 ##' @return a list include 1. df - a table with cluster distances (normalized if within.gorup.normalization=T), cell type, number of cells; 2. ctdml - a list of cluster distance matrices; 3. sample.groups; 4. valid.comparisons
 ##' @export
 cluster.expression.shift.magnitudes <- function(con,sample.groups,groups=NULL,dist='JS',within.group.normalization=TRUE,valid.comparisons=NULL,n.cells=NULL,n.top.genes=Inf,n.subsamples=100,min.cells=10,n.cores=con$n.cores,verbose=FALSE) {
-  
+
   if(is.null(groups)) {
-    if(is.null(con$clusters)) stop('no groups specified and no clusterings found') 
+    if(is.null(con$clusters)) stop('no groups specified and no clusterings found')
     groups <- as.factor(con$clusters[[1]]$groups)
   } else {
     groups <- as.factor(groups)
@@ -151,7 +151,7 @@ cluster.expression.shift.magnitudes <- function(con,sample.groups,groups=NULL,di
   sample.groups <- droplevels(na.omit(sample.groups))
   if(length(levels(sample.groups))!=2) stop("sample.groups must be a 2-level factor describing which samples are being contrasted")
   comp.matrix <- outer(sample.groups,sample.groups,'!='); diag(comp.matrix) <- FALSE
-  
+
   # set up comparison mask
   if(is.null(valid.comparisons)) {
     # all cross-level pairs will be compared
@@ -164,7 +164,7 @@ cluster.expression.shift.magnitudes <- function(con,sample.groups,groups=NULL,di
     # ensure that only valid.comp groups are in the sample.groups
     sample.groups <- droplevels(sample.groups[names(sample.groups) %in% c(rownames(valid.comparisons),colnames(valid.comparisons))])
     if(length(levels(sample.groups))!=2) stop("insufficient number of levels in sample.groups after intersecting with valid.comparisons")
-    
+
     # intersect with the cross-level pairs
     comp.matrix <- outer(sample.groups[rownames(valid.comparisons)],sample.groups[colnames(valid.comparisons)],'!='); diag(comp.matrix) <- FALSE
     valid.comparisons <- valid.comparisons & comp.matrix;
@@ -198,7 +198,7 @@ cluster.expression.shift.magnitudes <- function(con,sample.groups,groups=NULL,di
   if(verbose) cat('done\n')
 
   if(verbose) cat('running',n.subsamples,'subsamples ... ')
-  ctdml <- conos:::papply(1:n.subsamples,function(i) {
+  ctdml <- sccore:::plapply(1:n.subsamples,function(i) {
     # subsample cells
 
     ## # draw cells without sample stratification - this can drop certain samples, particularly those with lower total cell numbers
@@ -223,10 +223,10 @@ cluster.expression.shift.magnitudes <- function(con,sample.groups,groups=NULL,di
     #       would be faster to go only through the valid comparisons
     ctdm <- lapply(sn(levels(cf)),function(ct) {
       tcm <- na.omit(do.call(rbind,lapply(caggr,function(x) x[match(ct,rownames(x)),])))
-      
+
       # restrict to top expressed genes
       if(n.top.genes<ncol(tcm)) tcm <- tcm[,rank(-colSums(tcm))>=n.top.genes]
-      
+
       if(dist=='JS') {
         tcm <- t(tcm/pmax(1,rowSums(tcm)))
         tcd <- pagoda2:::jsDist(tcm); dimnames(tcd) <- list(colnames(tcm),colnames(tcm));
@@ -240,20 +240,20 @@ cluster.expression.shift.magnitudes <- function(con,sample.groups,groups=NULL,di
       tcd
     })
 
-  },n.cores=n.cores,mc.preschedule=TRUE)
+  },n.cores=n.cores, mc.preschedule=TRUE, mc.allow.recursive=FALSE, progress=verbose)
 
-  if(verbose) cat('done\n')  
+  if(verbose) cat('done\n')
 
   if(verbose) cat('calculating distances ...')
   df <- do.call(rbind,lapply(ctdml,function(ctdm) {
-  
+
     x <- lapply(ctdm,function(xm) {
       nc <- attr(xm,'cc');
       wm <- outer(nc,nc,FUN='pmin')
 
       cross.factor <- outer(sample.groups[rownames(xm)],sample.groups[colnames(xm)],'!=');
       frm <- valid.comparisons[rownames(xm),colnames(xm)] & cross.factor
-      
+
       if(within.group.normalization) {
         frm.cont <- valid.comparisons[rownames(xm),colnames(xm)] & !cross.factor
         med.cont <- median(na.omit(xm[frm.cont]))
@@ -261,7 +261,7 @@ cluster.expression.shift.magnitudes <- function(con,sample.groups,groups=NULL,di
       }
 
       diag(xm) <- NA;
-      
+
       # restrict
       xm[!frm] <- NA;
       xm[wm<min.cells] <- NA;
@@ -271,7 +271,7 @@ cluster.expression.shift.magnitudes <- function(con,sample.groups,groups=NULL,di
       xmd$n <- na.omit(reshape2::melt(wm))$value
       return(xmd);
     })
-  
+
     x <- x[!unlist(lapply(x,is.null))]
     df <- do.call(rbind,lapply(sn(names(x)),function(n) { z <- x[[n]]; z$cell <- n; z }))
     df$patient <- df$Var1
@@ -285,7 +285,7 @@ cluster.expression.shift.magnitudes <- function(con,sample.groups,groups=NULL,di
     ndf$n <- median(df$n[ii])
     ndf
   }))
-  
+
   # sort cell types
   df$cell <- factor(df$cell,levels=names(sort(tapply(df$value,as.factor(df$cell),median))))
 

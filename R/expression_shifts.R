@@ -118,12 +118,10 @@ cluster.expression.distances <- function(con,groups=NULL,dist='JS',n.cores=con$n
 
 sn <- function(x) { names(x) <- x; x}
 
-# calculate magnitude of expression shifts between conditions for each cluster
-
-#
-##' Calculate expression shift magnitudes of different clusters between conditions
+##' Estimate Expression Shift Magnitudes
 ##'
-##' @param con conos object
+##' @description  Calculate expression shift magnitudes of different clusters between conditions
+##' @param count.matrices raw count matrices for each of the samples
 ##' @param sample.groups a two-level factor on the sample names describing the conditions being compared
 ##' @param groups cell cluster factor
 ##' @param dist 'JS' - Jensen Shannon divergence, or 'cor' - correlation distance
@@ -134,18 +132,21 @@ sn <- function(x) { names(x) <- x; x}
 ##' @param n.subsamples number of samples to draw (default:100)
 ##' @param min.cells minimum number of cells per cluster/per sample to be included in the analysis
 ##' @param n.cores number of cores to use
+##' @param transposed.matrices are count matrices transposed (i.e. rows are cells and genes are cols)?
 ##' @param verbose
+##'
 ##' @return a list include 1. df - a table with cluster distances (normalized if within.gorup.normalization=T), cell type, number of cells; 2. ctdml - a list of cluster distance matrices; 3. sample.groups; 4. valid.comparisons
+##' @rdname estimateExpressionShiftMagnitudes
 ##' @export
-cluster.expression.shift.magnitudes <- function(con,sample.groups,groups=NULL,dist='JS',within.group.normalization=TRUE,valid.comparisons=NULL,n.cells=NULL,n.top.genes=Inf,n.subsamples=100,min.cells=10,n.cores=con$n.cores,verbose=FALSE) {
-
-  if(is.null(groups)) {
-    if(is.null(con$clusters)) stop('no groups specified and no clusterings found')
-    groups <- as.factor(con$clusters[[1]]$groups)
-  } else {
-    groups <- as.factor(groups)
+estimateExpressionShiftMagnitudes.default <- function(count.matrices, sample.groups, groups, dist='JS', within.group.normalization=TRUE,
+                                                      valid.comparisons=NULL, n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
+                                                      n.cores=1, verbose=FALSE, transposed.matrices=FALSE) {
+  if (!transposed.matrices) {
+    count.matrices %<>% lapply(Matrix::t)
   }
 
+  common.genes <- Reduce(intersect, lapply(count.matrices, colnames))
+  count.matrices %<>% lapply(`[`, , common.genes)
 
   if(!is.factor(sample.groups)) sample.groups <- as.factor(sample.groups)
   sample.groups <- droplevels(na.omit(sample.groups))
@@ -181,7 +182,7 @@ cluster.expression.shift.magnitudes <- function(con,sample.groups,groups=NULL,di
   }
 
   # get a cell sample factor, restricted to the samples being contrasted
-  cl <- lapply(con$samples[names(sample.groups)],conos:::getCellNames)
+  cl <- lapply(count.matrices[names(sample.groups)], rownames)
   cl <- rep(names(cl), sapply(cl, length)) %>% setNames(unlist(cl)) %>%  as.factor()
 
   # cell factor
@@ -192,10 +193,6 @@ cluster.expression.shift.magnitudes <- function(con,sample.groups,groups=NULL,di
     n.cells <- min(table(cf)) # use the size of the smallest group
     if(verbose) cat('setting group size of',n.cells,'cells for comparisons\n')
   }
-
-  if(verbose) cat('regularizing matrices ... ')
-  cmat <- conos:::rawMatricesWithCommonGenes(con)
-  if(verbose) cat('done\n')
 
   if(verbose) cat('running',n.subsamples,'subsamples ... ')
   ctdml <- sccore:::plapply(1:n.subsamples,function(i) {
@@ -216,8 +213,8 @@ cluster.expression.shift.magnitudes <- function(con,sample.groups,groups=NULL,di
 
     # table of sample types and cells
     cct <- table(cf,cl[names(cf)])
-    caggr <- lapply(cmat, conos:::collapseCellsByType, groups=as.factor(cf), min.cell.count=1)
-    caggr <- caggr[names(sample.groups)]
+    caggr <- lapply(count.matrices, conos:::collapseCellsByType, groups=as.factor(cf), min.cell.count=1) %>%
+      .[names(sample.groups)]
 
     # note: this is not efficient, as it will compare all samples on the two sides of the sample.groups
     #       would be faster to go only through the valid comparisons

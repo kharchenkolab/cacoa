@@ -290,3 +290,22 @@ estimateExpressionShiftMagnitudes.default <- function(count.matrices, sample.gro
   return(list(df=df, ctdml=ctdml, sample.groups=sample.groups, valid.comparisons=valid.comparisons))
 
 }
+
+##' @rdname expressionExpressionShiftZScores
+##' @export
+estimateExpressionShiftZScores.default <- function(pca, sample.per.cell, sample.groups, annotation) {
+  mean.pc.per.samp.per.type <- split(names(sample.per.cell), sample.per.cell) %>%
+    lapply(function(nsa) split(nsa, annotation[nsa]) %>% .[sapply(., length) > 0] %>%
+             sapply(function(nss) colMeans(pca[nss,,drop=F])))
+
+  res.df <- combn(names(mean.pc.per.samp.per.type), 2) %>% apply(2, function(ns)
+    data.frame(S1=ns[1], S2=ns[2], value=getColumnwiseCorrelations(mean.pc.per.samp.per.type[[ns[1]]], mean.pc.per.samp.per.type[[ns[2]]], corrected=F), stringsAsFactors=F) %>%
+      tibble::as_tibble(rownames="Type")) %>% Reduce(rbind, .) %>%
+    dplyr::mutate(SameCondition=(sample.groups[S1] == sample.groups[S2]),
+                  Condition=ifelse(!SameCondition, "Between", sample.groups[S1])) %>%
+    split(.$Type) %>% lapply(function(df)
+      dplyr::mutate(df, DiffStat=(value - mean(value[Condition == "control"], trim=0.4)) / mad(value[Condition == "control"]))) %>%
+    Reduce(rbind, .)
+
+  return(res.df)
+}

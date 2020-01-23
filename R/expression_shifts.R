@@ -116,31 +116,9 @@ cluster.expression.distances <- function(con,groups=NULL,dist='JS',n.cores=con$n
   }
 }
 
-sn <- function(x) { names(x) <- x; x}
-
-##' Estimate Expression Shift Magnitudes
-##'
-##' @description  Calculate expression shift magnitudes of different clusters between conditions
-##' @param count.matrices raw count matrices for each of the samples
-##' @param sample.groups a two-level factor on the sample names describing the conditions being compared
-##' @param groups cell cluster factor
-##' @param dist 'JS' - Jensen Shannon divergence, or 'cor' - correlation distance
-##' @param within.group.normalization normalize the shift magnitude by the mean magnitude of within-group variation
-##' @param valid.comparisons a logical matrix (rows and columns are samples) specifying valid between-sample comparisons. Note that if within.group.normalization=T, the method will automatically include all within-group comparisons of the samples for which at least one valid pair is included in the valid.comparisons
-##' @param n.cells number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)
-##' @param n.top.genes number of top highest-expressed genes to consider (default: all genes)
-##' @param n.subsamples number of samples to draw (default:100)
-##' @param min.cells minimum number of cells per cluster/per sample to be included in the analysis
-##' @param n.cores number of cores to use
-##' @param transposed.matrices are count matrices transposed (i.e. rows are cells and genes are cols)?
-##' @param verbose
-##'
-##' @return a list include 1. df - a table with cluster distances (normalized if within.gorup.normalization=T), cell type, number of cells; 2. ctdml - a list of cluster distance matrices; 3. sample.groups; 4. valid.comparisons
-##' @rdname estimateExpressionShiftMagnitudes
-##' @export
-estimateExpressionShiftMagnitudes.default <- function(count.matrices, sample.groups, groups, dist='JS', within.group.normalization=TRUE,
-                                                      valid.comparisons=NULL, n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
-                                                      n.cores=1, verbose=FALSE, transposed.matrices=FALSE) {
+estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, groups, dist='JS', within.group.normalization=TRUE,
+                                              valid.comparisons=NULL, n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
+                                              n.cores=1, verbose=FALSE, transposed.matrices=FALSE) {
   if (!transposed.matrices) {
     count.matrices %<>% lapply(Matrix::t)
   }
@@ -291,7 +269,7 @@ estimateExpressionShiftMagnitudes.default <- function(count.matrices, sample.gro
 
 }
 
-##' @rdname expressionExpressionShiftZScores
+##' @rdname estimateExpressionShiftZScores
 ##' @export
 estimateExpressionShiftZScores.default <- function(pca, sample.per.cell, sample.groups, annotation) {
   mean.pc.per.samp.per.type <- split(names(sample.per.cell), sample.per.cell) %>%

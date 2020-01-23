@@ -13,7 +13,8 @@ Imports:
     igraph,
     cowplot,
     abind,
-    sccore
+    sccore,
+    R6
 RoxygenNote: 7.0.2
 Depends: 
     Matrix

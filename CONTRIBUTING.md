@@ -6,7 +6,7 @@ Cacoa is the main class, providing the user interface. Most public methods insid
 
 Cacoa operates with Conos, Seurat and possibly some other objects, which store experimental data. Such objects (one per Cacoa object) are stored in the `data.object` field. Extraction of the information from this object must be done through S3 `extract*` wrappers, stored in the "[access_wrappers.R](R/access_wrappers.R)" file. It's a good idea to keep `extract*` methods as short and fast as possible, but deviations are allowed.
 
-Every `estimation*` function within Cacoa
+Every `estimation*` method of the Cacoa class should be a wrapper around `estimation*` function. The function accepts input in the processed format, and the only functionality stored in the class methods must be preparation of data for the estimation. 
 
 ## Code style
 

@@ -248,13 +248,13 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, gro
     })
 
     x <- x[!unlist(lapply(x,is.null))]
-    df <- do.call(rbind,lapply(sn(names(x)),function(n) { z <- x[[n]]; z$cell <- n; z }))
+    df <- do.call(rbind,lapply(sn(names(x)),function(n) { z <- x[[n]]; z$Type <- n; z }))
     df$patient <- df$Var1
     df
   }))
 
   # median across pairs
-  df <- do.call(rbind,tapply(1:nrow(df),paste(df$Var1,df$Var2,df$cell,sep='!!'),function(ii) {
+  df <- do.call(rbind,tapply(1:nrow(df),paste(df$Var1,df$Var2,df$Type,sep='!!'),function(ii) {
     ndf <- data.frame(df[ii[1],,drop=F]);
     ndf$value <- median(df$value[ii])
     ndf$n <- median(df$n[ii])
@@ -262,28 +262,26 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, gro
   }))
 
   # sort cell types
-  df$cell <- factor(df$cell,levels=names(sort(tapply(df$value,as.factor(df$cell),median))))
+  df$Type <- factor(df$Type,levels=names(sort(tapply(df$value,as.factor(df$Type),median))))
 
   if(verbose) cat('done\n')
   return(list(df=df, ctdml=ctdml, sample.groups=sample.groups, valid.comparisons=valid.comparisons))
-
 }
 
-##' @rdname estimateExpressionShiftZScores
-##' @export
-estimateExpressionShiftZScores.default <- function(pca, sample.per.cell, sample.groups, annotation) {
+estimateExpressionShiftZScores <- function(pca, sample.per.cell, sample.groups, annotation) {
+  sample.groups %<>% as.character() %>% setNames(names(sample.groups))
   mean.pc.per.samp.per.type <- split(names(sample.per.cell), sample.per.cell) %>%
     lapply(function(nsa) split(nsa, annotation[nsa]) %>% .[sapply(., length) > 0] %>%
              sapply(function(nss) colMeans(pca[nss,,drop=F])))
 
   res.df <- combn(names(mean.pc.per.samp.per.type), 2) %>% apply(2, function(ns)
-    data.frame(S1=ns[1], S2=ns[2], value=getColumnwiseCorrelations(mean.pc.per.samp.per.type[[ns[1]]], mean.pc.per.samp.per.type[[ns[2]]], corrected=F), stringsAsFactors=F) %>%
+    data.frame(S1=ns[1], S2=ns[2], value=getColumnwiseCorrelations(mean.pc.per.samp.per.type[[ns[1]]], mean.pc.per.samp.per.type[[ns[2]]]), stringsAsFactors=F) %>%
       tibble::as_tibble(rownames="Type")) %>% Reduce(rbind, .) %>%
     dplyr::mutate(SameCondition=(sample.groups[S1] == sample.groups[S2]),
                   Condition=ifelse(!SameCondition, "Between", sample.groups[S1])) %>%
     split(.$Type) %>% lapply(function(df)
-      dplyr::mutate(df, DiffStat=(value - mean(value[Condition == "control"], trim=0.4)) / mad(value[Condition == "control"]))) %>%
-    Reduce(rbind, .)
+      dplyr::mutate(df, distance=(mean(value[Condition == "control"], trim=0.4) - value) / mad(value[Condition == "control"]))) %>%
+    Reduce(rbind, .) %>% dplyr::rename(correlation=value)
 
   return(res.df)
 }

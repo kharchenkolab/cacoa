@@ -11,16 +11,17 @@ extractRawCountMatrices.Conos <- function(con, transposed=T) {
   return(lapply(con$samples, conos:::getRawCountMatrix, transposed=transposed))
 }
 
-estimateExpressionShiftZScores <- function(obj, ...) UseMethod("estimateExpressionShiftZScores", obj)
+extractJointCountMatrix <- function(obj, raw=T) UseMethod("extractJointCountMatrix", obj)
+extractJointCountMatrix.Conos <- function(con, raw=T) {
+  return(con$getJointCountMatrix(raw=raw))
+}
 
-##' @param con conos object
-##' @inheritDotParams estimateExpressionShiftZScores.default
-##' @rdname estimateExpressionShiftZScores
-estimateExpressionShiftZScores.Conos <- function(con, n.od.genes=1000, n.pcs=100, pca.maxit=1000, ...) {
-  cm.merged <- con$getJointCountMatrix(raw=F)
-  od.genes <- conos:::getOdGenesUniformly(con$samples, n.od.genes)
+extractOdGenes <- function(obj, n.genes=NULL) UseMethod("extractOdGenes", obj)
+extractOdGenes.Conos <- function(con, n.genes=NULL) {
+  return(conos:::getOdGenesUniformly(con$samples, n.genes))
+}
 
-  cm.merged[, od.genes] %>%
-    irlba::irlba(nv=n.pcs, nu=0, center=Matrix::colMeans(.), right_only=F, fastpath=T, maxit=pca.maxit, reorth=T) %>%
-    estimateExpressionShiftZScores.default(...)
+extractSamplePerCell <- function(obj) UseMethod("extractSamplePerCell", obj)
+extractSamplePerCell.Conos <- function(con) {
+  return(con$getDatasetPerCell())
 }

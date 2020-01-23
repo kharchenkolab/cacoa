@@ -14,7 +14,8 @@ Imports:
     cowplot,
     abind,
     sccore,
-    R6
+    R6,
+    lineup
 RoxygenNote: 7.0.2
 Depends: 
     Matrix

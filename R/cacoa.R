@@ -77,19 +77,67 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[[name]]))
     },
 
-    plotExpressionShiftMagnitudes=function(name="expression.shifts") {
-      if (is.null(self$test.results[[name]]))
-        stop("Test result for ", name, " wasn't found")
+    estimateExpressionShiftZScores=function(groups, sample.groups=self$sample.groups,
+                                            n.od.genes=1000, n.pcs=100, pca.maxit=1000, ignore.cache=F,
+                                            name="expression.z.scores") {
+      sample.per.cell <- extractSamplePerCell(self$data.object)
+      mtx <- extractJointCountMatrix(self$data.object, raw=F)
 
-      ggplot(na.omit(self$test.results[[name]]$df),aes(x=as.factor(cell),y=value)) +
+      if (n.od.genes > 0) {
+        mtx %<>% .[, extractOdGenes(self$data.object, n.od.genes)]
+      }
+
+      # TODO: use scaled count matrix here
+      if (n.pcs < ncol(mtx)) {
+        pca.name <- paste("joint.pca", n.od.genes, n.pcs, sep="_")
+        if (ignore.cache || !is.null(self$cache[[pca.name]])) {
+          mtx <- self$cache[[pca.name]]
+        } else {
+          centers <- Matrix::colMeans(mtx)
+          pcs <- mtx %>% irlba::irlba(nv=n.pcs, nu=0, center=Matrix::colMeans(.), right_only=F,
+                                      fastpath=T, maxit=pca.maxit, reorth=T)
+          mtx <- as.matrix(t(as(t(mtx %*% pcs$v), "dgeMatrix") - t(centers %*% pcs$v)))
+          self$cache[[pca.name]] <- mtx
+        }
+      }
+
+      self$test.results[[name]] <- estimateExpressionShiftZScores(mtx, sample.per.cell, sample.groups, groups)
+      return(invisible(self$test.results[[name]]))
+    },
+
+    plotExpressionShiftMagnitudes=function(name="expression.shifts") {
+      private$checkTestResults(name)
+
+      ggplot(na.omit(self$test.results[[name]]$df),aes(x=as.factor(Type), y=value)) +
         geom_boxplot(notch=T, outlier.shape=NA) +
         geom_jitter(position=position_jitter(0.1), aes(color=patient), show.legend=FALSE,alpha=0.1) +
         theme(axis.text.x=element_text(angle = 90, hjust=1), axis.text.y=element_text(angle=90, hjust=0.5)) +
         labs(x="", y="normalized distance") +
         geom_hline(yintercept=1, linetype="dashed", color = "black")
+    },
+
+    plotExpressionShiftZScores=function(type.order=NULL, name="expression.z.scores") {
+      private$checkTestResults(name)
+
+      plot.df <- self$test.results[[name]]
+      if (!is.null(type.order)) {
+        plot.df %<>% dplyr::filter(Type %in% type.order) %>%
+          dplyr::mutate(Type=factor(Type, levels=type.order))
+      }
+
+      ggplot(plot.df, aes(x=Type, y=distance)) +
+        geom_boxplot(outlier.alpha=0, show.legend=F) +
+        geom_hline(aes(yintercept=split(distance, Type) %>% sapply(median) %>% median()), color="darkred", size=1) +
+        geom_hline(aes(yintercept=0), color="darkgreen", size=1) +
+        labs(x="", y="normalized distance") +
+        scale_y_continuous(expand=c(0, 0)) +
+        theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=9))
     }
   ),
   private = list(
-
+    checkTestResults=function(name) {
+      if (is.null(self$test.results[[name]]))
+        stop("Test result for ", name, " wasn't found")
+    }
   )
 )

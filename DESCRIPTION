@@ -22,5 +22,5 @@ Depends:
 Suggests: 
     ggrastr (>= 0.1.7)
 Remotes: 
-    VPetukhov/ggrastr
+    VPetukhov/ggrastr,
     hms-dbmi/sccore

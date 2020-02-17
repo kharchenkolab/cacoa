@@ -268,7 +268,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, gro
   return(list(df=df, ctdml=ctdml, sample.groups=sample.groups, valid.comparisons=valid.comparisons))
 }
 
-estimateExpressionShiftZScores <- function(pca, sample.per.cell, sample.groups, annotation) {
+estimateExpressionShiftZScores <- function(pca, sample.per.cell, sample.groups, annotation, ctrl) {
   sample.groups %<>% as.character() %>% setNames(names(sample.groups))
   mean.pc.per.samp.per.type <- split(names(sample.per.cell), sample.per.cell) %>%
     lapply(function(nsa) split(nsa, annotation[nsa]) %>% .[sapply(., length) > 0] %>%
@@ -280,7 +280,7 @@ estimateExpressionShiftZScores <- function(pca, sample.per.cell, sample.groups, 
     dplyr::mutate(SameCondition=(sample.groups[S1] == sample.groups[S2]),
                   Condition=ifelse(!SameCondition, "Between", sample.groups[S1])) %>%
     split(.$Type) %>% lapply(function(df)
-      dplyr::mutate(df, distance=(mean(value[Condition == "control"], trim=0.4) - value) / mad(value[Condition == "control"]))) %>%
+      dplyr::mutate(df, distance=(mean(value[Condition == ctrl], trim=0.4) - value) / mad(value[Condition == ctrl]))) %>%
     Reduce(rbind, .) %>% dplyr::rename(correlation=value)
 
   return(res.df)

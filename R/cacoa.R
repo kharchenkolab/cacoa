@@ -47,6 +47,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param n.top.genes number of top highest-expressed genes to consider (default: all genes)
     #' @param n.subsamples number of samples to draw (default:100)
     #' @param min.cells minimum number of cells per cluster/per sample to be included in the analysis
+    #' @param ctrl reference sample group, e.g., ctrl, healthy, or untreated.
     #' @param n.cores number of cores to use
     #' @param verbose
     #'
@@ -77,9 +78,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[[name]]))
     },
 
-    estimateExpressionShiftZScores=function(groups, sample.groups=self$sample.groups,
+    estimateExpressionShiftZScores=function(groups, ctrl, sample.groups=self$sample.groups,
                                             n.od.genes=1000, n.pcs=100, pca.maxit=1000, ignore.cache=F,
                                             name="expression.z.scores") {
+      if(!ctrl %in% sample.groups) stop(paste0("Control group '",ctrl,"' not in sample groups: ",paste(unique(sample.groups), collapse=" ")))
       sample.per.cell <- extractSamplePerCell(self$data.object)
       mtx <- extractJointCountMatrix(self$data.object, raw=F)
 
@@ -101,7 +103,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         }
       }
 
-      self$test.results[[name]] <- estimateExpressionShiftZScores(mtx, sample.per.cell, sample.groups, groups)
+      self$test.results[[name]] <- estimateExpressionShiftZScores(mtx, sample.per.cell, sample.groups, groups, ctrl)
       return(invisible(self$test.results[[name]]))
     },
 

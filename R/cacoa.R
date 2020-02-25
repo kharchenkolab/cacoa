@@ -107,15 +107,50 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[[name]]))
     },
 
-    plotExpressionShiftMagnitudes=function(name="expression.shifts") {
+    #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
+    #' @param name Test results to plot (default=expression.shifts)
+    #' @param size.norm Plot size normalized results. Requires cluster.per.cell, and sample.per.cell (default=F)
+    #' @param cluster.per.cell Named cluster factor with cell names (default=NULL)
+    #' @param sample.per.cell Named sample factor with cell names (default=NULL)
+    #' @param label Plot labels on size normalized plots (default=T)
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, cluster.per.cell=NULL, sample.per.cell=NULL, label=T) {
       private$checkTestResults(name)
 
-      ggplot(na.omit(self$test.results[[name]]$df),aes(x=as.factor(Type), y=value)) +
-        geom_boxplot(notch=T, outlier.shape=NA) +
-        geom_jitter(position=position_jitter(0.1), aes(color=patient), show.legend=FALSE,alpha=0.1) +
-        theme(axis.text.x=element_text(angle = 90, hjust=1), axis.text.y=element_text(angle=90, hjust=0.5)) +
-        labs(x="", y="normalized distance") +
-        geom_hline(yintercept=1, linetype="dashed", color = "black")
+      if (!size.norm) {
+        gg <- ggplot(na.omit(self$test.results[[name]]$df),aes(x=as.factor(Type), y=value)) +
+          geom_boxplot(notch=T, outlier.shape=NA) +
+          geom_jitter(position=position_jitter(0.1), aes(color=patient), show.legend=FALSE,alpha=0.1) +
+          theme(axis.text.x=element_text(angle = 90, hjust=1), axis.text.y=element_text(angle=90, hjust=0.5)) +
+          labs(x="", y="normalized distance") +
+          geom_hline(yintercept=1, linetype="dashed", color = "black")
+      } else {
+        if (is.null(cluster.per.cell)) {
+          stop("'cluster.per.cell' cannot be empty.")
+        } else {
+          if (is.null(sample.per.cell)) {
+            stop("'sample.per.cell' cannot be empty.")
+          } else {
+            if (length(setdiff(names(cluster.per.cell), names(sample.per.cell)))>0) warning("Cell names in 'cluster.per.cell' and 'sample.per.cell' are not identical, plotting intersect.",)
+
+            cct <- table(cluster.per.cell, sample.per.cell[names(cluster.per.cell)])
+            cluster.shifts <- cao$test.results[[name]]$df
+            x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
+            odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
+
+            if (label) {
+              gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
+                ggrepel::geom_text_repel()
+            } else {
+              gg <- ggplot(odf, aes(size,md,color=cell))
+            }
+             gg <- gg +
+               geom_point() +
+               guides(color=F) + geom_hline(yintercept=1, linetype="dashed", color = "black") +
+               ylab("median distance")
+          }
+        }
+      }
+      return(gg)
     },
 
     plotExpressionShiftZScores=function(type.order=NULL, name="expression.z.scores") {

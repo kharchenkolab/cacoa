@@ -128,7 +128,7 @@ plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z
     })
 
       if (!is.null(z.scores)) {
-        lst <- cacoa:::plotZScores(g, con, z.scores, cur.scores=cur.scores, show.legend=show.legend,
+        lst <- plotZScores(g, con, z.scores, cur.scores=cur.scores, show.legend=show.legend,
                                    legend.pos=legend.pos, size=size, ...) %>% list() %>% c(lst)
       }
 

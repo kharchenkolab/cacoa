@@ -89,24 +89,24 @@ plotZScoreList <- function(con, z.scores, scores, n.genes=NULL, genes=NULL, ...)
   return(plots)
 }
 
-plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z.scores=NULL, cur.scores=NULL, show.legend=T, legend.pos=c(1, 1), size=0.2, n.col=1, ...) {
+plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z.scores=NULL, cur.scores=NULL, show.legend=T, legend.pos=c(1, 1), size=0.2, n.col=NULL, ...) {
   if (!is.null(cur.scores) & !is.null(names(cur.scores))) {
     genes <- names(sort(cur.scores, decreasing=T)[genes])
   }
 
+  if (is.null(n.col)) n.col = length(unique(condition.per.cell)) + 1
+
   lapply(genes, function(g) {
-    lst <- list(
+    lst <- lapply(unique(condition.per.cell), function(sg) {
       con$plotGraph(gene=g, show.legend=show.legend, legend.pos=legend.pos, size=size,
-                    title=paste("Control", g), groups=condition.per.cell, subgroups="control", ...),
-      con$plotGraph(gene=g, show.legend=show.legend, legend.pos=legend.pos, size=size,
-                    title=paste("Epilepsy", g), groups=condition.per.cell, subgroups="epilepsy", ...)
-    )
+                      title=paste(sg," ",g), groups=condition.per.cell, subgroups=sg, ...)
+    })
 
-    if (!is.null(z.scores)) {
-      lst <- plotZScores(g, con, z.scores, cur.scores=cur.scores, show.legend=show.legend,
-                         legend.pos=legend.pos, size=size, ...) %>% list() %>% c(lst)
-    }
+      if (!is.null(z.scores)) {
+        lst <- cacoa:::plotZScores(g, con, z.scores, cur.scores=cur.scores, show.legend=show.legend,
+                                   legend.pos=legend.pos, size=size, ...) %>% list() %>% c(lst)
+      }
 
-    cowplot::plot_grid(plotlist=lst, ncol=n.col)
+      cowplot::plot_grid(plotlist=lst, ncol=n.col)
   })
 }

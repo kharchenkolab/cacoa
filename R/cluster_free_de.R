@@ -1,16 +1,16 @@
 ##' Local Z Scores
 ##'
-##' @param graph alignment graph
-##' @param condition.per.cell conditions per cell. Must have two levels.
-##' @param genes genes to be tested. Procedure is slow, so it's reasonable to restrict amount of genes.
-##' @param count.matrix.transposed joint count matrix with cells by rows and genes by columns
-##' @param reference.level reference condition level
-localZScores <- function(graph, condition.per.cell, genes, count.matrix.transposed, reference.level, min.expr=1e-10, min.std=1e-10, n.cores=2, verbose=1) {
+##' @param graph Alignment graph (embedding)
+##' @param condition.per.cell Named condition factor with cell names. Must have exactly two levels.
+##' @param genes Genes to be tested. Procedure is slow, so it's reasonable to restrict amount of genes.
+##' @param count.matrix.transposed Joint count matrix with cells by rows and genes by columns
+##' @param ref.level Reference condition level, e.g., wt, ctrl, or healthy
+localZScores <- function(graph, condition.per.cell, genes, count.matrix.transposed, ref.level, min.expr=1e-10, min.std=1e-10, n.cores=1, verbose=T) {
   if (length(unique(condition.per.cell)) != 2)
     stop("Exactly two condition levels must be provided")
 
-  if (!(reference.level %in% unique(condition.per.cell)))
-    stop("reference.level must be presented in condition.per.cell")
+  if (!(ref.level %in% unique(condition.per.cell)))
+    stop("'ref.level' not present in 'condition.per.cell'")
 
   # adj_mat <- igraph::as_adj(graph, attr="weight")
   if (verbose) cat("Estimating adjacency matrices... ")
@@ -22,24 +22,30 @@ localZScores <- function(graph, condition.per.cell, genes, count.matrix.transpos
   if (verbose) cat("Estimating local means... ")
   local.mean.mat <- sccore:::plapply(adj.mat.by.cond, function(mat)
     (mat %*% count.matrix.transposed[colnames(mat), genes]) / pmax(Matrix::rowSums(mat), min.expr),
-    n.cores=n.cores, progress=(verbose > 1))
+    n.cores=n.cores, progress=verbose)
   if (verbose) cat("Done.\n")
 
   if (verbose) cat("Estimating stds... ")
-  ref.adj.mat <- adj.mat.by.cond[[reference.level]]
+  ref.adj.mat <- adj.mat.by.cond[[ref.level]]
   ref.cbs <- colnames(ref.adj.mat)
-  stds <- sqrt(ref.adj.mat %*% (count.matrix.transposed[ref.cbs, genes] - local.mean.mat[[reference.level]][ref.cbs, genes]) ^ 2 /
+  stds <- sqrt(ref.adj.mat %*% (count.matrix.transposed[ref.cbs, genes] - local.mean.mat[[ref.level]][ref.cbs, genes]) ^ 2 /
                  pmax(Matrix::rowSums(ref.adj.mat), min.expr))
   if (verbose) cat("Done.\n")
 
   if (verbose) cat("Estimating z-scores... ")
-  non.ref.level <- unique(condition.per.cell) %>% setdiff(reference.level)
-  z.scores <- (local.mean.mat[[non.ref.level]] - local.mean.mat[[reference.level]]) / pmax(stds, min.std)
+  non.ref.level <- unique(condition.per.cell) %>% setdiff(ref.level)
+  z.scores <- (local.mean.mat[[non.ref.level]] - local.mean.mat[[ref.level]]) / pmax(stds, min.std)
   if (verbose) cat("Done.\n")
 
   return(z.scores)
 }
 
+##' Filter Local Z Scores
+##'
+##' @param z.scores Output from localZScores function
+##' @param min.row.z (default=1)
+##' @param min.inidividual z (default=0.25)
+##' @param n.cores Cores for parallel processing (default=1)
 filterLocalZScores <- function(z.scores, min.row.z=1, min.individual.z=0.25, n.cores=1) {
   app.func <- if (requireNamespace("pbapply", quietly=T)) function(...) pbapply::pbapply(..., cl=n.cores) else apply
   z.scores.abs <- z.scores
@@ -52,6 +58,13 @@ filterLocalZScores <- function(z.scores, min.row.z=1, min.individual.z=0.25, n.c
 
 ### Selection
 
+##' Get Top DE Genes
+##'
+##' @param z.scores Filtered z scores
+##' @param min.z (default=0)
+##' @param max.z (default=10)
+##' @param cell.subset Cells to subset from z.scores (default=NULL)
+##' @param top.quantile (default=NULL)
 getTopDEGenes <- function(z.scores, min.z=0, max.z=10, cell.subset=NULL, top.quantile=NULL) {
   if (!is.null(cell.subset)) {
     z.scores %<>% .[intersect(rownames(.), cell.subset), ]
@@ -89,6 +102,18 @@ plotZScoreList <- function(con, z.scores, scores, n.genes=NULL, genes=NULL, ...)
   return(plots)
 }
 
+##' Plot Gene Comparison Between Conditions
+##'
+##' @param genes Vector of genes to plot
+##' @param con Conos object
+##' @param condition.per.cell Named condition factor with cell names.
+##' @param z.scores Z scores matrix. It is recommended to filter and adjust scores before plotting (default=NULL)
+##' @param cur.scores Named numeric vector with gene names.
+##' @param show.legend Plot legend (default=T)
+##' @param legend.pos Legend position, see ggplot2::theme
+##' @param size Size of cells on plot
+##' @param n.col Columns of plots. If NULL, will be number of conditions + 1 (default=NULL)
+##' @param ... Plotting variables propagated to conos:::embeddingPlot
 plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z.scores=NULL, cur.scores=NULL, show.legend=T, legend.pos=c(1, 1), size=0.2, n.col=NULL, ...) {
   if (!is.null(cur.scores) & !is.null(names(cur.scores))) {
     genes <- names(sort(cur.scores, decreasing=T)[genes])

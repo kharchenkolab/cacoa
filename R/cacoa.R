@@ -130,29 +130,29 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       } else {
         if (is.null(cluster.per.cell)) {
           stop("'cluster.per.cell' cannot be empty.")
+
+        if (is.null(sample.per.cell)) {
+          stop("'sample.per.cell' cannot be empty.")
+
+        if (length(setdiff(names(cluster.per.cell), names(sample.per.cell)))>0)
+          warning("Cell names in 'cluster.per.cell' and 'sample.per.cell' are not identical, plotting intersect.",)
+
+        cct <- table(cluster.per.cell, sample.per.cell[names(cluster.per.cell)])
+        cluster.shifts <- cao$test.results[[name]]$df
+        x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
+        odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
+
+        if (label) {
+          gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
+            ggrepel::geom_text_repel()
         } else {
-          if (is.null(sample.per.cell)) {
-            stop("'sample.per.cell' cannot be empty.")
-          } else {
-            if (length(setdiff(names(cluster.per.cell), names(sample.per.cell)))>0) warning("Cell names in 'cluster.per.cell' and 'sample.per.cell' are not identical, plotting intersect.",)
-
-            cct <- table(cluster.per.cell, sample.per.cell[names(cluster.per.cell)])
-            cluster.shifts <- cao$test.results[[name]]$df
-            x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
-            odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
-
-            if (label) {
-              gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
-                ggrepel::geom_text_repel()
-            } else {
-              gg <- ggplot(odf, aes(size,md,color=cell))
-            }
-             gg <- gg +
-               geom_point() +
-               guides(color=F) + geom_hline(yintercept=1, linetype="dashed", color = "black") +
-               ylab("median distance")
-          }
+          gg <- ggplot(odf, aes(size,md,color=cell))
         }
+
+        gg <- gg +
+          geom_point() +
+          guides(color=F) + geom_hline(yintercept=1, linetype="dashed", color = "black") +
+          ylab("median distance")
       }
       return(gg)
     },

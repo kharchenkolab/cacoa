@@ -1,4 +1,8 @@
 #' @title Cacoa R6 class
+#'
+#' @import methods
+#' @export Cacoa
+#' @exportClass Cacoa
 Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
   public = list(
     #' @field n.cores number of cores

@@ -9,23 +9,23 @@ localZScores(
   condition.per.cell,
   genes,
   count.matrix.transposed,
-  reference.level,
+  ref.level,
   min.expr = 1e-10,
   min.std = 1e-10,
-  n.cores = 2,
-  verbose = 1
+  n.cores = 1,
+  verbose = T
 )
 }
 \arguments{
-\item{graph}{alignment graph}
+\item{graph}{Alignment graph (embedding)}
 
-\item{condition.per.cell}{conditions per cell. Must have two levels.}
+\item{condition.per.cell}{Named condition factor with cell names. Must have exactly two levels.}
 
-\item{genes}{genes to be tested. Procedure is slow, so it's reasonable to restrict amount of genes.}
+\item{genes}{Genes to be tested. Procedure is slow, so it's reasonable to restrict amount of genes.}
 
-\item{count.matrix.transposed}{joint count matrix with cells by rows and genes by columns}
+\item{count.matrix.transposed}{Joint count matrix with cells by rows and genes by columns}
 
-\item{reference.level}{reference condition level}
+\item{ref.level}{Reference condition level, e.g., wt, ctrl, or healthy}
 }
 \description{
 Local Z Scores

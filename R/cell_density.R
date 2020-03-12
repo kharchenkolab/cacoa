@@ -1,10 +1,9 @@
-##' Evaluate cell density between different sample groups.  desity is caculated per sample and normlized by quantiles normlization.      
+##' Evaluate cell density between different sample groups.  Density is calculated per sample and normlized by quantiles normlization.
 ##'
-##' 
-##' @title cell embedding density 
+##' @title cell embedding density
 ##' @param emb cell embedding matrix
-##' @param anoSample   sample annotation  
-##' @param sample.group  sample groups factor
+##' @param anoSample   sample annotation  #Could do with better explanation
+##' @param sample.groups  sample groups factor
 ##' @param bins  number of bins for density
 #'  @import dplyr
 #'  @import tibble
@@ -16,7 +15,7 @@ plotDensity <- function(emb,anoSample,sample.groups,bins=200){
   list.den=lapply(sn(as.character(unique(anoSample))),function(x) {
       nname=names(anoSample[anoSample==x])
       tmp=emb[nname,]
-      f2=kde2d(tmp[,1], tmp[,2], n = bins, lims = c(range(emb[,1]), range(emb[,2])))  # estimate density 
+      f2=kde2d(tmp[,1], tmp[,2], n = bins, lims = c(range(emb[,1]), range(emb[,2])))  # estimate density
       f2
     })
 
@@ -28,7 +27,7 @@ plotDensity <- function(emb,anoSample,sample.groups,bins=200){
   denMatrix.normal=normalize.quantiles(denMatrix)
   colnames(denMatrix.normal)=colnames(denMatrix)
 
-  # avearge density 
+  # average density
   list.den2=lapply(sn(as.character(unique(sample.groups))),function(x){
 
     tmp=denMatrix.normal[,names(sample.groups[sample.groups==x])]
@@ -79,7 +78,7 @@ plotDensity <- function(emb,anoSample,sample.groups,bins=200){
   }
 
   b=  cowplot::plot_grid(plotlist=fig.list, ncol=2, nrow=ceiling(length(unique(sample.groups))/2))
-  
+
   return(b)
 }
 

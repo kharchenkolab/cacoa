@@ -20,13 +20,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @field data.object the main object storing data (Conos or Seurat)
     data.object = list(),
 
-    #' @field sample.groups 2-factor vector with annotation of groups per sample
+    #' @field sample.groups 2-factor vector with annotation of groups/condition per sample
     sample.groups = NULL,
 
-    initialize=function(data.object, sample.groups=NULL, n.cores=parallel::detectCores(logical=F), verbose=TRUE) {
+    #' @field cell.groups named factor with cell names with cluster per cell
+    cell.groups = NULL,
+
+    #' @field sample.per.cell named factor with cell names
+    sample.per.cell = NULL,
+
+    #' @field sample.groups 2-factor vector with annotation of groups per sample
+    ref.level = NULL,
+
+    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, n.cores=parallel::detectCores(logical=F), verbose=TRUE) {
       self$n.cores <- n.cores
       self$verbose <- verbose
-      self$sample.groups <- sample.groups
+      self$ref.level <- ref.level
 
       if('Cacoa' %in% class(data.object)) { # copy constructor
         for(n in ls(data.object)) {
@@ -39,21 +48,52 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
         self$data.object <- data.object
       }
+
+      #TODO: Similar wrapper for Seurat
+      if(!is.null(sample.groups)) {
+        self$sample.groups <- sample.groups
+      } else {
+        if("Conos" %in% class(data.object) && !is.null(ref.level) %% !is.null(target.level)) {
+          self$sample.groups <- ifelse(grepl(ref.level,names(data.object$samples)),ref.level,target.level)
+        } else {
+          self$sample.groups <- sample.groups
+        }
+      }
+
+      #TODO: Similar wrapper for Seurat
+      if(!is.null(cell.groups)) {
+        self$cell.groups <- cell.groups
+      } else {
+        if("Conos" %in% class(data.object)) {
+          self$cell.groups <- extractGroups(data.object)
+        } else {
+          self$cell.groups <- cell.groups
+        }
+      }
+
+      #TODO: Similar wrapper for Seurat
+      if(!is.null(sample.per.cell)) {
+        self$sample.per.cell <- sample.per.cell
+      } else {
+        if("Conos" %in% class(data.object)) {
+          self$sample.per.cell <- extractSamplePerCell(data.object)
+        } else {
+          self$sample.per.cell <- sample.per.cell
+        }
+      }
     },
 
     #' @description  Calculate expression shift magnitudes of different clusters between conditions
-    #' @param sample.groups a two-level factor on the sample names describing the conditions being compared
-    #' @param groups cell cluster factor
-    #' @param dist 'JS' - Jensen Shannon divergence, or 'cor' - correlation distance
-    #' @param within.group.normalization normalize the shift magnitude by the mean magnitude of within-group variation
-    #' @param valid.comparisons a logical matrix (rows and columns are samples) specifying valid between-sample comparisons. Note that if within.group.normalization=T, the method will automatically include all within-group comparisons of the samples for which at least one valid pair is included in the valid.comparisons
-    #' @param n.cells number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)
-    #' @param n.top.genes number of top highest-expressed genes to consider (default: all genes)
-    #' @param n.subsamples number of samples to draw (default:100)
-    #' @param min.cells minimum number of cells per cluster/per sample to be included in the analysis
-    #' @param ref.level reference sample group, e.g., ctrl, healthy, or untreated.
-    #' @param n.cores number of cores to use
-    #' @param verbose
+    #' @param cell.groups Named cell group factor with cell names (default: stored vector)
+    #' @param dist 'JS' - Jensen Shannon divergence, or 'cor' - correlation distance (default="JS")
+    #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+    #' @param within.group.normalization Normalize the shift magnitude by the mean magnitude of within-group variation (default=T)
+    #' @param valid.comparisons A logical matrix (rows and columns are samples) specifying valid between-sample comparisons. Note that if within.group.normalization=T, the method will automatically include all within-group comparisons of the samples for which at least one valid pair is included in the valid.comparisons (default=NULL)
+    #' @param n.cells Number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)
+    #' @param n.top.genes Number of top highest-expressed genes to consider (default: all genes)
+    #' @param n.subsamples Number of samples to draw (default:100)
+    #' @param min.cells Minimum number of cells per cluster/per sample to be included in the analysis (default=10)
+    #' @param verbose Print progress
     #'
     #' @return a list include \itemize{
     #'   \item{df: a table with cluster distances (normalized if within.gorup.normalization=T), cell type, number of cells}
@@ -61,32 +101,54 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #'   \item{sample.groups: same as the provided variable}
     #'   \item{valid.comparisons: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)}
     #' }
-    estimateExpressionShiftMagnitudes=function(groups=NULL, dist='JS', within.group.normalization=TRUE, valid.comparisons=NULL,
+    estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist='JS', within.group.normalization=TRUE, valid.comparisons=NULL,
                                                n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
                                                sample.groups=self$sample.groups, n.cores=self$n.cores, verbose=self$verbose,
                                                name="expression.shifts") {
       if (is.null(sample.groups))
-        stop("sample.groups must be provided either during the object initialization or during this function call")
+        stop("'sample.groups' must be provided either during the object initialization or during this function call")
 
-      if (is.null(groups)) {
-        groups <- extractGroups(self$data.object)
+      if (is.null(cell.groups)) {
+        stop("'cell.groups' must be provided either during the object initialization or during this function call")
       }
 
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
 
       self$test.results[[name]] <- count.matrices %>%
-        estimateExpressionShiftMagnitudes(sample.groups, groups, dist=dist, within.group.normalization=within.group.normalization,
+        estimateExpressionShiftMagnitudes(sample.groups, cell.groups, dist=dist, within.group.normalization=within.group.normalization,
                                           valid.comparisons=valid.comparisons, n.cells=n.cells, n.top.genes=n.top.genes, n.subsamples=n.subsamples,
                                           min.cells=min.cells, n.cores=n.cores, verbose=verbose, transposed.matrices=T)
 
       return(invisible(self$test.results[[name]]))
     },
 
-    estimateExpressionShiftZScores=function(groups, ref.level, sample.groups=self$sample.groups,
+    #' @description  Calculate expression shift Z scores of different clusters between conditions
+    #' @param cell.groups Named cell group factor with cell names (default: stored vector)
+    #' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
+    #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+    #' @param sample.per.cell (default: stored vector)
+    #' @param n.od.genes (default=1000)
+    #' @param n.pcs (default=100)
+    #' @param pca.maxit (default=1000)
+    #' @param ignore.cache (default=F)
+    #' @param name (default="expression.z.scores")
+    estimateExpressionShiftZScores=function(cell.groups=self$cell.groups, ref.level=self$ref.level, sample.groups=self$sample.groups,
+                                            sample.per.cell=self$sample.per.cell,
                                             n.od.genes=1000, n.pcs=100, pca.maxit=1000, ignore.cache=F,
                                             name="expression.z.scores") {
-      if(!ref.level %in% sample.groups) stop(paste0("Reference group '",ref.level,"' not in sample groups: ",paste(unique(sample.groups), collapse=" ")))
-      sample.per.cell <- extractSamplePerCell(self$data.object)
+      if (is.null(cell.groups))
+        stop("'cell.groups' must be provided either during the object initialization or during this function call")
+
+      if (is.null(ref.level))
+        stop("'ref.level' must be provided either during the object initialization or during this function call")
+
+      if (is.null(sample.groups))
+        stop("'sample.groups' must be provided either during the object initialization or during this function call")
+
+      if (is.null(sample.per.cel))
+        stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
+
+      if(!ref.level %in% sample.groups) stop(paste0("Reference group '",ref.level,"' not in 'sample.groups': ",paste(unique(sample.groups), collapse=" ")))
       mtx <- extractJointCountMatrix(self$data.object, raw=F)
 
       if (n.od.genes > 0) {
@@ -107,18 +169,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         }
       }
 
-      self$test.results[[name]] <- estimateExpressionShiftZScores(mtx, sample.per.cell, sample.groups, groups, ref.level)
+      self$test.results[[name]] <- estimateExpressionShiftZScores(mtx, sample.per.cell, sample.groups, cell.groups, ref.level)
       return(invisible(self$test.results[[name]]))
     },
 
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
     #' @param name Test results to plot (default=expression.shifts)
     #' @param size.norm Plot size normalized results. Requires cluster.per.cell, and sample.per.cell (default=F)
-    #' @param cluster.per.cell Named cluster factor with cell names (default=NULL)
-    #' @param sample.per.cell Named sample factor with cell names (default=NULL)
+    #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
+    #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
     #' @param label Plot labels on size normalized plots (default=T)
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, cluster.per.cell=NULL, sample.per.cell=NULL, label=T) {
+    #' @return A ggplot2 object
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, label=T) {
       private$checkTestResults(name)
+      if (is.null(cell.groups)) {
+        stop("'cell.groups' must be provided either during the object initialization or during this function call")
+      }
+
+      if (is.null(sample.per.cell)) {
+        stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
+      }
 
       if (!size.norm) {
         gg <- ggplot(na.omit(self$test.results[[name]]$df),aes(x=as.factor(Type), y=value)) +
@@ -157,6 +227,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(gg)
       },
 
+    #' @description  Plot results from cao$estimateExpressionShiftZScores()
+    #' @param type.order (default=NULL)
+    #' @param name Test results to plot (default=expression.z.shifts)
+    #' @return A ggplot2 object
     plotExpressionShiftZScores=function(type.order=NULL, name="expression.z.scores") {
       private$checkTestResults(name)
 

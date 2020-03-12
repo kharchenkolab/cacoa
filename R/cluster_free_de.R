@@ -1,13 +1,14 @@
 ##' Local Z Scores
 ##'
 ##' @param graph Alignment graph (embedding)
-##' @param condition.per.cell Named condition factor with cell names. Must have exactly two levels.
+##' @param condition.per.cell Named group factor with cell names. Must have exactly two levels.
 ##' @param genes Genes to be tested. Procedure is slow, so it's reasonable to restrict amount of genes.
 ##' @param count.matrix.transposed Joint count matrix with cells by rows and genes by columns
 ##' @param ref.level Reference condition level, e.g., wt, ctrl, or healthy
 localZScores <- function(graph, condition.per.cell, genes, count.matrix.transposed, ref.level, min.expr=1e-10, min.std=1e-10, n.cores=1, verbose=T) {
+  #TODO: Condition.per.cell should be derived from sample.groups and cell.groups
   if (length(unique(condition.per.cell)) != 2)
-    stop("Exactly two condition levels must be provided")
+    stop("Exactly two levels must be provided in 'condition.per.cell'")
 
   if (!(ref.level %in% unique(condition.per.cell)))
     stop("'ref.level' not present in 'condition.per.cell'")
@@ -106,7 +107,7 @@ plotZScoreList <- function(con, z.scores, scores, n.genes=NULL, genes=NULL, ...)
 ##'
 ##' @param genes Vector of genes to plot
 ##' @param con Conos object
-##' @param condition.per.cell Named condition factor with cell names.
+##' @param condition.per.cell Named factor with cell names and condition
 ##' @param z.scores Z scores matrix. It is recommended to filter and adjust scores before plotting (default=NULL)
 ##' @param cur.scores Named numeric vector with gene names.
 ##' @param show.legend Plot legend (default=T)
@@ -115,6 +116,7 @@ plotZScoreList <- function(con, z.scores, scores, n.genes=NULL, genes=NULL, ...)
 ##' @param n.col Columns of plots. If NULL, will be number of conditions + 1 (default=NULL)
 ##' @param ... Plotting variables propagated to conos:::embeddingPlot
 plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z.scores=NULL, cur.scores=NULL, show.legend=T, legend.pos=c(1, 1), size=0.2, n.col=NULL, ...) {
+  #TODO: Condition.per.cell should be derived from sample.groups and cell.groups
   if (!is.null(cur.scores) & !is.null(names(cur.scores))) {
     genes <- names(sort(cur.scores, decreasing=T)[genes])
   }

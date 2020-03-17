@@ -121,7 +121,7 @@ plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z
     genes <- names(sort(cur.scores, decreasing=T)[genes])
   }
 
-  if (is.null(n.col)) n.col = length(unique(condition.per.cell)) + 1
+  if (is.null(n.col)) n.col <- length(unique(condition.per.cell)) + 1
 
   lapply(genes, function(g) {
     lst <- lapply(unique(condition.per.cell), function(sg) {

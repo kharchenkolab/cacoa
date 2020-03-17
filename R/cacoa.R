@@ -49,37 +49,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         self$data.object <- data.object
       }
 
-      #TODO: Similar wrapper for Seurat
-      if(!is.null(sample.groups)) {
+      if(is.null(sample.groups) && (!is.null(ref.level) %% !is.null(target.level))) {
+        self$sample.groups <- extractSampleGroups(data.object, ref.level, target.level)
+      } else {
         self$sample.groups <- sample.groups
-      } else {
-        if("Conos" %in% class(data.object) && !is.null(ref.level) %% !is.null(target.level)) {
-          self$sample.groups <- ifelse(grepl(ref.level,names(data.object$samples)),ref.level,target.level)
-        } else {
-          self$sample.groups <- sample.groups
-        }
       }
 
-      #TODO: Similar wrapper for Seurat
-      if(!is.null(cell.groups)) {
+      if(is.null(cell.groups)) {
+        self$cell.groups <- extractCellGroups(data.object)
+      } else {
         self$cell.groups <- cell.groups
-      } else {
-        if("Conos" %in% class(data.object)) {
-          self$cell.groups <- extractGroups(data.object)
-        } else {
-          self$cell.groups <- cell.groups
-        }
       }
 
-      #TODO: Similar wrapper for Seurat
-      if(!is.null(sample.per.cell)) {
-        self$sample.per.cell <- sample.per.cell
+      if(is.null(sample.per.cell)) {
+        self$sample.per.cell <- extractSamplePerCell(data.object)
       } else {
-        if("Conos" %in% class(data.object)) {
-          self$sample.per.cell <- extractSamplePerCell(data.object)
-        } else {
-          self$sample.per.cell <- sample.per.cell
-        }
+        self$sample.per.cell <- sample.per.cell
       }
     },
 

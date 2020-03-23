@@ -160,7 +160,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
     #' @param name Test results to plot (default=expression.shifts)
-    #' @param size.norm Plot size normalized results. Requires cluster.per.cell, and sample.per.cell (default=F)
+    #' @param size.norm Plot size normalized results. Requires cell.groups, and sample.per.cell (default=F)
     #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
     #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
     #' @param label Plot labels on size normalized plots (default=T)
@@ -183,15 +183,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           labs(x="", y="Normalized distance") +
           geom_hline(yintercept=1, linetype="dashed", color = "black")
         } else {
-          if (is.null(cluster.per.cell)) stop("'cluster.per.cell' cannot be empty.")
+          if (is.null(cell.groups)) stop("'cell.groups' cannot be empty.")
 
           if (is.null(sample.per.cell)) {
             stop("'sample.per.cell' cannot be empty.")
 
-            if (length(setdiff(names(cluster.per.cell), names(sample.per.cell)))>0)
-              warning("Cell names in 'cluster.per.cell' and 'sample.per.cell' are not identical, plotting intersect.",)
+            if (length(setdiff(names(cell.groups), names(sample.per.cell)))>0)
+              warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.",)
 
-            cct <- table(cluster.per.cell, sample.per.cell[names(cluster.per.cell)])
+            cct <- table(cell.groups, sample.per.cell[names(cell.groups)])
             cluster.shifts <- cao$test.results[[name]]$df
             x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
             odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)

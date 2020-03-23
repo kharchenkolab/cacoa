@@ -26,7 +26,7 @@ extractSamplePerCell.Conos <- function(con) {
   return(con$getDatasetPerCell())
 }
 
-extractSampleGroups <- function(obj) UseMethod("extractSampleGroups", obj)
+extractSampleGroups <- function(obj) UseMethod("extractSampleGroups", obj, ref.level, target.level)
 extractSampleGroups.Conos <- function(con, ref.level, target.level) {
   con.names <- names(con$samples)
   if(!ref.level %in% con.names) stop("'ref.level' not in Conos sample names.")

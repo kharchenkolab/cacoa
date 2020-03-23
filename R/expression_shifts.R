@@ -143,7 +143,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
   }
 
   common.genes <- Reduce(intersect, lapply(count.matrices, colnames))
-  count.matrices %<>% lapply(`[`, common.genes)
+  count.matrices %<>% lapply(`[`, , common.genes)
 
   comp.matrix <- outer(sample.groups,sample.groups,'!='); diag(comp.matrix) <- FALSE
 

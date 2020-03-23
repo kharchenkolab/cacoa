@@ -32,10 +32,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @field reference level for sample.group vector
     ref.level = NULL,
 
+    #' @field target/disease level for sample.group vector
+    target.level = NULL,
+
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, n.cores=parallel::detectCores(logical=F), verbose=TRUE) {
       self$n.cores <- n.cores
       self$verbose <- verbose
       self$ref.level <- ref.level
+      self$target.level <- target.level
 
       if('Cacoa' %in% class(data.object)) { # copy constructor
         for(n in ls(data.object)) {

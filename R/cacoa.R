@@ -186,35 +186,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           theme(axis.text.x=element_text(angle = 90, hjust=1), axis.text.y=element_text(angle=90, hjust=0.5)) +
           labs(x="", y="Normalized distance") +
           geom_hline(yintercept=1, linetype="dashed", color = "black")
+      } else {
+        if (length(setdiff(names(cell.groups), names(sample.per.cell)))>0) warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
+
+        cct <- table(cell.groups, sample.per.cell[names(cell.groups)])
+        cluster.shifts <- cao$test.results[[name]]$df
+        x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
+        odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
+
+        if (label) {
+          gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
+            ggrepel::geom_text_repel()
         } else {
-          if (is.null(cell.groups)) stop("'cell.groups' cannot be empty.")
-
-          if (is.null(sample.per.cell)) {
-            stop("'sample.per.cell' cannot be empty.")
-
-            if (length(setdiff(names(cell.groups), names(sample.per.cell)))>0)
-              warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.",)
-
-            cct <- table(cell.groups, sample.per.cell[names(cell.groups)])
-            cluster.shifts <- cao$test.results[[name]]$df
-            x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
-            odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
-
-            if (label) {
-              gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
-                ggrepel::geom_text_repel()
-            } else {
-              gg <- ggplot(odf, aes(size,md,color=cell))
-            }
-
-            gg <- gg +
-              geom_point() +
-              guides(color=F) + geom_hline(yintercept=1, linetype="dashed", color = "black") +
-              ylab("Median distance")
-          }
+          gg <- ggplot(odf, aes(size,md,color=cell))
         }
+
+        gg <- gg +
+          geom_point() +
+          guides(color=F) + geom_hline(yintercept=1, linetype="dashed", color = "black") +
+          ylab("Median distance")
+
+        return(gg)
+      }
       return(gg)
-      },
+    },
 
     #' @description  Plot results from cao$estimateExpressionShiftZScores()
     #' @param type.order (default=NULL)

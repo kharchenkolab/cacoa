@@ -5,7 +5,7 @@
 ##'
 ##' @title expression distance between clusters
 ##' @param con conos object
-##' @param groups clustering factor
+##' @param cell.groups Named factor with cell names and clustering/annotation
 ##' @param dist what distance measure to use: 'JS' - Jensen-Shannon divergence, 'cor' - Pearson's linear correlation on log transformed values
 ##' @param use.aggregated.matrices whether to simply aggregate all the molecules from all of the samples in which cluster appears (i.e. don't do aggregation of per-sample distance estimates, but just add all the data and measure the distance once)
 ##' @param use.single.cell.comparisons whether instead of adding up all molecules from a cluster in a given sample, instead compare n.cell draws of single cells (note: doesn't seem to work that well)
@@ -18,13 +18,13 @@
 ##' @param n.cells number of single cells to sample when use.single.cell.comparisons=T
 ##' @return distance matrix (with possible NAs), or if return.details=T a list with a distance matrix ($mdist) and a list of distance matrices computed on the individual samples ($dc)
 ##' @export
-cluster.expression.distances <- function(con,groups=NULL,dist='JS',n.cores=con$n.cores,min.cluster.size=1,min.samples=1,max.n.cells=Inf,aggr=median,return.details=FALSE,use.aggregated.matrices=FALSE,use.single.cell.comparisons=FALSE,n.cells=100) {
+cluster.expression.distances <- function(con,cell.groups=NULL,dist='JS',n.cores=con$n.cores,min.cluster.size=1,min.samples=1,max.n.cells=Inf,aggr=median,return.details=FALSE,use.aggregated.matrices=FALSE,use.single.cell.comparisons=FALSE,n.cells=100) {
   # TODO: switch to abstracted accessor methods for con access
-  if(is.null(groups)) {
-    if(is.null(con$clusters)) stop('no groups specified and no clusterings found')
-    groups <- as.factor(con$clusters[[1]]$groups)
+  if(is.null(cell.groups)) {
+    if(is.null(con$clusters)) stop('no "cell.groups" specified and no clusterings found')
+    cell.groups <- as.factor(con$clusters[[1]]$groups)
   } else {
-    groups <- as.factor(groups)
+    cell.groups <- as.factor(cell.groups)
   }
 
   valid.dists <- c('JS','cor');
@@ -34,7 +34,7 @@ cluster.expression.distances <- function(con,groups=NULL,dist='JS',n.cores=con$n
   if(use.aggregated.matrices) {
     # in this case, we simply add all the counts from all the clusters into a common matrix and simply calculate distances on that
     tc <- conos:::rawMatricesWithCommonGenes(con) %>%
-      lapply(conos:::collapseCellsByType, groups=as.factor(groups), min.cell.count=0) %>%
+      lapply(conos:::collapseCellsByType, groups=cell.groups, min.cell.count=0) %>%
       abind::abind(along=3) %>%
       apply(c(1,2),sum,na.rm=T)
 
@@ -57,7 +57,7 @@ cluster.expression.distances <- function(con,groups=NULL,dist='JS',n.cores=con$n
   # determine distance matrices for each sample
   dc <- abind::abind(conos:::papply(con$samples,function(s) {
     m <- s$misc$rawCounts
-    cl <- factor(groups[match(rownames(m),names(groups))],levels=levels(groups));
+    cl <- factor(cell.groups[match(rownames(m),names(cell.groups))],levels=levels(cell.groups));
     tt <- table(cl);
 
     empty <- tt<min.cluster.size;
@@ -116,9 +116,28 @@ cluster.expression.distances <- function(con,groups=NULL,dist='JS',n.cores=con$n
   }
 }
 
-estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, groups, dist='JS', within.group.normalization=TRUE,
+##' @title Expression shift magnitudes per cluster between conditions
+##' @param count.matrices List of count matrices
+##' @param sample.groups Named factor with cell names indicating condition/sample, e.g., ctrl/disease
+##' @param cell.groups Named clustering/annotation factor with cell names
+##' @param dist what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values
+##' @param within.group.normalization (default=T)
+##' @param valid.comparisons (default=NULL)
+##' @param n.cells Number of cells per group (default=NULL)
+##' @param n.top.genes (default=Inf)
+##' @param n.subsamples (default=100)
+##' @param min.cells (default=10)
+##' @param n.cores number of cores (default=1)
+##' @param verbose (default=F)
+##' @param transposed.matrices (default=F)
+##' @export
+estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cell.groups, dist='JS', within.group.normalization=TRUE,
                                               valid.comparisons=NULL, n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
                                               n.cores=1, verbose=FALSE, transposed.matrices=FALSE) {
+  if(!is.factor(sample.groups)) sample.groups <- as.factor(sample.groups)
+  sample.groups <- droplevels(na.omit(sample.groups))
+  if(length(levels(sample.groups))!=2) stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
+
   if (!transposed.matrices) {
     count.matrices %<>% lapply(Matrix::t)
   }
@@ -126,9 +145,6 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, gro
   common.genes <- Reduce(intersect, lapply(count.matrices, colnames))
   count.matrices %<>% lapply(`[`, , common.genes)
 
-  if(!is.factor(sample.groups)) sample.groups <- as.factor(sample.groups)
-  sample.groups <- droplevels(na.omit(sample.groups))
-  if(length(levels(sample.groups))!=2) stop("sample.groups must be a 2-level factor describing which samples are being contrasted")
   comp.matrix <- outer(sample.groups,sample.groups,'!='); diag(comp.matrix) <- FALSE
 
   # set up comparison mask
@@ -164,7 +180,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, gro
   cl <- rep(names(cl), sapply(cl, length)) %>% setNames(unlist(cl)) %>%  as.factor()
 
   # cell factor
-  cf <- groups
+  cf <- cell.groups
   cf <- cf[names(cf) %in% names(cl)]
 
   if(is.null(n.cells)) {
@@ -267,11 +283,16 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, gro
   if(verbose) cat('done\n')
   return(list(df=df, ctdml=ctdml, sample.groups=sample.groups, valid.comparisons=valid.comparisons))
 }
-
-estimateExpressionShiftZScores <- function(pca, sample.per.cell, sample.groups, annotation) {
+##' @title Expression shift Z scores per cluster between conditions
+##' @param pca Principal components
+##' @param sample.per.cell Named factor with cell names indicating sample origin per cell
+##' @param sample.groups Named factor with cell names indicating condition/sample, e.g., ctrl/disease
+##' @param cell.groups Named factor with cell names and clustering/annotation
+##' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt
+estimateExpressionShiftZScores <- function(pca, sample.per.cell, sample.groups, cell.groups, ref.level) {
   sample.groups %<>% as.character() %>% setNames(names(sample.groups))
   mean.pc.per.samp.per.type <- split(names(sample.per.cell), sample.per.cell) %>%
-    lapply(function(nsa) split(nsa, annotation[nsa]) %>% .[sapply(., length) > 0] %>%
+    lapply(function(nsa) split(nsa, cell.groups[nsa]) %>% .[sapply(., length) > 0] %>%
              sapply(function(nss) colMeans(pca[nss,,drop=F])))
 
   res.df <- combn(names(mean.pc.per.samp.per.type), 2) %>% apply(2, function(ns)
@@ -280,7 +301,7 @@ estimateExpressionShiftZScores <- function(pca, sample.per.cell, sample.groups, 
     dplyr::mutate(SameCondition=(sample.groups[S1] == sample.groups[S2]),
                   Condition=ifelse(!SameCondition, "Between", sample.groups[S1])) %>%
     split(.$Type) %>% lapply(function(df)
-      dplyr::mutate(df, distance=(mean(value[Condition == "control"], trim=0.4) - value) / mad(value[Condition == "control"]))) %>%
+      dplyr::mutate(df, distance=(mean(value[Condition == ref.level], trim=0.4) - value) / mad(value[Condition == ref.level]))) %>%
     Reduce(rbind, .) %>% dplyr::rename(correlation=value)
 
   return(res.df)

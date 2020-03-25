@@ -94,6 +94,8 @@ Calculate expression shift magnitudes of different clusters between conditions
 \item{\code{n.cores}}{number of cores to use}
 
 \item{\code{verbose}}{}
+
+\item{\code{ref.level}}{reference sample group, e.g., ctrl, healthy, or untreated.}
 }
 \if{html}{\out{</div>}}
 }
@@ -112,6 +114,7 @@ a list include \itemize{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateExpressionShiftZScores(
   groups,
+  ref.level,
   sample.groups = self$sample.groups,
   n.od.genes = 1000,
   n.pcs = 100,
@@ -125,10 +128,32 @@ a list include \itemize{
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotExpressionShiftMagnitudes"></a>}}
 \subsection{Method \code{plotExpressionShiftMagnitudes()}}{
+Plot results from cao$estimateExpressionShiftMagnitudes()
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionShiftMagnitudes(name = "expression.shifts")}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionShiftMagnitudes(
+  name = "expression.shifts",
+  size.norm = F,
+  cluster.per.cell = NULL,
+  sample.per.cell = NULL,
+  label = T
+)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{Test results to plot (default=expression.shifts)}
+
+\item{\code{size.norm}}{Plot size normalized results. Requires cluster.per.cell, and sample.per.cell (default=F)}
+
+\item{\code{cluster.per.cell}}{Named cluster factor with cell names (default=NULL)}
+
+\item{\code{sample.per.cell}}{Named sample factor with cell names (default=NULL)}
+
+\item{\code{label}}{Plot labels on size normalized plots (default=T)}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotExpressionShiftZScores"></a>}}

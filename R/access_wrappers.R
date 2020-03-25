@@ -1,8 +1,8 @@
 # accessor methods for uniform access to data from Conos, Seurat and other objects
 
-extractGroups <- function(obj) UseMethod("extractGroups", obj)
-extractGroups.Conos <- function(con) {
-  if(is.null(con$clusters)) stop('no groups specified and no clusterings found')
+extractCellGroups <- function(obj) UseMethod("extractCellGroups", obj)
+extractCellGroups.Conos <- function(con) {
+  if(is.null(con$clusters)) stop('No cell groups specified and no clusterings found')
   return(as.factor(con$clusters[[1]]$groups))
 }
 
@@ -24,4 +24,12 @@ extractOdGenes.Conos <- function(con, n.genes=NULL) {
 extractSamplePerCell <- function(obj) UseMethod("extractSamplePerCell", obj)
 extractSamplePerCell.Conos <- function(con) {
   return(con$getDatasetPerCell())
+}
+
+extractSampleGroups <- function(obj) UseMethod("extractSampleGroups", obj, ref.level, target.level)
+extractSampleGroups.Conos <- function(con, ref.level=ref.level, target.level=target.level) {
+  con.names <- names(con$samples)
+  if(!any(grep(ref.level,con.names))) stop("'ref.level' not in Conos sample names.")
+  if(!any(grep(target.level,con.names))) stop("'target.level' not in Conos sample names.")
+  return(ifelse(grepl(ref.level,names(con$samples)),ref.level,target.level))
 }

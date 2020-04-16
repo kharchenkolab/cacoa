@@ -322,7 +322,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if (is.null(cell.groups))
         stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
-      plotDEgenes(de.raw=pathway.data$de.raw, de.genes.filtered=pathway.data$de.genes.filtered, cell.groups=cell.groups, show.legend=show.legend, legend.position=legend.position, p.adj=p.adj, label.x.pos=label.x.pos, label.y.pos=label.y.pos, rel_heights=rel_heights, scale=scale)
+      plotDEGenes(de.raw=pathway.data$de.raw, de.genes.filtered=pathway.data$de.genes.filtered, cell.groups=cell.groups, show.legend=show.legend, legend.position=legend.position, p.adj=p.adj, label.x.pos=label.x.pos, label.y.pos=label.y.pos, rel_heights=rel_heights, scale=scale)
     },
 
     #' @title Plot pathway distribution
@@ -330,14 +330,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
     #' @param pathway.data List containing a list of results from estimateOnthology
     #' @return A ggplot2 object
-    plotPathwayDistribution=function(type=NULL, pathway.data=self$pathway.data) {
+    plotPathwayDistribution=function(type=NULL, pathway.data=self$pathway.data, cell.groups=self$cell.groups) {
       if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
 
       ont.res <- pathway.data[[type]]
 
       if(is.null(ont.res)) stop(paste0("No results found for ",type,". Please run estimateOnthology first and specify type='",type,"'."))
 
-      plotPathwayDistribution(ont.res=ont.res, type=type)
+      plotPathwayDistribution(ont.res=ont.res, type=type, cell.groups=cell.groups)
     },
 
     #' @title Plot onthology heatmap

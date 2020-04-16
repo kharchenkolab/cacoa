@@ -162,7 +162,7 @@ plotHeatmap <- function(df, color.per.type=NULL, row.order=NULL, col.order=F, le
 #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
 #' @return A ggplot2 object
 #' @export
-plotPathwayDistribution <- function(ont.res, type=NULL) {
+plotPathwayDistribution <- function(ont.res, type=NULL, cell.groups) {
   if(type=="GO") {
     if((ont.res$df$Type %>% unique %>% length) == 1) stop("The input only contains one cell type.")
     ont.res <- ont.res[["list"]]
@@ -174,7 +174,7 @@ plotPathwayDistribution <- function(ont.res, type=NULL) {
                                                         nrow)) %>%
       as_tibble(rownames="Type") %>%
       reshape2::melt(id.vars="Type", variable.name="GO", value.name="N") %>%
-      mutate(Type=factor(Type, levels=unique(pathway.data$cell.groups) %>%
+      mutate(Type=factor(Type, levels=unique(cell.groups) %>%
                            .[. %in% names(pathway.data$de.gene.ids)] %>%
                            .[order(.)]))
 

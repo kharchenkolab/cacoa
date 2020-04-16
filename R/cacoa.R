@@ -35,11 +35,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @field target/disease level for sample.group vector
     target.level = NULL,
 
-    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, n.cores=parallel::detectCores(logical=F), verbose=TRUE) {
+    #' @field DE results for pathway estimations
+    pathway.data = list(),
+
+    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, n.cores=parallel::detectCores(logical=F), verbose=TRUE, pathway.data=NULL) {
       self$n.cores <- n.cores
       self$verbose <- verbose
       self$ref.level <- ref.level
       self$target.level <- target.level
+      self$pathway.data <- pathway.data
 
       if('Cacoa' %in% class(data.object)) { # copy constructor
         for(n in ls(data.object)) {
@@ -241,7 +245,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param stat.cutoff Cutoff for filtering highly-expressed DE genes (default=3)
     #' @param verbose Print progress (default=T)
     #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
-    preparePathwayData <- function(de, cell.groups=self$cell.groups, OrgDB=org.Hs.eg.db, stat.cutoff=3, verbose=T) {
+    preparePathwayData=function(de, cell.groups=self$cell.groups, OrgDB=org.Hs.eg.db, stat.cutoff=3, verbose=T) {
       if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if(verbose) cat("Extracting raw count matrices ... ")
@@ -264,7 +268,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param verbose Print progress (default=T)
     #' @param ... Additional parameters for sccore:::plapply function
     #' @return A list containing a list of onthologies per type of onthology, and a data frame with merged results
-    estimateOnthology <- function(type=NULL, pathway.data=self$pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, n.cores=self$n.cores, verbose=T, ...) {
+    estimateOnthology=function(type=NULL, pathway.data=self$pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, n.cores=self$n.cores, verbose=T, ...) {
       if(is.null(type)) stop("'type' must be 'GO' or 'DO'.")
 
       if(is.null(pathway.data)) stop("Please run 'preparePathwayData' first.")
@@ -285,7 +289,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param rel_heights Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
     #' @return A ggplot2 object
-    plotOnthologyTerms <- function(type=NULL, pathway.data=self$pathway.data, cell.groups=self$cell.groups, show.legend=T, legend.position="bottom", label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93) {
+    plotOnthologyTerms=function(type=NULL, pathway.data=self$pathway.data, cell.groups=self$cell.groups, show.legend=T, legend.position="bottom", label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93) {
       if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
 
       if(is.null(pathway.data)) stop("Please run 'preparePathwayData' first.")
@@ -312,7 +316,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param rel_heights Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (defaul=0.93)
     #' @return A ggplot2 object
-    plotDEGenes <- function(pathway.data=self$pathway.data, cell.groups=self$cell.groups, show.legend=T, legend.position="bottom", p.adj=0.05, label.x.pos=0.01, label.y.pos=1, rel_heights=c(2.5, 0.5), scale=0.93) {
+    plotDEGenes=function(pathway.data=self$pathway.data, cell.groups=self$cell.groups, show.legend=T, legend.position="bottom", p.adj=0.05, label.x.pos=0.01, label.y.pos=1, rel_heights=c(2.5, 0.5), scale=0.93) {
       if(is.null(pathway.data)) stop("Please run 'preparePathwayData' first.")
 
       if (is.null(cell.groups))
@@ -326,7 +330,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
     #' @param pathway.data List containing a list of results from estimateOnthology
     #' @return A ggplot2 object
-    plotPathwayDistribution <- function(type=NULL, pathway.data=self$pathway.data) {
+    plotPathwayDistribution=function(type=NULL, pathway.data=self$pathway.data) {
       if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
 
       ont.res <- pathway.data[[type]]
@@ -344,7 +348,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param order Order of rows in heatmap. Can be 'unique' (only show pathways that are unique for any cell type); 'unique-max-row' (same as 'unique' but ordered by P value); 'all-max-rowsum' (all pathways ordered by cumulative P value for all cell types); 'all-max-row' (all pathways ordered by max P value) (default="all-max-row")
     #' @param n Number of pathways to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
     #' @return A ggplot2 object
-    plotOnthologyHeatmap <- function(type=NULL, pathway.data=self$pathway.data, legend.position = "left", order = "all-max-row", n = 10) {
+    plotOnthologyHeatmap=function(type=NULL, pathway.data=self$pathway.data, legend.position = "left", order = "all-max-row", n = 10) {
       if(type=="BP" | type=="CC" | type=="MF") {
         ont.res <- pathway.data[["GO"]]
       } else if(type=="DO") {
@@ -361,7 +365,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
     #' @param pathway.data List containing a list of results from estimateOnthology
     #' @return A ggplot2 object
-    plotOnthologyCorrelations <- function(type=NULL, pathway.data=self$pathway.data) {
+    plotOnthologyCorrelations=function(type=NULL, pathway.data=self$pathway.data) {
       if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
 
       ont.res <- pathway.data[[type]][["list"]]

@@ -46,6 +46,28 @@ preparePathwayData <- function(cms, de, cell.groups, transpose=T, OrgDB=org.Hs.e
               de.raw = de))
 }
 
+enrichGOOpt <- function (gene, OrgDB, goData, keyType = "ENTREZID", ont = "MF", pvalueCutoff = 0.05,
+                         pAdjustMethod = "BH", universe=NULL, qvalueCutoff = 0.2, minGSSize = 10,
+                         maxGSSize = 500, readable = FALSE, pool = FALSE) {
+  ont %<>% toupper %>% match.arg(c("BP", "CC", "MF"))
+
+  res <- clusterProfiler:::enricher_internal(gene, pvalueCutoff = pvalueCutoff,
+                                             pAdjustMethod = pAdjustMethod, universe = universe,
+                                             qvalueCutoff = qvalueCutoff, minGSSize = minGSSize,
+                                             maxGSSize = maxGSSize, USER_DATA = goData)
+  if (is.null(res))
+    return(res)
+
+  res@keytype <- keyType
+  res@organism <- clusterProfiler:::get_organism(OrgDB)
+  if (readable) {
+    res <- DOSE::setReadable(res, OrgDB)
+  }
+  res@ontology <- ont
+
+  return(res)
+}
+
 #' @title Estimate onthology
 #' @description  Calculate onthologies based on DEs
 #' @param type Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.

@@ -268,12 +268,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param verbose Print progress (default=T)
     #' @param ... Additional parameters for sccore:::plapply function
     #' @return A list containing a list of onthologies per type of onthology, and a data frame with merged results
-    estimateOnthology=function(type=NULL, pathway.data=self$pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, n.cores=self$n.cores, verbose=T, ...) {
+    estimateOnthology=function(type=NULL, pathway.data=self$pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, ...) {
       if(is.null(type)) stop("'type' must be 'GO' or 'DO'.")
 
       if(is.null(pathway.data)) stop("Please run 'preparePathwayData' first.")
 
-      self$pathway.data[[type]] <- estimateOnthology(type=type, pathway.data=pathway.data, OrgDB=OrgDB, p.adj=p.adj, p.adjust.method=p.adjust.method, readable=readable, n.cores=n.cores, verbose=verbose, ...)
+      self$pathway.data[[type]] <- estimateOnthology(type=type, pathway.data=pathway.data, OrgDB=OrgDB, p.adj=p.adj, p.adjust.method=p.adjust.method, readable=readable, verbose=verbose, ...)
       return(invisible(self$pathway.data[[type]]))
     },
 

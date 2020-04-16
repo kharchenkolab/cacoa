@@ -59,9 +59,9 @@ preparePathwayData <- function(cms, de, cell.groups, transpose=T, OrgDB=org.Hs.e
 #' @param ... Additional parameters for sccore:::plapply function
 #' @return A list containing a list of onthologies per type of onthology, and a data frame with merged results
 #' @export
-estimateOnthology <- function(type, pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, n.cores=1, verbose=T, ...) {
+estimateOnthology <- function(type, pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, ...) {
   if(type=="DO") {
-    ont.list <- sccore:::plapply(pathway.data$de.gene.ids, DOSE::enrichDO, pAdjustMethod=p.adjust.method, readable=readable, n.cores=n.cores, progress=verbose, ...) %>%
+    ont.list <- sccore:::plapply(pathway.data$de.gene.ids, DOSE::enrichDO, pAdjustMethod=p.adjust.method, readable=readable, n.cores=1, progress=verbose, ...) %>%
       lapply(function(x) x@result)
     ont.list %<>% names %>%
       setNames(., .) %>%
@@ -70,13 +70,21 @@ estimateOnthology <- function(type, pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05
 
     ont.df <- ont.list %>%
       .[sapply(., nrow) > 0] %>%
-      bind_rows %>%
+      dplyr::bind_rows() %>%
       dplyr::select(Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)
   } else if(type=="GO") {
-    ont.list <- c("BP", "CC", "MF") %>%
+    if(verbose) cat("Extracting environment data ... \n")
+    go_data <- c("BP", "CC", "MF") %>%
       setNames(., .) %>%
-      lapply(function(ont) sccore:::plapply(pathway.data$de.gene.ids, clusterProfiler::enrichGO, ont=ont, readable=readable,  pAdjustMethod=p.adjust.method, OrgDb=OrgDB, n.cores=n.cores, progress=verbose, ...))
-    ont.list %<>% lapply(lapply, function(x) x@result)
+      sccore:::plapply(function(n) clusterProfiler:::get_GO_data(OrgDB, n, "ENTREZID") %>%
+                         as.list() %>%
+                         as.environment(), n.cores=1, progress=verbose)
+    if(verbose) cat("Estimating enriched pathways ... \n")
+    ont.list <- names(go_data) %>%
+      setNames(., .) %>%
+      lapply(function(ont) sccore:::plapply(pathway.data$de.gene.ids, enrichGOOpt, ont=ont, goData=go_data[[ont]], readable=readable, pAdjustMethod=p.adjust.method, OrgDB=OrgDB, n.cores=1, progress=verbose, ...)) %>%
+      lapply(lapply, function(x) x@result)
+
     ont.list %<>% lapply(lapply, function(x) filter(x, p.adjust < p.adj)) %>%
       lapply(function(gt) gt %>%
                .[sapply(., nrow) > 0] %>%
@@ -90,7 +98,7 @@ estimateOnthology <- function(type, pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05
       lapply(function(n) ont.list[[n]] %>%
                mutate(GO=n) %>%
                dplyr::select(GO, Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)) %>%
-      bind_rows
+      dplyr::bind_rows()
   } else {
     stop("'type' must be either 'GO' or 'DO'.")
   }

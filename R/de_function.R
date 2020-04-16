@@ -102,6 +102,3 @@ getPerCellTypeDEmat=function (raw.mats, cell.groups = NULL, sample.groups = NULL
 strpart <- function (x, split, n, fixed = FALSE) {
   sapply(strsplit(as.character(x), split, fixed = fixed), "[",n)
 }
-
-sn=function(x) { names(x) <- x; return(x); }
-

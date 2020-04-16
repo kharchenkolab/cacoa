@@ -53,7 +53,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         self$data.object <- data.object
       }
 
-      if(is.null(sample.groups) && (!is.null(ref.level) %% !is.null(target.level))) {
+      if(is.null(sample.groups) && (!is.null(ref.level) && !is.null(target.level))) {
         self$sample.groups <- extractSampleGroups(data.object, ref.level, target.level)
       } else {
         self$sample.groups <- sample.groups
@@ -80,7 +80,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param valid.comparisons A logical matrix (rows and columns are samples) specifying valid between-sample comparisons. Note that if within.group.normalization=T, the method will automatically include all within-group comparisons of the samples for which at least one valid pair is included in the valid.comparisons (default=NULL)
     #' @param n.cells Number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)
     #' @param n.top.genes Number of top highest-expressed genes to consider (default: all genes)
-    #' @param n.subsamples Number of samples to draw (default:100)
+    #' @param n.subsamples Number of samples to draw (default=100)
     #' @param min.cells Minimum number of cells per cluster/per sample to be included in the analysis (default=10)
     #' @param verbose Print progress
     #'
@@ -231,6 +231,144 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         labs(x="", y="normalized distance") +
         scale_y_continuous(expand=c(0, 0)) +
         theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=9))
+    },
+
+    #' @title Prepare pathway data
+    #' @description  Filter and prepare DE genes for onthology calculations
+    #' @param de List with differentially expressed genes per cell group
+    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+    #' @param OrgDB Genome-wide annotation (default=org.Hs.eg.db)
+    #' @param stat.cutoff Cutoff for filtering highly-expressed DE genes (default=3)
+    #' @param verbose Print progress (default=T)
+    #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
+    preparePathwayData <- function(de, cell.groups=self$cell.groups, OrgDB=org.Hs.eg.db, stat.cutoff=3, verbose=T) {
+      if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
+
+      if(verbose) cat("Extracting raw count matrices ... ")
+      count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
+      if(verbose) cat("done!\n")
+
+      self$pathway.data <- preparePathwayData(cms=count.matrices, de=de, transpose=T, cell.groups=cell.groups, OrgDB=OrgDB, verbose=verbose, stat.cutoff=stat.cutoff)
+      return(invisible(self$pathway.data))
+    },
+
+    #' @title Estimate onthology
+    #' @description  Calculate onthologies based on DEs
+    #' @param type Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.
+    #' @param pathway.data List containing DE gene IDs, and filtered and unfiltered DE genes
+    #' @param OrgDB Genome-wide annotation (default=org.Hs.eg.db)
+    #' @param p.adj Adjusted P cutoff (default=0.05)
+    #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
+    #' @param readable Mapping gene ID to gene name (default=T)
+    #' @param n.cores Number of cores used (default: stored vector)
+    #' @param verbose Print progress (default=T)
+    #' @param ... Additional parameters for sccore:::plapply function
+    #' @return A list containing a list of onthologies per type of onthology, and a data frame with merged results
+    estimateOnthology <- function(type=NULL, pathway.data=self$pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, n.cores=self$n.cores, verbose=T, ...) {
+      if(is.null(type)) stop("'type' must be 'GO' or 'DO'.")
+
+      if(is.null(pathway.data)) stop("Please run 'preparePathwayData' first.")
+
+      self$pathway.data[[type]] <- estimateOnthology(type=type, pathway.data=pathway.data, OrgDB=OrgDB, p.adj=p.adj, p.adjust.method=p.adjust.method, readable=readable, n.cores=n.cores, verbose=verbose, ...)
+      return(invisible(self$pathway.data[[type]]))
+    },
+
+    #' @title Plot onthology terms
+    #' @description Plot onthology terms as a function of both number of DE genes, and number of cells.
+    #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
+    #' @param pathway.data Results from preparePathwayData (default: stored list)
+    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+    #' @param show.legend Include legend in plot (default=T)
+    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
+    #' @param label.x.pos Plot label position on x axis (default=0.01)
+    #' @param label.y.pos Plot label position on y axis (default=1)
+    #' @param rel_heights Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))
+    #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
+    #' @return A ggplot2 object
+    plotOnthologyTerms <- function(type=NULL, pathway.data=self$pathway.data, cell.groups=self$cell.groups, show.legend=T, legend.position="bottom", label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93) {
+      if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
+
+      if(is.null(pathway.data)) stop("Please run 'preparePathwayData' first.")
+
+      ont.res <- pathway.data[[type]][["df"]]
+
+      if(is.null(ont.res)) stop(paste0("No results found for ",type,". Please run estimateOnthology first and specify type='",type,"'."))
+
+      if (is.null(cell.groups))
+        stop("'cell.groups' must be provided either during the object initialization or during this function call")
+
+      plotOnthologyTerms(ont.res=ont.res, type=type, de.genes.filtered=pathway.data$de.genes.filtered, cell.groups=cell.groups, show.legend=show.legend, legend.position=legend.position, label.x.pos=label.x.pos, label.y.pos=label.y.pos, rel_heights=rel_heights, scale=scale)
+    },
+
+    #' @title Plot DE genes
+    #' @description Plot number of DE genes as a function of number of cells
+    #' @param pathway.data Results from preparePathwayData (default: stored list)
+    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+    #' @param show.legend Include legend in plot (default=T)
+    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
+    #' @param p.adj Adjusted P cutoff (default=0.05)
+    #' @param label.x.pos Plot label position on x axis (default=0.01)
+    #' @param label.y.pos Plot label position on y axis (default=1)
+    #' @param rel_heights Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))
+    #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (defaul=0.93)
+    #' @return A ggplot2 object
+    plotDEGenes <- function(pathway.data=self$pathway.data, cell.groups=self$cell.groups, show.legend=T, legend.position="bottom", p.adj=0.05, label.x.pos=0.01, label.y.pos=1, rel_heights=c(2.5, 0.5), scale=0.93) {
+      if(is.null(pathway.data)) stop("Please run 'preparePathwayData' first.")
+
+      if (is.null(cell.groups))
+        stop("'cell.groups' must be provided either during the object initialization or during this function call")
+
+      plotDEgenes(de.raw=pathway.data$de.raw, de.genes.filtered=pathway.data$de.genes.filtered, cell.groups=cell.groups, show.legend=show.legend, legend.position=legend.position, p.adj=p.adj, label.x.pos=label.x.pos, label.y.pos=label.y.pos, rel_heights=rel_heights, scale=scale)
+    },
+
+    #' @title Plot pathway distribution
+    #' @description Bar plot of onthology pathways per cell type
+    #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
+    #' @param pathway.data List containing a list of results from estimateOnthology
+    #' @return A ggplot2 object
+    plotPathwayDistribution <- function(type=NULL, pathway.data=self$pathway.data) {
+      if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
+
+      ont.res <- pathway.data[[type]]
+
+      if(is.null(ont.res)) stop(paste0("No results found for ",type,". Please run estimateOnthology first and specify type='",type,"'."))
+
+      plotPathwayDistribution(ont.res=ont.res, type=type)
+    },
+
+    #' @title Plot onthology heatmap
+    #' @description Plot a heatmap of onthology P values per cell type
+    #' @param type Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
+    #' @param pathway.data List containing a list of results from estimateOnthology
+    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
+    #' @param order Order of rows in heatmap. Can be 'unique' (only show pathways that are unique for any cell type); 'unique-max-row' (same as 'unique' but ordered by P value); 'all-max-rowsum' (all pathways ordered by cumulative P value for all cell types); 'all-max-row' (all pathways ordered by max P value) (default="all-max-row")
+    #' @param n Number of pathways to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
+    #' @return A ggplot2 object
+    plotOnthologyHeatmap <- function(type=NULL, pathway.data=self$pathway.data, legend.position = "left", order = "all-max-row", n = 10) {
+      if(type=="BP" | type=="CC" | type=="MF") {
+        ont.res <- pathway.data[["GO"]]
+      } else if(type=="DO") {
+        ont.res <- pathway.data[["DO"]]
+      } else {
+        stop("'type' must be 'BP', 'CC', 'MF', or 'DO'.")
+      }
+
+      plotOnthologyHeatmap(type=type, ont.res=ont.res, legend.position=legend.position, order=order, n=n)
+    },
+
+    #' @title Plot onthology correlations
+    #' @description Plot correlation matrix for onthologies between cell types
+    #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
+    #' @param pathway.data List containing a list of results from estimateOnthology
+    #' @return A ggplot2 object
+    plotOnthologyCorrelations <- function(type=NULL, pathway.data=self$pathway.data) {
+      if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
+
+      ont.res <- pathway.data[[type]][["list"]]
+
+      if(is.null(ont.res)) stop(paste0("No results found for ",type,". Please run estimateOnthology first and specify type='",type,"'."))
+
+      plotOnthologyCorrelations(ont.res=ont.res, type=type)
     }
   ),
   private = list(

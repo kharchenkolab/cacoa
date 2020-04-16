@@ -1,0 +1,174 @@
+#' @title Prepare pathway data
+#' @description  Filter and prepare DE genes for onthology calculations
+#' @param de List with differentially expressed genes per cell group
+#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+#' @param OrgDB Genome-wide annotation (default=org.Hs.eg.db)
+#' @param stat.cutoff Cutoff for filtering highly-expressed DE genes (default=3)
+#' @param verbose Print progress (default=T)
+#' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
+#' @export
+preparePathwayData <- function(cms, de, cell.groups, transpose=T, OrgDB=org.Hs.eg.db, verbose=T, stat.cutoff=3) {
+  if(verbose) cat("Merging count matrices ... ")
+
+  # TODO shouldn't depend on Conos?
+  cm_merged <- conos:::mergeCountMatrices(cms)
+
+  if(transpose) {
+    if(verbose) cat("done!\nTransposing merged count matrix ... ")
+    cm_merged %<>% Matrix::t()
+  }
+
+  if(verbose) cat("done!\nCalculating boolean index ... ")
+  cm_bool <- (cm_merged > 1) * 1
+
+  if(verbose) cat("done!\nCollapsing cells ... ")
+  # TODO Shouldn't depend on Conos?
+  cm_collapsed_bool <- conos:::collapseCellsByType(Matrix::t(cm_bool), cell.groups %>%
+                                                     .[. %in% names(de)] %>%
+                                                     factor, min.cell.count=0)
+
+  if(verbose) cat("done!\nFiltering DE genes .. ")
+  de.filtered <- lapply(de, function(df) df[!is.na(df$stat) & (abs(df$stat) > stat.cutoff),]) # Consider filtering by pAdj
+
+  if(verbose) cat(". ")
+  de.genes.filtered <- mapply(intersect, lapply(de.filtered, rownames), ((cm_collapsed_bool > as.vector(table(annotation %>% .[. %in% names(de)]%>% factor)[rownames(cm_collapsed_bool)] * 0.05)) %>% apply(1, function(row) names(which(row))))[names(de.filtered)]) # Consider 0.05
+
+  if(verbose) cat("done!\nRetrieving Entrez Gene IDs ... ")
+  de.gene.ids <- lapply(de.genes.filtered, bitr, 'SYMBOL', 'ENTREZID', OrgDB) %>%
+    lapply(`[[`, "ENTREZID")
+
+  if(verbose) cat("done!\nAll done!\n")
+
+  self$pathway.data <- list(de.gene.ids = de.gene.ids,
+                            de.genes.filtered = de.genes.filtered,
+                            de.raw = de)
+  return(invisible(self$pathway.data))
+}
+
+#' @title Estimate onthology
+#' @description  Calculate onthologies based on DEs
+#' @param type Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.
+#' @param pathway.data List containing DE gene IDs, and filtered and unfiltered DE genes
+#' @param OrgDB Genome-wide annotation (default=org.Hs.eg.db)
+#' @param p.adj Adjusted P cutoff (default=0.05)
+#' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
+#' @param readable Mapping gene ID to gene name (default=T)
+#' @param n.cores Number of cores used (default: stored vector)
+#' @param verbose Print progress (default=T)
+#' @param ... Additional parameters for sccore:::plapply function
+#' @return A list containing a list of onthologies per type of onthology, and a data frame with merged results
+#' @export
+estimateOnthology <- function(type, pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, n.cores=1, verbose=T, ...) {
+  if(type=="DO") {
+    ont.list <- sccore:::plapply(pathway.data$de.gene.ids, enrichDO, pAdjustMethod=p.adjust.method, readable=readable, n.cores=n.cores, progress=verbose, ...) %>%
+      lapply(function(x) x@result)
+    ont.list %<>% names %>%
+      setNames(., .) %>%
+      lapply(function(n) mutate(ont.list[[n]], Type=n)) %>%
+      lapply(function(x) filter(x, p.adjust < p.adj))
+
+    ont.df <- ont.list %>%
+      .[sapply(., nrow) > 0] %>%
+      bind_rows %>%
+      dplyr::select(Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)
+  } else if(type=="GO") {
+    ont.list <- c("BP", "CC", "MF") %>%
+      setNames(., .) %>%
+      lapply(function(ont) sccore:::plapply(pathway.data$de.gene.ids, enrichGO, ont=ont, readable=readable,  pAdjustMethod=p.adjust.method, OrgDb=OrgDB, n.cores=n.cores, progress=verbose, ...))
+    ont.list %<>% lapply(lapply, function(x) x@result)
+    ont.list %<>% lapply(lapply, function(x) filter(x, p.adjust < p.adj)) %>%
+      lapply(function(gt) gt %>%
+               .[sapply(., nrow) > 0] %>%
+               names() %>%
+               setNames(., .) %>%
+               lapply(function(n) cbind(gt[[n]], Type=n)) %>%
+               Reduce(rbind, .))
+
+    ont.df <- ont.list %>%
+      names %>%
+      lapply(function(n) ont.list[[n]] %>%
+               mutate(GO=n) %>%
+               dplyr::select(GO, Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)) %>%
+      bind_rows
+  } else {
+    stop("'type' must be either 'GO' or 'DO'.")
+  }
+
+  self$pathway.data[[type]] <- list(list=ont.list,
+                                    df=ont.df)
+  return(invisible(self$pathway.data[[type]]))
+}
+
+#' @title Distance between terms
+#' @description Calculate distance matrix between onthology terms
+#' @param type Onthology, must be either "GO" or "DO" (default=NULL)
+#' @param pathway.data Results from preparePathwayData (default: stored list)
+#' @return Distance matrix
+#' @export
+distanceBetweenTerms <- function(type=NULL, pathway.data) {
+  if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
+
+  if(is.null(pathway.data)) stop("Please run 'preparePathwayData' first.")
+
+  ont.res <- pathway.data[[type]][["df"]]
+
+  genes.per.go <- sapply(ont.res$geneID, strsplit, "/") %>% setNames(ont.res$Description)
+  all.go.genes <- unique(unlist(genes.per.go))
+  all.gos <- unique(ont.res$Description)
+
+  genes.per.go.mat <- matrix(0, length(all.go.genes), length(all.gos)) %>%
+    `colnames<-`(all.gos) %>% `rownames<-`(all.go.genes)
+
+  for (i in 1:length(genes.per.go)) {
+    genes.per.go.mat[genes.per.go[[i]], ont.res$Description[[i]]] <- 1
+  }
+
+  return(dist(t(genes.per.go.mat), method="binary"))
+}
+
+#' @title Get onthology summary
+#' @description Get summary
+#' @param type Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
+#' @param pathway.data Results from preparePathwayData (default: stored list)
+#' @return Data frame
+#' @export
+getOnthologySummary <- function(type=NULL, pathway.data) {
+  if(type=="BP" | type=="CC" | type=="MF") {
+    ont.res <- pathway.data[["GO"]][["list"]][[type]]
+  } else if(type=="DO") {
+    ont.res <- pathway.data[["DO"]][["df"]]
+  } else {
+    stop("'type' must be 'BP', 'CC', 'MF', or 'DO'.")
+  }
+
+  go_dist <- distanceBetweenTerms(ont.res)
+  clusts <- hclust(go_dist) %>%
+    cutree(h=0.75)
+
+  ont.res %<>% mutate(Clust=clusts[Description])
+
+  name_per_clust <- ont.res %>%
+    group_by(Clust, Description) %>%
+    summarise(pvalue=exp(mean(log(pvalue)))) %>%
+    split(.$Clust) %>%
+    sapply(function(df) df$Description[which.min(df$pvalue)])
+
+  ont.res %<>% mutate(ClustName=name_per_clust[as.character(Clust)])
+
+  order.anno <- ont.res$Type %>% unique %>% .[order(.)]
+
+  df <- ont.res %>%
+    group_by(Type, ClustName) %>%
+    summarise(p.adjust=min(p.adjust)) %>%
+    ungroup %>%
+    mutate(p.adjust=-log10(p.adjust)) %>%
+    tidyr::spread(Type, p.adjust) %>%
+    as.data.frame() %>%
+    set_rownames(.$ClustName) %>%
+    .[, 2:ncol(.)] %>%
+    .[, order.anno[order.anno %in% colnames(.)]]
+
+  df[is.na(df)] <- 0
+
+  return(df)
+}

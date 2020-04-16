@@ -8,6 +8,8 @@
 #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
 #' @export
 preparePathwayData <- function(cms, de, cell.groups, transpose=T, OrgDB=org.Hs.eg.db, verbose=T, stat.cutoff=3) {
+  if (!requireNamespace("clusterProfiler", quietly = TRUE)) stop("You have to install 'clusterProfiler' package to perform onthology analysis")
+
   if(verbose) cat("Merging count matrices ... ")
 
   # TODO shouldn't depend on Conos?
@@ -34,15 +36,14 @@ preparePathwayData <- function(cms, de, cell.groups, transpose=T, OrgDB=org.Hs.e
   de.genes.filtered <- mapply(intersect, lapply(de.filtered, rownames), ((cm_collapsed_bool > as.vector(table(annotation %>% .[. %in% names(de)]%>% factor)[rownames(cm_collapsed_bool)] * 0.05)) %>% apply(1, function(row) names(which(row))))[names(de.filtered)]) # Consider 0.05
 
   if(verbose) cat("done!\nRetrieving Entrez Gene IDs ... ")
-  de.gene.ids <- lapply(de.genes.filtered, bitr, 'SYMBOL', 'ENTREZID', OrgDB) %>%
+  de.gene.ids <- lapply(de.genes.filtered, clusterProfiler::bitr, 'SYMBOL', 'ENTREZID', OrgDB) %>%
     lapply(`[[`, "ENTREZID")
 
   if(verbose) cat("done!\nAll done!\n")
 
-  self$pathway.data <- list(de.gene.ids = de.gene.ids,
-                            de.genes.filtered = de.genes.filtered,
-                            de.raw = de)
-  return(invisible(self$pathway.data))
+  return(list(de.gene.ids = de.gene.ids,
+              de.genes.filtered = de.genes.filtered,
+              de.raw = de))
 }
 
 #' @title Estimate onthology
@@ -60,7 +61,7 @@ preparePathwayData <- function(cms, de, cell.groups, transpose=T, OrgDB=org.Hs.e
 #' @export
 estimateOnthology <- function(type, pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, n.cores=1, verbose=T, ...) {
   if(type=="DO") {
-    ont.list <- sccore:::plapply(pathway.data$de.gene.ids, enrichDO, pAdjustMethod=p.adjust.method, readable=readable, n.cores=n.cores, progress=verbose, ...) %>%
+    ont.list <- sccore:::plapply(pathway.data$de.gene.ids, DOSE::enrichDO, pAdjustMethod=p.adjust.method, readable=readable, n.cores=n.cores, progress=verbose, ...) %>%
       lapply(function(x) x@result)
     ont.list %<>% names %>%
       setNames(., .) %>%
@@ -74,7 +75,7 @@ estimateOnthology <- function(type, pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05
   } else if(type=="GO") {
     ont.list <- c("BP", "CC", "MF") %>%
       setNames(., .) %>%
-      lapply(function(ont) sccore:::plapply(pathway.data$de.gene.ids, enrichGO, ont=ont, readable=readable,  pAdjustMethod=p.adjust.method, OrgDb=OrgDB, n.cores=n.cores, progress=verbose, ...))
+      lapply(function(ont) sccore:::plapply(pathway.data$de.gene.ids, clusterProfiler::enrichGO, ont=ont, readable=readable,  pAdjustMethod=p.adjust.method, OrgDb=OrgDB, n.cores=n.cores, progress=verbose, ...))
     ont.list %<>% lapply(lapply, function(x) x@result)
     ont.list %<>% lapply(lapply, function(x) filter(x, p.adjust < p.adj)) %>%
       lapply(function(gt) gt %>%
@@ -94,9 +95,8 @@ estimateOnthology <- function(type, pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05
     stop("'type' must be either 'GO' or 'DO'.")
   }
 
-  self$pathway.data[[type]] <- list(list=ont.list,
-                                    df=ont.df)
-  return(invisible(self$pathway.data[[type]]))
+  return(list(list=ont.list,
+              df=ont.df))
 }
 
 #' @title Distance between terms

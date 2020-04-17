@@ -46,6 +46,16 @@ preparePathwayData <- function(cms, de, cell.groups, transpose=T, OrgDB=org.Hs.e
               de.raw = de))
 }
 
+# TODO update description
+#' @title
+#' @description
+#' @param
+#' @param
+#' @param
+#' @param
+#' @param
+#' @return
+#' @export
 enrichGOOpt <- function (gene, OrgDB, goData, keyType = "ENTREZID", ont = "MF", pvalueCutoff = 0.05,
                          pAdjustMethod = "BH", universe=NULL, qvalueCutoff = 0.2, minGSSize = 10,
                          maxGSSize = 500, readable = FALSE, pool = FALSE) {
@@ -83,6 +93,8 @@ enrichGOOpt <- function (gene, OrgDB, goData, keyType = "ENTREZID", ont = "MF", 
 #' @export
 estimateOnthology <- function(type, pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, ...) {
   if(type=="DO") {
+    # TODO enable mapping to human data https://support.bioconductor.org/p/88192/
+    if(OrgDB!=org.Hs.eg.db) stop("DO analysis only available for human data (org.Hs.eg.db).")
     ont.list <- sccore:::plapply(pathway.data$de.gene.ids, DOSE::enrichDO, pAdjustMethod=p.adjust.method, readable=readable, n.cores=1, progress=verbose, ...) %>%
       lapply(function(x) x@result)
     ont.list %<>% names %>%
@@ -135,13 +147,7 @@ estimateOnthology <- function(type, pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05
 #' @param pathway.data Results from preparePathwayData (default: stored list)
 #' @return Distance matrix
 #' @export
-distanceBetweenTerms <- function(type=NULL, pathway.data) {
-  if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
-
-  if(is.null(pathway.data)) stop("Please run 'preparePathwayData' first.")
-
-  ont.res <- pathway.data[[type]][["df"]]
-
+distanceBetweenTerms <- function(type=NULL, ont.res) {
   genes.per.go <- sapply(ont.res$geneID, strsplit, "/") %>% setNames(ont.res$Description)
   all.go.genes <- unique(unlist(genes.per.go))
   all.gos <- unique(ont.res$Description)
@@ -162,16 +168,8 @@ distanceBetweenTerms <- function(type=NULL, pathway.data) {
 #' @param pathway.data Results from preparePathwayData (default: stored list)
 #' @return Data frame
 #' @export
-getOnthologySummary <- function(type=NULL, pathway.data) {
-  if(type=="BP" | type=="CC" | type=="MF") {
-    ont.res <- pathway.data[["GO"]][["list"]][[type]]
-  } else if(type=="DO") {
-    ont.res <- pathway.data[["DO"]][["df"]]
-  } else {
-    stop("'type' must be 'BP', 'CC', 'MF', or 'DO'.")
-  }
-
-  go_dist <- distanceBetweenTerms(ont.res)
+getOnthologySummary <- function(type=NULL, ont.res) {
+  go_dist <- distanceBetweenTerms(type, ont.res)
   clusts <- hclust(go_dist) %>%
     cutree(h=0.75)
 

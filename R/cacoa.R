@@ -301,7 +301,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if (is.null(cell.groups))
         stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
-      plotOnthologyTerms(ont.res=ont.res, type=type, de.genes.filtered=pathway.data$de.genes.filtered, cell.groups=cell.groups, show.legend=show.legend, legend.position=legend.position, label.x.pos=label.x.pos, label.y.pos=label.y.pos, rel_heights=rel_heights, scale=scale)
+      plotOnthologyTerms(type=type, ont.res=ont.res, de.genes.filtered=pathway.data$de.genes.filtered, cell.groups=cell.groups, show.legend=show.legend, legend.position=legend.position, label.x.pos=label.x.pos, label.y.pos=label.y.pos, rel_heights=rel_heights, scale=scale)
     },
 
     #' @title Plot DE genes
@@ -333,11 +333,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     plotPathwayDistribution=function(type=NULL, pathway.data=self$pathway.data, cell.groups=self$cell.groups) {
       if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
 
-      ont.res <- pathway.data[[type]]
+      ont.res <- pathway.data[[type]][["df"]]
 
       if(is.null(ont.res)) stop(paste0("No results found for ",type,". Please run estimateOnthology first and specify type='",type,"'."))
 
-      plotPathwayDistribution(ont.res=ont.res, type=type, cell.groups=cell.groups)
+      if((ont.res$Type %>% unique %>% length) == 1) stop("The input only contains one cell type.")
+
+      plotPathwayDistribution(type=type, ont.res=ont.res, cell.groups=cell.groups)
     },
 
     #' @title Plot onthology heatmap
@@ -350,12 +352,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @return A ggplot2 object
     plotOnthologyHeatmap=function(type=NULL, pathway.data=self$pathway.data, legend.position = "left", order = "all-max-row", n = 10) {
       if(type=="BP" | type=="CC" | type=="MF") {
-        ont.res <- pathway.data[["GO"]]
+        ont.res <- pathway.data[["GO"]][["df"]]
       } else if(type=="DO") {
-        ont.res <- pathway.data[["DO"]]
+        ont.res <- pathway.data[["DO"]][["df"]]
       } else {
         stop("'type' must be 'BP', 'CC', 'MF', or 'DO'.")
       }
+
+      if(is.null(ont.res)) stop("Please run 'preparePathwayData' first.")
 
       plotOnthologyHeatmap(type=type, ont.res=ont.res, legend.position=legend.position, order=order, n=n)
     },
@@ -372,7 +376,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if(is.null(ont.res)) stop(paste0("No results found for ",type,". Please run estimateOnthology first and specify type='",type,"'."))
 
-      plotOnthologyCorrelations(ont.res=ont.res, type=type)
+      plotOnthologyCorrelations(type=type, ont.res=ont.res)
     }
   ),
   private = list(

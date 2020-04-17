@@ -31,7 +31,7 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right") 
 #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
 #' @return A ggplot2 object
 #' @export
-plotOnthologyTerms <- function(ont.res, type=NULL, de.genes.filtered, cell.groups, legend.position="bottom", label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93, show.legend=T) {
+plotOnthologyTerms <- function(type=NULL, ont.res, de.genes.filtered, cell.groups, legend.position="bottom", label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93, show.legend=T) {
   if(length(unique(ont.res$Type))==1) stop("The input only contains one cell type.")
 
   if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
@@ -162,33 +162,23 @@ plotHeatmap <- function(df, color.per.type=NULL, row.order=NULL, col.order=F, le
 #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
 #' @return A ggplot2 object
 #' @export
-plotPathwayDistribution <- function(ont.res, type=NULL, cell.groups) {
+plotPathwayDistribution <- function(type=NULL, ont.res, cell.groups) {
   if(type=="GO") {
-    if((ont.res$df$Type %>% unique %>% length) == 1) stop("The input only contains one cell type.")
-    ont.res <- ont.res[["list"]]
-
-    p_df <- sapply(ont.res, function(ont) sapply(unique(sapply(ont.res, function(u) u$Type %>%
-                                                                      levels) %>%
-                                                               unlist), function(type) if((ont[ont$Type==type,] %>%
-                                                                                           nrow)==0) return(0) else ont[ont$Type==type,] %>%
-                                                        nrow)) %>%
+    p_df <- table(ont.res$Type, ont.res$GO) %>%
+      cbind %>%
       as_tibble(rownames="Type") %>%
       reshape2::melt(id.vars="Type", variable.name="GO", value.name="N") %>%
       mutate(Type=factor(Type, levels=unique(cell.groups) %>%
-                           .[. %in% names(pathway.data$de.gene.ids)] %>%
                            .[order(.)]))
 
     gg <- ggplot(p_df) +
       geom_bar(aes(x=Type, y=N, fill=GO), stat="identity")
   } else if(type=="DO") {
-    ont.res <- ont.res[["df"]]
-    if((ont.res$Type %>% unique %>% length) == 1) stop("The input only contains one cell type.")
-
-    p_df <- sapply(ont.res, nrow) %>%
+    p_df <- table(ont.res$Type) %>%
+      cbind %>%
       as_tibble(rownames="Type") %>%
       reshape2::melt(id.vars="Type", variable.name="DO", value.name="N") %>%
-      mutate(Type=factor(Type, levels=unique(pathway.data$cell.groups) %>%
-                           .[. %in% names(pathway.data$de.gene.ids)] %>%
+      mutate(Type=factor(Type, levels=unique(cell.groups) %>%
                            .[order(.)]))
 
     gg <- ggplot(p_df) +
@@ -196,8 +186,17 @@ plotPathwayDistribution <- function(ont.res, type=NULL, cell.groups) {
   } else {
     stop("'type' must be either 'GO' or 'DO'.")
   }
+
+  m <- sapply(p_df$Type %>%
+                unique, function(m) p_df %>%
+                dplyr::filter(Type==m) %>%
+                dplyr::select(N) %>%
+                sum) %>%
+    max %>%
+    plyr::round_any(10, ceiling)
+
   gg +
-    scale_y_continuous(expand=c(0, 0), limits=c(0, plyr::round_any(p_df$N, 100, ceiling) %>% max)) +
+    scale_y_continuous(expand=c(0, 0), limits=c(0, m)) +
     theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5),
           panel.grid.major.x=element_blank(), legend.position=c(0.99, 0.99), legend.justification=c(1, 1)) +
     labs(x="", y="No. of pathways")
@@ -212,9 +211,12 @@ plotPathwayDistribution <- function(ont.res, type=NULL, cell.groups) {
 #' @param n Number of pathways to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
 #' @export
 plotOnthologyHeatmap <- function(type, ont.res, legend.position = "left", order = "all-max-row", n = 10) {
-  if(length(unique(ont.res$df$Type))==1) stop("The input only contains one cell type.")
+  if(type=="BP" | type=="CC" | type=="MF") {
+    ont.sum <- getOnthologySummary(type, ont.res %>% filter(GO==type))
+  } else if(type=="DO") {
+    ont.sum <- getOnthologySummary(type, ont.res)
+  }
 
-  ont.sum <- getOnthologySummary(ont.res, type)
   if(!order %in% c("unique","unique-max-row","all-max-rowsum","all-max-row")) stop("'order' must be one of the following: 'unique', 'unique-max-row', 'all-max-rowsum', 'all-max-row'.")
 
   if(order=="unique") {
@@ -251,7 +253,7 @@ plotOnthologyHeatmap <- function(type, ont.res, legend.position = "left", order 
 #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
 #' @return A ggplot2 object
 #' @export
-plotOnthologyCorrelations <- function(ont.res, type=NULL) {
+plotOnthologyCorrelations <- function(type=NULL, ont.res) {
   if(type=="GO") {
     pathway_df <- names(ont.res) %>%
       lapply(function(ng) lapply(ont.res[[ng]] %>% .$Type %>% levels, function(nt) {

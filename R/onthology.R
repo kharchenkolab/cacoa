@@ -93,8 +93,7 @@ enrichGOOpt <- function (gene, OrgDB, goData, keyType = "ENTREZID", ont = "MF", 
 #' @export
 estimateOnthology <- function(type, pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, ...) {
   if(type=="DO") {
-    # TODO enable mapping to human data https://support.bioconductor.org/p/88192/
-    if(OrgDB!=org.Hs.eg.db) stop("DO analysis only available for human data (org.Hs.eg.db).")
+    # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
     ont.list <- sccore:::plapply(pathway.data$de.gene.ids, DOSE::enrichDO, pAdjustMethod=p.adjust.method, readable=readable, n.cores=1, progress=verbose, ...) %>%
       lapply(function(x) x@result)
     ont.list %<>% names %>%

@@ -316,13 +316,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param rel_heights Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (defaul=0.93)
     #' @return A ggplot2 object
-    plotDEGenes=function(pathway.data=self$pathway.data, cell.groups=self$cell.groups, show.legend=T, legend.position="bottom", p.adj=0.05, label.x.pos=0.01, label.y.pos=1, rel_heights=c(2.5, 0.5), scale=0.93) {
+    plotDEGenes=function(pathway.data=self$pathway.data, cell.groups=self$cell.groups, show.legend=T, legend.position="bottom", p.adj.cutoff=0.05, label.x.pos=0.01, label.y.pos=1, rel_heights=c(2.5, 0.5), scale=0.93) {
       if(is.null(pathway.data)) stop("Please run 'preparePathwayData' first.")
 
       if (is.null(cell.groups))
         stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
-      plotDEGenes(de.raw=pathway.data$de.raw, de.genes.filtered=pathway.data$de.genes.filtered, cell.groups=cell.groups, show.legend=show.legend, legend.position=legend.position, p.adj=p.adj, label.x.pos=label.x.pos, label.y.pos=label.y.pos, rel_heights=rel_heights, scale=scale)
+      plotDEGenes(de.raw=pathway.data$de.raw, de.genes.filtered=pathway.data$de.genes.filtered, cell.groups=cell.groups, show.legend=show.legend, legend.position=legend.position, p.adjust.cutoff=p.adjust.cutoff, label.x.pos=label.x.pos, label.y.pos=label.y.pos, rel_heights=rel_heights, scale=scale)
     },
 
     #' @title Plot pathway distribution

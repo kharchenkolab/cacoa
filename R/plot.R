@@ -77,7 +77,7 @@ plotOnthologyTerms <- function(type=NULL, ont.res, de.genes.filtered, cell.group
 #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (defaul=0.93)
 #' @return A ggplot2 object
 #' @export
-plotDEGenes <- function(de.raw, de.genes.filtered, cell.groups, legend.position="bottom", p.adjust.cutoff=0.05, label.x.pos=0.01, label.y.pos=1, rel_heights=c(2.5, .5), scale=0.93, show.legend=T) {
+plotDEGenes <- function(de.raw, de.genes.filtered, cell.groups, legend.position="bottom", p.adjust.cutoff=0.05, label.x.pos=0.01, label.y.pos=1, rel_heights=c(2.5, 0.5), scale=0.93, show.legend=T) {
   cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.genes.filtered)]
   leg <- cowplot::get_legend(plotNCellRegression(1:length(cell.groups) %>% setNames(names(cell.groups)), cell.groups, legend.position=legend.position))
 
@@ -87,10 +87,10 @@ plotDEGenes <- function(de.raw, de.genes.filtered, cell.groups, legend.position=
       xlab("") +
       theme(axis.text.x = element_blank(),
             axis.ticks.x = element_blank()) +
-      geom_smooth(method=MASS::rlm, se=0, color="black", size=0.5),
+      geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5),
     sapply(de.genes.filtered, length) %>%
       plotNCellRegression(cell.groups, y.lab="Highly-expressed DE genes", legend.position="none") +
-      geom_smooth(method=MASS::rlm, se=0, color="black", size=0.5),
+      geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5),
     ncol=1, labels=c("a","b"), label_x = label.x.pos, label_y = label.y.pos
   )
   if(show.legend) {

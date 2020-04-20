@@ -138,7 +138,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if (is.null(sample.groups))
         stop("'sample.groups' must be provided either during the object initialization or during this function call")
 
-      if (is.null(sample.per.cel))
+      if (is.null(sample.per.cell))
         stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
       if(!ref.level %in% sample.groups) stop(paste0("Reference group '",ref.level,"' not in 'sample.groups': ",paste(unique(sample.groups), collapse=" ")))

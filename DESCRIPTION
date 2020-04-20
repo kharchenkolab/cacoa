@@ -8,24 +8,24 @@ License: GPL-3.0
 Encoding: UTF-8
 LazyData: true
 Imports:
-    ggplot2,
-    magrittr,
-    igraph,
-    cowplot,
     abind,
-    sccore,
-    R6,
-    lineup,
+    cowplot,
     dplyr,
-    tibble,
+    ggplot2,
+    ggrepel,
+    igraph,
+    lineup,
+    magrittr,
+    Matrix,
+    methods,
+    R6,
     reshape2,
-    ggrepel
+    sccore,
+    tibble
 RoxygenNote: 7.0.2
-Depends: 
-    Matrix
 Suggests: 
-    ggrastr (>= 0.1.7),
-    clusterProfiler (>= 3.0.0)
+    clusterProfiler (>= 3.0.0),
+    ggrastr (>= 0.1.7)
 Remotes: 
     VPetukhov/ggrastr,
     hms-dbmi/sccore

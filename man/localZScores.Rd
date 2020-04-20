@@ -19,7 +19,7 @@ localZScores(
 \arguments{
 \item{graph}{Alignment graph (embedding)}
 
-\item{condition.per.cell}{Named condition factor with cell names. Must have exactly two levels.}
+\item{condition.per.cell}{Named group factor with cell names. Must have exactly two levels.}
 
 \item{genes}{Genes to be tested. Procedure is slow, so it's reasonable to restrict amount of genes.}
 

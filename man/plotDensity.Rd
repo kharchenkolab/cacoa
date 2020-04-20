@@ -9,16 +9,16 @@ plotDensity(emb, anoSample, sample.groups, bins = 200)
 \arguments{
 \item{emb}{cell embedding matrix}
 
-\item{anoSample}{sample annotation}
+\item{anoSample}{sample annotation  #Could do with better explanation}
+
+\item{sample.groups}{sample groups factor}
 
 \item{bins}{number of bins for density
 @import dplyr
 @import tibble
 @import tidyr
 @importFrom MASS kde2d}
-
-\item{sample.group}{sample groups factor}
 }
 \description{
-Evaluate cell density between different sample groups.  desity is caculated per sample and normlized by quantiles normlization.
+Evaluate cell density between different sample groups.  Density is calculated per sample and normlized by quantiles normlization.
 }

@@ -6,7 +6,7 @@
 \usage{
 cluster.expression.distances(
   con,
-  groups = NULL,
+  cell.groups = NULL,
   dist = "JS",
   n.cores = con$n.cores,
   min.cluster.size = 1,
@@ -22,7 +22,7 @@ cluster.expression.distances(
 \arguments{
 \item{con}{conos object}
 
-\item{groups}{clustering factor}
+\item{cell.groups}{Named factor with cell names and clustering/annotation}
 
 \item{dist}{what distance measure to use: 'JS' - Jensen-Shannon divergence, 'cor' - Pearson's linear correlation on log transformed values}
 

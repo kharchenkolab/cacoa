@@ -6,7 +6,7 @@
 \usage{
 getPerCellTypeDEmat(
   raw.mats,
-  groups = NULL,
+  cell.groups = NULL,
   sample.groups = NULL,
   cooks.cutoff = FALSE,
   ref.level = NULL,
@@ -20,19 +20,23 @@ getPerCellTypeDEmat(
 \arguments{
 \item{raw.mats}{list of counts matrix; row for gene and column for cell}
 
-\item{groups}{factor specifying cell types}
+\item{cell.groups}{factor specifying cell types (default=NULL)}
 
-\item{sample.groups}{a list of two character vector specifying the app groups to compare}
+\item{sample.groups}{a list of two character vector specifying the app groups to compare (default=NULL)}
 
-\item{cooks.cutoff}{cooksCutoff for DESeq2}
+\item{cooks.cutoff}{cooksCutoff for DESeq2 (default=F)}
 
-\item{independent.filtering}{independentFiltering for DESeq2}
+\item{ref.level}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
 
-\item{n.cores}{number of cores}
+\item{min.cell.count}{(default=10)}
+
+\item{independent.filtering}{independentFiltering for DESeq2 (default=F)}
+
+\item{n.cores}{Number of cores (default=1)}
 
 \item{cluster.sep.chr}{character string of length 1 specifying a delimiter to separate cluster and app names}
 
-\item{return.details}{return detals}
+\item{return.details}{Return details}
 }
 \description{
 Do differential expression for each cell type in a conos object between the specified subsets of apps

@@ -1,9 +1,9 @@
-#' @title
-#' @description
-#' @param
-#' @param
-#' @return A ggplot2 object
-#' @export
+#' @import ggrepel
+#' @import tibble
+#' @import cowplot
+#' @importFrom reshape2 melt
+NULL
+
 plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right") {
   p.df <- data.frame(N=n) %>% as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
@@ -70,7 +70,7 @@ plotOnthologyTerms <- function(type=NULL, ont.res, de.genes.filtered, cell.group
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
 #' @param show.legend Include legend in plot (default=T)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
-#' @param p.adj Adjusted P cutoff (default=0.05)
+#' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
 #' @param label.x.pos Plot label position on x axis (default=0.01)
 #' @param label.y.pos Plot label position on y axis (default=1)
 #' @param rel_heights Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))

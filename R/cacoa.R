@@ -237,7 +237,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=9))
     },
 
-    #' @title Prepare pathway data
     #' @description  Filter and prepare DE genes for onthology calculations
     #' @param de List with differentially expressed genes per cell group
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
@@ -256,7 +255,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$pathway.data))
     },
 
-    #' @title Estimate onthology
     #' @description  Calculate onthologies based on DEs
     #' @param type Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.
     #' @param pathway.data List containing DE gene IDs, and filtered and unfiltered DE genes
@@ -277,7 +275,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$pathway.data[[type]]))
     },
 
-    #' @title Plot onthology terms
     #' @description Plot onthology terms as a function of both number of DE genes, and number of cells.
     #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
     #' @param pathway.data Results from preparePathwayData (default: stored list)
@@ -304,19 +301,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       plotOnthologyTerms(type=type, ont.res=ont.res, de.genes.filtered=pathway.data$de.genes.filtered, cell.groups=cell.groups, show.legend=show.legend, legend.position=legend.position, label.x.pos=label.x.pos, label.y.pos=label.y.pos, rel_heights=rel_heights, scale=scale)
     },
 
-    #' @title Plot DE genes
     #' @description Plot number of DE genes as a function of number of cells
     #' @param pathway.data Results from preparePathwayData (default: stored list)
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param show.legend Include legend in plot (default=T)
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
-    #' @param p.adj Adjusted P cutoff (default=0.05)
+    #' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
     #' @param label.x.pos Plot label position on x axis (default=0.01)
     #' @param label.y.pos Plot label position on y axis (default=1)
     #' @param rel_heights Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (defaul=0.93)
     #' @return A ggplot2 object
-    plotDEGenes=function(pathway.data=self$pathway.data, cell.groups=self$cell.groups, show.legend=T, legend.position="bottom", p.adj.cutoff=0.05, label.x.pos=0.01, label.y.pos=1, rel_heights=c(2.5, 0.5), scale=0.93) {
+    plotDEGenes=function(pathway.data=self$pathway.data, cell.groups=self$cell.groups, show.legend=T, legend.position="bottom", p.adjust.cutoff=0.05, label.x.pos=0.01, label.y.pos=1, rel_heights=c(2.5, 0.5), scale=0.93) {
       if(is.null(pathway.data)) stop("Please run 'preparePathwayData' first.")
 
       if (is.null(cell.groups))
@@ -325,10 +321,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       plotDEGenes(de.raw=pathway.data$de.raw, de.genes.filtered=pathway.data$de.genes.filtered, cell.groups=cell.groups, show.legend=show.legend, legend.position=legend.position, p.adjust.cutoff=p.adjust.cutoff, label.x.pos=label.x.pos, label.y.pos=label.y.pos, rel_heights=rel_heights, scale=scale)
     },
 
-    #' @title Plot pathway distribution
     #' @description Bar plot of onthology pathways per cell type
     #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
     #' @param pathway.data List containing a list of results from estimateOnthology
+    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @return A ggplot2 object
     plotPathwayDistribution=function(type=NULL, pathway.data=self$pathway.data, cell.groups=self$cell.groups) {
       if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
@@ -342,7 +338,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       plotPathwayDistribution(type=type, ont.res=ont.res, cell.groups=cell.groups)
     },
 
-    #' @title Plot onthology heatmap
     #' @description Plot a heatmap of onthology P values per cell type
     #' @param type Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
     #' @param pathway.data List containing a list of results from estimateOnthology
@@ -364,7 +359,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       plotOnthologyHeatmap(type=type, ont.res=ont.res, legend.position=legend.position, order=order, n=n)
     },
 
-    #' @title Plot onthology correlations
     #' @description Plot correlation matrix for onthologies between cell types
     #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
     #' @param pathway.data List containing a list of results from estimateOnthology

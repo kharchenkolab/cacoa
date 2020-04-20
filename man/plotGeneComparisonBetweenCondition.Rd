@@ -22,7 +22,7 @@ plotGeneComparisonBetweenCondition(
 
 \item{con}{Conos object}
 
-\item{condition.per.cell}{Named condition factor with cell names.}
+\item{condition.per.cell}{Named factor with cell names and condition}
 
 \item{z.scores}{Z scores matrix. It is recommended to filter and adjust scores before plotting (default=NULL)}
 

@@ -1,3 +1,6 @@
+#' @import dplyr
+NULL
+
 #' @title Prepare pathway data
 #' @description  Filter and prepare DE genes for onthology calculations
 #' @param de List with differentially expressed genes per cell group
@@ -46,16 +49,6 @@ preparePathwayData <- function(cms, de, cell.groups, transpose=T, OrgDB=org.Hs.e
               de.raw = de))
 }
 
-# TODO update description
-#' @title
-#' @description
-#' @param
-#' @param
-#' @param
-#' @param
-#' @param
-#' @return
-#' @export
 enrichGOOpt <- function (gene, OrgDB, goData, keyType = "ENTREZID", ont = "MF", pvalueCutoff = 0.05,
                          pAdjustMethod = "BH", universe=NULL, qvalueCutoff = 0.2, minGSSize = 10,
                          maxGSSize = 500, readable = FALSE, pool = FALSE) {
@@ -145,7 +138,6 @@ estimateOnthology <- function(type, pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05
 #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
 #' @param pathway.data Results from preparePathwayData (default: stored list)
 #' @return Distance matrix
-#' @export
 distanceBetweenTerms <- function(type=NULL, ont.res) {
   genes.per.go <- sapply(ont.res$geneID, strsplit, "/") %>% setNames(ont.res$Description)
   all.go.genes <- unique(unlist(genes.per.go))
@@ -166,7 +158,6 @@ distanceBetweenTerms <- function(type=NULL, ont.res) {
 #' @param type Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
 #' @param pathway.data Results from preparePathwayData (default: stored list)
 #' @return Data frame
-#' @export
 getOnthologySummary <- function(type=NULL, ont.res) {
   go_dist <- distanceBetweenTerms(type, ont.res)
   clusts <- hclust(go_dist) %>%

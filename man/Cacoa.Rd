@@ -21,7 +21,28 @@ Cacoa R6 class
 
 \item{\code{data.object}}{the main object storing data (Conos or Seurat)}
 
-\item{\code{sample.groups}}{2-factor vector with annotation of groups per sample}
+\item{\code{sample.groups}}{2-factor vector with annotation of groups/condition per sample}
+
+\item{\code{cell.groups}}{named factor with cell names with cluster per cell}
+
+\item{\code{sample.per.cell}}{named factor with cell names}
+
+\item{\code{reference}}{level for sample.group vector}
+
+\item{\code{target/disease}}{level for sample.group vector}
+
+\item{\code{DE}}{results for pathway estimations}
+}
+\if{html}{\out{</div>}}
+}
+\section{Active bindings}{
+\if{html}{\out{<div class="r6-active-bindings">}}
+\describe{
+\item{\code{reference}}{level for sample.group vector}
+
+\item{\code{target/disease}}{level for sample.group vector}
+
+\item{\code{DE}}{results for pathway estimations}
 }
 \if{html}{\out{</div>}}
 }
@@ -33,6 +54,13 @@ Cacoa R6 class
 \item \href{#method-estimateExpressionShiftZScores}{\code{Cacoa$estimateExpressionShiftZScores()}}
 \item \href{#method-plotExpressionShiftMagnitudes}{\code{Cacoa$plotExpressionShiftMagnitudes()}}
 \item \href{#method-plotExpressionShiftZScores}{\code{Cacoa$plotExpressionShiftZScores()}}
+\item \href{#method-preparePathwayData}{\code{Cacoa$preparePathwayData()}}
+\item \href{#method-estimateOnthology}{\code{Cacoa$estimateOnthology()}}
+\item \href{#method-plotOnthologyTerms}{\code{Cacoa$plotOnthologyTerms()}}
+\item \href{#method-plotDEGenes}{\code{Cacoa$plotDEGenes()}}
+\item \href{#method-plotPathwayDistribution}{\code{Cacoa$plotPathwayDistribution()}}
+\item \href{#method-plotOnthologyHeatmap}{\code{Cacoa$plotOnthologyHeatmap()}}
+\item \href{#method-plotOnthologyCorrelations}{\code{Cacoa$plotOnthologyCorrelations()}}
 \item \href{#method-clone}{\code{Cacoa$clone()}}
 }
 }
@@ -43,8 +71,13 @@ Cacoa R6 class
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$new(
   data.object,
   sample.groups = NULL,
+  cell.groups = NULL,
+  sample.per.cell = NULL,
+  ref.level = NULL,
+  target.level = NULL,
   n.cores = parallel::detectCores(logical = F),
-  verbose = TRUE
+  verbose = TRUE,
+  pathway.data = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -55,7 +88,7 @@ Cacoa R6 class
 Calculate expression shift magnitudes of different clusters between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateExpressionShiftMagnitudes(
-  groups = NULL,
+  cell.groups = self$cell.groups,
   dist = "JS",
   within.group.normalization = TRUE,
   valid.comparisons = NULL,
@@ -73,29 +106,25 @@ Calculate expression shift magnitudes of different clusters between conditions
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{groups}}{cell cluster factor}
+\item{\code{cell.groups}}{Named cell group factor with cell names (default: stored vector)}
 
-\item{\code{dist}}{'JS' - Jensen Shannon divergence, or 'cor' - correlation distance}
+\item{\code{dist}}{'JS' - Jensen Shannon divergence, or 'cor' - correlation distance (default="JS")}
 
-\item{\code{within.group.normalization}}{normalize the shift magnitude by the mean magnitude of within-group variation}
+\item{\code{within.group.normalization}}{Normalize the shift magnitude by the mean magnitude of within-group variation (default=T)}
 
-\item{\code{valid.comparisons}}{a logical matrix (rows and columns are samples) specifying valid between-sample comparisons. Note that if within.group.normalization=T, the method will automatically include all within-group comparisons of the samples for which at least one valid pair is included in the valid.comparisons}
+\item{\code{valid.comparisons}}{A logical matrix (rows and columns are samples) specifying valid between-sample comparisons. Note that if within.group.normalization=T, the method will automatically include all within-group comparisons of the samples for which at least one valid pair is included in the valid.comparisons (default=NULL)}
 
-\item{\code{n.cells}}{number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)}
+\item{\code{n.cells}}{Number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)}
 
-\item{\code{n.top.genes}}{number of top highest-expressed genes to consider (default: all genes)}
+\item{\code{n.top.genes}}{Number of top highest-expressed genes to consider (default: all genes)}
 
-\item{\code{n.subsamples}}{number of samples to draw (default:100)}
+\item{\code{n.subsamples}}{Number of samples to draw (default=100)}
 
-\item{\code{min.cells}}{minimum number of cells per cluster/per sample to be included in the analysis}
+\item{\code{min.cells}}{Minimum number of cells per cluster/per sample to be included in the analysis (default=10)}
 
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared}
+\item{\code{sample.groups}}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}
 
-\item{\code{n.cores}}{number of cores to use}
-
-\item{\code{verbose}}{}
-
-\item{\code{ref.level}}{reference sample group, e.g., ctrl, healthy, or untreated.}
+\item{\code{verbose}}{Print progress}
 }
 \if{html}{\out{</div>}}
 }
@@ -111,11 +140,13 @@ a list include \itemize{
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateExpressionShiftZScores"></a>}}
 \subsection{Method \code{estimateExpressionShiftZScores()}}{
+Calculate expression shift Z scores of different clusters between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateExpressionShiftZScores(
-  groups,
-  ref.level,
+  cell.groups = self$cell.groups,
+  ref.level = self$ref.level,
   sample.groups = self$sample.groups,
+  sample.per.cell = self$sample.per.cell,
   n.od.genes = 1000,
   n.pcs = 100,
   pca.maxit = 1000,
@@ -124,6 +155,29 @@ a list include \itemize{
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{cell.groups}}{Named cell group factor with cell names (default: stored vector)}
+
+\item{\code{ref.level}}{Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)}
+
+\item{\code{sample.groups}}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}
+
+\item{\code{sample.per.cell}}{(default: stored vector)}
+
+\item{\code{n.od.genes}}{(default=1000)}
+
+\item{\code{n.pcs}}{(default=100)}
+
+\item{\code{pca.maxit}}{(default=1000)}
+
+\item{\code{ignore.cache}}{(default=F)}
+
+\item{\code{name}}{(default="expression.z.scores")}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotExpressionShiftMagnitudes"></a>}}
@@ -133,8 +187,8 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionShiftMagnitudes(
   name = "expression.shifts",
   size.norm = F,
-  cluster.per.cell = NULL,
-  sample.per.cell = NULL,
+  cell.groups = self$cell.groups,
+  sample.per.cell = self$sample.per.cell,
   label = T
 )}\if{html}{\out{</div>}}
 }
@@ -144,20 +198,24 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \describe{
 \item{\code{name}}{Test results to plot (default=expression.shifts)}
 
-\item{\code{size.norm}}{Plot size normalized results. Requires cluster.per.cell, and sample.per.cell (default=F)}
+\item{\code{size.norm}}{Plot size normalized results. Requires cell.groups, and sample.per.cell (default=F)}
 
-\item{\code{cluster.per.cell}}{Named cluster factor with cell names (default=NULL)}
+\item{\code{cell.groups}}{Named factor with cell names defining groups/clusters (default: stored vector)}
 
-\item{\code{sample.per.cell}}{Named sample factor with cell names (default=NULL)}
+\item{\code{sample.per.cell}}{Named sample factor with cell names (default: stored vector)}
 
 \item{\code{label}}{Plot labels on size normalized plots (default=T)}
 }
 \if{html}{\out{</div>}}
 }
+\subsection{Returns}{
+A ggplot2 object
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotExpressionShiftZScores"></a>}}
 \subsection{Method \code{plotExpressionShiftZScores()}}{
+Plot results from cao$estimateExpressionShiftZScores()
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionShiftZScores(
   type.order = NULL,
@@ -165,6 +223,266 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{type.order}}{(default=NULL)}
+
+\item{\code{name}}{Test results to plot (default=expression.z.shifts)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-preparePathwayData"></a>}}
+\subsection{Method \code{preparePathwayData()}}{
+Filter and prepare DE genes for onthology calculations
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$preparePathwayData(
+  de,
+  cell.groups = self$cell.groups,
+  OrgDB = org.Hs.eg.db,
+  stat.cutoff = 3,
+  verbose = T
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{de}}{List with differentially expressed genes per cell group}
+
+\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+
+\item{\code{OrgDB}}{Genome-wide annotation (default=org.Hs.eg.db)}
+
+\item{\code{stat.cutoff}}{Cutoff for filtering highly-expressed DE genes (default=3)}
+
+\item{\code{verbose}}{Print progress (default=T)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A list containing DE gene IDs, filtered DE genes, and input DE genes
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateOnthology"></a>}}
+\subsection{Method \code{estimateOnthology()}}{
+Calculate onthologies based on DEs
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOnthology(
+  type = NULL,
+  pathway.data = self$pathway.data,
+  OrgDB = org.Hs.eg.db,
+  p.adj = 0.05,
+  p.adjust.method = "BH",
+  readable = T,
+  verbose = T,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{type}}{Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.}
+
+\item{\code{pathway.data}}{List containing DE gene IDs, and filtered and unfiltered DE genes}
+
+\item{\code{OrgDB}}{Genome-wide annotation (default=org.Hs.eg.db)}
+
+\item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
+
+\item{\code{p.adjust.method}}{Method for calculating adj. P. Please see DOSE package for more information (default="BH")}
+
+\item{\code{readable}}{Mapping gene ID to gene name (default=T)}
+
+\item{\code{verbose}}{Print progress (default=T)}
+
+\item{\code{...}}{Additional parameters for sccore:::plapply function}
+
+\item{\code{n.cores}}{Number of cores used (default: stored vector)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A list containing a list of onthologies per type of onthology, and a data frame with merged results
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotOnthologyTerms"></a>}}
+\subsection{Method \code{plotOnthologyTerms()}}{
+Plot onthology terms as a function of both number of DE genes, and number of cells.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyTerms(
+  type = NULL,
+  pathway.data = self$pathway.data,
+  cell.groups = self$cell.groups,
+  show.legend = T,
+  legend.position = "bottom",
+  label.x.pos = 0.01,
+  label.y.pos = 1,
+  rel_heights = c(2.5, 0.5),
+  scale = 0.93
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{type}}{Onthology, must be either "GO" or "DO" (default=NULL)}
+
+\item{\code{pathway.data}}{Results from preparePathwayData (default: stored list)}
+
+\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+
+\item{\code{show.legend}}{Include legend in plot (default=T)}
+
+\item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="bottom")}
+
+\item{\code{label.x.pos}}{Plot label position on x axis (default=0.01)}
+
+\item{\code{label.y.pos}}{Plot label position on y axis (default=1)}
+
+\item{\code{rel_heights}}{Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))}
+
+\item{\code{scale}}{Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotDEGenes"></a>}}
+\subsection{Method \code{plotDEGenes()}}{
+Plot number of DE genes as a function of number of cells
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEGenes(
+  pathway.data = self$pathway.data,
+  cell.groups = self$cell.groups,
+  show.legend = T,
+  legend.position = "bottom",
+  p.adjust.cutoff = 0.05,
+  label.x.pos = 0.01,
+  label.y.pos = 1,
+  rel_heights = c(2.5, 0.5),
+  scale = 0.93
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{pathway.data}}{Results from preparePathwayData (default: stored list)}
+
+\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+
+\item{\code{show.legend}}{Include legend in plot (default=T)}
+
+\item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="bottom")}
+
+\item{\code{p.adjust.cutoff}}{Adjusted P cutoff (default=0.05)}
+
+\item{\code{label.x.pos}}{Plot label position on x axis (default=0.01)}
+
+\item{\code{label.y.pos}}{Plot label position on y axis (default=1)}
+
+\item{\code{rel_heights}}{Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))}
+
+\item{\code{scale}}{Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (defaul=0.93)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotPathwayDistribution"></a>}}
+\subsection{Method \code{plotPathwayDistribution()}}{
+Bar plot of onthology pathways per cell type
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotPathwayDistribution(
+  type = NULL,
+  pathway.data = self$pathway.data,
+  cell.groups = self$cell.groups
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{type}}{Onthology, must be either "GO" or "DO" (default=NULL)}
+
+\item{\code{pathway.data}}{List containing a list of results from estimateOnthology}
+
+\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotOnthologyHeatmap"></a>}}
+\subsection{Method \code{plotOnthologyHeatmap()}}{
+Plot a heatmap of onthology P values per cell type
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyHeatmap(
+  type = NULL,
+  pathway.data = self$pathway.data,
+  legend.position = "left",
+  order = "all-max-row",
+  n = 10
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{type}}{Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
+
+\item{\code{pathway.data}}{List containing a list of results from estimateOnthology}
+
+\item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="left")}
+
+\item{\code{order}}{Order of rows in heatmap. Can be 'unique' (only show pathways that are unique for any cell type); 'unique-max-row' (same as 'unique' but ordered by P value); 'all-max-rowsum' (all pathways ordered by cumulative P value for all cell types); 'all-max-row' (all pathways ordered by max P value) (default="all-max-row")}
+
+\item{\code{n}}{Number of pathways to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotOnthologyCorrelations"></a>}}
+\subsection{Method \code{plotOnthologyCorrelations()}}{
+Plot correlation matrix for onthologies between cell types
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyCorrelations(type = NULL, pathway.data = self$pathway.data)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{type}}{Onthology, must be either "GO" or "DO" (default=NULL)}
+
+\item{\code{pathway.data}}{List containing a list of results from estimateOnthology}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}

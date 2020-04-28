@@ -14,29 +14,26 @@ localZScores <- function(graph, condition.per.cell, genes, count.matrix.transpos
     stop("'ref.level' not present in 'condition.per.cell'")
 
   # adj_mat <- igraph::as_adj(graph, attr="weight")
-  if (verbose) cat("Estimating adjacency matrices... ")
   adj.mat <- igraph::as_adj(graph)
   adj.mat.by.cond <- colnames(adj.mat) %>% split(condition.per.cell[.]) %>%
     lapply(function(ns) adj.mat[,ns])
-  if (verbose) cat("Done.\n")
 
-  if (verbose) cat("Estimating local means... ")
+  if (verbose) cat("Estimating local means ...\n")
   local.mean.mat <- sccore:::plapply(adj.mat.by.cond, function(mat)
     (mat %*% count.matrix.transposed[colnames(mat), genes]) / pmax(Matrix::rowSums(mat), min.expr),
     n.cores=n.cores, progress=verbose)
-  if (verbose) cat("Done.\n")
 
-  if (verbose) cat("Estimating stds... ")
+  if (verbose) cat("Estimating SDs ... ")
   ref.adj.mat <- adj.mat.by.cond[[ref.level]]
   ref.cbs <- colnames(ref.adj.mat)
   stds <- sqrt(ref.adj.mat %*% (count.matrix.transposed[ref.cbs, genes] - local.mean.mat[[ref.level]][ref.cbs, genes]) ^ 2 /
                  pmax(Matrix::rowSums(ref.adj.mat), min.expr))
-  if (verbose) cat("Done.\n")
+  if (verbose) cat("done!\n")
 
-  if (verbose) cat("Estimating z-scores... ")
+  if (verbose) cat("Estimating Z-scores ... ")
   non.ref.level <- unique(condition.per.cell) %>% setdiff(ref.level)
   z.scores <- (local.mean.mat[[non.ref.level]] - local.mean.mat[[ref.level]]) / pmax(stds, min.std)
-  if (verbose) cat("Done.\n")
+  if (verbose) cat("done!\nAll done!")
 
   return(z.scores)
 }

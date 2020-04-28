@@ -185,10 +185,10 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
 
   if(is.null(n.cells)) {
     n.cells <- min(table(cf)) # use the size of the smallest group
-    if(verbose) cat('setting group size of',n.cells,'cells for comparisons\n')
+    if(verbose) cat('setting group size of ',n.cells,' cells for comparisons\n')
   }
 
-  if(verbose) cat('running',n.subsamples,'subsamples ... ')
+  if(verbose) cat('running',n.subsamples,'subsamples ... \n')
   ctdml <- sccore:::plapply(1:n.subsamples,function(i) {
     # subsample cells
 
@@ -233,9 +233,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
 
   },n.cores=n.cores, mc.preschedule=TRUE, mc.allow.recursive=FALSE, progress=verbose)
 
-  if(verbose) cat('done\n')
-
-  if(verbose) cat('calculating distances ...')
+  if(verbose) cat('calculating distances ... ')
   df <- do.call(rbind,lapply(ctdml,function(ctdm) {
 
     x <- lapply(ctdm,function(xm) {
@@ -280,7 +278,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
   # sort cell types
   df$Type <- factor(df$Type,levels=names(sort(tapply(df$value,as.factor(df$Type),median))))
 
-  if(verbose) cat('done\n')
+  if(verbose) cat('done!\n')
   return(list(df=df, ctdml=ctdml, sample.groups=sample.groups, valid.comparisons=valid.comparisons))
 }
 ##' @title Expression shift Z scores per cluster between conditions

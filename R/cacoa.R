@@ -57,7 +57,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         self$data.object <- data.object
       }
 
-      if(is.null(sample.groups) && (!is.null(ref.level) && !is.null(target.level))) {
+      if(is.null(sample.groups) && !is.null(ref.level)) {
         self$sample.groups <- extractSampleGroups(data.object, ref.level, target.level)
       } else {
         self$sample.groups <- sample.groups
@@ -169,11 +169,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
     #' @param name Test results to plot (default=expression.shifts)
     #' @param size.norm Plot size normalized results. Requires cell.groups, and sample.per.cell (default=F)
+    #' @param normalized.distance Plot the absolute median distance (default=F)
     #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
     #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
     #' @param label Plot labels on size normalized plots (default=T)
     #' @return A ggplot2 object
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, label=T) {
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, normalized.distance=F, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, label=T) {
       private$checkTestResults(name)
       if (is.null(cell.groups)) {
         stop("'cell.groups' must be provided either during the object initialization or during this function call")
@@ -184,19 +185,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       if (!size.norm) {
-        gg <- ggplot(na.omit(self$test.results[[name]]$df),aes(x=as.factor(Type), y=value)) +
+        if(normalized.distance) message("'normalized.distance' has no effect when 'size.norm' = F.")
+        if(label) message("'label' has no effect when 'size.norm' = F.")
+
+        m <- max(abs(df$value - 1))
+
+        gg <- ggplot(na.omit(self$test.results[[name]]$df), aes(x=as.factor(Type), y=value)) +
           geom_boxplot(notch=T, outlier.shape=NA) +
           geom_jitter(position=position_jitter(0.1), aes(color=patient), show.legend=FALSE,alpha=0.1) +
           theme(axis.text.x=element_text(angle = 90, hjust=1), axis.text.y=element_text(angle=90, hjust=0.5)) +
           labs(x="", y="Normalized distance") +
+          ylim(c(1 - m, 1 + m)) +
           geom_hline(yintercept=1, linetype="dashed", color = "black")
-      } else {
+        } else {
         if (length(setdiff(names(cell.groups), names(sample.per.cell)))>0) warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
 
         cct <- table(cell.groups, sample.per.cell[names(cell.groups)])
         cluster.shifts <- cao$test.results[[name]]$df
         x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
-        odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
+
+        if(normalized.distance) {
+          odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=abs(1-x))
+        } else {
+          odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
+        }
 
         if (label) {
           gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
@@ -207,9 +219,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
         gg <- gg +
           geom_point() +
-          guides(color=F) + geom_hline(yintercept=1, linetype="dashed", color = "black") +
-          ylab("Median distance")
+          guides(color=F) +
+          xlab("Cluster size")
 
+        if(normalized.distance) {
+          gg <- gg +
+            ylab("Absolute median distance")
+        } else {
+          m <- max(abs(odf$md - 1))
+
+          gg <- gg +
+            ylab("Median distance") +
+            ylim(c(1 - m,1 + m)) +
+            geom_hline(yintercept=1, linetype="dashed", color = "black")
+        }
         return(gg)
       }
       return(gg)

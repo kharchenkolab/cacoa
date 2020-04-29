@@ -54,15 +54,14 @@ rawMatricesWithCommonGenesCacoa=function (raw.mats, sample.groups = NULL)
 #' @export
 getPerCellTypeDEmat=function (raw.mats, cell.groups = NULL, sample.groups = NULL, cooks.cutoff = FALSE,
                               ref.level = NULL, min.cell.count = 10, independent.filtering = FALSE,
-                              n.cores = 1, cluster.sep.chr = "<!!>", return.details = TRUE)
-{
+                              n.cores = 1, cluster.sep.chr = "<!!>", return.details = TRUE) {
   validatePerCellTypeParamsCacoa(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr)
 
-  dat <- rawMatricesWithCommonGenesCacoa(raw.mats, sample.groups)
-  aggr2=lapply(dat,conos:::collapseCellsByType, groups = cell.groups, min.cell.count = min.cell.count) %>%
+  # TODO shouldn't depend on Conos
+  aggr2<- rawMatricesWithCommonGenesCacoa(raw.mats, sample.groups) %>%
+    lapply(conos:::collapseCellsByType, groups = cell.groups, min.cell.count = min.cell.count) %>%
     conos:::rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
 
-  gc()
   de.res <- conos:::papply(sn(levels(cell.groups)), function(l) {
     tryCatch({
       cm <- aggr2[, conos:::strpart(colnames(aggr2), cluster.sep.chr,
@@ -77,7 +76,6 @@ getPerCellTypeDEmat=function (raw.mats, cell.groups = NULL, sample.groups = NULL
       if (length(unique(as.character(meta$group))) < 2)
         stop("The cluster is not present in both conditions")
 
-      #cm=cm[rowMeans(as.matrix(cm))!=0,]
       dds1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta,
                                              design = ~group)
       dds1 <- DESeq2::DESeq(dds1)
@@ -86,17 +84,19 @@ getPerCellTypeDEmat=function (raw.mats, cell.groups = NULL, sample.groups = NULL
       res1 <- as.data.frame(res1)
       res1 <- res1[order(res1$padj, decreasing = FALSE),]
 
-      # res1$ExpressionFraction=ExpressionFraction(dat,l,cm,groups)[rownames(res1)]
-
       if (return.details) {
-        list(res = res1, cm = cm, sample.groups = sample.groups)
+        list(res = res1, cm = cm)
       }
       else {
         res1
       }
     }, error = function(err) NA)
-  }, n.cores = n.cores)
-  de.res
+  }, n.cores = n.cores) %>% .[!sapply(., is.na)]
+
+  dif <- length(levels(cell.groups)) - length(de.res)
+  if(dif > 0) warning(paste0("DEs not calculated for ",dif," cell group(s)."))
+
+  return(de.res)
 }
 
 strpart <- function (x, split, n, fixed = FALSE) {

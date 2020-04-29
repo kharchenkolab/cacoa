@@ -1,7 +1,7 @@
 #' @import dplyr
 NULL
 
-#' @title Prepare pathway data
+#' @title Prepare onthology data
 #' @description  Filter and prepare DE genes for onthology calculations
 #' @param de List with differentially expressed genes per cell group
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
@@ -10,7 +10,7 @@ NULL
 #' @param verbose Print progress (default=T)
 #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
 #' @export
-preparePathwayData <- function(cms, de, cell.groups, transpose=T, OrgDB=org.Hs.eg.db, verbose=T, stat.cutoff=3) {
+prepareOnthologyData <- function(cms, de, cell.groups, transpose=T, OrgDB=org.Hs.eg.db, verbose=T, stat.cutoff=3) {
   if (!requireNamespace("clusterProfiler", quietly = TRUE)) stop("You have to install 'clusterProfiler' package to perform onthology analysis")
 
   if(verbose) cat("Merging count matrices ... ")
@@ -45,8 +45,7 @@ preparePathwayData <- function(cms, de, cell.groups, transpose=T, OrgDB=org.Hs.e
   if(verbose) cat("done!\nAll done!\n")
 
   return(list(de.gene.ids = de.gene.ids,
-              de.genes.filtered = de.genes.filtered,
-              de.raw = de))
+              de.filter = de.genes.filtered))
 }
 
 enrichGOOpt <- function (gene, OrgDB, goData, keyType = "ENTREZID", ont = "MF", pvalueCutoff = 0.05,
@@ -71,72 +70,10 @@ enrichGOOpt <- function (gene, OrgDB, goData, keyType = "ENTREZID", ont = "MF", 
   return(res)
 }
 
-#' @title Estimate onthology
-#' @description  Calculate onthologies based on DEs
-#' @param type Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.
-#' @param pathway.data List containing DE gene IDs, and filtered and unfiltered DE genes
-#' @param OrgDB Genome-wide annotation (default=org.Hs.eg.db)
-#' @param p.adj Adjusted P cutoff (default=0.05)
-#' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
-#' @param readable Mapping gene ID to gene name (default=T)
-#' @param n.cores Number of cores used (default: stored vector)
-#' @param verbose Print progress (default=T)
-#' @param ... Additional parameters for sccore:::plapply function
-#' @return A list containing a list of onthologies per type of onthology, and a data frame with merged results
-#' @export
-estimateOnthology <- function(type, pathway.data, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, ...) {
-  if(type=="DO") {
-    # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
-    ont.list <- sccore:::plapply(pathway.data$de.gene.ids, DOSE::enrichDO, pAdjustMethod=p.adjust.method, readable=readable, n.cores=1, progress=verbose, ...) %>%
-      lapply(function(x) x@result)
-    ont.list %<>% names %>%
-      setNames(., .) %>%
-      lapply(function(n) mutate(ont.list[[n]], Type=n)) %>%
-      lapply(function(x) filter(x, p.adjust < p.adj))
-
-    ont.df <- ont.list %>%
-      .[sapply(., nrow) > 0] %>%
-      dplyr::bind_rows() %>%
-      dplyr::select(Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)
-  } else if(type=="GO") {
-    if(verbose) cat("Extracting environment data ... \n")
-    go_data <- c("BP", "CC", "MF") %>%
-      setNames(., .) %>%
-      sccore:::plapply(function(n) clusterProfiler:::get_GO_data(OrgDB, n, "ENTREZID") %>%
-                         as.list() %>%
-                         as.environment(), n.cores=1, progress=verbose)
-    if(verbose) cat("Estimating enriched pathways ... \n")
-    ont.list <- names(go_data) %>%
-      setNames(., .) %>%
-      lapply(function(ont) sccore:::plapply(pathway.data$de.gene.ids, enrichGOOpt, ont=ont, goData=go_data[[ont]], readable=readable, pAdjustMethod=p.adjust.method, OrgDB=OrgDB, n.cores=1, progress=verbose, ...)) %>%
-      lapply(lapply, function(x) x@result)
-
-    ont.list %<>% lapply(lapply, function(x) filter(x, p.adjust < p.adj)) %>%
-      lapply(function(gt) gt %>%
-               .[sapply(., nrow) > 0] %>%
-               names() %>%
-               setNames(., .) %>%
-               lapply(function(n) cbind(gt[[n]], Type=n)) %>%
-               Reduce(rbind, .))
-
-    ont.df <- ont.list %>%
-      names %>%
-      lapply(function(n) ont.list[[n]] %>%
-               mutate(GO=n) %>%
-               dplyr::select(GO, Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)) %>%
-      dplyr::bind_rows()
-  } else {
-    stop("'type' must be either 'GO' or 'DO'.")
-  }
-
-  return(list(list=ont.list,
-              df=ont.df))
-}
-
 #' @title Distance between terms
 #' @description Calculate distance matrix between onthology terms
 #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
-#' @param pathway.data Results from preparePathwayData (default: stored list)
+#' @param ont.res Results from prepareOnthologyData (default: stored list)
 #' @return Distance matrix
 distanceBetweenTerms <- function(type=NULL, ont.res) {
   genes.per.go <- sapply(ont.res$geneID, strsplit, "/") %>% setNames(ont.res$Description)
@@ -156,7 +93,7 @@ distanceBetweenTerms <- function(type=NULL, ont.res) {
 #' @title Get onthology summary
 #' @description Get summary
 #' @param type Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
-#' @param pathway.data Results from preparePathwayData (default: stored list)
+#' @param ont.res Results from prepareOnthologyData (default: stored list)
 #' @return Data frame
 getOnthologySummary <- function(type=NULL, ont.res) {
   go_dist <- distanceBetweenTerms(type, ont.res)
@@ -189,4 +126,66 @@ getOnthologySummary <- function(type=NULL, ont.res) {
   df[is.na(df)] <- 0
 
   return(df)
+}
+
+#' @title Estimate onthology
+#' @description  Calculate onthologies based on DEs
+#' @param type Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.
+#' @param ont.data List containing DE gene IDs, and filtered DE genes
+#' @param OrgDB Genome-wide annotation (default=org.Hs.eg.db)
+#' @param p.adj Adjusted P cutoff (default=0.05)
+#' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
+#' @param readable Mapping gene ID to gene name (default=T)
+#' @param n.cores Number of cores used (default: stored vector)
+#' @param verbose Print progress (default=T)
+#' @param ... Additional parameters for sccore:::plapply function
+#' @return A list containing a list of onthologies per type of onthology, and a data frame with merged results
+#' @export
+estimateOnthology <- function(type, de.gene.ids, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, ...) {
+  if(type=="DO") {
+    # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
+    ont.list <- sccore:::plapply(de.gene.ids, DOSE::enrichDO, pAdjustMethod=p.adjust.method, readable=readable, n.cores=1, progress=verbose, ...) %>%
+      lapply(function(x) x@result)
+    ont.list %<>% names %>%
+      setNames(., .) %>%
+      lapply(function(n) mutate(ont.list[[n]], Type=n)) %>%
+      lapply(function(x) filter(x, p.adjust < p.adj))
+
+    ont.df <- ont.list %>%
+      .[sapply(., nrow) > 0] %>%
+      dplyr::bind_rows() %>%
+      dplyr::select(Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)
+  } else if(type=="GO") {
+    if(verbose) cat("Extracting environment data ... \n")
+    go_data <- c("BP", "CC", "MF") %>%
+      setNames(., .) %>%
+      sccore:::plapply(function(n) clusterProfiler:::get_GO_data(OrgDB, n, "ENTREZID") %>%
+                         as.list() %>%
+                         as.environment(), n.cores=1, progress=verbose)
+    if(verbose) cat("Estimating enriched onthologies ... \n")
+    ont.list <- names(go_data) %>%
+      setNames(., .) %>%
+      lapply(function(ont) sccore:::plapply(de.gene.ids, enrichGOOpt, ont=ont, goData=go_data[[ont]], readable=readable, pAdjustMethod=p.adjust.method, OrgDB=OrgDB, n.cores=1, progress=verbose, ...)) %>%
+      lapply(lapply, function(x) x@result)
+
+    ont.list %<>% lapply(lapply, function(x) filter(x, p.adjust < p.adj)) %>%
+      lapply(function(gt) gt %>%
+               .[sapply(., nrow) > 0] %>%
+               names() %>%
+               setNames(., .) %>%
+               lapply(function(n) cbind(gt[[n]], Type=n)) %>%
+               Reduce(rbind, .))
+
+    ont.df <- ont.list %>%
+      names %>%
+      lapply(function(n) ont.list[[n]] %>%
+               mutate(GO=n) %>%
+               dplyr::select(GO, Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)) %>%
+      dplyr::bind_rows()
+  } else {
+    stop("'type' must be either 'GO' or 'DO'.")
+  }
+
+  return(list(list=ont.list,
+              df=ont.df))
 }

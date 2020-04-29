@@ -17,11 +17,89 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right") 
     guides(color=guide_legend(title="Cell type"))
 }
 
+#' @title Plot raw DE genes
+#' @description Plot number of DE genes as a function of number of cells
+#' @param de.raw
+#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+#' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
+#' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
+#' @return A ggplot2 object
+#' @export
+plotDEGenes <- function(de.raw, cell.groups, legend.position="bottom", p.adjust.cutoff=0.05) {
+  cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.raw)]
+
+  sapply(de.raw, function(n) n %>% dplyr::filter(padj <= p.adjust.cutoff) %>% nrow) %>%
+    plotNCellRegression(cell.groups, y.lab="Significant DE genes", legend.position=legend.position) +
+    xlab("") +
+    geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
+}
+
+#' @title Plot filtered DE genes
+#' @description Plot number of DE genes as a function of number of cells
+#' @param de.filter
+#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+#' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
+#' @export
+plotFilteredDEGenes <- function(de.filter, cell.groups, legend.position="bottom") {
+  cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
+
+  sapply(de.filter, length) %>%
+    plotNCellRegression(cell.groups, y.lab="Highly-expressed DE genes", legend.position=legend.position) +
+    xlab("") +
+    geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
+}
+
+#' @title Plot onthology distribution
+#' @description Bar plot of onthologies per cell type
+#' @param type Onthology, must be either "GO" or "DO" (default=NULL)
+#' @param ont.res Onthology resuls from estimateOnthology
+#' @return A ggplot2 object
+#' @export
+plotOnthologyDistribution <- function(type=NULL, ont.res, cell.groups) {
+  if(type=="GO") {
+    p_df <- table(ont.res$Type, ont.res$GO) %>%
+      cbind %>%
+      as_tibble(rownames="Type") %>%
+      reshape2::melt(id.vars="Type", variable.name="GO", value.name="N") %>%
+      mutate(Type=factor(Type, levels=unique(cell.groups) %>%
+                           .[order(.)]))
+
+    gg <- ggplot(p_df) +
+      geom_bar(aes(x=Type, y=N, fill=GO), stat="identity")
+  } else if(type=="DO") {
+    p_df <- table(ont.res$Type) %>%
+      cbind %>%
+      as_tibble(rownames="Type") %>%
+      reshape2::melt(id.vars="Type", variable.name="DO", value.name="N") %>%
+      mutate(Type=factor(Type, levels=unique(cell.groups) %>%
+                           .[order(.)]))
+
+    gg <- ggplot(p_df) +
+      geom_bar(aes(x=Type, y=N), stat="identity")
+  } else {
+    stop("'type' must be either 'GO' or 'DO'.")
+  }
+
+  m <- sapply(p_df$Type %>%
+                unique, function(m) p_df %>%
+                dplyr::filter(Type==m) %>%
+                dplyr::select(N) %>%
+                sum) %>%
+    max %>%
+    plyr::round_any(10, ceiling)
+
+  gg +
+    scale_y_continuous(expand=c(0, 0), limits=c(0, m)) +
+    theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5),
+          panel.grid.major.x=element_blank(), legend.position=c(0.99, 0.99), legend.justification=c(1, 1)) +
+    labs(x="", y="No. of onthologies")
+}
+
 #' @title Plot onthology terms
 #' @description Plot onthology terms as a function of both number of DE genes, and number of cells.
 #' @param ont.res Onthology results in a data frame
 #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
-#' @param de.genes.filtered
+#' @param de.filter
 #' @param cell.groups Vector indicating cell group sizes with cell group names
 #' @param show.legend Include legend in plot (default=T)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
@@ -31,17 +109,17 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right") 
 #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
 #' @return A ggplot2 object
 #' @export
-plotOnthologyTerms <- function(type=NULL, ont.res, de.genes.filtered, cell.groups, legend.position="bottom", label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93, show.legend=T) {
+plotOnthologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legend.position="bottom", label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93, show.legend=T) {
   if(length(unique(ont.res$Type))==1) stop("The input only contains one cell type.")
 
   if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
 
-  cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.genes.filtered)]
-  leg <- cowplot::get_legend(plotNCellRegression(sapply(de.genes.filtered, length), cell.groups, legend.position=legend.position))
+  cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
+  leg <- cowplot::get_legend(plotNCellRegression(sapply(de.filter, length), cell.groups, legend.position=legend.position))
 
   pg <- cowplot::plot_grid(
     ont.res$Type %>% table %>% c %>%
-      plotNCellRegression(sapply(de.genes.filtered, length), y.lab=NULL, legend.position="none") +
+      plotNCellRegression(sapply(de.filter, length), y.lab=NULL, legend.position="none") +
       geom_smooth(method=MASS::rlm, se=0, color="black", size=0.5) +
       scale_x_continuous(name="Number of highly-expressed DE genes"),
     ont.res$Type %>% table %>% c %>%
@@ -59,44 +137,6 @@ plotOnthologyTerms <- function(type=NULL, ont.res, de.genes.filtered, cell.group
     p <- cowplot::plot_grid(pg, leg, nrow=2, rel_heights = rel_heights, scale=scale) + draw_label(y_lab, x=0, y=0.6, vjust= 1.5, angle=90)
   } else {
     p <- cowplot::plot_grid(pg, nrow=1, scale=scale) + draw_label(y_lab, x=0, y=0.6, vjust= 1.5, angle=90)
-  }
-  return(p)
-}
-
-#' @title Plot DE genes
-#' @description Plot number of DE genes as a function of number of cells
-#' @param de.raw
-#' @param de.genes.filtered
-#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-#' @param show.legend Include legend in plot (default=T)
-#' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
-#' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
-#' @param label.x.pos Plot label position on x axis (default=0.01)
-#' @param label.y.pos Plot label position on y axis (default=1)
-#' @param rel_heights Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))
-#' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (defaul=0.93)
-#' @return A ggplot2 object
-#' @export
-plotDEGenes <- function(de.raw, de.genes.filtered, cell.groups, legend.position="bottom", p.adjust.cutoff=0.05, label.x.pos=0.01, label.y.pos=1, rel_heights=c(2.5, 0.5), scale=0.93, show.legend=T) {
-  cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.genes.filtered)]
-  leg <- cowplot::get_legend(plotNCellRegression(1:length(cell.groups) %>% setNames(names(cell.groups)), cell.groups, legend.position=legend.position))
-
-  pg <- cowplot::plot_grid(
-    sapply(de.raw, function(n) n %>% dplyr::filter(padj <= p.adjust.cutoff) %>% nrow) %>%
-      plotNCellRegression(cell.groups, y.lab="Significant DE genes", legend.position="none") +
-      xlab("") +
-      theme(axis.text.x = element_blank(),
-            axis.ticks.x = element_blank()) +
-      geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5),
-    sapply(de.genes.filtered, length) %>%
-      plotNCellRegression(cell.groups, y.lab="Highly-expressed DE genes", legend.position="none") +
-      geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5),
-    ncol=1, labels=c("a","b"), label_x = label.x.pos, label_y = label.y.pos
-  )
-  if(show.legend) {
-    p <- cowplot::plot_grid(pg, leg, nrow=2, rel_heights = rel_heights, scale=scale)
-  } else {
-    p <- cowplot::plot_grid(pg, nrow=1, scale=scale)
   }
   return(p)
 }
@@ -156,59 +196,13 @@ plotHeatmap <- function(df, color.per.type=NULL, row.order=NULL, col.order=F, le
   return(gg)
 }
 
-#' @title Plot pathway distribution
-#' @description Bar plot of onthology pathways per cell type
-#' @param ont.res Onthology resuls from estimateOnthology
-#' @param type Onthology, must be either "GO" or "DO" (default=NULL)
-#' @return A ggplot2 object
-#' @export
-plotPathwayDistribution <- function(type=NULL, ont.res, cell.groups) {
-  if(type=="GO") {
-    p_df <- table(ont.res$Type, ont.res$GO) %>%
-      cbind %>%
-      as_tibble(rownames="Type") %>%
-      reshape2::melt(id.vars="Type", variable.name="GO", value.name="N") %>%
-      mutate(Type=factor(Type, levels=unique(cell.groups) %>%
-                           .[order(.)]))
-
-    gg <- ggplot(p_df) +
-      geom_bar(aes(x=Type, y=N, fill=GO), stat="identity")
-  } else if(type=="DO") {
-    p_df <- table(ont.res$Type) %>%
-      cbind %>%
-      as_tibble(rownames="Type") %>%
-      reshape2::melt(id.vars="Type", variable.name="DO", value.name="N") %>%
-      mutate(Type=factor(Type, levels=unique(cell.groups) %>%
-                           .[order(.)]))
-
-    gg <- ggplot(p_df) +
-      geom_bar(aes(x=Type, y=N), stat="identity")
-  } else {
-    stop("'type' must be either 'GO' or 'DO'.")
-  }
-
-  m <- sapply(p_df$Type %>%
-                unique, function(m) p_df %>%
-                dplyr::filter(Type==m) %>%
-                dplyr::select(N) %>%
-                sum) %>%
-    max %>%
-    plyr::round_any(10, ceiling)
-
-  gg +
-    scale_y_continuous(expand=c(0, 0), limits=c(0, m)) +
-    theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5),
-          panel.grid.major.x=element_blank(), legend.position=c(0.99, 0.99), legend.justification=c(1, 1)) +
-    labs(x="", y="No. of pathways")
-}
-
 #' @title Plot onthology heatmap
 #' @description Plot a heatmap of onthology P values per cell type
 #' @param type Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
 #' @param ont.res Onthology resuls from estimateOnthology
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
-#' @param order Order of rows in heatmap. Can be 'unique' (only show pathways that are unique for any cell type); 'unique-max-row' (same as 'unique' but ordered by P value); 'all-max-rowsum' (all pathways ordered by cumulative P value for all cell types); 'all-max-row' (all pathways ordered by max P value) (default="all-max-row")
-#' @param n Number of pathways to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
+#' @param order Order of rows in heatmap. Can be 'unique' (only show onthologies that are unique for any cell type); 'unique-max-row' (same as 'unique' but ordered by P value); 'all-max-rowsum' (all onthologies ordered by cumulative P value for all cell types); 'all-max-row' (all onthologies ordered by max P value) (default="all-max-row")
+#' @param n Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
 #' @export
 plotOnthologyHeatmap <- function(type, ont.res, legend.position = "left", order = "all-max-row", n = 10) {
   if(type=="BP" | type=="CC" | type=="MF") {

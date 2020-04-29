@@ -308,17 +308,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description  Filter and prepare DE genes for onthology calculations
     #' @param de.raw Differentially expressed genes per cell group, results from getPerCellTypeDE (default: stored list)
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-    #' @param OrgDB Genome-wide annotation (default=org.Hs.eg.db)
+    #' @param org Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")
     #' @param stat.cutoff Cutoff for filtering highly-expressed DE genes (default=3)
     #' @param verbose Print progress (default=T)
     #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
-    prepareOnthologyData=function(de.raw=self$test.results$de, cell.groups=self$cell.groups, OrgDB=org.Hs.eg.db, stat.cutoff=3, verbose=T) {
+    prepareOnthologyData=function(de.raw=self$test.results$de, cell.groups=self$cell.groups, org="human", stat.cutoff=3, verbose=T) {
       if (is.null(de)) stop("Please run 'getPerCellTypeDE' first.")
 
       if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       self$test.results[["onthology"]] <- extractRawCountMatrices(self$data.object, transposed=T) %>%
-        prepareOnthologyData(de.raw=de.raw, transpose=T, cell.groups=cell.groups, OrgDB=OrgDB, verbose=verbose, stat.cutoff=stat.cutoff)
+        prepareOnthologyData(de.raw=de.raw, transpose=T, cell.groups=cell.groups, org=org, verbose=verbose, stat.cutoff=stat.cutoff)
       return(invisible(self$test.results[["onthology"]]))
     },
 
@@ -338,7 +338,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description  Calculate onthologies based on DEs
     #' @param type Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.
     #' @param de.gene.ids List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOnthologyData)
-    #' @param OrgDB Genome-wide annotation (default=org.Hs.eg.db)
+    #' @param org Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
     #' @param readable Mapping gene ID to gene name (default=T)
@@ -346,12 +346,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param verbose Print progress (default=T)
     #' @param ... Additional parameters for sccore:::plapply function
     #' @return A list containing a list of onthologies per type of onthology, and a data frame with merged results
-    estimateOnthology=function(type=NULL, de.gene.ids=self$test.resuls$onthology$de.gene.ids, OrgDB=org.Hs.eg.db, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, ...) {
+    estimateOnthology=function(type=NULL, de.gene.ids=self$test.resuls$onthology$de.gene.ids, background=self$test.results$onthology$background, org="human", p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, ...) {
       if(is.null(type)) stop("'type' must be 'GO' or 'DO'.")
 
       if(is.null(de.gene.ids)) stop("Please run 'prepareOnthologyData' first.")
 
-      self$test.results[[type]] <- estimateOnthology(type=type, de.gene.ids=de.gene.ids, OrgDB=OrgDB, p.adj=p.adj, p.adjust.method=p.adjust.method, readable=readable, verbose=verbose, ...)
+      self$test.results[[type]] <- estimateOnthology(type=type, de.gene.ids=de.gene.ids, background = background, org=org, p.adj=p.adj, p.adjust.method=p.adjust.method, readable=readable, verbose=verbose, ...)
       return(invisible(self$test.results[[type]]))
     },
 

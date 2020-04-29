@@ -54,7 +54,7 @@ rawMatricesWithCommonGenesCacoa=function (raw.mats, sample.groups = NULL)
 #' @export
 getPerCellTypeDEmat=function (raw.mats, cell.groups = NULL, sample.groups = NULL, cooks.cutoff = FALSE,
                               ref.level = NULL, min.cell.count = 10, independent.filtering = FALSE,
-                              n.cores = 1, cluster.sep.chr = "<!!>", return.details = TRUE, verbose=T) {
+                              n.cores = 1, cluster.sep.chr = "<!!>", return.details = F, verbose = T) {
   validatePerCellTypeParamsCacoa(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr)
 
   # TODO shouldn't depend on Conos

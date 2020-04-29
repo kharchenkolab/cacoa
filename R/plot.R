@@ -4,17 +4,20 @@
 #' @importFrom reshape2 melt
 NULL
 
-plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right") {
+plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", label=T) {
   p.df <- data.frame(N=n) %>% as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
 
-  ggplot(p.df, aes(x=NCells, y=N)) +
+  gg <- ggplot(p.df, aes(x=NCells, y=N)) +
     geom_point(aes(color=Type)) +
-    geom_label_repel(aes(label=Type), size=2, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4)) +
     scale_x_log10() +
     ylim(0, max(p.df$N)) + labs(x="Number of cells", y=y.lab) +
     theme(legend.position=legend.position, legend.justification=legend.position, legend.background=element_rect(fill=alpha("white", 0.4))) +
     guides(color=guide_legend(title="Cell type"))
+
+  if(label) gg <- gg + geom_label_repel(aes(label=Type), size=2, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4))
+
+  return(gg)
 }
 
 #' @title Plot raw DE genes
@@ -25,11 +28,11 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right") 
 #' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
 #' @return A ggplot2 object
 #' @export
-plotDEGenes <- function(de.raw, cell.groups, legend.position="bottom", p.adjust.cutoff=0.05) {
+plotDEGenes <- function(de.raw, cell.groups, legend.position="bottom", p.adjust.cutoff = 0.05, label = T) {
   cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.raw)]
 
   sapply(de.raw, function(n) n %>% dplyr::filter(padj <= p.adjust.cutoff) %>% nrow) %>%
-    plotNCellRegression(cell.groups, y.lab="Significant DE genes", legend.position=legend.position) +
+    plotNCellRegression(cell.groups, y.lab="Significant DE genes", legend.position=legend.position, label=label) +
     xlab("") +
     geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 }
@@ -40,11 +43,11 @@ plotDEGenes <- function(de.raw, cell.groups, legend.position="bottom", p.adjust.
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
 #' @export
-plotFilteredDEGenes <- function(de.filter, cell.groups, legend.position="bottom") {
+plotFilteredDEGenes <- function(de.filter, cell.groups, legend.position="bottom", label = T) {
   cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
 
   sapply(de.filter, length) %>%
-    plotNCellRegression(cell.groups, y.lab="Highly-expressed DE genes", legend.position=legend.position) +
+    plotNCellRegression(cell.groups, y.lab="Highly-expressed DE genes", legend.position=legend.position, label=label) +
     xlab("") +
     geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 }
@@ -109,7 +112,7 @@ plotOnthologyDistribution <- function(type=NULL, ont.res, cell.groups) {
 #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
 #' @return A ggplot2 object
 #' @export
-plotOnthologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legend.position="bottom", label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93, show.legend=T) {
+plotOnthologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legend.position="bottom", label = T, label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93, show.legend=T) {
   if(length(unique(ont.res$Type))==1) stop("The input only contains one cell type.")
 
   if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
@@ -119,11 +122,11 @@ plotOnthologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legen
 
   pg <- cowplot::plot_grid(
     ont.res$Type %>% table %>% c %>%
-      plotNCellRegression(sapply(de.filter, length), y.lab=NULL, legend.position="none") +
+      plotNCellRegression(sapply(de.filter, length), y.lab=NULL, legend.position="none", label=label) +
       geom_smooth(method=MASS::rlm, se=0, color="black", size=0.5) +
       scale_x_continuous(name="Number of highly-expressed DE genes"),
     ont.res$Type %>% table %>% c %>%
-      plotNCellRegression(cell.groups, y.lab=NULL, legend.position="none") +
+      plotNCellRegression(cell.groups, y.lab=NULL, legend.position="none", label=label) +
       geom_smooth(method=MASS::rlm, se=0, color="black", size=0.5),
     ncol=1, labels=c("a", "b"), label_x = label.x.pos, label_y = label.y.pos
   )

@@ -9,7 +9,7 @@ getOnthologySummary(type = NULL, ont.res)
 \arguments{
 \item{type}{Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
 
-\item{pathway.data}{Results from preparePathwayData (default: stored list)}
+\item{ont.res}{Results from prepareOnthologyData (default: stored list)}
 }
 \value{
 Data frame

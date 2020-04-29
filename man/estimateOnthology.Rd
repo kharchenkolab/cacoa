@@ -6,7 +6,7 @@
 \usage{
 estimateOnthology(
   type,
-  pathway.data,
+  de.gene.ids,
   OrgDB = org.Hs.eg.db,
   p.adj = 0.05,
   p.adjust.method = "BH",
@@ -17,8 +17,6 @@ estimateOnthology(
 }
 \arguments{
 \item{type}{Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.}
-
-\item{pathway.data}{List containing DE gene IDs, and filtered and unfiltered DE genes}
 
 \item{OrgDB}{Genome-wide annotation (default=org.Hs.eg.db)}
 
@@ -31,6 +29,8 @@ estimateOnthology(
 \item{verbose}{Print progress (default=T)}
 
 \item{...}{Additional parameters for sccore:::plapply function}
+
+\item{ont.data}{List containing DE gene IDs, and filtered DE genes}
 
 \item{n.cores}{Number of cores used (default: stored vector)}
 }

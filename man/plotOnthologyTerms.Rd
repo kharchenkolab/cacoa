@@ -7,7 +7,7 @@
 plotOnthologyTerms(
   type = NULL,
   ont.res,
-  de.genes.filtered,
+  de.filter,
   cell.groups,
   legend.position = "bottom",
   label.x.pos = 0.01,

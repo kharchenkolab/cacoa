@@ -19,9 +19,9 @@ plotOnthologyHeatmap(
 
 \item{legend.position}{Position of legend in plot. See ggplot2::theme (default="left")}
 
-\item{order}{Order of rows in heatmap. Can be 'unique' (only show pathways that are unique for any cell type); 'unique-max-row' (same as 'unique' but ordered by P value); 'all-max-rowsum' (all pathways ordered by cumulative P value for all cell types); 'all-max-row' (all pathways ordered by max P value) (default="all-max-row")}
+\item{order}{Order of rows in heatmap. Can be 'unique' (only show onthologies that are unique for any cell type); 'unique-max-row' (same as 'unique' but ordered by P value); 'all-max-rowsum' (all onthologies ordered by cumulative P value for all cell types); 'all-max-row' (all onthologies ordered by max P value) (default="all-max-row")}
 
-\item{n}{Number of pathways to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
+\item{n}{Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
 }
 \description{
 Plot a heatmap of onthology P values per cell type

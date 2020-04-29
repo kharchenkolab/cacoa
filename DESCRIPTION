@@ -22,7 +22,7 @@ Imports:
     reshape2,
     sccore,
     tibble
-RoxygenNote: 7.0.2
+RoxygenNote: 7.1.0
 Suggests: 
     clusterProfiler (>= 3.0.0),
     ggrastr (>= 0.1.7)

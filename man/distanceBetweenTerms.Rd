@@ -9,7 +9,7 @@ distanceBetweenTerms(type = NULL, ont.res)
 \arguments{
 \item{type}{Onthology, must be either "GO" or "DO" (default=NULL)}
 
-\item{pathway.data}{Results from preparePathwayData (default: stored list)}
+\item{ont.res}{Results from prepareOnthologyData (default: stored list)}
 }
 \value{
 Distance matrix

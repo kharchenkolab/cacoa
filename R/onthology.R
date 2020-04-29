@@ -10,7 +10,7 @@ NULL
 #' @param verbose Print progress (default=T)
 #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
 #' @export
-prepareOnthologyData <- function(cms, de, cell.groups, transpose=T, OrgDB=org.Hs.eg.db, verbose=T, stat.cutoff=3) {
+prepareOnthologyData <- function(cms, de.raw, cell.groups, transpose=T, OrgDB=org.Hs.eg.db, verbose=T, stat.cutoff=3) {
   if (!requireNamespace("clusterProfiler", quietly = TRUE)) stop("You have to install 'clusterProfiler' package to perform onthology analysis")
 
   if(verbose) cat("Merging count matrices ... ")
@@ -33,7 +33,7 @@ prepareOnthologyData <- function(cms, de, cell.groups, transpose=T, OrgDB=org.Hs
                                                      factor, min.cell.count=0)
 
   if(verbose) cat("done!\nFiltering DE genes .. ")
-  de.filtered <- lapply(de, function(df) df[!is.na(df$stat) & (abs(df$stat) > stat.cutoff),]) # Consider filtering by pAdj
+  de.filtered <- lapply(de.raw, function(df) df[!is.na(df$stat) & (abs(df$stat) > stat.cutoff),]) # Consider filtering by pAdj
 
   if(verbose) cat(". ")
   de.genes.filtered <- mapply(intersect, lapply(de.filtered, rownames), ((cm_collapsed_bool > as.vector(table(annotation %>% .[. %in% names(de)]%>% factor)[rownames(cm_collapsed_bool)] * 0.05)) %>% apply(1, function(row) names(which(row))))[names(de.filtered)]) # Consider 0.05

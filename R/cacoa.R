@@ -29,10 +29,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @field sample.per.cell named factor with cell names
     sample.per.cell = NULL,
 
-    #' @field reference level for sample.group vector
+    #' @field ref.level reference level for sample.group vector
     ref.level = NULL,
 
-    #' @field target/disease level for sample.group vector
+    #' @field target.level target/disease level for sample.group vector
     target.level = NULL,
 
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, n.cores=parallel::detectCores(logical=F), verbose=TRUE) {
@@ -83,7 +83,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param n.subsamples Number of samples to draw (default=100)
     #' @param min.cells Minimum number of cells per cluster/per sample to be included in the analysis (default=10)
     #' @param verbose Print progress
-    #'
+    #' @param n.cores Number of cores (default: stored integer)
+    #' @param name Test name (default="expression.shifts")
     #' @return a list include \itemize{
     #'   \item{df: a table with cluster distances (normalized if within.gorup.normalization=T), cell type, number of cells}
     #'   \item{ctdml: raw list of `n.subsamples` sampled distance matrices (cells were subsampled)}
@@ -304,7 +305,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description  Filter and prepare DE genes for onthology calculations
-    #' @param de.raw List with differentially expressed genes per cell group (default: stored list, results from getPerCellTypeDE)
+    #' @param de.raw Differentially expressed genes per cell group, results from getPerCellTypeDE (default: stored list)
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param OrgDB Genome-wide annotation (default=org.Hs.eg.db)
     #' @param stat.cutoff Cutoff for filtering highly-expressed DE genes (default=3)
@@ -321,7 +322,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Plot number of highly-expressed DE genes as a function of number of cells
-    #' @param de.filter Results from prepareOnthologyData (default: stored list)
+    #' @param de.filter Filtered DE genes, results from prepareOnthologyData (default: stored list)
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
     #' @return A ggplot2 object
@@ -335,7 +336,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description  Calculate onthologies based on DEs
     #' @param type Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.
-    #' @param ont.data List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOnthologyData)
+    #' @param de.gene.ids List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOnthologyData)
     #' @param OrgDB Genome-wide annotation (default=org.Hs.eg.db)
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
@@ -355,7 +356,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Bar plot of onthologies per cell type
     #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
-    #' @param ont.data List containing a list of results from estimateOnthology
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @return A ggplot2 object
     plotOnthologyDistribution=function(type=NULL, cell.groups=self$cell.groups) {
@@ -372,7 +372,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Plot onthology terms as a function of both number of DE genes, and number of cells.
     #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
-    #' @param ont.data Results from prepareOnthologyData (default: stored list)
+    #' @param de.filter Filtered DE genes, results from prepareOnthologyData (default: stored list)
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param show.legend Include legend in plot (default=T)
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")

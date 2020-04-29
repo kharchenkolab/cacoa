@@ -22,6 +22,8 @@ plotOnthologyTerms(
 
 \item{ont.res}{Onthology results in a data frame}
 
+\item{de.filter}{List of filtered differentially expressed genes, results from prepareOnthologyData (default: stored list)}
+
 \item{cell.groups}{Vector indicating cell group sizes with cell group names}
 
 \item{legend.position}{Position of legend in plot. See ggplot2::theme (default="bottom")}

@@ -27,18 +27,9 @@ Cacoa R6 class
 
 \item{\code{sample.per.cell}}{named factor with cell names}
 
-\item{\code{reference}}{level for sample.group vector}
+\item{\code{ref.level}}{reference level for sample.group vector}
 
-\item{\code{target/disease}}{level for sample.group vector}
-}
-\if{html}{\out{</div>}}
-}
-\section{Active bindings}{
-\if{html}{\out{<div class="r6-active-bindings">}}
-\describe{
-\item{\code{reference}}{level for sample.group vector}
-
-\item{\code{target/disease}}{level for sample.group vector}
+\item{\code{target.level}}{target/disease level for sample.group vector}
 }
 \if{html}{\out{</div>}}
 }
@@ -74,7 +65,7 @@ Cacoa R6 class
   sample.per.cell = NULL,
   ref.level = NULL,
   target.level = NULL,
-  n.cores = parallel::detectCores(logical = F),
+  n.cores = 1,
   verbose = TRUE
 )}\if{html}{\out{</div>}}
 }
@@ -123,7 +114,11 @@ Calculate expression shift magnitudes of different clusters between conditions
 
 \item{\code{sample.groups}}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}
 
+\item{\code{n.cores}}{Number of cores (default: stored integer)}
+
 \item{\code{verbose}}{Print progress}
+
+\item{\code{name}}{Test name (default="expression.shifts")}
 }
 \if{html}{\out{</div>}}
 }
@@ -256,7 +251,8 @@ Estimate differential gene expression per cell type between conditions
   min.cell.count = 10,
   independent.filtering = FALSE,
   cluster.sep.chr = "<!!>",
-  return.details = TRUE
+  return.details = TRUE,
+  verbose = T
 )}\if{html}{\out{</div>}}
 }
 
@@ -277,9 +273,11 @@ Estimate differential gene expression per cell type between conditions
 
 \item{\code{independent.filtering}}{independentFiltering for DESeq2 (default=F)}
 
-\item{\code{cluster.sep.chr}}{character string of length 1 specifying a delimiter to separate cluster and app names}
+\item{\code{cluster.sep.chr}}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
 
-\item{\code{return.details}}{Return details}
+\item{\code{return.details}}{Return details (default=T)}
+
+\item{\code{verbose}}{Show progress (default=T)}
 }
 \if{html}{\out{</div>}}
 }
@@ -336,7 +334,7 @@ Filter and prepare DE genes for onthology calculations
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{de.raw}}{List with differentially expressed genes per cell group (default: stored list, results from getPerCellTypeDE)}
+\item{\code{de.raw}}{Differentially expressed genes per cell group, results from getPerCellTypeDE (default: stored list)}
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
@@ -368,7 +366,7 @@ Plot number of highly-expressed DE genes as a function of number of cells
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{de.filter}}{Results from prepareOnthologyData (default: stored list)}
+\item{\code{de.filter}}{Filtered DE genes, results from prepareOnthologyData (default: stored list)}
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
@@ -403,6 +401,8 @@ Calculate onthologies based on DEs
 \describe{
 \item{\code{type}}{Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.}
 
+\item{\code{de.gene.ids}}{List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOnthologyData)}
+
 \item{\code{OrgDB}}{Genome-wide annotation (default=org.Hs.eg.db)}
 
 \item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
@@ -414,8 +414,6 @@ Calculate onthologies based on DEs
 \item{\code{verbose}}{Print progress (default=T)}
 
 \item{\code{...}}{Additional parameters for sccore:::plapply function}
-
-\item{\code{ont.data}}{List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOnthologyData)}
 
 \item{\code{n.cores}}{Number of cores used (default: stored vector)}
 }
@@ -440,8 +438,6 @@ Bar plot of onthologies per cell type
 \item{\code{type}}{Onthology, must be either "GO" or "DO" (default=NULL)}
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-
-\item{\code{ont.data}}{List containing a list of results from estimateOnthology}
 }
 \if{html}{\out{</div>}}
 }
@@ -473,6 +469,8 @@ Plot onthology terms as a function of both number of DE genes, and number of cel
 \describe{
 \item{\code{type}}{Onthology, must be either "GO" or "DO" (default=NULL)}
 
+\item{\code{de.filter}}{Filtered DE genes, results from prepareOnthologyData (default: stored list)}
+
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
 \item{\code{show.legend}}{Include legend in plot (default=T)}
@@ -486,8 +484,6 @@ Plot onthology terms as a function of both number of DE genes, and number of cel
 \item{\code{rel_heights}}{Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))}
 
 \item{\code{scale}}{Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)}
-
-\item{\code{ont.data}}{Results from prepareOnthologyData (default: stored list)}
 }
 \if{html}{\out{</div>}}
 }

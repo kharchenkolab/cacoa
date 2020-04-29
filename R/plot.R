@@ -19,7 +19,7 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right") 
 
 #' @title Plot raw DE genes
 #' @description Plot number of DE genes as a function of number of cells
-#' @param de.raw
+#' @param de.raw List of differentially expressed genes per cell type, results from getPerCellTypeDE (default: stored list)
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
 #' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
@@ -36,7 +36,7 @@ plotDEGenes <- function(de.raw, cell.groups, legend.position="bottom", p.adjust.
 
 #' @title Plot filtered DE genes
 #' @description Plot number of DE genes as a function of number of cells
-#' @param de.filter
+#' @param de.filter List of filtered differentially expressed genes, results from prepareOnthologyData (default: stored list)
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
 #' @export
@@ -99,7 +99,7 @@ plotOnthologyDistribution <- function(type=NULL, ont.res, cell.groups) {
 #' @description Plot onthology terms as a function of both number of DE genes, and number of cells.
 #' @param ont.res Onthology results in a data frame
 #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
-#' @param de.filter
+#' @param de.filter List of filtered differentially expressed genes, results from prepareOnthologyData (default: stored list)
 #' @param cell.groups Vector indicating cell group sizes with cell group names
 #' @param show.legend Include legend in plot (default=T)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")

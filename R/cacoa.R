@@ -35,7 +35,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @field target.level target/disease level for sample.group vector
     target.level = NULL,
 
-    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, n.cores=parallel::detectCores(logical=F), verbose=TRUE) {
+    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, n.cores=1, verbose=TRUE) {
       self$n.cores <- n.cores
       self$verbose <- verbose
       self$ref.level <- ref.level
@@ -265,12 +265,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param min.cell.count (default=10)
     #' @param independent.filtering independentFiltering for DESeq2 (default=F)
     #' @param n.cores Number of cores (default=1)
-    #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names
-    #' @param return.details Return details
+    #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
+    #' @param return.details Return details (default=T)
+    #' @param verbose Show progress (default=T)
     #' @return A list of DE genes
     getPerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level,
                               n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, independent.filtering = FALSE,
-                              cluster.sep.chr = "<!!>", return.details = TRUE) {
+                              cluster.sep.chr = "<!!>", return.details = TRUE, verbose=T) {
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if(is.null(ref.level)) stop("'ref.level' must be provided either during the object initialization or during this function call")

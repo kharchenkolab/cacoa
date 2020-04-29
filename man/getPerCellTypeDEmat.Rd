@@ -14,7 +14,8 @@ getPerCellTypeDEmat(
   independent.filtering = FALSE,
   n.cores = 1,
   cluster.sep.chr = "<!!>",
-  return.details = TRUE
+  return.details = TRUE,
+  verbose = T
 )
 }
 \arguments{

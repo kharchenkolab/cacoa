@@ -7,6 +7,8 @@
 plotFilteredDEGenes(de.filter, cell.groups, legend.position = "bottom")
 }
 \arguments{
+\item{de.filter}{List of filtered differentially expressed genes, results from prepareOnthologyData (default: stored list)}
+
 \item{cell.groups}{Vector indicating cell groups with cell names (default: stored vector)}
 
 \item{legend.position}{Position of legend in plot. See ggplot2::theme (default="bottom")}

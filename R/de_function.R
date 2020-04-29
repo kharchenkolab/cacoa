@@ -54,7 +54,7 @@ rawMatricesWithCommonGenesCacoa=function (raw.mats, sample.groups = NULL)
 #' @export
 getPerCellTypeDEmat=function (raw.mats, cell.groups = NULL, sample.groups = NULL, cooks.cutoff = FALSE,
                               ref.level = NULL, min.cell.count = 10, independent.filtering = FALSE,
-                              n.cores = 1, cluster.sep.chr = "<!!>", return.details = TRUE) {
+                              n.cores = 1, cluster.sep.chr = "<!!>", return.details = TRUE, verbose=T) {
   validatePerCellTypeParamsCacoa(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr)
 
   # TODO shouldn't depend on Conos
@@ -62,7 +62,7 @@ getPerCellTypeDEmat=function (raw.mats, cell.groups = NULL, sample.groups = NULL
     lapply(conos:::collapseCellsByType, groups = cell.groups, min.cell.count = min.cell.count) %>%
     conos:::rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
 
-  de.res <- conos:::papply(sn(levels(cell.groups)), function(l) {
+  de.res <- sccore:::plapply(sn(levels(cell.groups)), function(l) {
     tryCatch({
       cm <- aggr2[, conos:::strpart(colnames(aggr2), cluster.sep.chr,
                                     2, fixed = TRUE) == l]
@@ -78,7 +78,7 @@ getPerCellTypeDEmat=function (raw.mats, cell.groups = NULL, sample.groups = NULL
 
       dds1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta,
                                              design = ~group)
-      dds1 <- DESeq2::DESeq(dds1)
+      dds1 <- DESeq2::DESeq(dds1, quiet=T)
       res1 <- DESeq2::results(dds1, cooksCutoff = cooks.cutoff,
                               independentFiltering = independent.filtering)
       res1 <- as.data.frame(res1)
@@ -91,7 +91,8 @@ getPerCellTypeDEmat=function (raw.mats, cell.groups = NULL, sample.groups = NULL
         res1
       }
     }, error = function(err) NA)
-  }, n.cores = n.cores) %>% .[!sapply(., is.na)]
+  }, n.cores = n.cores, progress=verbose) %>%
+    .[!sapply(., `[[`, 1) %>% is.na]
 
   dif <- length(levels(cell.groups)) - length(de.res)
   if(dif > 0) warning(paste0("DEs not calculated for ",dif," cell group(s)."))

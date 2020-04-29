@@ -12,6 +12,8 @@ plotDEGenes(
 )
 }
 \arguments{
+\item{de.raw}{List of differentially expressed genes per cell type, results from getPerCellTypeDE (default: stored list)}
+
 \item{cell.groups}{Vector indicating cell groups with cell names (default: stored vector)}
 
 \item{legend.position}{Position of legend in plot. See ggplot2::theme (default="bottom")}

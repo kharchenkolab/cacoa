@@ -56,7 +56,7 @@ rbindDEMatrices <- function(mats, cluster.sep.chr) {
 collapseCellsByType <- function(cm, groups, min.cell.count=10) {
   groups <- as.factor(groups);
   cl <- factor(groups[match(rownames(cm),names(groups))],levels=levels(groups));
-  tc <- colSumByFactor(cm,cl);
+  tc <- conos:::colSumByFactor(cm,cl);
   tc <- tc[-1,,drop=FALSE]  # omit NA cells
   tc[table(cl)>=min.cell.count,,drop=FALSE]
 }

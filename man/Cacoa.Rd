@@ -251,7 +251,7 @@ Estimate differential gene expression per cell type between conditions
   min.cell.count = 10,
   independent.filtering = FALSE,
   cluster.sep.chr = "<!!>",
-  return.details = TRUE,
+  return.matrix = F,
   verbose = T
 )}\if{html}{\out{</div>}}
 }
@@ -275,7 +275,7 @@ Estimate differential gene expression per cell type between conditions
 
 \item{\code{cluster.sep.chr}}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
 
-\item{\code{return.details}}{Return details (default=T)}
+\item{\code{return.matrix}}{Return merged matrix of results (default=F)}
 
 \item{\code{verbose}}{Show progress (default=T)}
 }
@@ -325,9 +325,10 @@ Filter and prepare DE genes for onthology calculations
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$prepareOnthologyData(
   de.raw = self$test.results$de,
   cell.groups = self$cell.groups,
-  OrgDB = org.Hs.eg.db,
+  org = "human",
   stat.cutoff = 3,
-  verbose = T
+  verbose = T,
+  n.cores = self$n.cores
 )}\if{html}{\out{</div>}}
 }
 
@@ -338,11 +339,13 @@ Filter and prepare DE genes for onthology calculations
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
-\item{\code{OrgDB}}{Genome-wide annotation (default=org.Hs.eg.db)}
+\item{\code{org}}{Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")}
 
 \item{\code{stat.cutoff}}{Cutoff for filtering highly-expressed DE genes (default=3)}
 
 \item{\code{verbose}}{Print progress (default=T)}
+
+\item{\code{n.cores}}{Number of cores to use (default: stored integer)}
 }
 \if{html}{\out{</div>}}
 }
@@ -387,7 +390,8 @@ Calculate onthologies based on DEs
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOnthology(
   type = NULL,
   de.gene.ids = self$test.resuls$onthology$de.gene.ids,
-  OrgDB = org.Hs.eg.db,
+  background = self$test.results$onthology$background,
+  org = "human",
   p.adj = 0.05,
   p.adjust.method = "BH",
   readable = T,
@@ -403,7 +407,7 @@ Calculate onthologies based on DEs
 
 \item{\code{de.gene.ids}}{List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOnthologyData)}
 
-\item{\code{OrgDB}}{Genome-wide annotation (default=org.Hs.eg.db)}
+\item{\code{org}}{Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")}
 
 \item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
 

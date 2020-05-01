@@ -4,7 +4,12 @@
 \alias{plotFilteredDEGenes}
 \title{Plot filtered DE genes}
 \usage{
-plotFilteredDEGenes(de.filter, cell.groups, legend.position = "bottom")
+plotFilteredDEGenes(
+  de.filter,
+  cell.groups,
+  legend.position = "bottom",
+  label = T
+)
 }
 \arguments{
 \item{de.filter}{List of filtered differentially expressed genes, results from prepareOnthologyData (default: stored list)}

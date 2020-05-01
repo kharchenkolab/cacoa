@@ -7,7 +7,8 @@
 estimateOnthology(
   type,
   de.gene.ids,
-  OrgDB = org.Hs.eg.db,
+  background = NULL,
+  org = "human",
   p.adj = 0.05,
   p.adjust.method = "BH",
   readable = T,
@@ -18,7 +19,7 @@ estimateOnthology(
 \arguments{
 \item{type}{Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.}
 
-\item{OrgDB}{Genome-wide annotation (default=org.Hs.eg.db)}
+\item{org}{Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")}
 
 \item{p.adj}{Adjusted P cutoff (default=0.05)}
 

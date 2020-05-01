@@ -7,8 +7,9 @@
 plotDEGenes(
   de.raw,
   cell.groups,
-  legend.position = "bottom",
-  p.adjust.cutoff = 0.05
+  legend.position = "none",
+  p.adjust.cutoff = 0.05,
+  label = T
 )
 }
 \arguments{
@@ -16,7 +17,7 @@ plotDEGenes(
 
 \item{cell.groups}{Vector indicating cell groups with cell names (default: stored vector)}
 
-\item{legend.position}{Position of legend in plot. See ggplot2::theme (default="bottom")}
+\item{legend.position}{Position of legend in plot. See ggplot2::theme (default="none")}
 
 \item{p.adjust.cutoff}{Adjusted P cutoff (default=0.05)}
 }

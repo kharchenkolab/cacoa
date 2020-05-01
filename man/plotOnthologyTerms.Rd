@@ -10,6 +10,7 @@ plotOnthologyTerms(
   de.filter,
   cell.groups,
   legend.position = "bottom",
+  label = T,
   label.x.pos = 0.01,
   label.y.pos = 1,
   rel_heights = c(2.5, 0.5),

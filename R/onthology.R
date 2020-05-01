@@ -8,32 +8,38 @@ NULL
 #' @param org Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")
 #' @param stat.cutoff Cutoff for filtering highly-expressed DE genes (default=3)
 #' @param verbose Print progress (default=T)
+#' @param n.cores Number of cores to use (default=1)
 #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
 #' @export
-prepareOnthologyData <- function(cms, de.raw, cell.groups, transpose = T, org = "human", verbose = T, stat.cutoff = 3) {
+prepareOnthologyData <- function(cms, de.raw, cell.groups, transpose = T, org = "human", verbose = T, stat.cutoff = 3, n.cores = 1) {
   if (!requireNamespace("clusterProfiler", quietly = TRUE)) stop("You have to install 'clusterProfiler' package to perform onthology analysis")
 
+  # TODO Test functionality for other species than human or mouse
   if(org == "human") {
     if(!requireNamespace("org.Hs.eg.db", quietly = TRUE)) stop("You have to install 'org.Hs.eg.db' package to perform onthology analysis")
+    require(org.Hs.eg.db)
     OrgDB = org.Hs.eg.db
   } else if(org == "mouse") {
     if(!requireNamespace("org.Mm.eg.db", quietly = TRUE)) stop("You have to install 'org.Mm.eg.db' package to perform onthology analysis")
+    require(org.Mm.eg.db)
     OrgDB = org.Mm.eg.db
   } else if(org == "zebrafish") {
     if(!requireNamespace("org.Dm.eg.db", quietly = TRUE)) stop("You have to install 'org.Dm.eg.db' package to perform onthology analysis")
+    require(org.Dm.eg.db)
     OrgDB = org.Dm.eg.db
   } else if(org == "worm") {
     if(!requireNamespace("org.Ce.eg.db", quietly = TRUE)) stop("You have to install 'org.Ce.eg.db' package to perform onthology analysis")
+    require(org.Ce.eg.db)
     OrgDB = org.Ce.eg.db
   } else if(org == "fly") {
     if(!requireNamespace("org.Dr.eg.db", quietly = TRUE)) stop("You have to install 'org.Dr.eg.db' package to perform onthology analysis")
+    require(org.Dr.eg.db)
     OrgDB = org.Dr.eg.db
   }
 
   if(verbose) cat("Merging count matrices ... ")
 
-  # TODO shouldn't depend on Conos?
-  cm_merged <- conos:::mergeCountMatrices(cms)
+  cm_merged <- sccore:::mergeCountMatrices(cms, n.cores = n.cores)
 
   if(transpose) {
     if(verbose) cat("done!\nTransposing merged count matrix ... ")
@@ -44,8 +50,7 @@ prepareOnthologyData <- function(cms, de.raw, cell.groups, transpose = T, org = 
   cm_bool <- (cm_merged > 1) * 1
 
   if(verbose) cat("done!\nCollapsing cells ... ")
-  # TODO Shouldn't depend on Conos?
-  cm_collapsed_bool <- conos:::collapseCellsByType(Matrix::t(cm_bool), cell.groups %>%
+  cm_collapsed_bool <- collapseCellsByType(Matrix::t(cm_bool), cell.groups %>%
                                                      .[. %in% names(de)] %>%
                                                      factor, min.cell.count=0)
 
@@ -164,18 +169,23 @@ getOnthologySummary <- function(type=NULL, ont.res) {
 estimateOnthology <- function(type, de.gene.ids, background=NULL, org="human", p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, ...) {
   if(org == "human") {
     if(!requireNamespace("org.Hs.eg.db", quietly = TRUE)) stop("You have to install 'org.Hs.eg.db' package to perform onthology analysis")
+    require(org.Hs.eg.db)
     OrgDB = org.Hs.eg.db
   } else if(org == "mouse") {
     if(!requireNamespace("org.Mm.eg.db", quietly = TRUE)) stop("You have to install 'org.Mm.eg.db' package to perform onthology analysis")
+    require(org.Mm.eg.db)
     OrgDB = org.Mm.eg.db
   } else if(org == "zebrafish") {
     if(!requireNamespace("org.Dm.eg.db", quietly = TRUE)) stop("You have to install 'org.Dm.eg.db' package to perform onthology analysis")
+    require(org.Dm.eg.db)
     OrgDB = org.Dm.eg.db
   } else if(org == "worm") {
     if(!requireNamespace("org.Ce.eg.db", quietly = TRUE)) stop("You have to install 'org.Ce.eg.db' package to perform onthology analysis")
+    require(org.Ce.eg.db)
     OrgDB = org.Ce.eg.db
   } else if(org == "fly") {
     if(!requireNamespace("org.Dr.eg.db", quietly = TRUE)) stop("You have to install 'org.Dr.eg.db' package to perform onthology analysis")
+    require(org.Dr.eg.db)
     OrgDB = org.Dr.eg.db
   }
 
@@ -206,6 +216,7 @@ estimateOnthology <- function(type, de.gene.ids, background=NULL, org="human", p
       lapply(function(ont) sccore:::plapply(de.gene.ids, enrichGOOpt, ont=ont, goData=go_data[[ont]], universe=background, readable=readable, pAdjustMethod=p.adjust.method, OrgDB=OrgDB, n.cores=1, progress=verbose, ...)) %>%
       lapply(lapply, function(x) x@result)
 
+    # Filer signifiant onthologies
     ont.list %<>% lapply(lapply, function(x) filter(x, p.adjust < p.adj)) %>%
       lapply(function(gt) gt %>%
                .[sapply(., nrow) > 0] %>%

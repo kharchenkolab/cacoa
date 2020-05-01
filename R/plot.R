@@ -24,11 +24,11 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", 
 #' @description Plot number of DE genes as a function of number of cells
 #' @param de.raw List of differentially expressed genes per cell type, results from getPerCellTypeDE (default: stored list)
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-#' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
+#' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
 #' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
 #' @return A ggplot2 object
 #' @export
-plotDEGenes <- function(de.raw, cell.groups, legend.position="bottom", p.adjust.cutoff = 0.05, label = T) {
+plotDEGenes <- function(de.raw, cell.groups, legend.position="none", p.adjust.cutoff = 0.05, label = T) {
   cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.raw)]
 
   sapply(de.raw, function(n) n %>% dplyr::filter(padj <= p.adjust.cutoff) %>% nrow) %>%

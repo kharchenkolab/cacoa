@@ -8,4 +8,4 @@ getColumnwiseCorrelations <- function(m1, m2) {
   return(lineup::corbetw2mat(m1[, common.cols], m2[, common.cols]))
 }
 
-sn <- function(x) {setNames(x, x)}
+

@@ -4,7 +4,7 @@
 ##' @param sample.groups Named factor with cell names indicating condition/sample, e.g., ctrl/disease
 ##' @param ref.level Reference cluster level in 'sample.groups', e.g., ctrl, healthy, wt
 ##' @param cluster.sep.chr Character string of length 1 specifying a delimiter to separate cluster and app names
-validatePerCellTypeParamsCacoa <- function(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr) {
+validatePerCellTypeParams <- function(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr) {
   if (!requireNamespace("DESeq2", quietly = TRUE)) {
     stop("You have to install DESeq2 package to use differential expression")
   }
@@ -29,7 +29,7 @@ validatePerCellTypeParamsCacoa <- function(raw.mats, cell.groups, sample.groups,
     stop('"cluster.sep.chr" must not be part of any cluster name')
 }
 
-rawMatricesWithCommonGenesCacoa=function (raw.mats, sample.groups = NULL)
+rawMatricesWithCommonGenes=function (raw.mats, sample.groups = NULL)
 {
   if (!is.null(raw.mats)) {
     raw.mats <- raw.mats[unlist(sample.groups)]
@@ -38,6 +38,27 @@ rawMatricesWithCommonGenesCacoa=function (raw.mats, sample.groups = NULL)
   return(lapply(raw.mats, function(x) {
     x[, common.genes]
   }))
+}
+
+strpart <- function (x, split, n, fixed = FALSE) {
+  sapply(strsplit(as.character(x), split, fixed = fixed), "[",n)
+}
+
+rbindDEMatrices <- function(mats, cluster.sep.chr) {
+  mats <- lapply(names(mats), function(n) {
+    rownames(mats[[n]]) <- paste0(n, cluster.sep.chr, rownames(mats[[n]]));
+    return(mats[[n]])
+  })
+
+  return(t(do.call(rbind, mats)))
+}
+
+collapseCellsByType <- function(cm, groups, min.cell.count=10) {
+  groups <- as.factor(groups);
+  cl <- factor(groups[match(rownames(cm),names(groups))],levels=levels(groups));
+  tc <- colSumByFactor(cm,cl);
+  tc <- tc[-1,,drop=FALSE]  # omit NA cells
+  tc[table(cl)>=min.cell.count,,drop=FALSE]
 }
 
 #' Do differential expression for each cell type in a conos object between the specified subsets of apps
@@ -49,25 +70,25 @@ rawMatricesWithCommonGenesCacoa=function (raw.mats, sample.groups = NULL)
 #' @param min.cell.count (default=10)
 #' @param independent.filtering independentFiltering for DESeq2 (default=F)
 #' @param n.cores Number of cores (default=1)
-#' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names
-#' @param return.details Return details
+#' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
+#' @param return.matrix Return merged matrix of results (default=F)
 #' @export
-getPerCellTypeDEmat=function (raw.mats, cell.groups = NULL, sample.groups = NULL, cooks.cutoff = FALSE,
+getPerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NULL, cooks.cutoff = FALSE,
                               ref.level = NULL, min.cell.count = 10, independent.filtering = FALSE,
-                              n.cores = 1, cluster.sep.chr = "<!!>", return.details = F, verbose = T) {
-  validatePerCellTypeParamsCacoa(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr)
+                              n.cores = 1, cluster.sep.chr = "<!!>", return.matrix = F, verbose = T) {
+  validatePerCellTypeParams(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr)
 
-  # TODO shouldn't depend on Conos
-  aggr2<- rawMatricesWithCommonGenesCacoa(raw.mats, sample.groups) %>%
-    lapply(conos:::collapseCellsByType, groups = cell.groups, min.cell.count = min.cell.count) %>%
-    conos:::rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
+  # TODO genes should only be common per cell type - remember background per cell type
+  aggr2<- rawMatricesWithCommonGenes(raw.mats, sample.groups) %>%
+    lapply(collapseCellsByType, groups = cell.groups, min.cell.count = min.cell.count) %>%
+    rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
 
-  de.res <- sccore:::plapply(sn(levels(cell.groups)), function(l) {
+  de.res <- sccore:::plapply(sccore:::sn(levels(cell.groups)), function(l) {
     tryCatch({
-      cm <- aggr2[, conos:::strpart(colnames(aggr2), cluster.sep.chr,
+      cm <- aggr2[, nstrpart(colnames(aggr2), cluster.sep.chr,
                                     2, fixed = TRUE) == l]
       meta <- data.frame(sample.id=colnames(cm), group=as.factor(unlist(lapply(colnames(cm), function(y) {
-        y <- conos:::strpart(y, cluster.sep.chr, 1, fixed = TRUE)
+        y <- strpart(y, cluster.sep.chr, 1, fixed = TRUE)
         names(sample.groups)[unlist(lapply(sample.groups, function(x) any(x %in% y)))]}))))
 
       if (!ref.level %in% levels(meta$group))
@@ -76,19 +97,28 @@ getPerCellTypeDEmat=function (raw.mats, cell.groups = NULL, sample.groups = NULL
       if (length(unique(as.character(meta$group))) < 2)
         stop("The cluster is not present in both conditions")
 
-      dds1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta,
-                                             design = ~group)
-      dds1 <- DESeq2::DESeq(dds1, quiet=T)
-      res1 <- DESeq2::results(dds1, cooksCutoff = cooks.cutoff,
-                              independentFiltering = independent.filtering)
-      res1 <- as.data.frame(res1)
-      res1 <- res1[order(res1$padj, decreasing = FALSE),]
+      res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design = ~group) %>%
+        DESeq2::DESeq(dds1, quiet=T) %>%
+        DESeq2::results(cooksCutoff = cooks.cutoff, independentFiltering = independent.filtering) %>%
+        as.data.frame
 
-      if (return.details) {
-        list(res = res1, cm = cm)
+      # add Z scores
+      res1$Z <- -qnorm(res1$pval/2)
+      res1$Z[is.na(res1$Z)] <- 0
+      res1$Za <- -qnorm(res1$padj/2)
+      res1$Za[is.na(res1$Za)] <- 0
+      res1$Z <- res1$Z  * sign(res1$log2FoldChange)
+      res1$Za <- res1$Za  * sign(res1$log2FoldChange)
+
+      res1 <- list(down=rownames(res1)[order(res1$Z,decreasing=F)],
+                  up=rownames(res1)[order(res1$Z,decreasing=T)],
+                  all=rownames(res1)[order(abs(res1$Z),decreasing=T)])
+
+      if (return.matrix) {
+        res <- list(res = res, cm = cm)
       }
       else {
-        res1
+        res
       }
     }, error = function(err) NA)
   }, n.cores = n.cores, progress=verbose) %>%
@@ -97,9 +127,6 @@ getPerCellTypeDEmat=function (raw.mats, cell.groups = NULL, sample.groups = NULL
   dif <- length(levels(cell.groups)) - length(de.res)
   if(dif > 0) warning(paste0("DEs not calculated for ",dif," cell group(s)."))
 
-  return(de.res)
+  return(res)
 }
 
-strpart <- function (x, split, n, fixed = FALSE) {
-  sapply(strsplit(as.character(x), split, fixed = fixed), "[",n)
-}

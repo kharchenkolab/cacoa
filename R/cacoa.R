@@ -266,12 +266,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param independent.filtering independentFiltering for DESeq2 (default=F)
     #' @param n.cores Number of cores (default=1)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-    #' @param return.details Return details (default=T)
+    #' @param return.matrix Return merged matrix of results (default=F)
     #' @param verbose Show progress (default=T)
     #' @return A list of DE genes
     getPerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level,
                               n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, independent.filtering = FALSE,
-                              cluster.sep.chr = "<!!>", return.details = TRUE, verbose=T) {
+                              cluster.sep.chr = "<!!>", return.matrix = F, verbose=T) {
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if(is.null(ref.level)) stop("'ref.level' must be provided either during the object initialization or during this function call")
@@ -285,9 +285,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       self$test.results[["de"]] <- extractRawCountMatrices(self$data.object, transposed=T) %>%
-        getPerCellTypeDEmat(cell.groups = cell.groups, sample.groups = sample.groups, ref.level = ref.level, n.cores = n.cores,
+        getPerCellTypeDE(cell.groups = cell.groups, sample.groups = sample.groups, ref.level = ref.level, n.cores = n.cores,
                             cooks.cutoff = cooks.cutoff, min.cell.count = min.cell.count, independent.filtering = independent.filtering,
-                            cluster.sep.chr = cluster.sep.chr, return.details = return.details)
+                            cluster.sep.chr = cluster.sep.chr, return.matrix = return.matrix)
       return(invisible(self$test.results[["de"]]))
     },
 
@@ -311,8 +311,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param org Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")
     #' @param stat.cutoff Cutoff for filtering highly-expressed DE genes (default=3)
     #' @param verbose Print progress (default=T)
+    #' @param n.cores Number of cores to use (default: stored integer)
     #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
-    prepareOnthologyData=function(de.raw=self$test.results$de, cell.groups=self$cell.groups, org="human", stat.cutoff=3, verbose=T) {
+    prepareOnthologyData=function(de.raw=self$test.results$de, cell.groups=self$cell.groups, org="human", stat.cutoff=3, verbose=T, n.cores = self$n.cores) {
       if (is.null(de)) stop("Please run 'getPerCellTypeDE' first.")
 
       if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")

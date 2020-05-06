@@ -251,7 +251,7 @@ Estimate differential gene expression per cell type between conditions
   min.cell.count = 10,
   independent.filtering = FALSE,
   cluster.sep.chr = "<!!>",
-  return.details = TRUE,
+  return.matrix = F,
   verbose = T
 )}\if{html}{\out{</div>}}
 }
@@ -275,7 +275,7 @@ Estimate differential gene expression per cell type between conditions
 
 \item{\code{cluster.sep.chr}}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
 
-\item{\code{return.details}}{Return details (default=T)}
+\item{\code{return.matrix}}{Return merged matrix of results (default=F)}
 
 \item{\code{verbose}}{Show progress (default=T)}
 }
@@ -292,9 +292,10 @@ A list of DE genes
 Plot number of significant DE genes as a function of number of cells
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEGenes(
-  de.raw = self$test.results$de,
+  de.raw = self$test.results$de$results,
   cell.groups = self$cell.groups,
-  legend.position = "bottom",
+  legend.position = "none",
+  label = T,
   p.adjust.cutoff = 0.05
 )}\if{html}{\out{</div>}}
 }
@@ -306,7 +307,9 @@ Plot number of significant DE genes as a function of number of cells
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
-\item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="bottom")}
+\item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="none")}
+
+\item{\code{label}}{Show labels on plot (default=T)}
 
 \item{\code{p.adjust.cutoff}}{Adjusted P cutoff (default=0.05)}
 }
@@ -323,11 +326,15 @@ A ggplot2 object
 Filter and prepare DE genes for onthology calculations
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$prepareOnthologyData(
-  de.raw = self$test.results$de,
+  de.raw = self$test.results$de$results,
   cell.groups = self$cell.groups,
-  OrgDB = org.Hs.eg.db,
+  universe = self$test.results$de$universe,
+  org = "human",
+  n.top.genes = Inf,
   stat.cutoff = 3,
-  verbose = T
+  transposed = T,
+  verbose = T,
+  n.cores = self$n.cores
 )}\if{html}{\out{</div>}}
 }
 
@@ -338,11 +345,19 @@ Filter and prepare DE genes for onthology calculations
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
-\item{\code{OrgDB}}{Genome-wide annotation (default=org.Hs.eg.db)}
+\item{\code{universe}}{All measured genes (default: stored vector)}
+
+\item{\code{org}}{Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")}
+
+\item{\code{n.top.genes}}{Number of genes to use for analysis (default=Inf)}
 
 \item{\code{stat.cutoff}}{Cutoff for filtering highly-expressed DE genes (default=3)}
 
+\item{\code{transposed}}{Whether count matrices should be transposed (default=T)}
+
 \item{\code{verbose}}{Print progress (default=T)}
+
+\item{\code{n.cores}}{Number of cores to use (default: stored integer)}
 }
 \if{html}{\out{</div>}}
 }
@@ -387,11 +402,13 @@ Calculate onthologies based on DEs
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOnthology(
   type = NULL,
   de.gene.ids = self$test.resuls$onthology$de.gene.ids,
-  OrgDB = org.Hs.eg.db,
+  universe = self$test.results$onthology$universe,
+  org = "human",
   p.adj = 0.05,
   p.adjust.method = "BH",
   readable = T,
   verbose = T,
+  n.cores = self$n.cores,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -403,7 +420,9 @@ Calculate onthologies based on DEs
 
 \item{\code{de.gene.ids}}{List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOnthologyData)}
 
-\item{\code{OrgDB}}{Genome-wide annotation (default=org.Hs.eg.db)}
+\item{\code{universe}}{All measured genes (default: stored vector)}
+
+\item{\code{org}}{Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")}
 
 \item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
 
@@ -413,9 +432,9 @@ Calculate onthologies based on DEs
 
 \item{\code{verbose}}{Print progress (default=T)}
 
-\item{\code{...}}{Additional parameters for sccore:::plapply function}
-
 \item{\code{n.cores}}{Number of cores used (default: stored vector)}
+
+\item{\code{...}}{Additional parameters for sccore:::plapply function}
 }
 \if{html}{\out{</div>}}
 }

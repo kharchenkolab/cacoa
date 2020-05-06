@@ -1,3 +1,6 @@
+#' @import sccore
+NULL
+
 ##' @title Validate parameters per cell type
 ##' @param raw.mats List of raw count matrices
 ##' @param cell.groups Named clustering/annotation factor with cell names
@@ -56,13 +59,29 @@ rbindDEMatrices <- function(mats, cluster.sep.chr) {
 collapseCellsByType <- function(cm, groups, min.cell.count=10) {
   groups <- as.factor(groups);
   cl <- factor(groups[match(rownames(cm),names(groups))],levels=levels(groups));
-  tc <- colSumByFactor(cm,cl);
+  # TODO remove dependency on Conos
+  tc <- conos:::colSumByFactor(cm,cl);
   tc <- tc[-1,,drop=FALSE]  # omit NA cells
   tc[table(cl)>=min.cell.count,,drop=FALSE]
 }
 
+#' Add Z scores to DE results
+#' @param df Data frame with the columns "pval", "padj" and "log2FoldChange"
+#' @return Updated data frame with Z scores
+#' @export
+addZScores <- function(df) {
+  df$Z <- -qnorm(df$pval/2)
+  df$Z[is.na(df$Z)] <- 0
+  df$Za <- -qnorm(df$padj/2)
+  df$Za[is.na(df$Za)] <- 0
+  df$Z <- df$Z * sign(df$log2FoldChange)
+  df$Za <- df$Za * sign(df$log2FoldChange)
+
+  return(df)
+}
+
 #' Do differential expression for each cell type in a conos object between the specified subsets of apps
-#' @param raw.mats  list of counts matrix; row for gene and column for cell
+#' @param raw.mats list of counts matrices; column for gene and row for cell
 #' @param cell.groups factor specifying cell types (default=NULL)
 #' @param sample.groups a list of two character vector specifying the app groups to compare (default=NULL)
 #' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
@@ -83,14 +102,18 @@ getPerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NULL, c
     lapply(collapseCellsByType, groups = cell.groups, min.cell.count = min.cell.count) %>%
     rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
 
-  de.res <- sccore:::plapply(sccore:::sn(levels(cell.groups)), function(l) {
+  de.res <- cell.groups %>%
+    levels() %>%
+    sccore:::sn() %>%
+    sccore:::plapply(function(l) {
     tryCatch({
-      cm <- aggr2[, nstrpart(colnames(aggr2), cluster.sep.chr,
+      cm <- aggr2[, strpart(colnames(aggr2), cluster.sep.chr,
                                     2, fixed = TRUE) == l]
       meta <- data.frame(sample.id=colnames(cm), group=as.factor(unlist(lapply(colnames(cm), function(y) {
         y <- strpart(y, cluster.sep.chr, 1, fixed = TRUE)
         names(sample.groups)[unlist(lapply(sample.groups, function(x) any(x %in% y)))]}))))
 
+      # TODO these messages are not displayed, seems unnecessary
       if (!ref.level %in% levels(meta$group))
         stop("The reference level is absent in this comparison")
       meta$group <- relevel(meta$group, ref = ref.level)
@@ -98,35 +121,30 @@ getPerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NULL, c
         stop("The cluster is not present in both conditions")
 
       res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design = ~group) %>%
-        DESeq2::DESeq(dds1, quiet=T) %>%
+        DESeq2::DESeq(quiet=T) %>%
         DESeq2::results(cooksCutoff = cooks.cutoff, independentFiltering = independent.filtering) %>%
         as.data.frame
 
       # add Z scores
-      res1$Z <- -qnorm(res1$pval/2)
-      res1$Z[is.na(res1$Z)] <- 0
-      res1$Za <- -qnorm(res1$padj/2)
-      res1$Za[is.na(res1$Za)] <- 0
-      res1$Z <- res1$Z  * sign(res1$log2FoldChange)
-      res1$Za <- res1$Za  * sign(res1$log2FoldChange)
-
-      res1 <- list(down=rownames(res1)[order(res1$Z,decreasing=F)],
-                  up=rownames(res1)[order(res1$Z,decreasing=T)],
-                  all=rownames(res1)[order(abs(res1$Z),decreasing=T)])
+      if(!is.na(res1[[1]][1])) {
+        res1 <- addZScores(res1) %>%
+          .[order(abs(.$Z),decreasing=T),]
+      }
 
       if (return.matrix) {
-        res <- list(res = res, cm = cm)
+        list(res = res1, cm = cm)
       }
       else {
-        res
+        res1
       }
     }, error = function(err) NA)
   }, n.cores = n.cores, progress=verbose) %>%
-    .[!sapply(., `[[`, 1) %>% is.na]
+    .[!sapply(., is.logical)]
 
   dif <- length(levels(cell.groups)) - length(de.res)
   if(dif > 0) warning(paste0("DEs not calculated for ",dif," cell group(s)."))
 
-  return(res)
+  return(list(results = de.res,
+              universe = Reduce(intersect, lapply(raw.mats, colnames))))
 }
 

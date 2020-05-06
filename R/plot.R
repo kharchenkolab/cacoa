@@ -1,6 +1,7 @@
 #' @import ggrepel
 #' @import tibble
 #' @import cowplot
+#' @import dplyr
 #' @importFrom reshape2 melt
 NULL
 

@@ -8,20 +8,27 @@ prepareOnthologyData(
   cms,
   de.raw,
   cell.groups,
-  transpose = T,
-  OrgDB = org.Hs.eg.db,
+  universe = NULL,
+  org = "human",
+  n.top.genes = Inf,
+  stat.cutoff = 3,
+  transposed = T,
   verbose = T,
-  stat.cutoff = 3
+  n.cores = 1
 )
 }
 \arguments{
+\item{cms}{list of counts matrices; column for gene and row for cell}
+
 \item{cell.groups}{Vector indicating cell groups with cell names (default: stored vector)}
 
-\item{OrgDB}{Genome-wide annotation (default=org.Hs.eg.db)}
+\item{org}{Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")}
+
+\item{stat.cutoff}{Cutoff for filtering highly-expressed DE genes (default=3)}
 
 \item{verbose}{Print progress (default=T)}
 
-\item{stat.cutoff}{Cutoff for filtering highly-expressed DE genes (default=3)}
+\item{n.cores}{Number of cores to use (default=1)}
 
 \item{de}{List with differentially expressed genes per cell group}
 }

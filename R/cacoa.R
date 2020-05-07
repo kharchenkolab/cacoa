@@ -333,14 +333,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Plot number of highly-expressed DE genes as a function of number of cells
     #' @param de.filter Filtered DE genes, results from prepareOnthologyData (default: stored list)
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
+    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
+    #' @param label Show labels on plot (default=T)
     #' @return A ggplot2 object
-    plotFilteredDEGenes=function(de.filter=self$test.results$onthology$de.filter, cell.groups=self$cell.groups, legend.position="bottom") {
+    plotFilteredDEGenes=function(de.filter=self$test.results$onthology$de.filter, cell.groups=self$cell.groups, legend.position="none", label = T) {
       if(is.null(de.filter)) stop("Please run 'getPerCellTypeDE' first.")
 
       if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
-      plotFilteredDEGenes(de.filter=de.filter, cell.groups=cell.groups, legend.position=legend.position)
+      plotFilteredDEGenes(de.filter=de.filter, cell.groups=cell.groups, legend.position=legend.position, label=label)
     },
 
     #' @description  Calculate onthologies based on DEs
@@ -355,7 +356,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param verbose Print progress (default=T)
     #' @param ... Additional parameters for sccore:::plapply function
     #' @return A list containing a list of onthologies per type of onthology, and a data frame with merged results
-    estimateOnthology=function(type=NULL, de.gene.ids=self$test.resuls$onthology$de.gene.ids, universe = self$test.results$onthology$universe, org="human", p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, n.cores = self$n.cores, ...) {
+    estimateOnthology=function(type=NULL, de.gene.ids=self$test.results$onthology$de.gene.ids, universe = self$test.results$onthology$universe, org="human", p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, n.cores = self$n.cores, ...) {
       if(is.null(type)) stop("'type' must be 'GO' or 'DO'.")
 
       if(is.null(de.gene.ids)) stop("Please run 'prepareOnthologyData' first.")

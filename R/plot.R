@@ -43,6 +43,7 @@ plotDEGenes <- function(de.raw, cell.groups, legend.position="none", p.adjust.cu
 #' @param de.filter List of filtered differentially expressed genes, results from prepareOnthologyData (default: stored list)
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
+#' @param label Show labels on plot (default=T)
 #' @export
 plotFilteredDEGenes <- function(de.filter, cell.groups, legend.position="bottom", label = T) {
   cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]

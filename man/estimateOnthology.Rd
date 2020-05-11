@@ -6,14 +6,15 @@
 \usage{
 estimateOnthology(
   type,
-  de.gene.ids,
   org = "human",
+  de.gene.ids,
+  universe = NULL,
+  go.environment = NULL,
   p.adj = 0.05,
   p.adjust.method = "BH",
-  universe = NULL,
-  go.environment = self$test.results$go$go.environment,
   readable = T,
   verbose = T,
+  n.cores = 1,
   ...
 )
 }
@@ -30,11 +31,11 @@ estimateOnthology(
 
 \item{verbose}{Print progress (default=T)}
 
+\item{n.cores}{Number of cores used (default: stored vector)}
+
 \item{...}{Additional parameters for sccore:::plapply function}
 
 \item{ont.data}{List containing DE gene IDs, and filtered DE genes}
-
-\item{n.cores}{Number of cores used (default: stored vector)}
 }
 \value{
 A list containing a list of onthologies per type of onthology, and a data frame with merged results

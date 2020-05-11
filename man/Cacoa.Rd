@@ -404,9 +404,10 @@ Calculate onthologies based on DEs
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOnthology(
   type = NULL,
+  org = "human",
   de.gene.ids = self$test.results$onthology$de.gene.ids,
   universe = self$test.results$onthology$universe,
-  org = "human",
+  go.environment = self$test.results$go$go.environment,
   p.adj = 0.05,
   p.adjust.method = "BH",
   readable = T,
@@ -421,11 +422,13 @@ Calculate onthologies based on DEs
 \describe{
 \item{\code{type}}{Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.}
 
+\item{\code{org}}{Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")}
+
 \item{\code{de.gene.ids}}{List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOnthologyData)}
 
 \item{\code{universe}}{All measured genes (default: stored vector)}
 
-\item{\code{org}}{Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")}
+\item{\code{go.environment}}{Extracted GO environment. If set to NULL, the environment will be re-extracted (default: stored environment)}
 
 \item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
 

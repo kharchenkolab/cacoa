@@ -346,9 +346,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description  Calculate onthologies based on DEs
     #' @param type Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.
+    #' @param org Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")
     #' @param de.gene.ids List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOnthologyData)
     #' @param universe All measured genes (default: stored vector)
-    #' @param org Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")
+    #' @param go.environment Extracted GO environment. If set to NULL, the environment will be re-extracted (default: stored environment)
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
     #' @param readable Mapping gene ID to gene name (default=T)
@@ -356,12 +357,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param verbose Print progress (default=T)
     #' @param ... Additional parameters for sccore:::plapply function
     #' @return A list containing a list of onthologies per type of onthology, and a data frame with merged results
-    estimateOnthology=function(type=NULL, de.gene.ids=self$test.results$onthology$de.gene.ids, universe = self$test.results$onthology$universe, org="human", p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, n.cores = self$n.cores, ...) {
+    estimateOnthology=function(type=NULL, org="human", de.gene.ids=self$test.results$onthology$de.gene.ids, universe = self$test.results$onthology$universe, go.environment = self$test.results$go$go.environment, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, n.cores = self$n.cores, ...) {
       if(is.null(type)) stop("'type' must be 'GO' or 'DO'.")
 
       if(is.null(de.gene.ids)) stop("Please run 'prepareOnthologyData' first.")
 
-      self$test.results[[type]] <- estimateOnthology(type=type, de.gene.ids=de.gene.ids, universe = universe, org=org, p.adj=p.adj, p.adjust.method=p.adjust.method, readable=readable, verbose=verbose, n.cores = n.cores, ...)
+      self$test.results[[type]] <- estimateOnthology(type=type, org=org, de.gene.ids=de.gene.ids, universe = universe, go.environment, p.adj=p.adj, p.adjust.method=p.adjust.method, readable=readable, verbose=verbose, n.cores = n.cores, ...)
       return(invisible(self$test.results[[type]]))
     },
 

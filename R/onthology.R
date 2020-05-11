@@ -211,7 +211,7 @@ onthologyListToDf <- function(ont.list) {
 #' @param ... Additional parameters for sccore:::plapply function
 #' @return A list containing a list of onthologies per type of onthology, and a data frame with merged results
 #' @export
-estimateOnthology <- function(type, de.gene.ids, org="human", p.adj=0.05, p.adjust.method="BH", universe=NULL, go.environment = self$test.results$go$go.environment, readable=T, verbose=T, ...) {
+estimateOnthology <- function(type, org="human", de.gene.ids, universe=NULL, go.environment = NULL, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, n.cores = 1, ...) {
   if(org == "human") {
     if(!requireNamespace("org.Hs.eg.db", quietly = TRUE)) stop("You have to install 'org.Hs.eg.db' package to perform onthology analysis")
     require(org.Hs.eg.db)
@@ -264,7 +264,7 @@ estimateOnthology <- function(type, de.gene.ids, org="human", p.adj=0.05, p.adju
     }
 
     if(verbose) cat("Estimating enriched onthologies ... \n")
-    ont.list <- sccore:::plapply(de.gene.ids, estimateEnrichedGO, go.environment = go.environment, universe=universe, readable=readable, pAdjustMethod=p.adjust.method, OrgDB=OrgDB, progress=verbose, ...)
+    ont.list <- sccore:::plapply(de.gene.ids, estimateEnrichedGO, go.environment = go.environment, universe=universe, readable=readable, pAdjustMethod=p.adjust.method, OrgDB=OrgDB, progress=verbose, n.cores = n.cores, ...)
 
     #Split into different fractions
     ont.list <- 1:3 %>%

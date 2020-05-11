@@ -374,7 +374,8 @@ Plot number of highly-expressed DE genes as a function of number of cells
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotFilteredDEGenes(
   de.filter = self$test.results$onthology$de.filter,
   cell.groups = self$cell.groups,
-  legend.position = "bottom"
+  legend.position = "none",
+  label = T
 )}\if{html}{\out{</div>}}
 }
 
@@ -385,7 +386,9 @@ Plot number of highly-expressed DE genes as a function of number of cells
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
-\item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="bottom")}
+\item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="none")}
+
+\item{\code{label}}{Show labels on plot (default=T)}
 }
 \if{html}{\out{</div>}}
 }
@@ -401,7 +404,7 @@ Calculate onthologies based on DEs
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOnthology(
   type = NULL,
-  de.gene.ids = self$test.resuls$onthology$de.gene.ids,
+  de.gene.ids = self$test.results$onthology$de.gene.ids,
   universe = self$test.results$onthology$universe,
   org = "human",
   p.adj = 0.05,

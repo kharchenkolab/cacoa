@@ -11,6 +11,7 @@ estimateOnthology(
   p.adj = 0.05,
   p.adjust.method = "BH",
   universe = NULL,
+  go.environment = self$test.results$go$go.environment,
   readable = T,
   verbose = T,
   ...

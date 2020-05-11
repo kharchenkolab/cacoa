@@ -17,6 +17,8 @@ plotFilteredDEGenes(
 \item{cell.groups}{Vector indicating cell groups with cell names (default: stored vector)}
 
 \item{legend.position}{Position of legend in plot. See ggplot2::theme (default="bottom")}
+
+\item{label}{Show labels on plot (default=T)}
 }
 \description{
 Plot number of DE genes as a function of number of cells

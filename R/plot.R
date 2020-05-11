@@ -2,6 +2,7 @@
 #' @import tibble
 #' @import cowplot
 #' @import dplyr
+#' @import magrittr
 #' @importFrom reshape2 melt
 NULL
 
@@ -19,6 +20,42 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", 
   if(label) gg <- gg + geom_label_repel(aes(label=Type), size=2, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4))
 
   return(gg)
+}
+
+#' @title Plot proportions
+#' @description Plot the cell group proportions per sample
+#' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
+#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+#' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
+#' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
+#' @return A ggplot2 object
+#' @export
+plotProportions <- function(legend.position = "right", cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups) {
+  df <- data.frame(anno=cell.groups, group=sample.per.cell) %>%
+    table %>%
+    rbind %>%
+    t %>%
+    as.data.frame
+
+  df %<>% apply(2, as.numeric) %>%
+    as.data.frame %>%
+    magrittr::divide_by(rowSums(.)) %>%
+    magrittr::multiply_by(1e2)
+
+  df$group <- sample.groups
+
+  df.melt <- reshape2::melt(df, id.vars="group", measure.vars=colnames(df)[-ncol(df)])
+
+  ggplot(df.melt, aes(x=variable, y=value, by=group)) +
+    geom_boxplot(position=position_dodge()) +
+    ylab("%") +
+    xlab("") +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle=90),
+          legend.position=legend.position,
+          legend.title=element_blank()) +
+    geom_point(position=position_dodge(width=0.75), aes(col=group)) +
+    scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
 }
 
 #' @title Plot raw DE genes

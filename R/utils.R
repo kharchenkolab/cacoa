@@ -1,6 +1,5 @@
 #' @import Matrix
 #' @import ggplot2
-#' @importFrom magrittr %<>% %>% %$%
 NULL
 
 getColumnwiseCorrelations <- function(m1, m2) {

@@ -7,7 +7,7 @@
 NULL
 
 plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", label=T) {
-  p.df <- data.frame(N=n) %>% as_tibble(rownames="Type") %>%
+  p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
 
   gg <- ggplot(p.df, aes(x=NCells, y=N)) +
@@ -71,7 +71,7 @@ plotDEGenes <- function(de.raw, cell.groups, legend.position="none", p.adjust.cu
 
   sapply(de.raw, function(n) n %>% dplyr::filter(padj <= p.adjust.cutoff) %>% nrow) %>%
     plotNCellRegression(cell.groups, y.lab="Significant DE genes", legend.position=legend.position, label=label) +
-    xlab("") +
+    xlab("Number of cells") +
     geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 }
 
@@ -87,7 +87,7 @@ plotFilteredDEGenes <- function(de.filter, cell.groups, legend.position="bottom"
 
   sapply(de.filter, length) %>%
     plotNCellRegression(cell.groups, y.lab="Highly-expressed DE genes", legend.position=legend.position, label=label) +
-    xlab("") +
+    xlab("Number of cells") +
     geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 }
 
@@ -99,32 +99,30 @@ plotFilteredDEGenes <- function(de.filter, cell.groups, legend.position="bottom"
 #' @export
 plotOnthologyDistribution <- function(type=NULL, ont.res, cell.groups) {
   if(type=="GO") {
-    p_df <- table(ont.res$Type, ont.res$GO) %>%
+    p_df <- table(ont.res$Group, ont.res$Type) %>%
       cbind %>%
-      as_tibble(rownames="Type") %>%
-      reshape2::melt(id.vars="Type", variable.name="GO", value.name="N") %>%
-      mutate(Type=factor(Type, levels=unique(cell.groups) %>%
-                           .[order(.)]))
+      tibble::as_tibble(rownames="Group") %>%
+      reshape2::melt(id.vars="Group", variable.name="Type", value.name="N") %>%
+                           .[order(.$Group),]
 
     gg <- ggplot(p_df) +
-      geom_bar(aes(x=Type, y=N, fill=GO), stat="identity")
+      geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
   } else if(type=="DO") {
-    p_df <- table(ont.res$Type) %>%
+    p_df <- table(ont.res$Group) %>%
       cbind %>%
-      as_tibble(rownames="Type") %>%
-      reshape2::melt(id.vars="Type", variable.name="DO", value.name="N") %>%
-      mutate(Type=factor(Type, levels=unique(cell.groups) %>%
-                           .[order(.)]))
+      tibble::as_tibble(rownames="Group") %>%
+      reshape2::melt(id.vars="Group", value.name="N") %>%
+                           .[order(.$Group),]
 
     gg <- ggplot(p_df) +
-      geom_bar(aes(x=Type, y=N), stat="identity")
+      geom_bar(aes(x=Group, y=N), stat="identity")
   } else {
     stop("'type' must be either 'GO' or 'DO'.")
   }
 
-  m <- sapply(p_df$Type %>%
+  m <- sapply(p_df$Group %>%
                 unique, function(m) p_df %>%
-                dplyr::filter(Type==m) %>%
+                dplyr::filter(Group==m) %>%
                 dplyr::select(N) %>%
                 sum) %>%
     max %>%
@@ -132,8 +130,12 @@ plotOnthologyDistribution <- function(type=NULL, ont.res, cell.groups) {
 
   gg +
     scale_y_continuous(expand=c(0, 0), limits=c(0, m)) +
+    theme_bw() +
     theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5),
-          panel.grid.major.x=element_blank(), legend.position=c(0.99, 0.99), legend.justification=c(1, 1)) +
+          panel.grid.minor = element_blank(),
+          panel.grid.major = element_blank(),
+          legend.position=c(0.99, 0.99),
+          legend.justification=c(1, 1)) +
     labs(x="", y="No. of onthologies")
 }
 
@@ -143,7 +145,6 @@ plotOnthologyDistribution <- function(type=NULL, ont.res, cell.groups) {
 #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
 #' @param de.filter List of filtered differentially expressed genes, results from prepareOnthologyData (default: stored list)
 #' @param cell.groups Vector indicating cell group sizes with cell group names
-#' @param show.legend Include legend in plot (default=T)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
 #' @param label.x.pos Plot label position on x axis (default=0.01)
 #' @param label.y.pos Plot label position on y axis (default=1)
@@ -151,22 +152,23 @@ plotOnthologyDistribution <- function(type=NULL, ont.res, cell.groups) {
 #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
 #' @return A ggplot2 object
 #' @export
-plotOnthologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legend.position="bottom", label = T, label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93, show.legend=T) {
+plotOnthologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legend.position="bottom", label = T, label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93) {
   if(length(unique(ont.res$Type))==1) stop("The input only contains one cell type.")
 
   if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
 
   cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
-  leg <- cowplot::get_legend(plotNCellRegression(sapply(de.filter, length), cell.groups, legend.position=legend.position))
+
+  if(legend.position != "none") leg <- cowplot::get_legend(plotNCellRegression(sapply(de.filter, length), cell.groups, legend.position=legend.position))
 
   pg <- cowplot::plot_grid(
-    ont.res$Type %>% table %>% c %>%
+    ont.res$Group %>% table %>% c %>%
       plotNCellRegression(sapply(de.filter, length), y.lab=NULL, legend.position="none", label=label) +
-      geom_smooth(method=MASS::rlm, se=0, color="black", size=0.5) +
+      geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5) +
       scale_x_continuous(name="Number of highly-expressed DE genes"),
-    ont.res$Type %>% table %>% c %>%
+    ont.res$Group %>% table %>% c %>%
       plotNCellRegression(cell.groups, y.lab=NULL, legend.position="none", label=label) +
-      geom_smooth(method=MASS::rlm, se=0, color="black", size=0.5),
+      geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5),
     ncol=1, labels=c("a", "b"), label_x = label.x.pos, label_y = label.y.pos
   )
 
@@ -175,8 +177,8 @@ plotOnthologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legen
   } else if(type=="DO") {
     y_lab <- "Number of DO terms"
   }
-  if(show.legend) {
-    p <- cowplot::plot_grid(pg, leg, nrow=2, rel_heights = rel_heights, scale=scale) + draw_label(y_lab, x=0, y=0.6, vjust= 1.5, angle=90)
+  if(legend.position != "none") {
+    p <- cowplot::plot_grid(pg, leg, nrow=2, rel_heights = rel_heights, scale=scale) + cowplot::draw_label(y_lab, x=0, y=0.6, vjust= 1.5, angle=90)
   } else {
     p <- cowplot::plot_grid(pg, nrow=1, scale=scale) + draw_label(y_lab, x=0, y=0.6, vjust= 1.5, angle=90)
   }
@@ -185,7 +187,7 @@ plotOnthologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legen
 
 #' @title Plot heatmap
 #' @param df Data frame with plot data
-#' @param color.per.type Colors per cell type (default=NULL)
+#' @param color.per.group Colors per cell group (default=NULL)
 #' @param row.order Forced row order (default=NULL)
 #' @param col.order Forced column order (default=NULL)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
@@ -194,7 +196,7 @@ plotOnthologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legen
 #' @param x.axis.position Position of x axis (default="top")
 #' @return A ggplot2 object
 #' @export
-plotHeatmap <- function(df, color.per.type=NULL, row.order=NULL, col.order=F, legend.position="right", legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top") {
+plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, legend.position="right", legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top") {
   m <- max(df)
 
   if (is.null(row.order)) {
@@ -209,25 +211,25 @@ plotHeatmap <- function(df, color.per.type=NULL, row.order=NULL, col.order=F, le
     col.order <- colnames(df)
   }
 
-  df %<>% as_tibble(rownames="GO") %>%
-    melt(id.vars="GO", variable.name="Type", value.name="p.value")
+  df %<>% tibble::as_tibble(rownames="Pathway") %>%
+    reshape2::melt(id.vars="Pathway", variable.name="Group", value.name="p.value")
 
   if (!is.logical(row.order)) {
-    df %<>% mutate(GO=factor(GO, levels=row.order))
+    df %<>% dplyr::mutate(Pathway=factor(Pathway, levels=row.order))
   }
 
   if (!is.logical(col.order)) {
-    df %<>% mutate(Type=factor(Type, levels=col.order))
+    df %<>% dplyr::mutate(Group=factor(Group, levels=col.order))
   }
 
-  if (is.null(color.per.type)) {
-    color.per.type <- "black"
+  if (is.null(color.per.group)) {
+    color.per.group <- "black"
   } else {
-    color.per.type <- color.per.type[levels(df$Type)]
+    color.per.group <- color.per.group[levels(df$Group)]
   }
 
-  gg <- ggplot(df) + geom_tile(aes(x=Type, y=GO, fill=pmin(p.value, m)), colour = "grey50") +
-    theme(axis.text.x=element_text(angle=90, hjust=0, vjust=0.5, color=color.per.type),
+  gg <- ggplot(df) + geom_tile(aes(x=Group, y=Pathway, fill=pmin(p.value, m)), colour = "grey50") +
+    theme(axis.text.x=element_text(angle=90, hjust=0, vjust=0.5, color=color.per.group),
           axis.text=element_text(size=8), axis.ticks=element_blank(), axis.title=element_blank()) +
     scale_fill_distiller(palette="RdYlBu", limits=c(0, m)) +
     guides(fill=guide_colorbar(title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5))) +
@@ -248,7 +250,7 @@ plotHeatmap <- function(df, color.per.type=NULL, row.order=NULL, col.order=F, le
 #' @export
 plotOnthologyHeatmap <- function(type, ont.res, legend.position = "left", order = "all-max-row", n = 10) {
   if(type=="BP" | type=="CC" | type=="MF") {
-    ont.sum <- getOnthologySummary(type, ont.res %>% filter(GO==type))
+    ont.sum <- getOnthologySummary(type, ont.res %>% filter(Type==type))
   } else if(type=="DO") {
     ont.sum <- getOnthologySummary(type, ont.res)
   }
@@ -283,34 +285,36 @@ plotOnthologyHeatmap <- function(type, ont.res, legend.position = "left", order 
   }
 }
 
+# TODO should depend on merged DF, not list
 #' @title Plot onthology correlations
 #' @description Plot correlation matrix for onthologies between cell types
-#' @param ont.res Onthology resuls from estimateOnthology
+#' @param ont.res List with onthology resuls from estimateOnthology
 #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
 #' @return A ggplot2 object
 #' @export
 plotOnthologyCorrelations <- function(type=NULL, ont.res) {
   if(type=="GO") {
     pathway_df <- names(ont.res) %>%
-      lapply(function(ng) lapply(ont.res[[ng]] %>% .$Type %>% levels, function(nt) {
-        tibble(Pathway=ont.res[[ng]] %>%
-                 dplyr::filter(Type==nt) %>%
-                 .$Description, PathwayType=ng, Type=nt)
-      }) %>% bind_rows) %>% bind_rows
-  } else if(type=="DO") {
-    pathway_df <- lapply(ont.res %>% names, function(nt) {
-      tibble(Pathway=ont.res[[nt]] %>%
-               .$Description, Type=nt)
-    }) %>% bind_rows
+      lapply(function(cell.group) lapply(ont.res[[cell.group]] %>% dplyr::pull(Type) %>% levels, function(go) {
+        tibble::tibble(Pathway=ont.res[[cell.group]] %>% dplyr::filter(Type==go) %>% dplyr::pull(Description),
+                       Group=cell.group,
+                       GO=go)
+      }) %>% dplyr::bind_rows()) %>%
+      dplyr::bind_rows()
+    } else if(type=="DO") {
+    pathway_df <- lapply(ont.res %>% names, function(cell.group) {
+      tibble::tibble(Pathway=ont.res[[cell.group]] %>% dplyr::pull(Description),
+                     Group=cell.group)
+    }) %>% dplyr::bind_rows()
   } else {
     stop("'type' must be either 'GO' or 'DO'.")
   }
   path_bin <- pathway_df %>%
-    dplyr::select(Pathway, Type) %>%
-    mutate(X=1) %>%
+    dplyr::select(Pathway, Group) %>%
+    dplyr::mutate(X=1) %>%
     tidyr::spread(Pathway, X) %>%
     as.data.frame() %>%
-    set_rownames(.$Type) %>%
+    magrittr::set_rownames(.$Group) %>%
     .[, 2:ncol(.)] %>%
     as.matrix()
   path_bin[is.na(path_bin)] <- 0
@@ -325,7 +329,7 @@ plotOnthologyCorrelations <- function(type=NULL, ont.res) {
   t_cl_lengths <- rle(t_cls)$lengths %>% rev
 
   diag(p_mat) <- 1
-  plotHeatmap(p_mat, color.per.type=NULL, row.order=t_order, col.order=rev(t_order), legend.title="Similarity") +
+  plotHeatmap(p_mat, color.per.group=NULL, row.order=t_order, col.order=rev(t_order), legend.title="Similarity") +
     scale_fill_distiller(palette="RdYlBu", limits=c(0, 0.5)) +
     geom_vline(aes(xintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5)) +
     geom_hline(aes(yintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5))

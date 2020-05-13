@@ -246,6 +246,7 @@ Estimate differential gene expression per cell type between conditions
   cell.groups = self$cell.groups,
   sample.groups = self$sample.groups,
   ref.level = self$ref.level,
+  target.level = self$target.level,
   n.cores = self$n.cores,
   cooks.cutoff = FALSE,
   min.cell.count = 10,
@@ -407,7 +408,7 @@ Calculate onthologies based on DEs
   org = "human",
   de.gene.ids = self$test.results$onthology$de.gene.ids,
   universe = self$test.results$onthology$universe,
-  go.environment = self$test.results$go$go.environment,
+  go.environment = self$test.results$GO$go.environment,
   p.adj = 0.05,
   p.adjust.method = "BH",
   readable = T,
@@ -454,13 +455,19 @@ A list containing a list of onthologies per type of onthology, and a data frame 
 \subsection{Method \code{plotOnthologyDistribution()}}{
 Bar plot of onthologies per cell type
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyDistribution(type = NULL, cell.groups = self$cell.groups)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyDistribution(
+  type = NULL,
+  genes = NULL,
+  cell.groups = self$cell.groups
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{type}}{Onthology, must be either "GO" or "DO" (default=NULL)}
+
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 }
@@ -478,10 +485,10 @@ Plot onthology terms as a function of both number of DE genes, and number of cel
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyTerms(
   type = NULL,
+  genes = NULL,
   de.filter = self$test.results$onthology$de.filter,
   cell.groups = self$cell.groups,
-  show.legend = T,
-  legend.position = "bottom",
+  legend.position = "none",
   label.x.pos = 0.01,
   label.y.pos = 1,
   rel_heights = c(2.5, 0.5),
@@ -494,11 +501,11 @@ Plot onthology terms as a function of both number of DE genes, and number of cel
 \describe{
 \item{\code{type}}{Onthology, must be either "GO" or "DO" (default=NULL)}
 
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
+
 \item{\code{de.filter}}{Filtered DE genes, results from prepareOnthologyData (default: stored list)}
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-
-\item{\code{show.legend}}{Include legend in plot (default=T)}
 
 \item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="bottom")}
 
@@ -524,6 +531,7 @@ Plot a heatmap of onthology P values per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyHeatmap(
   type = NULL,
+  genes = NULL,
   legend.position = "left",
   order = "all-max-row",
   n = 10
@@ -534,6 +542,8 @@ Plot a heatmap of onthology P values per cell type
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{type}}{Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
+
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
 
 \item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="left")}
 
@@ -555,7 +565,7 @@ A ggplot2 object
 \subsection{Method \code{plotOnthologyCorrelations()}}{
 Plot correlation matrix for onthologies between cell types
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyCorrelations(type = NULL)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyCorrelations(type = NULL, genes = NULL)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -563,7 +573,7 @@ Plot correlation matrix for onthologies between cell types
 \describe{
 \item{\code{type}}{Onthology, must be either "GO" or "DO" (default=NULL)}
 
-\item{\code{ont.data}}{List containing a list of results from estimateOnthology}
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
 }
 \if{html}{\out{</div>}}
 }

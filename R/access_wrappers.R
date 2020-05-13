@@ -33,10 +33,6 @@ extractSampleGroups.Conos <- function(con, ref.level = ref.level, target.level =
 
     if(!any(grep(ref.level,con.names))) stop("'ref.level' not in Conos sample names.")
 
-    if(is.null(target.level)) {
-      target.level <- "target"
-    }
-
     sample.groups <- ifelse(grepl(ref.level,con.names),ref.level,target.level) %>% setNames(con.names)
 
     return(sample.groups)

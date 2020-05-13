@@ -67,12 +67,13 @@ prepareOnthologyData <- function(cms, de.raw, cell.groups, universe = NULL, org 
   de.gene.ids <- groups %>% lapply(function(x) {
     de <- de.raw[[x]] %>% .[rownames(.) %in% de.genes.filtered[[x]],]
 
-    if(n.top.genes == Inf | n.top.genes > nrow(de)) m <- nrow(de)
-
-    list(down=rownames(de)[order(de$Z,decreasing=F)[1:m]],
-         up=rownames(de)[order(de$Z,decreasing=T)[1:m]],
-         all=rownames(de)[order(abs(de$Z),decreasing=T)[1:m]])
-  }) %>% setNames(groups)
+    list(down = de %>% .[order(.$Z[.$Z < 0], decreasing = F),] %>% rownames,
+         up = de %>% .[order(.$Z[.$Z > 0], decreasing = F),] %>% rownames,
+         all = de %>% .[order(.$Z %>% abs(), decreasing = F),] %>% rownames) %>%
+      lapply(function(l) {
+        if(n.top.genes == Inf | n.top.genes > length(l)) l else l[1:n.top.genes]
+      })
+    }) %>% setNames(groups)
 
   de.gene.ids <- suppressMessages(lapply(de.gene.ids, lapply, clusterProfiler::bitr, 'SYMBOL', 'ENTREZID', OrgDB)) %>%
     lapply(lapply, `[[`, "ENTREZID")
@@ -158,14 +159,14 @@ getOnthologySummary <- function(type=NULL, ont.res) {
 
   ont.res %<>% mutate(ClustName=name_per_clust[as.character(Clust)])
 
-  order.anno <- ont.res$Type %>% unique %>% .[order(.)]
+  order.anno <- ont.res$Group %>% unique %>% .[order(.)]
 
   df <- ont.res %>%
-    group_by(Type, ClustName) %>%
+    group_by(Group, ClustName) %>%
     summarise(p.adjust=min(p.adjust)) %>%
     ungroup %>%
     mutate(p.adjust=-log10(p.adjust)) %>%
-    tidyr::spread(Type, p.adjust) %>%
+    tidyr::spread(Group, p.adjust) %>%
     as.data.frame() %>%
     set_rownames(.$ClustName) %>%
     .[, 2:ncol(.)] %>%
@@ -176,26 +177,34 @@ getOnthologySummary <- function(type=NULL, ont.res) {
   return(df)
 }
 
-filterOnthologies <- function(ont.list) {
-  ont.list %<>% lapply(lapply, function(x) dplyr::filter(x, p.adjust < p.adj)) %>%
-    lapply(function(gt) {
-      gt %>%
-        .[sapply(., nrow) > 0] %>%
-        names() %>%
-        sccore:::sn() %>%
-        lapply(function(n) cbind(gt[[n]], Type=n)) %>%
-        Reduce(rbind, .)
+filterOnthologies <- function(ont.list, p.adj) {
+  ont.list %>%
+    names() %>%
+    lapply(function(dir) {
+      lapply(ont.list[[dir]] %>% names(), function(group) {
+        dplyr::mutate(ont.list[[dir]][[group]], Group=group) %>%
+          dplyr::filter(p.adjust < p.adj)
+      }) %>%
+        setNames(ont.list[[dir]] %>% names) %>%
+        .[sapply(., nrow) > 0] # Remove empty data frames
     }) %>%
-    .[!sapply(., is.null)]
+    setNames(c("down", "up", "all"))
 }
 
 onthologyListToDf <- function(ont.list) {
-  ont.list %>%
-    names %>%
-    lapply(function(n) ont.list[[n]] %>%
-             dplyr::mutate(GO=n) %>%
-             dplyr::select(GO, Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)) %>%
-    dplyr::bind_rows()
+  lapply(ont.list, function(x) {
+    if(length(x) > 0) {
+      dplyr::bind_rows(x) %>%
+        {if("Type" %in% colnames(.)) {
+          dplyr::select(., Group, Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)
+        } else {
+          dplyr::select(., Group, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)
+        }
+        }
+    } else {
+      "No significant onthologies identified. Try relaxing p.adj."
+    }
+  })
 }
 
 #' @title Estimate onthology
@@ -234,20 +243,22 @@ estimateOnthology <- function(type, org="human", de.gene.ids, universe=NULL, go.
     OrgDB = org.Dr.eg.db
   }
 
+  dir.names <- c("down", "up", "all")
+
   if(type=="DO") {
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
     if(org != "human") stop("Only human data supported for DO analysis.")
-    ont.list <- sccore:::plapply(de.gene.ids, DOSE::enrichDO, pAdjustMethod=p.adjust.method, universe=universe, readable=readable, n.cores=1, progress=verbose, ...) %>%
-      lapply(function(x) x@result)
-    ont.list %<>% names %>%
-      setNames(., .) %>%
-      lapply(function(n) mutate(ont.list[[n]], Type=n)) %>%
-      lapply(function(x) filter(x, p.adjust < p.adj))
+    ont.list <- sccore:::plapply(lapply, de.gene.ids, DOSE::enrichDO, pAdjustMethod=p.adjust.method, universe=universe, readable=readable, n.cores=1, progress=verbose, ...) %>%
+      lapply(lapply, function(x) x@result)
 
-    ont.df <- ont.list %>%
-      .[sapply(., nrow) > 0] %>%
-      dplyr::bind_rows() %>%
-      dplyr::select(Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)
+    # Split into different fractions
+    ont.list <- 1:3 %>%
+      lapply(function(x) lapply(ont.list, `[[`, x)) %>%
+      setNames(dir.names)
+
+    ont.list %<>% filterOnthologies(p.adj = p.adj)
+
+    ont.df <- ont.list %>% onthologyListToDf()
 
     res <- list(list=ont.list,
                 df=ont.df)
@@ -269,11 +280,22 @@ estimateOnthology <- function(type, org="human", de.gene.ids, universe=NULL, go.
     #Split into different fractions
     ont.list <- 1:3 %>%
       lapply(function(x) lapply(ont.list, lapply, `[[`, x)) %>%
-      setNames(c("down", "up", "all"))
+      setNames(dir.names)
 
-    ont.list %<>% lapply(filterOnthologies)
+    ont.list %<>%
+      names() %>%
+      lapply(function(dir) {
+        lapply(ont.list[[dir]] %>% names, function(group) {
+          lapply(ont.list[[dir]][[group]] %>% names, function(go) {
+            dplyr::mutate(ont.list[[dir]][[group]][[go]], Type = go)
+          }) %>% setNames(ont.list[[dir]][[group]] %>% names) %>%
+            dplyr::bind_rows()
+        }) %>% setNames(ont.list[[dir]] %>% names)
+      }) %>% setNames(dir.names)
 
-    ont.df <- ont.list %>% lapply(onthologyListToDf)
+    ont.list %<>% filterOnthologies(p.adj = p.adj)
+
+    ont.df <- ont.list %>% onthologyListToDf()
 
     res <- list(list=ont.list,
                 df=ont.df,

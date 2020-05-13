@@ -14,8 +14,7 @@ plotOnthologyTerms(
   label.x.pos = 0.01,
   label.y.pos = 1,
   rel_heights = c(2.5, 0.5),
-  scale = 0.93,
-  show.legend = T
+  scale = 0.93
 )
 }
 \arguments{
@@ -36,8 +35,6 @@ plotOnthologyTerms(
 \item{rel_heights}{Vector indicating relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))}
 
 \item{scale}{Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)}
-
-\item{show.legend}{Include legend in plot (default=T)}
 }
 \value{
 A ggplot2 object

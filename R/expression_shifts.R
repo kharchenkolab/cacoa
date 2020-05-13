@@ -33,8 +33,8 @@ cluster.expression.distances <- function(con,cell.groups=NULL,dist='JS',n.cores=
 
   if(use.aggregated.matrices) {
     # in this case, we simply add all the counts from all the clusters into a common matrix and simply calculate distances on that
-    tc <- conos:::rawMatricesWithCommonGenes(con) %>%
-      lapply(conos:::collapseCellsByType, groups=cell.groups, min.cell.count=0) %>%
+    tc <- rawMatricesWithCommonGenes(con) %>%
+      lapply(collapseCellsByType, groups=cell.groups, min.cell.count=0) %>%
       abind::abind(along=3) %>%
       apply(c(1,2),sum,na.rm=T)
 
@@ -54,8 +54,9 @@ cluster.expression.distances <- function(con,cell.groups=NULL,dist='JS',n.cores=
   }
 
 
+  # TODO this should be generic, not specific for Conos
   # determine distance matrices for each sample
-  dc <- abind::abind(conos:::papply(con$samples,function(s) {
+  dc <- abind::abind(sccore:::plapply(con$samples,function(s) {
     m <- s$misc$rawCounts
     cl <- factor(cell.groups[match(rownames(m),names(cell.groups))],levels=levels(cell.groups));
     tt <- table(cl);
@@ -207,12 +208,12 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
 
     # table of sample types and cells
     cct <- table(cf,cl[names(cf)])
-    caggr <- lapply(count.matrices, conos:::collapseCellsByType, groups=as.factor(cf), min.cell.count=1) %>%
+    caggr <- lapply(count.matrices, collapseCellsByType, groups=as.factor(cf), min.cell.count=1) %>%
       .[names(sample.groups)]
 
     # note: this is not efficient, as it will compare all samples on the two sides of the sample.groups
     #       would be faster to go only through the valid comparisons
-    ctdm <- lapply(sn(levels(cf)),function(ct) {
+    ctdm <- lapply(sccore:::sn(levels(cf)),function(ct) {
       tcm <- na.omit(do.call(rbind,lapply(caggr,function(x) x[match(ct,rownames(x)),])))
 
       # restrict to top expressed genes
@@ -262,7 +263,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
     })
 
     x <- x[!unlist(lapply(x,is.null))]
-    df <- do.call(rbind,lapply(sn(names(x)),function(n) { z <- x[[n]]; z$Type <- n; z }))
+    df <- do.call(rbind,lapply(sccore:::sn(names(x)),function(n) { z <- x[[n]]; z$Type <- n; z }))
     df$patient <- df$Var1
     df
   }))

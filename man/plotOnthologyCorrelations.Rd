@@ -9,7 +9,7 @@ plotOnthologyCorrelations(type = NULL, ont.res)
 \arguments{
 \item{type}{Onthology, must be either "GO" or "DO" (default=NULL)}
 
-\item{ont.res}{Onthology resuls from estimateOnthology}
+\item{ont.res}{List with onthology resuls from estimateOnthology}
 }
 \value{
 A ggplot2 object

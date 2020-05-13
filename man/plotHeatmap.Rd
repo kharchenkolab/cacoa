@@ -6,7 +6,7 @@
 \usage{
 plotHeatmap(
   df,
-  color.per.type = NULL,
+  color.per.group = NULL,
   row.order = NULL,
   col.order = F,
   legend.position = "right",
@@ -18,7 +18,7 @@ plotHeatmap(
 \arguments{
 \item{df}{Data frame with plot data}
 
-\item{color.per.type}{Colors per cell type (default=NULL)}
+\item{color.per.group}{Colors per cell group (default=NULL)}
 
 \item{row.order}{Forced row order (default=NULL)}
 

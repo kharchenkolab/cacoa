@@ -26,15 +26,13 @@ extractSamplePerCell.Conos <- function(con) {
   return(con$getDatasetPerCell())
 }
 
-extractSampleGroups <- function(obj, ref.level = self$ref.level, target.level = self$target.level) UseMethod("extractSampleGroups", obj)
+extractSampleGroups <- function(obj, ref.level, target.level) UseMethod("extractSampleGroups", obj)
 extractSampleGroups.Conos <- function(con, ref.level = ref.level, target.level = target.level) {
   if(!is.null(ref.level)) {
     con.names <- names(con$samples)
 
     if(!any(grep(ref.level,con.names))) stop("'ref.level' not in Conos sample names.")
 
-    sample.groups <- ifelse(grepl(ref.level,con.names),ref.level,target.level) %>% setNames(con.names)
-
-    return(sample.groups)
+    ifelse(grepl(ref.level,con.names),ref.level,target.level) %>% setNames(con.names)
   }
 }

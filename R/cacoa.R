@@ -59,7 +59,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       if(is.null(sample.groups) && !is.null(ref.level)) {
-        self$sample.groups <- extractSampleGroups(data.object, ref.level, target.level)
+        self$sample.groups <- extractSampleGroups(data.object, ref.level, self$target.level)
       } else {
         self$sample.groups <- sample.groups
       }

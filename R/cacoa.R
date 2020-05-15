@@ -304,7 +304,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param label Show labels on plot (default=T)
     #' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
     #' @return A ggplot2 object
-    plotDEGenes=function(de.raw=self$test.results$de$results, cell.groups=self$cell.groups, legend.position="none", label = T, p.adjust.cutoff=0.05) {
+    plotDEGenes=function(de.raw=self$test.results$de, cell.groups=self$cell.groups, legend.position="none", label = T, p.adjust.cutoff=0.05) {
       if(is.null(de.raw)) stop("Please run 'getPerCellTypeDE' first.")
 
       # If getPerCellTypeDE was run with return.matrix = T, remove matrix before plotting
@@ -326,7 +326,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param verbose Print progress (default=T)
     #' @param n.cores Number of cores to use (default: stored integer)
     #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
-    prepareOnthologyData=function(de.raw=self$test.results$de$results, cell.groups=self$cell.groups, universe = self$test.results$de$universe, org="human", n.top.genes = Inf, stat.cutoff=3, transposed = T, verbose=T, n.cores = self$n.cores) {
+    prepareOnthologyData=function(de.raw=self$test.results$de, cell.groups=self$cell.groups, universe = self$test.results$de$universe, org="human", n.top.genes = Inf, stat.cutoff=3, transposed = T, verbose=T, n.cores = self$n.cores) {
       if (is.null(de)) stop("Please run 'getPerCellTypeDE' first.")
 
       if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")

@@ -42,7 +42,7 @@ prepareOnthologyData <- function(cms, de.raw, cell.groups, universe = NULL, org 
 
   cm_merged <- sccore:::mergeCountMatrices(cms, transposed = transposed, n.cores = n.cores)
 
-  if(transposed) {
+  if(!transposed) {
     if(verbose) cat("done!\nTransposing merged count matrix ... ")
     cm_merged %<>% Matrix::t()
   }
@@ -51,7 +51,7 @@ prepareOnthologyData <- function(cms, de.raw, cell.groups, universe = NULL, org 
   cm_bool <- (cm_merged > 1) * 1
 
   if(verbose) cat("done!\nFiltering DE genes .")
-  cm_collapsed_bool <- collapseCellsByType(Matrix::t(cm_bool), cell.groups %>%
+  cm_collapsed_bool <- collapseCellsByType(cm_bool, cell.groups %>%
                                                      .[. %in% names(de.raw)] %>%
                                                      factor, min.cell.count=0)
 

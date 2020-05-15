@@ -32,7 +32,7 @@ validatePerCellTypeParams <- function(raw.mats, cell.groups, sample.groups, ref.
     stop('"cluster.sep.chr" must not be part of any cluster name')
 }
 
-rawMatricesWithCommonGenes=function (raw.mats, sample.groups = NULL)
+rawMatricesWithCommonGenes=function(raw.mats, sample.groups = NULL)
 {
   if (!is.null(raw.mats)) {
     raw.mats <- raw.mats[unlist(sample.groups)]
@@ -84,21 +84,28 @@ addZScores <- function(df) {
 #' @param raw.mats list of counts matrices; column for gene and row for cell
 #' @param cell.groups factor specifying cell types (default=NULL)
 #' @param sample.groups a list of two character vector specifying the app groups to compare (default=NULL)
-#' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
 #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
+#' @param common.genes Only investigate common genes across cell groups (default=F)
+#' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
 #' @param min.cell.count (default=10)
 #' @param independent.filtering independentFiltering for DESeq2 (default=F)
 #' @param n.cores Number of cores (default=1)
 #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
 #' @param return.matrix Return merged matrix of results (default=F)
 #' @export
-getPerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NULL, cooks.cutoff = FALSE,
-                              ref.level = NULL, min.cell.count = 10, independent.filtering = FALSE,
-                              n.cores = 1, cluster.sep.chr = "<!!>", return.matrix = F, verbose = T) {
+getPerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NULL, ref.level = NULL,
+                           common.genes = F, cooks.cutoff = FALSE, min.cell.count = 10, independent.filtering = T,
+                           n.cores = 1, cluster.sep.chr = "<!!>", return.matrix = F, verbose = T) {
   validatePerCellTypeParams(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr)
 
-  # TODO genes should only be common per cell type - remember background per cell type
-  aggr2<- rawMatricesWithCommonGenes(raw.mats, sample.groups) %>%
+  if(common.genes) {
+    raw.mats <- rawMatricesWithCommonGenes(raw.mats, sample.groups)
+  } else {
+    gene.union <- lapply(raw.mats, colnames) %>% Reduce(union, .)
+    raw.mats <- sccore:::plapply(raw.mats, sccore:::extendMatrix, gene.union, n.cores = n.cores)
+  }
+
+  aggr2 <- raw.mats %>%
     lapply(collapseCellsByType, groups = cell.groups, min.cell.count = min.cell.count) %>%
     rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
 
@@ -107,13 +114,13 @@ getPerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NULL, c
     sccore:::sn() %>%
     sccore:::plapply(function(l) {
     tryCatch({
-      cm <- aggr2[, strpart(colnames(aggr2), cluster.sep.chr,
-                                    2, fixed = TRUE) == l]
+      cm <- aggr2[, strpart(colnames(aggr2), cluster.sep.chr, 2, fixed = TRUE) == l] %>%
+        .[rowSums(.) > 0,] # Remove genes with no counts
+
       meta <- data.frame(sample.id=colnames(cm), group=as.factor(unlist(lapply(colnames(cm), function(y) {
         y <- strpart(y, cluster.sep.chr, 1, fixed = TRUE)
         names(sample.groups)[unlist(lapply(sample.groups, function(x) any(x %in% y)))]}))))
 
-      # TODO these messages are not displayed, seems unnecessary
       if (!ref.level %in% levels(meta$group))
         stop("The reference level is absent in this comparison")
       meta$group <- relevel(meta$group, ref = ref.level)
@@ -144,7 +151,5 @@ getPerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NULL, c
   dif <- length(levels(cell.groups)) - length(de.res)
   if(dif > 0) warning(paste0("DEs not calculated for ",dif," cell group(s)."))
 
-  return(list(results = de.res,
-              universe = Reduce(intersect, lapply(raw.mats, colnames))))
+  return(de.res)
 }
-

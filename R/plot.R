@@ -22,42 +22,6 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", 
   return(gg)
 }
 
-#' @title Plot proportions
-#' @description Plot the cell group proportions per sample
-#' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
-#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-#' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
-#' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
-#' @return A ggplot2 object
-#' @export
-plotProportions <- function(legend.position = "right", cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups) {
-  df <- data.frame(anno=cell.groups, group=sample.per.cell) %>%
-    table %>%
-    rbind %>%
-    t %>%
-    as.data.frame
-
-  df %<>% apply(2, as.numeric) %>%
-    as.data.frame %>%
-    magrittr::divide_by(rowSums(.)) %>%
-    magrittr::multiply_by(1e2)
-
-  df$group <- sample.groups
-
-  df.melt <- reshape2::melt(df, id.vars="group", measure.vars=colnames(df)[-ncol(df)])
-
-  ggplot(df.melt, aes(x=variable, y=value, by=group)) +
-    geom_boxplot(position=position_dodge()) +
-    ylab("%") +
-    xlab("") +
-    theme_classic() +
-    theme(axis.text.x = element_text(angle=90),
-          legend.position=legend.position,
-          legend.title=element_blank()) +
-    geom_point(position=position_dodge(width=0.75), aes(col=group)) +
-    scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
-}
-
 #' @title Plot raw DE genes
 #' @description Plot number of DE genes as a function of number of cells
 #' @param de.raw List of differentially expressed genes per cell type, results from getPerCellTypeDE (default: stored list)
@@ -255,7 +219,7 @@ plotOnthologyHeatmap <- function(type, ont.res, legend.position = "left", order 
     ont.sum <- getOnthologySummary(type, ont.res)
   }
 
-  if(!order %in% c("unique","unique-max-row","all-max-rowsum","all-max-row")) stop("'order' must be one of the following: 'unique', 'unique-max-row', 'all-max-rowsum', 'all-max-row'.")
+  if(is.null(order) || !order %in% c("unique","unique-max-row","all-max-rowsum","all-max-row")) stop("'order' must be one of the following: 'unique', 'unique-max-row', 'all-max-rowsum', 'all-max-row'.")
 
   if(order=="unique") {
     ont.sum %>% .[rowSums(. > 0.1) == 1,] %>%
@@ -295,7 +259,7 @@ plotOnthologyHeatmap <- function(type, ont.res, legend.position = "left", order 
 plotOnthologyCorrelations <- function(type=NULL, ont.res) {
   if(type=="GO") {
     pathway_df <- names(ont.res) %>%
-      lapply(function(cell.group) lapply(ont.res[[cell.group]] %>% dplyr::pull(Type) %>% levels, function(go) {
+      lapply(function(cell.group) lapply(ont.res[[cell.group]] %>% dplyr::pull(Type) %>% as.factor() %>% levels(), function(go) {
         tibble::tibble(Pathway=ont.res[[cell.group]] %>% dplyr::filter(Type==go) %>% dplyr::pull(Description),
                        Group=cell.group,
                        GO=go)
@@ -333,4 +297,67 @@ plotOnthologyCorrelations <- function(type=NULL, ont.res) {
     scale_fill_distiller(palette="RdYlBu", limits=c(0, 0.5)) +
     geom_vline(aes(xintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5)) +
     geom_hline(aes(yintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5))
+}
+
+#' @title Plot proportions
+#' @description Plot the cell group proportions per sample
+#' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
+#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+#' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
+#' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
+#' @return A ggplot2 object
+plotProportions <- function(legend.position = "right", cell.groups, sample.per.cell, sample.groups) {
+  df <- data.frame(anno=cell.groups, group=sample.per.cell) %>%
+    table %>%
+    rbind %>%
+    t %>%
+    as.data.frame
+
+  df %<>% apply(2, as.numeric) %>%
+    as.data.frame %>%
+    magrittr::divide_by(rowSums(.)) %>%
+    magrittr::multiply_by(1e2)
+
+  df$group <- sample.groups
+
+  df.melt <- reshape2::melt(df, id.vars="group", measure.vars=colnames(df)[-ncol(df)])
+
+  ggplot(df.melt, aes(x=variable, y=value, by=group)) +
+    geom_boxplot(position=position_dodge()) +
+    ylab("%") +
+    xlab("") +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle=90),
+          legend.position=legend.position,
+          legend.title=element_blank()) +
+    geom_point(position=position_dodge(width=0.75), aes(col=group)) +
+    scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
+}
+
+#' @title Plot proportions
+#' @description Plot the cell group proportions per sample
+#' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
+#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+#' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
+#' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
+#' @return A ggplot2 object
+plotCellNumbers <- function(legend.position = "right", cell.groups, sample.per.cell, sample.groups) {
+  df.melt <- data.frame(anno=cell.groups, group=sample.per.cell) %>%
+    table %>%
+    rbind %>%
+    t %>%
+    as.data.frame %>%
+    dplyr::mutate(group = sample.groups) %>%
+    reshape2::melt(., id.vars="group", measure.vars=colnames(.)[-ncol(.)])
+
+  ggplot(df.melt, aes(x=variable, y=value, by=group)) +
+    geom_boxplot(position=position_dodge()) +
+    ylab("Number of cells") +
+    xlab("") +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle=90),
+          legend.position=legend.position,
+          legend.title=element_blank()) +
+    geom_point(position=position_dodge(width=0.75), aes(col=group)) +
+    scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 50)))
 }

@@ -8,10 +8,11 @@ getPerCellTypeDE(
   raw.mats,
   cell.groups = NULL,
   sample.groups = NULL,
-  cooks.cutoff = FALSE,
   ref.level = NULL,
+  common.genes = F,
+  cooks.cutoff = FALSE,
   min.cell.count = 10,
-  independent.filtering = FALSE,
+  independent.filtering = T,
   n.cores = 1,
   cluster.sep.chr = "<!!>",
   return.matrix = F,
@@ -25,9 +26,11 @@ getPerCellTypeDE(
 
 \item{sample.groups}{a list of two character vector specifying the app groups to compare (default=NULL)}
 
-\item{cooks.cutoff}{cooksCutoff for DESeq2 (default=F)}
-
 \item{ref.level}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
+
+\item{common.genes}{Only investigate common genes across cell groups (default=F)}
+
+\item{cooks.cutoff}{cooksCutoff for DESeq2 (default=F)}
 
 \item{min.cell.count}{(default=10)}
 

@@ -50,6 +50,8 @@ Cacoa R6 class
 \item \href{#method-plotOnthologyTerms}{\code{Cacoa$plotOnthologyTerms()}}
 \item \href{#method-plotOnthologyHeatmap}{\code{Cacoa$plotOnthologyHeatmap()}}
 \item \href{#method-plotOnthologyCorrelations}{\code{Cacoa$plotOnthologyCorrelations()}}
+\item \href{#method-plotProportions}{\code{Cacoa$plotProportions()}}
+\item \href{#method-plotCellNumbers}{\code{Cacoa$plotCellNumbers()}}
 \item \href{#method-clone}{\code{Cacoa$clone()}}
 }
 }
@@ -246,7 +248,6 @@ Estimate differential gene expression per cell type between conditions
   cell.groups = self$cell.groups,
   sample.groups = self$sample.groups,
   ref.level = self$ref.level,
-  target.level = self$target.level,
   n.cores = self$n.cores,
   cooks.cutoff = FALSE,
   min.cell.count = 10,
@@ -407,7 +408,6 @@ Calculate onthologies based on DEs
   type = NULL,
   org = "human",
   de.gene.ids = self$test.results$onthology$de.gene.ids,
-  universe = self$test.results$onthology$universe,
   go.environment = self$test.results$GO$go.environment,
   p.adj = 0.05,
   p.adjust.method = "BH",
@@ -427,8 +427,6 @@ Calculate onthologies based on DEs
 
 \item{\code{de.gene.ids}}{List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOnthologyData)}
 
-\item{\code{universe}}{All measured genes (default: stored vector)}
-
 \item{\code{go.environment}}{Extracted GO environment. If set to NULL, the environment will be re-extracted (default: stored environment)}
 
 \item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
@@ -442,6 +440,8 @@ Calculate onthologies based on DEs
 \item{\code{n.cores}}{Number of cores used (default: stored vector)}
 
 \item{\code{...}}{Additional parameters for sccore:::plapply function}
+
+\item{\code{universe}}{All measured genes (default: stored vector)}
 }
 \if{html}{\out{</div>}}
 }
@@ -574,6 +574,68 @@ Plot correlation matrix for onthologies between cell types
 \item{\code{type}}{Onthology, must be either "GO" or "DO" (default=NULL)}
 
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotProportions"></a>}}
+\if{latex}{\out{\hypertarget{method-plotProportions}{}}}
+\subsection{Method \code{plotProportions()}}{
+Plot the cell group proportions per sample
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotProportions(
+  legend.position = "right",
+  cell.groups = self$cell.groups,
+  sample.per.cell = self$sample.per.cell,
+  sample.groups = self$sample.groups
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="right")}
+
+\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+
+\item{\code{sample.per.cell}}{Vector indicating sample name with cell names (default: stored vector)}
+
+\item{\code{sample.groups}}{Vector indicating sample groups with sample names (default: stored vector)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotCellNumbers"></a>}}
+\if{latex}{\out{\hypertarget{method-plotCellNumbers}{}}}
+\subsection{Method \code{plotCellNumbers()}}{
+Plot the cell numbers per sample
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellNumbers(
+  legend.position = "right",
+  cell.groups = self$cell.groups,
+  sample.per.cell = self$sample.per.cell,
+  sample.groups = self$sample.groups
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="right")}
+
+\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+
+\item{\code{sample.per.cell}}{Vector indicating sample name with cell names (default: stored vector)}
+
+\item{\code{sample.groups}}{Vector indicating sample groups with sample names (default: stored vector)}
 }
 \if{html}{\out{</div>}}
 }

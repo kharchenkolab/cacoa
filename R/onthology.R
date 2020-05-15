@@ -59,7 +59,7 @@ prepareOnthologyData <- function(cms, de.raw, cell.groups, universe = NULL, org 
   de.filtered <- lapply(de.raw, function(df) df[!is.na(df$stat) & (abs(df$stat) > stat.cutoff),]) # Consider filtering by pAdj
 
   if(verbose) cat(". ")
-  de.genes.filtered <- mapply(intersect, lapply(de.filtered, rownames), ((cm_collapsed_bool > as.vector(table(cell.groups %>% .[. %in% names(de.raw)]%>% factor)[rownames(cm_collapsed_bool)] * 0.05)) %>% apply(1, function(row) names(which(row))))[names(de.filtered)]) # Consider 0.05
+  de.genes.filtered <- mapply(intersect, lapply(de.filtered, rownames), ((cm_collapsed_bool > as.vector(table(cell.groups %>% .[. %in% names(de.raw)]%>% factor)[rownames(cm_collapsed_bool)] * 0.05)) %>% apply(1, function(row) names(which(row))))[names(de.filtered)])
 
   if(verbose) cat("done!\nRetrieving Entrez Gene IDs ... ")
   groups <- de.genes.filtered %>% .[sapply(., length) > 0] %>% names
@@ -70,24 +70,16 @@ prepareOnthologyData <- function(cms, de.raw, cell.groups, universe = NULL, org 
     list(down = de %>% .[order(.$Z[.$Z < 0], decreasing = F),] %>% rownames,
          up = de %>% .[order(.$Z[.$Z > 0], decreasing = F),] %>% rownames,
          all = de %>% .[order(.$Z %>% abs(), decreasing = F),] %>% rownames) %>%
-      lapply(function(l) {
-        if(n.top.genes == Inf | n.top.genes > length(l)) l else l[1:n.top.genes]
-      })
+      lapply(function(l) if(n.top.genes == Inf | n.top.genes > length(l)) l else l[1:n.top.genes]) %>%
+      append(list(universe=rownames(de.raw[[x]])))
     }) %>% setNames(groups)
 
-  de.gene.ids <- suppressMessages(lapply(de.gene.ids, lapply, clusterProfiler::bitr, 'SYMBOL', 'ENTREZID', OrgDB)) %>%
+  de.gene.ids %<>% sccore:::plapply(function(id) suppressMessages(lapply(id, clusterProfiler::bitr, 'SYMBOL', 'ENTREZID', OrgDB)), n.cores = 1, progress = verbose) %>%
     lapply(lapply, `[[`, "ENTREZID")
 
-  if(is.null(universe)) universe <- Reduce(intersect, lapply(de.raw, rownames))
-
-  universe <- suppressMessages(universe %>% clusterProfiler::bitr("SYMBOL", "ENTREZID", OrgDB)) %>%
-    dplyr::select(ENTREZID) %>%
-    unlist()
-
-  if(verbose) cat("done!\nAll done!\n")
+  if(verbose) cat("All done!\n")
 
   return(list(de.gene.ids = de.gene.ids,
-              universe = universe,
               de.filter = de.genes.filtered))
 }
 
@@ -220,7 +212,7 @@ onthologyListToDf <- function(ont.list) {
 #' @param ... Additional parameters for sccore:::plapply function
 #' @return A list containing a list of onthologies per type of onthology, and a data frame with merged results
 #' @export
-estimateOnthology <- function(type, org="human", de.gene.ids, universe=NULL, go.environment = NULL, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, n.cores = 1, ...) {
+estimateOnthology <- function(type, org="human", de.gene.ids, go.environment = NULL, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, n.cores = 1, ...) {
   if(org == "human") {
     if(!requireNamespace("org.Hs.eg.db", quietly = TRUE)) stop("You have to install 'org.Hs.eg.db' package to perform onthology analysis")
     require(org.Hs.eg.db)
@@ -248,8 +240,9 @@ estimateOnthology <- function(type, org="human", de.gene.ids, universe=NULL, go.
   if(type=="DO") {
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
     if(org != "human") stop("Only human data supported for DO analysis.")
-    ont.list <- sccore:::plapply(lapply, de.gene.ids, DOSE::enrichDO, pAdjustMethod=p.adjust.method, universe=universe, readable=readable, n.cores=1, progress=verbose, ...) %>%
-      lapply(lapply, function(x) x@result)
+    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) lapply(de.gene.ids[[id]][1:3], DOSE::enrichDO, pAdjustMethod=p.adjust.method, universe=de.gene.ids[[id]][["universe"]], readable=readable), n.cores=1, progress=verbose, ...) %>%
+      lapply(lapply, function(x) x@result) %>%
+      setNames(names(de.gene.ids))
 
     # Split into different fractions
     ont.list <- 1:3 %>%
@@ -275,7 +268,10 @@ estimateOnthology <- function(type, org="human", de.gene.ids, universe=NULL, go.
     }
 
     if(verbose) cat("Estimating enriched onthologies ... \n")
-    ont.list <- sccore:::plapply(de.gene.ids, estimateEnrichedGO, go.environment = go.environment, universe=universe, readable=readable, pAdjustMethod=p.adjust.method, OrgDB=OrgDB, progress=verbose, n.cores = n.cores, ...)
+    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) {
+      estimateEnrichedGO(de.gene.ids[[id]][1:3], go.environment = go.environment, universe=de.gene.ids[[id]][["universe"]], readable=readable, pAdjustMethod=p.adjust.method, OrgDB=OrgDB)
+    }, progress = verbose, n.cores = n.cores, ...) %>%
+      setNames(names(de.gene.ids))
 
     #Split into different fractions
     ont.list <- 1:3 %>%

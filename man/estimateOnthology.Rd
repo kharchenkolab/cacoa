@@ -8,7 +8,6 @@ estimateOnthology(
   type,
   org = "human",
   de.gene.ids,
-  universe = NULL,
   go.environment = NULL,
   p.adj = 0.05,
   p.adjust.method = "BH",

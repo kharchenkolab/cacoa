@@ -274,7 +274,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param return.matrix Return merged matrix of results (default=F)
     #' @param verbose Show progress (default=T)
     #' @return A list of DE genes
-    getPerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level, target.level = self$target.level,
+    getPerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level,
                               n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, independent.filtering = FALSE,
                               cluster.sep.chr = "<!!>", return.matrix = F, verbose=T) {
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
@@ -362,12 +362,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param verbose Print progress (default=T)
     #' @param ... Additional parameters for sccore:::plapply function
     #' @return A list containing a list of onthologies per type of onthology, and a data frame with merged results
-    estimateOnthology=function(type=NULL, org="human", de.gene.ids=self$test.results$onthology$de.gene.ids, universe = self$test.results$onthology$universe, go.environment = self$test.results$GO$go.environment, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, n.cores = self$n.cores, ...) {
+    estimateOnthology=function(type=NULL, org="human", de.gene.ids=self$test.results$onthology$de.gene.ids, go.environment = self$test.results$GO$go.environment, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, n.cores = self$n.cores, ...) {
       if(!is.null(type) & !type %in% c("GO", "DO")) stop("'type' must be 'GO' or 'DO'.")
 
       if(is.null(de.gene.ids)) stop("Please run 'prepareOnthologyData' first.")
 
-      self$test.results[[type]] <- estimateOnthology(type=type, org=org, de.gene.ids=de.gene.ids, universe = universe, go.environment = go.environment, p.adj=p.adj, p.adjust.method=p.adjust.method, readable=readable, verbose=verbose, n.cores = n.cores, ...)
+      self$test.results[[type]] <- estimateOnthology(type=type, org=org, de.gene.ids=de.gene.ids, go.environment = go.environment, p.adj=p.adj, p.adjust.method=p.adjust.method, readable=readable, verbose=verbose, n.cores = n.cores, ...)
       return(invisible(self$test.results[[type]]))
     },
 
@@ -490,6 +490,38 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(length(ont.res) == 0) stop("No significant onthologies identified. Try relaxing p.adj.")
 
       plotOnthologyCorrelations(type=type, ont.res=ont.res)
+    },
+
+    #' @description Plot the cell group proportions per sample
+    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
+    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+    #' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
+    #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
+    #' @return A ggplot2 object
+    plotProportions=function(legend.position = "right", cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups) {
+      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
+
+      if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
+
+      if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
+
+      plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups)
+    },
+
+    #' @description Plot the cell numbers per sample
+    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
+    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+    #' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
+    #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
+    #' @return A ggplot2 object
+    plotCellNumbers=function(legend.position = "right", cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups) {
+      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
+
+      if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
+
+      if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
+
+      plotCellNumbers(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups)
     }
   ),
   private = list(

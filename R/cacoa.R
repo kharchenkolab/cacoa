@@ -139,9 +139,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         if(normalized.distance) message("'normalized.distance' has no effect when 'size.norm' = F.")
         if(label) message("'label' has no effect when 'size.norm' = F.")
 
-        m <- max(abs(df$value - 1))
+        cluster.shifts <- self$test.results[[name]]$df
+        m <- max(abs(cluster.shifts$value - 1))
 
-        gg <- ggplot(na.omit(self$test.results[[name]]$df), aes(x=as.factor(Type), y=value)) +
+        gg <- ggplot(na.omit(cluster.shifts), aes(x=as.factor(Type), y=value)) +
           geom_boxplot(notch=T, outlier.shape=NA) +
           geom_jitter(position=position_jitter(0.1), aes(color=patient), show.legend=FALSE,alpha=0.1) +
           theme(axis.text.x=element_text(angle = 90, hjust=1), axis.text.y=element_text(angle=90, hjust=0.5)) +

@@ -287,7 +287,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(!is.list(sample.groups)) {
         sample.groups <- list(names(sample.groups[sample.groups == ref.level]),
                               names(sample.groups[sample.groups != ref.level])) %>%
-          setNames(c(ref.level, target.level))
+          setNames(c(ref.level, self$target.level))
       }
 
       self$test.results[["de"]] <- extractRawCountMatrices(self$data.object, transposed=T) %>%

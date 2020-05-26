@@ -294,7 +294,7 @@ A list of DE genes
 Plot number of significant DE genes as a function of number of cells
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEGenes(
-  de.raw = self$test.results$de$results,
+  de.raw = self$test.results$de,
   cell.groups = self$cell.groups,
   legend.position = "none",
   label = T,
@@ -328,7 +328,7 @@ A ggplot2 object
 Filter and prepare DE genes for onthology calculations
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$prepareOnthologyData(
-  de.raw = self$test.results$de$results,
+  de.raw = self$test.results$de,
   cell.groups = self$cell.groups,
   universe = self$test.results$de$universe,
   org = "human",

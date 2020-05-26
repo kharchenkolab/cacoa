@@ -4,7 +4,7 @@ Version: 0.1
 Authors@R: c(person("Peter", "Kharchenko", email = "peter_kharchenko@hms.harvard.edu", role = c("aut", "cre")),
              person("Viktor","Petukhov", email="viktor.s.petuhov@ya.ru", role="aut"))
 Description: Case-Control Analysis tools for single-cell RNA-seq
-License: GPL-3.0
+License: GPL3
 Encoding: UTF-8
 LazyData: true
 Imports:
@@ -23,6 +23,8 @@ Imports:
     sccore,
     tibble
 RoxygenNote: 7.1.0
+LinkingTo: Rcpp, RcppArmadillo
+NeedsCompilation: yes
 Suggests: 
     clusterProfiler (>= 3.0.0),
     ggrastr (>= 0.1.7)

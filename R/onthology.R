@@ -74,10 +74,10 @@ prepareOnthologyData <- function(cms, de.raw, cell.groups, universe = NULL, org 
       append(list(universe=rownames(de.raw[[x]])))
     }) %>% setNames(groups)
 
-  de.gene.ids %<>% sccore:::plapply(function(id) suppressMessages(lapply(id, clusterProfiler::bitr, 'SYMBOL', 'ENTREZID', OrgDB)), n.cores = 1, progress = verbose) %>%
+  de.gene.ids <- suppressMessages(lapply(de.gene.ids, lapply, clusterProfiler::bitr, 'SYMBOL', 'ENTREZID', OrgDB)) %>%
     lapply(lapply, `[[`, "ENTREZID")
 
-  if(verbose) cat("All done!\n")
+  if(verbose) cat("done!\nAll done!\n")
 
   return(list(de.gene.ids = de.gene.ids,
               de.filter = de.genes.filtered))

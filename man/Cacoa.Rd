@@ -48,6 +48,8 @@ Cacoa R6 class
 \item \href{#method-estimateOnthology}{\code{Cacoa$estimateOnthology()}}
 \item \href{#method-plotOnthologyDistribution}{\code{Cacoa$plotOnthologyDistribution()}}
 \item \href{#method-plotOnthologyTerms}{\code{Cacoa$plotOnthologyTerms()}}
+\item \href{#method-plotOnthologyBarplot}{\code{Cacoa$plotOnthologyBarplot()}}
+\item \href{#method-plotOnthologyDotplot}{\code{Cacoa$plotOnthologyDotplot()}}
 \item \href{#method-plotOnthologyHeatmap}{\code{Cacoa$plotOnthologyHeatmap()}}
 \item \href{#method-plotOnthologyCorrelations}{\code{Cacoa$plotOnthologyCorrelations()}}
 \item \href{#method-plotProportions}{\code{Cacoa$plotProportions()}}
@@ -516,6 +518,74 @@ Plot onthology terms as a function of both number of DE genes, and number of cel
 \item{\code{rel_heights}}{Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))}
 
 \item{\code{scale}}{Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotOnthologyBarplot"></a>}}
+\if{latex}{\out{\hypertarget{method-plotOnthologyBarplot}{}}}
+\subsection{Method \code{plotOnthologyBarplot()}}{
+Plot a barplot of onthologies with adj. P values for a specific cell subgroup
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyBarplot(
+  type = NULL,
+  genes = NULL,
+  cell.subgroup = NULL,
+  n = 20,
+  p.adj = 0.05
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{type}}{Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
+
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
+
+\item{\code{cell.subgroup}}{Cell group to plot (default=NULL)}
+
+\item{\code{n}}{Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
+
+\item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotOnthologyDotplot"></a>}}
+\if{latex}{\out{\hypertarget{method-plotOnthologyDotplot}{}}}
+\subsection{Method \code{plotOnthologyDotplot()}}{
+Plot a dotplot of onthologies with adj. P values for a specific cell subgroup
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyDotplot(
+  type = NULL,
+  genes = NULL,
+  cell.subgroup = NULL,
+  n = 20,
+  p.adj = 0.05
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{type}}{Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
+
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
+
+\item{\code{cell.subgroup}}{Cell group to plot (default=NULL)}
+
+\item{\code{n}}{Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
+
+\item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
 }
 \if{html}{\out{</div>}}
 }

@@ -175,6 +175,7 @@ filterOnthologies <- function(ont.list, p.adj) {
     lapply(function(dir) {
       lapply(ont.list[[dir]] %>% names(), function(group) {
         dplyr::mutate(ont.list[[dir]][[group]], Group=group) %>%
+          dplyr::arrange(p.adjust) %>%
           dplyr::filter(p.adjust < p.adj)
       }) %>%
         setNames(ont.list[[dir]] %>% names) %>%

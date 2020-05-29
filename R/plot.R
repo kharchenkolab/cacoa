@@ -361,3 +361,65 @@ plotCellNumbers <- function(legend.position = "right", cell.groups, sample.per.c
     geom_point(position=position_dodge(width=0.75), aes(col=group)) +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 50)))
 }
+
+#' @title Plot onthologies with barplot
+#' @description Plot a barplot of onthologies with adj. P values for a specific cell subgroup
+#' @param ont.res Data frame with onthology resuls from estimateOnthology
+#' @param genes Specify which genes are plotted, can either be 'down', 'up' or 'all' (default=NULL)
+#' @param n Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
+#' @param p.adj Adjusted P cutoff (default=0.05)
+#' @return A ggplot2 object
+plotOnthologyBarplot <- function(ont.res, genes, n = 20, p.adj = 0.05) {
+  ont.res %<>% dplyr::mutate(., gratio = sapply(.$GeneRatio, function(s) strsplit(s, "/")) %>% sapply(function(x) as.numeric(x[1])/as.numeric(x[2]) * 100)) %>%
+    dplyr::arrange(p.adjust) %>%
+    dplyr::filter(p.adjust <= p.adj) %>%
+    {if(nrow(.) > n) .[1:n,] else .}
+  ont.res$Description %<>% as.factor()
+
+  gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), gratio, fill=p.adjust)) +
+    geom_col() +
+    coord_flip() +
+    labs(y="% DE genes of total genes per pathway", x="", fill="Adj. P") +
+    theme_bw()
+
+  if(genes == "up") {
+    gg <- gg + scale_fill_gradient(low = "red", high = "gray80")
+  } else if(genes == "down") {
+    gg <- gg + scale_fill_gradient(low = "blue", high = "gray80")
+  } else {
+    gg <- gg + scale_fill_gradient(low = "green", high = "gray80")
+  }
+
+  gg
+}
+
+#' @title Plot onthologies with dotplot
+#' @description Plot a dotplot of onthologies with adj. P values for a specific cell subgroup
+#' @param ont.res Data frame with onthology resuls from estimateOnthology
+#' @param genes Specify which genes are plotted, can either be 'down', 'up' or 'all' (default=NULL)
+#' @param n Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
+#' @param p.adj Adjusted P cutoff (default=0.05)
+#' @return A ggplot2 object
+plotOnthologyDotplot <- function(ont.res, genes, n = 20, p.adj = 0.05) {
+  ont.res %<>% dplyr::mutate(., gratio = sapply(.$GeneRatio, function(s) strsplit(s, "/")) %>% sapply(function(x) as.numeric(x[1])/as.numeric(x[2]) * 100)) %>%
+    dplyr::arrange(p.adjust) %>%
+    dplyr::filter(p.adjust <= p.adj) %>%
+    {if(nrow(.) > n) .[1:n,] else .}
+  ont.res$Description %<>% as.factor()
+
+  gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), gratio, col=p.adjust)) +
+    geom_point(aes(size = Count)) +
+    coord_flip() +
+    labs(y="% DE genes of total genes per pathway", x="", col="Adj. P", size = "DE genes") +
+    theme_bw()
+
+  if(genes == "up") {
+    gg <- gg + scale_color_gradient(low = "red", high = "gray80")
+  } else if(genes == "down") {
+    gg <- gg + scale_color_gradient(low = "blue", high = "gray80")
+  } else {
+    gg <- gg + scale_color_gradient(low = "green", high = "gray80")
+  }
+
+  gg
+}

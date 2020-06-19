@@ -36,7 +36,8 @@ plotDEGenes <- function(de.raw, cell.groups, legend.position="none", p.adjust.cu
   sapply(de.raw, function(n) n %>% dplyr::filter(padj <= p.adjust.cutoff) %>% nrow) %>%
     plotNCellRegression(cell.groups, y.lab="Significant DE genes", legend.position=legend.position, label=label) +
     xlab("Number of cells") +
-    geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
+    geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5) +
+    theme_bw()
 }
 
 #' @title Plot filtered DE genes
@@ -52,7 +53,8 @@ plotFilteredDEGenes <- function(de.filter, cell.groups, legend.position="bottom"
   sapply(de.filter, length) %>%
     plotNCellRegression(cell.groups, y.lab="Highly-expressed DE genes", legend.position=legend.position, label=label) +
     xlab("Number of cells") +
-    geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
+    geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5) +
+    theme_bw()
 }
 
 #' @title Plot onthology distribution
@@ -100,7 +102,7 @@ plotOnthologyDistribution <- function(type=NULL, ont.res, cell.groups) {
           panel.grid.major = element_blank(),
           legend.position=c(0.99, 0.99),
           legend.justification=c(1, 1)) +
-    labs(x="", y="No. of onthologies")
+    labs(x="", y="No. of terms")
 }
 
 #' @title Plot onthology terms
@@ -129,10 +131,12 @@ plotOnthologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legen
     ont.res$Group %>% table %>% c %>%
       plotNCellRegression(sapply(de.filter, length), y.lab=NULL, legend.position="none", label=label) +
       geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5) +
-      scale_x_continuous(name="Number of highly-expressed DE genes"),
+      scale_x_continuous(name="Number of highly-expressed DE genes") +
+      theme_bw(),
     ont.res$Group %>% table %>% c %>%
       plotNCellRegression(cell.groups, y.lab=NULL, legend.position="none", label=label) +
-      geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5),
+      geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5) +
+      theme_bw(),
     ncol=1, labels=c("a", "b"), label_x = label.x.pos, label_y = label.y.pos
   )
 
@@ -209,44 +213,41 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
 #' @param type Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
 #' @param ont.res Onthology resuls from estimateOnthology
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
-#' @param order Order of rows in heatmap. Can be 'unique' (only show onthologies that are unique for any cell type); 'unique-max-row' (same as 'unique' but ordered by P value); 'all-max-rowsum' (all onthologies ordered by cumulative P value for all cell types); 'all-max-row' (all onthologies ordered by max P value) (default="all-max-row")
-#' @param n Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
+#' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are not unique for any cell type); 'all' (all onthology terms) (default="all")
+#' @param n Number of terms to show (default=10)
 #' @export
-plotOnthologyHeatmap <- function(type, ont.res, legend.position = "left", order = "all-max-row", n = 10) {
-  if(type=="BP" | type=="CC" | type=="MF") {
-    ont.sum <- getOnthologySummary(type, ont.res %>% filter(Type==type))
+plotOnthologyHeatmap <- function(type = "GO", ont.res, legend.position = "left", selection = "all", n = 10, cell.subgroups = NULL) {
+  if(is.null(selection) || (!selection %in% c("unique","common","all"))) stop("'selection' must be one of the following: 'unique', 'common', or 'all'.")
+
+  if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1)) stop("'cell.subgroups' must contain at least two groups. Please use plotOnthologyBarplot or plotOnthologyDotplot instead.")
+
+  if(type=="GO") {
+    ont.sum <- getOnthologySummary(ont.res)
+  } else if(type=="BP" | type=="CC" | type=="MF") {
+    ont.sum <- getOnthologySummary(ont.res %>% filter(Type==type))
   } else if(type=="DO") {
-    ont.sum <- getOnthologySummary(type, ont.res)
+    ont.sum <- getOnthologySummary(ont.res)
   }
 
-  if(is.null(order) || !order %in% c("unique","unique-max-row","all-max-rowsum","all-max-row")) stop("'order' must be one of the following: 'unique', 'unique-max-row', 'all-max-rowsum', 'all-max-row'.")
+  if(!is.null(cell.subgroups)) {
+      ont.sum %<>% dplyr::select(all_of(cell.subgroups))
+    }
 
-  if(order=="unique") {
-    ont.sum %>% .[rowSums(. > 0.1) == 1,] %>%
-      .[, colSums(.) > 0]  %>%
-      plotHeatmap(legend.position=legend.position)
-  } else if(order=="unique-max-row") {
-    ont.sum %>% .[rowSums(. > 0.1) == 1,] %>%
-      .[, colSums(.) > 0] %>%
-      .[match(apply(., 1, max) %>%
-                .[order(., decreasing = F)] %>%
-                names, rownames(.)),] %>%
-      plotHeatmap(legend.position=legend.position, row.order=T)
-  } else if(order=="all-max-rowsum") {
-    ont.sum %>% .[, colSums(.) > 0] %>%
-      .[match(rowSums(.)[rowSums(.)>0] %>%
-                .[order(., decreasing = F)] %>%
-                names, rownames(.)),] %>%
-      tail(n) %>%
-      plotHeatmap(legend.position=legend.position, row.order=T)
-  } else if(order=="all-max-row") {
-    ont.sum %>% .[, colSums(.) > 0] %>%
-      .[match(apply(., 1, max) %>%
-                .[order(., decreasing = F)] %>%
-                names, rownames(.)),] %>%
-      tail(n) %>%
-      plotHeatmap(legend.position=legend.position, row.order=T)
+  if(selection=="unique") {
+      ont.sum %<>%
+        .[rowSums(. > 0) == 1,]
+  } else if(selection=="common") {
+      ont.sum %<>%
+        .[rowSums(. > 0) > 1,]
   }
+
+  ont.sum %>%
+    .[, colSums(.) > 0] %>%
+    .[match(rowSums(.)[rowSums(.)>0] %>%
+              .[order(., decreasing = F)] %>%
+              names, rownames(.)),] %>%
+    tail(n) %>%
+    plotHeatmap(legend.position=legend.position, row.order=T)
 }
 
 # TODO should depend on merged DF, not list
@@ -256,7 +257,7 @@ plotOnthologyHeatmap <- function(type, ont.res, legend.position = "left", order 
 #' @param type Onthology, must be either "GO" or "DO" (default=NULL)
 #' @return A ggplot2 object
 #' @export
-plotOnthologyCorrelations <- function(type=NULL, ont.res) {
+plotOnthologySimilarities <- function(type=NULL, ont.res) {
   if(type=="GO") {
     pathway_df <- names(ont.res) %>%
       lapply(function(cell.group) lapply(ont.res[[cell.group]] %>% dplyr::pull(Type) %>% as.factor() %>% levels(), function(go) {
@@ -307,7 +308,7 @@ plotOnthologyCorrelations <- function(type=NULL, ont.res) {
 #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
 #' @return A ggplot2 object
 plotProportions <- function(legend.position = "right", cell.groups, sample.per.cell, sample.groups) {
-  df <- data.frame(anno=cell.groups, group=sample.per.cell) %>%
+  df <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
     table %>%
     rbind %>%
     t %>%
@@ -323,14 +324,14 @@ plotProportions <- function(legend.position = "right", cell.groups, sample.per.c
   df.melt <- reshape2::melt(df, id.vars="group", measure.vars=colnames(df)[-ncol(df)])
 
   ggplot(df.melt, aes(x=variable, y=value, by=group)) +
-    geom_boxplot(position=position_dodge()) +
-    ylab("%") +
+    geom_boxplot(position=position_dodge(), notch=T) +
+    ylab("% cells per sample") +
     xlab("") +
     theme_classic() +
     theme(axis.text.x = element_text(angle=90),
           legend.position=legend.position,
           legend.title=element_blank()) +
-    geom_point(position=position_dodge(width=0.75), aes(col=group)) +
+    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group)) +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
 }
 
@@ -358,7 +359,7 @@ plotCellNumbers <- function(legend.position = "right", cell.groups, sample.per.c
     theme(axis.text.x = element_text(angle=90),
           legend.position=legend.position,
           legend.title=element_blank()) +
-    geom_point(position=position_dodge(width=0.75), aes(col=group)) +
+    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group)) +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 50)))
 }
 
@@ -369,18 +370,23 @@ plotCellNumbers <- function(legend.position = "right", cell.groups, sample.per.c
 #' @param n Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
 #' @param p.adj Adjusted P cutoff (default=0.05)
 #' @return A ggplot2 object
-plotOnthologyBarplot <- function(ont.res, genes, n = 20, p.adj = 0.05) {
+plotOnthologyBarplot <- function(ont.res, genes = NULL, type = NULL, n = 20, p.adj = 0.05) {
   ont.res %<>% dplyr::mutate(., gratio = sapply(.$GeneRatio, function(s) strsplit(s, "/")) %>% sapply(function(x) as.numeric(x[1])/as.numeric(x[2]) * 100)) %>%
     dplyr::arrange(p.adjust) %>%
     dplyr::filter(p.adjust <= p.adj) %>%
     {if(nrow(.) > n) .[1:n,] else .}
   ont.res$Description %<>% as.factor()
 
+  if(is.null(type)) type <- "Onthology"
+
   gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), gratio, fill=p.adjust)) +
     geom_col() +
     coord_flip() +
-    labs(y="% DE genes of total genes per pathway", x="", fill="Adj. P") +
-    theme_bw()
+    labs(title=paste0(type," terms"), y="% DE genes of total genes per pathway", x="", fill="Adj. P") +
+    theme_bw() +
+    scale_y_continuous(expand=c(0, 0), limits=c(0, (max(ont.res$gratio) + 1)))
+
+  if(is.null(genes)) genes <- "all"
 
   if(genes == "up") {
     gg <- gg + scale_fill_gradient(low = "red", high = "gray80")
@@ -400,18 +406,23 @@ plotOnthologyBarplot <- function(ont.res, genes, n = 20, p.adj = 0.05) {
 #' @param n Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
 #' @param p.adj Adjusted P cutoff (default=0.05)
 #' @return A ggplot2 object
-plotOnthologyDotplot <- function(ont.res, genes, n = 20, p.adj = 0.05) {
+plotOnthologyDotplot <- function(ont.res, genes = NULL, type = NULL, n = 20, p.adj = 0.05) {
   ont.res %<>% dplyr::mutate(., gratio = sapply(.$GeneRatio, function(s) strsplit(s, "/")) %>% sapply(function(x) as.numeric(x[1])/as.numeric(x[2]) * 100)) %>%
     dplyr::arrange(p.adjust) %>%
     dplyr::filter(p.adjust <= p.adj) %>%
     {if(nrow(.) > n) .[1:n,] else .}
   ont.res$Description %<>% as.factor()
 
+  if(is.null(type)) type <- "Onthology"
+
   gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), gratio, col=p.adjust)) +
     geom_point(aes(size = Count)) +
     coord_flip() +
-    labs(y="% DE genes of total genes per pathway", x="", col="Adj. P", size = "DE genes") +
-    theme_bw()
+    labs(title=paste0(type," terms"), y="% DE genes of total genes per pathway", x="", col="Adj. P", size = "DE genes") +
+    theme_bw() +
+    scale_y_continuous(expand=c(0, 0), limits=c(0, (max(ont.res$gratio) + 1)))
+
+  if(is.null(genes)) genes <- "all"
 
   if(genes == "up") {
     gg <- gg + scale_color_gradient(low = "red", high = "gray80")

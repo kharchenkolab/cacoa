@@ -113,10 +113,9 @@ estimateEnrichedGO <- function(de.gene.ids, go.environment, ...) {
 
 #' @title Distance between terms
 #' @description Calculate distance matrix between onthology terms
-#' @param type Onthology, must be either "GO" or "DO" (default=NULL)
 #' @param ont.res Results from prepareOnthologyData (default: stored list)
 #' @return Distance matrix
-distanceBetweenTerms <- function(type=NULL, ont.res) {
+distanceBetweenTerms <- function(ont.res) {
   genes.per.go <- sapply(ont.res$geneID, strsplit, "/") %>% setNames(ont.res$Description)
   all.go.genes <- unique(unlist(genes.per.go))
   all.gos <- unique(ont.res$Description)
@@ -133,11 +132,10 @@ distanceBetweenTerms <- function(type=NULL, ont.res) {
 
 #' @title Get onthology summary
 #' @description Get summary
-#' @param type Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
 #' @param ont.res Results from prepareOnthologyData (default: stored list)
 #' @return Data frame
-getOnthologySummary <- function(type=NULL, ont.res) {
-  go_dist <- distanceBetweenTerms(type, ont.res)
+getOnthologySummary <- function(ont.res) {
+  go_dist <- distanceBetweenTerms(ont.res)
   clusts <- hclust(go_dist) %>%
     cutree(h=0.75)
 

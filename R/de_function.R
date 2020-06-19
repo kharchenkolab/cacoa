@@ -93,7 +93,7 @@ addZScores <- function(df) {
 #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
 #' @param return.matrix Return merged matrix of results (default=F)
 #' @export
-getPerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NULL, ref.level = NULL,
+estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NULL, ref.level = NULL,
                            common.genes = F, cooks.cutoff = FALSE, min.cell.count = 10, independent.filtering = T,
                            n.cores = 1, cluster.sep.chr = "<!!>", return.matrix = F, verbose = T) {
   validatePerCellTypeParams(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr)

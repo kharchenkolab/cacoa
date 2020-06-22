@@ -42,7 +42,7 @@ plotDEGenes <- function(de.raw, cell.groups, legend.position="none", p.adjust.cu
 
 #' @title Plot filtered DE genes
 #' @description Plot number of DE genes as a function of number of cells
-#' @param de.filter List of filtered differentially expressed genes, results from prepareOnthologyData (default: stored list)
+#' @param de.filter List of filtered differentially expressed genes, results from prepareOntologyData (default: stored list)
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
 #' @param label Show labels on plot (default=T)
@@ -57,13 +57,13 @@ plotFilteredDEGenes <- function(de.filter, cell.groups, legend.position="bottom"
     theme_bw()
 }
 
-#' @title Plot onthology distribution
-#' @description Bar plot of onthologies per cell type
-#' @param type Onthology, must be either "GO" or "DO" (default=NULL)
-#' @param ont.res Onthology resuls from estimateOnthology
+#' @title Plot ontology distribution
+#' @description Bar plot of ontologies per cell type
+#' @param type Ontology, must be either "GO" or "DO" (default=NULL)
+#' @param ont.res Ontology resuls from estimateOntology
 #' @return A ggplot2 object
 #' @export
-plotOnthologyDistribution <- function(type=NULL, ont.res, cell.groups) {
+plotOntologyDistribution <- function(type=NULL, ont.res, cell.groups) {
   if(type=="GO") {
     p_df <- table(ont.res$Group, ont.res$Type) %>%
       cbind %>%
@@ -105,11 +105,11 @@ plotOnthologyDistribution <- function(type=NULL, ont.res, cell.groups) {
     labs(x="", y="No. of terms")
 }
 
-#' @title Plot onthology terms
-#' @description Plot onthology terms as a function of both number of DE genes, and number of cells.
-#' @param ont.res Onthology results in a data frame
-#' @param type Onthology, must be either "GO" or "DO" (default=NULL)
-#' @param de.filter List of filtered differentially expressed genes, results from prepareOnthologyData (default: stored list)
+#' @title Plot ontology terms
+#' @description Plot ontology terms as a function of both number of DE genes, and number of cells.
+#' @param ont.res Ontology results in a data frame
+#' @param type Ontology, must be either "GO" or "DO" (default=NULL)
+#' @param de.filter List of filtered differentially expressed genes, results from prepareOntologyData (default: stored list)
 #' @param cell.groups Vector indicating cell group sizes with cell group names
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
 #' @param label.x.pos Plot label position on x axis (default=0.01)
@@ -118,7 +118,7 @@ plotOnthologyDistribution <- function(type=NULL, ont.res, cell.groups) {
 #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
 #' @return A ggplot2 object
 #' @export
-plotOnthologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legend.position="bottom", label = T, label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93) {
+plotOntologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legend.position="bottom", label = T, label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93) {
   if(length(unique(ont.res$Type))==1) stop("The input only contains one cell type.")
 
   if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
@@ -208,25 +208,25 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
   return(gg)
 }
 
-#' @title Plot onthology heatmap
-#' @description Plot a heatmap of onthology P values per cell type
-#' @param type Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
-#' @param ont.res Onthology resuls from estimateOnthology
+#' @title Plot ontology heatmap
+#' @description Plot a heatmap of ontology P values per cell type
+#' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
+#' @param ont.res Ontology resuls from estimateOntology
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
-#' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are not unique for any cell type); 'all' (all onthology terms) (default="all")
+#' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are not unique for any cell type); 'all' (all ontology terms) (default="all")
 #' @param n Number of terms to show (default=10)
 #' @export
-plotOnthologyHeatmap <- function(type = "GO", ont.res, legend.position = "left", selection = "all", n = 10, cell.subgroups = NULL) {
+plotOntologyHeatmap <- function(type = "GO", ont.res, legend.position = "left", selection = "all", n = 10, cell.subgroups = NULL) {
   if(is.null(selection) || (!selection %in% c("unique","common","all"))) stop("'selection' must be one of the following: 'unique', 'common', or 'all'.")
 
-  if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1)) stop("'cell.subgroups' must contain at least two groups. Please use plotOnthologyBarplot or plotOnthologyDotplot instead.")
+  if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1)) stop("'cell.subgroups' must contain at least two groups. Please use plotOntologyBarplot or plotOntologyDotplot instead.")
 
   if(type=="GO") {
-    ont.sum <- getOnthologySummary(ont.res)
+    ont.sum <- getOntologySummary(ont.res)
   } else if(type=="BP" | type=="CC" | type=="MF") {
-    ont.sum <- getOnthologySummary(ont.res %>% filter(Type==type))
+    ont.sum <- getOntologySummary(ont.res %>% filter(Type==type))
   } else if(type=="DO") {
-    ont.sum <- getOnthologySummary(ont.res)
+    ont.sum <- getOntologySummary(ont.res)
   }
 
   if(!is.null(cell.subgroups)) {
@@ -251,13 +251,13 @@ plotOnthologyHeatmap <- function(type = "GO", ont.res, legend.position = "left",
 }
 
 # TODO should depend on merged DF, not list
-#' @title Plot onthology correlations
-#' @description Plot correlation matrix for onthologies between cell types
-#' @param ont.res List with onthology resuls from estimateOnthology
-#' @param type Onthology, must be either "GO" or "DO" (default=NULL)
+#' @title Plot ontology correlations
+#' @description Plot correlation matrix for ontologies between cell types
+#' @param ont.res List with ontology resuls from estimateOntology
+#' @param type Ontology, must be either "GO" or "DO" (default=NULL)
 #' @return A ggplot2 object
 #' @export
-plotOnthologySimilarities <- function(type=NULL, ont.res) {
+plotOntologySimilarities <- function(type=NULL, ont.res) {
   if(type=="GO") {
     pathway_df <- names(ont.res) %>%
       lapply(function(cell.group) lapply(ont.res[[cell.group]] %>% dplyr::pull(Type) %>% as.factor() %>% levels(), function(go) {
@@ -363,21 +363,21 @@ plotCellNumbers <- function(legend.position = "right", cell.groups, sample.per.c
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 50)))
 }
 
-#' @title Plot onthologies with barplot
-#' @description Plot a barplot of onthologies with adj. P values for a specific cell subgroup
-#' @param ont.res Data frame with onthology resuls from estimateOnthology
+#' @title Plot ontologies with barplot
+#' @description Plot a barplot of ontologies with adj. P values for a specific cell subgroup
+#' @param ont.res Data frame with ontology resuls from estimateOntology
 #' @param genes Specify which genes are plotted, can either be 'down', 'up' or 'all' (default=NULL)
-#' @param n Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
+#' @param n Number of ontologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
 #' @param p.adj Adjusted P cutoff (default=0.05)
 #' @return A ggplot2 object
-plotOnthologyBarplot <- function(ont.res, genes = NULL, type = NULL, n = 20, p.adj = 0.05) {
+plotOntologyBarplot <- function(ont.res, genes = NULL, type = NULL, n = 20, p.adj = 0.05) {
   ont.res %<>% dplyr::mutate(., gratio = sapply(.$GeneRatio, function(s) strsplit(s, "/")) %>% sapply(function(x) as.numeric(x[1])/as.numeric(x[2]) * 100)) %>%
     dplyr::arrange(p.adjust) %>%
     dplyr::filter(p.adjust <= p.adj) %>%
     {if(nrow(.) > n) .[1:n,] else .}
   ont.res$Description %<>% as.factor()
 
-  if(is.null(type)) type <- "Onthology"
+  if(is.null(type)) type <- "Ontology"
 
   gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), gratio, fill=p.adjust)) +
     geom_col() +
@@ -399,21 +399,21 @@ plotOnthologyBarplot <- function(ont.res, genes = NULL, type = NULL, n = 20, p.a
   gg
 }
 
-#' @title Plot onthologies with dotplot
-#' @description Plot a dotplot of onthologies with adj. P values for a specific cell subgroup
-#' @param ont.res Data frame with onthology resuls from estimateOnthology
+#' @title Plot ontologies with dotplot
+#' @description Plot a dotplot of ontologies with adj. P values for a specific cell subgroup
+#' @param ont.res Data frame with ontology resuls from estimateOntology
 #' @param genes Specify which genes are plotted, can either be 'down', 'up' or 'all' (default=NULL)
-#' @param n Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
+#' @param n Number of ontologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
 #' @param p.adj Adjusted P cutoff (default=0.05)
 #' @return A ggplot2 object
-plotOnthologyDotplot <- function(ont.res, genes = NULL, type = NULL, n = 20, p.adj = 0.05) {
+plotOntologyDotplot <- function(ont.res, genes = NULL, type = NULL, n = 20, p.adj = 0.05) {
   ont.res %<>% dplyr::mutate(., gratio = sapply(.$GeneRatio, function(s) strsplit(s, "/")) %>% sapply(function(x) as.numeric(x[1])/as.numeric(x[2]) * 100)) %>%
     dplyr::arrange(p.adjust) %>%
     dplyr::filter(p.adjust <= p.adj) %>%
     {if(nrow(.) > n) .[1:n,] else .}
   ont.res$Description %<>% as.factor()
 
-  if(is.null(type)) type <- "Onthology"
+  if(is.null(type)) type <- "Ontology"
 
   gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), gratio, col=p.adjust)) +
     geom_point(aes(size = Count)) +

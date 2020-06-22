@@ -135,7 +135,7 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
       # add Z scores
       if(!is.na(res1[[1]][1])) {
         res1 <- addZScores(res1) %>%
-          .[order(abs(.$Z),decreasing=T),]
+          .[order(abs(.$pvalue),decreasing=F),]
       }
 
       if (return.matrix) {

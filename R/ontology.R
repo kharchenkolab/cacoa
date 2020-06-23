@@ -6,7 +6,7 @@ NULL
 #' @param cms list of counts matrices; column for gene and row for cell
 #' @param de.raw List with differentially expressed genes per cell group
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-#' @param org.db Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")
+#' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
 #' @param universe Background gene list, NULL will take all input genes in de.raw (default=NULL)
 #' @param n.top.genes Number of most different genes to take as input. If less are left after filtering for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)
 #' @param p.adj.cutoff Cutoff for filtering highly-expressed DE genes (default=0.05)
@@ -193,31 +193,40 @@ ontologyListToDf <- function(ont.list) {
 #' @description  Calculate ontologies based on DEs
 #' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information.
 #' @param ont.data List containing DE gene IDs, and filtered DE genes
-#' @param org Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")
+#' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
 #' @param p.adj Adjusted P cutoff (default=0.05)
 #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
 #' @param readable Mapping gene ID to gene name (default=T)
 #' @param n.cores Number of cores used (default: stored vector)
 #' @param verbose Print progress (default=T)
+#' @param qvalueCutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
+#' @param minGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5)
+#' @param maxGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
 #' @param ... Additional parameters for sccore:::plapply function
 #' @return A list containing a list of ontologies per type of ontology, and a data frame with merged results
 #' @export
-estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = NULL, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, ...) {
+estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = NULL, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, qvalueCutoff = 0.2, minGSSize = 5, maxGSSize = 5e2, ...) {
   if(class(org.db) != "OrgDb") stop("'org.db' must be of class 'OrgDb'. Please input an organism database.")
 
   dir.names <- c("down", "up", "all")
 
   if(type=="DO") {
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
+    # TODO test functionality in general
     message("Only human data supported for DO analysis.")
-    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) lapply(de.gene.ids[[id]][1:3], DOSE::enrichDO, pAdjustMethod=p.adjust.method, universe=de.gene.ids[[id]][["universe"]], readable=readable), n.cores=1, progress=verbose, ...) %>%
+    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])], DOSE::enrichDO, pAdjustMethod=p.adjust.method, universe=de.gene.ids[[id]][["universe"]], readable=readable), n.cores=1, progress=verbose, qvalueCutoff = qvalueCutoff, minGSSize = minGSSize, maxGSSize = maxGSSize, ...) %>%
       lapply(lapply, function(x) x@result) %>%
       setNames(names(de.gene.ids))
 
     # Split into different fractions
-    ont.list <- 1:3 %>%
+    ont.list <- dir.names %>%
       lapply(function(x) lapply(ont.list, `[[`, x)) %>%
       setNames(dir.names)
+
+    #Remove empty entries - is this necessary for DO?
+    ont.list %<>% lapply(plyr::compact) %>%
+      lapply(function(x) if(length(x)) x) %>%
+      lapply(plyr::compact)
 
     ont.list %<>% filterOntologies(p.adj = p.adj)
 
@@ -239,7 +248,7 @@ estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = 
 
     if(verbose) cat("Estimating enriched ontologies ... \n")
     ont.list <- sccore:::plapply(names(de.gene.ids), function(id) {
-      estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])], go.environment = go.environment, universe=de.gene.ids[[id]][["universe"]], readable=readable, pAdjustMethod=p.adjust.method, org.db=org.db)
+      estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])], go.environment = go.environment, universe=de.gene.ids[[id]][["universe"]], readable=readable, pAdjustMethod=p.adjust.method, org.db=org.db,  qvalueCutoff = qvalueCutoff, minGSSize = minGSSize, maxGSSize = maxGSSize,)
     }, progress = verbose, n.cores = 1, ...) %>%
       setNames(names(de.gene.ids))
 

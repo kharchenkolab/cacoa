@@ -65,7 +65,7 @@ prepareOntologyData <- function(cms, de.raw, cell.groups, org.db, n.top.genes = 
     lapply(lapply, function(x) if(length(x)) x) %>%
     lapply(plyr::compact)
 
-  de.gene.ids <- lapply(de.gene.ids, function(x) lapply(x, function(y) tryCatch({clusterProfiler::bitr(y, 'SYMBOL', 'ENTREZID', org.db)}, error = function(err) NULL))) %>%
+  de.gene.ids <- lapply(de.gene.ids, function(x) lapply(x, function(y) suppressMessages(tryCatch({clusterProfiler::bitr(y, 'SYMBOL', 'ENTREZID', org.db)}, error = function(err) NULL)))) %>%
     lapply(plyr::compact) %>%
     lapply(lapply, `[[`, "ENTREZID")
 

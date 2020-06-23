@@ -363,19 +363,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
     #' @param readable Mapping gene ID to gene name (default=T)
-    #' @param n.cores Number of cores used (default: stored vector)
     #' @param verbose Print progress (default=T)
     #' @param qvalueCutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
     #' @param minGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5)
     #' @param maxGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
     #' @param ... Additional parameters for sccore:::plapply function
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
-    estimateOntology=function(type = "GO", org.db, de.gene.ids = self$test.results$ontology$de.gene.ids, go.environment = self$test.results$GO$go.environment, p.adj = 0.05, p.adjust.method = "BH", readable = T, verbose = T, n.cores = self$n.cores, qvalueCutoff = 0.2, minGSSize = 5, maxGSSize = 5e2, ...) {
+    estimateOntology=function(type = "GO", org.db, de.gene.ids = self$test.results$ontology$de.gene.ids, go.environment = self$test.results$GO$go.environment, p.adj = 0.05, p.adjust.method = "BH", readable = T, verbose = T, qvalueCutoff = 0.2, minGSSize = 5, maxGSSize = 5e2, ...) {
       if(!is.null(type) & !type %in% c("GO", "DO")) stop("'type' must be 'GO' or 'DO'.")
 
       if(is.null(de.gene.ids)) stop("Please run 'prepareOntologyData' first.")
 
-      self$test.results[[type]] <- estimateOntology(type = type, org.db = org.db, de.gene.ids = de.gene.ids, go.environment = go.environment, p.adj = p.adj, p.adjust.method = p.adjust.method, readable = readable, verbose = verbose, n.cores = n.cores, qvalueCutoff = qvalueCutoff, minGSSize = minGSSize, maxGSSize = maxGSSize, ...)
+      self$test.results[[type]] <- estimateOntology(type = type, org.db = org.db, de.gene.ids = de.gene.ids, go.environment = go.environment, p.adj = p.adj, p.adjust.method = p.adjust.method, readable = readable, verbose = verbose, qvalueCutoff = qvalueCutoff, minGSSize = minGSSize, maxGSSize = maxGSSize, ...)
       return(invisible(self$test.results[[type]]))
     },
 

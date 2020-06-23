@@ -421,7 +421,6 @@ Estimate ontology terms based on DEs
   p.adjust.method = "BH",
   readable = T,
   verbose = T,
-  n.cores = self$n.cores,
   qvalueCutoff = 0.2,
   minGSSize = 5,
   maxGSSize = 500,
@@ -447,8 +446,6 @@ Estimate ontology terms based on DEs
 \item{\code{readable}}{Mapping gene ID to gene name (default=T)}
 
 \item{\code{verbose}}{Print progress (default=T)}
-
-\item{\code{n.cores}}{Number of cores used (default: stored vector)}
 
 \item{\code{qvalueCutoff}}{Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
 

@@ -355,7 +355,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description  Estimate ontology terms based on DEs
-    #' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information.
+    #' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")
     #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
     #' @param de.gene.ids List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOntologyData)
     #' @param universe All measured genes (default: stored vector)
@@ -379,8 +379,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Bar plot of ontology terms per cell type
-    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)
-    #' @param type Ontology, must be either "GO" or "DO" (default=NULL)
+    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
+    #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @return A ggplot2 object
     plotOntologyDistribution=function(genes = "up", type = "GO", cell.groups = self$cell.groups) {
@@ -404,8 +404,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Plot ontology terms as a function of both number of DE genes, and number of cells.
-    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)
-    #' @param type Ontology, must be either "GO" or "DO" (default=NULL)
+    #' @param genes Specify which genes to plot, can either be 'down', 'up', 'all' or a combination of these (default=c("up","down"))
+    #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @param de.filter Filtered DE genes, results from prepareOntologyData (default: stored list)
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
@@ -414,10 +414,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param rel_heights Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
     #' @return A ggplot2 object
-    plotOntologyTerms=function(genes = "up", type = "GO", de.filter = self$test.results$ontology$de.filter, cell.groups = self$cell.groups, legend.position = "none", label.x.pos = 0.01, label.y.pos = 1, rel_heights = c(2.5, 0.5), scale = 0.93) {
+    plotOntologyTerms=function(genes = c("up","down"), type = "GO", de.filter = self$test.results$ontology$de.filter, cell.groups = self$cell.groups, legend.position = "none", label.x.pos = 0.01, label.y.pos = 1, rel_heights = c(2.5, 0.5), scale = 0.93) {
       if(is.null(type) || (!type %in% c("GO", "DO"))) stop("'type' must be 'GO' or 'DO'.")
 
-      if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
+      if(is.null(genes) || (!all(genes %in% c("down","up","all")))) stop("'genes' must be 'down', 'up', 'all', or a combination of these.")
 
       if(is.null(de.filter)) stop("Please run 'prepareOntologyData' first.")
 
@@ -425,9 +425,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if(is.null(ont.res)) stop(paste0("No results found for ",type,". Please run estimateOntology first and specify type='",type,"'."))
 
-      ont.res %<>% .[[genes]]
+      ont.res %<>% .[names(.) %in% genes]
 
-      if(is.null(ncol(ont.res))) print(ont.res)
+      if(length(genes) > 1) ont.res %<>% Reduce(rbind, .) else ont.res %<>% .[[1]]
 
       if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
@@ -435,8 +435,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Plot a barplot of ontology terms with adj. P values for a specific cell subgroup
-    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)
-    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
+    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
+    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")
     #' @param cell.subgroups Cell group to plot (default=NULL)
     #' @param n Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
     #' @param p.adj Adjusted P cutoff (default=0.05)
@@ -454,7 +454,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         ont.res <- self$test.results[["DO"]][["list"]]
       }
 
-      if(is.null(ont.res)) stop(paste0("No results found for ",type,". Please run estimateOntology first and specify type='",type,"'."))
+      if(is.null(ont.res)) {
+        if(type == "DO") t <- "DO" else t <- "GO"
+        stop(paste0("No results found for ",type,". Please run estimateOntology first and specify type='",t,"'."))
+      }
 
       ont.res %<>% .[[genes]]
 
@@ -466,6 +469,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if(length(ont.res) > 1) {
         ont.res %<>% Reduce(rbind, .)
+      } else {
+        ont.res %<>% .[[1]]
       }
 
       if(type %in% c("BP","CC","MF")) {
@@ -476,8 +481,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
-    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)
-    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
+    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
+    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")
     #' @param cell.subgroups Cell group to plot (default=NULL)
     #' @param n Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
     #' @param p.adj Adjusted P cutoff (default=0.05)
@@ -491,7 +496,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       ont.res <- self$test.results[[type]][["list"]]
 
-      if(is.null(ont.res)) stop(paste0("No results found for ",type,". Please run estimateOntology first and specify type='",type,"'."))
+      if(is.null(ont.res)) {
+        if(type == "DO") t <- "DO" else t <- "GO"
+        stop(paste0("No results found for ",type,". Please run estimateOntology first and specify type='",t,"'."))
+      }
 
       ont.res %<>% .[[genes]]
 
@@ -499,10 +507,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if(!cell.subgroups %in% names(ont.res)) stop("'cell.subgroups' not found in results.")
 
-      ont.res %<>% .[[cell.subgroups]]
+      ont.res %<>% .[cell.subgroups]
 
       if(length(ont.res) > 1) {
         ont.res %<>% Reduce(rbind, .)
+      } else {
+        ont.res %<>% .[[1]]
       }
 
       if(type %in% c("BP","CC","MF")) {
@@ -513,8 +523,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Plot a heatmap of ontology P values per cell type
-    #' @param genes Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all' (default=NULL)
-    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
+    #' @param genes Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all' (default="up")
+    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
     #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms) (default="all")
     #' @param n Number of terms to show (default=10)
@@ -541,8 +551,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Plot correlation matrix for ontology terms between cell types
-    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)
-    #' @param type Ontology, must be either "GO" or "DO" (default=NULL)
+    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
+    #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @return A ggplot2 object
     plotOntologySimilarities=function(genes = "up", type = "GO") {
       if(is.null(type) || (!type %in% c("GO", "DO"))) stop("'type' must be 'GO' or 'DO'.")

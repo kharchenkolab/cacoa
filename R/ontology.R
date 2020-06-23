@@ -19,26 +19,8 @@ NULL
 prepareOntologyData <- function(cms, de.raw, cell.groups, org.db, n.top.genes = 1e2, p.adj.cutoff = 0.05, expr.cutoff = 0.05, universe = NULL, transposed = T,  verbose = T, n.cores = 1) {
   if (!requireNamespace("clusterProfiler", quietly = TRUE)) stop("You have to install 'clusterProfiler' package to perform ontology analysis")
 
-  if(class(org.db) != "OrgDb") stop("'org.db' must be of class 'OrgDb'. Please input an organism database.")
+  if(class(org.db) != "OrgDb") stop("'org.db' must be of class 'OrgDb'. Please input an organism database, e.g., org.Hs.eg.db for human data.")
 
-  if(verbose) cat("Merging count matrices ... ")
-
-  cm_merged <- sccore:::mergeCountMatrices(cms, transposed = transposed, n.cores = n.cores)
-
-  if(!transposed) {
-    if(verbose) cat("done!\nTransposing merged count matrix ... ")
-    cm_merged %<>% Matrix::t()
-  }
-
-  if(verbose) cat("done!\nCalculating boolean index ... ")
-  cm_bool <- (cm_merged > 1) * 1
-
-  if(verbose) cat("done!\nFiltering DE genes .")
-  cm_collapsed_bool <- conos:::collapseCellsByType(cm_bool, cell.groups %>%
-                                                     .[. %in% names(de.raw)] %>%
-                                                     factor(), min.cell.count=0)
-
-  if(verbose) cat(".")
   de.filtered <- lapply(de.raw, function(df) {
     df.filt <- df[!is.na(df$padj) & (df$padj < p.adj.cutoff),]
     if(nrow(df.filt) < n.top.genes) {
@@ -47,10 +29,37 @@ prepareOntologyData <- function(cms, de.raw, cell.groups, org.db, n.top.genes = 
     return(df.filt)
   })
 
-  if(verbose) cat(". ")
-  de.genes.filtered <- mapply(intersect, lapply(de.filtered, rownames), ((cm_collapsed_bool > as.vector(table(cell.groups %>% .[. %in% names(de.raw)]%>% factor)[rownames(cm_collapsed_bool)] * expr.cutoff)) %>% apply(1, function(row) names(which(row))))[names(de.filtered)])
+  if(expr.cutoff != 0) {
+    if(verbose) cat("Merging count matrices ... ")
 
-  if(verbose) cat("done!\nRetrieving Entrez Gene IDs ... ")
+    cm_merged <- sccore:::mergeCountMatrices(cms, transposed = transposed, n.cores = n.cores)
+
+    if(!transposed) {
+      if(verbose) cat("done!\nTransposing merged count matrix ... ")
+      cm_merged %<>% Matrix::t()
+    }
+
+    if(verbose) cat("done!\nCalculating boolean index ... ")
+    cm_bool <- (cm_merged > 1) * 1
+
+    if(verbose) cat("done!\nFiltering DE genes ... ")
+    cm_collapsed_bool <- conos:::collapseCellsByType(cm_bool, cell.groups %>%
+                                                       .[. %in% names(de.raw)] %>%
+                                                       factor(), min.cell.count=0)
+
+    de.genes.filtered <- mapply(intersect,
+                                lapply(de.filtered, rownames),
+                                ((cm_collapsed_bool > as.vector(table(cell.groups %>%
+                                                                        .[. %in% names(de.raw)] %>%
+                                                                        factor)[rownames(cm_collapsed_bool)] * expr.cutoff)) %>%
+                                   apply(1, function(row) names(which(row))))[names(de.filtered)])
+
+    if(verbose) cat("done!\n")
+  } else {
+    de.genes.filtered <- lapply(de.filtered, rownames)
+  }
+
+  if(verbose) cat("Retrieving Entrez Gene IDs ... ")
   groups <- de.genes.filtered %>% .[sapply(., length) > 0] %>% names()
 
   de.gene.ids <- groups %>% lapply(function(x) {
@@ -215,7 +224,15 @@ estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = 
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
     # TODO test functionality in general
     message("Only human data supported for DO analysis.")
-    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])], DOSE::enrichDO, pAdjustMethod=p.adjust.method, universe=de.gene.ids[[id]][["universe"]], readable=readable), n.cores=1, progress=verbose, qvalueCutoff = qvalueCutoff, minGSSize = minGSSize, maxGSSize = maxGSSize, ...) %>%
+    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
+                                                                         DOSE::enrichDO,
+                                                                         pAdjustMethod=p.adjust.method,
+                                                                         universe=de.gene.ids[[id]][["universe"]],
+                                                                         readable=readable,
+                                                                         qvalueCutoff = qvalueCutoff,
+                                                                         minGSSize = minGSSize,
+                                                                         maxGSSize = maxGSSize),
+                                 n.cores=1, progress=verbose, ...) %>%
       lapply(lapply, function(x) x@result) %>%
       setNames(names(de.gene.ids))
 
@@ -248,9 +265,16 @@ estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = 
     }
 
     if(verbose) cat("Estimating enriched ontologies ... \n")
-    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) {
-      estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])], go.environment = go.environment, universe=de.gene.ids[[id]][["universe"]], readable=readable, pAdjustMethod=p.adjust.method, org.db=org.db,  qvalueCutoff = qvalueCutoff, minGSSize = minGSSize, maxGSSize = maxGSSize,)
-    }, progress = verbose, n.cores = 1, ...) %>%
+    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) suppressMessages(estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
+                                                                                                      go.environment = go.environment,
+                                                                                                      universe=de.gene.ids[[id]][["universe"]],
+                                                                                                      readable=readable,
+                                                                                                      pAdjustMethod=p.adjust.method,
+                                                                                                      org.db=org.db,
+                                                                                                      qvalueCutoff = qvalueCutoff,
+                                                                                                      minGSSize = minGSSize,
+                                                                                                      maxGSSize = maxGSSize)),
+                                 progress = verbose, n.cores = 1, ...) %>%
       setNames(names(de.gene.ids))
 
     #Split into different fractions

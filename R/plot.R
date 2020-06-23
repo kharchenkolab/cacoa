@@ -308,23 +308,20 @@ plotOntologySimilarities <- function(type=NULL, ont.res) {
 #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
 #' @return A ggplot2 object
 plotProportions <- function(legend.position = "right", cell.groups, sample.per.cell, sample.groups) {
-  df <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
+  df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
     table %>%
     rbind %>%
     t %>%
-    as.data.frame
-
-  df %<>% apply(2, as.numeric) %>%
+    as.data.frame %>%
+    apply(2, as.numeric) %>%
     as.data.frame %>%
     magrittr::divide_by(rowSums(.)) %>%
-    magrittr::multiply_by(1e2)
-
-  df$group <- sample.groups
-
-  df.melt <- reshape2::melt(df, id.vars="group", measure.vars=colnames(df)[-ncol(df)])
+    magrittr::multiply_by(1e2) %>%
+    dplyr::mutate(group = sample.groups[match(levels(sample.per.cell), names(sample.groups))]) %>%
+    reshape2::melt(., id.vars="group")
 
   ggplot(df.melt, aes(x=variable, y=value, by=group)) +
-    geom_boxplot(position=position_dodge(), notch=T) +
+    geom_boxplot(position=position_dodge(), outlier.shape = NA) +
     ylab("% cells per sample") +
     xlab("") +
     theme_classic() +
@@ -343,17 +340,17 @@ plotProportions <- function(legend.position = "right", cell.groups, sample.per.c
 #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
 #' @return A ggplot2 object
 plotCellNumbers <- function(legend.position = "right", cell.groups, sample.per.cell, sample.groups) {
-  df.melt <- data.frame(anno=cell.groups, group=sample.per.cell) %>%
+  df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
     table %>%
     rbind %>%
     t %>%
     as.data.frame %>%
-    dplyr::mutate(group = sample.groups) %>%
-    reshape2::melt(., id.vars="group", measure.vars=colnames(.)[-ncol(.)])
+    dplyr::mutate(group = sample.groups[match(levels(sample.per.cell), names(sample.groups))]) %>%
+    reshape2::melt(., id.vars="group")
 
   ggplot(df.melt, aes(x=variable, y=value, by=group)) +
-    geom_boxplot(position=position_dodge()) +
-    ylab("Number of cells") +
+    geom_boxplot(position=position_dodge(), outlier.shape = NA) +
+    ylab("Cells per sample") +
     xlab("") +
     theme_classic() +
     theme(axis.text.x = element_text(angle=90),

@@ -513,8 +513,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)
     #' @param ont.data List containing a list of results from estimateOntology
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
-    #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'non-unique' (only show terms that are not unique for any cell type); 'all' (all ontology terms) (default="all")
+    #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms) (default="all")
     #' @param n Number of terms to show (default=10)
+    #' @param cell.subgroups Cell groups to plot (default=NULL)
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(genes = "up", type = "GO", legend.position = "left", selection = "all", n = 10, cell.subgroups = NULL) {
       if(is.null(type) || (!type %in% c("GO","BP","CC","MF","DO"))) stop("'type' must be 'BP', 'CC', 'MF', or 'DO'.")

@@ -41,17 +41,17 @@ Cacoa R6 class
 \item \href{#method-plotExpressionShiftMagnitudes}{\code{Cacoa$plotExpressionShiftMagnitudes()}}
 \item \href{#method-estimateExpressionShiftZScores}{\code{Cacoa$estimateExpressionShiftZScores()}}
 \item \href{#method-plotExpressionShiftZScores}{\code{Cacoa$plotExpressionShiftZScores()}}
-\item \href{#method-getPerCellTypeDE}{\code{Cacoa$getPerCellTypeDE()}}
+\item \href{#method-estimatePerCellTypeDE}{\code{Cacoa$estimatePerCellTypeDE()}}
 \item \href{#method-plotDEGenes}{\code{Cacoa$plotDEGenes()}}
-\item \href{#method-prepareOnthologyData}{\code{Cacoa$prepareOnthologyData()}}
+\item \href{#method-prepareOntologyData}{\code{Cacoa$prepareOntologyData()}}
 \item \href{#method-plotFilteredDEGenes}{\code{Cacoa$plotFilteredDEGenes()}}
-\item \href{#method-estimateOnthology}{\code{Cacoa$estimateOnthology()}}
-\item \href{#method-plotOnthologyDistribution}{\code{Cacoa$plotOnthologyDistribution()}}
-\item \href{#method-plotOnthologyTerms}{\code{Cacoa$plotOnthologyTerms()}}
-\item \href{#method-plotOnthologyBarplot}{\code{Cacoa$plotOnthologyBarplot()}}
-\item \href{#method-plotOnthologyDotplot}{\code{Cacoa$plotOnthologyDotplot()}}
-\item \href{#method-plotOnthologyHeatmap}{\code{Cacoa$plotOnthologyHeatmap()}}
-\item \href{#method-plotOnthologyCorrelations}{\code{Cacoa$plotOnthologyCorrelations()}}
+\item \href{#method-estimateOntology}{\code{Cacoa$estimateOntology()}}
+\item \href{#method-plotOntologyDistribution}{\code{Cacoa$plotOntologyDistribution()}}
+\item \href{#method-plotOntologyTerms}{\code{Cacoa$plotOntologyTerms()}}
+\item \href{#method-plotOntologyBarplot}{\code{Cacoa$plotOntologyBarplot()}}
+\item \href{#method-plotOntologyDotplot}{\code{Cacoa$plotOntologyDotplot()}}
+\item \href{#method-plotOntologyHeatmap}{\code{Cacoa$plotOntologyHeatmap()}}
+\item \href{#method-plotOntologySimilarities}{\code{Cacoa$plotOntologySimilarities()}}
 \item \href{#method-plotProportions}{\code{Cacoa$plotProportions()}}
 \item \href{#method-plotCellNumbers}{\code{Cacoa$plotCellNumbers()}}
 \item \href{#method-clone}{\code{Cacoa$clone()}}
@@ -241,12 +241,12 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-getPerCellTypeDE"></a>}}
-\if{latex}{\out{\hypertarget{method-getPerCellTypeDE}{}}}
-\subsection{Method \code{getPerCellTypeDE()}}{
+\if{html}{\out{<a id="method-estimatePerCellTypeDE"></a>}}
+\if{latex}{\out{\hypertarget{method-estimatePerCellTypeDE}{}}}
+\subsection{Method \code{estimatePerCellTypeDE()}}{
 Estimate differential gene expression per cell type between conditions
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$getPerCellTypeDE(
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimatePerCellTypeDE(
   cell.groups = self$cell.groups,
   sample.groups = self$sample.groups,
   ref.level = self$ref.level,
@@ -324,12 +324,12 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-prepareOnthologyData"></a>}}
-\if{latex}{\out{\hypertarget{method-prepareOnthologyData}{}}}
-\subsection{Method \code{prepareOnthologyData()}}{
-Filter and prepare DE genes for onthology calculations
+\if{html}{\out{<a id="method-prepareOntologyData"></a>}}
+\if{latex}{\out{\hypertarget{method-prepareOntologyData}{}}}
+\subsection{Method \code{prepareOntologyData()}}{
+Filter and prepare DE genes for ontology calculations
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$prepareOnthologyData(
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$prepareOntologyData(
   de.raw = self$test.results$de,
   cell.groups = self$cell.groups,
   universe = self$test.results$de$universe,
@@ -376,7 +376,7 @@ A list containing DE gene IDs, filtered DE genes, and input DE genes
 Plot number of highly-expressed DE genes as a function of number of cells
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotFilteredDEGenes(
-  de.filter = self$test.results$onthology$de.filter,
+  de.filter = self$test.results$ontology$de.filter,
   cell.groups = self$cell.groups,
   legend.position = "none",
   label = T
@@ -386,7 +386,7 @@ Plot number of highly-expressed DE genes as a function of number of cells
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{de.filter}}{Filtered DE genes, results from prepareOnthologyData (default: stored list)}
+\item{\code{de.filter}}{Filtered DE genes, results from prepareOntologyData (default: stored list)}
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
@@ -401,15 +401,15 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateOnthology"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateOnthology}{}}}
-\subsection{Method \code{estimateOnthology()}}{
-Calculate onthologies based on DEs
+\if{html}{\out{<a id="method-estimateOntology"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateOntology}{}}}
+\subsection{Method \code{estimateOntology()}}{
+Estimate ontology terms based on DEs
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOnthology(
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntology(
   type = NULL,
   org = "human",
-  de.gene.ids = self$test.results$onthology$de.gene.ids,
+  de.gene.ids = self$test.results$ontology$de.gene.ids,
   go.environment = self$test.results$GO$go.environment,
   p.adj = 0.05,
   p.adjust.method = "BH",
@@ -423,11 +423,11 @@ Calculate onthologies based on DEs
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{type}}{Onthology type, either GO (gene onthology) or DO (disease onthology). Please see DOSE package for more information.}
+\item{\code{type}}{Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information.}
 
 \item{\code{org}}{Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")}
 
-\item{\code{de.gene.ids}}{List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOnthologyData)}
+\item{\code{de.gene.ids}}{List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOntologyData)}
 
 \item{\code{go.environment}}{Extracted GO environment. If set to NULL, the environment will be re-extracted (default: stored environment)}
 
@@ -448,18 +448,18 @@ Calculate onthologies based on DEs
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-A list containing a list of onthologies per type of onthology, and a data frame with merged results
+A list containing a list of terms per ontology, and a data frame with merged results
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotOnthologyDistribution"></a>}}
-\if{latex}{\out{\hypertarget{method-plotOnthologyDistribution}{}}}
-\subsection{Method \code{plotOnthologyDistribution()}}{
-Bar plot of onthologies per cell type
+\if{html}{\out{<a id="method-plotOntologyDistribution"></a>}}
+\if{latex}{\out{\hypertarget{method-plotOntologyDistribution}{}}}
+\subsection{Method \code{plotOntologyDistribution()}}{
+Bar plot of ontology terms per cell type
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyDistribution(
-  type = NULL,
-  genes = NULL,
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyDistribution(
+  genes = "up",
+  type = "GO",
   cell.groups = self$cell.groups
 )}\if{html}{\out{</div>}}
 }
@@ -467,9 +467,9 @@ Bar plot of onthologies per cell type
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{type}}{Onthology, must be either "GO" or "DO" (default=NULL)}
-
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
+
+\item{\code{type}}{Ontology, must be either "GO" or "DO" (default=NULL)}
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 }
@@ -480,15 +480,15 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotOnthologyTerms"></a>}}
-\if{latex}{\out{\hypertarget{method-plotOnthologyTerms}{}}}
-\subsection{Method \code{plotOnthologyTerms()}}{
-Plot onthology terms as a function of both number of DE genes, and number of cells.
+\if{html}{\out{<a id="method-plotOntologyTerms"></a>}}
+\if{latex}{\out{\hypertarget{method-plotOntologyTerms}{}}}
+\subsection{Method \code{plotOntologyTerms()}}{
+Plot ontology terms as a function of both number of DE genes, and number of cells.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyTerms(
-  type = NULL,
-  genes = NULL,
-  de.filter = self$test.results$onthology$de.filter,
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyTerms(
+  genes = "up",
+  type = "GO",
+  de.filter = self$test.results$ontology$de.filter,
   cell.groups = self$cell.groups,
   legend.position = "none",
   label.x.pos = 0.01,
@@ -501,11 +501,11 @@ Plot onthology terms as a function of both number of DE genes, and number of cel
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{type}}{Onthology, must be either "GO" or "DO" (default=NULL)}
-
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
 
-\item{\code{de.filter}}{Filtered DE genes, results from prepareOnthologyData (default: stored list)}
+\item{\code{type}}{Ontology, must be either "GO" or "DO" (default=NULL)}
+
+\item{\code{de.filter}}{Filtered DE genes, results from prepareOntologyData (default: stored list)}
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
@@ -526,15 +526,15 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotOnthologyBarplot"></a>}}
-\if{latex}{\out{\hypertarget{method-plotOnthologyBarplot}{}}}
-\subsection{Method \code{plotOnthologyBarplot()}}{
-Plot a barplot of onthologies with adj. P values for a specific cell subgroup
+\if{html}{\out{<a id="method-plotOntologyBarplot"></a>}}
+\if{latex}{\out{\hypertarget{method-plotOntologyBarplot}{}}}
+\subsection{Method \code{plotOntologyBarplot()}}{
+Plot a barplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyBarplot(
-  type = NULL,
-  genes = NULL,
-  cell.subgroup = NULL,
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyBarplot(
+  genes = "up",
+  type = "GO",
+  cell.subgroups = NULL,
   n = 20,
   p.adj = 0.05
 )}\if{html}{\out{</div>}}
@@ -543,13 +543,13 @@ Plot a barplot of onthologies with adj. P values for a specific cell subgroup
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{type}}{Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
-
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
 
-\item{\code{cell.subgroup}}{Cell group to plot (default=NULL)}
+\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
 
-\item{\code{n}}{Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
+\item{\code{cell.subgroups}}{Cell group to plot (default=NULL)}
+
+\item{\code{n}}{Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
 
 \item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
 }
@@ -560,15 +560,15 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotOnthologyDotplot"></a>}}
-\if{latex}{\out{\hypertarget{method-plotOnthologyDotplot}{}}}
-\subsection{Method \code{plotOnthologyDotplot()}}{
-Plot a dotplot of onthologies with adj. P values for a specific cell subgroup
+\if{html}{\out{<a id="method-plotOntologyDotplot"></a>}}
+\if{latex}{\out{\hypertarget{method-plotOntologyDotplot}{}}}
+\subsection{Method \code{plotOntologyDotplot()}}{
+Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyDotplot(
-  type = NULL,
-  genes = NULL,
-  cell.subgroup = NULL,
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyDotplot(
+  genes = "up",
+  type = "GO",
+  cell.subgroups = NULL,
   n = 20,
   p.adj = 0.05
 )}\if{html}{\out{</div>}}
@@ -577,13 +577,13 @@ Plot a dotplot of onthologies with adj. P values for a specific cell subgroup
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{type}}{Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
-
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
 
-\item{\code{cell.subgroup}}{Cell group to plot (default=NULL)}
+\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
 
-\item{\code{n}}{Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
+\item{\code{cell.subgroups}}{Cell group to plot (default=NULL)}
+
+\item{\code{n}}{Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
 
 \item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
 }
@@ -594,34 +594,37 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotOnthologyHeatmap"></a>}}
-\if{latex}{\out{\hypertarget{method-plotOnthologyHeatmap}{}}}
-\subsection{Method \code{plotOnthologyHeatmap()}}{
-Plot a heatmap of onthology P values per cell type
+\if{html}{\out{<a id="method-plotOntologyHeatmap"></a>}}
+\if{latex}{\out{\hypertarget{method-plotOntologyHeatmap}{}}}
+\subsection{Method \code{plotOntologyHeatmap()}}{
+Plot a heatmap of ontology P values per cell type
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyHeatmap(
-  type = NULL,
-  genes = NULL,
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyHeatmap(
+  genes = "up",
+  type = "GO",
   legend.position = "left",
-  order = "all-max-row",
-  n = 10
+  selection = "all",
+  n = 10,
+  cell.subgroups = NULL
 )}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{type}}{Onthology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
-
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
+
+\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
 
 \item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="left")}
 
-\item{\code{order}}{Order of rows in heatmap. Can be 'unique' (only show onthologies that are unique for any cell type); 'unique-max-row' (same as 'unique' but ordered by P value); 'all-max-rowsum' (all onthologies ordered by cumulative P value for all cell types); 'all-max-row' (all onthologies ordered by max P value) (default="all-max-row")}
+\item{\code{selection}}{Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms) (default="all")}
 
-\item{\code{n}}{Number of onthologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
+\item{\code{n}}{Number of terms to show (default=10)}
 
-\item{\code{ont.data}}{List containing a list of results from estimateOnthology}
+\item{\code{cell.subgroups}}{Cell groups to plot (default=NULL)}
+
+\item{\code{ont.data}}{List containing a list of results from estimateOntology}
 }
 \if{html}{\out{</div>}}
 }
@@ -630,20 +633,20 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotOnthologyCorrelations"></a>}}
-\if{latex}{\out{\hypertarget{method-plotOnthologyCorrelations}{}}}
-\subsection{Method \code{plotOnthologyCorrelations()}}{
-Plot correlation matrix for onthologies between cell types
+\if{html}{\out{<a id="method-plotOntologySimilarities"></a>}}
+\if{latex}{\out{\hypertarget{method-plotOntologySimilarities}{}}}
+\subsection{Method \code{plotOntologySimilarities()}}{
+Plot correlation matrix for ontology terms between cell types
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOnthologyCorrelations(type = NULL, genes = NULL)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologySimilarities(genes = "up", type = "GO")}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{type}}{Onthology, must be either "GO" or "DO" (default=NULL)}
-
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
+
+\item{\code{type}}{Ontology, must be either "GO" or "DO" (default=NULL)}
 }
 \if{html}{\out{</div>}}
 }

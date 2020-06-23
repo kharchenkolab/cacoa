@@ -12,7 +12,7 @@ plotFilteredDEGenes(
 )
 }
 \arguments{
-\item{de.filter}{List of filtered differentially expressed genes, results from prepareOnthologyData (default: stored list)}
+\item{de.filter}{List of filtered differentially expressed genes, results from prepareOntologyData (default: stored list)}
 
 \item{cell.groups}{Vector indicating cell groups with cell names (default: stored vector)}
 

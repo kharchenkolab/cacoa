@@ -319,23 +319,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description  Filter and prepare DE genes for ontology calculations
-    #' @param de.raw Differentially expressed genes per cell group, results from estimatePerCellTypeDE (default: stored list)
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-    #' @param universe Only set this if a common background gene set is desired for all cell groups (default: NULL)
     #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
     #' @param n.top.genes Number of most different genes to take as input. If less are left after filtering for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)
     #' @param p.adj.cutoff Cutoff for filtering highly-expressed DE genes (default=0.05)
+    #' @param expr.cutoff Cutoff for cells per group expressing a DE gene, i.e., cutoff for highly-expressed genes (default=0.05)
+    #' @param de.raw Differentially expressed genes per cell group, results from estimatePerCellTypeDE (default: stored list)
+    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+    #' @param universe Only set this if a common background gene set is desired for all cell groups (default: NULL)
     #' @param transposed Whether count matrices should be transposed (default=T)
     #' @param verbose Print progress (default=T)
     #' @param n.cores Number of cores to use (default: stored integer)
     #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
-    prepareOntologyData=function(de.raw = self$test.results$de, cell.groups = self$cell.groups, universe = NULL, org.db, n.top.genes = 1e2, transposed = T, verbose = T, n.cores = self$n.cores) {
+    prepareOntologyData=function(org.db, n.top.genes = 1e2, p.adj.cutoff = 0.05, expr.cutoff = 0.05, de.raw = self$test.results$de, cell.groups = self$cell.groups, universe = NULL, transposed = T, verbose = T, n.cores = self$n.cores) {
       if (is.null(de)) stop("Please run 'estimatePerCellTypeDE' first.")
 
       if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       self$test.results[["ontology"]] <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
-        prepareOntologyData(de.raw = de.raw, cell.groups = cell.groups, universe = universe, org.db = org.db, n.top.genes = n.top.genes, transposed = transposed, verbose = verbose, n.cores = n.cores)
+        prepareOntologyData(org.db = org.db, n.top.genes = n.top.genes, p.adj.cutoff = p.adj.cutoff, expr.cutoff = expr.cutoff, de.raw = de.raw, cell.groups = cell.groups, universe = universe, transposed = transposed, verbose = verbose, n.cores = n.cores)
       return(invisible(self$test.results[["ontology"]]))
     },
 

@@ -148,8 +148,14 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
   }, n.cores = n.cores, progress=verbose) %>%
     .[!sapply(., is.logical)]
 
-  dif <- length(levels(cell.groups)) - length(de.res)
-  if(dif > 0) warning(paste0("DEs not calculated for ",dif," cell group(s)."))
+
+  if(verbose) {
+    dif <- intersect(levels(cell.groups), names(de.res))
+    if(length(dif) > 0) {
+      message(paste0("DEs not calculated for ",length(dif)," cell group(s):"))
+      print(dif)
+    }
+  }
 
   return(de.res)
 }

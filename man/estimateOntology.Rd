@@ -13,11 +13,16 @@ estimateOntology(
   p.adjust.method = "BH",
   readable = T,
   verbose = T,
+  qvalueCutoff = 0.2,
+  minGSSize = 5,
+  maxGSSize = 500,
   ...
 )
 }
 \arguments{
 \item{type}{Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information.}
+
+\item{org.db}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'}
 
 \item{p.adj}{Adjusted P cutoff (default=0.05)}
 
@@ -27,11 +32,15 @@ estimateOntology(
 
 \item{verbose}{Print progress (default=T)}
 
+\item{qvalueCutoff}{Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
+
+\item{minGSSize}{Minimal geneset size, please see clusterProfiler package for more information (default=5)}
+
+\item{maxGSSize}{Minimal geneset size, please see clusterProfiler package for more information (default=5e2)}
+
 \item{...}{Additional parameters for sccore:::plapply function}
 
 \item{ont.data}{List containing DE gene IDs, and filtered DE genes}
-
-\item{org}{Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")}
 
 \item{n.cores}{Number of cores used (default: stored vector)}
 }

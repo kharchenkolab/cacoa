@@ -250,6 +250,7 @@ Estimate differential gene expression per cell type between conditions
   cell.groups = self$cell.groups,
   sample.groups = self$sample.groups,
   ref.level = self$ref.level,
+  common.genes = F,
   n.cores = self$n.cores,
   cooks.cutoff = FALSE,
   min.cell.count = 10,
@@ -268,6 +269,8 @@ Estimate differential gene expression per cell type between conditions
 \item{\code{sample.groups}}{a list of two character vector specifying the app groups to compare (default=NULL)}
 
 \item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
+
+\item{\code{common.genes}}{Only investigate common genes across cell groups (default=F)}
 
 \item{\code{n.cores}}{Number of cores (default=1)}
 
@@ -307,7 +310,7 @@ Plot number of significant DE genes as a function of number of cells
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{de.raw}}{List with differentially expressed genes per cell group (default: stored list, results from getPerCellTypeDE)}
+\item{\code{de.raw}}{List with differentially expressed genes per cell group (default: stored list, results from estimatePerCellTypeDE)}
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
@@ -330,12 +333,13 @@ A ggplot2 object
 Filter and prepare DE genes for ontology calculations
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$prepareOntologyData(
+  org.db,
+  n.top.genes = 100,
+  p.adj.cutoff = 0.05,
+  expr.cutoff = 0.05,
   de.raw = self$test.results$de,
   cell.groups = self$cell.groups,
-  universe = self$test.results$de$universe,
-  org = "human",
-  n.top.genes = Inf,
-  stat.cutoff = 3,
+  universe = NULL,
   transposed = T,
   verbose = T,
   n.cores = self$n.cores
@@ -345,17 +349,19 @@ Filter and prepare DE genes for ontology calculations
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{de.raw}}{Differentially expressed genes per cell group, results from getPerCellTypeDE (default: stored list)}
+\item{\code{org.db}}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'}
+
+\item{\code{n.top.genes}}{Number of most different genes to take as input. If less are left after filtering for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)}
+
+\item{\code{p.adj.cutoff}}{Cutoff for filtering highly-expressed DE genes (default=0.05)}
+
+\item{\code{expr.cutoff}}{Cutoff for cells per group expressing a DE gene, i.e., cutoff for highly-expressed genes (default=0.05)}
+
+\item{\code{de.raw}}{Differentially expressed genes per cell group, results from estimatePerCellTypeDE (default: stored list)}
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
-\item{\code{universe}}{All measured genes (default: stored vector)}
-
-\item{\code{org}}{Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")}
-
-\item{\code{n.top.genes}}{Number of genes to use for analysis (default=Inf)}
-
-\item{\code{stat.cutoff}}{Cutoff for filtering highly-expressed DE genes (default=3)}
+\item{\code{universe}}{Only set this if a common background gene set is desired for all cell groups (default: NULL)}
 
 \item{\code{transposed}}{Whether count matrices should be transposed (default=T)}
 
@@ -407,8 +413,8 @@ A ggplot2 object
 Estimate ontology terms based on DEs
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntology(
-  type = NULL,
-  org = "human",
+  type = "GO",
+  org.db,
   de.gene.ids = self$test.results$ontology$de.gene.ids,
   go.environment = self$test.results$GO$go.environment,
   p.adj = 0.05,
@@ -416,6 +422,9 @@ Estimate ontology terms based on DEs
   readable = T,
   verbose = T,
   n.cores = self$n.cores,
+  qvalueCutoff = 0.2,
+  minGSSize = 5,
+  maxGSSize = 500,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -425,7 +434,7 @@ Estimate ontology terms based on DEs
 \describe{
 \item{\code{type}}{Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information.}
 
-\item{\code{org}}{Organism, can be "human", "mouse", "zebrafish", "worm", or "fly" (default="human")}
+\item{\code{org.db}}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'}
 
 \item{\code{de.gene.ids}}{List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOntologyData)}
 
@@ -440,6 +449,12 @@ Estimate ontology terms based on DEs
 \item{\code{verbose}}{Print progress (default=T)}
 
 \item{\code{n.cores}}{Number of cores used (default: stored vector)}
+
+\item{\code{qvalueCutoff}}{Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
+
+\item{\code{minGSSize}}{Minimal geneset size, please see clusterProfiler package for more information (default=5)}
+
+\item{\code{maxGSSize}}{Minimal geneset size, please see clusterProfiler package for more information (default=5e2)}
 
 \item{\code{...}}{Additional parameters for sccore:::plapply function}
 
@@ -612,7 +627,7 @@ Plot a heatmap of ontology P values per cell type
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
+\item{\code{genes}}{Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all' (default=NULL)}
 
 \item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
 
@@ -623,8 +638,6 @@ Plot a heatmap of ontology P values per cell type
 \item{\code{n}}{Number of terms to show (default=10)}
 
 \item{\code{cell.subgroups}}{Cell groups to plot (default=NULL)}
-
-\item{\code{ont.data}}{List containing a list of results from estimateOntology}
 }
 \if{html}{\out{</div>}}
 }

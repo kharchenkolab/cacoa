@@ -7,15 +7,16 @@ NULL
 #' @param de.raw List with differentially expressed genes per cell group
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
 #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
-#' @param universe Background gene list, NULL will take all input genes in de.raw (default=NULL)
 #' @param n.top.genes Number of most different genes to take as input. If less are left after filtering for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)
-#' @param p.adj.cutoff Cutoff for filtering highly-expressed DE genes (default=0.05)
+#' @param p.adj.cutoff Adj. P cutoff for filtering DE genes (default=0.05)
+#' @param expr.cutoff Cutoff for cells per group expressing a DE gene, i.e., cutoff for highly-expressed genes (default=0.05)
+#' @param universe Background gene list, NULL will take all input genes in de.raw (default=NULL)
 #' @param transposed Indicate whether raw counts are transposed, i.e., cells as rows, genes as columns (default=T)
 #' @param verbose Print progress (default=T)
 #' @param n.cores Number of cores to use (default=1)
 #' @return A list containing DE ENSEMBL gene IDs, and filtered DE genes
 #' @export
-prepareOntologyData <- function(cms, de.raw, cell.groups, org.db, universe = NULL, n.top.genes = 1e2, p.adj.cutoff = 0.05, transposed = T,  verbose = T, n.cores = 1) {
+prepareOntologyData <- function(cms, de.raw, cell.groups, org.db, n.top.genes = 1e2, p.adj.cutoff = 0.05, expr.cutoff = 0.05, universe = NULL, transposed = T,  verbose = T, n.cores = 1) {
   if (!requireNamespace("clusterProfiler", quietly = TRUE)) stop("You have to install 'clusterProfiler' package to perform ontology analysis")
 
   if(class(org.db) != "OrgDb") stop("'org.db' must be of class 'OrgDb'. Please input an organism database.")
@@ -47,7 +48,7 @@ prepareOntologyData <- function(cms, de.raw, cell.groups, org.db, universe = NUL
   })
 
   if(verbose) cat(". ")
-  de.genes.filtered <- mapply(intersect, lapply(de.filtered, rownames), ((cm_collapsed_bool > as.vector(table(cell.groups %>% .[. %in% names(de.raw)]%>% factor)[rownames(cm_collapsed_bool)] * 0.05)) %>% apply(1, function(row) names(which(row))))[names(de.filtered)])
+  de.genes.filtered <- mapply(intersect, lapply(de.filtered, rownames), ((cm_collapsed_bool > as.vector(table(cell.groups %>% .[. %in% names(de.raw)]%>% factor)[rownames(cm_collapsed_bool)] * expr.cutoff)) %>% apply(1, function(row) names(which(row))))[names(de.filtered)])
 
   if(verbose) cat("done!\nRetrieving Entrez Gene IDs ... ")
   groups <- de.genes.filtered %>% .[sapply(., length) > 0] %>% names()

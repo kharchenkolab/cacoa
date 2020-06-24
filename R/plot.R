@@ -63,46 +63,45 @@ plotFilteredDEGenes <- function(de.filter, cell.groups, legend.position="bottom"
 #' @param ont.res Ontology resuls from estimateOntology
 #' @return A ggplot2 object
 #' @export
-plotOntologyDistribution <- function(type=NULL, ont.res, cell.groups) {
+plotOntologyDistribution <- function(type = NULL, ont.res, cell.groups) {
   if(type=="GO") {
-    p_df <- table(ont.res$Group, ont.res$Type) %>%
-      cbind %>%
-      tibble::as_tibble(rownames="Group") %>%
-      reshape2::melt(id.vars="Group", variable.name="Type", value.name="N") %>%
-                           .[order(.$Group),]
+    p_df <- table(ont.res$Group, ont.res$Type, ont.res$direction) %>%
+      as.data.frame() %>%
+      setNames(c("Group","Type","direction","N")) %>%
+      dplyr::arrange(Group)
 
-    gg <- ggplot(p_df) +
-      geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
+    if(length(unique(p_df$direction)) > 1) {
+      gg <- ggplot(p_df, aes(x=Group, y=N, fill=Type, group=Group)) +
+        geom_bar(stat="identity") +
+        facet_grid(~direction, switch="x")
+    } else {
+      gg <- ggplot(p_df) +
+        geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
+    }
   } else if(type=="DO") {
-    p_df <- table(ont.res$Group) %>%
-      cbind %>%
-      tibble::as_tibble(rownames="Group") %>%
-      reshape2::melt(id.vars="Group", value.name="N") %>%
-                           .[order(.$Group),]
+    p_df <- table(ont.res$Group, ont.res$direction) %>%
+      as.data.frame() %>%
+      setNames(c("Group","direction","N")) %>%
+      dplyr::arrange(Group)
 
-    gg <- ggplot(p_df) +
-      geom_bar(aes(x=Group, y=N), stat="identity")
+    if(length(unique(p_df$direction)) > 1) {
+      gg <- ggplot(p_df) +
+        geom_bar(aes(x=Group, y=N, fill=direction), stat="identity", position="dodge") +
+        labs(fill="Gene set")
+    } else {
+      gg <- ggplot(p_df) +
+        geom_bar(aes(x=Group, y=N), stat="identity")
+    }
   } else {
     stop("'type' must be either 'GO' or 'DO'.")
   }
 
-  m <- sapply(p_df$Group %>%
-                unique, function(m) p_df %>%
-                dplyr::filter(Group==m) %>%
-                dplyr::select(N) %>%
-                sum) %>%
-    max %>%
-    plyr::round_any(10, ceiling)
-
   gg +
-    scale_y_continuous(expand=c(0, 0), limits=c(0, m)) +
+    scale_y_continuous(expand=c(0, 0)) +
     theme_bw() +
     theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5),
-          panel.grid.minor = element_blank(),
-          panel.grid.major = element_blank(),
-          legend.position=c(0.99, 0.99),
-          legend.justification=c(1, 1)) +
-    labs(x="", y="No. of terms")
+          legend.position="right") +
+    labs(x="", y=paste0("No. of ",type," terms"))
 }
 
 #' @title Plot ontology terms
@@ -111,14 +110,13 @@ plotOntologyDistribution <- function(type=NULL, ont.res, cell.groups) {
 #' @param type Ontology, must be either "GO" or "DO" (default=NULL)
 #' @param de.filter List of filtered differentially expressed genes, results from prepareOntologyData (default: stored list)
 #' @param cell.groups Vector indicating cell group sizes with cell group names
-#' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
 #' @param label.x.pos Plot label position on x axis (default=0.01)
 #' @param label.y.pos Plot label position on y axis (default=1)
 #' @param rel_heights Vector indicating relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))
 #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
 #' @return A ggplot2 object
 #' @export
-plotOntologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legend.position="bottom", label = T, label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93) {
+plotOntologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93) {
   if(length(unique(ont.res$Type))==1) stop("The input only contains one cell type.")
 
   if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
@@ -129,12 +127,12 @@ plotOntologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, legend
 
   pg <- cowplot::plot_grid(
     ont.res$Group %>% table %>% c %>%
-      plotNCellRegression(sapply(de.filter, length), y.lab=NULL, legend.position="none", label=label) +
+      plotNCellRegression(sapply(de.filter, length), y.lab=NULL, legend.position="none", label=T) +
       geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5) +
       scale_x_continuous(name="Number of highly-expressed DE genes") +
       theme_bw(),
     ont.res$Group %>% table %>% c %>%
-      plotNCellRegression(cell.groups, y.lab=NULL, legend.position="none", label=label) +
+      plotNCellRegression(cell.groups, y.lab=NULL, legend.position="none", label=T) +
       geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5) +
       theme_bw(),
     ncol=1, labels=c("a", "b"), label_x = label.x.pos, label_y = label.y.pos
@@ -216,7 +214,7 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
 #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are not unique for any cell type); 'all' (all ontology terms) (default="all")
 #' @param n Number of terms to show (default=10)
 #' @export
-plotOntologyHeatmap <- function(type = "GO", ont.res, legend.position = "left", selection = "all", n = 10, cell.subgroups = NULL) {
+plotOntologyHeatmap <- function(type = "GO", ont.res, legend.position = "left", selection = "all", n = 20, cell.subgroups = NULL) {
   if(is.null(selection) || (!selection %in% c("unique","common","all"))) stop("'selection' must be one of the following: 'unique', 'common', or 'all'.")
 
   if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1)) stop("'cell.subgroups' must contain at least two groups. Please use plotOntologyBarplot or plotOntologyDotplot instead.")
@@ -240,6 +238,8 @@ plotOntologyHeatmap <- function(type = "GO", ont.res, legend.position = "left", 
       ont.sum %<>%
         .[rowSums(. > 0) > 1,]
   }
+
+  if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 
   ont.sum %>%
     .[, colSums(.) > 0] %>%

@@ -9,8 +9,6 @@ plotOntologyTerms(
   ont.res,
   de.filter,
   cell.groups,
-  legend.position = "bottom",
-  label = T,
   label.x.pos = 0.01,
   label.y.pos = 1,
   rel_heights = c(2.5, 0.5),
@@ -25,8 +23,6 @@ plotOntologyTerms(
 \item{de.filter}{List of filtered differentially expressed genes, results from prepareOntologyData (default: stored list)}
 
 \item{cell.groups}{Vector indicating cell group sizes with cell group names}
-
-\item{legend.position}{Position of legend in plot. See ggplot2::theme (default="bottom")}
 
 \item{label.x.pos}{Plot label position on x axis (default=0.01)}
 

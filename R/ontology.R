@@ -74,7 +74,7 @@ prepareOntologyData <- function(cms, de.raw, cell.groups, org.db, n.top.genes = 
     lapply(lapply, function(x) if(length(x)) x) %>%
     lapply(plyr::compact)
 
-  de.gene.ids <- lapply(de.gene.ids, function(x) lapply(x, function(y) suppressMessages(tryCatch({clusterProfiler::bitr(y, 'SYMBOL', 'ENTREZID', org.db)}, error = function(err) NULL)))) %>%
+  de.gene.ids <- lapply(de.gene.ids, function(x) lapply(x, function(y) suppressMessages({tryCatch({clusterProfiler::bitr(y, 'SYMBOL', 'ENTREZID', org.db)}, error = function(err) NULL)}))) %>%
     lapply(plyr::compact) %>%
     lapply(lapply, `[[`, "ENTREZID")
 
@@ -215,7 +215,7 @@ ontologyListToDf <- function(ont.list) {
 #' @param ... Additional parameters for sccore:::plapply function
 #' @return A list containing a list of ontologies per type of ontology, and a data frame with merged results
 #' @export
-estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = NULL, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, qvalueCutoff = 0.2, minGSSize = 5, maxGSSize = 5e2, ...) {
+estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = NULL, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, qvalueCutoff = 0.2, minGSSize = 10, maxGSSize = 5e2, ...) {
   if(class(org.db) != "OrgDb") stop("'org.db' must be of class 'OrgDb'. Please input an organism database.")
 
   dir.names <- c("down", "up", "all")
@@ -233,17 +233,13 @@ estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = 
                                                                          minGSSize = minGSSize,
                                                                          maxGSSize = maxGSSize),
                                  n.cores=1, progress=verbose, ...) %>%
-      lapply(lapply, function(x) x@result) %>%
+      lapply(lapply, function(x) if(length(x)) x@result else x) %>%
       setNames(names(de.gene.ids))
 
     # Split into different fractions
     ont.list <- dir.names %>%
       lapply(function(x) lapply(ont.list, `[[`, x)) %>%
-      setNames(dir.names)
-
-    #Remove empty entries - is this necessary for DO?
-    ont.list %<>% lapply(plyr::compact) %>%
-      lapply(function(x) if(length(x)) x) %>%
+      setNames(dir.names) %>%
       lapply(plyr::compact)
 
     ont.list %<>% filterOntologies(p.adj = p.adj)

@@ -221,7 +221,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
 
       if(dist=='JS') {
         tcm <- t(tcm/pmax(1,rowSums(tcm)))
-        tcd <- pagoda2:::jsDist(tcm); dimnames(tcd) <- list(colnames(tcm),colnames(tcm));
+        tcd <- pagoda2:::jsDist(tcm, ncores = 1); dimnames(tcd) <- list(colnames(tcm),colnames(tcm));
       } else {
         tcm <- log10(t(tcm/pmax(1,rowSums(tcm)))*1e3+1)
         tcd <- 1-cor(tcm)

@@ -202,8 +202,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param ignore.cache (default=F)
     #' @param name (default="expression.z.scores")
     estimateExpressionShiftZScores=function(cell.groups=self$cell.groups, ref.level=self$ref.level, sample.groups=self$sample.groups,
-                                            sample.per.cell=self$sample.per.cell,
-                                            n.od.genes=1000, n.pcs=100, pca.maxit=1000, ignore.cache=F,
+                                            sample.per.cell=self$sample.per.cell, n.od.genes=1000, n.pcs=100, pca.maxit=1000, ignore.cache=F,
                                             name="expression.z.scores") {
       if (is.null(cell.groups))
         stop("'cell.groups' must be provided either during the object initialization or during this function call")
@@ -249,7 +248,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     plotExpressionShiftZScores=function(type.order=NULL, name="expression.z.scores") {
       private$checkTestResults(name)
 
-      plot.df <- self$test.results[[name]]
+      plot.df <- self$test.results[[name]] %>% dplyr::filter(complete.cases(.))
       if (!is.null(type.order)) {
         plot.df %<>% dplyr::filter(Type %in% type.order) %>%
           dplyr::mutate(Type=factor(Type, levels=type.order))
@@ -258,7 +257,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       ggplot(plot.df, aes(x=Type, y=distance)) +
         geom_boxplot(outlier.alpha=0, show.legend=F) +
         geom_hline(aes(yintercept=split(distance, Type) %>% sapply(median) %>% median()), color="darkred", size=1) +
-        # geom_hline(aes(yintercept=0), color="darkgreen", size=1) +
         labs(x="", y="normalized distance") +
         scale_y_continuous(expand=c(0, 0)) +
         theme_bw() +
@@ -383,22 +381,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @return A ggplot2 object
-    plotOntologyDistribution=function(genes = "up", type = "GO", cell.groups = self$cell.groups) {
+    plotOntologyDistribution=function(genes = c("up","down"), type = "GO", cell.groups = self$cell.groups) {
       if(is.null(type) || (!type %in% c("GO", "DO"))) stop("'type' must be 'GO' or 'DO'.")
 
-      if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
+      if(is.null(genes) || (!all(genes %in% c("down","up","all")))) stop("'genes' must be 'down', 'up', 'all', or a combination of these.")
 
       ont.res <- self$test.results[[type]][["df"]]
 
       if(is.null(ont.res)) stop(paste0("No results found for '",type,"'. Please run 'estimateOntology' first and specify type='",type,"'."))
 
-      ont.res %<>% .[[genes]]
+      ont.res %<>% .[names(.) %in% genes]
 
-      if(is.null(ncol(ont.res))) print(ont.res)
+      if(length(genes) > 1) {
+        ont.res %<>% names() %>%
+          lapply(function(d) ont.res[[d]] %>% dplyr::mutate(direction = d)) %>%
+          Reduce(rbind, .)
+      } else {
+        ont.res %<>% .[[1]] %>% dplyr::mutate(direction = genes)
+      }
 
-      if((ont.res$Type %>% unique %>% length) == 1) stop("The input only contains one cell type.")
-
-      if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
+      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       plotOntologyDistribution(type = type, ont.res = ont.res, cell.groups = cell.groups)
     },
@@ -408,13 +410,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @param de.filter Filtered DE genes, results from prepareOntologyData (default: stored list)
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
     #' @param label.x.pos Plot label position on x axis (default=0.01)
     #' @param label.y.pos Plot label position on y axis (default=1)
     #' @param rel_heights Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
     #' @return A ggplot2 object
-    plotOntologyTerms=function(genes = c("up","down"), type = "GO", de.filter = self$test.results$ontology$de.filter, cell.groups = self$cell.groups, legend.position = "none", label.x.pos = 0.01, label.y.pos = 1, rel_heights = c(2.5, 0.5), scale = 0.93) {
+    plotOntologyTerms=function(genes = c("up","down"), type = "GO", de.filter = self$test.results$ontology$de.filter, cell.groups = self$cell.groups, label.x.pos = 0.01, label.y.pos = 1, rel_heights = c(2.5, 0.5), scale = 0.93) {
       if(is.null(type) || (!type %in% c("GO", "DO"))) stop("'type' must be 'GO' or 'DO'.")
 
       if(is.null(genes) || (!all(genes %in% c("down","up","all")))) stop("'genes' must be 'down', 'up', 'all', or a combination of these.")

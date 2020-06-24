@@ -14,7 +14,7 @@ estimateOntology(
   readable = T,
   verbose = T,
   qvalueCutoff = 0.2,
-  minGSSize = 5,
+  minGSSize = 10,
   maxGSSize = 500,
   ...
 )

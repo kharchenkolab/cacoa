@@ -9,7 +9,7 @@ plotOntologyHeatmap(
   ont.res,
   legend.position = "left",
   selection = "all",
-  n = 10,
+  n = 20,
   cell.subgroups = NULL
 )
 }

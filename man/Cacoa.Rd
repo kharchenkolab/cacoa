@@ -431,7 +431,7 @@ Estimate ontology terms based on DEs
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{type}}{Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information.}
+\item{\code{type}}{Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")}
 
 \item{\code{org.db}}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'}
 
@@ -470,7 +470,7 @@ A list containing a list of terms per ontology, and a data frame with merged res
 Bar plot of ontology terms per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyDistribution(
-  genes = "up",
+  genes = c("up", "down"),
   type = "GO",
   cell.groups = self$cell.groups
 )}\if{html}{\out{</div>}}
@@ -479,9 +479,9 @@ Bar plot of ontology terms per cell type
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
-\item{\code{type}}{Ontology, must be either "GO" or "DO" (default=NULL)}
+\item{\code{type}}{Ontology, must be either "GO" or "DO" (default="GO")}
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 }
@@ -498,11 +498,10 @@ A ggplot2 object
 Plot ontology terms as a function of both number of DE genes, and number of cells.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyTerms(
-  genes = "up",
+  genes = c("up", "down"),
   type = "GO",
   de.filter = self$test.results$ontology$de.filter,
   cell.groups = self$cell.groups,
-  legend.position = "none",
   label.x.pos = 0.01,
   label.y.pos = 1,
   rel_heights = c(2.5, 0.5),
@@ -513,15 +512,13 @@ Plot ontology terms as a function of both number of DE genes, and number of cell
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up', 'all' or a combination of these (default=c("up","down"))}
 
-\item{\code{type}}{Ontology, must be either "GO" or "DO" (default=NULL)}
+\item{\code{type}}{Ontology, must be either "GO" or "DO" (default="GO")}
 
 \item{\code{de.filter}}{Filtered DE genes, results from prepareOntologyData (default: stored list)}
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-
-\item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="bottom")}
 
 \item{\code{label.x.pos}}{Plot label position on x axis (default=0.01)}
 
@@ -555,9 +552,9 @@ Plot a barplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
-\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
+\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")}
 
 \item{\code{cell.subgroups}}{Cell group to plot (default=NULL)}
 
@@ -589,9 +586,9 @@ Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
-\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
+\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")}
 
 \item{\code{cell.subgroups}}{Cell group to plot (default=NULL)}
 
@@ -624,9 +621,9 @@ Plot a heatmap of ontology P values per cell type
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{genes}}{Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all' (default=NULL)}
+\item{\code{genes}}{Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all' (default="up")}
 
-\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
+\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")}
 
 \item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="left")}
 
@@ -654,9 +651,9 @@ Plot correlation matrix for ontology terms between cell types
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default=NULL)}
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
-\item{\code{type}}{Ontology, must be either "GO" or "DO" (default=NULL)}
+\item{\code{type}}{Ontology, must be either "GO" or "DO" (default="GO")}
 }
 \if{html}{\out{</div>}}
 }

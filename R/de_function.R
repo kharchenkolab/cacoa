@@ -172,10 +172,12 @@ saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", create.di
   if(!is.null(dir.name)) {
     if(!dir.exists(dir.name) & create.dir) dir.create(dir.name)
     setwd(dir.name)
-    s <- T
+    set.dir <- T
   } else if(dir.exists(dir.name)) {
     setwd(dir.name)
-    s <- T
+    set.dir <- T
+  } else {
+    set.dir <- F
   }
 
   lapply(sccore:::sn(de.raw %>% names()), function(ncc) {
@@ -221,5 +223,7 @@ saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", create.di
 
   write(s,file=toc.file)
 
-  if(s) setwd("../")
+  if(set.dir) {
+    setwd("../")
+  }
 }

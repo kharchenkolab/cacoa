@@ -324,7 +324,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param gene.metadata (default=NULL)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
     saveDEasJSON=function(saveprefix = NULL, create.dir = T, dir.name = "JSON", de.raw = self$test.results$de, gene.metadata = NULL, cluster.sep.chr = "<!!>") {
-      if(class(de.results[[1]]) == "list") de.results %<>% lapply(`[[`, 1)
+      if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, 1)
 
       if (is.null(saveprefix)) saveprefix <- ""
 

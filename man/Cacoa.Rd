@@ -43,6 +43,7 @@ Cacoa R6 class
 \item \href{#method-plotExpressionShiftZScores}{\code{Cacoa$plotExpressionShiftZScores()}}
 \item \href{#method-estimatePerCellTypeDE}{\code{Cacoa$estimatePerCellTypeDE()}}
 \item \href{#method-plotDEGenes}{\code{Cacoa$plotDEGenes()}}
+\item \href{#method-saveDEasJSON}{\code{Cacoa$saveDEasJSON()}}
 \item \href{#method-prepareOntologyData}{\code{Cacoa$prepareOntologyData()}}
 \item \href{#method-plotFilteredDEGenes}{\code{Cacoa$plotFilteredDEGenes()}}
 \item \href{#method-estimateOntology}{\code{Cacoa$estimateOntology()}}
@@ -324,6 +325,40 @@ Plot number of significant DE genes as a function of number of cells
 }
 \subsection{Returns}{
 A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-saveDEasJSON"></a>}}
+\if{latex}{\out{\hypertarget{method-saveDEasJSON}{}}}
+\subsection{Method \code{saveDEasJSON()}}{
+Save DE results as JSON files
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveDEasJSON(
+  saveprefix = NULL,
+  create.dir = T,
+  dir.name = "JSON",
+  de.raw = self$test.results$de,
+  gene.metadata = NULL,
+  cluster.sep.chr = "<!!>"
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{saveprefix}}{Prefix for created files (default=NULL)}
+
+\item{\code{create.dir}}{Whether to create results directory if not already existing (default=T)}
+
+\item{\code{dir.name}}{Name for directory with results (default="JSON")}
+
+\item{\code{de.raw}}{List of DE results}
+
+\item{\code{gene.metadata}}{(default=NULL)}
+
+\item{\code{cluster.sep.chr}}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
+}
+\if{html}{\out{</div>}}
 }
 }
 \if{html}{\out{<hr>}}

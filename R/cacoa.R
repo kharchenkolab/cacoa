@@ -316,6 +316,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       plotDEGenes(de.raw = de.raw, cell.groups = cell.groups, legend.position = legend.position, p.adjust.cutoff = p.adjust.cutoff)
     },
 
+    #' @description Save DE results as JSON files
+    #' @param saveprefix Prefix for created files (default=NULL)
+    #' @param create.dir Whether to create results directory if not already existing (default=T)
+    #' @param dir.name Name for directory with results (default="JSON")
+    #' @param de.raw List of DE results
+    #' @param gene.metadata (default=NULL)
+    #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
+    saveDEasJSON=function(saveprefix = NULL, create.dir = T, dir.name = "JSON", de.raw = self$test.results$de, gene.metadata = NULL, cluster.sep.chr = "<!!>") {
+      if(class(de.results[[1]]) == "list") de.results %<>% lapply(`[[`, 1)
+
+      if (is.null(saveprefix)) saveprefix <- ""
+
+      saveDEasJSON(de.raw = de.raw, saveprefix = saveprefix, dir.name = dir.name, create.dir = create.dir, gene.metadata = gene.metadata, cluster.sep.chr = cluster.sep.chr)
+    },
+
     #' @description  Filter and prepare DE genes for ontology calculations
     #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
     #' @param n.top.genes Number of most different genes to take as input. If less are left after filtering for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)
@@ -432,7 +447,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
-      plotOntologyTerms(type = type, ont.res = ont.res, de.filter = de.filter, cell.groups = cell.groups, legend.position = legend.position, label.x.pos = label.x.pos, label.y.pos = label.y.pos, rel_heights = rel_heights, scale = scale)
+      plotOntologyTerms(type = type, ont.res = ont.res, de.filter = de.filter, cell.groups = cell.groups, label.x.pos = label.x.pos, label.y.pos = label.y.pos, rel_heights = rel_heights, scale = scale)
     },
 
     #' @description Plot a barplot of ontology terms with adj. P values for a specific cell subgroup

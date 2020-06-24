@@ -159,3 +159,67 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
 
   return(de.res)
 }
+
+#' @title Save DE results as JSON files
+#' @param de.raw List of DE results
+#' @param saveprefix Prefix for created files (default=NULL)
+#' @param dir.name Name for directory with results (default="JSON")
+#' @param create.dir Whether to create results directory if not already existing (default=T)
+#' @param gene.metadata (default=NULL)
+#' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
+saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", create.dir = T, gene.metadata = NULL, cluster.sep.chr = "<!!>")
+{
+  if(!is.null(dir.name)) {
+    if(!dir.exists(dir.name) & create.dir) dir.create(dir.name)
+    setwd(dir.name)
+    s <- T
+  } else if(dir.exists(dir.name)) {
+    setwd(dir.name)
+    s <- T
+  }
+
+  lapply(sccore:::sn(de.raw %>% names()), function(ncc) {
+    res.table <- de.raw[[ncc]]
+    res.table$gene <- rownames(res.table)
+    res.table$significant <- res.table$padj < 0.05
+    res.table$log2FoldChange[is.na(res.table$log2FoldChange)] <- 0
+    res.table$rowid <- 1:nrow(res.table)
+    if (!is.null(gene.metadata)) {
+      mo <- match(as.character(gene.metadata$geneid), as.character(res.table$gene))
+      keep.cols <- colnames(gene.metadata)[colnames(gene.metadata) != "geneid"]
+      names(keep.cols) <- keep.cols
+      res.table <- cbind(res.table, gene.metadata[mo, keep.cols, drop = FALSE])
+    }
+
+    tojson <- list(res = res.table, genes = rownames(res.table))
+    y <- jsonlite::toJSON(tojson)
+    file <- paste0(saveprefix, make.names(ncc), ".json")
+    write(y, file)
+    NULL
+  })
+  invisible(NULL)
+
+  toc.file <- paste('toc.html',sep='/')
+  s <- paste(c(list('<html><head><style>
+    table {
+    font-family: arial, sans-serif;
+    border-collapse: collapse;
+    width: 100%;
+    }
+
+    td, th {
+    border: 1px solid #dddddd;
+    text-align: left;
+    padding: 8px;
+    }
+
+    tr:nth-child(even) {
+    background-color: #dddddd;
+    }
+
+    </style></head><body><table>'),lapply(names(de.raw),function(n) paste0('<tr><td><a href="deview.2.html?d=',saveprefix,n %>% gsub("-",".", .) %>% gsub(" ", ".", .),'.json">',n,'</a></td></tr>')),list('</table></body></html>')),collapse='\n')
+
+  write(s,file=toc.file)
+
+  if(s) setwd("../")
+}

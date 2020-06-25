@@ -323,12 +323,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param de.raw List of DE results
     #' @param gene.metadata (default=NULL)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-    saveDEasJSON=function(saveprefix = NULL, create.dir = T, dir.name = "JSON", de.raw = self$test.results$de, gene.metadata = NULL, cluster.sep.chr = "<!!>") {
+    saveDEasJSON=function(saveprefix = NULL, dir.name = "JSON", de.raw = self$test.results$de, gene.metadata = NULL, cluster.sep.chr = "<!!>") {
       if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, 1)
 
       if (is.null(saveprefix)) saveprefix <- ""
 
-      saveDEasJSON(de.raw = de.raw, saveprefix = saveprefix, dir.name = dir.name, create.dir = create.dir, gene.metadata = gene.metadata, cluster.sep.chr = cluster.sep.chr)
+      saveDEasJSON(de.raw = de.raw, saveprefix = saveprefix, dir.name = dir.name, gene.metadata = gene.metadata, cluster.sep.chr = cluster.sep.chr)
     },
 
     #' @description  Filter and prepare DE genes for ontology calculations

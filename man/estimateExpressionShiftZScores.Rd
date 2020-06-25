@@ -9,7 +9,8 @@ estimateExpressionShiftZScores(
   sample.per.cell,
   sample.groups,
   cell.groups,
-  ref.level
+  ref.level,
+  verbose = T
 )
 }
 \arguments{

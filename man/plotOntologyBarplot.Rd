@@ -4,7 +4,14 @@
 \alias{plotOntologyBarplot}
 \title{Plot ontologies with barplot}
 \usage{
-plotOntologyBarplot(ont.res, genes = NULL, type = NULL, n = 20, p.adj = 0.05)
+plotOntologyBarplot(
+  ont.res,
+  genes = NULL,
+  type = NULL,
+  cell.subgroups = NULL,
+  n = 20,
+  p.adj = 0.05
+)
 }
 \arguments{
 \item{ont.res}{Data frame with ontology resuls from estimateOntology}

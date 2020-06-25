@@ -288,7 +288,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
 ##' @param sample.groups Named factor with cell names indicating condition/sample, e.g., ctrl/disease
 ##' @param cell.groups Named factor with cell names and clustering/annotation
 ##' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt
-estimateExpressionShiftZScores <- function(pca, sample.per.cell, sample.groups, cell.groups, ref.level) {
+estimateExpressionShiftZScores <- function(pca, sample.per.cell, sample.groups, cell.groups, ref.level, verbose = T) {
   sample.groups %<>% as.character() %>%
     setNames(names(sample.groups))
 
@@ -315,5 +315,6 @@ estimateExpressionShiftZScores <- function(pca, sample.per.cell, sample.groups, 
     Reduce(rbind, .) %>%
     dplyr::rename(correlation=value)
 
+  if(verbose) cat("All done!")
   return(res.df)
 }

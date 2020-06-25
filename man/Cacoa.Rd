@@ -188,7 +188,8 @@ Calculate expression shift Z scores of different clusters between conditions
   n.pcs = 100,
   pca.maxit = 1000,
   ignore.cache = F,
-  name = "expression.z.scores"
+  name = "expression.z.scores",
+  verbose = self$verbose
 )}\if{html}{\out{</div>}}
 }
 

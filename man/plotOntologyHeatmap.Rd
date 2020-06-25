@@ -7,6 +7,7 @@
 plotOntologyHeatmap(
   type = "GO",
   ont.res,
+  genes = NULL,
   legend.position = "left",
   selection = "all",
   n = 20,
@@ -17,6 +18,8 @@ plotOntologyHeatmap(
 \item{type}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)}
 
 \item{ont.res}{Ontology resuls from estimateOntology}
+
+\item{genes}{Specify which genes are plotted, can either be 'down', 'up' or 'all' (default=NULL)}
 
 \item{legend.position}{Position of legend in plot. See ggplot2::theme (default="left")}
 

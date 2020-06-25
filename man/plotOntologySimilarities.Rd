@@ -4,12 +4,14 @@
 \alias{plotOntologySimilarities}
 \title{Plot ontology correlations}
 \usage{
-plotOntologySimilarities(type = NULL, ont.res)
+plotOntologySimilarities(type = NULL, ont.res, genes = NULL)
 }
 \arguments{
 \item{type}{Ontology, must be either "GO" or "DO" (default=NULL)}
 
 \item{ont.res}{List with ontology resuls from estimateOntology}
+
+\item{genes}{Specify which genes are plotted, can either be 'down', 'up' or 'all' (default=NULL)}
 }
 \value{
 A ggplot2 object

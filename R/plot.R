@@ -203,15 +203,12 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
 #' @description Plot a heatmap of ontology P values per cell type
 #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
 #' @param ont.res Ontology resuls from estimateOntology
+#' @param genes Specify which genes are plotted, can either be 'down', 'up' or 'all' (default=NULL)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
 #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are not unique for any cell type); 'all' (all ontology terms) (default="all")
 #' @param n Number of terms to show (default=10)
 #' @export
-plotOntologyHeatmap <- function(type = "GO", ont.res, legend.position = "left", selection = "all", n = 20, cell.subgroups = NULL) {
-  if(is.null(selection) || (!selection %in% c("unique","common","all"))) stop("'selection' must be one of the following: 'unique', 'common', or 'all'.")
-
-  if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1)) stop("'cell.subgroups' must contain at least two groups. Please use plotOntologyBarplot or plotOntologyDotplot instead.")
-
+plotOntologyHeatmap <- function(type = "GO", ont.res, genes = NULL, legend.position = "left", selection = "all", n = 20, cell.subgroups = NULL) {
   if(type=="GO") {
     ont.sum <- getOntologySummary(ont.res)
   } else if(type=="BP" | type=="CC" | type=="MF") {
@@ -220,9 +217,7 @@ plotOntologyHeatmap <- function(type = "GO", ont.res, legend.position = "left", 
     ont.sum <- getOntologySummary(ont.res)
   }
 
-  if(!is.null(cell.subgroups)) {
-      ont.sum %<>% dplyr::select(all_of(cell.subgroups))
-    }
+  if(!is.null(cell.subgroups)) ont.sum %<>% dplyr::select(all_of(cell.subgroups))
 
   if(selection=="unique") {
       ont.sum %<>%
@@ -240,7 +235,7 @@ plotOntologyHeatmap <- function(type = "GO", ont.res, legend.position = "left", 
               .[order(., decreasing = F)] %>%
               names, rownames(.)),] %>%
     tail(n) %>%
-    plotHeatmap(legend.position=legend.position, row.order=T)
+    plotHeatmap(legend.position=legend.position, row.order=T) + l
 }
 
 # TODO should depend on merged DF, not list
@@ -248,9 +243,10 @@ plotOntologyHeatmap <- function(type = "GO", ont.res, legend.position = "left", 
 #' @description Plot correlation matrix for ontologies between cell types
 #' @param ont.res List with ontology resuls from estimateOntology
 #' @param type Ontology, must be either "GO" or "DO" (default=NULL)
+#' @param genes Specify which genes are plotted, can either be 'down', 'up' or 'all' (default=NULL)
 #' @return A ggplot2 object
 #' @export
-plotOntologySimilarities <- function(type=NULL, ont.res) {
+plotOntologySimilarities <- function(type=NULL, ont.res, genes = NULL) {
   if(type=="GO") {
     pathway_df <- names(ont.res) %>%
       lapply(function(cell.group) lapply(ont.res[[cell.group]] %>% dplyr::pull(Type) %>% as.factor() %>% levels(), function(go) {
@@ -287,10 +283,17 @@ plotOntologySimilarities <- function(type=NULL, ont.res) {
   t_cl_lengths <- rle(t_cls)$lengths %>% rev
 
   diag(p_mat) <- 1
+
+  if(genes == "all") {
+    l <- labs(title=paste0(type," term similarities for all DE genes"))
+  } else {
+    l <- labs(title=paste0(type," term similarities for ",genes,"-regulated DE genes"))
+  }
+
   plotHeatmap(p_mat, color.per.group=NULL, row.order=t_order, col.order=rev(t_order), legend.title="Similarity") +
     scale_fill_distiller(palette="RdYlBu", limits=c(0, 0.5)) +
     geom_vline(aes(xintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5)) +
-    geom_hline(aes(yintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5))
+    geom_hline(aes(yintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5)) + l
 }
 
 #' @title Plot proportions
@@ -360,7 +363,7 @@ plotCellNumbers <- function(legend.position = "right", cell.groups, sample.per.c
 #' @param n Number of ontologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
 #' @param p.adj Adjusted P cutoff (default=0.05)
 #' @return A ggplot2 object
-plotOntologyBarplot <- function(ont.res, genes = NULL, type = NULL, n = 20, p.adj = 0.05) {
+plotOntologyBarplot <- function(ont.res, genes = NULL, type = NULL, cell.subgroups = NULL, n = 20, p.adj = 0.05) {
   ont.res %<>% dplyr::mutate(., gratio = sapply(.$GeneRatio, function(s) strsplit(s, "/")) %>% sapply(function(x) as.numeric(x[1])/as.numeric(x[2]) * 100)) %>%
     dplyr::arrange(p.adjust) %>%
     dplyr::filter(p.adjust <= p.adj) %>%
@@ -372,11 +375,9 @@ plotOntologyBarplot <- function(ont.res, genes = NULL, type = NULL, n = 20, p.ad
   gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), gratio, fill=p.adjust)) +
     geom_col() +
     coord_flip() +
-    labs(title=paste0(type," terms"), y="% DE genes of total genes per pathway", x="", fill="Adj. P") +
+    labs(y="% DE genes of total genes per pathway", x="", fill="Adj. P") +
     theme_bw() +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(ont.res$gratio) + 1)))
-
-  if(is.null(genes)) genes <- "all"
 
   if(genes == "up") {
     gg <- gg + scale_fill_gradient(low = "red", high = "gray80")
@@ -384,6 +385,12 @@ plotOntologyBarplot <- function(ont.res, genes = NULL, type = NULL, n = 20, p.ad
     gg <- gg + scale_fill_gradient(low = "blue", high = "gray80")
   } else {
     gg <- gg + scale_fill_gradient(low = "green", high = "gray80")
+  }
+
+  if(genes == "all") {
+    gg <- gg + labs(title=paste0(type," terms for ",cell.subgroups," for all DE genes"))
+  } else {
+    gg <- gg + labs(title=paste0(type," terms for ",cell.subgroups," for ",genes,"-regulated DE genes"))
   }
 
   gg
@@ -396,23 +403,19 @@ plotOntologyBarplot <- function(ont.res, genes = NULL, type = NULL, n = 20, p.ad
 #' @param n Number of ontologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
 #' @param p.adj Adjusted P cutoff (default=0.05)
 #' @return A ggplot2 object
-plotOntologyDotplot <- function(ont.res, genes = NULL, type = NULL, n = 20, p.adj = 0.05) {
+plotOntologyDotplot <- function(ont.res, genes = NULL, type = NULL, cell.subgroups = NULL, n = 20, p.adj = 0.05) {
   ont.res %<>% dplyr::mutate(., gratio = sapply(.$GeneRatio, function(s) strsplit(s, "/")) %>% sapply(function(x) as.numeric(x[1])/as.numeric(x[2]) * 100)) %>%
     dplyr::arrange(p.adjust) %>%
     dplyr::filter(p.adjust <= p.adj) %>%
     {if(nrow(.) > n) .[1:n,] else .}
   ont.res$Description %<>% as.factor()
 
-  if(is.null(type)) type <- "Ontology"
-
   gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), gratio, col=p.adjust)) +
     geom_point(aes(size = Count)) +
     coord_flip() +
-    labs(title=paste0(type," terms"), y="% DE genes of total genes per pathway", x="", col="Adj. P", size = "DE genes") +
+    labs(title=paste0(y="% DE genes of total genes per pathway", x="", col="Adj. P", size = "DE genes") +
     theme_bw() +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(ont.res$gratio) + 1)))
-
-  if(is.null(genes)) genes <- "all"
 
   if(genes == "up") {
     gg <- gg + scale_color_gradient(low = "red", high = "gray80")
@@ -420,6 +423,12 @@ plotOntologyDotplot <- function(ont.res, genes = NULL, type = NULL, n = 20, p.ad
     gg <- gg + scale_color_gradient(low = "blue", high = "gray80")
   } else {
     gg <- gg + scale_color_gradient(low = "green", high = "gray80")
+  }
+
+  if(genes == "all") {
+    gg <- gg + labs(title=paste0(type," terms for ",cell.subgroups," for all DE genes"))
+  } else {
+    gg <- gg + labs(title=paste0(type," terms for ",cell.subgroups," for ",genes,"-regulated DE genes"))
   }
 
   gg

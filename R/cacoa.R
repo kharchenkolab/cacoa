@@ -203,7 +203,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param name (default="expression.z.scores")
     estimateExpressionShiftZScores=function(cell.groups=self$cell.groups, ref.level=self$ref.level, sample.groups=self$sample.groups,
                                             sample.per.cell=self$sample.per.cell, n.od.genes=1000, n.pcs=100, pca.maxit=1000, ignore.cache=F,
-                                            name="expression.z.scores") {
+                                            name="expression.z.scores", verbose = self$verbose) {
       if (is.null(cell.groups))
         stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
@@ -217,14 +217,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
       if(!ref.level %in% sample.groups) stop(paste0("Reference group '",ref.level,"' not in 'sample.groups': ",paste(unique(sample.groups), collapse=" ")))
+
+      if(verbose) cat("Merging count matrices ... ")
       mtx <- extractJointCountMatrix(self$data.object, raw=F)
 
       if (n.od.genes > 0) {
+        if(verbose) cat("done!\nExtracting OD genes ... ")
         mtx %<>% .[, extractOdGenes(self$data.object, n.od.genes)]
       }
 
       # TODO: use scaled count matrix here
       if (n.pcs < ncol(mtx)) {
+        if(verbose) cat("done!\n Calculating PCs ... ")
         pca.name <- paste("joint.pca", n.od.genes, n.pcs, sep="_")
         if (ignore.cache || !is.null(self$cache[[pca.name]])) {
           mtx <- self$cache[[pca.name]]
@@ -237,7 +241,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         }
       }
 
-      self$test.results[[name]] <- estimateExpressionShiftZScores(mtx, sample.per.cell, sample.groups, cell.groups, ref.level)
+      if(verbose) cat("done!\n")
+      self$test.results[[name]] <- estimateExpressionShiftZScores(mtx, sample.per.cell, sample.groups, cell.groups, ref.level, verbose = verbose)
       return(invisible(self$test.results[[name]]))
     },
 
@@ -477,21 +482,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if(is.null(ont.res)) stop("No results found for genes = '",genes,"'.")
 
-      if(!cell.subgroups %in% names(ont.res)) stop("'cell.subgroups' not found in results.")
+      if(!cell.subgroups %in% unique(ont.res$Group)) stop("'cell.subgroups' not found in results.")
 
-      ont.res %<>% .[cell.subgroups]
+      ont.res %<>% dplyr::filter(Group == cell.subgroups)
 
-      if(length(ont.res) > 1) {
-        ont.res %<>% Reduce(rbind, .)
-      } else {
-        ont.res %<>% .[[1]]
-      }
+      if(type %in% c("BP","CC","MF")) ont.res %<>% dplyr::filter(Type == type)
 
-      if(type %in% c("BP","CC","MF")) {
-        ont.res %<>% .[.$Type == type,]
-      }
-
-      plotOntologyBarplot(ont.res = ont.res, genes = genes, type = type, n = n, p.adj = p.adj)
+      plotOntologyBarplot(ont.res = ont.res, genes = genes, type = type, cell.subgroups = cell.subgroups, n = n, p.adj = p.adj)
     },
 
     #' @description Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
@@ -523,21 +520,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if(is.null(ont.res)) stop("No results found for genes = '",genes,"'.")
 
-      if(!cell.subgroups %in% names(ont.res)) stop("'cell.subgroups' not found in results.")
+      if(!cell.subgroups %in% unique(ont.res$Group)) stop("'cell.subgroups' not found in results.")
 
-      ont.res %<>% .[cell.subgroups]
+      ont.res %<>% dplyr::filter(Group == cell.subgroups)
 
-      if(length(ont.res) > 1) {
-        ont.res %<>% Reduce(rbind, .)
-      } else {
-        ont.res %<>% .[[1]]
-      }
+      if(type %in% c("BP","CC","MF")) ont.res %<>% dplyr::filter(Type == type)
 
-      if(type %in% c("BP","CC","MF")) {
-        ont.res %<>% .[.$Type == type,]
-      }
-
-      plotOntologyDotplot(ont.res = ont.res, genes = genes, type = type, n = n, p.adj = p.adj)
+      plotOntologyDotplot(ont.res = ont.res, genes = genes, type = type, cell.subgroups = cell.subgroups, n = n, p.adj = p.adj)
     },
 
     #' @description Plot a heatmap of ontology P values per cell type
@@ -553,6 +542,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
 
+      if(!is.null(cell.subgroups)) {
+        if(length(cell.subgroups) == 1) stop("'cell.subgroups' must contain at least two groups. Please use plotOntologyBarplot or plotOntologyDotplot instead.")
+      }
+
+      if(is.null(selection) || (!selection %in% c("unique","common","all"))) stop("'selection' must be one of the following: 'unique', 'common', or 'all'.")
+
       if(type=="DO") {
         ont.res <- self$test.results[["DO"]][["df"]]
       } else {
@@ -563,9 +558,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       ont.res %<>% .[[genes]]
 
-      if(is.null(ncol(ont.res))) stop(print(ont.res))
+      if(!cell.subgroups %in% unique(ont.res$Group)) stop("'cell.subgroups' not found in results.")
 
-      plotOntologyHeatmap(type = type, ont.res = ont.res, legend.position = legend.position, selection = selection, n = n, cell.subgroups = cell.subgroups)
+      plotOntologyHeatmap(type = type, ont.res = ont.res, legend.position = legend.position, selection = selection, n = n, cell.subgroups = cell.subgroups, genes = genes)
     },
 
     #' @description Plot correlation matrix for ontology terms between cell types
@@ -586,7 +581,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(length(ont.res) == 1) stop("Only one group present, correlation cannot be performed.")
       if(length(ont.res) == 0) stop("No significant ontology terms identified. Try relaxing p.adj.")
 
-      plotOntologySimilarities(type = type, ont.res = ont.res)
+      plotOntologySimilarities(type = type, ont.res = ont.res, genes = genes)
     },
 
     #' @description Plot the cell group proportions per sample

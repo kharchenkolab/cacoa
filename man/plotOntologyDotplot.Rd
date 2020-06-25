@@ -4,7 +4,14 @@
 \alias{plotOntologyDotplot}
 \title{Plot ontologies with dotplot}
 \usage{
-plotOntologyDotplot(ont.res, genes = NULL, type = NULL, n = 20, p.adj = 0.05)
+plotOntologyDotplot(
+  ont.res,
+  genes = NULL,
+  type = NULL,
+  cell.subgroups = NULL,
+  n = 20,
+  p.adj = 0.05
+)
 }
 \arguments{
 \item{ont.res}{Data frame with ontology resuls from estimateOntology}

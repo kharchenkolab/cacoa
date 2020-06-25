@@ -335,7 +335,6 @@ Save DE results as JSON files
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveDEasJSON(
   saveprefix = NULL,
-  create.dir = T,
   dir.name = "JSON",
   de.raw = self$test.results$de,
   gene.metadata = NULL,
@@ -347,8 +346,6 @@ Save DE results as JSON files
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{saveprefix}}{Prefix for created files (default=NULL)}
-
-\item{\code{create.dir}}{Whether to create results directory if not already existing (default=T)}
 
 \item{\code{dir.name}}{Name for directory with results (default="JSON")}
 
@@ -539,7 +536,6 @@ Plot ontology terms as a function of both number of DE genes, and number of cell
   cell.groups = self$cell.groups,
   label.x.pos = 0.01,
   label.y.pos = 1,
-  rel_heights = c(2.5, 0.5),
   scale = 0.93
 )}\if{html}{\out{</div>}}
 }
@@ -558,8 +554,6 @@ Plot ontology terms as a function of both number of DE genes, and number of cell
 \item{\code{label.x.pos}}{Plot label position on x axis (default=0.01)}
 
 \item{\code{label.y.pos}}{Plot label position on y axis (default=1)}
-
-\item{\code{rel_heights}}{Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))}
 
 \item{\code{scale}}{Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)}
 }

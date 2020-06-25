@@ -152,7 +152,7 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
   if(verbose) {
     dif <- setdiff(levels(cell.groups), names(de.res))
     if(length(dif) > 0) {
-      message(paste0("DEs not calculated for ",length(dif)," cell group(s):"))
+      message(paste0("\nDEs not calculated for ",length(dif)," cell group(s):"))
       print(dif)
     }
   }

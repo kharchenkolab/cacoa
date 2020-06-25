@@ -289,19 +289,31 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
 ##' @param cell.groups Named factor with cell names and clustering/annotation
 ##' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt
 estimateExpressionShiftZScores <- function(pca, sample.per.cell, sample.groups, cell.groups, ref.level) {
-  sample.groups %<>% as.character() %>% setNames(names(sample.groups))
-  mean.pc.per.samp.per.type <- split(names(sample.per.cell), sample.per.cell) %>%
-    lapply(function(nsa) split(nsa, cell.groups[nsa]) %>% .[sapply(., length) > 0] %>%
-             sapply(function(nss) colMeans(pca[nss,,drop=F])))
+  sample.groups %<>% as.character() %>%
+    setNames(names(sample.groups))
 
-  res.df <- combn(names(mean.pc.per.samp.per.type), 2) %>% apply(2, function(ns)
-    data.frame(S1=ns[1], S2=ns[2], value=getColumnwiseCorrelations(mean.pc.per.samp.per.type[[ns[1]]], mean.pc.per.samp.per.type[[ns[2]]]), stringsAsFactors=F) %>%
-      tibble::as_tibble(rownames="Type")) %>% Reduce(rbind, .) %>%
+  mean.pc.per.samp.per.type <- split(names(sample.per.cell), sample.per.cell) %>%
+    lapply(function(nsa) {
+      split(nsa, cell.groups[nsa]) %>%
+        .[sapply(., length) > 0] %>%
+        sapply(function(nss) colMeans(pca[nss,,drop=F]))
+    })
+
+  res.df <- combn(names(mean.pc.per.samp.per.type), 2) %>%
+    apply(2, function(ns) {
+      data.frame(S1=ns[1],
+                 S2=ns[2],
+                 value=getColumnwiseCorrelations(mean.pc.per.samp.per.type[[ns[1]]], mean.pc.per.samp.per.type[[ns[2]]]),
+                 stringsAsFactors=F) %>%
+        tibble::as_tibble(rownames="Type")
+      }) %>%
+    Reduce(rbind, .) %>%
     dplyr::mutate(SameCondition=(sample.groups[S1] == sample.groups[S2]),
                   Condition=ifelse(!SameCondition, "Between", sample.groups[S1])) %>%
-    split(.$Type) %>% lapply(function(df)
-      dplyr::mutate(df, distance=(mean(value[Condition == ref.level], trim=0.4) - value) / mad(value[Condition == ref.level]))) %>%
-    Reduce(rbind, .) %>% dplyr::rename(correlation=value)
+    split(.$Type) %>%
+    lapply(function(df) dplyr::mutate(df, distance=(mean(value[Condition == ref.level], trim=0.4) - value) / mad(value[Condition == ref.level]))) %>%
+    Reduce(rbind, .) %>%
+    dplyr::rename(correlation=value)
 
   return(res.df)
 }

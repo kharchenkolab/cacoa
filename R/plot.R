@@ -13,11 +13,15 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", 
   gg <- ggplot(p.df, aes(x=NCells, y=N)) +
     geom_point(aes(color=Type)) +
     scale_x_log10() +
-    ylim(0, max(p.df$N)) + labs(x="Number of cells", y=y.lab) +
-    theme(legend.position=legend.position, legend.justification=legend.position, legend.background=element_rect(fill=alpha("white", 0.4))) +
-    guides(color=guide_legend(title="Cell type"))
+    ylim(0, max(p.df$N)) +
+    labs(x="Number of cells", y=y.lab) +
+    theme_bw()
 
   if(label) gg <- gg + geom_label_repel(aes(label=Type), size=2, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4))
+
+  gg <- gg +
+      theme(legend.position=legend.position, legend.justification=legend.position, legend.background=element_rect(fill=alpha("white", 0.4))) +
+      guides(color=guide_legend(title="Cell type"))
 
   return(gg)
 }
@@ -36,8 +40,7 @@ plotDEGenes <- function(de.raw, cell.groups, legend.position="none", p.adjust.cu
   sapply(de.raw, function(n) n %>% dplyr::filter(padj <= p.adjust.cutoff) %>% nrow) %>%
     plotNCellRegression(cell.groups, y.lab="Significant DE genes", legend.position=legend.position, label=label) +
     xlab("Number of cells") +
-    geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5) +
-    theme_bw()
+    geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 }
 
 #' @title Plot filtered DE genes
@@ -53,8 +56,7 @@ plotFilteredDEGenes <- function(de.filter, cell.groups, legend.position="bottom"
   sapply(de.filter, length) %>%
     plotNCellRegression(cell.groups, y.lab="Highly-expressed DE genes", legend.position=legend.position, label=label) +
     xlab("Number of cells") +
-    geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5) +
-    theme_bw()
+    geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 }
 
 #' @title Plot ontology distribution
@@ -126,12 +128,10 @@ plotOntologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, label.
     ont.res$Group %>% table %>% c %>%
       plotNCellRegression(sapply(de.filter, length), y.lab=NULL, legend.position="none", label=T) +
       geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5) +
-      scale_x_continuous(name="Number of highly-expressed DE genes") +
-      theme_bw(),
+      scale_x_continuous(name="Number of highly-expressed DE genes"),
     ont.res$Group %>% table %>% c %>%
       plotNCellRegression(cell.groups, y.lab=NULL, legend.position="none", label=T) +
-      geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5) +
-      theme_bw(),
+      geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5),
     ncol=1, labels=c("a", "b"), label_x = label.x.pos, label_y = label.y.pos
   )
 
@@ -317,7 +317,7 @@ plotProportions <- function(legend.position = "right", cell.groups, sample.per.c
     geom_boxplot(position=position_dodge(), outlier.shape = NA) +
     ylab("% cells per sample") +
     xlab("") +
-    theme_classic() +
+    theme_bw() +
     theme(axis.text.x = element_text(angle=90),
           legend.position=legend.position,
           legend.title=element_blank()) +
@@ -345,7 +345,7 @@ plotCellNumbers <- function(legend.position = "right", cell.groups, sample.per.c
     geom_boxplot(position=position_dodge(), outlier.shape = NA) +
     ylab("Cells per sample") +
     xlab("") +
-    theme_classic() +
+    theme_bw() +
     theme(axis.text.x = element_text(angle=90),
           legend.position=legend.position,
           legend.title=element_blank()) +

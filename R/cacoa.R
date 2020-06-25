@@ -309,7 +309,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(de.raw)) stop("Please run 'estimatePerCellTypeDE' first.")
 
       # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before plotting
-      de.raw %<>% lapply(function(de) if(length(de) == 2) de[[1]] else de)
+      de.raw %<>% lapply(function(de) if(class(de) == "list") de[[1]] else de)
 
       if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
@@ -462,10 +462,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if(is.null(cell.subgroups)) stop("Please define 'cell.subgroups'.")
 
-      if(type %in% c("GO","BP","CC","MF")) {
-        ont.res <- self$test.results[["GO"]][["list"]]
+      if(type=="DO") {
+        ont.res <- self$test.results[["DO"]][["df"]]
       } else {
-        ont.res <- self$test.results[["DO"]][["list"]]
+        ont.res <- self$test.results[["GO"]][["df"]]
       }
 
       if(is.null(ont.res)) {
@@ -508,7 +508,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if(is.null(cell.subgroups)) stop("Please define 'cell.subgroups'.")
 
-      ont.res <- self$test.results[[type]][["list"]]
+      if(type=="DO") {
+        ont.res <- self$test.results[["DO"]][["df"]]
+      } else {
+        ont.res <- self$test.results[["GO"]][["df"]]
+      }
 
       if(is.null(ont.res)) {
         if(type == "DO") t <- "DO" else t <- "GO"
@@ -533,7 +537,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         ont.res %<>% .[.$Type == type,]
       }
 
-      plotOntologyDotplot(ont.res = ont.res, genes = genes, n = n, p.adj = p.adj)
+      plotOntologyDotplot(ont.res = ont.res, genes = genes, type = type, n = n, p.adj = p.adj)
     },
 
     #' @description Plot a heatmap of ontology P values per cell type

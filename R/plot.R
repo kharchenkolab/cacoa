@@ -413,7 +413,7 @@ plotOntologyDotplot <- function(ont.res, genes = NULL, type = NULL, cell.subgrou
   gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), gratio, col=p.adjust)) +
     geom_point(aes(size = Count)) +
     coord_flip() +
-    labs(title=paste0(y="% DE genes of total genes per pathway", x="", col="Adj. P", size = "DE genes") +
+    labs(title=paste0(y="% DE genes of total genes per pathway", x="", col="Adj. P", size = "DE genes")) +
     theme_bw() +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(ont.res$gratio) + 1)))
 

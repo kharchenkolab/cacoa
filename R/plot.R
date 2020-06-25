@@ -112,18 +112,15 @@ plotOntologyDistribution <- function(type = NULL, ont.res, cell.groups) {
 #' @param cell.groups Vector indicating cell group sizes with cell group names
 #' @param label.x.pos Plot label position on x axis (default=0.01)
 #' @param label.y.pos Plot label position on y axis (default=1)
-#' @param rel_heights Vector indicating relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))
 #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
 #' @return A ggplot2 object
 #' @export
-plotOntologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, label.x.pos=0.01, label.y.pos=1, rel_heights = c(2.5, 0.5), scale = 0.93) {
+plotOntologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, label.x.pos=0.01, label.y.pos=1, scale = 0.93) {
   if(length(unique(ont.res$Type))==1) stop("The input only contains one cell type.")
 
   if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
 
   cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
-
-  if(legend.position != "none") leg <- cowplot::get_legend(plotNCellRegression(sapply(de.filter, length), cell.groups, legend.position=legend.position))
 
   pg <- cowplot::plot_grid(
     ont.res$Group %>% table %>% c %>%
@@ -143,12 +140,8 @@ plotOntologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, label.
   } else if(type=="DO") {
     y_lab <- "Number of DO terms"
   }
-  if(legend.position != "none") {
-    p <- cowplot::plot_grid(pg, leg, nrow=2, rel_heights = rel_heights, scale=scale) + cowplot::draw_label(y_lab, x=0, y=0.6, vjust= 1.5, angle=90)
-  } else {
-    p <- cowplot::plot_grid(pg, nrow=1, scale=scale) + draw_label(y_lab, x=0, y=0.6, vjust= 1.5, angle=90)
-  }
-  return(p)
+
+  cowplot::plot_grid(pg, nrow=1, scale=scale) + draw_label(y_lab, x=0, y=0.6, vjust= 1.5, angle=90)
 }
 
 #' @title Plot heatmap

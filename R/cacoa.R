@@ -318,7 +318,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Save DE results as JSON files
     #' @param saveprefix Prefix for created files (default=NULL)
-    #' @param create.dir Whether to create results directory if not already existing (default=T)
     #' @param dir.name Name for directory with results (default="JSON")
     #' @param de.raw List of DE results
     #' @param gene.metadata (default=NULL)
@@ -427,10 +426,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param label.x.pos Plot label position on x axis (default=0.01)
     #' @param label.y.pos Plot label position on y axis (default=1)
-    #' @param rel_heights Relative heights for plots. Only relevant if show.legend=T. See cowplot::plot_grid for more info (default=c(2.5, 0.5))
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
     #' @return A ggplot2 object
-    plotOntologyTerms=function(genes = c("up","down"), type = "GO", de.filter = self$test.results$ontology$de.filter, cell.groups = self$cell.groups, label.x.pos = 0.01, label.y.pos = 1, rel_heights = c(2.5, 0.5), scale = 0.93) {
+    plotOntologyTerms=function(genes = c("up","down"), type = "GO", de.filter = self$test.results$ontology$de.filter, cell.groups = self$cell.groups, label.x.pos = 0.01, label.y.pos = 1, scale = 0.93) {
       if(is.null(type) || (!type %in% c("GO", "DO"))) stop("'type' must be 'GO' or 'DO'.")
 
       if(is.null(genes) || (!all(genes %in% c("down","up","all")))) stop("'genes' must be 'down', 'up', 'all', or a combination of these.")
@@ -447,7 +445,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
-      plotOntologyTerms(type = type, ont.res = ont.res, de.filter = de.filter, cell.groups = cell.groups, label.x.pos = label.x.pos, label.y.pos = label.y.pos, rel_heights = rel_heights, scale = scale)
+      plotOntologyTerms(type = type, ont.res = ont.res, de.filter = de.filter, cell.groups = cell.groups, label.x.pos = label.x.pos, label.y.pos = label.y.pos, scale = scale)
     },
 
     #' @description Plot a barplot of ontology terms with adj. P values for a specific cell subgroup

@@ -224,14 +224,14 @@ estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = 
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
     # TODO test functionality in general
     message("Only human data supported for DO analysis.")
-    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
-                                                                         DOSE::enrichDO,
-                                                                         pAdjustMethod=p.adjust.method,
-                                                                         universe=de.gene.ids[[id]][["universe"]],
-                                                                         readable=readable,
-                                                                         qvalueCutoff = qvalueCutoff,
-                                                                         minGSSize = minGSSize,
-                                                                         maxGSSize = maxGSSize),
+    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) suppressMessages(lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
+                                                                                          DOSE::enrichDO,
+                                                                                          pAdjustMethod=p.adjust.method,
+                                                                                          universe=de.gene.ids[[id]][["universe"]],
+                                                                                          readable=readable,
+                                                                                          qvalueCutoff = qvalueCutoff,
+                                                                                          minGSSize = minGSSize,
+                                                                                          maxGSSize = maxGSSize)),
                                  n.cores=1, progress=verbose, ...) %>%
       lapply(lapply, function(x) if(length(x)) x@result else x) %>%
       setNames(names(de.gene.ids))

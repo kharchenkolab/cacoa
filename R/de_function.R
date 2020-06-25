@@ -163,21 +163,15 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
 #' @title Save DE results as JSON files
 #' @param de.raw List of DE results
 #' @param saveprefix Prefix for created files (default=NULL)
-#' @param dir.name Name for directory with results (default="JSON")
-#' @param create.dir Whether to create results directory if not already existing (default=T)
+#' @param dir.name Name for directory with results. If it doesn't exist, it will be created. To disable, set as NULL (default="JSON")
 #' @param gene.metadata (default=NULL)
 #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", create.dir = T, gene.metadata = NULL, cluster.sep.chr = "<!!>")
+saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.metadata = NULL, cluster.sep.chr = "<!!>")
 {
   if(!is.null(dir.name)) {
-    if(!dir.exists(dir.name) & create.dir) dir.create(dir.name)
-    setwd(dir.name)
-    set.dir <- T
-  } else if(dir.exists(dir.name)) {
-    setwd(dir.name)
-    set.dir <- T
+    if(!dir.exists(dir.name)) dir.create(dir.name)
   } else {
-    set.dir <- F
+    dir.name = "."
   }
 
   lapply(sccore:::sn(de.raw %>% names()), function(ncc) {
@@ -195,13 +189,13 @@ saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", create.di
 
     tojson <- list(res = res.table, genes = rownames(res.table))
     y <- jsonlite::toJSON(tojson)
-    file <- paste0(saveprefix, make.names(ncc), ".json")
+    file <- paste0(dir.name, "/", saveprefix, make.names(ncc), ".json")
     write(y, file)
     NULL
   })
   invisible(NULL)
 
-  toc.file <- paste('toc.html',sep='/')
+  toc.file <- paste0(dir.name,"/toc.html")
   s <- paste(c(list('<html><head><style>
     table {
     font-family: arial, sans-serif;
@@ -219,11 +213,7 @@ saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", create.di
     background-color: #dddddd;
     }
 
-    </style></head><body><table>'),lapply(names(de.raw),function(n) paste0('<tr><td><a href="deview.2.html?d=',saveprefix,n %>% gsub("-",".", .) %>% gsub(" ", ".", .),'.json">',n,'</a></td></tr>')),list('</table></body></html>')),collapse='\n')
+    </style></head><body><table>'),lapply(names(de.raw),function(n) paste0('<tr><td><a href="deview.2.html?d=',saveprefix, make.names(n),'.json">',n,'</a></td></tr>')),list('</table></body></html>')),collapse='\n')
 
   write(s,file=toc.file)
-
-  if(set.dir) {
-    setwd("../")
-  }
 }

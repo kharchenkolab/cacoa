@@ -8,7 +8,6 @@ saveDEasJSON(
   de.raw,
   saveprefix = NULL,
   dir.name = "JSON",
-  create.dir = T,
   gene.metadata = NULL,
   cluster.sep.chr = "<!!>"
 )
@@ -18,9 +17,7 @@ saveDEasJSON(
 
 \item{saveprefix}{Prefix for created files (default=NULL)}
 
-\item{dir.name}{Name for directory with results (default="JSON")}
-
-\item{create.dir}{Whether to create results directory if not already existing (default=T)}
+\item{dir.name}{Name for directory with results. If it doesn't exist, it will be created. To disable, set as NULL (default="JSON")}
 
 \item{gene.metadata}{(default=NULL)}
 

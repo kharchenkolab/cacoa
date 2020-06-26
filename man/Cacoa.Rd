@@ -146,6 +146,7 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
   name = "expression.shifts",
   size.norm = F,
   normalized.distance = F,
+  notch = T,
   cell.groups = self$cell.groups,
   sample.per.cell = self$sample.per.cell,
   label = T
@@ -160,6 +161,8 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \item{\code{size.norm}}{Plot size normalized results. Requires cell.groups, and sample.per.cell (default=F)}
 
 \item{\code{normalized.distance}}{Plot the absolute median distance (default=F)}
+
+\item{\code{notch}}{Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)}
 
 \item{\code{cell.groups}}{Named factor with cell names defining groups/clusters (default: stored vector)}
 

@@ -188,9 +188,9 @@ ontologyListToDf <- function(ont.list) {
     if(length(x) > 0) {
       dplyr::bind_rows(x) %>%
         {if("Type" %in% colnames(.)) {
-          dplyr::select(., Group, Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)
+          dplyr::select(., Group, Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue, Count)
         } else {
-          dplyr::select(., Group, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue)
+          dplyr::select(., Group, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue, Count)
         }
         }
     } else {
@@ -244,10 +244,7 @@ estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = 
 
     ont.list %<>% filterOntologies(p.adj = p.adj)
 
-    ont.df <- ont.list %>% ontologyListToDf()
-
-    res <- list(list=ont.list,
-                df=ont.df)
+    res <- list(df=ont.list %>% ontologyListToDf())
   } else if(type=="GO") {
     if(is.null(go.environment)) {
       if(verbose) cat("Extracting environment data ... \n")
@@ -296,10 +293,7 @@ estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = 
 
     ont.list %<>% filterOntologies(p.adj = p.adj)
 
-    ont.df <- ont.list %>% ontologyListToDf()
-
-    res <- list(list=ont.list,
-                df=ont.df,
+    res <- list(df=ont.list %>% ontologyListToDf(),
                 go.environment=go.environment)
   } else {
     stop("'type' must be either 'GO' or 'DO'.")

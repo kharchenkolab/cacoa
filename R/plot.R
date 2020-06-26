@@ -229,6 +229,12 @@ plotOntologyHeatmap <- function(type = "GO", ont.res, genes = NULL, legend.posit
 
   if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 
+  if(genes == "all") {
+    l <- labs(title=paste0("Heatmap of ",selection," ",type," terms for all DE genes"))
+  } else {
+    l <- labs(title=paste0("Heatmap of ",selection," ",type," terms for ",genes,"-regulated DE genes"))
+  }
+
   ont.sum %>%
     .[, colSums(.) > 0] %>%
     .[match(rowSums(.)[rowSums(.)>0] %>%
@@ -241,25 +247,38 @@ plotOntologyHeatmap <- function(type = "GO", ont.res, genes = NULL, legend.posit
 # TODO should depend on merged DF, not list
 #' @title Plot ontology correlations
 #' @description Plot correlation matrix for ontologies between cell types
-#' @param ont.res List with ontology resuls from estimateOntology
+#' @param ont.res Data frame with ontology resuls from estimateOntology
 #' @param type Ontology, must be either "GO" or "DO" (default=NULL)
 #' @param genes Specify which genes are plotted, can either be 'down', 'up' or 'all' (default=NULL)
 #' @return A ggplot2 object
 #' @export
 plotOntologySimilarities <- function(type=NULL, ont.res, genes = NULL) {
   if(type=="GO") {
-    pathway_df <- names(ont.res) %>%
-      lapply(function(cell.group) lapply(ont.res[[cell.group]] %>% dplyr::pull(Type) %>% as.factor() %>% levels(), function(go) {
-        tibble::tibble(Pathway=ont.res[[cell.group]] %>% dplyr::filter(Type==go) %>% dplyr::pull(Description),
-                       Group=cell.group,
-                       GO=go)
-      }) %>% dplyr::bind_rows()) %>%
+    pathway_df <- unique(ont.res$Group) %>%
+      lapply(function(cell.group) {
+        lapply(ont.res %>%
+                 dplyr::filter(Group == cell.group) %>%
+                 dplyr::pull(Type) %>%
+                 as.factor() %>%
+                 levels(), function(go) {
+                   tibble::tibble(Pathway=ont.res %>%
+                                    dplyr::filter(Group == cell.group) %>%
+                                    dplyr::filter(Type==go) %>%
+                                    dplyr::pull(Description),
+                                  Group=cell.group,
+                                  GO=go)
+                   }) %>% dplyr::bind_rows()
+        }) %>%
       dplyr::bind_rows()
     } else if(type=="DO") {
-    pathway_df <- lapply(ont.res %>% names, function(cell.group) {
-      tibble::tibble(Pathway=ont.res[[cell.group]] %>% dplyr::pull(Description),
-                     Group=cell.group)
-    }) %>% dplyr::bind_rows()
+      pathway_df <- unique(ont.res$Group) %>%
+        lapply(function(cell.group) {
+          tibble::tibble(Pathway=ont.res %>%
+                           dplyr::filter(Group == cell.group) %>%
+                           dplyr::pull(Description),
+                         Group=cell.group)
+          }) %>%
+        dplyr::bind_rows()
   } else {
     stop("'type' must be either 'GO' or 'DO'.")
   }
@@ -432,4 +451,68 @@ plotOntologyDotplot <- function(ont.res, genes = NULL, type = NULL, cell.subgrou
   }
 
   gg
+}
+
+#' @title Plot Expression Shift Magnitudes
+#' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
+#' @param name Test results to plot (default=expression.shifts)
+#' @param size.norm Plot size normalized results. Requires cell.groups, and sample.per.cell (default=F)
+#' @param normalized.distance Plot the absolute median distance (default=F)
+#' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
+#' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
+#' @param sample.per.cell Named sample factor with cell names (default: stored vector)
+#' @param label Plot labels on size normalized plots (default=T)
+#' @return A ggplot2 object
+plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, normalized.distance = F, notch = T, cell.groups = NULL, sample.per.cell = NULL, label = T) {
+  if (!size.norm) {
+    m <- max(abs(cluster.shifts$value - 1))
+
+    gg <- ggplot(na.omit(cluster.shifts), aes(x=as.factor(Type), y=value)) +
+      geom_boxplot(notch=notch, outlier.shape=NA) +
+      geom_jitter(position=position_jitter(0.1), aes(color=patient), show.legend=FALSE,alpha=0.1) +
+      theme_bw() +
+      theme(axis.text.x=element_text(angle = 90, hjust=1), axis.text.y=element_text(angle=90, hjust=0.5)) +
+      labs(x="", y="Normalized distance") +
+      ylim(c(1 - m, 1 + m)) +
+      geom_hline(yintercept=1, linetype="dashed", color = "black")
+  } else {
+    if (length(setdiff(names(cell.groups), names(sample.per.cell)))>0) warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
+
+    cct <- table(cell.groups, sample.per.cell[names(cell.groups)])
+    cluster.shifts <- cao$test.results[[name]]$df
+    x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
+
+    if(normalized.distance) {
+      odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=abs(1-x))
+    } else {
+      odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
+    }
+
+    if (label) {
+      gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
+        ggrepel::geom_text_repel()
+    } else {
+      gg <- ggplot(odf, aes(size,md,color=cell))
+    }
+
+    gg <- gg +
+      geom_point() +
+      guides(color=F) +
+      xlab("Cluster size") +
+      theme_bw()
+
+    if(normalized.distance) {
+      gg <- gg +
+        ylab("Absolute median distance")
+    } else {
+      m <- max(abs(odf$md - 1))
+
+      gg <- gg +
+        ylab("Median distance") +
+        ylim(c(1 - m,1 + m)) +
+        geom_hline(yintercept=1, linetype="dashed", color = "black")
+    }
+    return(gg)
+  }
+  return(gg)
 }

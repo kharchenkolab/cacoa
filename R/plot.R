@@ -230,9 +230,9 @@ plotOntologyHeatmap <- function(type = "GO", ont.res, genes = NULL, legend.posit
   if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 
   if(genes == "all") {
-    l <- labs(title=paste0("Heatmap of ",selection," ",type," terms for all DE genes"))
+    l <- ggtitle(paste0("Heatmap of ",selection," ",type," terms for all DE genes"))
   } else {
-    l <- labs(title=paste0("Heatmap of ",selection," ",type," terms for ",genes,"-regulated DE genes"))
+    l <- ggtitle(paste0("Heatmap of ",selection," ",type," terms for ",genes,"-regulated DE genes"))
   }
 
   ont.sum %>%
@@ -304,9 +304,9 @@ plotOntologySimilarities <- function(type=NULL, ont.res, genes = NULL) {
   diag(p_mat) <- 1
 
   if(genes == "all") {
-    l <- labs(title=paste0(type," term similarities for all DE genes"))
+    l <- ggtitle(paste0(type," term similarities for all DE genes"))
   } else {
-    l <- labs(title=paste0(type," term similarities for ",genes,"-regulated DE genes"))
+    l <- ggtitle(paste0(type," term similarities for ",genes,"-regulated DE genes"))
   }
 
   plotHeatmap(p_mat, color.per.group=NULL, row.order=t_order, col.order=rev(t_order), legend.title="Similarity") +
@@ -407,9 +407,9 @@ plotOntologyBarplot <- function(ont.res, genes = NULL, type = NULL, cell.subgrou
   }
 
   if(genes == "all") {
-    gg <- gg + labs(title=paste0(type," terms for ",cell.subgroups," for all DE genes"))
+    gg <- gg + ggtitle(paste0(type," terms for ",cell.subgroups," for all DE genes")) + theme(plot.title = element_text(size=9))
   } else {
-    gg <- gg + labs(title=paste0(type," terms for ",cell.subgroups," for ",genes,"-regulated DE genes"))
+    gg <- gg + ggtitle(paste0(type," terms for ",cell.subgroups," for ",genes,"-regulated DE genes")) + theme(plot.title = element_text(size=9))
   }
 
   gg
@@ -445,9 +445,9 @@ plotOntologyDotplot <- function(ont.res, genes = NULL, type = NULL, cell.subgrou
   }
 
   if(genes == "all") {
-    gg <- gg + labs(title=paste0(type," terms for ",cell.subgroups," for all DE genes"))
+    gg <- gg + ggtitle(paste0(type," terms for ",cell.subgroups," for all DE genes")) + theme(plot.title = element_text(size=9))
   } else {
-    gg <- gg + labs(title=paste0(type," terms for ",cell.subgroups," for ",genes,"-regulated DE genes"))
+    gg <- gg + ggtitle(paste0(type," terms for ",cell.subgroups," for ",genes,"-regulated DE genes")) + theme(plot.title = element_text(size=9))
   }
 
   gg
@@ -479,7 +479,6 @@ plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, normali
     if (length(setdiff(names(cell.groups), names(sample.per.cell)))>0) warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
 
     cct <- table(cell.groups, sample.per.cell[names(cell.groups)])
-    cluster.shifts <- cao$test.results[[name]]$df
     x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
 
     if(normalized.distance) {

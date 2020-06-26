@@ -407,9 +407,9 @@ plotOntologyBarplot <- function(ont.res, genes = NULL, type = NULL, cell.subgrou
   }
 
   if(genes == "all") {
-    gg <- gg + ggtitle(paste0(type," terms for ",cell.subgroups," for all DE genes")) + theme(plot.title = element_text(size=9))
+    gg <- gg + ggtitle(paste0(cell.subgroups," ",type," terms, all DE genes")) + theme(plot.title = element_text(size=9))
   } else {
-    gg <- gg + ggtitle(paste0(type," terms for ",cell.subgroups," for ",genes,"-regulated DE genes")) + theme(plot.title = element_text(size=9))
+    gg <- gg + ggtitle(paste0(cell.subgroups," ",type," terms, ",genes,"-regulated DE genes")) + theme(plot.title = element_text(size=9))
   }
 
   gg
@@ -432,7 +432,7 @@ plotOntologyDotplot <- function(ont.res, genes = NULL, type = NULL, cell.subgrou
   gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), gratio, col=p.adjust)) +
     geom_point(aes(size = Count)) +
     coord_flip() +
-    labs(title=paste0(y="% DE genes of total genes per pathway", x="", col="Adj. P", size = "DE genes")) +
+    labs(y="% DE genes of total genes per pathway", x="", col="Adj. P", size = "DE genes") +
     theme_bw() +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(ont.res$gratio) + 1)))
 
@@ -445,9 +445,9 @@ plotOntologyDotplot <- function(ont.res, genes = NULL, type = NULL, cell.subgrou
   }
 
   if(genes == "all") {
-    gg <- gg + ggtitle(paste0(type," terms for ",cell.subgroups," for all DE genes")) + theme(plot.title = element_text(size=9))
+    gg <- gg + ggtitle(paste0(cell.subgroups," ",type," terms, all DE genes")) + theme(plot.title = element_text(size=9))
   } else {
-    gg <- gg + ggtitle(paste0(type," terms for ",cell.subgroups," for ",genes,"-regulated DE genes")) + theme(plot.title = element_text(size=9))
+    gg <- gg + ggtitle(paste0(cell.subgroups," ",type," terms, ",genes,"-regulated DE genes")) + theme(plot.title = element_text(size=9))
   }
 
   gg
@@ -464,7 +464,7 @@ plotOntologyDotplot <- function(ont.res, genes = NULL, type = NULL, cell.subgrou
 #' @param label Plot labels on size normalized plots (default=T)
 #' @return A ggplot2 object
 plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, normalized.distance = F, notch = T, cell.groups = NULL, sample.per.cell = NULL, label = T) {
-  if (!size.norm) {
+  if (!size.norm && !normalized.distance) {
     m <- max(abs(cluster.shifts$value - 1))
 
     gg <- ggplot(na.omit(cluster.shifts), aes(x=as.factor(Type), y=value)) +

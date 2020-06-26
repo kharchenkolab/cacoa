@@ -106,6 +106,7 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
   }
 
   aggr2 <- raw.mats %>%
+    .[sample.groups %>% unlist] %>%
     lapply(collapseCellsByType, groups = cell.groups, min.cell.count = min.cell.count) %>%
     rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
 
@@ -135,7 +136,7 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
       # add Z scores
       if(!is.na(res1[[1]][1])) {
         res1 <- addZScores(res1) %>%
-          .[order(abs(.$pvalue),decreasing=F),]
+          .[order(.$pvalue,decreasing=F),]
       }
 
       if (return.matrix) {

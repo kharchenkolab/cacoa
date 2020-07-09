@@ -215,16 +215,12 @@ ontologyListToDf <- function(ont.list) {
 #' @param ... Additional parameters for sccore:::plapply function
 #' @return A list containing a list of ontologies per type of ontology, and a data frame with merged results
 #' @export
-estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = NULL, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, qvalueCutoff = 0.2, minGSSize = 10, maxGSSize = 5e2, ...) {
-  if(class(org.db) != "OrgDb") stop("'org.db' must be of class 'OrgDb'. Please input an organism database.")
-
+estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, go.environment = NULL, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, qvalueCutoff = 0.2, minGSSize = 10, maxGSSize = 5e2, ...) {
   dir.names <- c("down", "up", "all")
 
   if(type=="DO") {
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
-    # TODO test functionality in general
-    message("Only human data supported for DO analysis.")
-    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) suppressMessages(lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
+    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
                                                                                           DOSE::enrichDO,
                                                                                           pAdjustMethod=p.adjust.method,
                                                                                           universe=de.gene.ids[[id]][["universe"]],
@@ -240,13 +236,15 @@ estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = 
     ont.list <- dir.names %>%
       lapply(function(x) lapply(ont.list, `[[`, x)) %>%
       setNames(dir.names) %>%
-      lapply(plyr::compact)
+      lapply(plyr::compact) #Remove empty entries
 
     ont.list %<>% filterOntologies(p.adj = p.adj)
 
     res <- list(df=ont.list %>% ontologyListToDf())
   } else if(type=="GO") {
     if(is.null(go.environment)) {
+      if(class(org.db) != "OrgDb") stop("'org.db' must be of class 'OrgDb'. Please input an organism database.")
+
       if(verbose) cat("Extracting environment data ... \n")
       go.environment <- c("BP", "CC", "MF") %>%
         sccore:::sn() %>%
@@ -258,7 +256,7 @@ estimateOntology <- function(type = "GO", org.db, de.gene.ids, go.environment = 
     }
 
     if(verbose) cat("Estimating enriched ontologies ... \n")
-    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) suppressMessages(estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
+    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
                                                                                                       go.environment = go.environment,
                                                                                                       universe=de.gene.ids[[id]][["universe"]],
                                                                                                       readable=readable,

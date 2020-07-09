@@ -106,9 +106,19 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
   }
 
   aggr2 <- raw.mats %>%
-    .[sample.groups %>% unlist] %>%
+    .[sample.groups %>% unlist] %>% # Only consider samples in sample.groups
     lapply(collapseCellsByType, groups = cell.groups, min.cell.count = min.cell.count) %>%
+    .[sapply(., nrow) > 0] %>% # Remove empty samples due to min.cell.count
     rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
+
+  # Adjust sample.groups
+  passed.samples <- strpart(colnames(aggr2), cluster.sep.chr, 1, fixed = TRUE) %>% unique()
+  if(verbose) {
+    if(length(passed.samples) != length(unlist(sample.groups))) {
+      warning("Excluded ",length(unlist(sample.groups)) - length(passed.samples)," sample(s) due to 'min.cell.count'.")
+    }
+  }
+  sample.groups %<>% lapply(function(n) n[n %in% passed.samples])
 
   de.res <- cell.groups %>%
     levels() %>%

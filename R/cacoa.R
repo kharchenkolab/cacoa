@@ -354,6 +354,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if(is.null(ont.res)) stop(paste0("No results found for '",type,"'. Please run 'estimateOntology' first and specify type='",type,"'."))
 
+      classes <- sapply(ont.res[genes], class)
+      if(any(classes == "character")) {
+        message(paste0("No results found for genes = '",names(classes[classes == "character"]),"'."))
+        genes <- names(classes[classes == "data.frame"])
+        if(length(genes) == 0) stop("No results to plot.")
+      }
+
       ont.res %<>% .[names(.) %in% genes]
 
       if(length(genes) > 1) {
@@ -388,6 +395,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       ont.res <- self$test.results[[type]][["df"]]
 
       if(is.null(ont.res)) stop(paste0("No results found for ",type,". Please run estimateOntology first and specify type='",type,"'."))
+
+      classes <- sapply(ont.res[genes], class)
+      if(any(classes == "character")) {
+        message(paste0("No results found for genes = '",names(classes[classes == "character"]),"'."))
+        genes <- names(classes[classes == "data.frame"])
+        if(length(genes) == 0) stop("No results to plot.")
+      }
 
       ont.res %<>% .[names(.) %in% genes]
 

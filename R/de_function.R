@@ -91,11 +91,11 @@ addZScores <- function(df) {
 #' @param independent.filtering independentFiltering for DESeq2 (default=F)
 #' @param n.cores Number of cores (default=1)
 #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-#' @param return.matrix Return merged matrix of results (default=F)
+#' @param return.matrix Return merged matrix of results (default=T)
 #' @export
 estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NULL, ref.level = NULL,
                            common.genes = F, cooks.cutoff = FALSE, min.cell.count = 10, independent.filtering = T,
-                           n.cores = 1, cluster.sep.chr = "<!!>", return.matrix = F, verbose = T) {
+                           n.cores = 1, cluster.sep.chr = "<!!>", return.matrix = T, verbose = T) {
   validatePerCellTypeParams(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr)
 
   if(common.genes) {
@@ -173,32 +173,73 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
 
 #' @title Save DE results as JSON files
 #' @param de.raw List of DE results
+#' @param sample.groups Sample groups as named list, each element containing a vector of samples
 #' @param saveprefix Prefix for created files (default=NULL)
 #' @param dir.name Name for directory with results. If it doesn't exist, it will be created. To disable, set as NULL (default="JSON")
 #' @param gene.metadata (default=NULL)
 #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.metadata = NULL, cluster.sep.chr = "<!!>")
-{
+#' @param verbose Show progress (default=T)
+saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.metadata = NULL, cluster.sep.chr = "<!!>", sample.groups = NULL, verbose=T) {
   if(!is.null(dir.name)) {
     if(!dir.exists(dir.name)) dir.create(dir.name)
   } else {
     dir.name = "."
   }
 
+  if(is.null(gene.metadata)) {
+    gene.metadata <- data.frame()
+    all.genes <- unique(unlist(lapply(de.raw, function(x) {
+      if(!is.null(x)){
+        rownames(as.data.frame(x$res))
+      } else {
+        NULL
+      }
+    })))
+    gene.metadata <- data.frame(geneid=all.genes)
+  } else {
+    if(is.null(gene.metadata$gene.id)) stop("gene.metadata must contain $gene.id field")
+  }
+
   lapply(sccore:::sn(de.raw %>% names()), function(ncc) {
-    res.table <- de.raw[[ncc]]
+    if(verbose) print(ncc)
+    res.celltype <- de.raw[[ncc]]
+    res.table <- res.celltype$res %>% as.data.frame()
     res.table$gene <- rownames(res.table)
     res.table$significant <- res.table$padj < 0.05
     res.table$log2FoldChange[is.na(res.table$log2FoldChange)] <- 0
     res.table$rowid <- 1:nrow(res.table)
-    if (!is.null(gene.metadata)) {
-      mo <- match(as.character(gene.metadata$geneid), as.character(res.table$gene))
-      keep.cols <- colnames(gene.metadata)[colnames(gene.metadata) != "geneid"]
-      names(keep.cols) <- keep.cols
-      res.table <- cbind(res.table, gene.metadata[mo, keep.cols, drop = FALSE])
-    }
 
-    tojson <- list(res = res.table, genes = rownames(res.table))
+    all.genes <- rownames(res.table)
+    cm <- res.celltype$cm
+    colnames(cm) <- strpart(colnames(cm),cluster.sep.chr,1,fixed=TRUE)
+
+    ilev <- lapply(sample.groups, function(sg) {
+      sg <- sg[sg %in% colnames(cm)]
+      cm.tmp <- cm[,sg]
+      cm.tmp <- as.matrix(cm.tmp)
+      rownames(cm.tmp) <- rownames(cm)
+
+      ## calculate cpm
+      cpm <- sweep(cm.tmp, 2, apply(cm.tmp,2, sum), FUN='/')
+      cpm <- log10(cpm * 1e6 + 1)
+      snames1 <- colnames(cpm)
+
+      ## Put genes in order
+      cpm <- cpm[all.genes,]
+      colnames(cpm) <- NULL;
+      rownames(cpm) <- NULL;
+
+      list(snames=snames1, val=as.matrix(cpm))
+    })
+
+    snames <- names(res.celltype$sample.groups)
+
+    ## convert to json
+    tojson <- list(
+      res = res.table,
+      genes = all.genes,
+      ilev = ilev,
+      snames = snames)
     y <- jsonlite::toJSON(tojson)
     file <- paste0(dir.name, "/", saveprefix, make.names(ncc), ".json")
     write(y, file)

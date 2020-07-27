@@ -256,7 +256,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(de.raw)) stop("Please run 'estimatePerCellTypeDE' first.")
 
       # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before plotting
-      if(class(de.raw[[1]] == "list")) de.raw %<>% lapply(`[[`, 1)
+      if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, 1)
 
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
@@ -285,7 +285,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if(is.null(de.raw)) stop("Please run 'estimatePerCellTypeDE' first.")
 
-      if(class(de.raw[[1]] == "list")) stop("Please rerun 'estimatePerCellTypeDE' with return.matrix=T")
+      if(class(de.raw[[1]]) != "list") stop("Please rerun 'estimatePerCellTypeDE' with return.matrix=T")
 
       if(is.null(saveprefix)) saveprefix <- ""
 
@@ -308,7 +308,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(de.raw)) stop("Please run 'estimatePerCellTypeDE' first.")
 
       # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before calculating
-      if(class(de.raw[[1]] == "list")) de.raw %<>% lapply(`[[`, 1)
+      if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, 1)
 
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 

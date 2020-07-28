@@ -516,7 +516,7 @@ plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch =
 #' @return A ggplot2 object
 plotExpressionShiftZScores <- function(plot.df, size.norm = F, cell.groups = NULL, sample.per.cell = NULL, label = T) {
   if (!size.norm) {
-    ggplot(plot.df, aes(x=Type, y=distance)) +
+    gg <- ggplot(plot.df, aes(x=Type, y=distance)) +
       geom_boxplot(outlier.alpha=0, show.legend=F) +
       geom_hline(aes(yintercept=split(distance, Type) %>% sapply(median) %>% median(), linetype="Median"), color="darkred", size=1) +
       labs(x="", y="Normalized distance") +
@@ -528,7 +528,7 @@ plotExpressionShiftZScores <- function(plot.df, size.norm = F, cell.groups = NUL
     if (length(setdiff(names(cell.groups), names(sample.per.cell)))>0) warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
 
     cct <- table(cell.groups, sample.per.cell[names(cell.groups)])
-    x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
+    x <- tapply(plot.df$distance, plot.df$Type, median)
 
     odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
 

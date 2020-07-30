@@ -19,11 +19,12 @@ Imports:
     Matrix,
     methods,
     R6,
+    RcppProgress,
     reshape2,
     sccore,
     tibble
 RoxygenNote: 7.1.0
-LinkingTo: Rcpp, RcppArmadillo
+LinkingTo: Rcpp, RcppEigen, RcppProgress
 NeedsCompilation: yes
 Suggests: 
     clusterProfiler (>= 3.0.0),

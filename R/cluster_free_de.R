@@ -5,7 +5,7 @@
 ##' @param genes Genes to be tested. Procedure is slow, so it's reasonable to restrict amount of genes.
 ##' @param count.matrix.transposed Joint count matrix with cells by rows and genes by columns
 ##' @param ref.level Reference condition level, e.g., wt, ctrl, or healthy
-localZScores <- function(graph, condition.per.cell, genes, count.matrix.transposed, ref.level, min.expr=1e-10, min.std=1e-10, n.cores=1, verbose=T) {
+localZScores <- function(graph, condition.per.cell, count.matrix.transposed, ref.level, genes=NULL, max.z=20, ...) {
   #TODO: Condition.per.cell should be derived from sample.groups and cell.groups
   if (length(unique(condition.per.cell)) != 2)
     stop("Exactly two levels must be provided in 'condition.per.cell'")
@@ -13,46 +13,22 @@ localZScores <- function(graph, condition.per.cell, genes, count.matrix.transpos
   if (!(ref.level %in% unique(condition.per.cell)))
     stop("'ref.level' not present in 'condition.per.cell'")
 
-  # adj_mat <- igraph::as_adj(graph, attr="weight")
   adj.mat <- igraph::as_adj(graph)
-  adj.mat.by.cond <- colnames(adj.mat) %>% split(condition.per.cell[.]) %>%
-    lapply(function(ns) adj.mat[,ns])
 
-  if (verbose) cat("Estimating local means ... ")
-  local.mean.mat <- sccore:::plapply(adj.mat.by.cond, function(mat)
-    (mat %*% count.matrix.transposed[colnames(mat), genes]) / pmax(Matrix::rowSums(mat), min.expr),
-    n.cores=n.cores, progress=F)
-  if (verbose) cat("done!\n")
+  cell.names <- intersect(rownames(count.matrix.transposed), names(condition.per.cell))
+  if (length(cell.names) == 0)
+    stop("No cells in condition.per.cell matching to count.matrix.transposed")
 
-  if (verbose) cat("Estimating SDs ... ")
-  ref.adj.mat <- adj.mat.by.cond[[ref.level]]
-  ref.cbs <- colnames(ref.adj.mat)
-  stds <- sqrt(ref.adj.mat %*% matsub(count.matrix.transposed[ref.cbs, genes], local.mean.mat[[ref.level]][ref.cbs, genes]) ^ 2 /
-                 pmax(Matrix::rowSums(ref.adj.mat), min.expr))
-  if (verbose) cat("done!\n")
+  if (!is.null(genes)) {
+    count.matrix.transposed <- count.matrix.transposed[,genes]
+  }
 
-  if (verbose) cat("Estimating Z-scores ... ")
-  non.ref.level <- unique(condition.per.cell) %>% setdiff(ref.level)
-  z.scores <- calcZScores(local.mean.mat[[non.ref.level]], local.mean.mat[[ref.level]], stds, min.std)
-  if (verbose) cat("done!\nAll done!")
+  z.scores <- localZScoreMat(adj.mat[cell.names, cell.names], count.matrix.transposed[cell.names,],
+                             condition.per.cell[cell.names] == ref.level, ...)
+
+  z.scores@x %<>% pmin(max.z) %>% pmax(-max.z)
 
   return(z.scores)
-}
-
-##' Filter Local Z Scores
-##'
-##' @param z.scores Output from localZScores function
-##' @param min.row.z (default=1)
-##' @param min.inidividual z (default=0.25)
-##' @param n.cores Cores for parallel processing (default=1)
-filterLocalZScores <- function(z.scores, min.row.z=1, min.individual.z=0.25, n.cores=1) {
-  app.func <- if (requireNamespace("pbapply", quietly=T)) function(...) pbapply::pbapply(..., cl=n.cores) else apply
-  z.scores.abs <- z.scores
-  z.scores.abs@x %<>% abs()
-  max.z <- app.func(z.scores.abs, 2, quantile, 0.99)
-  z.scores <- z.scores[, max.z > min.row.z]
-  z.scores@x[abs(z.scores@x) < min.individual.z] <- 0
-  return(drop0(z.scores))
 }
 
 ### Selection
@@ -81,7 +57,7 @@ getTopDEGenes <- function(z.scores, min.z=0, max.z=10, cell.subset=NULL, top.qua
 }
 
 plotZScores <- function(gene, con, z.scores, cur.scores=NULL, color.range=c(-4, 4), show.legend=T, legend.pos=c(1, 1), size=0.2, score.digits=3, ...) {
-  cur.score <- if (is.null(cur.scores)) sum(z.scores[, gene]) else cur.scores[gene]
+  cur.score <- if (is.null(cur.scores)) sum(z.scores[, gene], na.rm=T) else cur.scores[gene]
   colors <- z.scores[,gene] %>% pmin(max(color.range)) %>% pmax(min(color.range))
   con$plotGraph(colors=colors, show.legend=show.legend, legend.pos=legend.pos, size=size,
                 color.range=color.range, title=paste0(gene, ": ", round(cur.score, score.digits)), ...)
@@ -129,7 +105,7 @@ plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z
 
       if (!is.null(z.scores)) {
         lst <- plotZScores(g, con, z.scores, cur.scores=cur.scores, show.legend=show.legend,
-                                   legend.pos=legend.pos, size=size, ...) %>% list() %>% c(lst)
+                           legend.pos=legend.pos, size=size, ...) %>% list() %>% c(lst)
       }
 
       cowplot::plot_grid(plotlist=lst, ncol=n.col)

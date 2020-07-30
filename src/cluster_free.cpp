@@ -18,7 +18,7 @@ double increment_std_acc(double cur_std, double x, double cur_mean, double old_m
 //' @param adj_mat adjacency matrix with 1 on the position (r,c) if the cell r is adjacent to the cell c
 SparseMatrix<double> localZScoreMat(const SparseMatrix<bool>& adj_mat, const SparseMatrix<double>& count_mat,
                                     const std::vector<bool> is_control, bool verbose=true, int return_type=0, double min_z=0.01) {
-  if (adj_mat.rows() != adj_mat.rows())
+  if (adj_mat.cols() != adj_mat.rows())
     Rcpp::stop("adj_mat must be squared");
 
   if (count_mat.rows() != adj_mat.rows())

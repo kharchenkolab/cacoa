@@ -177,7 +177,7 @@ filterOntologies <- function(ont.list, p.adj) {
           dplyr::arrange(p.adjust) %>%
           dplyr::filter(p.adjust < p.adj)
       }) %>%
-        setNames(ont.list[[dir]] %>% names) %>%
+        setNames(ont.list[[dir]] %>% names()) %>%
         .[sapply(., nrow) > 0] # Remove empty data frames
     }) %>%
     setNames(c("down", "up", "all"))
@@ -209,13 +209,14 @@ ontologyListToDf <- function(ont.list) {
 #' @param readable Mapping gene ID to gene name (default=T)
 #' @param n.cores Number of cores used (default: stored vector)
 #' @param verbose Print progress (default=T)
+#' @param min.genes Minimum number of input genes overlapping with ontologies (default=0)
 #' @param qvalueCutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
 #' @param minGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5)
 #' @param maxGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
 #' @param ... Additional parameters for sccore:::plapply function
 #' @return A list containing a list of ontologies per type of ontology, and a data frame with merged results
 #' @export
-estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, go.environment = NULL, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, qvalueCutoff = 0.2, minGSSize = 10, maxGSSize = 5e2, ...) {
+estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, go.environment = NULL, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, min.genes = 0, qvalueCutoff = 0.2, minGSSize = 10, maxGSSize = 5e2, ...) {
   dir.names <- c("down", "up", "all")
 
   if(type=="DO") {
@@ -291,7 +292,23 @@ estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, go.environme
 
     ont.list %<>% filterOntologies(p.adj = p.adj)
 
-    res <- list(df=ont.list %>% ontologyListToDf(),
+    res <- ont.list %>% ontologyListToDf()
+
+    # Filter by min. number of genes per pathway
+    if(min.genes > 0) {
+      res %<>% lapply(function(g) {
+        if(class(g) != "character") {
+          idx <- g$GeneRatio %>%
+            strsplit("/", fixed=T) %>%
+            sapply(`[[`, 1)
+
+          return(g[idx > min.genes,])
+        }
+        g
+      })
+    }
+
+    res <- list(df=res,
                 go.environment=go.environment)
   } else {
     stop("'type' must be either 'GO' or 'DO'.")

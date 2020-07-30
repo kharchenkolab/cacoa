@@ -120,20 +120,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
     #' @param name Test results to plot (default=expression.shifts)
     #' @param size.norm Plot size normalized results. Requires cell.groups, and sample.per.cell (default=F)
-    #' @param normalized.distance Plot the absolute median distance (default=F)
     #' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
     #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
     #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
     #' @param label Plot labels on size normalized plots (default=T)
     #' @return A ggplot2 object
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, normalized.distance=F, notch = T, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, label=T) {
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, notch = T, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, label=T) {
       private$checkTestResults(name)
 
       if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if (is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
-      plotExpressionShiftMagnitudes(cluster.shifts = self$test.results[[name]]$df, size.norm = size.norm, normalized.distance = normalized.distance, notch = notch, cell.groups = cell.groups, sample.per.cell = sample.per.cell, label = label)
+      plotExpressionShiftMagnitudes(cluster.shifts = self$test.results[[name]]$df, size.norm = size.norm, notch = notch, cell.groups = cell.groups, sample.per.cell = sample.per.cell, label = label)
     },
 
     #' @description  Calculate expression shift Z scores of different clusters between conditions
@@ -173,7 +172,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       # TODO: use scaled count matrix here
       if (n.pcs < ncol(mtx)) {
-        if(verbose) cat("done!\n Calculating PCs ... ")
+        if(verbose) cat("done!\nCalculating PCs ... ")
         pca.name <- paste("joint.pca", n.od.genes, n.pcs, sep="_")
         if (ignore.cache || !is.null(self$cache[[pca.name]])) {
           mtx <- self$cache[[pca.name]]
@@ -194,8 +193,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description  Plot results from cao$estimateExpressionShiftZScores()
     #' @param type.order (default=NULL)
     #' @param name Test results to plot (default=expression.z.shifts)
+    #' @param size.norm Show cluster size-normalized results
+    #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
+    #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
+    #' @param label Plot labels on size normalized plots (default=T)
     #' @return A ggplot2 object
-    plotExpressionShiftZScores=function(type.order=NULL, name="expression.z.scores") {
+    plotExpressionShiftZScores=function(type.order=NULL, name="expression.z.scores", size.norm = F, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, label = T) {
       private$checkTestResults(name)
 
       plot.df <- self$test.results[[name]] %>% dplyr::filter(complete.cases(.))
@@ -204,13 +207,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           dplyr::mutate(Type=factor(Type, levels=type.order))
       }
 
-      ggplot(plot.df, aes(x=Type, y=distance)) +
-        geom_boxplot(outlier.alpha=0, show.legend=F) +
-        geom_hline(aes(yintercept=split(distance, Type) %>% sapply(median) %>% median()), color="darkred", size=1) +
-        labs(x="", y="normalized distance") +
-        scale_y_continuous(expand=c(0, 0)) +
-        theme_bw() +
-        theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=9))
+      plotExpressionShiftZScores(plot.df = plot.df, size.norm = size.norm, cell.groups = cell.groups, sample.per.cell = sample.per.cell, label = label)
     },
 
     #' @description Estimate differential gene expression per cell type between conditions
@@ -223,12 +220,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param independent.filtering independentFiltering for DESeq2 (default=F)
     #' @param n.cores Number of cores (default=1)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-    #' @param return.matrix Return merged matrix of results (default=F)
+    #' @param return.matrix Return merged matrix of results (default=T)
     #' @param verbose Show progress (default=T)
     #' @return A list of DE genes
     estimatePerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level,
                               common.genes = F, n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, independent.filtering = FALSE,
-                              cluster.sep.chr = "<!!>", return.matrix = F, verbose=T) {
+                              cluster.sep.chr = "<!!>", return.matrix = T, verbose=T) {
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if(is.null(ref.level)) stop("'ref.level' must be provided either during the object initialization or during this function call")
@@ -259,9 +256,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(de.raw)) stop("Please run 'estimatePerCellTypeDE' first.")
 
       # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before plotting
-      de.raw %<>% lapply(function(de) if(class(de) == "list") de[[1]] else de)
+      if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, 1)
 
-      if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
+      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       plotDEGenes(de.raw = de.raw, cell.groups = cell.groups, legend.position = legend.position, p.adjust.cutoff = p.adjust.cutoff)
     },
@@ -270,14 +267,29 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param saveprefix Prefix for created files (default=NULL)
     #' @param dir.name Name for directory with results (default="JSON")
     #' @param de.raw List of DE results
+    #' @param sample.groups Sample groups (default: stored vector)
+    #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
     #' @param gene.metadata (default=NULL)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-    saveDEasJSON=function(saveprefix = NULL, dir.name = "JSON", de.raw = self$test.results$de, gene.metadata = NULL, cluster.sep.chr = "<!!>") {
-      if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, 1)
+    #' @param verbose Show progress (default=T)
+    saveDEasJSON=function(saveprefix = NULL, dir.name = "JSON", de.raw = self$test.results$de, sample.groups = self$sample.groups, ref.level = self$ref.level, gene.metadata = NULL, cluster.sep.chr = "<!!>", verbose = T) {
+      if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
 
-      if (is.null(saveprefix)) saveprefix <- ""
+      if(is.null(ref.level) & !is.list(sample.groups)) stop("'ref.level' must be provided either during the object initialization or during this function call")
 
-      saveDEasJSON(de.raw = de.raw, saveprefix = saveprefix, dir.name = dir.name, gene.metadata = gene.metadata, cluster.sep.chr = cluster.sep.chr)
+      if(!is.list(sample.groups)) {
+        sample.groups <- list(names(sample.groups[sample.groups == ref.level]),
+                              names(sample.groups[sample.groups != ref.level])) %>%
+          setNames(c(ref.level, self$target.level))
+      }
+
+      if(is.null(de.raw)) stop("Please run 'estimatePerCellTypeDE' first.")
+
+      if(class(de.raw[[1]]) != "list") stop("Please rerun 'estimatePerCellTypeDE' with return.matrix=T")
+
+      if(is.null(saveprefix)) saveprefix <- ""
+
+      saveDEasJSON(de.raw = de.raw, saveprefix = saveprefix, dir.name = dir.name, gene.metadata = gene.metadata, cluster.sep.chr = cluster.sep.chr, sample.groups = sample.groups, verbose = verbose)
     },
 
     #' @description  Filter and prepare DE genes for ontology calculations
@@ -293,9 +305,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param n.cores Number of cores to use (default: stored integer)
     #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
     prepareOntologyData=function(org.db, n.top.genes = 1e2, p.adj.cutoff = 0.05, expr.cutoff = 0.05, de.raw = self$test.results$de, cell.groups = self$cell.groups, universe = NULL, transposed = T, verbose = T, n.cores = self$n.cores) {
-      if (is.null(de)) stop("Please run 'estimatePerCellTypeDE' first.")
+      if(is.null(de.raw)) stop("Please run 'estimatePerCellTypeDE' first.")
 
-      if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
+      # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before calculating
+      if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, 1)
+
+      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       self$test.results[["ontology"]] <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
         prepareOntologyData(org.db = org.db, n.top.genes = n.top.genes, p.adj.cutoff = p.adj.cutoff, expr.cutoff = expr.cutoff, de.raw = de.raw, cell.groups = cell.groups, universe = universe, transposed = transposed, verbose = verbose, n.cores = n.cores)
@@ -311,7 +326,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     plotFilteredDEGenes=function(de.filter = self$test.results$ontology$de.filter, cell.groups = self$cell.groups, legend.position = "none", label = T) {
       if(is.null(de.filter)) stop("Please run 'estimatePerCellTypeDE' first.")
 
-      if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
+      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       plotFilteredDEGenes(de.filter = de.filter, cell.groups = cell.groups, legend.position = legend.position, label = label)
     },
@@ -326,17 +341,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
     #' @param readable Mapping gene ID to gene name (default=T)
     #' @param verbose Print progress (default=T)
+    #' @param min.genes Minimum number of input genes overlapping with ontologies (default=0)
     #' @param qvalueCutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
     #' @param minGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5)
     #' @param maxGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
     #' @param ... Additional parameters for sccore:::plapply function
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
-    estimateOntology=function(type = "GO", org.db, de.gene.ids = self$test.results$ontology$de.gene.ids, go.environment = self$test.results$GO$go.environment, p.adj = 0.05, p.adjust.method = "BH", readable = T, verbose = T, qvalueCutoff = 0.2, minGSSize = 5, maxGSSize = 5e2, ...) {
+    estimateOntology=function(type = "GO", org.db, de.gene.ids = self$test.results$ontology$de.gene.ids, go.environment = self$test.results$GO$go.environment, p.adj = 0.05, p.adjust.method = "BH", readable = T, verbose = T, min.genes = 0, qvalueCutoff = 0.2, minGSSize = 5, maxGSSize = 5e2, ...) {
       if(!is.null(type) & !type %in% c("GO", "DO")) stop("'type' must be 'GO' or 'DO'.")
 
       if(is.null(de.gene.ids)) stop("Please run 'prepareOntologyData' first.")
 
-      self$test.results[[type]] <- estimateOntology(type = type, org.db = org.db, de.gene.ids = de.gene.ids, go.environment = go.environment, p.adj = p.adj, p.adjust.method = p.adjust.method, readable = readable, verbose = verbose, qvalueCutoff = qvalueCutoff, minGSSize = minGSSize, maxGSSize = maxGSSize, ...)
+      self$test.results[[type]] <- estimateOntology(type = type, org.db = org.db, de.gene.ids = de.gene.ids, go.environment = go.environment, p.adj = p.adj, p.adjust.method = p.adjust.method, readable = readable, verbose = verbose, min.genes = min.genes, qvalueCutoff = qvalueCutoff, minGSSize = minGSSize, maxGSSize = maxGSSize, ...)
       return(invisible(self$test.results[[type]]))
     },
 
@@ -419,7 +435,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param n Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @return A ggplot2 object
-    plotOntologyBarplot = function(genes = "up", type = "GO", cell.subgroups = NULL, n = 20, p.adj = 0.05) {
+    plotOntologyBarplot = function(genes = "up", type = "BP", cell.subgroups = NULL, n = 20, p.adj = 0.05) {
       if(is.null(type) || (!type %in% c("GO","BP","CC","MF","DO"))) stop("'type' must be 'GO', BP', 'CC', 'MF', or 'DO'.")
 
       if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
@@ -457,7 +473,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param n Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @return A ggplot2 object
-    plotOntologyDotplot = function(genes = "up", type = "GO", cell.subgroups = NULL, n = 20, p.adj = 0.05) {
+    plotOntologyDotplot = function(genes = "up", type = "BP", cell.subgroups = NULL, n = 20, p.adj = 0.05) {
       if(is.null(type) || (!type %in% c("GO","BP","CC","MF","DO"))) stop("'type' must be 'GO', BP', 'CC', 'MF', or 'DO'.")
 
       if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")

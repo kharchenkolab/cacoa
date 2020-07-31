@@ -461,9 +461,8 @@ plotOntologyDotplot <- function(ont.res, genes = NULL, type = NULL, cell.subgrou
 #' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
 #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
 #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
-#' @param label Plot labels on size normalized plots (default=T)
 #' @return A ggplot2 object
-plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch = T, cell.groups = NULL, sample.per.cell = NULL, label = T) {
+plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch = T, cell.groups = NULL, sample.per.cell = NULL) {
   if (!size.norm) {
     m <- max(abs(cluster.shifts$value - 1))
 
@@ -480,25 +479,16 @@ plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch =
 
     cct <- table(cell.groups, sample.per.cell[names(cell.groups)])
     x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
-
     odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
-
-    if (label) {
-      gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
-        ggrepel::geom_text_repel()
-    } else {
-      gg <- ggplot(odf, aes(size,md,color=cell))
-    }
-
-    gg <- gg +
-      geom_point() +
-      guides(color=F) +
-      xlab("Cluster size") +
-      theme_bw()
 
     m <- max(abs(odf$md - 1))
 
-    gg <- gg +
+    gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
+      ggrepel::geom_text_repel() +
+      geom_point() +
+      guides(color=F) +
+      xlab("Cluster size") +
+      theme_bw() +
       ylab("Median normalized distance") +
       ylim(c(1 - m,1 + m)) +
       geom_hline(yintercept=1, linetype="dashed", color = "black")
@@ -514,7 +504,7 @@ plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch =
 #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
 #' @param label Plot labels on size normalized plots (default=T)
 #' @return A ggplot2 object
-plotExpressionShiftZScores <- function(plot.df, size.norm = F, cell.groups = NULL, sample.per.cell = NULL, label = T) {
+plotExpressionShiftZScores <- function(plot.df, size.norm = F, cell.groups = NULL, sample.per.cell = NULL) {
   if (!size.norm) {
     gg <- ggplot(plot.df, aes(x=Type, y=distance)) +
       geom_boxplot(outlier.alpha=0, show.legend=F) +
@@ -525,31 +515,19 @@ plotExpressionShiftZScores <- function(plot.df, size.norm = F, cell.groups = NUL
       theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=9)) +
       scale_linetype_manual(name = "", values=1)
   } else {
-    if (length(setdiff(names(cell.groups), names(sample.per.cell)))>0) warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
+    if(length(setdiff(names(cell.groups), names(sample.per.cell)))>0) warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
 
     cct <- table(cell.groups, sample.per.cell[names(cell.groups)])
     x <- tapply(plot.df$distance, plot.df$Type, median)
-
     odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
 
-    if (label) {
-      gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
-        ggrepel::geom_text_repel()
-    } else {
-      gg <- ggplot(odf, aes(size,md,color=cell))
-    }
-
-    gg <- gg +
+    gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
+      ggrepel::geom_text_repel() +
       geom_point() +
       guides(color=F) +
       xlab("Cluster size") +
-      theme_bw()
-
-    m <- max(abs(odf$md - 1))
-
-    gg <- gg +
+      theme_bw() +
       ylab("Median normalized distance") +
-      ylim(c(1 - m,1 + m)) +
       geom_hline(aes(yintercept=split(plot.df$distance, plot.df$Type) %>% sapply(median) %>% median(), linetype="Median"), color="darkred", size=1) +
       scale_linetype_manual(name = "", values=1)
   }

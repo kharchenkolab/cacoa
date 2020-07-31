@@ -123,16 +123,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
     #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
     #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
-    #' @param label Plot labels on size normalized plots (default=T)
     #' @return A ggplot2 object
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, notch = T, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, label=T) {
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, notch = T, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell) {
       private$checkTestResults(name)
 
       if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if (is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
-      plotExpressionShiftMagnitudes(cluster.shifts = self$test.results[[name]]$df, size.norm = size.norm, notch = notch, cell.groups = cell.groups, sample.per.cell = sample.per.cell, label = label)
+      plotExpressionShiftMagnitudes(cluster.shifts = self$test.results[[name]]$df, size.norm = size.norm, notch = notch, cell.groups = cell.groups, sample.per.cell = sample.per.cell)
     },
 
     #' @description  Calculate expression shift Z scores of different clusters between conditions
@@ -196,9 +195,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param size.norm Show cluster size-normalized results
     #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
     #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
-    #' @param label Plot labels on size normalized plots (default=T)
     #' @return A ggplot2 object
-    plotExpressionShiftZScores=function(type.order=NULL, name="expression.z.scores", size.norm = F, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, label = T) {
+    plotExpressionShiftZScores=function(type.order=NULL, name="expression.z.scores", size.norm = F, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell) {
       private$checkTestResults(name)
 
       plot.df <- self$test.results[[name]] %>% dplyr::filter(complete.cases(.))
@@ -207,7 +205,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           dplyr::mutate(Type=factor(Type, levels=type.order))
       }
 
-      plotExpressionShiftZScores(plot.df = plot.df, size.norm = size.norm, cell.groups = cell.groups, sample.per.cell = sample.per.cell, label = label)
+      plotExpressionShiftZScores(plot.df = plot.df, size.norm = size.norm, cell.groups = cell.groups, sample.per.cell = sample.per.cell)
     },
 
     #' @description Estimate differential gene expression per cell type between conditions

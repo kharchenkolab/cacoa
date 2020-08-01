@@ -25,7 +25,7 @@ plotDensity=function(emb, anoSample,sample.per.cell, sample.groups,ref.level,tar
   
   
   cname = intersect(names(anoSample),rownames(emb))
-  fraction=anoSampleType[cname]
+  fraction=sample.per.cell[cname]
   anoSample=anoSample[cname]
   emb=emb[cname,]
 

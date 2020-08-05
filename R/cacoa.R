@@ -587,7 +587,109 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
       plotCellNumbers(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups)
+    },
+    
+    #' @description Plot compositions in CoDA-PCA space
+    #' @return A ggplot2 object
+    plotPcaSpace=function() {
+      # Cope with levels
+      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided') 
+      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
+      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
+      
+      # Construct sample groups and count data
+      # ---- The following can be significantly reduced
+      sample.groups <- self$sample.groups
+      cell.type <- self$cell.groups
+      samples.trgt <- names(sample.groups)[sample.groups == self$target.level]
+      samples.ctrl <- setdiff(names(sample.groups), samples.trgt)
+      d.counts <- table(fac$sample, cell.type[names(fac$sample)])
+      d.counts <- d.counts[intersect(c(samples.trgt, samples.ctrl), rownames(d.counts)),]
+      d.groups = rownames(d.counts) %in% samples.trgt
+      names(d.groups) <- rownames(d.counts)
+      # ----
+      
+      plotPcaSpace(d.counts, d.groups)
+    },
+    
+    #' @description Plot compositions in CoDA-CDA space
+    #' @return A ggplot2 object
+    plotCdaSpace=function() {
+      # Cope with levels
+      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided') 
+      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
+      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
+      
+      # Construct sample groups and count data
+      # ---- The following can be significantly reduced
+      sample.groups <- self$sample.groups
+      cell.type <- self$cell.groups
+      samples.trgt <- names(sample.groups)[sample.groups == self$target.level]
+      samples.ctrl <- setdiff(names(sample.groups), samples.trgt)
+      d.counts <- table(fac$sample, cell.type[names(fac$sample)])
+      d.counts <- d.counts[intersect(c(samples.trgt, samples.ctrl), rownames(d.counts)),]
+      d.groups = rownames(d.counts) %in% samples.trgt
+      names(d.groups) <- rownames(d.counts)
+      # ----
+      
+      plotCdaSpace(d.counts, d.groups)
+    },
+
+    #' @description Plot contrast tree
+    #' @return A ggplot2 object  
+    plotContrastTree=function() {
+      # Cope with levels
+      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided') 
+      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
+      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
+      
+      # Construct sample groups and count data
+      # ---- The following can be significantly reduced
+      sample.groups <- self$sample.groups
+      cell.type <- self$cell.groups
+      samples.trgt <- names(sample.groups)[sample.groups == self$target.level]
+      samples.ctrl <- setdiff(names(sample.groups), samples.trgt)
+      d.counts <- table(fac$sample, cell.type[names(fac$sample)])
+      d.counts <- d.counts[intersect(c(samples.trgt, samples.ctrl), rownames(d.counts)),]
+      d.groups = rownames(d.counts) %in% samples.trgt
+      names(d.groups) <- rownames(d.counts)
+      # ----
+      
+      plotContrastTree(d.counts, d.groups)
+    },
+    
+    #' @description Plot Loadings
+    #' @return A ggplot2 object 
+    plotCellLoadings=function(n.cell.counts = 1000, n.seed = 239, aplha = 0.01){
+      # Cope with levels
+      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided') 
+      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
+      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
+      
+      # Construct sample groups and count data
+      # ---- The following can be significantly reduced
+      sample.groups <- self$sample.groups
+      cell.type <- self$cell.groups
+      samples.trgt <- names(sample.groups)[sample.groups == self$target.level]
+      samples.ctrl <- setdiff(names(sample.groups), samples.trgt)
+      d.counts <- table(fac$sample, cell.type[names(fac$sample)])
+      d.counts <- d.counts[intersect(c(samples.trgt, samples.ctrl), rownames(d.counts)),]
+      d.groups = rownames(d.counts) %in% samples.trgt
+      names(d.groups) <- rownames(d.counts)
+      # ----
+      
+      cda = resampleContrast(d.counts, d.groups,
+                             n.cell.counts = n.cell.counts, 
+                             n.seed = n.seed)
+      plotCellLoadings(cda$balances, aplha = aplha)
     }
+  
+
+
   ),
   private = list(
     checkTestResults=function(name) {

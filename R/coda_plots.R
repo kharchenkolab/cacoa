@@ -34,13 +34,18 @@ plotPcaSpace <- function(d.counts, d.groups){
   
   
   # ----------- PLOT -----------
+  group.names = c('Control', 'Case')
   options(repr.plot.width = 15, repr.plot.height = 10)
   rda.plot <- ggplot(df.pca, aes(x=PC1, y=PC2)) +
     #   geom_text(aes(label=rownames(df_pca) %in% samplegroups$trgt),size=4) +
     geom_hline(yintercept=0, linetype="dotted") +
     geom_vline(xintercept=0, linetype="dotted") +
-    geom_point(aes(colour = factor(d.groups))) +
+    geom_point(aes(colour = factor(group.names[d.groups + 1] ))) +
+    labs(colour="Group") + 
     coord_fixed()
+  
+  dx = max(df.pca[,'PC1']) - min(df.pca[,'PC1'])
+  dy = max(df.pca[,'PC2']) - min(df.pca[,'PC2'])
   
   
   rda.biplot <- rda.plot +
@@ -49,7 +54,7 @@ plotPcaSpace <- function(d.counts, d.groups){
     coord_flip(clip = "off") +
     geom_text(data=df.loadings,
               aes(x=pc1,y=pc2,label=rownames(df.loadings)),
-              color="black", size=4)
+              color="black", size=3) + coord_fixed(ratio = dx / dy)
   return(rda.biplot)
 }
 
@@ -77,17 +82,22 @@ plotCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
   
   
   df.pca = as.data.frame(sample.pos)
-  df.loadings = as.data.frame(cell.loadings * 10)
+  df.loadings = as.data.frame(cell.loadings * 8)
   
   
   # ----------- PLOT -----------
+  group.names = c('Control', 'Case')
   options(repr.plot.width = 15, repr.plot.height = 10)
   rda.plot <- ggplot(df.pca, aes(x=Score1, y=Score2)) +
     #   geom_text(aes(label=rownames(df_pca) %in% samplegroups$trgt),size=4) +
     geom_hline(yintercept=0, linetype="dotted") +
     geom_vline(xintercept=0, linetype="dotted") +
-    geom_point(aes(colour = factor(d.groups))) +
+    geom_point(aes(colour = factor(group.names[d.groups + 1] ))) +
+    labs(colour="Group") + 
     coord_fixed()
+  
+  dx = max(df.pca[,'Score1']) - min(df.pca[,'Score1'])
+  dy = max(df.pca[,'Score2']) - min(df.pca[,'Score2'])
   
   
   rda.biplot <- rda.plot +
@@ -95,7 +105,7 @@ plotCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
                  color="grey", arrow=arrow(length=unit(0.01,"npc")))  +
     geom_text(data=df.loadings,
               aes(x=C1,y=C2,label=rownames(df.loadings)),
-              color="black", size=4)
+              color="black", size=3) + coord_fixed(ratio = dx / dy)
   
   return(rda.biplot)
 }
@@ -217,20 +227,20 @@ plotContrastTree <- function(d.counts, d.groups, p.threshold = 0.01){
   df.balance.range = data.frame(x = x.range, y = y.range, s = n.range)
   df.pval = data.frame(x = pval.x, y = pval.y)
 
-  px = px + geom_point(data = df.balance.points, 
-                       aes(x=x, y=y, col = as.factor(group)), alpha = 0.5, size = 1) +
-    geom_point(data = df.balance.mean, 
-               aes(x=x, y=y, col = as.factor(group)), 
-               size = 3, shape = 18, stroke = 2) + 
-    labs(col="Group") + 
-    geom_text(data=df.balance.range, mapping=aes(x=x, y=y, label=sprintf('%2.1f',s)), vjust=0, hjust=0)
+  
+  # px = px + geom_point(data = df.balance.points, 
+  #                      aes(x=x, y=y, col = as.factor(group)), alpha = 0.5, size = 1) +
+  #   geom_point(data = df.balance.mean, 
+  #              aes(x=x, y=y, col = as.factor(group)), 
+  #              size = 3, shape = 18, stroke = 2) + 
+  #   labs(col="Group") + 
+  #   geom_text(data=df.balance.range, mapping=aes(x=x, y=y, label=sprintf('%2.1f',s)), vjust=0, hjust=0)
   
   # if(length(pval.x) > 0){
   #   px <- px + geom_point(data = df.pval, aes(x=x, y=y, size = 2)) +
   #     labs(size= sprintf('p-value < %1.1e',p.threshold)) 
   # }
    
-  options(repr.plot.width = 10, repr.plot.height = 10)
   
   return(px)
 }

@@ -1,6 +1,7 @@
 #include <RcppEigen.h>
 #include <iostream>
 #include <vector>
+#include <cmath>
 
 #include <progress.hpp>
 
@@ -16,8 +17,9 @@ double increment_std_acc(double cur_std, double x, double cur_mean, double old_m
 }
 
 //' @param adj_mat adjacency matrix with 1 on the position (r,c) if the cell r is adjacent to the cell c
-SparseMatrix<double> localZScoreMat(const SparseMatrix<bool>& adj_mat, const SparseMatrix<double>& count_mat,
-                                    const std::vector<bool> is_control, bool verbose=true, int return_type=0, double min_z=0.01) {
+std::pair<SparseMatrix<double>, SparseMatrix<double>> localZScoreMat(const SparseMatrix<bool>& adj_mat, const SparseMatrix<double>& count_mat,
+                                                                     const std::vector<bool> is_control, bool verbose=true, int return_type=0, double min_z=0.01,
+                                                                     double lfc_pseudocount=1e-6) {
   if (adj_mat.cols() != adj_mat.rows())
     Rcpp::stop("adj_mat must be squared");
 
@@ -27,7 +29,7 @@ SparseMatrix<double> localZScoreMat(const SparseMatrix<bool>& adj_mat, const Spa
   if (is_control.size() != adj_mat.rows())
     Rcpp::stop("is_control must size equal to the number of rows in count_mat");
 
-  std::vector<Triplet<double>> z_triplets;
+  std::vector<Triplet<double>> z_triplets, lfc_triplets;
   Progress p(count_mat.outerSize(), verbose);
   for (size_t gene_id=0; gene_id < count_mat.outerSize(); ++gene_id) {
     auto cur_col = VectorXd(count_mat.col(gene_id));
@@ -63,30 +65,38 @@ SparseMatrix<double> localZScoreMat(const SparseMatrix<bool>& adj_mat, const Spa
       if ((n_vals_case > 0) && (n_vals_control > 1)) {
         double std_val = std::sqrt(std_acc_control / (n_vals_control - 1));
         double z_score = (mean_val_case - mean_val_control) / std::max(std_val, 1e-20);
+        double lfc = std::log(mean_val_case + lfc_pseudocount) - std::log(mean_val_control + lfc_pseudocount);
         if (std::abs(z_score) > min_z) {
           z_triplets.emplace_back(dst_cell_id, gene_id, z_score);
+          lfc_triplets.emplace_back(dst_cell_id, gene_id, lfc);
         }
       }
       else {
         z_triplets.emplace_back(dst_cell_id, gene_id, NA_REAL);
+        lfc_triplets.emplace_back(dst_cell_id, gene_id, NA_REAL);
       }
     }
 
     p.increment();
   }
 
-  SparseMatrix<double> res_mat(count_mat.rows(), count_mat.cols());
-  res_mat.setFromTriplets(z_triplets.begin(), z_triplets.end());
-  return res_mat;
+  SparseMatrix<double> z_mat(count_mat.rows(), count_mat.cols()), lfc_mat(count_mat.rows(), count_mat.cols());
+  z_mat.setFromTriplets(z_triplets.begin(), z_triplets.end());
+  lfc_mat.setFromTriplets(lfc_triplets.begin(), lfc_triplets.end());
+  return std::make_pair(z_mat, lfc_mat);
 }
 
 // [[Rcpp::export]]
-SEXP localZScoreMat(const SEXP adj_mat, const SEXP count_mat, const std::vector<bool> is_control, bool verbose=true, int return_type=0, double min_z=0.01) {
+SEXP localZScoreMat(const SEXP adj_mat, const SEXP count_mat, const std::vector<bool> is_control, bool verbose=true, int return_type=0,
+                    double min_z=0.01, double lfc_pseudocount=1e-6) {
   S4 adj_mat_s4(adj_mat), count_mat_s4(count_mat);
-  SparseMatrix<double> z_mat = localZScoreMat(as<SparseMatrix<bool>>(adj_mat), as<SparseMatrix<double>>(count_mat), is_control, verbose, return_type, min_z);
+  auto mat_pair = localZScoreMat(as<SparseMatrix<bool>>(adj_mat), as<SparseMatrix<double>>(count_mat), is_control, verbose, return_type, min_z, lfc_pseudocount);
 
-  S4 mat_res(wrap(z_mat));
-  mat_res.slot("Dimnames") = S4(count_mat).slot("Dimnames");
+  S4 z_mat(wrap(mat_pair.first));
+  z_mat.slot("Dimnames") = S4(count_mat).slot("Dimnames");
 
-  return mat_res;
+  S4 lfc_mat(wrap(mat_pair.second));
+  lfc_mat.slot("Dimnames") = S4(count_mat).slot("Dimnames");
+
+  return List::create(_["z"]=z_mat, _["lfc"]=lfc_mat);
 }

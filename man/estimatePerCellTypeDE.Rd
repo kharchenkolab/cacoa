@@ -15,7 +15,7 @@ estimatePerCellTypeDE(
   independent.filtering = T,
   n.cores = 1,
   cluster.sep.chr = "<!!>",
-  return.matrix = F,
+  return.matrix = T,
   verbose = T
 )
 }
@@ -40,7 +40,7 @@ estimatePerCellTypeDE(
 
 \item{cluster.sep.chr}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
 
-\item{return.matrix}{Return merged matrix of results (default=F)}
+\item{return.matrix}{Return merged matrix of results (default=T)}
 }
 \description{
 Do differential expression for each cell type in a conos object between the specified subsets of apps

@@ -6,13 +6,14 @@
 \usage{
 estimateOntology(
   type = "GO",
-  org.db,
+  org.db = NULL,
   de.gene.ids,
   go.environment = NULL,
   p.adj = 0.05,
   p.adjust.method = "BH",
   readable = T,
   verbose = T,
+  min.genes = 0,
   qvalueCutoff = 0.2,
   minGSSize = 10,
   maxGSSize = 500,
@@ -31,6 +32,8 @@ estimateOntology(
 \item{readable}{Mapping gene ID to gene name (default=T)}
 
 \item{verbose}{Print progress (default=T)}
+
+\item{min.genes}{Minimum number of input genes overlapping with ontologies (default=0)}
 
 \item{qvalueCutoff}{Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
 

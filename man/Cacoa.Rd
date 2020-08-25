@@ -55,6 +55,10 @@ Cacoa R6 class
 \item \href{#method-plotOntologySimilarities}{\code{Cacoa$plotOntologySimilarities()}}
 \item \href{#method-plotProportions}{\code{Cacoa$plotProportions()}}
 \item \href{#method-plotCellNumbers}{\code{Cacoa$plotCellNumbers()}}
+\item \href{#method-plotPcaSpace}{\code{Cacoa$plotPcaSpace()}}
+\item \href{#method-plotCdaSpace}{\code{Cacoa$plotCdaSpace()}}
+\item \href{#method-plotContrastTree}{\code{Cacoa$plotContrastTree()}}
+\item \href{#method-plotCellLoadings}{\code{Cacoa$plotCellLoadings()}}
 \item \href{#method-clone}{\code{Cacoa$clone()}}
 }
 }
@@ -145,11 +149,9 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionShiftMagnitudes(
   name = "expression.shifts",
   size.norm = F,
-  normalized.distance = F,
   notch = T,
   cell.groups = self$cell.groups,
-  sample.per.cell = self$sample.per.cell,
-  label = T
+  sample.per.cell = self$sample.per.cell
 )}\if{html}{\out{</div>}}
 }
 
@@ -160,15 +162,11 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 
 \item{\code{size.norm}}{Plot size normalized results. Requires cell.groups, and sample.per.cell (default=F)}
 
-\item{\code{normalized.distance}}{Plot the absolute median distance (default=F)}
-
 \item{\code{notch}}{Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)}
 
 \item{\code{cell.groups}}{Named factor with cell names defining groups/clusters (default: stored vector)}
 
 \item{\code{sample.per.cell}}{Named sample factor with cell names (default: stored vector)}
-
-\item{\code{label}}{Plot labels on size normalized plots (default=T)}
 }
 \if{html}{\out{</div>}}
 }
@@ -228,7 +226,10 @@ Plot results from cao$estimateExpressionShiftZScores()
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionShiftZScores(
   type.order = NULL,
-  name = "expression.z.scores"
+  name = "expression.z.scores",
+  size.norm = F,
+  cell.groups = self$cell.groups,
+  sample.per.cell = self$sample.per.cell
 )}\if{html}{\out{</div>}}
 }
 
@@ -238,6 +239,12 @@ Plot results from cao$estimateExpressionShiftZScores()
 \item{\code{type.order}}{(default=NULL)}
 
 \item{\code{name}}{Test results to plot (default=expression.z.shifts)}
+
+\item{\code{size.norm}}{Show cluster size-normalized results}
+
+\item{\code{cell.groups}}{Named factor with cell names defining groups/clusters (default: stored vector)}
+
+\item{\code{sample.per.cell}}{Named sample factor with cell names (default: stored vector)}
 }
 \if{html}{\out{</div>}}
 }
@@ -261,7 +268,7 @@ Estimate differential gene expression per cell type between conditions
   min.cell.count = 10,
   independent.filtering = FALSE,
   cluster.sep.chr = "<!!>",
-  return.matrix = F,
+  return.matrix = T,
   verbose = T
 )}\if{html}{\out{</div>}}
 }
@@ -287,7 +294,7 @@ Estimate differential gene expression per cell type between conditions
 
 \item{\code{cluster.sep.chr}}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
 
-\item{\code{return.matrix}}{Return merged matrix of results (default=F)}
+\item{\code{return.matrix}}{Return merged matrix of results (default=T)}
 
 \item{\code{verbose}}{Show progress (default=T)}
 }
@@ -341,8 +348,11 @@ Save DE results as JSON files
   saveprefix = NULL,
   dir.name = "JSON",
   de.raw = self$test.results$de,
+  sample.groups = self$sample.groups,
+  ref.level = self$ref.level,
   gene.metadata = NULL,
-  cluster.sep.chr = "<!!>"
+  cluster.sep.chr = "<!!>",
+  verbose = T
 )}\if{html}{\out{</div>}}
 }
 
@@ -355,9 +365,15 @@ Save DE results as JSON files
 
 \item{\code{de.raw}}{List of DE results}
 
+\item{\code{sample.groups}}{Sample groups (default: stored vector)}
+
+\item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
+
 \item{\code{gene.metadata}}{(default=NULL)}
 
 \item{\code{cluster.sep.chr}}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
+
+\item{\code{verbose}}{Show progress (default=T)}
 }
 \if{html}{\out{</div>}}
 }
@@ -457,6 +473,7 @@ Estimate ontology terms based on DEs
   p.adjust.method = "BH",
   readable = T,
   verbose = T,
+  min.genes = 0,
   qvalueCutoff = 0.2,
   minGSSize = 5,
   maxGSSize = 500,
@@ -482,6 +499,8 @@ Estimate ontology terms based on DEs
 \item{\code{readable}}{Mapping gene ID to gene name (default=T)}
 
 \item{\code{verbose}}{Print progress (default=T)}
+
+\item{\code{min.genes}}{Minimum number of input genes overlapping with ontologies (default=0)}
 
 \item{\code{qvalueCutoff}}{Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
 
@@ -575,7 +594,7 @@ Plot a barplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyBarplot(
   genes = "up",
-  type = "GO",
+  type = "BP",
   cell.subgroups = NULL,
   n = 20,
   p.adj = 0.05
@@ -609,7 +628,7 @@ Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyDotplot(
   genes = "up",
-  type = "GO",
+  type = "BP",
   cell.subgroups = NULL,
   n = 20,
   p.adj = 0.05
@@ -752,6 +771,58 @@ Plot the cell numbers per sample
 }
 \if{html}{\out{</div>}}
 }
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotPcaSpace"></a>}}
+\if{latex}{\out{\hypertarget{method-plotPcaSpace}{}}}
+\subsection{Method \code{plotPcaSpace()}}{
+Plot compositions in CoDA-PCA space
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotPcaSpace()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotCdaSpace"></a>}}
+\if{latex}{\out{\hypertarget{method-plotCdaSpace}{}}}
+\subsection{Method \code{plotCdaSpace()}}{
+Plot compositions in CoDA-CDA space
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCdaSpace()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotContrastTree"></a>}}
+\if{latex}{\out{\hypertarget{method-plotContrastTree}{}}}
+\subsection{Method \code{plotContrastTree()}}{
+Plot contrast tree
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotContrastTree()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotCellLoadings"></a>}}
+\if{latex}{\out{\hypertarget{method-plotCellLoadings}{}}}
+\subsection{Method \code{plotCellLoadings()}}{
+Plot Loadings
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellLoadings(n.cell.counts = 1000, n.seed = 239, aplha = 0.01)}\if{html}{\out{</div>}}
+}
+
 \subsection{Returns}{
 A ggplot2 object
 }

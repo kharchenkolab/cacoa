@@ -7,25 +7,19 @@
 plotExpressionShiftMagnitudes(
   cluster.shifts,
   size.norm = F,
-  normalized.distance = F,
   notch = T,
   cell.groups = NULL,
-  sample.per.cell = NULL,
-  label = T
+  sample.per.cell = NULL
 )
 }
 \arguments{
 \item{size.norm}{Plot size normalized results. Requires cell.groups, and sample.per.cell (default=F)}
-
-\item{normalized.distance}{Plot the absolute median distance (default=F)}
 
 \item{notch}{Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)}
 
 \item{cell.groups}{Named factor with cell names defining groups/clusters (default: stored vector)}
 
 \item{sample.per.cell}{Named sample factor with cell names (default: stored vector)}
-
-\item{label}{Plot labels on size normalized plots (default=T)}
 
 \item{name}{Test results to plot (default=expression.shifts)}
 }

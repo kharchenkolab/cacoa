@@ -65,7 +65,7 @@ std::pair<SparseMatrix<double>, SparseMatrix<double>> localZScoreMat(const Spars
       if ((n_vals_case > 0) && (n_vals_control > 1)) {
         double std_val = std::sqrt(std_acc_control / (n_vals_control - 1));
         double z_score = (mean_val_case - mean_val_control) / std::max(std_val, 1e-20);
-        double lfc = std::log(mean_val_case + lfc_pseudocount) - std::log(mean_val_control + lfc_pseudocount);
+        double lfc = std::log2(mean_val_case + lfc_pseudocount) - std::log2(mean_val_control + lfc_pseudocount);
         if (std::abs(z_score) > min_z) {
           z_triplets.emplace_back(dst_cell_id, gene_id, z_score);
           lfc_triplets.emplace_back(dst_cell_id, gene_id, lfc);

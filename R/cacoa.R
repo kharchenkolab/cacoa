@@ -695,9 +695,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
     #' @param target.level target/disease level for sample.group vector
     #' @param bins number of bins for density esitmation, default 400
+    #' @param condition.per.cell Named group factor with cell names. Must have exactly two levels.
     #' @param by.sample  if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell fraction need to be provided and density will simply esitmated by fraction. 
     #' @add.ponits add.ponits  show cells in density plot     
-    estimateCellDensity=function(emb,fraction=NULL,anoSample=NULL,ref.level,target.level,bins=400,by.sample=TRUE){
+    estimateCellDensity = function(emb, condition.per.cell = NULL, sample.per.cell = NULL, ref.level, target.level, bins = 400, by.sample = TRUE){
     
       if(is.null(emb)) stop("'emb' must be provided either during the object initialization or during this function call")
       
@@ -710,76 +711,75 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(self$target.level)) stop("'target.level' must be provided either during the object initialization or during this function call")
       
 
-      anoSample=self$sample.per.cell
-      ref.level=self$ref.level
-      target.level=self$target.level
-      sample.groups=self$sample.groups
+      sample.per.cell <- self$sample.per.cell
+      ref.level <- self$ref.level
+      target.level <- self$target.level
+      sample.groups <- self$sample.groups
       
-      self$test.results[['bins']]=bins
-      res=estimateCellDensity(emb,anoSample=anoSample,sample.groups=sample.groups,bins=bins,ref.level=ref.level,target.level=target.level,fraction=fraction,by.sample=by.sample)
-      self$test.results[['DensityMatrix']]=res[['denMatrix.nor']]
-      self$test.results[['targetDensity']]=res[['density.fraction']][[target.level]]
-      self$test.results[['refDensity']]=res[['density.fraction']][[ref.level]]
-      self$test.results[['DiffDensity']]=res[['density.fraction']][[target.level]]-res[['density.fraction']][[ref.level]]
-      
+      self$test.results[['bins']] <- bins
+      res <- estimateCellDensity(emb, anoSample = sample.per.cell, sample.groups = sample.groups, bins = bins, ref.level =
+                                   ref.level, target.level = target.level, fraction = condition.per.cell, by.sample =
+                                   by.sample)
+      self$test.results[['DensityMatrix']] <- res[['denMatrix.nor']]
+      self$test.results[['targetDensity']] <- res[['density.fraction']][[target.level]]
+      self$test.results[['refDensity']] <- res[['density.fraction']][[ref.level]]
+      self$test.results[['DiffDensity']] <- res[['density.fraction']][[target.level]] - res[['density.fraction']][[ref.level]]
+
       # adjust embedding to the same density space 
-      x=emb[,1]
-      y=emb[,2]
+      x <- emb[, 1]
+      y <- emb[, 2]
+      x <- (x - range(x)[1])
+      x <- (x / max(x)) * bins
       
-      x=(x-range(x)[1])
-      x=(x/max(x))*bins
-      
-      y=(y-range(y)[1])
-      y=(y/max(y))*bins
-      emb2=data.frame(x=x,y=y)
-      self$test.results[['density.emb']]=emb2
+      y <- (y - range(y)[1])
+      y <- (y / max(y)) * bins
+      emb2 <- data.frame(x = x, y = y)
+      self$test.results[['density.emb']] <- emb2
       return(invisible(self$density[['bins']]))
-      
     },
     
     ##' @description Plot cell density 
     ##' @param add.ponits default is TRUE, add points to cell density figure
-    ##' @param fraction fraction must be provided when add.ponits is TRUE
-    plotCellDensity=function(legend=NULL,title=NULL,grid=NULL,add.ponits=TRUE,fraction=NULL){
-      bins=self$test.results$bins
-      ref=self$ref.level
-      target=self$target.level
-      p1=plotDensity(cao$test.results$refDensity,bins=bins,col='B',legend=NULL,title=self$ref.level,grid=TRUE)
-      p2=plotDensity(cao$test.results$targetDensity,bins=bins,col='B',legend=NULL,title=self$target.level,grid=TRUE)
+    ##' @param condition.per.cell Named group factor with cell names. Must have exactly two levels. condition.per.cell must be provided when add.ponits is TRUE
+    plotCellDensity = function(legend = NULL, title = NULL, grid = NULL, add.ponits = TRUE, condition.per.cell = NULL){
+      bins <- self$test.results$bins
+      ref <- self$ref.level
+      target <- self$target.level
+      p1 <- plotDensity(cao$test.results$refDensity, bins = bins, col = 'B', legend = NULL, title =self$ref.level, grid = TRUE)
+      p2 <- plotDensity(cao$test.results$targetDensity, bins = bins, col = 'B', legend = NULL, title =self$target.level, grid = TRUE)
       
       if (add.ponits){
-        if(is.null(fraction)) stop("'fraction' must be provided when add points")
+        if(is.null(condition.per.cell)) stop("'fraction' must be provided when add points")
     
-        emb=self$test.results$density.emb
-        emb$Z=1
-        nname1=names(fraction[fraction==ref])
-        nname1=sample(nname1,min(2000,nrow(emb[nname1,])))
+        emb <- self$test.results$density.emb
+        emb$Z <- 1
+        nname1 <- names(condition.per.cell[condition.per.cell == ref])
+        nname1 <- sample(nname1, min(2000, nrow(emb[nname1, ])))
         
-        nname2=names(fraction[fraction==target])
-        nname2=sample(nname2,min(2000,nrow(emb[nname2,])))
+        nname2 <- names(condition.per.cell[condition.per.cell == target])
+        nname2 <- sample(nname2, min(2000, nrow(emb[nname2, ])))
         
-        p1=p1+geom_point(data=emb[nname1,],aes(x=x,y=y), col='#FCFDBFFF',size=0.00001,alpha=0.2)  
-        p2=p2+geom_point(data=emb[nname2,],aes(x=x,y=y), col='#FCFDBFFF',size=0.00001,alpha=0.2) 
-        return(list('ref'=p1,'target'=p2))
+        p1 <- p1 + geom_point(data = emb[nname1, ], aes(x = x, y = y), col = '#FCFDBFFF', size = 0.00001, alpha = 0.2)  
+        p2 <- p2 + geom_point(data = emb[nname2, ], aes(x = x, y = y), col = '#FCFDBFFF', size = 0.00001, alpha = 0.2) 
+        return(list('ref' = p1, 'target' = p2))
       }
     },
     
     ##' @description esitmate differential cell density
     ##' @param col color palettes, 4 different color palettes are supported; default is yellow-black-magenta; BWR: blue-white-red;  WR: white-read; B: magma in viridi;
-    ##' @param fraction A two-level factor on the cell names describing the conditions being compared (default: stored vector)
+    ##' @param condition.per.cell A two-level factor on the cell names describing the conditions being compared (default: stored vector)
     ##' @method method to cacuated differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy betwwen sample grapups ; t.test: zscore of t-test,global variacen is setting for t.test;     
-    DiffCellDensity=function(fraction=NULL,method='substract',legend=NULL,grid=TRUE,col='YBM',title=NULL){
-      ref.level=self$ref.level
-      target.level=self$target.level
-      sample.groups=self$sample.groups
-      bins=self$test.results$bins
-      
-      DensityMatrix=self$test.results$DensityMatrix
-      if (method=='entropy'){
+    diffCellDensity = function(condition.per.cell = NULL, method = 'substract', legend = NULL, grid = TRUE, col = 'YBM', title = NULL){
+      ref.level <- self$ref.level
+      target.level <- self$target.level
+      sample.groups <- self$sample.groups
+      bins <- self$test.results$bins
+      density.matrix <- self$test.results$DensityMatrix
+      if (method == 'entropy'){
         if(is.null(fraction)) stop("'fraction' must be provided when entropy was used")
       }
-      p=DiffCellDensity(DensityMatrix,fraction,sample.groups,bins=bins,target.level=target.level,ref.level=ref.level,method=method,
-                        title=title,grid=grid,legend=legend)
+      p <- diffCellDensity(density.matrix, fraction=condition.per.cell, sample.groups, bins = bins, target.level = target.level, ref.level =
+                             ref.level, method = method, title = title, grid = grid, legend = legend)
       return(p)
     },
     
@@ -787,27 +787,27 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description esitmate expression distance between samples of each cell type  
     ##' @param dist what distance measure to use: 'JS' - Jensen-Shannon divergence, 'cor' - Pearson's linear correlation on log transformed values
     ##' @param min.cluster.size minimum number of cells in a cluster (in a sample) for the distance to be estimated. default: 10
-    esitmate.expression.dsiatnce=function(dist='JS',min.cells =10){
+    esitmateExpressionDsiatnce = function(dist = 'JS', min.cells = 10){
       cell.type <- self$cell.groups
-      samplef=self$sample.per.cell
-      count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
-      self$test.results[['exp_disance']]=esitmate.expression.dsiatnce(count.matrices,samplef,cell.type,dist=dist,min.cells =min.cells)
+      samplef <- self$sample.per.cell
+      count.matrices <- extractRawCountMatrices(self$data.object, transposed = T)
+      self$test.results[['exp_disance']] <- esitmateExpressionDsiatnce(count.matrices, samplef, cell.type, dist = dist, min.cells = min.cells)
       return(invisible(self$test.results[['exp_disance']]))
     },
     
     
     #' @description Plot expression distance 
-    #' @param disData esitmated cell expression distance with esitmate.expression.dsiatnce
+    #' @param dist.data esitmated cell expression distance with esitmate.expression.dsiatnce
     #' @param type output figure format to measure inter sample distance or intra sample distance;
-    #' @param cell.Type default is null for weigeted expression distance across mutiple cell types, if setting, draw plot for specific cell type.
+    #' @param cell.type default is null for weigeted expression distance across mutiple cell types, if setting, draw plot for specific cell type.
     #' @return A ggplot2 object 
-    plotExpressionDistance=function(disData=NULL,cell.Type=NULL,type='inter'){
+    plotExpressionDistance = function(dist.data = NULL, cell.type = NULL, type = 'inter'){
       
-      sample.groups=self$sample.groups
-      if (is.null(disData)){
-        disData=self$test.results[['exp_disance']]
+      sample.groups <- self$sample.groups
+      if (is.null(dist.data)){
+        dist.data <- self$test.results[['exp_disance']]
       }
-      plotExpressionDistance(disData,sample.groups,cell.Type=cell.Type,type=type)
+      plotExpressionDistance(dist.data, sample.groups, cell.type = cell.type, type = type)
     }
 
   ),

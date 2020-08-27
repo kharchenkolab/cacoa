@@ -1,7 +1,4 @@
 
-
-
-
 ##' @description Estimate cell density in giving embedding 
 ##' @param emb cell embedding matrix
 ##' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
@@ -11,48 +8,51 @@
 ##' @param bins number of bins for density esitmation, default 400
 ##' @param by.sample  if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell fraction need to be provided and density will simply esitmated by fraction. 
 ##' @add.ponits add.ponits  show cells in density plot   
-estimateCellDensity<-function(emb, anoSample,sample.groups,bins,ref.level,target.level,fraction=NULL,by.sample=TRUE){
+estimateCellDensity <- function(emb, anoSample, sample.groups, bins, ref.level, target.level, fraction = NULL, by.sample = TRUE){
+  if (!requireNamespace("preprocessCore", quietly = TRUE)) {
+    stop("You have to install preprocessCore package to do quantile normlization ")
+  }
   
-  cname = intersect(names(anoSample),rownames(emb)) 
-  anoSample=anoSample[cname]
-  fraction=fraction[cname]
-  emb=emb[cname,]
+  if (!requireNamespace("MASS", quietly = TRUE)) {
+    stop("You have to install MASS package to estimate density ")
+  }
   
-  list.den = lapply(sn(as.character(unique(anoSample))), function(x) {
-    nname = names(anoSample[anoSample == x])
-    tmp = emb[nname, ]
-    f2 = kde2d(tmp[, 1], tmp[, 2], n = bins, lims = c(range(emb[, 
-                                                                1]), range(emb[, 2])))
+  
+  cname <- intersect(names(anoSample), rownames(emb)) 
+  anoSample <- anoSample[cname]
+  fraction <- fraction[cname]
+  emb <- emb[cname, ]
+  list.den <- lapply(sccore:::sn(as.character(unique(anoSample))), function(x) {
+    nname <- names(anoSample[anoSample == x])
+    tmp <- emb[nname, ]
+    f2 <- MASS::kde2d(tmp[, 1], tmp[, 2], n = bins, lims = c(range(emb[, 1]), range(emb[, 2])))
     f2
   })
-  denMatrix = do.call("cbind", lapply(list.den, function(x) as.numeric(x$z)))
-  denMatrix.nor = normalize.quantiles(denMatrix)    #      print('quantiles normlization')
-  colnames(denMatrix.nor) = colnames(denMatrix)
+  denMatrix <- do.call("cbind", lapply(list.den, function(x) as.numeric(x$z)))
+  denMatrix.nor <- preprocessCore::normalize.quantiles(denMatrix)    #quantiles normlization
+  colnames(denMatrix.nor) <- colnames(denMatrix)
   
   if (by.sample){
-    density.fraction = lapply(sn(as.character(unique(sample.groups))), 
+    density.fraction <- lapply(sccore:::sn(as.character(unique(sample.groups))), 
                               function(x) {
-                                tmp = denMatrix.nor[, names(sample.groups[sample.groups == 
-                                                                            x])]
+                                tmp  <-  denMatrix.nor[, names(sample.groups[sample.groups == x])]
                                 matrix(rowMeans(tmp), ncol = bins, byrow = FALSE)
                               })
   }else{
-    if (is.null(fraction)) {stop("'fraction' must be provided")}
-    list.den = lapply(sn(as.character(unique(fraction))), function(x) {
-      nname = names(fraction[fraction == x])
-      tmp = emb[nname, ]
-      f2 = kde2d(tmp[, 1], tmp[, 2], n = bins, lims = c(range(emb[, 
-                                                                  1]), range(emb[, 2])))
+    if (is.null(fraction)) { stop("'fraction' must be provided") }
+    list.den <- lapply(sccore:::sn(as.character(unique(fraction))), function(x) {
+      nname <- names(fraction[fraction == x])
+      tmp <- emb[nname, ]
+      f2 <- kde2d(tmp[, 1], tmp[, 2], n = bins, lims = c(range(emb[, 1]), range(emb[, 2])))
       f2
     })
-    denMatrix = do.call("cbind", lapply(list.den, function(x) as.numeric(x$z)))
-    density.fraction = lapply(sn(as.character(unique(sample.groups))), 
+    denMatrix <- do.call("cbind", lapply(list.den, function(x) as.numeric(x$z)))
+    density.fraction <- lapply(sccore:::sn(as.character(unique(sample.groups))), 
                               function(x) {
-                                matrix(denMatrix[,x], ncol = bins, byrow = FALSE)
+                                matrix(denMatrix[, x], ncol = bins, byrow = FALSE)
                               })
-    
-  }
-  return(list('denMatrix.nor'=denMatrix.nor,'density.fraction'=density.fraction))
+    }
+  return(list('denMatrix.nor' = denMatrix.nor, 'density.fraction' = density.fraction))
 }
 
 
@@ -64,78 +64,64 @@ estimateCellDensity<-function(emb, anoSample,sample.groups,bins,ref.level,target
 ##' @param cell.type specify cell types for counter, mutiple cell types are also suported 
 ##' @param conf confidence interval of counter
 ##' @param bins number of bins for density esitmation, should keep consistent with bins in estimateCellDensity
-getCounter<-function(emb,cell.type, bins,cell,color='white',linetype = 2,conf="20%"){
-  x=emb[,1]
-  y=emb[,2]
-  
-  x=(x-range(x)[1])
-  x=(x/max(x))*bins
-  
-  y=(y-range(y)[1])
-  y=(y/max(y))*bins
-  
-  emb2=data.frame(x=x,y=y)
-  
-  
+getContour <- function(emb, cell.type, bins, cell, color = 'white', linetype = 2, conf = "10%"){
+  x <- emb[, 1]
+  y <- emb[, 2]
+  x <- (x - range(x)[1])
+  x <- (x / max(x)) * bins
+  y <- (y - range(y)[1])
+  y <- (y / max(y)) * bins
+  emb2 <- data.frame(x = x, y = y)
+  linetype <- 2
+  emb2 <- data.frame(x = x, y = y)
   linetype <- 2;
-  tmp= emb2[rownames(emb2) %in% names(cell.type)[cell.type %in% cell],]
-  kd <- ks::kde(tmp, compute.cont=TRUE)
-  lcn <- with(kd, contourLines(x=eval.points[[1]], y=eval.points[[2]],z=estimate, levels=cont[conf])[[1]])
+  tmp <- emb2[rownames(emb2) %in% names(cell.type)[cell.type %in% cell], ]
+  kd <- ks::kde(tmp, compute.cont = TRUE)
+  lcn <- with(kd, contourLines(x = eval.points[[1]], y = eval.points[[2]], z = estimate, levels = cont[conf])[[1]])
   #name1 <- point.in.polygon(tmp[,1], tmp[,2], cn$x, cn$y)
-  dd=data.frame(lcn)
-  dd$Z=1
-  cn <- geom_path(aes(x, y), data=dd,linetype = linetype , color=color);
-  
+  dd <- data.frame(lcn)
+  dd$Z <- 1
+  cn <- geom_path(aes(x, y), data = dd, linetype = linetype , color = color);
+  return(cn)
 }
-
 
 
 ##' @description Plot cell density 
 ##' @param bins number of bins for density esitmation, should keep consistent with bins in estimateCellDensity
 ##' @param col color palettes, 4 different color palettes are supported; default is yellow-black-magenta; BWR: blue-white-red;  WR: white-read; B: magma in viridi;
-
-
-
-plotDensity<-function(mat,bins,col='BWR',legend=NULL,title=NULL,grid=NULL){
-  p =  mat %>% as_tibble() %>% rowid_to_column(var = "X") %>% 
-    gather(key = "Y", value = "Z", -1) %>% mutate(Y = as.numeric(gsub("V", 
-                                                                      "", Y))) %>% ggplot(aes(X, Y, fill = Z)) + geom_raster() +
-    
+plotDensity <- function(mat, bins, col = 'BWR', legend = NULL, title = NULL, grid = NULL){
+  p  <-  mat %>% as_tibble() %>% rowid_to_column(var = "X") %>% 
+    gather(key = "Y", value = "Z", -1) %>% mutate(Y = as.numeric(gsub("V", "", Y))) %>% ggplot(aes(X, Y, fill = Z)) + 
+    geom_raster() +
     theme_bw() + theme(panel.grid.major = element_blank(), 
                        panel.grid.minor = element_blank(), panel.border = element_blank(), 
-                       panel.background = element_blank(), plot.margin = margin(0.1, 
-                                                                                0.1, 0.1, 0.1, "cm")) + 
-    theme(axis.title.x = element_blank(), 
-          axis.text.x = element_blank(), #axis.ticks.x = element_blank(), axis.ticks.y = element_blank()
-          axis.title.y = element_blank(), axis.text.y = element_blank()) +   #geom_tile(color=NA) + #theme(panel.border=element_rect(fill = NA, colour=alpha('black', .5),size=10))+
-    
-    #scale_fill_viridis(option='B',alpha = 1,direction=1, limits = c(min(tmp2), max(tmp2)))+
-    scale_y_continuous(expand = c(0,0)) + scale_x_continuous(expand = c(0,0))+
-    theme(panel.border = element_rect(fill=NA,color="black", size=0.5, 
-                                      linetype="solid"))
+                       panel.background = element_blank(), plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm")) + 
+    theme(axis.title.x = element_blank(), axis.text.x = element_blank(), 
+          axis.title.y = element_blank(), axis.text.y = element_blank()) +  
+    scale_y_continuous(expand = c(0,0)) + scale_x_continuous(expand = c(0,0)) +
+    theme(panel.border = element_rect(fill=NA,color="black", size=0.5, linetype="solid"))
   
     if (col=='BWR'){
-      p=p+scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limits = c(min(mat), max(mat)))
+      p <- p + scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limits = c(min(mat), max(mat)))
     }else if(col=='WR'){
-      p=p+scale_fill_gradient2(low = "white", high = "red", limits = c(min(mat), max(mat)))
+      p <- p + scale_fill_gradient2(low = "white", high = "red", limits = c(min(mat), max(mat)))
     }else if(col=='B'){
-      p=p+scale_fill_viridis(option='B',alpha = 1,direction=1, limits = c(min(mat), max(mat)))
+      p <- p + scale_fill_viridis(option = 'B', alpha = 1, direction = 1, limits = c(min(mat), max(mat)))
     }else{
-      p=p+scale_fill_gradient2(low = "yellow", high = "magenta", mid = "black", midpoint = 0, limits = c(min(mat), max(mat)))
+      p <- p + scale_fill_gradient2(low = "yellow", high = "magenta", mid = "black", midpoint = 0, limits = c(min(mat), max(mat)))
     }
-    
   
     if (is.null(legend)){
-      p=p+ theme(legend.position = "none") 
+      p <- p + theme(legend.position = "none")
     }
   
     if(!is.null(title)){
-      p=p +ggtitle(title) 
+      p <- p + ggtitle(title)
     }
   
     if(!is.null(grid)){
-      p=p+ geom_vline(xintercept=seq(30, bins, length.out=6),col='grey',alpha=0.1) 
-      p=p+ geom_hline(yintercept=seq(30, bins, length.out=6),col='grey',alpha=0.1) 
+      p <- p + geom_vline(xintercept=seq(30, bins, length.out=6), col='grey', alpha=0.1) 
+      p <- p + geom_hline(yintercept=seq(30, bins, length.out=6), col='grey', alpha=0.1) 
     }
   
   return(p)
@@ -155,137 +141,63 @@ plotDensity<-function(mat,bins,col='BWR',legend=NULL,title=NULL,grid=NULL){
 ##' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
 ##' @param target.level target/disease level for sample.group vector
 ##' @method method to cacuated differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy betwwen sample grapups ; t.test: zscore of t-test,global variacen is setting for t.test; 
-DiffCellDensity <- function(denMatrix.nor,fraction,sample.groups,bins,ref.level,target.level,method='substract',legend=NULL,grid=TRUE,col='YBM',title=NULL){
+diffCellDensity <- function(denMatrix.nor, fraction, sample.groups, bins, ref.level, target.level, method = 'substract', legend = NULL, grid = TRUE, col = 'YBM', title = NULL){
+  NT <- names(sample.groups[sample.groups == target.level])
+  NR <- names(sample.groups[sample.groups == ref.level])
   
-
-  NT=names(sample.groups[sample.groups==target.level])
-  NR=names(sample.groups[sample.groups==ref.level])
-  
-  if (method=='substract'){
-    score=rowMeans(denMatrix.nor[,NT])-rowMeans(denMatrix.nor[,NR])
-  }else if (method=='entropy'){
-      sudo=mean(as.numeric(denMatrix.nor)) # add sudo counts 
-      denMatrix.nor2=denMatrix.nor+sudo
-      s1=rowSums(denMatrix.nor2[,NR])
-      s2=rowSums(denMatrix.nor2[,NT])
-      #s1=rowMeans(denMatrix.nor2[,NR])
-      #s2=rowMeans(denMatrix.nor2[,NT])
-      r1=s1/(s1+s2)
-      r2=s2/(s1+s2)
-      weight.sum.per.fac.cell=data.frame(r1,r2)
-      xt <- table(fraction)
-      max.ent <- (if (xt[1] > xt[2]) c(0, 1) else c(1, 0)) %>% entropy::KL.empirical(xt, unit='log2')
-      entropy.per.cell <- apply(weight.sum.per.fac.cell, 1, entropy::KL.empirical, xt, unit='log2') / max.ent
-      score=entropy.per.cell*sign(r2-r1)
+  if (method == 'substract'){
+    score = rowMeans(denMatrix.nor[, NT]) - rowMeans(denMatrix.nor[, NR])
+  }else if (method == 'entropy'){
+    sudo <- mean(as.numeric(denMatrix.nor)) # add sudo counts
+    denMatrix.nor2 <- denMatrix.nor + sudo
+    s1 <- rowSums(denMatrix.nor2[, NR])
+    s2 <- rowSums(denMatrix.nor2[, NT])
+    #s1=rowMeans(denMatrix.nor2[,NR])
+    #s2=rowMeans(denMatrix.nor2[,NT])
+    r1 <- s1 / (s1 + s2)
+    r2 <- s2 / (s1 + s2)
+    weight.sum.per.fac.cell <- data.frame(r1, r2)
+    xt <- table(fraction)
+    max.ent <- (if (xt[1] > xt[2]) c(0, 1) else c(1, 0)) %>% entropy::KL.empirical(xt, unit='log2')
+    entropy.per.cell <- apply(weight.sum.per.fac.cell, 1, entropy::KL.empirical, xt, unit = 'log2') / max.ent
+    score <- entropy.per.cell * sign(r2 - r1)
   }else if (method=='t.test'){
-    vel=rowMeans(denMatrix.nor)
-    sudo=quantile(vel,0.05) # add sudo counts at 5% 
-    denMatrix.nor2=denMatrix.nor+sudo
-  
-    N1=denMatrix.nor2[,NR]
-    T1=denMatrix.nor2[,NT]
-    x1=as.numeric(N1)
-    x2=as.numeric(T1)
-    
-    n1=length(x1)
-    n2=length(x2)
-    
-    var.pooled <- weighted.mean(x=c(var(x1), var(x2)), w=c(n1 - 1, n2 - 1)) # caculate global variance 
-    
-    score=apply(denMatrix.nor2,1,function(x) {
-      x1=x[NT]
-      x2=x[NR]
-      n1=length(x1)
-      n2=length(x2)
+    vel <- rowMeans(denMatrix.nor)
+    denMatrix.nor2 <- denMatrix.nor + sudo + quantile(vel, 0.05) # add sudo counts at 5%
+    N1 <- denMatrix.nor2[, NR]
+    T1 <- denMatrix.nor2[, NT]
+    n1 <- length(as.numeric(N1))
+    n2 <- length(as.numeric(T1))
+    var.pooled <- weighted.mean(x = c(var(x1), var(x2)), w = c(n1 - 1, n2 - 1)) # caculate global variance 
+    score <- apply(denMatrix.nor2, 1, function(x) {
+      x1 <- x[NT]
+      x2 <- x[NR]
+      n1 <- length(x1)
+      n2 <- length(x2)
       (mean(x1) - mean(x2)) / sqrt(var.pooled / n1 + var.pooled / n2)
     })
   }
-  
+
   if (is.null(title)){
-    title=method
+    title <- method
   }
+  DensitScore <- matrix(score, ncol = bins, byrow = FALSE)
   
-  DensitScore=matrix(score, ncol = bins, byrow = FALSE)
-  
-  plotDensity(DensitScore,bins,col=col,title=title,legend=legend,grid=grid)
-  
+  p <- plotDensity(DensitScore, bins, col = col, title = title, legend = legend, grid = grid)
+  return(p)
 }
 
 
 
 
-
-EntropySamples<-function(denMatrix.nor,samples,bins){
-  vel=rowMeans(denMatrix.nor)
-  #sudo=quantile(vel,0.05) # add sudo counts at 5% 
-  sudo=mean(as.numeric(denMatrix.nor)) # add sudo counts at 5% 
-  
-  denMatrix.nor=denMatrix.nor+sudo
-  
-  Z=apply(denMatrix.nor[,samples],1,function(x) 
-    entropy(x)/log(length(x)) # empirical estimate near theoretical maximum
-  )
-  
-  Z=1-Z
-  
-  DensitScore=matrix(Z, ncol = bins, byrow = FALSE)
-  
-  return(DensitScore)
-}
-
-
-
-estimteWeightEntropyPerCell <- function(graph, factor.per.cell, annotation=NULL) {
-  if (length(unique(factor.per.cell)) != 2)
-    stop("factor.per.cell must have exactly two factors")
-  
-  adj.mat <- igraph::as_adjacency_matrix(graph, attr="weight") %>% as("dgTMatrix")
-  factor.per.cell %<>% as.factor() %>% .[rownames(adj.mat)]
-  
-  
-  
-  if (!is.null(annotation)) {
-    annotation %<>% as.factor() %>% .[rownames(adj.mat)]
-  }
-  
-  
-  
-  lev=levels(factor.per.cell)
-  n1=names(factor.per.cell[factor.per.cell==lev[1]])
-  n2=names(factor.per.cell[factor.per.cell==lev[2]])
-  
-  adj.mat2=adj.mat/Matrix:::rowSums(adj.mat)
-  adj.mat3=adj.mat*adj.mat2
-  
-  s1=Matrix:::rowSums(adj.mat3[,intersect(n1,colnames(adj.mat3))])
-  s2=Matrix:::rowSums(adj.mat3[,intersect(n2,colnames(adj.mat3))])
-  
-  
-  r1=s1/(s1+s2)
-  r2=s2/(s1+s2)
-  
-  weight.sum.per.fac.cell=data.frame(r1,r2)
-  
-  colnames(weight.sum.per.fac.cell)=lev
-  rownames(weight.sum.per.fac.cell)=rownames(adj.mat)
-  
-  
-  #  weight.sum.per.fac.cell <- conos:::getSumWeightMatrix(adj.mat@x, adj.mat@i, adj.mat@j, as.integer(factor.per.cell)) %>%
-  #    `colnames<-`(levels(factor.per.cell)) %>% `rownames<-`(rownames(adj.mat))
-  
-  if (is.null(annotation)) {
-    xt <- table(factor.per.cell)
-    max.ent <- (if (xt[1] > xt[2]) c(0, 1) else c(1, 0)) %>% entropy::KL.empirical(xt, unit='log2')
-    entropy.per.cell <- apply(weight.sum.per.fac.cell, 1, entropy::KL.empirical, xt, unit='log2') / max.ent
-  } else {
-    xt.per.type <- factor.per.cell %>% split(annotation) %>% sapply(table) %>% t()
-    max.ent.per.type <- apply(xt.per.type, 1, function(xt)
-      (if (xt[1] > xt[2]) c(0, 1) else c(1, 0)) %>% entropy::KL.empirical(xt, unit='log2'))
-    entropy.per.cell <- sapply(1:nrow(weight.sum.per.fac.cell), function(i)
-      entropy::KL.empirical(weight.sum.per.fac.cell[i,], xt.per.type[annotation[i],], unit='log2') / max.ent.per.type[annotation[i]])
-  }
-  
-  return(cbind(data.frame(weight.sum.per.fac.cell), entropy=entropy.per.cell))
+EntropySamples <- function(denMatrix.nor, samples, bins) {
+  vel <- rowMeans(denMatrix.nor)
+  sudo <- mean(as.numeric(denMatrix.nor)) # add sudo counts at 5%
+  denMatrix.nor <- denMatrix.nor + sudo
+  Z <- apply(denMatrix.nor[, samples], 1 , function(x) entropy(x) / log(length(x))) # empirical estimate near theoretical maximum
+  Z <- 1 - Z
+  density.score <- matrix(Z, ncol = bins, byrow = FALSE)
+  return(density.score)
 }
 
 

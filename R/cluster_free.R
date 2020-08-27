@@ -89,7 +89,7 @@ plotZScoreList <- function(con, z.scores, scores, n.genes=NULL, genes=NULL, ...)
 ##' @param size Size of cells on plot
 ##' @param n.col Columns of plots. If NULL, will be number of conditions + 1 (default=NULL)
 ##' @param ... Plotting variables propagated to conos:::embeddingPlot
-plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z.scores=NULL, cur.scores=NULL, show.legend=TRUE, legend.pos=c(1, 1), size=0.2, n.col=NULL, ...) {
+plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z.scores=NULL, cur.scores=NULL, show.legend=TRUE, legend.pos=c(1, 1), size=0.2, n.col=NULL, z.lims=NULL, max.expr=NULL, adj.list=NULL, ...) {
   #TODO: Condition.per.cell should be derived from sample.groups and cell.groups
   if (!is.null(cur.scores) & !is.null(names(cur.scores))) {
     genes <- names(sort(cur.scores, decreasing=TRUE)[genes])
@@ -100,15 +100,21 @@ plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z
   lapply(genes, function(g) {
     lst <- lapply(unique(condition.per.cell), function(sg) {
       con$plotGraph(gene=g, show.legend=show.legend, legend.pos=legend.pos, size=size,
-                      title=paste(sg," ",g), groups=condition.per.cell, subgroups=sg, ...)
+                    title=paste(sg," ",g), groups=condition.per.cell, subgroups=sg,
+                    color.range=if (is.null(max.expr)) NULL else c(0, max.expr),
+                    legend.title="Expression", ...)
     })
 
-      if (!is.null(z.scores)) {
-        lst <- plotZScores(g, con, z.scores, cur.scores=cur.scores, show.legend=show.legend,
-                           legend.pos=legend.pos, size=size, ...) %>% list() %>% c(lst)
-      }
+    if (!is.null(z.scores)) {
+      lst <- plotZScores(g, con, z.scores, cur.scores=cur.scores, show.legend=show.legend, legend.title="Z-score",
+                         legend.pos=legend.pos, size=size, color.range=z.lims, ...) %>% list() %>% c(lst)
+    }
 
-      cowplot::plot_grid(plotlist=lst, ncol=n.col)
+    if (!is.null(adj.list)) {
+      lst %<>% lapply(function(p) Reduce(`+`, adj.list, p))
+    }
+
+    cowplot::plot_grid(plotlist=lst, ncol=n.col)
   })
 }
 

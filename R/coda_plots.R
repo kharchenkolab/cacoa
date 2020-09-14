@@ -1,14 +1,21 @@
-plotCellLoadings <- function(cda.resamples, aplha = 0.01){
-  res.init = t(cda.resamples)
+plotCellLoadings <- function(cda.resamples, aplha = 0.01, 
+                             n.significant.cells = 0,
+                             font.size = 16){
+  res.init = t(cda.resamples$balances)
   
   # Define order of cell types
-  res.ordered= res.init[,order(abs(colMeans(res.init)))]
+  # res.ordered= res.init[,order(abs(colMeans(res.init)))]
+
+  n.bal = ncol(cda.resamples$balances)
+  n.plus = rowSums(cda.resamples$balances[,2:n.bal] > 0)
+  n.minus = rowSums(cda.resamples$balances[,2:n.bal] < 0)  
+  frac = mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) / mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
+  res.ordered= res.init[,order(-frac)]
+  
   # Dataframe
   dat <- stack(as.data.frame(res.ordered))
   
-  font.size = 16
-  
-  p = ggplot(dat, aes(x = ind, y = values, fill=factor(ind))) + 
+  p <- ggplot(dat, aes(x = ind, y = values, fill=factor(ind))) + 
     geom_boxplot(notch=TRUE, outlier.shape = NA) + 
     geom_jitter(aes(x = ind, y = values), alpha = aplha, size=1) +
     # scale_fill_manual(values=cell_colors)+
@@ -17,7 +24,9 @@ plotCellLoadings <- function(cda.resamples, aplha = 0.01){
     xlab('') + ylab('') +
     theme_bw()  +
     theme(axis.text=element_text(size=font.size),
-          axis.title=element_text(size=font.size)) + theme(legend.position = "none")  
+          axis.title=element_text(size=font.size)) + theme(legend.position = "none")
+  if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(cda.resamples$balances) - n.significant.cells + 0.5, color='red')
+  
   return(p)
 }
 
@@ -54,7 +63,12 @@ plotPcaSpace <- function(d.counts, d.groups){
     coord_flip(clip = "off") +
     geom_text(data=df.loadings,
               aes(x=pc1,y=pc2,label=rownames(df.loadings)),
-              color="black", size=3) + coord_fixed(ratio = dx / dy)
+              color="black", size=3)
+  
+  dx = max(dx, max(df.loadings[,'pc1']) - min(df.loadings[,'pc1']))
+  dy = max(dy, max(df.loadings[,'pc2']) - min(df.loadings[,'pc2']))
+  
+  rda.biplot <- rda.biplot + coord_fixed(ratio = dx / dy)
   return(rda.biplot)
 }
 
@@ -66,13 +80,20 @@ plotCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
   bal = getRndBalances(d.counts)
   d.used = bal$norm
   
-  for(i in 1:n.dim){
-    res.remove = removeGroupEffect(d.used, d.groups, thresh.pc.var = 0.9)
-    cell.loadings = cbind(cell.loadings, bal$psi %*% res.remove$rotation)
-    sample.pos = cbind(sample.pos, res.remove$scores)
-    # d.used = res.remove$remain
-    d.used = d.used - res.remove$used.part
+  if(ncol(d.used) != 2){
+    for(i in 1:n.dim){
+      res.remove = removeGroupEffect(d.used, d.groups, thresh.pc.var = 0.9)
+      cell.loadings = cbind(cell.loadings, bal$psi %*% res.remove$rotation)
+      sample.pos = cbind(sample.pos, res.remove$scores)
+      # d.used = res.remove$remain
+      d.used = d.used - res.remove$used.part
+    }  
+  }else{
+    cell.loadings = bal$psi
+    sample.pos = d.used
   }
+  
+  
   
   colnames(cell.loadings) <- paste('C', 1:n.dim, sep = '')
   colnames(sample.pos) <- paste('Score', 1:n.dim, sep = '')
@@ -105,7 +126,13 @@ plotCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
                  color="grey", arrow=arrow(length=unit(0.01,"npc")))  +
     geom_text(data=df.loadings,
               aes(x=C1,y=C2,label=rownames(df.loadings)),
-              color="black", size=3) + coord_fixed(ratio = dx / dy)
+              color="black", size=3)
+  
+  
+  dx = max(dx, max(df.loadings[,'C1']) - min(df.loadings[,'C1']))
+  dy = max(dy, max(df.loadings[,'C2']) - min(df.loadings[,'C2']))
+  
+  rda.biplot <- rda.biplot + coord_fixed(ratio = dx / dy)
   
   return(rda.biplot)
 }

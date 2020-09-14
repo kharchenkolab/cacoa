@@ -5,7 +5,6 @@
 resampleContrast <- function(d.counts, d.groups, n.cell.counts = 500, n.seed = 239, n.iter = 1000){
   checkDataGroups(d.counts, d.groups)
   # --------
-  
   set.seed(n.seed)
   rnd.seeds <- unique(round(runif(1.5*n.iter, max = 1000000)))
   
@@ -17,16 +16,15 @@ resampleContrast <- function(d.counts, d.groups, n.cell.counts = 500, n.seed = 2
 
     d.resampled <- resampleCounts(d.counts, d.groups = d.groups, n.tot.count = n.cell.counts, n.seed = rnd.seeds[iter])
     d.all <- rbind(d.all, d.resampled)
-    
     cda.loadings <- getCdaLoadings(d.resampled, d.groups[rownames(d.resampled)], n.seed = rnd.seeds[iter])
     
     x <- cda.loadings[colnames(d.counts),]
-    if(length(cda.resamples) > 0){
-      if(sum((sign(x) != sign(cda.resamples[,1])) * abs(cda.resamples[,1])) > 
-         sum((sign(-x) != sign(cda.resamples[,1])) * abs(cda.resamples[,1]))){
-        x <- -x
-      }  
-    }
+    # if(length(cda.resamples) > 0){
+    #   if(sum((sign(x) != sign(cda.resamples[,1])) * abs(cda.resamples[,1])) > 
+    #      sum((sign(-x) != sign(cda.resamples[,1])) * abs(cda.resamples[,1]))){
+    #     x <- -x
+    #   }  
+    # }
     cda.resamples <- cbind(cda.resamples, x)        
   }
   return(list(balances = cda.resamples, data = d.all))
@@ -137,21 +135,24 @@ getCdaLoadings <- function(d.counts, d.groups, n.seed = 239){
   # ---------
   
   bal <- getRndBalances(d.counts, n.seed)
-  
+
   # PCA
   pca.res <- prcomp(bal$norm)
   pca.loadings <- bal$psi %*% pca.res$rotation
-  
+
   # CDA
   df.pca <- as.data.frame(pca.res$x)
   n.pc <- ncol(pca.loadings)
-  
+
   for (i in 0:n.pc) {
     stop.loop <- TRUE
-    model<-lm(as.matrix(df.pca[,1:(n.pc-i)])~d.groups)
-    tryCatch(suppressWarnings(cda <- candisc(model,ndim=1)), error = function(e) { stop.loop <<- FALSE})
-    if(stop.loop) { break }     
+    # print(d.groups)
+    model<-lm(as.matrix(df.pca[,1:(n.pc-i)]) ~ d.groups)
+    tryCatch(suppressWarnings(cda <- candisc(model, ndim=1)), error = function(e) { stop.loop <<- FALSE})
+    if(stop.loop) { break }
   }
+  
+  if(mean(cda$scores[d.groups,'Can1']) < mean(cda$scores[!d.groups,'Can1'])) cda$structure = -cda$structure
   
   cda.loadings <- pca.loadings[,1:(n.pc-i)]  %*% as.matrix(cda$structure)
   # cda.loadings <- pca.loadings[,1:(n.pc-i)]  %*% as.matrix(cda$coeffs.raw)
@@ -214,13 +215,26 @@ removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
   # Calculate cummularive variance explained by PCs
   expl.var <- cumsum(pca.res$sdev^2/sum(pca.res$sdev^2))
   n.pc.var <- sum(expl.var < thresh.pc.var) + 1
+  n.pc.var = ncol(pca.res$x) - 1
   
-  d.working <- pca.res$x[,1:n.pc.var] # data to cda
+  
+  
   # d.used.explained <- d.working %*% t(pca.res$rotation[,1:n.pc.var])
+  
+  for (i in 0:n.pc.var) {
+    stop.loop <- TRUE
+    # print(d.groups)
+    d.working <- pca.res$x[,1:(n.pc.var - i)] # data to cda
+    
+    model<-lm(d.working ~ d.groups)
+    tryCatch(suppressWarnings(cda <- candisc(model)), error = function(e) { stop.loop <<- FALSE})
+    if(stop.loop) { break }
+  }
+  n.pc.var = n.pc.var - i
   
   model<-lm(d.working ~ d.groups)
   cda <- candisc(model)
-  # print(cda)
+  
   cda.rotation <- cda$structure # already normalised
 
   
@@ -246,10 +260,11 @@ removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
 #' @param cell.set1 Set#1
 #' @param cell.set2 Set#1
 #' @return Balance values
-calcBalancesOnCellSets <- function(d.counts, cell.set1, cell.set2){
+calcBalancesOnCellSets <- function(d.counts, cell.set1, cell.set2 = NULL){
   
   checkData(d.counts)
   checkDataAndCells(d.counts, cell.set1)
+  if(is.null(cell.set2)) cell.set2 = setdiff(colnames(d.counts), cell.set1)
   checkDataAndCells(d.counts, cell.set2)
   # ---------
   
@@ -265,3 +280,54 @@ calcBalancesOnCellSets <- function(d.counts, cell.set1, cell.set2){
   return(bal * normalizing.coef)
 }
 
+
+calcWilcoxonTest <- function(cell.groups, 
+                             sample.per.cell, 
+                             sample.groups,
+                             cells.to.remain = NULL,
+                             cells.to.remove = NULL){
+  
+  d.counts <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
+    table  %>%
+    rbind  %>%  t
+  
+  if(!is.null(cells.to.remain)) d.counts = d.counts[,colnames(d.counts) %in% cells.to.remain]
+  if(!is.null(cells.to.remove)) d.counts = d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
+  
+  d.freqs = d.counts %>% magrittr::divide_by(rowSums(.)) 
+  
+  d.groups = cao$sample.groups[rownames(d.counts)] == cao$target.level
+  names(d.groups) <- rownames(d.counts)
+  
+  
+  options(warn=-1)
+  
+  p.vals.balances = c()
+  for(cell.set1 in colnames(d.counts)){
+    cell.set2 = setdiff(colnames(d.counts), cell.set1)
+    # cell.set2 = 'AST-PP'
+    bal = calcBalancesOnCellSets(d.counts, cell.set1, cell.set2)
+    x = bal[d.groups]
+    y = bal[!d.groups]
+    
+    res = wilcox.test(x, y)
+    p.vals.balances = c(p.vals.balances, res$p.value)
+  }
+  
+  
+  p.vals.freqs = c()
+  for(cell.type in colnames(d.counts)){
+    x = d.freqs[d.groups, cell.type]
+    y = d.freqs[!d.groups, cell.type]
+    
+    res = wilcox.test(x, y)
+    p.vals.freqs = c(p.vals.freqs, res$p.value)
+  }
+  
+  p.vals.res = cbind(p.vals.balances, p.vals.freqs)
+  rownames(p.vals.res) <- colnames(d.counts)
+  
+  options(warn=0)
+  
+  p.vals.res
+}

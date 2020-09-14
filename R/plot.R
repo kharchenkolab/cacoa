@@ -343,9 +343,56 @@ plotProportions <- function(legend.position = "right", cell.groups, sample.per.c
     theme(axis.text.x = element_text(angle=90),
           legend.position=legend.position,
           legend.title=element_blank()) +
-    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group)) +
+    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), aplha=0.1) +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
 }
+
+
+#' @title Plot proportions for a subset of cell types
+#' @description Plot the cell group proportions per sample
+#' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
+#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+#' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
+#' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
+#' @param cells.to.remain Vector of cell types to remain in the composition
+#' @param cells.to.remove Vector of cell types to remove from the composition
+#' @return A ggplot2 object
+plotProportionsSubset <- function(legend.position = "right", 
+                                  cell.groups, 
+                                  sample.per.cell, 
+                                  sample.groups,
+                                  cells.to.remove,
+                                  cells.to.remain) {
+  df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
+    table  %>%
+    rbind 
+  
+  if(!is.null(cells.to.remove)) df.melt = df.melt[!(rownames(df.melt) %in% cells.to.remove),]
+  if(!is.null(cells.to.remain)) df.melt = df.melt[rownames(df.melt) %in% cells.to.remain,]
+  
+  df.melt <- df.melt %>%
+    t %>%
+    as.data.frame  %>%
+    apply(2, as.numeric) %>%
+    as.data.frame %>%
+    magrittr::divide_by(rowSums(.)) %>%
+    magrittr::multiply_by(1e2) %>%
+    dplyr::mutate(group = sample.groups[match(levels(sample.per.cell), names(sample.groups))]) %>%
+    reshape2::melt(., id.vars="group")
+  
+  p = ggplot(df.melt, aes(x=variable, y=value, by=group)) +
+    geom_boxplot(position=position_dodge(), outlier.shape = NA) +
+    ylab("% cells per sample") +
+    xlab("") +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle=90),
+          legend.title=element_blank()) +
+    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), aplha=0.1) +
+    scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
+  
+  return(p)
+}
+
 
 #' @title Plot proportions
 #' @description Plot the cell group proportions per sample
@@ -371,7 +418,7 @@ plotCellNumbers <- function(legend.position = "right", cell.groups, sample.per.c
     theme(axis.text.x = element_text(angle=90),
           legend.position=legend.position,
           legend.title=element_blank()) +
-    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group)) +
+    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=0.4) +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 50)))
 }
 

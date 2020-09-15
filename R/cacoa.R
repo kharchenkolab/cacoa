@@ -713,7 +713,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       names(d.groups) <- rownames(d.counts)
       # ----
       
-<<<<<<< HEAD
       self$test.results[['cda']] <- resampleContrast(d.counts, d.groups,
                                                      n.cell.counts = n.cell.counts, 
                                                      n.seed = n.seed)
@@ -806,7 +805,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       
       self$test.results[['p.vals.balances']] <- p.vals
       return(self$test.results[['p.vals.balances']])
-=======
+
       cda = resampleContrast(d.counts, d.groups,
                              n.cell.counts = n.cell.counts, 
                              n.seed = n.seed)
@@ -933,7 +932,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         disData=self$test.results[['exp_disance']]
       }
       plotExpressionDistance(disData,sample.groups,cell.Type=cell.Type,type=type)
->>>>>>> 49365d7aa3d32e3d7c7d9d5bef074daac5f566f1
     }
 
   ),

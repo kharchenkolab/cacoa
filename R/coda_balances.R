@@ -153,7 +153,9 @@ getCdaLoadings <- function(d.counts, d.groups, n.seed = 239){
       break
   }
 
-  if(mean(cda$scores[d.groups,'Can1']) < mean(cda$scores[!d.groups,'Can1'])) cda$structure = -cda$structure
+  if (mean(cda$scores[d.groups,'Can1']) < mean(cda$scores[!d.groups,'Can1'])) {
+    cda$structure <- -cda$structure
+  }
 
   cda.loadings <- pca.loadings[,1:(n.pc-i)]  %*% as.matrix(cda$structure)
   # cda.loadings <- pca.loadings[,1:(n.pc-i)]  %*% as.matrix(cda$coeffs.raw)
@@ -216,7 +218,7 @@ removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
   # Calculate cummularive variance explained by PCs
   expl.var <- cumsum(pca.res$sdev^2/sum(pca.res$sdev^2))
   n.pc.var <- sum(expl.var < thresh.pc.var) + 1
-  n.pc.var = ncol(pca.res$x) - 1
+  n.pc.var <- ncol(pca.res$x) - 1
 
   # d.used.explained <- d.working %*% t(pca.res$rotation[,1:n.pc.var])
 
@@ -229,7 +231,7 @@ removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
     tryCatch(suppressWarnings(cda <- candisc::candisc(model)), error = function(e) { stop.loop <<- FALSE})
     if(stop.loop) { break }
   }
-  n.pc.var = n.pc.var - i
+  n.pc.var <- n.pc.var - i
 
   model<-lm(d.working ~ d.groups)
   cda <- candisc::candisc(model)
@@ -289,38 +291,38 @@ calcWilcoxonTest <- function(cell.groups,
     table  %>%
     rbind  %>%  t
 
-  if(!is.null(cells.to.remain)) d.counts = d.counts[,colnames(d.counts) %in% cells.to.remain]
-  if(!is.null(cells.to.remove)) d.counts = d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
+  if(!is.null(cells.to.remain)) d.counts <- d.counts[,colnames(d.counts) %in% cells.to.remain]
+  if(!is.null(cells.to.remove)) d.counts <- d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
 
-  d.freqs = d.counts %>% magrittr::divide_by(rowSums(.))
+  d.freqs <- d.counts %>% magrittr::divide_by(rowSums(.))
 
-  d.groups = cao$sample.groups[rownames(d.counts)] == cao$target.level
+  d.groups <- cao$sample.groups[rownames(d.counts)] == cao$target.level
   names(d.groups) <- rownames(d.counts)
 
   options(warn=-1)
 
-  p.vals.balances = c()
+  p.vals.balances <- c()
   for(cell.set1 in colnames(d.counts)){
-    cell.set2 = setdiff(colnames(d.counts), cell.set1)
-    # cell.set2 = 'AST-PP'
-    bal = calcBalancesOnCellSets(d.counts, cell.set1, cell.set2)
-    x = bal[d.groups]
-    y = bal[!d.groups]
+    cell.set2 <- setdiff(colnames(d.counts), cell.set1)
+    # cell.set2 <- 'AST-PP'
+    bal <- calcBalancesOnCellSets(d.counts, cell.set1, cell.set2)
+    x <- bal[d.groups]
+    y <- bal[!d.groups]
 
-    res = wilcox.test(x, y)
-    p.vals.balances = c(p.vals.balances, res$p.value)
+    res <- wilcox.test(x, y)
+    p.vals.balances <- c(p.vals.balances, res$p.value)
   }
 
-  p.vals.freqs = c()
+  p.vals.freqs <- c()
   for(cell.type in colnames(d.counts)){
-    x = d.freqs[d.groups, cell.type]
-    y = d.freqs[!d.groups, cell.type]
+    x <- d.freqs[d.groups, cell.type]
+    y <- d.freqs[!d.groups, cell.type]
 
-    res = wilcox.test(x, y)
-    p.vals.freqs = c(p.vals.freqs, res$p.value)
+    res <- wilcox.test(x, y)
+    p.vals.freqs <- c(p.vals.freqs, res$p.value)
   }
 
-  p.vals.res = cbind(p.vals.balances, p.vals.freqs)
+  p.vals.res <- cbind(p.vals.balances, p.vals.freqs)
   rownames(p.vals.res) <- colnames(d.counts)
 
   options(warn=0)

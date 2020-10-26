@@ -50,6 +50,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         for(n in ls(data.object)) {
           if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
         }
+
+        return()
       } else {
         # TODO: would be nice to support a list of count matrices as input
         if (!('Conos' %in% class(data.object)) && !('Seurat' %in% class(data.object)))

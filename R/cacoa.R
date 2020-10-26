@@ -79,6 +79,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
     },
 
+    ### Expression shifts
+
     #' @description  Calculate expression shift magnitudes of different clusters between conditions
     #' @param cell.groups Named cell group factor with cell names (default: stored vector)
     #' @param dist 'JS' - Jensen Shannon divergence, or 'cor' - correlation distance (default="JS")
@@ -149,6 +151,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     estimateExpressionShiftZScores=function(cell.groups=self$cell.groups, ref.level=self$ref.level, sample.groups=self$sample.groups,
                                             sample.per.cell=self$sample.per.cell, n.od.genes=1000, n.pcs=100, pca.maxit=1000, ignore.cache=F,
                                             name="expression.z.scores", verbose = self$verbose) {
+      .Deprecated("estimateExpressionShiftMagnitudes")
       if (is.null(cell.groups))
         stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
@@ -199,6 +202,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
     #' @return A ggplot2 object
     plotExpressionShiftZScores=function(type.order=NULL, name="expression.z.scores", size.norm = F, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell) {
+      .Deprecated("plotExpressionShiftMagnitudes")
       private$checkTestResults(name)
 
       plot.df <- self$test.results[[name]] %>% dplyr::filter(complete.cases(.))
@@ -209,6 +213,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       plotExpressionShiftZScores(plot.df = plot.df, size.norm = size.norm, cell.groups = cell.groups, sample.per.cell = sample.per.cell)
     },
+
+    ### Differential expression
 
     #' @description Estimate differential gene expression per cell type between conditions
     #' @param cell.groups factor specifying cell types (default=NULL)
@@ -292,6 +298,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       saveDEasJSON(de.raw = de.raw, saveprefix = saveprefix, dir.name = dir.name, gene.metadata = gene.metadata, cluster.sep.chr = cluster.sep.chr, sample.groups = sample.groups, verbose = verbose)
     },
 
+    #' @description Plot number of highly-expressed DE genes as a function of number of cells
+    #' @param de.filter Filtered DE genes, results from prepareOntologyData (default: stored list)
+    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
+    #' @param label Show labels on plot (default=T)
+    #' @return A ggplot2 object
+    plotFilteredDEGenes=function(de.filter = self$test.results$ontology$de.filter, cell.groups = self$cell.groups, legend.position = "none", label = T) {
+      if(is.null(de.filter)) stop("Please run 'estimatePerCellTypeDE' first.")
+
+      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
+
+      plotFilteredDEGenes(de.filter = de.filter, cell.groups = cell.groups, legend.position = legend.position, label = label)
+    },
+
+    ### Onthology analysis
+
     #' @description  Filter and prepare DE genes for ontology calculations
     #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
     #' @param n.top.genes Number of most different genes to take as input. If less are left after filtering for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)
@@ -315,20 +337,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       self$test.results[["ontology"]] <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
         prepareOntologyData(org.db = org.db, n.top.genes = n.top.genes, p.adj.cutoff = p.adj.cutoff, expr.cutoff = expr.cutoff, de.raw = de.raw, cell.groups = cell.groups, universe = universe, transposed = transposed, verbose = verbose, n.cores = n.cores)
       return(invisible(self$test.results[["ontology"]]))
-    },
-
-    #' @description Plot number of highly-expressed DE genes as a function of number of cells
-    #' @param de.filter Filtered DE genes, results from prepareOntologyData (default: stored list)
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
-    #' @param label Show labels on plot (default=T)
-    #' @return A ggplot2 object
-    plotFilteredDEGenes=function(de.filter = self$test.results$ontology$de.filter, cell.groups = self$cell.groups, legend.position = "none", label = T) {
-      if(is.null(de.filter)) stop("Please run 'estimatePerCellTypeDE' first.")
-
-      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
-
-      plotFilteredDEGenes(de.filter = de.filter, cell.groups = cell.groups, legend.position = legend.position, label = label)
     },
 
     #' @description  Estimate ontology terms based on DEs
@@ -558,6 +566,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       plotOntologySimilarities(type = type, ont.res = ont.res, genes = genes)
     },
+
+    ### Proportion analysis
 
     #' @description Plot the cell group proportions per sample
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
@@ -813,6 +823,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       plotCellLoadings(cda$balances, aplha = aplha)
     },
 
+
+    ### Segmentation-free cell density
+
     #' @description Estimate cell density in giving embedding
     #' @param emb cell embedding matrix
     #' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
@@ -933,7 +946,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
       plotExpressionDistance(disData,sample.groups,cell.Type=cell.Type,type=type)
     }
-
   ),
   private = list(
     checkTestResults=function(name) {

@@ -821,8 +821,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     plotExpressionDistance = function(cluster.shifts, notch = T, cell.groups = NULL, sample.per.cell = NULL, weight.disatnce = NULL,  min.cells = 10) {
       cluster.shifts <- self$test.results$expression.shifts
       plotExpressionDistance(cluster.shifts, notch = notch, cell.groups = cell.groups, sample.per.cell = sample.per.cell, weight.disatnce = weight.disatnce,  min.cells = min.cells)
-    }
+    },
 
+    #' @title Plot sample-sample expression distance in tSNE
+    #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
+    #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+    #' @param cell.type Named of cell type, default is null, it set plot sample-sample expression distance in tSNE for the cell type
+    #' @weight.disatnce default is null, it set caculated weigeted expression distance across mutiple cell types
+    #' @return A ggplot2 object
+    plotExpressionDistancetSNE = function(cluster.shifts, sample.groups, weight.disatnce = TRUE, cell.type = NULL, method = 'tSNE') {
+      cluster.shifts <- self$test.results$expression.shifts
+      sample.groups <- self$sample.groups
+      plotExpressionDistancetSNE(cluster.shifts, sample.groups = sample.groups, weight.disatnce = weight.disatnce, cell.type = cell.type, method = method)
+    }    
+    
+    
   ),
   private = list(
     checkTestResults=function(name) {

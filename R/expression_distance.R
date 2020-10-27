@@ -117,7 +117,7 @@ plotExpressionDistance <- function(cluster.shifts, notch = T, cell.groups = NULL
     
     df2$group = df2$type1
     gg <- ggplot(na.omit(df2), aes(x = group, y = value)) + theme_classic() + 
-      geom_boxplot(notch = TRUE, outlier.shape = NA , aes(fill = group)) + ggtitle('')+
+      geom_boxplot(notch = notch, outlier.shape = NA , aes(fill = group)) + ggtitle('')+
       geom_jitter(position = position_jitter(0.2), color = adjustcolor("black", alpha = 0.2)) + 
       theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.text.y = element_text(angle = 90, hjust = 0.5)) + 
       theme(legend.position = "right") +
@@ -132,3 +132,71 @@ plotExpressionDistance <- function(cluster.shifts, notch = T, cell.groups = NULL
   return(gg)
 }
 
+
+
+#' @title Plot sample-sample expression distance in tSNE
+#' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
+#' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+#' @param cell.type Named of cell type, default is null, it set plot sample-sample expression distance in tSNE for the cell type
+#' @weight.disatnce default is null, it set caculated weigeted expression distance across mutiple cell types
+#' @return A ggplot2 object
+
+plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, weight.disatnce = TRUE, method = 'tSNE', cell.type = NULL) {
+  ctdml <- cluster.shifts$ctdml
+  if (is.null(weight.disatnce)) {
+    title <- cell.type
+#    if (is.null(cell.type) stop('please speficy cell type')
+    df <- lapply(ctdml, function(ctdm) {
+      xm <-  ctdm[[cell.type]]
+      xm
+    })
+    dfm=Reduce(`+`, df)/length(df)
+    }
+  else { # weighetd expression distance
+    title <- ''
+    df <- lapply(ctdml, function(ctdm) {
+      n.cell <- unlist(lapply(ctdm,ncol)) %>% table() %>% sort() %>% rev %>% names %>% as.numeric #
+      ctdm <- ctdm[unlist(lapply(ctdm, ncol)) == n.cell[1]]
+      genelists <- lapply(ctdm, function(x) colnames(x))
+      commoncell <- Reduce(intersect, genelists)
+      ctdm <-  lapply(ctdm, function(x) {
+        cct <- attr(x, 'cc')
+        x <- x[commoncell, commoncell]
+        attr(x, 'cc') <- cct[commoncell]
+        x
+      }) # reform the matrix to make sure all cell type have the same diminsion
+
+      x <- abind(lapply(ctdm, function(x) {
+        nc <- attr(x, 'cc')
+        #wm <- (outer(nc,nc,FUN='pmin'))
+        wm <- sqrt(outer(nc, nc, FUN = 'pmin'))
+        return(x * wm)
+      }), along = 3)
+
+      # just the weights (for total sum of weights normalization)
+      y <- abind(lapply(ctdm, function(x) {
+        nc <- attr(x, 'cc')
+        sqrt(outer(nc, nc, FUN = 'pmin'))
+      }), along = 3)
+
+      # normalize by total weight sums
+      xd <- apply(x, c(1, 2), sum) / apply(y, c(1, 2), sum)
+      xd
+    })
+    dfm=Reduce(`+`, df)/length(df)
+  }
+  if (method == 'tSNE'){
+    xde <- Rtsne::Rtsne(dfm, is_distance = TRUE, perplexity = 4, max_iter = 1e4)$Y
+  }else if (method == 'MDS'){
+    xde <- cmdscale(dfm, eig=TRUE, k=2)$points # k is the number of dim
+  }
+  df <- data.frame(xde)
+  rownames(df) <- rownames(dfm)
+  colnames(df) <- c("x", "y")
+  df$fraction <- sample.groups[rownames(df)]
+  df$sample=rownames(df)
+  #df$ncells <- nc[rownames(df)]
+  gg <- ggplot(df, aes(x, y, color=fraction, shape=fraction)) + geom_point(size=5) + #, size=log10(ncells)
+    theme_bw() + ggtitle(title) + theme(axis.title = element_blank(), axis.text = element_blank(), axis.ticks = element_blank())
+  return(gg)
+  }

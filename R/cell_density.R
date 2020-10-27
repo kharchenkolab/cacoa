@@ -198,7 +198,7 @@ diffCellDensity <- function(density.mat, dcounts, condition.per.cell, sample.gro
   
   p <- plotDensity(density.score, bins, col = col, title = title, legend = legend, grid = grid)
   
-  return(list('fig'=p,'score'=score))
+  return(list('fig'=p,'score'=density.score))
 }
 
 

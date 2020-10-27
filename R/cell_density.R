@@ -66,17 +66,16 @@ estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.l
 ##' @param conf confidence interval of counter
 ##' @param bins number of bins for density esitmation, should keep consistent with bins in estimateCellDensity
 getContour <- function(emb, cell.type, bins = NULL, cell, color = 'white', linetype = 2, conf = "10%"){
-  if (!is.null(bin)){
-    x <- emb[, 1]
-    y <- emb[, 2]
+  x <- emb[, 1]
+  y <- emb[, 2]
+  if (!is.null(bins)){
     x <- (x - range(x)[1])
     x <- (x / max(x)) * bins
     y <- (y - range(y)[1])
     y <- (y / max(y)) * bins
     emb2 <- data.frame(x = x, y = y)
   }else(
-    emb2 <- emb
-    colnames(emb2) <- c('x', 'y')
+    emb2 <- data.frame(x = x, y = y)
   )
   linetype <- 2
   tmp <- emb2[rownames(emb2) %in% names(cell.type)[cell.type %in% cell], ]
@@ -175,14 +174,14 @@ diffCellDensity <- function(density.mat, dcounts, condition.per.cell, sample.gro
     vel <- rowMeans(density.mat)
     density.mat2 <- density.mat + quantile(vel, 0.05) # add sudo counts at 5%
     score <- apply(density.mat2, 1, function(x) {
-      mw = wilcox.test(x[nt], x[nr], exact = FALSE)
-      zstat <- abs(qnorm(mw$p.value / 2))
-      fc <- mean(x1) - mean(x2)
-      zscore <- zstat * sign(fc)
-      zscore
+      x1 <- x[nt]
+      x2 <- x[nr]
+      tryCatch({
+        t.test(x1, x2)$statistic
+      }, error = function(e) {
+        0
+      })
     })
-  }
-    
   } else if (method == 'willcox') {
     vel <- rowMeans(density.mat)
     density.mat2 <- density.mat + quantile(vel, 0.05) # add sudo counts at 5%

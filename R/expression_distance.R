@@ -12,7 +12,7 @@
 plotExpressionDistance <- function(cluster.shifts, notch = T, cell.groups = NULL, sample.per.cell = NULL, weight.disatnce = NULL,  min.cells = 10) {
   ctdml <- cluster.shifts$ctdml
   valid.comparisons <- cluster.shifts$valid.comparisons
-  if (is.null(weight.disatnce)) {
+  if (is.null(weight.disatnce)) { #
     df <- do.call(rbind,lapply(ctdml,function(ctdm) {
       x <- lapply(ctdm, function(xm) {
         nc <- attr(xm, 'cc')
@@ -20,7 +20,7 @@ plotExpressionDistance <- function(cluster.shifts, notch = T, cell.groups = NULL
         cross.factor <- outer(sample.groups[rownames(xm)], sample.groups[colnames(xm)], '==')
         frm <- valid.comparisons[rownames(xm), colnames(xm)] & cross.factor
         diag(xm) <- NA
-        # restrict
+        # remove self distance  
         xm[!frm] <- NA
         xm[wm < min.cells] <- NA
         if (!any(!is.na(xm)))
@@ -139,6 +139,7 @@ plotExpressionDistance <- function(cluster.shifts, notch = T, cell.groups = NULL
 #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 #' @param cell.type Named of cell type, default is null, it set plot sample-sample expression distance in tSNE for the cell type
 #' @weight.disatnce default is null, it set caculated weigeted expression distance across mutiple cell types
+#' @method dimension reduction methods (tSNE or MSD ) , default is tSNE
 #' @return A ggplot2 object
 
 plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, weight.disatnce = TRUE, method = 'tSNE', cell.type = NULL) {

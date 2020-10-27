@@ -61,17 +61,23 @@ estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.l
 
 ##' @description extract Counter from embedding 
 ##' @param emb cell embedding matrix
-##' @param cell.type specify cell types for counter, mutiple cell types are also suported 
+##' @param cell.type vector of cell type annotation
+##' @param cell specify cell types for counter, mutiple cell types are also suported 
 ##' @param conf confidence interval of counter
 ##' @param bins number of bins for density esitmation, should keep consistent with bins in estimateCellDensity
-getContour <- function(emb, cell.type, bins, cell, color = 'white', linetype = 2, conf = "10%"){
-  x <- emb[, 1]
-  y <- emb[, 2]
-  x <- (x - range(x)[1])
-  x <- (x / max(x)) * bins
-  y <- (y - range(y)[1])
-  y <- (y / max(y)) * bins
-  emb2 <- data.frame(x = x, y = y)
+getContour <- function(emb, cell.type, bins = NULL, cell, color = 'white', linetype = 2, conf = "10%"){
+  if (!is.null(bin)){
+    x <- emb[, 1]
+    y <- emb[, 2]
+    x <- (x - range(x)[1])
+    x <- (x / max(x)) * bins
+    y <- (y - range(y)[1])
+    y <- (y / max(y)) * bins
+    emb2 <- data.frame(x = x, y = y)
+  }else(
+    emb2 <- emb
+    colnames(emb2) <- c('x', 'y')
+  )
   linetype <- 2
   tmp <- emb2[rownames(emb2) %in% names(cell.type)[cell.type %in% cell], ]
   kd <- ks::kde(tmp, compute.cont = TRUE)
@@ -86,7 +92,7 @@ getContour <- function(emb, cell.type, bins, cell, color = 'white', linetype = 2
 
 ##' @description Plot cell density 
 ##' @param bins number of bins for density esitmation, should keep consistent with bins in estimateCellDensity
-##' @param col color palettes, 4 different color palettes are supported; default is yellow-black-magenta; BWR: blue-white-red;  WR: white-read; B: magma in viridi;
+##' @param col color palettes, 4 different color palettes are supported; default is yellow-black-magenta; BWR: blue-white-red; PBY:purple-black-yellow;  WR: white-read; B: magma in viridi;
 plotDensity <- function(mat, bins, col = 'BWR', legend = NULL, title = NULL, grid = NULL, mi=NULL, ma=NULL){
   p  <-  mat %>% as_tibble() %>% rowid_to_column(var = "X") %>% 
     gather(key = "Y", value = "Z", -1) %>% mutate(Y = as.numeric(gsub("V", "", Y))) %>% ggplot(aes(X, Y, fill = Z)) + 
@@ -158,8 +164,6 @@ diffCellDensity <- function(density.mat, dcounts, condition.per.cell, sample.gro
     density.mat2 <- density.mat + sudo
     s1 <- rowSums(density.mat2[, nr])
     s2 <- rowSums(density.mat2[, nt])
-    #s1=rowMeans(density.mat2[,NR])
-    #s2=rowMeans(density.mat2[,NT])
     r1 <- s1 / (s1 + s2)
     r2 <- s2 / (s1 + s2)
     weight.sum.per.fac.cell <- data.frame(r1, r2)
@@ -171,10 +175,13 @@ diffCellDensity <- function(density.mat, dcounts, condition.per.cell, sample.gro
     vel <- rowMeans(density.mat)
     density.mat2 <- density.mat + quantile(vel, 0.05) # add sudo counts at 5%
     score <- apply(density.mat2, 1, function(x) {
-      x1 <- x[nt]
-      x2 <- x[nr]
-      t.test(x1,x2)$statistic
+      mw = wilcox.test(x[nt], x[nr], exact = FALSE)
+      zstat <- abs(qnorm(mw$p.value / 2))
+      fc <- mean(x1) - mean(x2)
+      zscore <- zstat * sign(fc)
+      zscore
     })
+  }
     
   } else if (method == 'willcox') {
     vel <- rowMeans(density.mat)
@@ -198,7 +205,7 @@ diffCellDensity <- function(density.mat, dcounts, condition.per.cell, sample.gro
   
   p <- plotDensity(density.score, bins, col = col, title = title, legend = legend, grid = grid)
   
-  return(list('fig'=p,'score'=density.score))
+  return(list('fig' = p,'score' = density.score))
 }
 
 

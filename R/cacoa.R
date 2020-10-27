@@ -787,10 +787,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
     
     ##' @description esitmate differential cell density
-    ##' @param col color palettes, 4 different color palettes are supported; default is yellow-black-magenta; BWR: blue-white-red;  WR: white-read; B: magma in viridi;
+    ##' @param col color palettes, 4 different color palettes are supported; default is blue-white-red; BWR: blue-white-red;  WR: white-read; B: magma in viridi;
     ##' @param condition.per.cell A two-level factor on the cell names describing the conditions being compared (default: stored vector)
     ##' @method method to cacuated differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy betwwen sample grapups ; t.test: zscore of t-test,global variacen is setting for t.test;     
-    diffCellDensity = function(condition.per.cell = NULL, method = 'substract', legend = NULL, grid = TRUE, col = 'PBY', title = NULL, plot = TRUE){
+    diffCellDensity = function(condition.per.cell = NULL, method = 'substract', legend = NULL, grid = TRUE, col = 'BWR', title = NULL, plot = TRUE){
       ref.level <- self$ref.level
       target.level <- self$target.level
       sample.groups <- self$sample.groups
@@ -828,6 +828,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
     #' @param cell.type Named of cell type, default is null, it set plot sample-sample expression distance in tSNE for the cell type
     #' @weight.disatnce default is null, it set caculated weigeted expression distance across mutiple cell types
+    #' @method dimension reduction methods (tSNE or MSD ) , default is tSNE
     #' @return A ggplot2 object
     plotExpressionDistancetSNE = function(cluster.shifts, sample.groups, weight.disatnce = TRUE, cell.type = NULL, method = 'tSNE') {
       cluster.shifts <- self$test.results$expression.shifts

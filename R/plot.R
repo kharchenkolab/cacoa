@@ -6,6 +6,10 @@
 #' @importFrom reshape2 melt
 NULL
 
+theme_legend_position <- function(position) {
+  theme(legend.position=position, legend.justification=position)
+}
+
 plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", label=T) {
   p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
@@ -20,8 +24,9 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", 
   if(label) gg <- gg + geom_label_repel(aes(label=Type), size=2, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4))
 
   gg <- gg +
-      theme(legend.position=legend.position, legend.justification=legend.position, legend.background=element_rect(fill=alpha("white", 0.4))) +
-      guides(color=guide_legend(title="Cell type"))
+    theme(legend.background=element_rect(fill=alpha("white", 0.4))) +
+    theme_legend_position(legend.position) +
+    guides(color=guide_legend(title="Cell type"))
 
   return(gg)
 }
@@ -194,7 +199,8 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
     guides(fill=guide_colorbar(title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5))) +
     scale_y_discrete(position="right", expand=c(0, 0)) +
     scale_x_discrete(expand=c(0, 0), position=x.axis.position) +
-    theme(legend.position=legend.position, legend.key.width=legend.key.width, legend.background=element_blank())
+    theme_legend_position(legend.position) +
+    theme(legend.key.width=legend.key.width, legend.background=element_blank())
 
   return(gg)
 }
@@ -340,12 +346,60 @@ plotProportions <- function(legend.position = "right", cell.groups, sample.per.c
     ylab("% cells per sample") +
     xlab("") +
     theme_bw() +
-    theme(axis.text.x = element_text(angle=90),
-          legend.position=legend.position,
+    theme_legend_position(legend.position) +
+    theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
-    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group)) +
+    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), aplha=0.1) +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
 }
+
+
+#' @title Plot proportions for a subset of cell types
+#' @description Plot the cell group proportions per sample
+#' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
+#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+#' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
+#' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
+#' @param cells.to.remain Vector of cell types to remain in the composition
+#' @param cells.to.remove Vector of cell types to remove from the composition
+#' @return A ggplot2 object
+plotProportionsSubset <- function(legend.position = "right",
+                                  cell.groups,
+                                  sample.per.cell,
+                                  sample.groups,
+                                  cells.to.remove,
+                                  cells.to.remain) {
+  df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
+    table  %>%
+    rbind
+
+  if(!is.null(cells.to.remove)) df.melt = df.melt[!(rownames(df.melt) %in% cells.to.remove),]
+  if(!is.null(cells.to.remain)) df.melt = df.melt[rownames(df.melt) %in% cells.to.remain,]
+
+  df.melt <- df.melt %>%
+    t %>%
+    as.data.frame  %>%
+    apply(2, as.numeric) %>%
+    as.data.frame %>%
+    magrittr::divide_by(rowSums(.)) %>%
+    magrittr::multiply_by(1e2) %>%
+    dplyr::mutate(group = sample.groups[match(levels(sample.per.cell), names(sample.groups))]) %>%
+    reshape2::melt(., id.vars="group")
+
+  p = ggplot(df.melt, aes(x=variable, y=value, by=group)) +
+    geom_boxplot(position=position_dodge(), outlier.shape = NA) +
+    ylab("% cells per sample") +
+    xlab("") +
+    theme_bw() +
+    theme_legend_position(legend.position) +
+    theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
+          legend.title=element_blank()) +
+    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), aplha=0.1) +
+    scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
+
+  return(p)
+}
+
 
 #' @title Plot proportions
 #' @description Plot the cell group proportions per sample
@@ -368,10 +422,10 @@ plotCellNumbers <- function(legend.position = "right", cell.groups, sample.per.c
     ylab("Cells per sample") +
     xlab("") +
     theme_bw() +
-    theme(axis.text.x = element_text(angle=90),
-          legend.position=legend.position,
+    theme_legend_position(legend.position) +
+    theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
-    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group)) +
+    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=0.4) +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 50)))
 }
 

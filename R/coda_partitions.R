@@ -53,8 +53,28 @@ gaPartition <- function(d.counts, d.groups, n.pop = 1000, n.epoch = 100, n.seed 
     
     # bal.mean.dist <- colMeans(balances[d.groups,]) - colMeans(balances[!d.groups,])
     
-    bal.mean.dist <- apply(balances[d.groups,],2,min) - apply(balances[!d.groups,],2,max)
+    # bal.mean.dist <- apply(balances[d.groups,],2,min) - apply(balances[!d.groups,],2,max)
     
+    # # Wilcox
+    # n1 = sum(d.groups)
+    # n2 = sum(!d.groups)
+    # r = apply(balances, 2, rank)
+    # r1 = colSums(r[d.groups,])
+    # r2 = colSums(r[!d.groups,])
+    # 
+    # u1 = n1*n2 + n1 * (n1+1)/2 - r1
+    # u2 = n1*n2 + n2 * (n2+1)/2 - r2
+    # bal.mean.dist = pmin(u1, u2)
+  
+    bal.mean.dist = c()
+    for(ibal in 1:ncol(balances)){
+      bal.mean.dist = c(bal.mean.dist, f.stat(balances[d.groups, ibal], balances[!d.groups, ibal])$stat)
+    }
+    # print(bal.mean.dist)
+    
+    
+    # ref = f.stat(balances[d.groups], balances[!d.groups])
+    # bal.mean.dist = ref$stat
     
     sbp.pop <- sbp.pop[rev(order(bal.mean.dist)),]
     sbp.pop <- sbp.pop[1:min(nrow(sbp.pop), n.parents),]
@@ -261,8 +281,8 @@ getSignifCellTypesIteratively <- function(d.counts, d.groups,
     
   }
   # print(p.vals)
-  p.vals.adj <- p.adjust(p.vals, method = 'fdr')
-  p.vals
+  # p.vals.adj <- p.adjust(p.vals, method = 'fdr')
+  p.vals.adj <- p.vals
   
   cell.used.merge <- c()
   for(i in 1:length(cell.used.iter)){
@@ -275,6 +295,36 @@ getSignifCellTypesIteratively <- function(d.counts, d.groups,
               scores = scores,
               p.vals = p.vals,
               p.vals.adj = p.vals.adj))
+}
+
+
+f.stat <- function(b1, b2)
+{
+  n1 = length(b1)
+  n2 = length(b2)
+  
+
+  ss_tot = sum()
+  
+  m_tot <- mean(c(b1, b2))
+  ss_tot <- sum((c(b1, b2) - m_tot)^2)
+  ss_tot
+  
+  # Within-group variance
+  ss_wg <- sum((b1 - mean(b1))^2) + sum((b2 - mean(b2))^2)
+  ss_wg
+  
+  # Between-group variance
+  ss_bg <- ss_tot - ss_wg
+  ss_bg
+  
+  ms_b = ss_bg / (2 - 1)
+  ms_w = ss_wg / (n1 + n2 - 2)
+  
+  res = list(stat = ms_b/ms_w,
+             pval = 	pf(ms_b/ms_w, 2 - 1, n1 + n2 - 2, lower.tail=F))
+  
+  return(res)
 }
 
 

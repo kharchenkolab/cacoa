@@ -50,6 +50,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         for(n in ls(data.object)) {
           if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
         }
+
+        return()
       } else {
         # TODO: would be nice to support a list of count matrices as input
         if (!('Conos' %in% class(data.object)) && !('Seurat' %in% class(data.object)))
@@ -177,7 +179,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           mtx <- self$cache[[pca.name]]
         } else {
           centers <- Matrix::colMeans(mtx)
-          pcs <- mtx %>% irlba::irlba(nv=n.pcs, nu=0, center=Matrix::colMeans(.), right_only=F,
+          pcs <- mtx %>% irlba::irlba(nv=n.pcs, nu=0, center=centers, right_only=F,
                                       fastpath=T, maxit=pca.maxit, reorth=T)
           mtx <- as.matrix(t(as(t(mtx %*% pcs$v), "dgeMatrix") - t(centers %*% pcs$v)))
           self$cache[[pca.name]] <- mtx
@@ -562,15 +564,32 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
     #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
+    #' @param cells.to.remove Vector of cell types to remove from the composition
+    #' @param cells.to.remain Vector of cell types to remain in the composition
     #' @return A ggplot2 object
-    plotProportions=function(legend.position = "right", cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups) {
+    plotProportions=function(legend.position = "right",
+                             cell.groups = self$cell.groups,
+                             sample.per.cell = self$sample.per.cell,
+                             sample.groups = self$sample.groups,
+                             cells.to.remove = NULL,
+                             cells.to.remain = NULL) {
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
 
       if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
-      plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups)
+      if(is.null(cells.to.remove) && is.null(cells.to.remain)){
+        plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups)
+      }else{  # Anna modified
+        plotProportionsSubset(legend.position = legend.position,
+                        cell.groups = cell.groups,
+                        sample.per.cell = sample.per.cell,
+                        sample.groups = sample.groups,
+                        cells.to.remove = cells.to.remove,
+                        cells.to.remain = cells.to.remain)
+      }
+
     },
 
     #' @description Plot the cell numbers per sample
@@ -588,107 +607,213 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       plotCellNumbers(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups)
     },
-    
+
     #' @description Plot compositions in CoDA-PCA space
     #' @return A ggplot2 object
-    plotPcaSpace=function() {
+    plotPcaSpace=function(cells.to.remove = NULL) {
       # Cope with levels
       if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
-      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided') 
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
       if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
       if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
-      
+
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
-      sample.groups <- self$sample.groups
-      cell.type <- self$cell.groups
-      samples.trgt <- names(sample.groups)[sample.groups == self$target.level]
-      samples.ctrl <- setdiff(names(sample.groups), samples.trgt)
-      d.counts <- table(fac$sample, cell.type[names(fac$sample)])
-      d.counts <- d.counts[intersect(c(samples.trgt, samples.ctrl), rownames(d.counts)),]
-      d.groups = rownames(d.counts) %in% samples.trgt
+      d.counts <- data.frame(anno=self$cell.groups,
+                             group=self$sample.per.cell[match(names(self$cell.groups), names(self$sample.per.cell))]) %>%
+        table  %>% rbind %>% t
+      if(!is.null(cells.to.remove)) d.counts = d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
+
+      d.groups = self$sample.groups[rownames(d.counts)] == self$target.level
       names(d.groups) <- rownames(d.counts)
       # ----
-      
+
       plotPcaSpace(d.counts, d.groups)
     },
-    
+
     #' @description Plot compositions in CoDA-CDA space
     #' @return A ggplot2 object
-    plotCdaSpace=function() {
+    plotCdaSpace=function(cells.to.remain = NULL,
+                          cells.to.remove = NULL,
+                          samples.to.remove = NULL) {
       # Cope with levels
       if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
-      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided') 
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
       if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
       if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
-      
+
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
-      sample.groups <- self$sample.groups
-      cell.type <- self$cell.groups
-      samples.trgt <- names(sample.groups)[sample.groups == self$target.level]
-      samples.ctrl <- setdiff(names(sample.groups), samples.trgt)
-      d.counts <- table(fac$sample, cell.type[names(fac$sample)])
-      d.counts <- d.counts[intersect(c(samples.trgt, samples.ctrl), rownames(d.counts)),]
-      d.groups = rownames(d.counts) %in% samples.trgt
+      d.counts <- data.frame(anno=self$cell.groups,
+                             group=self$sample.per.cell[match(names(self$cell.groups), names(self$sample.per.cell))]) %>%
+        table  %>% rbind %>% t
+
+      if(!is.null(cells.to.remain)) d.counts = d.counts[,colnames(d.counts) %in% cells.to.remain]
+      if(!is.null(cells.to.remove)) d.counts = d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
+      if(!is.null(samples.to.remove)) d.counts = d.counts[!(rownames(d.counts) %in% samples.to.remove),]
+
+      d.groups = self$sample.groups[rownames(d.counts)] == self$target.level
       names(d.groups) <- rownames(d.counts)
       # ----
-      
+
       plotCdaSpace(d.counts, d.groups)
+
     },
 
     #' @description Plot contrast tree
-    #' @return A ggplot2 object  
-    plotContrastTree=function() {
+    #' @return A ggplot2 object
+    plotContrastTree=function(cells.to.remain = NULL,
+                              cells.to.remove = NULL) {
       # Cope with levels
       if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
-      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided') 
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
       if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
       if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
-      
+
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
-      sample.groups <- self$sample.groups
-      cell.type <- self$cell.groups
-      samples.trgt <- names(sample.groups)[sample.groups == self$target.level]
-      samples.ctrl <- setdiff(names(sample.groups), samples.trgt)
-      d.counts <- table(fac$sample, cell.type[names(fac$sample)])
-      d.counts <- d.counts[intersect(c(samples.trgt, samples.ctrl), rownames(d.counts)),]
-      d.groups = rownames(d.counts) %in% samples.trgt
+      d.counts <- data.frame(anno=self$cell.groups,
+                             group=self$sample.per.cell[match(names(self$cell.groups), names(self$sample.per.cell))]) %>%
+        table  %>% rbind %>% t
+
+      if(!is.null(cells.to.remain)) d.counts = d.counts[,colnames(d.counts) %in% cells.to.remain]
+      if(!is.null(cells.to.remove)) d.counts = d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
+
+      d.groups = self$sample.groups[rownames(d.counts)] == self$target.level
       names(d.groups) <- rownames(d.counts)
       # ----
-      
+
       plotContrastTree(d.counts, d.groups)
     },
-    
+
     #' @description Plot Loadings
-    #' @return A ggplot2 object 
-    plotCellLoadings=function(n.cell.counts = 1000, n.seed = 239, aplha = 0.01){
+    #' @return A ggplot2 object
+    estimateCellLoadings=function(n.cell.counts = 1000,
+                              n.seed = 239,
+                              aplha = 0.01,
+                              cells.to.remove = NULL,
+                              cells.to.remain = NULL,
+                              samples.to.remove = NULL,
+                              signif.threshold = 0.2){
       # Cope with levels
       if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
-      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided') 
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
       if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
       if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
-      
+
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
-      sample.groups <- self$sample.groups
-      cell.type <- self$cell.groups
-      samples.trgt <- names(sample.groups)[sample.groups == self$target.level]
-      samples.ctrl <- setdiff(names(sample.groups), samples.trgt)
-      d.counts <- table(fac$sample, cell.type[names(fac$sample)])
-      d.counts <- d.counts[intersect(c(samples.trgt, samples.ctrl), rownames(d.counts)),]
-      d.groups = rownames(d.counts) %in% samples.trgt
+      d.counts <- data.frame(anno=self$cell.groups,
+                             group=self$sample.per.cell[match(names(self$cell.groups), names(self$sample.per.cell))]) %>%
+        table  %>% rbind %>% t
+      if(!is.null(cells.to.remove)) d.counts = d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
+      if(!is.null(cells.to.remain)) d.counts = d.counts[,colnames(d.counts) %in% cells.to.remain]
+      if(!is.null(samples.to.remove)) d.counts = d.counts[!(rownames(d.counts) %in% samples.to.remove),]
+
+      d.groups = self$sample.groups[rownames(d.counts)] == self$target.level
       names(d.groups) <- rownames(d.counts)
       # ----
-      
+
+      self$test.results[['cda']] <- resampleContrast(d.counts, d.groups,
+                                                     n.cell.counts = n.cell.counts,
+                                                     n.seed = n.seed)
+
+
+      balances = self$test.results$cda$balances
+      n.bal = ncol(balances)
+      n.plus = rowSums(balances[,2:n.bal] > 0)
+      n.minus = rowSums(balances[,2:n.bal] < 0)
+      perm.frac = mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) /
+        mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
+
+      cda.top.cells = names(perm.frac)[perm.frac < signif.threshold]
+
+      self$test.results[['cda.top.cells']] = cda.top.cells
+
+      return(invisible(self$test.results[['cda']]))
+    },
+
+    estimateGaPartiotion=function(n.cell.counts = 1000,
+                                  n.seed = 239,
+                                  aplha = 0.01,
+                                  cells.to.remain = NULL,
+                                  cells.to.remove = NULL,
+                                  samples.to.remove = NULL){
+      # Cope with levels
+      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
+      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
+      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
+
+      # Construct sample groups and count data
+      # ---- The following can be significantly reduced
+      d.counts <- data.frame(anno=self$cell.groups,
+                             group=self$sample.per.cell[match(names(self$cell.groups), names(self$sample.per.cell))]) %>%
+        table  %>% rbind %>% t
+
+      if(!is.null(cells.to.remain)) d.counts = d.counts[,colnames(d.counts) %in% cells.to.remain]
+      if(!is.null(cells.to.remove)) d.counts = d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
+      if(!is.null(samples.to.remove)) d.counts = d.counts[!(rownames(d.counts) %in% samples.to.remove),]
+
+      d.groups = self$sample.groups[rownames(d.counts)] == self$target.level
+      names(d.groups) <- rownames(d.counts)
+      # ----
+
+      ga.res = gaPartition(d.counts, d.groups)
+
+      self$test.results[['ga.partition']] <- rownames(t(ga.res[1,ga.res[1,] != 0,drop=FALSE]))
+
+      return(invisible(self$test.results[['ga.partition']]))
+    },
+
+    #' @description Plot Loadings
+    #' @return A ggplot2 object
+    plotCellLoadings = function(n.cell.counts = 1000,
+                              n.seed = 239,
+                              aplha = 0.01,
+                              font.size = 16,
+                              cells.to.remove = NULL,
+                              samples.to.remove = NULL){
+      # Cope with levels
+      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
+      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
+      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
+
+      if(is.null(self$test.results$cda)) self$estimateCellLoadings(n.cell.counts = n.cell.counts,
+                                                     n.seed = n.seed,
+                                                     aplha = aplha,
+                                                     cells.to.remove = cells.to.remove,
+                                                     samples.to.remove = samples.to.remove)
+
+      plotCellLoadings(self$test.results[['cda']],
+                       aplha = aplha,
+                       n.significant.cells = length(self$test.results$cda.top.cells),
+                       font.size = font.size)
+    },
+
+    extimateWilcoxonTest = function(cell.groups = self$cell.groups,
+                                     sample.per.cell = self$sample.per.cell,
+                                     sample.groups = self$sample.groups,
+                                     cells.to.remove = NULL,
+                                     cells.to.remain = NULL){
+
+      p.vals <- calcWilcoxonTest(cell.groups = cell.groups,
+                                 sample.per.cell = sample.per.cell,
+                                 sample.groups = sample.groups,
+                                 cells.to.remove = cells.to.remove,
+                                 cells.to.remain = cells.to.remain)
+
+      self$test.results[['p.vals.balances']] <- p.vals
+      return(self$test.results[['p.vals.balances']])
+
       cda = resampleContrast(d.counts, d.groups,
-                             n.cell.counts = n.cell.counts, 
+                             n.cell.counts = n.cell.counts,
                              n.seed = n.seed)
       plotCellLoadings(cda$balances, aplha = aplha)
     },
-  
-    #' @description Estimate cell density in giving embedding 
+
+    #' @description Estimate cell density in giving embedding
     #' @param emb cell embedding matrix
     #' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
     #' @param sample.groups @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
@@ -699,17 +824,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param by.sample  if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell condition.per.cell need to be provided and density will simply esitmated by condition.per.cell. 
     #' @add.ponits add.ponits  show cells in density plot     
     estimateCellDensity = function(emb, condition.per.cell = NULL, sample.per.cell = NULL, ref.level, target.level, bins = 400, by.sample = TRUE){
-    
+
       if(is.null(emb)) stop("'emb' must be provided either during the object initialization or during this function call")
-      
+
       if(is.null(self$sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
-      
+
       if(is.null(self$sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
-      
+
       if(is.null(self$ref.level)) stop("'ref.level' must be provided either during the object initialization or during this function call")
-      
+
       if(is.null(self$target.level)) stop("'target.level' must be provided either during the object initialization or during this function call")
-      
 
       sample.per.cell <- self$sample.per.cell
       ref.level <- self$ref.level
@@ -751,8 +875,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       
       return(invisible(self$density[['bins']]))
     },
-    
-    ##' @description Plot cell density 
+
+    ##' @description Plot cell density
     ##' @param add.ponits default is TRUE, add points to cell density figure
     ##' @param condition.per.cell Named group factor with cell names. Must have exactly two levels. condition.per.cell must be provided when add.ponits is TRUE
     plotCellDensity = function(legend = NULL, title = NULL, grid = NULL, add.ponits = TRUE, condition.per.cell = NULL){
@@ -785,7 +909,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         return(list('ref' = p1, 'target' = p2))
       }
     },
-    
+
     ##' @description esitmate differential cell density
     ##' @param col color palettes, 4 different color palettes are supported; default is blue-white-red; BWR: blue-white-red;  WR: white-read; B: magma in viridi;
     ##' @param condition.per.cell A two-level factor on the cell names describing the conditions being compared (default: stored vector)
@@ -802,14 +926,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
       p <- diffCellDensity(density.matrix, dcounts = dcounts, condition.per.cell = condition.per.cell, sample.groups, bins = bins, col = col, target.level = target.level, ref.level =
                              ref.level, method = method, title = title, grid = grid, legend = legend)
-      if ( plot ){
+      if (plot)
         return(p$fig)
-      }else{
-        return(p$score)
-      }
+      
+      return(p$score)
     },
-    
-    
+
     #' @title Plot inter-sample expression distance 
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
     #' @param name Test results to plot (default=expression.shifts)
@@ -834,9 +956,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       cluster.shifts <- self$test.results$expression.shifts
       sample.groups <- self$sample.groups
       plotExpressionDistancetSNE(cluster.shifts, sample.groups = sample.groups, weight.disatnce = weight.disatnce, cell.type = cell.type, method = method)
-    }    
-    
-    
+    }
   ),
   private = list(
     checkTestResults=function(name) {

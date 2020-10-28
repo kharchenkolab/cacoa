@@ -859,19 +859,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param condition.per.cell Named group factor with cell names. Must have exactly two levels.
     #' @param by.sample  if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell condition.per.cell need to be provided and density will simply esitmated by condition.per.cell. 
     #' @add.ponits add.ponits  show cells in density plot     
-    estimateCellDensity = function(embedding=self$embedding, condition.per.cell = NULL, sample.per.cell = NULL, ref.level, target.level, bins = 400, by.sample = TRUE){
+    estimateCellDensity = function(embedding=self$embedding, cell.groups=self$cell.groups, sample.groups=self$sample.groups, sample.per.cell = self$sample.per.cell, ref.level=self$ref.level, target.level=self$target.level, bins = 400, by.sample = TRUE){
 
       if(is.null(embedding)) stop("'embedding' must be provided either during the object initialization or during this function call")
 
-      if(is.null(self$sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
+      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
+      
+      if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
+      
+      if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
-      if(is.null(self$sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
+      if(is.null(ref.level)) stop("'ref.level' must be provided either during the object initialization or during this function call")
 
-      if(is.null(self$ref.level)) stop("'ref.level' must be provided either during the object initialization or during this function call")
+      if(is.null(target.level)) stop("'target.level' must be provided either during the object initialization or during this function call")
+      
+      # calculate sample.per.cell
+      condition.per.cell <- as.factor(setNames( as.character(sample.groups[ as.character(sample.per.cell)]), names(sample.per.cell) ))
 
-      if(is.null(self$target.level)) stop("'target.level' must be provided either during the object initialization or during this function call")
-
-      sample.per.cell <- self$sample.per.cell
       ref.level <- self$ref.level
       target.level <- self$target.level
       sample.groups <- self$sample.groups
@@ -919,6 +923,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       bins <- private$getResults('bins', 'estimateCellDensity()')
       ref <- self$ref.level
       target <- self$target.level
+      
+      # calculate sample.per.cell
+      condition.per.cell <- as.factor(setNames( as.character(self$sample.groups[ as.character(self$sample.per.cell)]), names(self$sample.per.cell) ))
+      
       
       target.density <- private$getResults('target.density', 'estimateCellDensity()')
       ref.density <- private$getResults('ref.density', 'estimateCellDensity()')

@@ -6,13 +6,14 @@
 #' @param name Test results to plot (default=expression.shifts)
 #' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
 #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
-#' @param sample.per.cell Named sample factor with cell names (default: stored vector)
-#' @weight.disatnce default is null, it set caculated weigeted expression distance across mutiple cell types
+#' @param sample.groups Named sample factor with cell names (default: stored vector)
+#' @param alpha transparency level for the individual points (default: 0.2)
+#' @param weighted.distance whether to weigh the expression distance by the sizes of cell types (default: FALSE)
 #' @return A ggplot2 object
-plotExpressionDistance <- function(cluster.shifts, notch = T, cell.groups = NULL, sample.per.cell = NULL, weight.disatnce = NULL,  min.cells = 10) {
+plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.groups = NULL, weighted.distance = FALSE,  notch= TRUE, alpha=0.2, min.cells = 10) {
   ctdml <- cluster.shifts$ctdml
   valid.comparisons <- cluster.shifts$valid.comparisons
-  if (is.null(weight.disatnce)) { #
+  if (!weighted.distance) { #
     df <- do.call(rbind,lapply(ctdml,function(ctdm) {
       x <- lapply(ctdm, function(xm) {
         nc <- attr(xm, 'cc')
@@ -41,42 +42,45 @@ plotExpressionDistance <- function(cluster.shifts, notch = T, cell.groups = NULL
       df$type2 <- sample.groups[df$Var2]
       df
     }))
-    
+
     # median across pairs
-    df <- do.call(rbind, tapply(1:nrow(df), paste(df$Var1, df$Var2, df$type, sep =
-                                                    '!!'), function(ii) {
-                                                      ndf <- data.frame(df[ii[1], , drop = F])
-                                                      ndf$value <- median(df$value[ii])
-                                                      ndf$n <- median(df$n[ii])
-                                                      ndf
-                                                    }))
+    df <- do.call(rbind, tapply(1:nrow(df), paste(df$Var1, df$Var2, df$type, sep = '!!'),
+                                function(ii) {
+                                  ndf <- data.frame(df[ii[1], , drop = F])
+                                  ndf$value <- median(df$value[ii])
+                                  ndf$n <- median(df$n[ii])
+                                  ndf
+                                }))
     df$group <- df$type1
+
+    
     gg <- ggplot(na.omit(df), aes( x = type, y = value, dodge = group, fill = group )) +
-      theme_classic() + geom_boxplot(notch = TRUE, outlier.shape = NA,) + #ggtitle(cell.type) +
+      theme_classic() + geom_boxplot(notch = notch, outlier.shape = NA,) + #ggtitle(cell.type) +
       geom_point(
         position = position_jitterdodge(jitter.width = 0.1),
         size = 0.5,
-        color = adjustcolor("black", alpha = 0.2)
+        color = adjustcolor("black", alpha = alpha)
       ) +
       theme(
         axis.text.x = element_text(angle = 90, hjust = 1),
         axis.text.y = element_text(angle = 90, hjust = 0.5)
       ) + theme(legend.position = "top") + xlab("") + ylab("expression distance")
     
-  } else { # weighetd expression distance 
+  } else { # weighted expression distance 
     df <- do.call(rbind, lapply(ctdml, function(ctdm) {
-      n.cell <- unlist(lapply(ctdm,ncol)) %>% table() %>% sort() %>% rev %>% names %>% as.numeric # 
-      ctdm <- ctdm[unlist(lapply(ctdm, ncol)) == n.cell[1]]
-      genelists <- lapply(ctdm, function(x) colnames(x))
-      commoncell <- Reduce(intersect, genelists)
-      ctdm <-  lapply(ctdm, function(x) {
-        cct <- attr(x, 'cc')
-        x <- x[commoncell, commoncell]
-        attr(x, 'cc') <- cct[commoncell]
-        x
-      }) # reform the matrix to make sure all cell type have the same diminsion  
+      # bring to a common set of cell types
+      commoncell <- unique( unlist( lapply(ctdm, function(x) colnames(x)) ))
       
-      x <- abind(lapply(ctdm, function(x) {
+      ctdm <-  lapply(ctdm, function(x) {
+        y <- matrix(0,nrow=length(commoncell),ncol=length(commoncell)); rownames(y) <- colnames(y) <- commoncell; # can set the missing entries to zero, as they will carry zero weights
+        y[rownames(x),colnames(x)] <- x;
+        ycct <- setNames(rep(0,length(commoncell)), commoncell);
+        ycct[colnames(x)] <- attr(x,'cc')
+        attr(y, 'cc') <- ycct
+        y
+      }) # reform the matrix to make sure all cell type have the same dimensions
+      
+      x <- abind::abind(lapply(ctdm, function(x) {
         nc <- attr(x, 'cc')
         #wm <- (outer(nc,nc,FUN='pmin'))
         wm <- sqrt(outer(nc, nc, FUN = 'pmin'))
@@ -84,7 +88,7 @@ plotExpressionDistance <- function(cluster.shifts, notch = T, cell.groups = NULL
       }), along = 3)
       
       # just the weights (for total sum of weights normalization)
-      y <- abind(lapply(ctdm, function(x) {
+      y <- abind::abind(lapply(ctdm, function(x) {
         nc <- attr(x, 'cc')
         sqrt(outer(nc, nc, FUN = 'pmin'))
       }), along = 3)
@@ -138,34 +142,35 @@ plotExpressionDistance <- function(cluster.shifts, notch = T, cell.groups = NULL
 #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
 #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 #' @param cell.type Named of cell type, default is null, it set plot sample-sample expression distance in tSNE for the cell type
-#' @weight.disatnce default is null, it set caculated weigeted expression distance across mutiple cell types
-#' @method dimension reduction methods (tSNE or MSD ) , default is tSNE
+#' #' @param perplexity tSNE perpexity (default: 4)
+#' @param max_iter tSNE max_iter (default: 1e3)
+#' @param method dimension reduction methods (MDS or tSNE) (default is MDS)
 #' @return A ggplot2 object
 
-plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, weight.disatnce = TRUE, method = 'tSNE', cell.type = NULL) {
+plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, method = 'MDS', cell.type = NULL,  perplexity=4, max_iter=1e3) {
   ctdml <- cluster.shifts$ctdml
-  if (is.null(weight.disatnce)) {
+  if (!is.null(cell.type)) { # use distances based on the specified cell type
     title <- cell.type
-#    if (is.null(cell.type) stop('please speficy cell type')
+    #if (is.null(cell.type) stop('please speficy cell type')
     df <- lapply(ctdml, function(ctdm) {
       xm <-  ctdm[[cell.type]]
       xm
     })
-    dfm=Reduce(`+`, df)/length(df)
-    }
-  else { # weighetd expression distance
+    dfm <- Reduce(`+`, df)/length(df)
+  } else { # weighetd expression distance across all cell types
     title <- ''
     df <- lapply(ctdml, function(ctdm) {
-      n.cell <- unlist(lapply(ctdm,ncol)) %>% table() %>% sort() %>% rev %>% names %>% as.numeric #
-      ctdm <- ctdm[unlist(lapply(ctdm, ncol)) == n.cell[1]]
-      genelists <- lapply(ctdm, function(x) colnames(x))
-      commoncell <- Reduce(intersect, genelists)
+      # bring to a common set of cell types
+      commoncell <- unique( unlist( lapply(ctdm, function(x) colnames(x)) ))
+      
       ctdm <-  lapply(ctdm, function(x) {
-        cct <- attr(x, 'cc')
-        x <- x[commoncell, commoncell]
-        attr(x, 'cc') <- cct[commoncell]
-        x
-      }) # reform the matrix to make sure all cell type have the same diminsion
+        y <- matrix(0,nrow=length(commoncell),ncol=length(commoncell)); rownames(y) <- colnames(y) <- commoncell; # can set the missing entries to zero, as they will carry zero weights
+        y[rownames(x),colnames(x)] <- x;
+        ycct <- setNames(rep(0,length(commoncell)), commoncell);
+        ycct[colnames(x)] <- attr(x,'cc')
+        attr(y, 'cc') <- ycct
+        y
+      }) # reform the matrix to make sure all cell type have the same dimensions
 
       x <- abind(lapply(ctdm, function(x) {
         nc <- attr(x, 'cc')
@@ -184,12 +189,14 @@ plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, weight.dis
       xd <- apply(x, c(1, 2), sum) / apply(y, c(1, 2), sum)
       xd
     })
-    dfm=Reduce(`+`, df)/length(df)
+    dfm <- Reduce(`+`, df)/length(df)
   }
   if (method == 'tSNE'){
-    xde <- Rtsne::Rtsne(dfm, is_distance = TRUE, perplexity = 4, max_iter = 1e4)$Y
-  }else if (method == 'MDS'){
+    xde <- Rtsne::Rtsne(dfm, is_distance = TRUE, perplexity = perplexity, max_iter = max_iter)$Y
+  } else if (method == 'MDS') {
     xde <- cmdscale(dfm, eig=TRUE, k=2)$points # k is the number of dim
+  } else {
+    stop("unknown embedding method")
   }
   df <- data.frame(xde)
   rownames(df) <- rownames(dfm)
@@ -200,4 +207,4 @@ plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, weight.dis
   gg <- ggplot(df, aes(x, y, color=fraction, shape=fraction)) + geom_point(size=5) + #, size=log10(ncells)
     theme_bw() + ggtitle(title) + theme(axis.title = element_blank(), axis.text = element_blank(), axis.ticks = element_blank())
   return(gg)
-  }
+}

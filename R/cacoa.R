@@ -25,6 +25,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @field cell.groups named factor with cell names with cluster per cell
     cell.groups = NULL,
+    
+    #' @field embedding a 2D embedding to visualize the cells in
+    embedding = NULL,
 
     #' @field sample.per.cell named factor with cell names
     sample.per.cell = NULL,
@@ -34,8 +37,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @field target.level target/disease level for sample.group vector
     target.level = NULL,
+    
+    #' @field sample.groups.palette a color palette for the sample.groups
+    sample.groups.palette = NULL,
+    
+    #' @field cell.groups.palette a color palette for the cell.groups
+    cell.groups.palette = NULL,
 
-    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, n.cores=1, verbose=TRUE) {
+    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, sample.groups.palette=NULL, cell.groups.palette=NULL, embedding=NULL, n.cores=1, verbose=TRUE) {
       self$n.cores <- n.cores
       self$verbose <- verbose
       self$ref.level <- ref.level
@@ -76,6 +85,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         self$sample.per.cell <- extractSamplePerCell(data.object)
       } else {
         self$sample.per.cell <- sample.per.cell
+      }
+      
+      if(is.null(sample.groups.palette)) {
+        self$sample.groups.palette <- setNames(hcl(h= seq(15,375,length= length(levels(sample.groups)))), levels(sample.groups))
+      }
+      
+      if(is.null(cell.groups.palette)) {
+        self$cell.groups.palette <- setNames( rainbow(length(levels(cell.groups)),s=0.9,v=0.9), levels(cell.groups))
+      }
+      
+      if(is.null(embedding)) {
+        # TODO: extract from the object
       }
     },
 
@@ -330,6 +351,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       plotFilteredDEGenes(de.filter = de.filter, cell.groups = cell.groups, legend.position = legend.position, label = label)
     },
+    
+    #' @description  Plot embedding
+    #' @param embedding A cell embedding to use (two-column data frame with rownames corresponding to cells) (default: stored embedding object)
+    #' @param plot.theme plot theme to use (default: ggplot2::theme_bw())
+    #' @param ... other parameters are passed to sccore::embeddingPlot()
+    plotEmbedding=function( embedding=self$embedding, plot.theme=ggplot2::theme_bw(), ... ) {
+      if(is.null(embedding)) stop("embedding must be provided to cacoa constructor or to this method")
+      sccore::embeddingPlot(embedding, plot.theme=plot.theme, ...)
+    },
 
     #' @description  Estimate ontology terms based on DEs
     #' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")
@@ -566,13 +596,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
     #' @param cells.to.remove Vector of cell types to remove from the composition
     #' @param cells.to.remain Vector of cell types to remain in the composition
+    #' @param notch Whether to show notch in the boxplots
+    #' @param alpha Transparency level on the data points (default: 0.2)
     #' @return A ggplot2 object
     plotProportions=function(legend.position = "right",
                              cell.groups = self$cell.groups,
                              sample.per.cell = self$sample.per.cell,
                              sample.groups = self$sample.groups,
                              cells.to.remove = NULL,
-                             cells.to.remain = NULL) {
+                             cells.to.remain = NULL,
+                             notch = FALSE,
+                             alpha=0.2) {
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
@@ -580,14 +614,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
       if(is.null(cells.to.remove) && is.null(cells.to.remain)){
-        plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups)
+        plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups, notch=notch, alpha = alpha)
       }else{  # Anna modified
         plotProportionsSubset(legend.position = legend.position,
                         cell.groups = cell.groups,
                         sample.per.cell = sample.per.cell,
                         sample.groups = sample.groups,
                         cells.to.remove = cells.to.remove,
-                        cells.to.remain = cells.to.remain)
+                        cells.to.remain = cells.to.remain,
+                        notch=notch,
+                        alpha = alpha)
       }
 
     },
@@ -816,16 +852,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Estimate cell density in giving embedding
     #' @param emb cell embedding matrix
     #' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
-    #' @param sample.groups @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+    #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
     #' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
     #' @param target.level target/disease level for sample.group vector
     #' @param bins number of bins for density esitmation, default 400
     #' @param condition.per.cell Named group factor with cell names. Must have exactly two levels.
     #' @param by.sample  if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell condition.per.cell need to be provided and density will simply esitmated by condition.per.cell. 
     #' @add.ponits add.ponits  show cells in density plot     
-    estimateCellDensity = function(emb, condition.per.cell = NULL, sample.per.cell = NULL, ref.level, target.level, bins = 400, by.sample = TRUE){
+    estimateCellDensity = function(embedding=self$embedding, condition.per.cell = NULL, sample.per.cell = NULL, ref.level, target.level, bins = 400, by.sample = TRUE){
 
-      if(is.null(emb)) stop("'emb' must be provided either during the object initialization or during this function call")
+      if(is.null(embedding)) stop("'embedding' must be provided either during the object initialization or during this function call")
 
       if(is.null(self$sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
@@ -841,7 +877,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       sample.groups <- self$sample.groups
       
       self$test.results[['bins']] <- bins
-      res <- estimateCellDensity(emb, sample.per.cell = sample.per.cell, sample.groups = sample.groups, bins = bins, ref.level =
+      res <- estimateCellDensity(embedding, sample.per.cell = sample.per.cell, sample.groups = sample.groups, bins = bins, ref.level =
                                    ref.level, target.level = target.level, condition.per.cell = condition.per.cell, by.sample =
                                    by.sample)
       self$test.results[['density.mat']] <- res[['density.mat']]
@@ -850,8 +886,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       #self$test.results[['diff.density']] <- res[['density.fraction']][[target.level]] - res[['density.fraction']][[ref.level]]
 
       # adjust embedding to the same density space 
-      x <- emb[, 1]
-      y <- emb[, 2]
+      x <- embedding[, 1]
+      y <- embedding[, 2]
       x <- (x - range(x)[1])
       x <- (x / max(x)) * bins
       
@@ -879,13 +915,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     ##' @description Plot cell density
     ##' @param add.ponits default is TRUE, add points to cell density figure
     ##' @param condition.per.cell Named group factor with cell names. Must have exactly two levels. condition.per.cell must be provided when add.ponits is TRUE
-    plotCellDensity = function(legend = NULL, title = NULL, grid = NULL, add.ponits = TRUE, condition.per.cell = NULL){
-      bins <- self$test.results$bins
+    plotCellDensity = function(legend = NULL, title = NULL, grid = NULL, add.ponits = TRUE, condition.per.cell = NULL) {
+      bins <- private$getResults('bins', 'estimateCellDensity()')
       ref <- self$ref.level
       target <- self$target.level
       
-      target.density <- cao$test.results$target.density
-      ref.density <- cao$test.results$ref.density
+      target.density <- private$getResults('target.density', 'estimateCellDensity()')
+      ref.density <- private$getResults('ref.density', 'estimateCellDensity()')
       
       mi <- min(c(min(ref.density), min(target.density)))
       ma <- max(c(max(ref.density), max(target.density)))
@@ -896,7 +932,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if (add.ponits){
         if(is.null(condition.per.cell)) stop("'condition.per.cell' must be provided when add points")
     
-        emb <- self$test.results$density.emb
+        emb <- private$getResults('density.emb', 'estimateCellDensity()')
         emb$Z <- 1
         nname1 <- names(condition.per.cell[condition.per.cell == ref])
         nname1 <- sample(nname1, min(2000, nrow(emb[nname1, ])))
@@ -918,9 +954,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       ref.level <- self$ref.level
       target.level <- self$target.level
       sample.groups <- self$sample.groups
-      bins <- self$test.results$bins
-      density.matrix <- self$test.results$density.mat
-      dcounts <- self$test.results$density.counts
+      bins <- private$getResults('bins', 'estimateCellDensity()')
+      density.matrix <- private$getResults('density.mat', 'estimateCellDensity()')
+      dcounts <- private$getResults('density.counts', 'estimateCellDensity()')
+
       if (method == 'entropy'){
         if(is.null(condition.per.cell)) stop("'condition.per.cell' must be provided when entropy was used")
       }
@@ -936,32 +973,45 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
     #' @param name Test results to plot (default=expression.shifts)
     #' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
-    #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
-    #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
-    #' @weight.disatnce default is null, it set caculated weigeted expression distance across mutiple cell types
+    #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored $cell.groups vector)
+    #' @param sample.groups Named sample factor with cell names (default: stored $sample.groups vector)
+    #' @param weighted.distance whether to weigh the expression distance by the sizes of cell types (default: TRUE), or show distances for each individual cell type
     #' @return A ggplot2 object
-    plotExpressionDistance = function(cluster.shifts, notch = T, cell.groups = NULL, sample.per.cell = NULL, weight.disatnce = NULL,  min.cells = 10) {
-      cluster.shifts <- self$test.results$expression.shifts
-      plotExpressionDistance(cluster.shifts, notch = notch, cell.groups = cell.groups, sample.per.cell = sample.per.cell, weight.disatnce = weight.disatnce,  min.cells = min.cells)
+    plotExpressionDistance = function(name='expression.shifts', notch = TRUE, cell.groups = self$cell.groups, sample.groups = self$sample.groups, weighted.distance = TRUE,  min.cells = 10) {
+      plotExpressionDistance(private$getResults(name, 'estimateExpressionShiftMagnitudes()'), notch = notch, cell.groups = cell.groups, sample.groups = sample.groups, weighted.distance = weighted.distance,  min.cells = min.cells)
     },
 
-    #' @title Plot sample-sample expression distance in tSNE
+    #' @title Plot sample-sample expression distance as a 2D embedding
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
     #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
-    #' @param cell.type Named of cell type, default is null, it set plot sample-sample expression distance in tSNE for the cell type
-    #' @weight.disatnce default is null, it set caculated weigeted expression distance across mutiple cell types
-    #' @method dimension reduction methods (tSNE or MSD ) , default is tSNE
+    #' @param cell.type If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)
+    #' @param sample.groups Named sample factor with cell names (default: stored $sample.groups )
+    #' @method dimension reduction methods (MDS or tSNE ) , default is MDS
+    #' @param perplexity tSNE perpexity (default: 4)
+    #' @param max_iter tSNE max_iter (default: 1e3)
     #' @return A ggplot2 object
-    plotExpressionDistancetSNE = function(cluster.shifts, sample.groups, weight.disatnce = TRUE, cell.type = NULL, method = 'tSNE') {
-      cluster.shifts <- self$test.results$expression.shifts
-      sample.groups <- self$sample.groups
-      plotExpressionDistancetSNE(cluster.shifts, sample.groups = sample.groups, weight.disatnce = weight.disatnce, cell.type = cell.type, method = method)
+    plotExpressionDistanceEmbedding = function(name='expression.shifts', sample.groups = self$sample.groups, cell.type = NULL, method = 'tSNE', perplexity=4, max_iter=1e3) {
+      cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
+      plotExpressionDistancetSNE(cluster.shifts, sample.groups = sample.groups, cell.type = cell.type, method = method, perplexity=perplexity, max_iter=max_iter)
     }
   ),
   private = list(
     checkTestResults=function(name) {
-      if (is.null(self$test.results[[name]]))
+      if (is.null(self$test.results[[name]])) {
         stop("Test result for ", name, " wasn't found")
+      }
+    },
+    
+    getResults=function(name,suggestedFunction=NULL) {
+      if (is.null(self$test.results[[name]])) {
+        msg <- paste0("A result named \"", name, "\" cannot be found.");
+        if(!is.null(suggestedFunction)) {
+          msg <- paste(msg,"Please first run",suggestedFunction)
+        }
+        stop(msg)
+      } else {
+        return(self$test.results[[name]])
+      }
     }
   )
 )

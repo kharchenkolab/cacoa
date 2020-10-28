@@ -327,8 +327,9 @@ plotOntologySimilarities <- function(type=NULL, ont.res, genes = NULL) {
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
 #' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
 #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
+#' @param alpha Transparency level on the data points (default: 0.1)
 #' @return A ggplot2 object
-plotProportions <- function(legend.position = "right", cell.groups, sample.per.cell, sample.groups) {
+plotProportions <- function(legend.position = "right", cell.groups, sample.per.cell, sample.groups, notch=FALSE, alpha=0.1) {
   df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
     table %>%
     rbind %>%
@@ -342,14 +343,14 @@ plotProportions <- function(legend.position = "right", cell.groups, sample.per.c
     reshape2::melt(., id.vars="group")
 
   ggplot(df.melt, aes(x=variable, y=value, by=group)) +
-    geom_boxplot(position=position_dodge(), outlier.shape = NA) +
+    geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
     ylab("% cells per sample") +
     xlab("") +
     theme_bw() +
     theme_legend_position(legend.position) +
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
-    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), aplha=0.1) +
+    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
 }
 
@@ -362,13 +363,16 @@ plotProportions <- function(legend.position = "right", cell.groups, sample.per.c
 #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
 #' @param cells.to.remain Vector of cell types to remain in the composition
 #' @param cells.to.remove Vector of cell types to remove from the composition
+#' #' @param alpha Transparency level on the data points (default: 0.1)
 #' @return A ggplot2 object
 plotProportionsSubset <- function(legend.position = "right",
                                   cell.groups,
                                   sample.per.cell,
                                   sample.groups,
                                   cells.to.remove,
-                                  cells.to.remain) {
+                                  cells.to.remain,
+                                  notch = FALSE,
+                                  alpha = 0.1) {
   df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
     table  %>%
     rbind
@@ -387,14 +391,14 @@ plotProportionsSubset <- function(legend.position = "right",
     reshape2::melt(., id.vars="group")
 
   p = ggplot(df.melt, aes(x=variable, y=value, by=group)) +
-    geom_boxplot(position=position_dodge(), outlier.shape = NA) +
+    geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
     ylab("% cells per sample") +
     xlab("") +
     theme_bw() +
     theme_legend_position(legend.position) +
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
-    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), aplha=0.1) +
+    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
 
   return(p)

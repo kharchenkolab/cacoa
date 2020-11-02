@@ -88,15 +88,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
       
       if(is.null(sample.groups.palette)) {
-        self$sample.groups.palette <- setNames(hcl(h= seq(15,375,length= length(levels(sample.groups)))), levels(sample.groups))
+        self$sample.groups.palette <- setNames(rev(scales::hue_pal()(length(levels(sample.groups)))), levels(sample.groups))
+      } else {
+        self$sample.groups.palette <- sample.groups.palette
       }
       
       if(is.null(cell.groups.palette)) {
         self$cell.groups.palette <- setNames( rainbow(length(levels(cell.groups)),s=0.9,v=0.9), levels(cell.groups))
+      } else {
+        self$cell.groups.palette <- cell.groups.palette
       }
       
       if(is.null(embedding)) {
         # TODO: extract from the object
+      } else {
+        self$embedding <- embedding;
       }
     },
 
@@ -131,6 +137,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
+      
 
       self$test.results[[name]] <- count.matrices %>%
         estimateExpressionShiftMagnitudes(sample.groups, cell.groups, dist=dist, within.group.normalization=within.group.normalization,
@@ -138,6 +145,114 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                           min.cells=min.cells, n.cores=n.cores, verbose=verbose, transposed.matrices=T)
 
       return(invisible(self$test.results[[name]]))
+    },
+    
+    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50, n.subsamples=30, min.cells=10, n.cores=1, verbose=TRUE,  mean.trim=0.1, name='common.expression.shifts') {
+      if (is.null(sample.groups))
+        stop("'sample.groups' must be provided either during the object initialization or during this function call")
+      
+      if (is.null(cell.groups)) {
+        stop("'cell.groups' must be provided either during the object initialization or during this function call")
+      }
+      
+      if(length(levels(sample.groups))!=2) stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
+      
+      count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
+      
+      common.genes <- Reduce(intersect, lapply(count.matrices, colnames))
+      count.matrices %<>% lapply(`[`, , common.genes)
+      
+      comp.matrix <- outer(sample.groups,sample.groups,'!='); diag(comp.matrix) <- FALSE
+      
+      
+      # get a cell sample factor, restricted to the samples being contrasted
+      cl <- lapply(count.matrices[names(sample.groups)], rownames)
+      cl <- rep(names(cl), sapply(cl, length)) %>% setNames(unlist(cl)) %>%  as.factor()
+      
+      # cell factor
+      cf <- cell.groups
+      cf <- cf[names(cf) %in% names(cl)]
+      
+      # if(is.null(n.cells)) {
+      #   n.cells <- min(table(cf)) # use the size of the smallest group
+      #   if(verbose) cat('setting group size of ',n.cells,' cells for comparisons\n')
+      # }
+      
+      if(!is.null(n.cells) && n.cells>=length(cf)) {
+        if(n.subsamples>1) {
+          warning('turning off subsampling, as n.cells exceeds the total number of cells')
+          n.subsamples <- 1;
+        }
+      }
+      
+      if(verbose) cat('running',n.subsamples,'subsamples,',n.randomizations,'randomizations each ... \n')
+      ctdll <- sccore:::plapply(1:n.subsamples,function(i) {
+        # subsample cells
+        
+        # draw cells without sample stratification - this can drop certain samples, particularly those with lower total cell numbers
+        if(!is.null(n.cells)) {
+          cf <- tapply(names(cf),cf,function(x) {
+            if(length(x)<=n.cells) { return(cf[x]) } else { setNames(rep(cf[x[1]],n.cells), sample(x,n.cells)) }
+          })
+        }
+        
+        # calculate expected mean number of cells per sample and aim to sample that
+        n.cells.scaled <- max(min.cells,ceiling(n.cells/length(sample.groups)));
+        cf <- tapply(names(cf),list(cf,cl[names(cf)]),function(x) {
+          if(length(x)<=n.cells.scaled) { return(cf[x]) } else { setNames(rep(cf[x[1]],n.cells.scaled), sample(x,n.cells.scaled)) }
+        })
+        
+        cf <- as.factor(setNames(unlist(lapply(cf,as.character)),unlist(lapply(cf,names))))
+        
+        # table of sample types and cells
+        cct <- table(cf,cl[names(cf)])
+        caggr <- lapply(count.matrices, conos:::collapseCellsByType, groups=as.factor(cf), min.cell.count=1)[names(sample.groups)]
+        
+        ctdl <- sccore::plapply(sccore:::sn(levels(cf)),function(ct) { # for each cell type
+          tcm <- na.omit(do.call(rbind,lapply(caggr,function(x) x[match(ct,rownames(x)),])))
+          tcm <- log(tcm/rowSums(tcm)*1e3+1) # log transform
+          tcm <- t(tcm[cct[ct,rownames(tcm)]>=min.cells,,drop=F])
+          
+          # an internal function to calculate consensus change direction and distances between samples along this axis
+          t.consensus.shift.distances <- function(tcm,sample.groups, useCpp=TRUE) {
+            if(min(table(sample.groups[colnames(tcm)]))<1) return(NA); # not enough samples
+            if(useCpp) {
+              g1 <- which(sample.groups[colnames(tcm)]==levels(sample.groups)[1])-1
+              g2 <- which(sample.groups[colnames(tcm)]==levels(sample.groups)[2])-1
+              as.numeric(projdiff(tcm,g1,g2))
+            } else {
+              # calculate consensus expression shift
+              s1 <- colnames(tcm)[sample.groups[colnames(tcm)]==levels(sample.groups)[1]]
+              s2 <- colnames(tcm)[sample.groups[colnames(tcm)]==levels(sample.groups)[2]]
+              dm <- do.call(rbind,lapply(s1,function(n1) {
+                do.call(rbind,lapply(s2,function(n2) {
+                  tcm[,n1]-tcm[,n2]
+                }))
+              }))
+              dmm <- apply(dm,2,mean,trim=mean.trim)
+              dmm <- dmm/sqrt(sum(dmm^2)) # normalize
+              
+              # project samples and calculate distances
+              as.numeric(dm %*% dmm)
+            }
+          }
+          
+          # true distances
+          tdist <- t.consensus.shift.distances(tcm,sample.groups)
+          # randomized distances
+          
+          rdist <- lapply(1:n.randomizations,function(i) {
+            t.consensus.shift.distances(tcm,as.factor(setNames(sample(as.character(sample.groups)), names(sample.groups))))
+          })
+          
+          # normalize true distances by the mean of the randomized ones
+          return(abs(tdist)/mean(abs(unlist(rdist))))
+        },n.cores = 1,mc.preschedule = FALSE, progress=(n.subsamples<=1))
+        
+      },n.cores=ifelse(n.subsamples>1,n.cores,1), mc.preschedule=FALSE, progress=(verbose && n.subsamples>1))
+      
+      return(invisible(self$test.results[[name]] <- ctdll))
+      
     },
 
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
@@ -147,14 +262,45 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
     #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
     #' @return A ggplot2 object
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, notch = T, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell) {
-      private$checkTestResults(name)
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, notch = T, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, palette=self$cell.groups.palette) {
+      cluster.shifts <- private$getResults(name)$df
 
       if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if (is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
-      plotExpressionShiftMagnitudes(cluster.shifts = self$test.results[[name]]$df, size.norm = size.norm, notch = notch, cell.groups = cell.groups, sample.per.cell = sample.per.cell)
+      plotExpressionShiftMagnitudes(cluster.shifts = cluster.shifts, size.norm = size.norm, notch = notch, cell.groups = cell.groups, sample.per.cell = sample.per.cell, palette=palette)
+    },
+    
+    
+    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.subsampling.variability=FALSE, show.jitter=FALSE, jitter.alpha=0.05, palette=self$cell.groups.palette) { 
+      res <- private$getResults(name)
+      cn <- setNames(names(res[[1]]),names(res[[1]]))
+      if(show.subsampling.variability) { # average across patient pairs
+        if(length(res)<2) stop('the result has only one subsample; please set show.sampling.variability=FALSE')
+        df <- do.call(rbind,lapply(res,function(d) data.frame(val=unlist(lapply(d,mean)),cell=names(d))))
+      } else { # average across subsampling rounds
+        df <- do.call(rbind,lapply(cn,function(n) data.frame(val=colMeans(do.call(rbind,lapply(res,function(x) x[[n]]))),cell=n)))
+      }
+      odf <- na.omit(df);
+      df <- data.frame(cell=levels(df$cell),mean=tapply(df$val,df$cell,mean),se=tapply(df$val,df$cell,function(x) sd(x)/sqrt(length(x))),stringsAsFactors=F)
+      df <- df[order(df$mean,decreasing=F),]
+      df$cell <- factor(df$cell,levels=df$cell)
+      df <- na.omit(df);
+      
+      p <- ggplot(df,aes(x=cell,y=mean,fill=cell))+
+        geom_bar(stat='identity') + 
+        geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)+
+        geom_hline(yintercept = 1,linetype=2,color='gray50')+
+        theme_bw() +
+        theme(axis.text.x=element_text(angle = 90, hjust=1, size=12), axis.text.y=element_text(angle=90, hjust=0.5, size=12))+ guides(fill=FALSE)+
+        theme(legend.position = "none")+
+        labs(x="", y="normalized distance (common)")
+      if(show.jitter) p <- p+geom_jitter(data=odf,aes(x=cell,y=val),position=position_jitter(0.1),show.legend=FALSE,alpha=jitter.alpha);
+      if(!is.null(palette)) {
+        p <- p+ scale_fill_manual(values=palette)
+      }
+      p
     },
 
     #' @description  Calculate expression shift Z scores of different clusters between conditions
@@ -598,6 +744,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param cells.to.remain Vector of cell types to remain in the composition
     #' @param notch Whether to show notch in the boxplots
     #' @param alpha Transparency level on the data points (default: 0.2)
+    #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
     #' @return A ggplot2 object
     plotProportions=function(legend.position = "right",
                              cell.groups = self$cell.groups,
@@ -606,7 +753,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                              cells.to.remove = NULL,
                              cells.to.remain = NULL,
                              notch = FALSE,
-                             alpha=0.2) {
+                             alpha=0.2, palette=self$sample.groups.palette) {
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
@@ -614,7 +761,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
       if(is.null(cells.to.remove) && is.null(cells.to.remain)){
-        plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups, notch=notch, alpha = alpha)
+        plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups, notch=notch, alpha = alpha, palette=palette)
       }else{  # Anna modified
         plotProportionsSubset(legend.position = legend.position,
                         cell.groups = cell.groups,
@@ -623,7 +770,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                         cells.to.remove = cells.to.remove,
                         cells.to.remain = cells.to.remain,
                         notch=notch,
-                        alpha = alpha)
+                        alpha = alpha, palette=palette)
       }
 
     },
@@ -646,7 +793,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Plot compositions in CoDA-PCA space
     #' @return A ggplot2 object
-    plotPcaSpace=function(cells.to.remove = NULL) {
+    plotPcaSpace=function(cells.to.remove = NULL, palette=self$sample.groups.palette) {
       # Cope with levels
       if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
       if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
@@ -664,7 +811,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       names(d.groups) <- rownames(d.counts)
       # ----
 
-      plotPcaSpace(d.counts, d.groups)
+      plotPcaSpace(d.counts, d.groups, palette=palette)
     },
 
     #' @description Plot compositions in CoDA-CDA space
@@ -803,13 +950,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Plot Loadings
+    #' @param palette palette specification for cell types (default: stored $cell.groups.palette)
     #' @return A ggplot2 object
     plotCellLoadings = function(n.cell.counts = 1000,
                               n.seed = 239,
                               aplha = 0.01,
-                              font.size = 16,
+                              font.size = NULL,
                               cells.to.remove = NULL,
-                              samples.to.remove = NULL){
+                              samples.to.remove = NULL,
+                              palette=self$cell.groups.palette){
       # Cope with levels
       if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
       if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
@@ -825,7 +974,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       plotCellLoadings(self$test.results[['cda']],
                        aplha = aplha,
                        n.significant.cells = length(self$test.results$cda.top.cells),
-                       font.size = font.size)
+                       font.size = font.size, palette=palette)
     },
 
     extimateWilcoxonTest = function(cell.groups = self$cell.groups,
@@ -919,7 +1068,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     ##' @description Plot cell density
     ##' @param add.ponits default is TRUE, add points to cell density figure
     ##' @param condition.per.cell Named group factor with cell names. Must have exactly two levels. condition.per.cell must be provided when add.ponits is TRUE
-    plotCellDensity = function(legend = NULL, title = NULL, grid = NULL, add.ponits = TRUE, condition.per.cell = NULL) {
+    plotCellDensity = function(legend = NULL, title = NULL, grid = NULL, add.ponits = TRUE, condition.per.cell = NULL, color='B', point.col='#FCFDBFFF') {
       bins <- private$getResults('bins', 'estimateCellDensity()')
       ref <- self$ref.level
       target <- self$target.level
@@ -934,25 +1083,27 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       mi <- min(c(min(ref.density), min(target.density)))
       ma <- max(c(max(ref.density), max(target.density)))
       
-      p1 <- plotDensity(target.density, bins = bins, col = 'B', legend = legend, title =self$ref.level, grid = grid, mi = mi, ma = ma)
-      p2 <- plotDensity(ref.density, bins = bins, col = 'B', legend = legend, title =self$target.level, grid = grid, mi = mi, ma = ma)
+      p1 <- plotDensity(target.density, bins = bins, col = color, legend = legend, title =self$ref.level, grid = grid, mi = mi, ma = ma)
+      p2 <- plotDensity(ref.density, bins = bins, col = color, legend = legend, title =self$target.level, grid = grid, mi = mi, ma = ma)
       
       if (add.ponits){
         if(is.null(condition.per.cell)) stop("'condition.per.cell' must be provided when add points")
     
         emb <- private$getResults('density.emb', 'estimateCellDensity()')
         emb$Z <- 1
-        nname1 <- names(condition.per.cell[condition.per.cell == ref])
+        nname1 <- names(condition.per.cell)[condition.per.cell == ref]
         nname1 <- sample(nname1, min(2000, nrow(emb[nname1, ])))
         
-        nname2 <- names(condition.per.cell[condition.per.cell == target])
+        nname2 <- names(condition.per.cell)[condition.per.cell == target]
         nname2 <- sample(nname2, min(2000, nrow(emb[nname2, ])))
         
-        p1 <- p1 + geom_point(data = emb[nname1, ], aes(x = x, y = y), col = '#FCFDBFFF', size = 0.00001, alpha = 0.2)  
-        p2 <- p2 + geom_point(data = emb[nname2, ], aes(x = x, y = y), col = '#FCFDBFFF', size = 0.00001, alpha = 0.2) 
-        return(list('ref' = p1, 'target' = p2))
+        p1 <- p1 + geom_point(data = emb[nname1, ], aes(x = x, y = y), col = point.col, size = 0.00001, alpha = 0.2)  
+        p2 <- p2 + geom_point(data = emb[nname2, ], aes(x = x, y = y), col = point.col, size = 0.00001, alpha = 0.2) 
       }
+      return(list('ref' = p1, 'target' = p2))
     },
+    
+    
 
     ##' @description esitmate differential cell density
     ##' @param col color palettes, 4 different color palettes are supported; default is blue-white-red; BWR: blue-white-red;  WR: white-read; B: magma in viridi;
@@ -985,8 +1136,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param sample.groups Named sample factor with cell names (default: stored $sample.groups vector)
     #' @param weighted.distance whether to weigh the expression distance by the sizes of cell types (default: TRUE), or show distances for each individual cell type
     #' @return A ggplot2 object
-    plotExpressionDistance = function(name='expression.shifts', notch = TRUE, cell.groups = self$cell.groups, sample.groups = self$sample.groups, weighted.distance = TRUE,  min.cells = 10) {
-      plotExpressionDistance(private$getResults(name, 'estimateExpressionShiftMagnitudes()'), notch = notch, cell.groups = cell.groups, sample.groups = sample.groups, weighted.distance = weighted.distance,  min.cells = min.cells)
+    plotExpressionDistance = function(name='expression.shifts', notch = TRUE, cell.groups = self$cell.groups, sample.groups = self$sample.groups, weighted.distance = TRUE,  min.cells = 10, palette=self$sample.groups.palette) {
+      plotExpressionDistance(private$getResults(name, 'estimateExpressionShiftMagnitudes()'), notch = notch, cell.groups = cell.groups, sample.groups = sample.groups, weighted.distance = weighted.distance,  min.cells = min.cells, palette=palette)
     },
 
     #' @title Plot sample-sample expression distance as a 2D embedding
@@ -997,10 +1148,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @method dimension reduction methods (MDS or tSNE ) , default is MDS
     #' @param perplexity tSNE perpexity (default: 4)
     #' @param max_iter tSNE max_iter (default: 1e3)
+    #' @param palette a set of colors to use for conditions (default: stored $sample.groups.palette)
     #' @return A ggplot2 object
-    plotExpressionDistanceEmbedding = function(name='expression.shifts', sample.groups = self$sample.groups, cell.type = NULL, method = 'tSNE', perplexity=4, max_iter=1e3) {
+    plotExpressionDistanceEmbedding = function(name='expression.shifts', sample.groups = self$sample.groups, cell.type = NULL, method = 'tSNE', perplexity=4, max_iter=1e3, palette=self$sample.groups.palette) {
       cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
-      plotExpressionDistancetSNE(cluster.shifts, sample.groups = sample.groups, cell.type = cell.type, method = method, perplexity=perplexity, max_iter=max_iter)
+      plotExpressionDistancetSNE(cluster.shifts, sample.groups = sample.groups, cell.type = cell.type, method = method, perplexity=perplexity, max_iter=max_iter, palette=palette)
+    },
+    
+    #' @title get a cell group contour for 
+    getContour = function(cell, embedding=self$embedding, cell.groups=self$cell.groups, ...) {
+      getContour(cell=cell, emb=embedding,cell.type=cell.groups, ...)
     }
   ),
   private = list(

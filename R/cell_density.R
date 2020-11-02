@@ -65,7 +65,8 @@ estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.l
 ##' @param cell specify cell types for counter, mutiple cell types are also suported 
 ##' @param conf confidence interval of counter
 ##' @param bins number of bins for density esitmation, should keep consistent with bins in estimateCellDensity
-getContour <- function(emb, cell.type, bins = NULL, cell, color = 'white', linetype = 2, conf = "10%"){
+##' @export
+getContour <- function(emb, cell.type, cell, bins = NULL,  color = 'white', linetype = 2, conf = "10%"){
   x <- emb[, 1]
   y <- emb[, 2]
   if (!is.null(bins)){
@@ -114,10 +115,12 @@ plotDensity <- function(mat, bins, col = 'BWR', legend = NULL, title = NULL, gri
   
     if (col=='BWR'){ # 
       p <- p + scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limits = c(mi, ma))
+    } else if(col=='WBB') {
+      p <- p + scale_fill_gradientn(colours=c('white','cadetblue1','blue','gray10'), limits = c(mi, ma))
     }else if(col=='WR'){
       p <- p + scale_fill_gradient2(low = "white", high = "red", limits = c(mi, ma))
-    }else if(col=='B'){
-      p <- p + scale_fill_viridis(option = 'B', alpha = 1, direction = 1, limits = c(mi, ma))
+    }else if(col %in% c('B','A','C','D','E')) {
+      p <- p + scale_fill_viridis(option = col, alpha = 1, direction = 1, limits = c(mi, ma))
     }else{ #purple-black-yellow
       p <- p + scale_fill_gradient2(low = "purple", high = "yellow", mid = "black", midpoint = 0, limits = c(mi, ma))
     }
@@ -134,6 +137,7 @@ plotDensity <- function(mat, bins, col = 'BWR', legend = NULL, title = NULL, gri
       p <- p + geom_vline(xintercept=seq(30, bins, length.out=6), col='grey', alpha=0.1) 
       p <- p + geom_hline(yintercept=seq(30, bins, length.out=6), col='grey', alpha=0.1) 
     }
+    
   
   return(p)
 }

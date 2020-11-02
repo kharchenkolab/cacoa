@@ -9,8 +9,9 @@
 #' @param sample.groups Named sample factor with cell names (default: stored vector)
 #' @param alpha transparency level for the individual points (default: 0.2)
 #' @param weighted.distance whether to weigh the expression distance by the sizes of cell types (default: FALSE)
+#' @param palette a set of colors to use for the conditions
 #' @return A ggplot2 object
-plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.groups = NULL, weighted.distance = FALSE,  notch= TRUE, alpha=0.2, min.cells = 10) {
+plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.groups = NULL, weighted.distance = FALSE,  notch= TRUE, alpha=0.2, min.cells = 10, palette=NULL) {
   ctdml <- cluster.shifts$ctdml
   valid.comparisons <- cluster.shifts$valid.comparisons
   if (!weighted.distance) { #
@@ -133,6 +134,7 @@ plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.gr
         plot.title = element_text(size = 10)
       )
   }
+  if(!is.null(palette)) { gg <- gg + scale_fill_manual(values=palette) }  
   return(gg)
 }
 
@@ -147,7 +149,7 @@ plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.gr
 #' @param method dimension reduction methods (MDS or tSNE) (default is MDS)
 #' @return A ggplot2 object
 
-plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, method = 'MDS', cell.type = NULL,  perplexity=4, max_iter=1e3) {
+plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, method = 'MDS', cell.type = NULL,  perplexity=4, max_iter=1e3, palette=NULL) {
   ctdml <- cluster.shifts$ctdml
   if (!is.null(cell.type)) { # use distances based on the specified cell type
     title <- cell.type
@@ -206,5 +208,6 @@ plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, method = '
   #df$ncells <- nc[rownames(df)]
   gg <- ggplot(df, aes(x, y, color=fraction, shape=fraction)) + geom_point(size=5) + #, size=log10(ncells)
     theme_bw() + ggtitle(title) + theme(axis.title = element_blank(), axis.text = element_blank(), axis.ticks = element_blank())
+  if(!is.null(palette)) { gg <- gg + scale_color_manual(values=palette) }  
   return(gg)
 }

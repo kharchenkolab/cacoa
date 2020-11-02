@@ -329,7 +329,7 @@ plotOntologySimilarities <- function(type=NULL, ont.res, genes = NULL) {
 #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
 #' @param alpha Transparency level on the data points (default: 0.1)
 #' @return A ggplot2 object
-plotProportions <- function(legend.position = "right", cell.groups, sample.per.cell, sample.groups, notch=FALSE, alpha=0.1) {
+plotProportions <- function(legend.position = "right", cell.groups, sample.per.cell, sample.groups, notch=FALSE, alpha=0.1, palette=NULL) {
   df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
     table %>%
     rbind %>%
@@ -342,7 +342,7 @@ plotProportions <- function(legend.position = "right", cell.groups, sample.per.c
     dplyr::mutate(group = sample.groups[match(levels(sample.per.cell), names(sample.groups))]) %>%
     reshape2::melt(., id.vars="group")
 
-  ggplot(df.melt, aes(x=variable, y=value, by=group)) +
+  gg <- ggplot(df.melt, aes(x=variable, y=value, by=group)) +
     geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
     ylab("% cells per sample") +
     xlab("") +
@@ -350,8 +350,11 @@ plotProportions <- function(legend.position = "right", cell.groups, sample.per.c
     theme_legend_position(legend.position) +
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
-    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
+    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) + 
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
+  
+  if(!is.null(palette)) gg <- gg+ scale_color_manual(values=palette)
+  gg
 }
 
 
@@ -372,7 +375,7 @@ plotProportionsSubset <- function(legend.position = "right",
                                   cells.to.remove,
                                   cells.to.remain,
                                   notch = FALSE,
-                                  alpha = 0.1) {
+                                  alpha = 0.1, palette=NULL) {
   df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
     table  %>%
     rbind
@@ -390,7 +393,7 @@ plotProportionsSubset <- function(legend.position = "right",
     dplyr::mutate(group = sample.groups[match(levels(sample.per.cell), names(sample.groups))]) %>%
     reshape2::melt(., id.vars="group")
 
-  p = ggplot(df.melt, aes(x=variable, y=value, by=group)) +
+  gg <- ggplot(df.melt, aes(x=variable, y=value, by=group)) +
     geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
     ylab("% cells per sample") +
     xlab("") +
@@ -400,8 +403,8 @@ plotProportionsSubset <- function(legend.position = "right",
           legend.title=element_blank()) +
     geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
-
-  return(p)
+  if(!is.null(palette)) gg <- gg+scale_color_manual(values=palette)
+  return(gg)
 }
 
 
@@ -520,18 +523,19 @@ plotOntologyDotplot <- function(ont.res, genes = NULL, type = NULL, cell.subgrou
 #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
 #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
 #' @return A ggplot2 object
-plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch = T, cell.groups = NULL, sample.per.cell = NULL) {
+plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch = T, cell.groups = NULL, sample.per.cell = NULL, palette=NULL) {
   if (!size.norm) {
     m <- max(abs(cluster.shifts$value - 1))
 
-    gg <- ggplot(na.omit(cluster.shifts), aes(x=as.factor(Type), y=value)) +
-      geom_boxplot(notch=notch, outlier.shape=NA) +
-      geom_jitter(position=position_jitter(0.1), aes(color=patient), show.legend=FALSE,alpha=0.1) +
+    gg <- ggplot(na.omit(cluster.shifts), aes(x=as.factor(Type), y=value, fill=Type)) +
+      geom_boxplot(notch=notch, outlier.shape=NA)  +
+      geom_jitter(position=position_jitter(0.1), color='gray30', show.legend=FALSE,alpha=0.1,size=0.8) +
       theme_bw() +
-      theme(axis.text.x=element_text(angle = 90, hjust=1), axis.text.y=element_text(angle=90, hjust=0.5)) +
-      labs(x="", y="Normalized to within condition distance") +
-      ylim(c(1 - m, 1 + m)) +
+      theme(axis.text.x=element_text(angle = 90, hjust=1), axis.text.y=element_text(angle=90, hjust=0.5), legend.position = 'none') +
+      labs(x="", y="normalized expression distance") +
+      #ylim(c(1 - m, 1 + m)) + 
       geom_hline(yintercept=1, linetype="dashed", color = "black")
+    if(!is.null(palette)) { gg <- gg + scale_fill_manual(values=palette) }  
   } else {
     if (length(setdiff(names(cell.groups), names(sample.per.cell)))>0) warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
 
@@ -539,7 +543,7 @@ plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch =
     x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
     odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
 
-    m <- max(abs(odf$md - 1))
+    #m <- max(abs(odf$md - 1))
 
     gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
       ggrepel::geom_text_repel() +
@@ -547,10 +551,15 @@ plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch =
       guides(color=F) +
       xlab("Cluster size") +
       theme_bw() +
+      theme(legend.position = 'none')
       ylab("Median normalized distance") +
-      ylim(c(1 - m,1 + m)) +
+      #ylim(c(1 - m,1 + m)) +
       geom_hline(yintercept=1, linetype="dashed", color = "black")
+      
+    if(!is.null(palette)) { gg <- gg + scale_color_manual(values=palette) }  
   }
+ 
+ 
   return(gg)
 }
 

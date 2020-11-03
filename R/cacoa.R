@@ -383,16 +383,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
     #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
     #' @param common.genes Only investigate common genes across cell groups (default=F)
-    #' @param min.cell.count (default=10)
-    #' @param independent.filtering independentFiltering for DESeq2 (default=F)
+    #' @param test which DESeq2 test to use (options: "LRT" (default), "Wald")
+    #' @param cooks.cutoff cooksCutoff for DESeq2 (default=FALSE)
+    #' @param min.cell.count minimum number of cells that need to be present in a given cell type in a given sample in order to be taken into account (default=10)
+    #' @param max.cell.count maximal number of cells per cluster per sample to include in a comparison (useful for comparing the number of DE genes between cell types) (default: Inf)
+    #' @param independent.filtering independentFiltering parameter for DESeq2 (default=FALSE)
     #' @param n.cores Number of cores (default=1)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-    #' @param return.matrix Return merged matrix of results (default=T)
-    #' @param verbose Show progress (default=T)
+    #' @param return.matrix Return merged matrix of results (default=TRUE)
+    #' @param verbose Show progress (default=TRUE)
+    #' @param name slot in which to save the results (default: 'de')
     #' @return A list of DE genes
     estimatePerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level,
-                              common.genes = F, n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, independent.filtering = FALSE,
-                              cluster.sep.chr = "<!!>", return.matrix = T, verbose=T) {
+                              common.genes = F, n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, max.cell.count= Inf, test='Wald', independent.filtering = FALSE,
+                              cluster.sep.chr = "<!!>", return.matrix = T, verbose=T, name ='de') {
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if(is.null(ref.level)) stop("'ref.level' must be provided either during the object initialization or during this function call")
@@ -405,29 +409,52 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           setNames(c(ref.level, self$target.level))
       }
 
-      self$test.results[["de"]] <- extractRawCountMatrices(self$data.object, transposed=T) %>%
-        estimatePerCellTypeDE(cell.groups = cell.groups, sample.groups = sample.groups, ref.level = ref.level, n.cores = n.cores,
-                            cooks.cutoff = cooks.cutoff, min.cell.count = min.cell.count, independent.filtering = independent.filtering,
+      self$test.results[[name]] <- estimatePerCellTypeDE(extractRawCountMatrices(self$data.object, transposed=T), cell.groups = cell.groups, sample.groups = sample.groups, ref.level = ref.level, n.cores = n.cores,
+                            cooks.cutoff = cooks.cutoff, min.cell.count = min.cell.count, max.cell.count=max.cell.count, test=test, independent.filtering = independent.filtering,
                             cluster.sep.chr = cluster.sep.chr, return.matrix = return.matrix)
-      return(invisible(self$test.results[["de"]]))
+      return(invisible(self$test.results[[name]]))
     },
 
     #' @description Plot number of significant DE genes as a function of number of cells
-    #' @param de.raw List with differentially expressed genes per cell group (default: stored list, results from estimatePerCellTypeDE)
+    #' @param name results slot in which the DE results should be stored (default: 'de')
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
+    #' @param palette cell group palette (default: stored $cell.groups.palette)
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
     #' @param label Show labels on plot (default=T)
     #' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
     #' @return A ggplot2 object
-    plotDEGenes=function(de.raw = self$test.results$de, cell.groups = self$cell.groups, legend.position = "none", label = T, p.adjust.cutoff = 0.05) {
-      if(is.null(de.raw)) stop("Please run 'estimatePerCellTypeDE' first.")
+    plotDEGenes=function(name='de', cell.groups = self$cell.groups, legend.position = "none", label = T, p.adjust.cutoff = 0.05, size=4, palette=self$cell.groups.palette) {
+      de.raw <- private$getResults(name, 'estimatePerCellTypeDE()')
 
       # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before plotting
       if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, 1)
 
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
-      plotDEGenes(de.raw = de.raw, cell.groups = cell.groups, legend.position = legend.position, p.adjust.cutoff = p.adjust.cutoff)
+      plotDEGenes(de.raw = de.raw, cell.groups = cell.groups, legend.position = legend.position, p.adjust.cutoff = p.adjust.cutoff, palette=palette, size=size)
+    },
+    
+    #' @description Plot number of significant DE genes
+    #' @param name results slot in which the DE results should be stored (default: 'de')
+    #' @param palette cell group palette (default: stored $cell.groups.palette)
+    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
+    #' @param label Show labels on plot (default=T)
+    #' @param pvalue.cutoff P value cutoff (default=0.05)
+    #' @param p.adjust whether the cutoff should be based on the adjusted P value (default: TRUE)
+    #' @return A ggplot2 object
+    plotNumberOfDEGenes=function(name='de', cell.groups = self$cell.groups, legend.position = "none", label = T, p.adjust=TRUE, pvalue.cutoff=0.05, palette=self$cell.groups.palette) {
+      de.raw <- private$getResults(name, 'estimatePerCellTypeDE()')
+  
+      if(p.adjust) {
+        x <- lapply(de.raw,function(x) sum(na.omit(x$res$padj<=pvalue.cutoff))) %>% unlist %>% sort
+      } else {
+        x <- lapply(de.raw,function(x) sum(na.omit(x$res$pvalue<=pvalue.cutoff))) %>% unlist %>% sort
+      }
+      p <- ggplot(data.frame(cell=names(x),nde=x),aes(x=reorder(cell,nde),y=nde,fill=cell)) + geom_bar(stat="identity")+ theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size=12),axis.title.x = element_blank()) +ylab("number of DE genes") + guides(fill=F)
+      
+      if(!is.null(palette)) p <- p+ scale_fill_manual(values=palette)
+      
+      return(p)
     },
 
     #' @description Save DE results as JSON files

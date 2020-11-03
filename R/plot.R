@@ -10,7 +10,7 @@ theme_legend_position <- function(position) {
   theme(legend.position=position, legend.justification=position)
 }
 
-plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", label=T) {
+plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", label=T, size=5, palette=NULL) {
   p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
 
@@ -21,12 +21,14 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", 
     labs(x="Number of cells", y=y.lab) +
     theme_bw()
 
-  if(label) gg <- gg + geom_label_repel(aes(label=Type), size=2, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4))
+  if(label) gg <- gg + geom_label_repel(aes(label=Type), size=size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4))
 
   gg <- gg +
     theme(legend.background=element_rect(fill=alpha("white", 0.4))) +
     theme_legend_position(legend.position) +
     guides(color=guide_legend(title="Cell type"))
+  
+  if(!is.null(palette)) gg <- gg+ scale_color_manual(values=palette)
 
   return(gg)
 }
@@ -39,11 +41,11 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", 
 #' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
 #' @return A ggplot2 object
 #' @export
-plotDEGenes <- function(de.raw, cell.groups, legend.position="none", p.adjust.cutoff = 0.05, label = T) {
+plotDEGenes <- function(de.raw, cell.groups, legend.position="none", p.adjust.cutoff = 0.05, label = T, palette=NULL, ...) {
   cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.raw)]
 
   sapply(de.raw, function(n) n %>% dplyr::filter(padj <= p.adjust.cutoff) %>% nrow) %>%
-    plotNCellRegression(cell.groups, y.lab="Significant DE genes", legend.position=legend.position, label=label) +
+    plotNCellRegression(cell.groups, y.lab="Significant DE genes", legend.position=legend.position, label=label, ...) +
     xlab("Number of cells") +
     geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 }

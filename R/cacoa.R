@@ -50,6 +50,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         for(n in ls(data.object)) {
           if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
         }
+
+        return()
       } else {
         # TODO: would be nice to support a list of count matrices as input
         if (!('Conos' %in% class(data.object)) && !('Seurat' %in% class(data.object)))
@@ -177,7 +179,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           mtx <- self$cache[[pca.name]]
         } else {
           centers <- Matrix::colMeans(mtx)
-          pcs <- mtx %>% irlba::irlba(nv=n.pcs, nu=0, center=Matrix::colMeans(.), right_only=F,
+          pcs <- mtx %>% irlba::irlba(nv=n.pcs, nu=0, center=centers, right_only=F,
                                       fastpath=T, maxit=pca.maxit, reorth=T)
           mtx <- as.matrix(t(as(t(mtx %*% pcs$v), "dgeMatrix") - t(centers %*% pcs$v)))
           self$cache[[pca.name]] <- mtx
@@ -562,15 +564,32 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
     #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
+    #' @param cells.to.remove Vector of cell types to remove from the composition
+    #' @param cells.to.remain Vector of cell types to remain in the composition
     #' @return A ggplot2 object
-    plotProportions=function(legend.position = "right", cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups) {
+    plotProportions=function(legend.position = "right",
+                             cell.groups = self$cell.groups,
+                             sample.per.cell = self$sample.per.cell,
+                             sample.groups = self$sample.groups,
+                             cells.to.remove = NULL,
+                             cells.to.remain = NULL) {
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
 
       if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
-      plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups)
+      if(is.null(cells.to.remove) && is.null(cells.to.remain)){
+        plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups)
+      }else{  # Anna modified
+        plotProportionsSubset(legend.position = legend.position,
+                        cell.groups = cell.groups,
+                        sample.per.cell = sample.per.cell,
+                        sample.groups = sample.groups,
+                        cells.to.remove = cells.to.remove,
+                        cells.to.remain = cells.to.remain)
+      }
+
     },
 
     #' @description Plot the cell numbers per sample
@@ -587,6 +606,356 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
       plotCellNumbers(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups)
+    },
+
+    #' @description Plot compositions in CoDA-PCA space
+    #' @return A ggplot2 object
+    plotPcaSpace=function(cells.to.remove = NULL) {
+      # Cope with levels
+      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
+      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
+      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
+
+      # Construct sample groups and count data
+      # ---- The following can be significantly reduced
+      d.counts <- data.frame(anno=self$cell.groups,
+                             group=self$sample.per.cell[match(names(self$cell.groups), names(self$sample.per.cell))]) %>%
+        table  %>% rbind %>% t
+      if(!is.null(cells.to.remove)) d.counts = d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
+
+      d.groups = self$sample.groups[rownames(d.counts)] == self$target.level
+      names(d.groups) <- rownames(d.counts)
+      # ----
+
+      plotPcaSpace(d.counts, d.groups)
+    },
+
+    #' @description Plot compositions in CoDA-CDA space
+    #' @return A ggplot2 object
+    plotCdaSpace=function(cells.to.remain = NULL,
+                          cells.to.remove = NULL,
+                          samples.to.remove = NULL) {
+      # Cope with levels
+      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
+      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
+      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
+
+      # Construct sample groups and count data
+      # ---- The following can be significantly reduced
+      d.counts <- data.frame(anno=self$cell.groups,
+                             group=self$sample.per.cell[match(names(self$cell.groups), names(self$sample.per.cell))]) %>%
+        table  %>% rbind %>% t
+
+      if(!is.null(cells.to.remain)) d.counts = d.counts[,colnames(d.counts) %in% cells.to.remain]
+      if(!is.null(cells.to.remove)) d.counts = d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
+      if(!is.null(samples.to.remove)) d.counts = d.counts[!(rownames(d.counts) %in% samples.to.remove),]
+
+      d.groups = self$sample.groups[rownames(d.counts)] == self$target.level
+      names(d.groups) <- rownames(d.counts)
+      # ----
+
+      plotCdaSpace(d.counts, d.groups)
+
+    },
+
+    #' @description Plot contrast tree
+    #' @return A ggplot2 object
+    plotContrastTree=function(cells.to.remain = NULL,
+                              cells.to.remove = NULL) {
+      # Cope with levels
+      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
+      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
+      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
+
+      # Construct sample groups and count data
+      # ---- The following can be significantly reduced
+      d.counts <- data.frame(anno=self$cell.groups,
+                             group=self$sample.per.cell[match(names(self$cell.groups), names(self$sample.per.cell))]) %>%
+        table  %>% rbind %>% t
+
+      if(!is.null(cells.to.remain)) d.counts = d.counts[,colnames(d.counts) %in% cells.to.remain]
+      if(!is.null(cells.to.remove)) d.counts = d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
+
+      d.groups = self$sample.groups[rownames(d.counts)] == self$target.level
+      names(d.groups) <- rownames(d.counts)
+      # ----
+
+      plotContrastTree(d.counts, d.groups)
+    },
+
+    #' @description Plot Loadings
+    #' @return A ggplot2 object
+    estimateCellLoadings=function(n.cell.counts = 1000,
+                              n.seed = 239,
+                              aplha = 0.01,
+                              cells.to.remove = NULL,
+                              cells.to.remain = NULL,
+                              samples.to.remove = NULL,
+                              signif.threshold = 0.2){
+      # Cope with levels
+      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
+      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
+      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
+
+      # Construct sample groups and count data
+      # ---- The following can be significantly reduced
+      d.counts <- data.frame(anno=self$cell.groups,
+                             group=self$sample.per.cell[match(names(self$cell.groups), names(self$sample.per.cell))]) %>%
+        table  %>% rbind %>% t
+      if(!is.null(cells.to.remove)) d.counts = d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
+      if(!is.null(cells.to.remain)) d.counts = d.counts[,colnames(d.counts) %in% cells.to.remain]
+      if(!is.null(samples.to.remove)) d.counts = d.counts[!(rownames(d.counts) %in% samples.to.remove),]
+
+      d.groups = self$sample.groups[rownames(d.counts)] == self$target.level
+      names(d.groups) <- rownames(d.counts)
+      # ----
+
+      self$test.results[['cda']] <- resampleContrast(d.counts, d.groups,
+                                                     n.cell.counts = n.cell.counts,
+                                                     n.seed = n.seed)
+
+
+      balances = self$test.results$cda$balances
+      n.bal = ncol(balances)
+      n.plus = rowSums(balances[,2:n.bal] > 0)
+      n.minus = rowSums(balances[,2:n.bal] < 0)
+      perm.frac = mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) /
+        mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
+
+      cda.top.cells = names(perm.frac)[perm.frac < signif.threshold]
+
+      self$test.results[['cda.top.cells']] = cda.top.cells
+
+      return(invisible(self$test.results[['cda']]))
+    },
+
+    estimateGaPartiotion=function(n.cell.counts = 1000,
+                                  n.seed = 239,
+                                  aplha = 0.01,
+                                  cells.to.remain = NULL,
+                                  cells.to.remove = NULL,
+                                  samples.to.remove = NULL){
+      # Cope with levels
+      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
+      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
+      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
+
+      # Construct sample groups and count data
+      # ---- The following can be significantly reduced
+      d.counts <- data.frame(anno=self$cell.groups,
+                             group=self$sample.per.cell[match(names(self$cell.groups), names(self$sample.per.cell))]) %>%
+        table  %>% rbind %>% t
+
+      if(!is.null(cells.to.remain)) d.counts = d.counts[,colnames(d.counts) %in% cells.to.remain]
+      if(!is.null(cells.to.remove)) d.counts = d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
+      if(!is.null(samples.to.remove)) d.counts = d.counts[!(rownames(d.counts) %in% samples.to.remove),]
+
+      d.groups = self$sample.groups[rownames(d.counts)] == self$target.level
+      names(d.groups) <- rownames(d.counts)
+      # ----
+
+      ga.res = gaPartition(d.counts, d.groups)
+
+      self$test.results[['ga.partition']] <- rownames(t(ga.res[1,ga.res[1,] != 0,drop=FALSE]))
+
+      return(invisible(self$test.results[['ga.partition']]))
+    },
+
+    #' @description Plot Loadings
+    #' @return A ggplot2 object
+    plotCellLoadings = function(n.cell.counts = 1000,
+                              n.seed = 239,
+                              aplha = 0.01,
+                              font.size = 16,
+                              cells.to.remove = NULL,
+                              samples.to.remove = NULL){
+      # Cope with levels
+      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
+      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
+      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
+      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
+
+      if(is.null(self$test.results$cda)) self$estimateCellLoadings(n.cell.counts = n.cell.counts,
+                                                     n.seed = n.seed,
+                                                     aplha = aplha,
+                                                     cells.to.remove = cells.to.remove,
+                                                     samples.to.remove = samples.to.remove)
+
+      plotCellLoadings(self$test.results[['cda']],
+                       aplha = aplha,
+                       n.significant.cells = length(self$test.results$cda.top.cells),
+                       font.size = font.size)
+    },
+
+    extimateWilcoxonTest = function(cell.groups = self$cell.groups,
+                                     sample.per.cell = self$sample.per.cell,
+                                     sample.groups = self$sample.groups,
+                                     cells.to.remove = NULL,
+                                     cells.to.remain = NULL){
+
+      p.vals <- calcWilcoxonTest(cell.groups = cell.groups,
+                                 sample.per.cell = sample.per.cell,
+                                 sample.groups = sample.groups,
+                                 cells.to.remove = cells.to.remove,
+                                 cells.to.remain = cells.to.remain)
+
+      self$test.results[['p.vals.balances']] <- p.vals
+      return(self$test.results[['p.vals.balances']])
+
+      cda = resampleContrast(d.counts, d.groups,
+                             n.cell.counts = n.cell.counts,
+                             n.seed = n.seed)
+      plotCellLoadings(cda$balances, aplha = aplha)
+    },
+
+    #' @description Estimate cell density in giving embedding
+    #' @param emb cell embedding matrix
+    #' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
+    #' @param sample.groups @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+    #' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
+    #' @param target.level target/disease level for sample.group vector
+    #' @param bins number of bins for density esitmation, default 400
+    #' @param condition.per.cell Named group factor with cell names. Must have exactly two levels.
+    #' @param by.sample  if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell condition.per.cell need to be provided and density will simply esitmated by condition.per.cell. 
+    #' @add.ponits add.ponits  show cells in density plot     
+    estimateCellDensity = function(emb, condition.per.cell = NULL, sample.per.cell = NULL, ref.level, target.level, bins = 400, by.sample = TRUE){
+
+      if(is.null(emb)) stop("'emb' must be provided either during the object initialization or during this function call")
+
+      if(is.null(self$sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
+
+      if(is.null(self$sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
+
+      if(is.null(self$ref.level)) stop("'ref.level' must be provided either during the object initialization or during this function call")
+
+      if(is.null(self$target.level)) stop("'target.level' must be provided either during the object initialization or during this function call")
+
+      sample.per.cell <- self$sample.per.cell
+      ref.level <- self$ref.level
+      target.level <- self$target.level
+      sample.groups <- self$sample.groups
+      
+      self$test.results[['bins']] <- bins
+      res <- estimateCellDensity(emb, sample.per.cell = sample.per.cell, sample.groups = sample.groups, bins = bins, ref.level =
+                                   ref.level, target.level = target.level, condition.per.cell = condition.per.cell, by.sample =
+                                   by.sample)
+      self$test.results[['density.mat']] <- res[['density.mat']]
+      self$test.results[['target.density']] <- res[['density.fraction']][[target.level]]
+      self$test.results[['ref.density']] <- res[['density.fraction']][[ref.level]]
+      #self$test.results[['diff.density']] <- res[['density.fraction']][[target.level]] - res[['density.fraction']][[ref.level]]
+
+      # adjust embedding to the same density space 
+      x <- emb[, 1]
+      y <- emb[, 2]
+      x <- (x - range(x)[1])
+      x <- (x / max(x)) * bins
+      
+      y <- (y - range(y)[1])
+      y <- (y / max(y)) * bins
+      emb2 <- data.frame(x = x, y = y)
+      self$test.results[['density.emb']] <- emb2
+      
+      
+      #count cell number in each bin
+      x=emb2[,1]
+      y=emb2[,2]
+      s1 = seq(from = min(x),
+               to = max(x),
+               length.out = bins + 1)
+      s2 = seq(from = min(y),
+               to = max(y),
+               length.out = bins + 1)
+      dcounts = table(cut(x, breaks = s1), cut(y, breaks = s2)) %>% as.matrix.data.frame
+      self$test.results[['density.counts']] <- dcounts
+      
+      return(invisible(self$density[['bins']]))
+    },
+
+    ##' @description Plot cell density
+    ##' @param add.ponits default is TRUE, add points to cell density figure
+    ##' @param condition.per.cell Named group factor with cell names. Must have exactly two levels. condition.per.cell must be provided when add.ponits is TRUE
+    plotCellDensity = function(legend = NULL, title = NULL, grid = NULL, add.ponits = TRUE, condition.per.cell = NULL){
+      bins <- self$test.results$bins
+      ref <- self$ref.level
+      target <- self$target.level
+      
+      target.density <- cao$test.results$target.density
+      ref.density <- cao$test.results$ref.density
+      
+      mi <- min(c(min(ref.density), min(target.density)))
+      ma <- max(c(max(ref.density), max(target.density)))
+      
+      p1 <- plotDensity(target.density, bins = bins, col = 'B', legend = legend, title =self$ref.level, grid = grid, mi = mi, ma = ma)
+      p2 <- plotDensity(ref.density, bins = bins, col = 'B', legend = legend, title =self$target.level, grid = grid, mi = mi, ma = ma)
+      
+      if (add.ponits){
+        if(is.null(condition.per.cell)) stop("'condition.per.cell' must be provided when add points")
+    
+        emb <- self$test.results$density.emb
+        emb$Z <- 1
+        nname1 <- names(condition.per.cell[condition.per.cell == ref])
+        nname1 <- sample(nname1, min(2000, nrow(emb[nname1, ])))
+        
+        nname2 <- names(condition.per.cell[condition.per.cell == target])
+        nname2 <- sample(nname2, min(2000, nrow(emb[nname2, ])))
+        
+        p1 <- p1 + geom_point(data = emb[nname1, ], aes(x = x, y = y), col = '#FCFDBFFF', size = 0.00001, alpha = 0.2)  
+        p2 <- p2 + geom_point(data = emb[nname2, ], aes(x = x, y = y), col = '#FCFDBFFF', size = 0.00001, alpha = 0.2) 
+        return(list('ref' = p1, 'target' = p2))
+      }
+    },
+
+    ##' @description esitmate differential cell density
+    ##' @param col color palettes, 4 different color palettes are supported; default is blue-white-red; BWR: blue-white-red;  WR: white-read; B: magma in viridi;
+    ##' @param condition.per.cell A two-level factor on the cell names describing the conditions being compared (default: stored vector)
+    ##' @method method to cacuated differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy betwwen sample grapups ; t.test: zscore of t-test,global variacen is setting for t.test;     
+    diffCellDensity = function(condition.per.cell = NULL, method = 'substract', legend = NULL, grid = TRUE, col = 'BWR', title = NULL, plot = TRUE){
+      ref.level <- self$ref.level
+      target.level <- self$target.level
+      sample.groups <- self$sample.groups
+      bins <- self$test.results$bins
+      density.matrix <- self$test.results$density.mat
+      dcounts <- self$test.results$density.counts
+      if (method == 'entropy'){
+        if(is.null(condition.per.cell)) stop("'condition.per.cell' must be provided when entropy was used")
+      }
+      p <- diffCellDensity(density.matrix, dcounts = dcounts, condition.per.cell = condition.per.cell, sample.groups, bins = bins, col = col, target.level = target.level, ref.level =
+                             ref.level, method = method, title = title, grid = grid, legend = legend)
+      if (plot)
+        return(p$fig)
+      
+      return(p$score)
+    },
+
+    #' @title Plot inter-sample expression distance 
+    #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
+    #' @param name Test results to plot (default=expression.shifts)
+    #' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
+    #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
+    #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
+    #' @weight.disatnce default is null, it set caculated weigeted expression distance across mutiple cell types
+    #' @return A ggplot2 object
+    plotExpressionDistance = function(cluster.shifts, notch = T, cell.groups = NULL, sample.per.cell = NULL, weight.disatnce = NULL,  min.cells = 10) {
+      cluster.shifts <- self$test.results$expression.shifts
+      plotExpressionDistance(cluster.shifts, notch = notch, cell.groups = cell.groups, sample.per.cell = sample.per.cell, weight.disatnce = weight.disatnce,  min.cells = min.cells)
+    },
+
+    #' @title Plot sample-sample expression distance in tSNE
+    #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
+    #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+    #' @param cell.type Named of cell type, default is null, it set plot sample-sample expression distance in tSNE for the cell type
+    #' @weight.disatnce default is null, it set caculated weigeted expression distance across mutiple cell types
+    #' @method dimension reduction methods (tSNE or MSD ) , default is tSNE
+    #' @return A ggplot2 object
+    plotExpressionDistancetSNE = function(cluster.shifts, sample.groups, weight.disatnce = TRUE, cell.type = NULL, method = 'tSNE') {
+      cluster.shifts <- self$test.results$expression.shifts
+      sample.groups <- self$sample.groups
+      plotExpressionDistancetSNE(cluster.shifts, sample.groups = sample.groups, weight.disatnce = weight.disatnce, cell.type = cell.type, method = method)
     }
   ),
   private = list(

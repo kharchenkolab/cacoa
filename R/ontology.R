@@ -65,9 +65,9 @@ prepareOntologyData <- function(cms, de.raw, cell.groups, org.db, n.top.genes = 
   de.gene.ids <- groups %>% lapply(function(x) {
     de <- de.raw[[x]] %>% .[rownames(.) %in% de.genes.filtered[[x]],]
 
-    list(down = de %>% .[order(.$Z[.$Z < 0], decreasing = F),] %>% rownames,
-         up = de %>% .[order(.$Z[.$Z > 0], decreasing = F),] %>% rownames,
-         all = de %>% .[order(.$Z %>% abs(), decreasing = F),] %>% rownames) %>%
+    list(down = de %>% dplyr::filter(Z < 0) %>% .[order(.$Z, decreasing = F),] %>% rownames,
+         up = de %>% dplyr::filter(Z > 0) %>% .[order(.$Z, decreasing = T),] %>% rownames,
+         all = de %>% .[order((.$Z %>% abs()), decreasing = T),] %>% rownames) %>%
       # lapply(function(l) if(n.top.genes == Inf | n.top.genes > length(l)) l else l[1:n.top.genes]) %>%
       append(list(universe=rownames(de.raw[[x]])))
     }) %>% setNames(groups) %>%

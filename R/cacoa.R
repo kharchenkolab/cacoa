@@ -772,6 +772,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param notch Whether to show notch in the boxplots
     #' @param alpha Transparency level on the data points (default: 0.2)
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
+    #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (* < 0.05; ** < 0.01; *** < 0.001)  
     #' @return A ggplot2 object
     plotProportions=function(legend.position = "right",
                              cell.groups = self$cell.groups,
@@ -780,7 +781,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                              cells.to.remove = NULL,
                              cells.to.remain = NULL,
                              notch = FALSE,
-                             alpha=0.2, palette=self$sample.groups.palette) {
+                             alpha=0.2, palette=self$sample.groups.palette, show.significance = FALSE) {
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
@@ -788,7 +789,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
 
       if(is.null(cells.to.remove) && is.null(cells.to.remain)){
-        plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups, notch=notch, alpha = alpha, palette=palette)
+        plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups, notch=notch, alpha = alpha, palette=palette, show.significance=show.significance)
       }else{  # Anna modified
         plotProportionsSubset(legend.position = legend.position,
                         cell.groups = cell.groups,
@@ -797,7 +798,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                         cells.to.remove = cells.to.remove,
                         cells.to.remain = cells.to.remain,
                         notch=notch,
-                        alpha = alpha, palette=palette)
+                        alpha = alpha, palette=palette, 
+                        show.significance=show.significance)
       }
 
     },
@@ -1064,38 +1066,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       self$test.results[['target.density']] <- res[['density.fraction']][[target.level]]
       self$test.results[['ref.density']] <- res[['density.fraction']][[ref.level]]
       #self$test.results[['diff.density']] <- res[['density.fraction']][[target.level]] - res[['density.fraction']][[ref.level]]
+      
+      self$test.results[['density.emb']] <- res[['density.emb']]
 
-      # adjust embedding to the same density space 
-      x <- embedding[, 1]
-      y <- embedding[, 2]
-      x <- (x - range(x)[1])
-      x <- (x / max(x)) * bins
-      
-      y <- (y - range(y)[1])
-      y <- (y / max(y)) * bins
-      emb2 <- data.frame(x = x, y = y)
-      self$test.results[['density.emb']] <- emb2
-      
-      
-      #count cell number in each bin
-      x=emb2[,1]
-      y=emb2[,2]
-      s1 = seq(from = min(x),
-               to = max(x),
-               length.out = bins + 1)
-      s2 = seq(from = min(y),
-               to = max(y),
-               length.out = bins + 1)
-      dcounts = table(cut(x, breaks = s1), cut(y, breaks = s2)) %>% as.matrix.data.frame
-      self$test.results[['density.counts']] <- dcounts
-      
       return(invisible(self$density[['bins']]))
     },
 
-    ##' @description Plot cell density
-    ##' @param add.ponits default is TRUE, add points to cell density figure
-    ##' @param condition.per.cell Named group factor with cell names. Must have exactly two levels. condition.per.cell must be provided when add.ponits is TRUE
-    plotCellDensity = function(legend = NULL, title = NULL, grid = NULL, add.ponits = TRUE, condition.per.cell = NULL, color='B', point.col='#FCFDBFFF') {
+    #' @description Plot cell density
+    #' @param add.ponits default is TRUE, add points to cell density figure
+    #' @param condition.per.cell Named group factor with cell names. Must have exactly two levels. condition.per.cell must be provided when add.ponits is TRUE
+    #' @param contours specify cell types for contour, mutiple cell types are also suported 
+    #' @param contour.color color for contour line
+    #' @param contour.conf confidence interval of contour
+    #' @return A ggplot2 object
+    plotCellDensity = function(col = c('blue','white','red'), show.legend = NULL, legend.position = NULL, title = NULL, show.grid = NULL, add.ponits = TRUE, condition.per.cell = NULL, color = 'B', point.col = '#FCFDBFFF', contours = NULL, contour.color = 'white', contour.conf = '10%') {
       bins <- private$getResults('bins', 'estimateCellDensity()')
       ref <- self$ref.level
       target <- self$target.level
@@ -1109,15 +1093,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       
       mi <- min(c(min(ref.density), min(target.density)))
       ma <- max(c(max(ref.density), max(target.density)))
+      emb <- private$getResults('density.emb', 'estimateCellDensity()')
       
-      p1 <- plotDensity(target.density, bins = bins, col = color, legend = legend, title =self$ref.level, grid = grid, mi = mi, ma = ma)
-      p2 <- plotDensity(ref.density, bins = bins, col = color, legend = legend, title =self$target.level, grid = grid, mi = mi, ma = ma)
+      target.density = data.frame(emb, 'z' = target.density)
+      ref.density = data.frame(emb, 'z' = ref.density)
+      
+      p1 <- plotDensity(target.density, bins = bins, col = col, legend.position = legend.position, show.legend = show.legend, title =self$ref.level, show.grid = show.grid, mi = mi, ma = ma)
+      p2 <- plotDensity(ref.density, bins = bins, col = col,legend.position = legend.position, show.legend = show.legend, title =self$target.level, show.grid = show.grid, mi = mi, ma = ma)
       
       if (add.ponits){
         if(is.null(condition.per.cell)) stop("'condition.per.cell' must be provided when add points")
-    
-        emb <- private$getResults('density.emb', 'estimateCellDensity()')
-        emb$Z <- 1
+        emb <- self$embedding %>% as.data.frame()
+        colnames(emb) = c('x','y')
+        emb$z <- 1
+        emb[1:4,]
         nname1 <- names(condition.per.cell)[condition.per.cell == ref]
         nname1 <- sample(nname1, min(2000, nrow(emb[nname1, ])))
         
@@ -1127,31 +1116,49 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         p1 <- p1 + geom_point(data = emb[nname1, ], aes(x = x, y = y), col = point.col, size = 0.00001, alpha = 0.2)  
         p2 <- p2 + geom_point(data = emb[nname2, ], aes(x = x, y = y), col = point.col, size = 0.00001, alpha = 0.2) 
       }
+      
+
+      if(!is.null(contours)){
+        cnl = do.call(c, lapply(sn(contours), function(x) getContour(self$embedding, cell.type =self$cell.groups , cell=x ,conf = contour.conf, color = contour.color)))
+        p1 <- p1 + cnl
+        p2 <- p2 + cnl
+      }
+      
+      
       return(list('ref' = p1, 'target' = p2))
     },
     
-    
 
-    ##' @description esitmate differential cell density
-    ##' @param col color palettes, 4 different color palettes are supported; default is blue-white-red; BWR: blue-white-red;  WR: white-read; B: magma in viridi;
-    ##' @param condition.per.cell A two-level factor on the cell names describing the conditions being compared (default: stored vector)
-    ##' @method method to cacuated differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy betwwen sample grapups ; t.test: zscore of t-test,global variacen is setting for t.test;     
-    diffCellDensity = function(condition.per.cell = NULL, method = 'substract', legend = NULL, grid = TRUE, col = 'BWR', title = NULL, plot = TRUE){
+    
+    #' @description esitmate differential cell density
+    #' @param col color palettes,  default is c('blue','white','red')
+    #' @param condition.per.cell A two-level factor on the cell names describing the conditions being compared (default: stored vector)
+    #' @method method to cacuated differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy betwwen sample grapups ; t.test: zscore of t-test,global variacen is setting for t.test;     
+    #' @param contours specify cell types for contour, mutiple cell types are also suported 
+    #' @param contour.color color for contour line
+    #' @param z.cutoff absolute z score cutoff
+    #' @param contour.conf confidence interval of contour
+    diffCellDensity = function(condition.per.cell = NULL, method = 'substract', col = c('blue','white','red'), show.legend = NULL, legend.position = NULL, title = NULL, show.grid = NULL, plot = TRUE, contours = NULL, contour.color = 'white', contour.conf = '10%' , z.cutoff = NULL){
       ref.level <- self$ref.level
       target.level <- self$target.level
       sample.groups <- self$sample.groups
       bins <- private$getResults('bins', 'estimateCellDensity()')
       density.matrix <- private$getResults('density.mat', 'estimateCellDensity()')
-      dcounts <- private$getResults('density.counts', 'estimateCellDensity()')
-
+      density.emb <- private$getResults('density.emb', 'estimateCellDensity()')
+      
       if (method == 'entropy'){
         if(is.null(condition.per.cell)) stop("'condition.per.cell' must be provided when entropy was used")
       }
-      p <- diffCellDensity(density.matrix, dcounts = dcounts, condition.per.cell = condition.per.cell, sample.groups, bins = bins, col = col, target.level = target.level, ref.level =
-                             ref.level, method = method, title = title, grid = grid, legend = legend)
-      if (plot)
-        return(p$fig)
+      p <- diffCellDensity(density.emb, density.matrix, condition.per.cell = condition.per.cell, sample.groups, bins = bins, target.level = target.level, ref.level =
+                             ref.level, method = method, title = title, legend.position = legend.position, show.legend = show.legend, show.grid = show.grid, z.cutoff = z.cutoff)
       
+      if (plot){
+        if(!is.null(contours)){
+          cnl = do.call(c, lapply(sn(contours), function(x) getContour(self$embedding, cell.type =self$cell.groups , cell=x ,conf = contour.conf, color = contour.color)))
+          fig <- p$fig + cnl
+        }
+        return(fig)
+      }
       return(p$score)
     },
 
@@ -1162,9 +1169,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored $cell.groups vector)
     #' @param sample.groups Named sample factor with cell names (default: stored $sample.groups vector)
     #' @param weighted.distance whether to weigh the expression distance by the sizes of cell types (default: TRUE), or show distances for each individual cell type
+    #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (* < 0.05; ** < 0.01; *** < 0.001)  
     #' @return A ggplot2 object
-    plotExpressionDistance = function(name='expression.shifts', notch = TRUE, cell.groups = self$cell.groups, sample.groups = self$sample.groups, weighted.distance = TRUE,  min.cells = 10, palette=self$sample.groups.palette) {
-      plotExpressionDistance(private$getResults(name, 'estimateExpressionShiftMagnitudes()'), notch = notch, cell.groups = cell.groups, sample.groups = sample.groups, weighted.distance = weighted.distance,  min.cells = min.cells, palette=palette)
+    plotExpressionDistance = function(name='expression.shifts', notch = TRUE, cell.groups = self$cell.groups, sample.groups = self$sample.groups, weighted.distance = TRUE,  min.cells = 10, palette=self$sample.groups.palette, show.significance = FALSE) {
+      plotExpressionDistance(private$getResults(name, 'estimateExpressionShiftMagnitudes()'), notch = notch, cell.groups = cell.groups, sample.groups = sample.groups, weighted.distance = weighted.distance,  min.cells = min.cells, palette=palette, show.significance=show.significance)
     },
 
     #' @title Plot sample-sample expression distance as a 2D embedding
@@ -1182,9 +1190,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       plotExpressionDistancetSNE(cluster.shifts, sample.groups = sample.groups, cell.type = cell.type, method = method, perplexity=perplexity, max_iter=max_iter, palette=palette)
     },
     
-    #' @title get a cell group contour for 
-    getContour = function(cell, embedding=self$embedding, cell.groups=self$cell.groups, ...) {
-      getContour(cell=cell, emb=embedding,cell.type=cell.groups, ...)
+    #' @description Extract contour from embedding 
+    #' @param cell specify cell types for contour, mutiple cell types are also suported
+    #' @param conf confidence interval of contour
+    getContour = function(cells,  color = 'white', linetype = 2, conf = "10%") {
+      cell.groups <- self$cell.groups
+      emb <- self$embedding
+      cnl <- do.call(c, lapply(sn(cells), function(x) getContour(emb, cell.type =cell.groups, linetype = linetype,
+                                                                 cell=x ,conf = conf, color = color)))
+      return(cnl)
     }
   ),
   private = list(

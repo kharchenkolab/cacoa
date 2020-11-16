@@ -10,8 +10,9 @@
 #' @param alpha transparency level for the individual points (default: 0.2)
 #' @param weighted.distance whether to weigh the expression distance by the sizes of cell types (default: FALSE)
 #' @param palette a set of colors to use for the conditions
+#' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (* < 0.05; ** < 0.01; *** < 0.001)  
 #' @return A ggplot2 object
-plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.groups = NULL, weighted.distance = FALSE,  notch= TRUE, alpha=0.2, min.cells = 10, palette=NULL) {
+plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.groups = NULL, weighted.distance = FALSE,  notch= TRUE, alpha=0.2, min.cells = 10, palette=NULL, show.significance = FALSE) {
   ctdml <- cluster.shifts$ctdml
   valid.comparisons <- cluster.shifts$valid.comparisons
   if (!weighted.distance) { #
@@ -22,7 +23,7 @@ plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.gr
         cross.factor <- outer(sample.groups[rownames(xm)], sample.groups[colnames(xm)], '==')
         frm <- valid.comparisons[rownames(xm), colnames(xm)] & cross.factor
         diag(xm) <- NA
-        # remove self distance  
+        # remove self pairs  
         xm[!frm] <- NA
         xm[wm < min.cells] <- NA
         if (!any(!is.na(xm)))
@@ -53,10 +54,8 @@ plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.gr
                                   ndf
                                 }))
     df$group <- df$type1
-
-    
     gg <- ggplot(na.omit(df), aes( x = type, y = value, dodge = group, fill = group )) +
-      theme_classic() + geom_boxplot(notch = notch, outlier.shape = NA,) + #ggtitle(cell.type) +
+      theme_bw() + geom_boxplot(notch = notch, outlier.shape = NA,) + #ggtitle(cell.type) +
       geom_point(
         position = position_jitterdodge(jitter.width = 0.1),
         size = 0.5,
@@ -65,7 +64,10 @@ plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.gr
       theme(
         axis.text.x = element_text(angle = 90, hjust = 1),
         axis.text.y = element_text(angle = 90, hjust = 0.5)
-      ) + theme(legend.position = "top") + xlab("") + ylab("expression distance")
+      ) + theme(legend.position = "top") + xlab("") + ylab("expression distance") +
+      scale_y_continuous( expand=c(0, max(df2$value) * 0.1), limits=c(0, (max(df2$value) + max(df2$value) * 0.01 )))  #expand=c(0, 0),
+  
+      if(show.significance) gg <- gg + stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
     
   } else { # weighted expression distance 
     df <- do.call(rbind, lapply(ctdml, function(ctdm) {
@@ -121,9 +123,10 @@ plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.gr
     }))
     
     df2$group = df2$type1
-    gg <- ggplot(na.omit(df2), aes(x = group, y = value)) + theme_classic() + 
+    
+    gg <- ggplot(na.omit(df2), aes(x = group, y = value)) + theme_bw() + 
       geom_boxplot(notch = notch, outlier.shape = NA , aes(fill = group)) + ggtitle('')+
-      geom_jitter(position = position_jitter(0.2), color = adjustcolor("black", alpha = 0.2)) + 
+      geom_jitter(position = position_jitter(0.2), color = adjustcolor("black", alpha = alpha)) + 
       theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.text.y = element_text(angle = 90, hjust = 0.5)) + 
       theme(legend.position = "right") +
       xlab("") + ylab("expression distance") +
@@ -133,7 +136,10 @@ plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.gr
         axis.ticks.x = element_blank(),
         plot.title = element_text(size = 10)
       )
+    if(show.significance) gg <- gg + stat_compare_means(label = "p.signif", label.x = 1.5) # willcox test
   }
+  
+  
   if(!is.null(palette)) { gg <- gg + scale_fill_manual(values=palette) }  
   return(gg)
 }

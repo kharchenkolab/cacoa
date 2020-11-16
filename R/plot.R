@@ -331,7 +331,7 @@ plotOntologySimilarities <- function(type=NULL, ont.res, genes = NULL) {
 #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
 #' @param alpha Transparency level on the data points (default: 0.1)
 #' @return A ggplot2 object
-plotProportions <- function(legend.position = "right", cell.groups, sample.per.cell, sample.groups, notch=FALSE, alpha=0.1, palette=NULL) {
+plotProportions <- function(legend.position = "right", cell.groups, sample.per.cell, sample.groups, notch=FALSE, alpha=0.1, palette=NULL, show.significance = FALSE) {
   df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
     table %>%
     rbind %>%
@@ -353,7 +353,10 @@ plotProportions <- function(legend.position = "right", cell.groups, sample.per.c
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
     geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) + 
-    scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
+    scale_y_continuous( expand=c(0, max(df.melt$value) * 0.1), limits=c(0, (max(df.melt$value) + max(df.melt$value) * 0.05 )))  #expand=c(0, 0),
+  
+  if(show.significance) gg <- gg + stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+  
   
   if(!is.null(palette)) gg <- gg+ scale_color_manual(values=palette)
   gg
@@ -377,7 +380,8 @@ plotProportionsSubset <- function(legend.position = "right",
                                   cells.to.remove,
                                   cells.to.remain,
                                   notch = FALSE,
-                                  alpha = 0.1, palette=NULL) {
+                                  alpha = 0.1, palette=NULL,
+                                  show.significance = FALSE) {
   df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
     table  %>%
     rbind
@@ -404,7 +408,11 @@ plotProportionsSubset <- function(legend.position = "right",
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
     geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
-    scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 1)))
+    scale_y_continuous(limits=c(0, (max(df.melt$value) + 5))) +
+    stat_compare_means(aes(group = group), label = "p.signif") 
+  
+  if(show.significance) gg <- gg + stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+  
   if(!is.null(palette)) gg <- gg+scale_color_manual(values=palette)
   return(gg)
 }

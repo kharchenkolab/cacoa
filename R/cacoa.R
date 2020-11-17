@@ -533,20 +533,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[["ontology"]]))
     },
 
-    #' @description Plot number of highly-expressed DE genes as a function of number of cells
-    #' @param de.filter Filtered DE genes, results from prepareOntologyData (default: stored list)
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
-    #' @param label Show labels on plot (default=T)
-    #' @return A ggplot2 object
-    plotFilteredDEGenes=function(de.filter = self$test.results$ontology$de.filter, cell.groups = self$cell.groups, legend.position = "none", label = T) {
-      if(is.null(de.filter)) stop("Please run 'estimatePerCellTypeDE' first.")
-
-      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
-
-      plotFilteredDEGenes(de.filter = de.filter, cell.groups = cell.groups, legend.position = legend.position, label = label)
-    },
-
     #' @description  Plot embedding
     #' @param embedding A cell embedding to use (two-column data frame with rownames corresponding to cells) (default: stored embedding object)
     #' @param plot.theme plot theme to use (default: ggplot2::theme_bw())
@@ -1221,9 +1207,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param cell specify cell types for contour, mutiple cell types are also suported
     #' @param conf confidence interval of contour
     getContour = function(cells,  color = 'white', linetype = 2, conf = "10%") {
-      cell.groups <- self$cell.groups
-      emb <- self$embedding
-      cnl <- do.call(c, lapply(sn(cells), function(x) getContour(emb, cell.type =cell.groups, linetype = linetype,
+      cnl <- do.call(c, lapply(sn(cells), function(x) getContour(self$embedding, cell.type=self$cell.groups, linetype = linetype,
                                                                  cell=x ,conf = conf, color = color)))
       return(cnl)
     }

@@ -9,7 +9,9 @@ plotDEGenes(
   cell.groups,
   legend.position = "none",
   p.adjust.cutoff = 0.05,
-  label = T
+  label = T,
+  palette = NULL,
+  ...
 )
 }
 \arguments{

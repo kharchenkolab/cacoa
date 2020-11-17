@@ -9,7 +9,8 @@ plotExpressionShiftMagnitudes(
   size.norm = F,
   notch = T,
   cell.groups = NULL,
-  sample.per.cell = NULL
+  sample.per.cell = NULL,
+  palette = NULL
 )
 }
 \arguments{

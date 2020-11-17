@@ -8,3 +8,7 @@ localZScoreMat <- function(adj_mat, count_mat, is_control, verbose = TRUE, retur
     .Call('_cacoa_localZScoreMat', PACKAGE = 'cacoa', adj_mat, count_mat, is_control, verbose, return_type, min_z, lfc_pseudocount)
 }
 
+projdiff <- function(mat, g1, g2) {
+    .Call('_cacoa_projdiff', PACKAGE = 'cacoa', mat, g1, g2)
+}
+

@@ -4,7 +4,7 @@
 \alias{calcBalancesOnCellSets}
 \title{Calculate balances based on the contrast defines by two sets of cells}
 \usage{
-calcBalancesOnCellSets(d.counts, cell.set1, cell.set2)
+calcBalancesOnCellSets(d.counts, cell.set1, cell.set2 = NULL)
 }
 \arguments{
 \item{d.counts}{Cell count matrix}

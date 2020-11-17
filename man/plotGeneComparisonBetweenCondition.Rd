@@ -14,6 +14,9 @@ plotGeneComparisonBetweenCondition(
   legend.pos = c(1, 1),
   size = 0.2,
   n.col = NULL,
+  z.lims = NULL,
+  max.expr = NULL,
+  adj.list = NULL,
   ...
 )
 }

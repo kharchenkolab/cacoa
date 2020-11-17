@@ -1,6 +1,7 @@
 plotCellLoadings <- function(cda.resamples, aplha = 0.01,
                              n.significant.cells = 0,
-                             font.size = 16){
+                             font.size = NULL, 
+                             palette=NULL){
   res.init = t(cda.resamples$balances)
 
   # Define order of cell types
@@ -18,19 +19,21 @@ plotCellLoadings <- function(cda.resamples, aplha = 0.01,
   p <- ggplot(dat, aes(x = ind, y = values, fill=factor(ind))) +
     geom_boxplot(notch=TRUE, outlier.shape = NA) +
     geom_jitter(aes(x = ind, y = values), alpha = aplha, size=1) +
-    # scale_fill_manual(values=cell_colors)+
+  
     geom_hline(yintercept = 0, color = "gray37") +
     coord_flip() +
     xlab('') + ylab('') +
-    theme_bw()  +
-    theme(axis.text=element_text(size=font.size),
-          axis.title=element_text(size=font.size)) + theme(legend.position = "none")
+    theme_bw()+ theme(legend.position = "none")
+  if(!is.null(font.size)) {
+    p <- p + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
+  }
+  if(!is.null(palette)) p <-  p+ scale_fill_manual(values=palette)
   if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(cda.resamples$balances) - n.significant.cells + 0.5, color='red')
 
   return(p)
 }
 
-plotPcaSpace <- function(d.counts, d.groups){
+plotPcaSpace <- function(d.counts, d.groups, palette=NULL){
   bal <- getRndBalances(d.counts)
   pca.res <- prcomp(bal$norm)
   pca.loadings <- bal$psi %*% pca.res$rotation
@@ -52,6 +55,8 @@ plotPcaSpace <- function(d.counts, d.groups){
     geom_point(aes(colour = factor(group.names[d.groups + 1] ))) +
     labs(colour="Group") +
     coord_fixed()
+  
+  if(!is.null(palette)) rda.plot <- rda.plot + scale_fill_manual(values=palette)
 
   dx <- max(df.pca[,'PC1']) - min(df.pca[,'PC1'])
   dy <- max(df.pca[,'PC2']) - min(df.pca[,'PC2'])
@@ -64,6 +69,8 @@ plotPcaSpace <- function(d.counts, d.groups){
     geom_text(data=df.loadings,
               aes(x=pc1,y=pc2,label=rownames(df.loadings)),
               color="black", size=3)
+  
+  
 
   dx <- max(dx, max(df.loadings[,'pc1']) - min(df.loadings[,'pc1']))
   dy <- max(dy, max(df.loadings[,'pc2']) - min(df.loadings[,'pc2']))

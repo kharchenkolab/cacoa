@@ -85,17 +85,20 @@ addZScores <- function(df) {
 #' @param cell.groups factor specifying cell types (default=NULL)
 #' @param sample.groups a list of two character vector specifying the app groups to compare (default=NULL)
 #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
-#' @param common.genes Only investigate common genes across cell groups (default=F)
-#' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
+#' @param common.genes Only investigate common genes across cell groups (default=FALSE)
+#' @param test which DESeq2 test to use (options: "LRT" (default), "Wald")
+#' @param cooks.cutoff cooksCutoff for DESeq2 (default=FALSE)
 #' @param min.cell.count (default=10)
-#' @param independent.filtering independentFiltering for DESeq2 (default=F)
+#' @param max.cell.count maximal number of cells per cluster per sample to include in a comparison (useful for comparing the number of DE genes between cell types)
+#' @param independent.filtering independentFiltering for DESeq2 (default=FALSE)
 #' @param n.cores Number of cores (default=1)
 #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-#' @param return.matrix Return merged matrix of results (default=T)
+#' @param return.matrix Return merged matrix of results (default=TRUE)
 #' @export
 estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NULL, ref.level = NULL,
-                           common.genes = F, cooks.cutoff = FALSE, min.cell.count = 10, independent.filtering = T,
+                           common.genes = FALSE, test="LRT", cooks.cutoff = FALSE, min.cell.count = 10,max.cell.count=Inf, independent.filtering = T,
                            n.cores = 1, cluster.sep.chr = "<!!>", return.matrix = T, verbose = T) {
+  
   validatePerCellTypeParams(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr)
 
   if(common.genes) {
@@ -107,7 +110,7 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
 
   aggr2 <- raw.mats %>%
     .[sample.groups %>% unlist] %>% # Only consider samples in sample.groups
-    lapply(collapseCellsByType, groups = cell.groups, min.cell.count = min.cell.count) %>%
+    lapply(conos:::collapseCellsByType, groups=cell.groups, min.cell.count=min.cell.count, max.cell.count=max.cell.count) %>%
     .[sapply(., nrow) > 0] %>% # Remove empty samples due to min.cell.count
     rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
 
@@ -120,29 +123,31 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
   }
   sample.groups %<>% lapply(function(n) n[n %in% passed.samples])
 
-  de.res <- cell.groups %>%
-    levels() %>%
-    sccore:::sn() %>%
-    sccore:::plapply(function(l) {
+  ## For every cell type get differential expression results
+  de.res <- sccore::plapply( sccore::sn( levels(cell.groups) ), function(l) {
     tryCatch({
-      cm <- aggr2[, strpart(colnames(aggr2), cluster.sep.chr, 2, fixed = TRUE) == l] %>%
-        .[rowSums(.) > 0,] # Remove genes with no counts
-
-      meta <- data.frame(sample.id=colnames(cm), group=as.factor(unlist(lapply(colnames(cm), function(y) {
-        y <- strpart(y, cluster.sep.chr, 1, fixed = TRUE)
-        names(sample.groups)[unlist(lapply(sample.groups, function(x) any(x %in% y)))]}))))
-
-      if (!ref.level %in% levels(meta$group))
-        stop("The reference level is absent in this comparison")
+      ## Get count matrix
+      cm <- aggr2[, strpart(colnames(aggr2), cluster.sep.chr, 2, fixed = TRUE) == l] %>% .[rowSums(.) > 0,] # Remove genes with no counts
+      ## Generate metadata
+      meta <- data.frame(
+        sample.id=colnames(cm),
+        group=as.factor(unlist(lapply(colnames(cm), function(y) {
+          y <- strpart(y, cluster.sep.chr, 1, fixed = TRUE)
+          names(sample.groups)[unlist(lapply(sample.groups, function(x) any(x %in% y)))]})))
+      )
+      
+      if (!ref.level %in% levels(meta$group))  stop("The reference level is absent in this comparison")
       meta$group <- relevel(meta$group, ref = ref.level)
-      if (length(unique(as.character(meta$group))) < 2)
-        stop("The cluster is not present in both conditions")
+      if (length(unique(as.character(meta$group))) < 2)  stop("The cluster is not present in both conditions")
 
-      res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design = ~group) %>%
-        DESeq2::DESeq(quiet=T) %>%
-        DESeq2::results(cooksCutoff = cooks.cutoff, independentFiltering = independent.filtering) %>%
-        as.data.frame
-
+      dds1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=~group)
+      if(test=="LRT") {
+        dds1 <- DESeq2::DESeq(dds1,test="LRT", reduced = ~ 1,quiet=T)
+      } else { # defaults to Wald 
+        dds1 <- DESeq2::DESeq(dds1,quiet=T)
+      }
+      res1 <- DESeq2::results(dds1, cooksCutoff = cooks.cutoff, independentFiltering = independent.filtering) %>% as.data.frame
+      
       # add Z scores
       if(!is.na(res1[[1]][1])) {
         res1 <- addZScores(res1) %>%
@@ -156,8 +161,7 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
         res1
       }
     }, error = function(err) NA)
-  }, n.cores = n.cores, progress=verbose) %>%
-    .[!sapply(., is.logical)]
+  }, n.cores = n.cores, progress=verbose) %>%  .[!sapply(., is.logical)]
 
 
   if(verbose) {

@@ -111,34 +111,3 @@ plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z
     cowplot::plot_grid(plotlist=lst, ncol=n.col)
   })
 }
-
-
-# TODO: remove it
-#' @export
-estimteWeightEntropyPerCell <- function(graph, factor.per.cell, annotation=NULL) {
-  if (length(unique(factor.per.cell)) != 2)
-    stop("factor.per.cell must have exactly two factors")
-
-  adj.mat <- igraph::as_adjacency_matrix(graph, attr="weight") %>% as("dgTMatrix")
-  factor.per.cell %<>% as.factor() %>% .[rownames(adj.mat)]
-  if (!is.null(annotation)) {
-    annotation %<>% as.factor() %>% .[rownames(adj.mat)]
-  }
-
-  weight.sum.per.fac.cell <- conos:::getSumWeightMatrix(adj.mat@x, adj.mat@i, adj.mat@j, as.integer(factor.per.cell)) %>%
-    `colnames<-`(levels(adj.mat)) %>% `rownames<-`(rownames(adj.mat))
-
-  if (is.null(annotation)) {
-    xt <- table(factor.per.cell)
-    max.ent <- (if (xt[1] > xt[2]) c(0, 1) else c(1, 0)) %>% entropy::KL.empirical(xt, unit='log2')
-    entropy.per.cell <- apply(weight.sum.per.fac.cell, 1, entropy::KL.empirical, xt, unit='log2') / max.ent
-  } else {
-    xt.per.type <- factor.per.cell %>% split(annotation) %>% sapply(table) %>% t()
-    max.ent.per.type <- apply(xt.per.type, 1, function(xt)
-      (if (xt[1] > xt[2]) c(0, 1) else c(1, 0)) %>% entropy::KL.empirical(xt, unit='log2'))
-    entropy.per.cell <- sapply(1:nrow(weight.sum.per.fac.cell), function(i)
-      entropy::KL.empirical(weight.sum.per.fac.cell[i,], xt.per.type[annotation[i],], unit='log2') / max.ent.per.type[annotation[i]])
-  }
-
-  return(cbind(data.frame(weight.sum.per.fac.cell), entropy=entropy.per.cell))
-}

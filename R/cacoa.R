@@ -72,13 +72,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(sample.groups) && !is.null(ref.level)) {
         self$sample.groups <- extractSampleGroups(data.object, ref.level, self$target.level)
       } else {
-        self$sample.groups <- sample.groups
+        self$sample.groups <- sample.groups <- as.factor(sample.groups)
       }
 
       if(is.null(cell.groups)) {
         self$cell.groups <- extractCellGroups(data.object)
       } else {
-        self$cell.groups <- cell.groups
+        self$cell.groups <- cell.groups <- as.factor(cell.groups)
       }
 
       if(is.null(sample.per.cell)) {
@@ -1152,6 +1152,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param z.cutoff absolute z score cutoff
     #' @param contour.conf confidence interval of contour
     diffCellDensity = function(condition.per.cell = NULL, method = 'substract', col = c('blue','white','red'), show.legend = NULL, legend.position = NULL, title = NULL, show.grid = NULL, plot = TRUE, contours = NULL, contour.color = 'white', contour.conf = '10%' , z.cutoff = NULL){
+      # TODO: rename it to start with estimate*
       ref.level <- self$ref.level
       target.level <- self$target.level
       sample.groups <- self$sample.groups

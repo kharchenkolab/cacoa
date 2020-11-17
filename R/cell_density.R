@@ -1,24 +1,24 @@
 
-##' @description Estimate cell density in giving embedding 
+##' @description Estimate cell density in giving embedding
 ##' @param emb cell embedding matrix
 ##' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
 ##' @param sample.groups @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 ##' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
 ##' @param target.level target/disease level for sample.group vector
 ##' @param bins number of bins for density esitmation, default 400
-##' @param by.sample  if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell condition.per.cell need to be provided and density will simply esitmated by condition.per.cell. 
-##' @add.ponits add.ponits  show cells in density plot   
+##' @param by.sample  if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell condition.per.cell need to be provided and density will simply esitmated by condition.per.cell.
+##' @add.ponits add.ponits  show cells in density plot
 estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.level, target.level, condition.per.cell = NULL, by.sample = TRUE){
   if (!requireNamespace("preprocessCore", quietly = TRUE)) {
     stop("You have to install preprocessCore package to do quantile normlization ")
   }
-  
+
   if (!requireNamespace("MASS", quietly = TRUE)) {
     stop("You have to install MASS package to estimate density ")
   }
-  
-  
-  cname <- intersect(names(sample.per.cell), rownames(emb)) 
+
+
+  cname <- intersect(names(sample.per.cell), rownames(emb))
   sample.per.cell <- sample.per.cell[cname]
   condition.per.cell <- condition.per.cell[cname]
   emb <- emb[cname, ]
@@ -31,9 +31,9 @@ estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.l
   den.mat <- do.call("cbind", lapply(list.den, function(x) as.numeric(x$z)))
   density.mat <- preprocessCore::normalize.quantiles(den.mat)    #quantiles normlization
   colnames(density.mat) <- colnames(den.mat)
-  
+
   if (by.sample){
-    density.fraction <- lapply(sccore:::sn(as.character(unique(sample.groups))), 
+    density.fraction <- lapply(sccore:::sn(as.character(unique(sample.groups))),
                               function(x) {
                                 tmp  <-  density.mat[, names(sample.groups[sample.groups == x])]
                                 rowMeans(tmp)
@@ -48,14 +48,14 @@ estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.l
       f2
     })
     denMatrix <- do.call("cbind", lapply(list.den, function(x) as.numeric(x$z)))
-    density.fraction <- lapply(sccore:::sn(as.character(unique(sample.groups))), 
+    density.fraction <- lapply(sccore:::sn(as.character(unique(sample.groups))),
                               function(x) {
                                 denMatrix[, x]
                                 #matrix(denMatrix[, x], ncol = bins, byrow = FALSE)
                               })
   }
-  
-  # cordinate embedding space 
+
+  # cordinate embedding space
   mat <- matrix(target.density, ncol = bins, byrow = FALSE)
   x <- emb[, 1]
   y <- emb[, 2]
@@ -67,7 +67,7 @@ estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.l
   d1$x1=x1[d1$x]
   d1$y1=y1[d1$y]
   emb2 <- data.frame(x = d1$x1, y = d1$y1)
-  
+
   #count cell number in each bin
   x <- emb[,1]
   y <- emb[,2]
@@ -77,9 +77,9 @@ estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.l
   s2 <- seq(from = min(y),
            to = max(y),
            length.out = bins + 1)
-  dcounts <- table(cut(x, breaks = s1), cut(y, breaks = s2)) #%>% as.matrix.data.frame 
+  dcounts <- table(cut(x, breaks = s1), cut(y, breaks = s2)) #%>% as.matrix.data.frame
   emb2$counts <- as.numeric(dcounts)
-  
+
   return(list('density.mat' = density.mat, 'density.fraction' = density.fraction, 'density.emb' = emb2))
 }
 
@@ -87,10 +87,10 @@ estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.l
 
 
 
-##' @description extract contour from embedding 
+##' @description extract contour from embedding
 ##' @param emb cell embedding matrix
 ##' @param cell.type vector of cell type annotation
-##' @param cell specify cell types for contour, mutiple cell types are also suported 
+##' @param cell specify cell types for contour, mutiple cell types are also suported
 ##' @param conf confidence interval of contour
 getContour <- function(emb, cell.type, cell,  color = 'white', linetype = 2, conf = "10%"){
   linetype <- 2
@@ -105,62 +105,62 @@ getContour <- function(emb, cell.type, cell,  color = 'white', linetype = 2, con
 }
 
 
-##' @description Plot cell density 
+##' @description Plot cell density
 ##' @param bins number of bins for density esitmation, should keep consistent with bins in estimateCellDensity
 ##' @param col color palettes, default is c('blue','white','red')
 plotDensity <- function(mat, bins, col = c('blue','white','red'), show.legend = NULL, legend.position = NULL, title = NULL, show.grid = NULL, mi=NULL, ma=NULL, diffDensity = NULL){
-  #  p  <-  mat %>% as_tibble() %>% rowid_to_column(var = "X") %>% 
-  #    gather(key = "Y", value = "Z", -1) %>% mutate(Y = as.numeric(gsub("V", "", Y))) %>% 
+  #  p  <-  mat %>% as_tibble() %>% rowid_to_column(var = "X") %>%
+  #    gather(key = "Y", value = "Z", -1) %>% mutate(Y = as.numeric(gsub("V", "", Y))) %>%
   #
   if (is.null(mi)){
     mi <- min(mat$z)
   }
   if (is.null(ma)){
     ma <- max(mat$z)*1.1
-  }  
-  
+  }
+
   if (is.null(diffDensity)){
-    p <- ggplot(mat, aes(x, y, fill = z)) + 
+    p <- ggplot(mat, aes(x, y, fill = z)) +
       geom_raster() +
-      theme_bw() + theme(panel.grid.major = element_blank(), 
-                         panel.grid.minor = element_blank(), panel.border = element_blank(), 
-                         panel.background = element_blank(), plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm")) + 
-      theme(axis.title.x = element_blank(), axis.text.x = element_blank(), 
-            axis.title.y = element_blank(), axis.text.y = element_blank()) +  
+      theme_bw() + theme(panel.grid.major = element_blank(),
+                         panel.grid.minor = element_blank(), panel.border = element_blank(),
+                         panel.background = element_blank(), plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm")) +
+      theme(axis.title.x = element_blank(), axis.text.x = element_blank(),
+            axis.title.y = element_blank(), axis.text.y = element_blank()) +
       scale_y_continuous(expand = c(0,0)) + scale_x_continuous(expand = c(0,0)) +
       scale_fill_viridis(option = 'B', alpha = 1, direction = 1, limits = c(mi, ma))
       if(!is.null(show.grid)){ #  add grid manulay
-        p <- p + geom_vline(xintercept=seq(quantile(mat$x,0.1),quantile(mat$x,0.9), length.out=6), col='grey', alpha=0.1) 
-        p <- p + geom_hline(yintercept=seq(quantile(mat$y,0.1),quantile(mat$y,0.9),, length.out=6), col='grey', alpha=0.1) 
+        p <- p + geom_vline(xintercept=seq(quantile(mat$x,0.1),quantile(mat$x,0.9), length.out=6), col='grey', alpha=0.1)
+        p <- p + geom_hline(yintercept=seq(quantile(mat$y,0.1),quantile(mat$y,0.9),, length.out=6), col='grey', alpha=0.1)
       }
-  }else{ # using geom_tile and keep the same 
-    p <- ggplot(mat, aes(x, y, fill = z)) + 
+  }else{ # using geom_tile and keep the same
+    p <- ggplot(mat, aes(x, y, fill = z)) +
       geom_tile() +
-      theme_bw() + 
+      theme_bw() +
       ggplot2::lims(x = range(mat[, 'x']), y = range(mat[, 'y']))+
-      theme(axis.title.x = element_blank(), axis.text.x = element_blank(), 
+      theme(axis.title.x = element_blank(), axis.text.x = element_blank(),
             axis.title.y = element_blank(), axis.text.y = element_blank(),
-            axis.ticks = element_blank())+ 
+            axis.ticks = element_blank())+
             scale_fill_gradient2(low = col[1], high = col[3], mid = col[2], midpoint = 0, limits = c(mi, ma))
-    
+
   }
 
 
   p <- p + theme(panel.border = element_rect(fill=NA,color="black", size=0.5, linetype="solid"))
 
-  
+
   if (is.null(show.legend)){
     p <- p + theme(legend.position = "none")
   }
-  
+
   if (!is.null(legend.position)){
     p <- p + theme(legend.position = legend.position)
   }
-  
+
   if(!is.null(title)){
     p <- p + ggtitle(title)
   }
-  
+
   return(p)
 }
 
@@ -177,11 +177,11 @@ plotDensity <- function(mat, bins, col = c('blue','white','red'), show.legend = 
 ##' @param condition.per.cell A two-level factor on the cell names describing the conditions being compared (default: stored vector)
 ##' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
 ##' @param target.level target/disease level for sample.group vector
-##' @method method to cacuated differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy betwwen sample grapups ; t.test: zscore of t-test,global variacen is setting for t.test; 
+##' @param method method to cacuated differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy betwwen sample grapups ; t.test: zscore of t-test,global variacen is setting for t.test;
 diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample.groups, bins, ref.level, target.level, method = 'substract', show.legend = NULL,legend.position = NULL, show.grid = TRUE, col = c('blue','white','red'), title = NULL, dcount.cutoff = 0, z.cutoff = NULL){
   nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
-  nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference 
-  
+  nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
+
   if (method == 'substract'){
     score = rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])
   }else if (method == 'entropy'){
@@ -229,12 +229,12 @@ diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample
   #density.score[dcounts < dcount.cutoff] <- 0
   mat <-  data.frame(density.emb, 'z' = score)
   mat <-  mat[mat$counts > dcount.cutoff, ]
-  
+
   if (!is.null(z.cutoff))
     mat[abs(mat$z) < z.cutoff, 'z'] = 0
-  
+
   p <- plotDensity(mat, bins, col = col, title = title, legend.position = legend.position, show.legend = show.legend, show.grid = show.grid, diffDensity = TRUE)
-  
+
   return(list('fig' = p,'score' = mat))
 }
 

@@ -1146,7 +1146,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description esitmate differential cell density
     #' @param col color palettes,  default is c('blue','white','red')
     #' @param condition.per.cell A two-level factor on the cell names describing the conditions being compared (default: stored vector)
-    #' @method method to cacuated differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy betwwen sample grapups ; t.test: zscore of t-test,global variacen is setting for t.test;
+    #' @param method method to cacuated differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy betwwen sample grapups ; t.test: zscore of t-test,global variacen is setting for t.test;
     #' @param contours specify cell types for contour, mutiple cell types are also suported
     #' @param contour.color color for contour line
     #' @param z.cutoff absolute z score cutoff
@@ -1193,7 +1193,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
     #' @param cell.type If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)
     #' @param sample.groups Named sample factor with cell names (default: stored $sample.groups )
-    #' @method dimension reduction methods (MDS or tSNE ) , default is MDS
+    #' @param method dimension reduction methods (MDS or tSNE ) , default is MDS
     #' @param perplexity tSNE perpexity (default: 4)
     #' @param max_iter tSNE max_iter (default: 1e3)
     #' @param palette a set of colors to use for conditions (default: stored $sample.groups.palette)

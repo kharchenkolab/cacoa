@@ -9,7 +9,9 @@ saveDEasJSON(
   saveprefix = NULL,
   dir.name = "JSON",
   gene.metadata = NULL,
-  cluster.sep.chr = "<!!>"
+  cluster.sep.chr = "<!!>",
+  sample.groups = NULL,
+  verbose = T
 )
 }
 \arguments{
@@ -22,6 +24,10 @@ saveDEasJSON(
 \item{gene.metadata}{(default=NULL)}
 
 \item{cluster.sep.chr}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
+
+\item{sample.groups}{Sample groups as named list, each element containing a vector of samples}
+
+\item{verbose}{Show progress (default=T)}
 }
 \description{
 Save DE results as JSON files

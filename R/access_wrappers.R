@@ -6,6 +6,12 @@ extractCellGroups.Conos <- function(con) {
   return(as.factor(con$clusters[[1]]$groups))
 }
 
+extractCellGraph <- function(obj) UseMethod("extractCellGraph", obj)
+extractCellGraph.Conos <- function(con) {
+  if(is.null(con$graph)) stop('No cell graph found in the object')
+  return(con$graph)
+}
+
 extractRawCountMatrices <- function(obj, transposed=T) UseMethod("extractRawCountMatrices", obj)
 extractRawCountMatrices.Conos <- function(con, transposed=T) {
   return(lapply(con$samples, conos:::getRawCountMatrix, transposed=transposed))

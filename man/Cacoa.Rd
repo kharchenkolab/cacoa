@@ -82,6 +82,7 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-plotExpressionDistance}{\code{Cacoa$plotExpressionDistance()}}
 \item \href{#method-plotExpressionDistanceEmbedding}{\code{Cacoa$plotExpressionDistanceEmbedding()}}
 \item \href{#method-getContour}{\code{Cacoa$getContour()}}
+\item \href{#method-estimateClusterFreeZScores}{\code{Cacoa$estimateClusterFreeZScores()}}
 \item \href{#method-clone}{\code{Cacoa$clone()}}
 }
 }
@@ -1276,6 +1277,25 @@ Extract contour from embedding
 \item{\code{conf}}{confidence interval of contour}
 
 \item{\code{cell}}{specify cell types for contour, mutiple cell types are also suported}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateClusterFreeZScores"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateClusterFreeZScores}{}}}
+\subsection{Method \code{estimateClusterFreeZScores()}}{
+Estimate Cluster-free Z-scores
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeZScores(n.od.genes = NULL, ...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{n.od.genes}}{Number of overdispersed genes for estimating Z-scores}
+
+\item{\code{...}}{see \link[=estimateLocalZScores]{estimateLocalZScores} parameters}
 }
 \if{html}{\out{</div>}}
 }

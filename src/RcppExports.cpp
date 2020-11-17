@@ -7,9 +7,9 @@
 
 using namespace Rcpp;
 
-// localZScoreMat
-SEXP localZScoreMat(const SEXP adj_mat, const SEXP count_mat, const std::vector<bool> is_control, bool verbose, int return_type, double min_z, double lfc_pseudocount);
-RcppExport SEXP _cacoa_localZScoreMat(SEXP adj_matSEXP, SEXP count_matSEXP, SEXP is_controlSEXP, SEXP verboseSEXP, SEXP return_typeSEXP, SEXP min_zSEXP, SEXP lfc_pseudocountSEXP) {
+// clusterFreeZScoreMat
+SEXP clusterFreeZScoreMat(const SEXP adj_mat, const SEXP count_mat, const std::vector<bool> is_control, bool verbose, double min_z);
+RcppExport SEXP _cacoa_clusterFreeZScoreMat(SEXP adj_matSEXP, SEXP count_matSEXP, SEXP is_controlSEXP, SEXP verboseSEXP, SEXP min_zSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -17,10 +17,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const SEXP >::type count_mat(count_matSEXP);
     Rcpp::traits::input_parameter< const std::vector<bool> >::type is_control(is_controlSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    Rcpp::traits::input_parameter< int >::type return_type(return_typeSEXP);
     Rcpp::traits::input_parameter< double >::type min_z(min_zSEXP);
-    Rcpp::traits::input_parameter< double >::type lfc_pseudocount(lfc_pseudocountSEXP);
-    rcpp_result_gen = Rcpp::wrap(localZScoreMat(adj_mat, count_mat, is_control, verbose, return_type, min_z, lfc_pseudocount));
+    rcpp_result_gen = Rcpp::wrap(clusterFreeZScoreMat(adj_mat, count_mat, is_control, verbose, min_z));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -39,7 +37,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_cacoa_localZScoreMat", (DL_FUNC) &_cacoa_localZScoreMat, 7},
+    {"_cacoa_clusterFreeZScoreMat", (DL_FUNC) &_cacoa_clusterFreeZScoreMat, 5},
     {"_cacoa_projdiff", (DL_FUNC) &_cacoa_projdiff, 3},
     {NULL, NULL, 0}
 };

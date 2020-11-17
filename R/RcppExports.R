@@ -4,8 +4,8 @@
 #' @param adj_mat adjacency matrix with 1 on the position (r,c) if the cell r is adjacent to the cell c
 NULL
 
-localZScoreMat <- function(adj_mat, count_mat, is_control, verbose = TRUE, return_type = 0L, min_z = 0.01, lfc_pseudocount = 1e-6) {
-    .Call('_cacoa_localZScoreMat', PACKAGE = 'cacoa', adj_mat, count_mat, is_control, verbose, return_type, min_z, lfc_pseudocount)
+clusterFreeZScoreMat <- function(adj_mat, count_mat, is_control, verbose = TRUE, min_z = 0.01) {
+    .Call('_cacoa_clusterFreeZScoreMat', PACKAGE = 'cacoa', adj_mat, count_mat, is_control, verbose, min_z)
 }
 
 projdiff <- function(mat, g1, g2) {

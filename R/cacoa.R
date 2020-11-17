@@ -1211,6 +1211,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       cnl <- do.call(c, lapply(sn(cells), function(x) getContour(self$embedding, cell.type=self$cell.groups, linetype = linetype,
                                                                  cell=x ,conf = conf, color = color)))
       return(cnl)
+    },
+
+
+    ### Cluster-free differential expression
+
+    #' @description Estimate Cluster-free Z-scores
+    #' @param n.od.genes Number of overdispersed genes for estimating Z-scores
+    #' @param ... see \link[=estimateLocalZScores]{estimateLocalZScores} parameters
+    estimateClusterFreeZScores = function(n.od.genes=NULL, verbose=self$verbose, ...) {
+      cm <- extractJointCountMatrix(self$data.object)
+      genes <- extractOdGenes(self$data.object, n.od.genes)
+
+      is.ref <- self$sample.per.cell %>%
+        {setNames(self$sample.groups[as.character(.)] == self$ref.level, names(.))}
+      self$test.results[["cluster.free.z"]] <- cacoa:::extractCellGraph.Conos(self$data.object) %>%
+        estimateClusterFreeZScores(cm, is.ref=is.ref, genes=genes, verbose=verbose, ...)
+
+      return(invisible(self$test.results[["cluster.free.z"]]))
     }
   ),
   private = list(

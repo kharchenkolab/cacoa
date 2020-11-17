@@ -8,18 +8,17 @@
 using namespace Rcpp;
 using namespace Eigen;
 
-double increment_mean(double cur_mean, double x, size_t n) {
+double incrementMean(double cur_mean, double x, size_t n) {
   return cur_mean + (x - cur_mean) / n;
 }
 
-double increment_std_acc(double cur_std, double x, double cur_mean, double old_mean) {
+double incrementStdAcc(double cur_std, double x, double cur_mean, double old_mean) {
   return cur_std + (x - old_mean) * (x - cur_mean);
 }
 
 //' @param adj_mat adjacency matrix with 1 on the position (r,c) if the cell r is adjacent to the cell c
-std::pair<SparseMatrix<double>, SparseMatrix<double>> localZScoreMat(const SparseMatrix<bool>& adj_mat, const SparseMatrix<double>& count_mat,
-                                                                     const std::vector<bool> is_control, bool verbose=true, int return_type=0, double min_z=0.01,
-                                                                     double lfc_pseudocount=1e-6) {
+SparseMatrix<double> clusterFreeZScoreMat(const SparseMatrix<bool>& adj_mat, const SparseMatrix<double>& count_mat,
+                                          const std::vector<bool> is_control, bool verbose=true, double min_z=0.01) {
   if (adj_mat.cols() != adj_mat.rows())
     Rcpp::stop("adj_mat must be squared");
 
@@ -54,49 +53,40 @@ std::pair<SparseMatrix<double>, SparseMatrix<double>> localZScoreMat(const Spars
         if (is_control.at(adj_it.row())) {
           n_vals_control++;
           double mean_old = mean_val_control;
-          mean_val_control = increment_mean(mean_val_control, cur_val, n_vals_control);
-          std_acc_control = increment_std_acc(std_acc_control, cur_val, mean_val_control, mean_old);
+          mean_val_control = incrementMean(mean_val_control, cur_val, n_vals_control);
+          std_acc_control = incrementStdAcc(std_acc_control, cur_val, mean_val_control, mean_old);
         } else {
           n_vals_case++;
-          mean_val_case = increment_mean(mean_val_case, cur_val, n_vals_case);
+          mean_val_case = incrementMean(mean_val_case, cur_val, n_vals_case);
         }
       }
 
       if ((n_vals_case > 0) && (n_vals_control > 1)) {
         double std_val = std::sqrt(std_acc_control / (n_vals_control - 1));
         double z_score = (mean_val_case - mean_val_control) / std::max(std_val, 1e-20);
-        double lfc = std::log2(mean_val_case + lfc_pseudocount) - std::log2(mean_val_control + lfc_pseudocount);
         if (std::abs(z_score) > min_z) {
           z_triplets.emplace_back(dst_cell_id, gene_id, z_score);
-          lfc_triplets.emplace_back(dst_cell_id, gene_id, lfc);
         }
       }
       else {
         z_triplets.emplace_back(dst_cell_id, gene_id, NA_REAL);
-        lfc_triplets.emplace_back(dst_cell_id, gene_id, NA_REAL);
       }
     }
 
     p.increment();
   }
 
-  SparseMatrix<double> z_mat(count_mat.rows(), count_mat.cols()), lfc_mat(count_mat.rows(), count_mat.cols());
+  SparseMatrix<double> z_mat(count_mat.rows(), count_mat.cols());
   z_mat.setFromTriplets(z_triplets.begin(), z_triplets.end());
-  lfc_mat.setFromTriplets(lfc_triplets.begin(), lfc_triplets.end());
-  return std::make_pair(z_mat, lfc_mat);
+  return z_mat;
 }
 
 // [[Rcpp::export]]
-SEXP localZScoreMat(const SEXP adj_mat, const SEXP count_mat, const std::vector<bool> is_control, bool verbose=true, int return_type=0,
-                    double min_z=0.01, double lfc_pseudocount=1e-6) {
-  S4 adj_mat_s4(adj_mat), count_mat_s4(count_mat);
-  auto mat_pair = localZScoreMat(as<SparseMatrix<bool>>(adj_mat), as<SparseMatrix<double>>(count_mat), is_control, verbose, return_type, min_z, lfc_pseudocount);
+SEXP clusterFreeZScoreMat(const SEXP adj_mat, const SEXP count_mat, const std::vector<bool> is_control, bool verbose=true, double min_z=0.01) {
+  auto z_mat_eig = clusterFreeZScoreMat(as<SparseMatrix<bool>>(adj_mat), as<SparseMatrix<double>>(count_mat), is_control, verbose, min_z);
 
-  S4 z_mat(wrap(mat_pair.first));
+  S4 z_mat(wrap(z_mat_eig));
   z_mat.slot("Dimnames") = S4(count_mat).slot("Dimnames");
 
-  S4 lfc_mat(wrap(mat_pair.second));
-  lfc_mat.slot("Dimnames") = S4(count_mat).slot("Dimnames");
-
-  return List::create(_["z"]=z_mat, _["lfc"]=lfc_mat);
+  return z_mat;
 }

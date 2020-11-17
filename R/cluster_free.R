@@ -1,45 +1,39 @@
-##' Local Z Scores
-##'
-##' @param graph Alignment graph (embedding)
-##' @param condition.per.cell Named group factor with cell names. Must have exactly two levels.
-##' @param genes Genes to be tested. Procedure is slow, so it's reasonable to restrict amount of genes.
-##' @param count.matrix.transposed Joint count matrix with cells by rows and genes by columns
-##' @param ref.level Reference condition level, e.g., wt, ctrl, or healthy
-localZScores <- function(graph, condition.per.cell, count.matrix.transposed, ref.level, genes=NULL, max.z=20, ...) {
-  #TODO: Condition.per.cell should be derived from sample.groups and cell.groups
-  if (length(unique(condition.per.cell)) != 2)
-    stop("Exactly two levels must be provided in 'condition.per.cell'")
-
-  if (!(ref.level %in% unique(condition.per.cell)))
-    stop("'ref.level' not present in 'condition.per.cell'")
-
+#' Estimate Local Z Scores
+#'
+#' @param graph Alignment graph adjacency matrix
+#' @param genes Genes to be tested. Procedure is slow, so it's reasonable to restrict amount of genes.
+#' @param is.ref Boolean vector per cell indicating whether it came from the reference condition
+#' @param count.matrix.transposed Joint count matrix with cells by rows and genes by columns
+#' @param ref.level Reference condition level, e.g., wt, ctrl, or healthy
+estimateClusterFreeZScores <- function(graph, count.matrix.transposed, is.ref, genes=NULL, max.z=20, ...) {
   adj.mat <- igraph::as_adj(graph)
 
-  cell.names <- intersect(rownames(count.matrix.transposed), names(condition.per.cell))
+  cell.names <- intersect(rownames(count.matrix.transposed), rownames(adj.mat)) %>%
+    intersect(names(is.ref))
   if (length(cell.names) == 0)
-    stop("No cells in condition.per.cell matching to count.matrix.transposed")
+    stop("No cells in graph matching to count.matrix.transposed and is.ref")
 
   if (!is.null(genes)) {
     count.matrix.transposed <- count.matrix.transposed[,genes]
   }
 
-  de.scores <- localZScoreMat(adj.mat[cell.names, cell.names], count.matrix.transposed[cell.names,],
-                              condition.per.cell[cell.names] == ref.level, ...)
+  z.mat <- clusterFreeZScoreMat(adj.mat[cell.names, cell.names], count.matrix.transposed[cell.names,],
+                                is.ref[cell.names], ...)
 
-  de.scores$z@x %<>% pmin(max.z) %>% pmax(-max.z)
+  z.mat@x %<>% pmin(max.z) %>% pmax(-max.z)
 
-  return(de.scores)
+  return(z.mat)
 }
 
 ### Selection
 
-##' Get Top DE Genes
-##'
-##' @param z.scores Filtered z scores
-##' @param min.z (default=0)
-##' @param max.z (default=10)
-##' @param cell.subset Cells to subset from z.scores (default=NULL)
-##' @param top.quantile (default=NULL)
+#' Get Top DE Genes
+#'
+#' @param z.scores Filtered z scores
+#' @param min.z (default=0)
+#' @param max.z (default=10)
+#' @param cell.subset Cells to subset from z.scores (default=NULL)
+#' @param top.quantile (default=NULL)
 getTopDEGenes <- function(z.scores, min.z=0, max.z=10, cell.subset=NULL, top.quantile=NULL) {
   if (!is.null(cell.subset)) {
     z.scores %<>% .[intersect(rownames(.), cell.subset), ]
@@ -77,18 +71,18 @@ plotZScoreList <- function(con, z.scores, scores, n.genes=NULL, genes=NULL, ...)
   return(plots)
 }
 
-##' Plot Gene Comparison Between Conditions
-##'
-##' @param genes Vector of genes to plot
-##' @param con Conos object
-##' @param condition.per.cell Named factor with cell names and condition
-##' @param z.scores Z scores matrix. It is recommended to filter and adjust scores before plotting (default=NULL)
-##' @param cur.scores Named numeric vector with gene names.
-##' @param show.legend Plot legend (default=TRUE)
-##' @param legend.pos Legend position, see ggplot2::theme
-##' @param size Size of cells on plot
-##' @param n.col Columns of plots. If NULL, will be number of conditions + 1 (default=NULL)
-##' @param ... Plotting variables propagated to conos:::embeddingPlot
+#' Plot Gene Comparison Between Conditions
+#'
+#' @param genes Vector of genes to plot
+#' @param con Conos object
+#' @param condition.per.cell Named factor with cell names and condition
+#' @param z.scores Z scores matrix. It is recommended to filter and adjust scores before plotting (default=NULL)
+#' @param cur.scores Named numeric vector with gene names.
+#' @param show.legend Plot legend (default=TRUE)
+#' @param legend.pos Legend position, see ggplot2::theme
+#' @param size Size of cells on plot
+#' @param n.col Columns of plots. If NULL, will be number of conditions + 1 (default=NULL)
+#' @param ... Plotting variables propagated to conos:::embeddingPlot
 plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z.scores=NULL, cur.scores=NULL, show.legend=TRUE, legend.pos=c(1, 1), size=0.2, n.col=NULL, z.lims=NULL, max.expr=NULL, adj.list=NULL, ...) {
   #TODO: Condition.per.cell should be derived from sample.groups and cell.groups
   if (!is.null(cur.scores) & !is.null(names(cur.scores))) {
@@ -118,6 +112,8 @@ plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z
   })
 }
 
+
+# TODO: remove it
 #' @export
 estimteWeightEntropyPerCell <- function(graph, factor.per.cell, annotation=NULL) {
   if (length(unique(factor.per.cell)) != 2)

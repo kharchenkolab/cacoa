@@ -83,6 +83,8 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-plotExpressionDistanceEmbedding}{\code{Cacoa$plotExpressionDistanceEmbedding()}}
 \item \href{#method-getContour}{\code{Cacoa$getContour()}}
 \item \href{#method-estimateClusterFreeZScores}{\code{Cacoa$estimateClusterFreeZScores()}}
+\item \href{#method-estimateClusterFreeExpressionShifts}{\code{Cacoa$estimateClusterFreeExpressionShifts()}}
+\item \href{#method-plotClusterFreeExpressionShifts}{\code{Cacoa$plotClusterFreeExpressionShifts()}}
 \item \href{#method-clone}{\code{Cacoa$clone()}}
 }
 }
@@ -1287,7 +1289,11 @@ Extract contour from embedding
 \subsection{Method \code{estimateClusterFreeZScores()}}{
 Estimate Cluster-free Z-scores
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeZScores(n.od.genes = NULL, ...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeZScores(
+  n.od.genes = NULL,
+  verbose = self$verbose,
+  ...
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -1296,6 +1302,61 @@ Estimate Cluster-free Z-scores
 \item{\code{n.od.genes}}{Number of overdispersed genes for estimating Z-scores}
 
 \item{\code{...}}{see \link[=estimateLocalZScores]{estimateLocalZScores} parameters}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateClusterFreeExpressionShifts"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateClusterFreeExpressionShifts}{}}}
+\subsection{Method \code{estimateClusterFreeExpressionShifts()}}{
+Estimate Cluster-free Expression Shift
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeExpressionShifts(
+  n.od.genes = NULL,
+  verbose = self$verbose,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{n.od.genes}}{Number of overdispersed genes for estimating Z-scores}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotClusterFreeExpressionShifts"></a>}}
+\if{latex}{\out{\hypertarget{method-plotClusterFreeExpressionShifts}{}}}
+\subsection{Method \code{plotClusterFreeExpressionShifts()}}{
+Plot cluster-free expression shift z-scores
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotClusterFreeExpressionShifts(
+  cell.groups = self$cell.groups,
+  plot.both.conditions = FALSE,
+  plot.na = FALSE,
+  max.shift = 3,
+  alpha = 0.2,
+  font.size = c(2, 3),
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{cell.groups}}{cell type labels. Set to NULL if it shouldn't be shown}
+
+\item{\code{plot.both.conditions}}{show both case and control cells. Normally, showing control cells doesn't}
+
+\item{\code{max.shift}}{all shift values above `max.shift` are set to this value when plotting.
+make sense, as control cells always have small distance from control.}
+
+\item{\code{font.size}}{size range for cell type labels}
+
+\item{\code{...}}{parameters forwarded to \link[=sccore::embeddingPlot]{`embeddingPlot`}}
 }
 \if{html}{\out{</div>}}
 }

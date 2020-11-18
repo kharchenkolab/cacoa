@@ -8,6 +8,10 @@ clusterFreeZScoreMat <- function(adj_mat, count_mat, is_control, verbose = TRUE,
     .Call('_cacoa_clusterFreeZScoreMat', PACKAGE = 'cacoa', adj_mat, count_mat, is_control, verbose, min_z)
 }
 
+estimateClusterFreeExpressionShifts <- function(rmat, rfactor, nn_ids, is_ref, verbose = TRUE) {
+    .Call('_cacoa_estimateClusterFreeExpressionShifts', PACKAGE = 'cacoa', rmat, rfactor, nn_ids, is_ref, verbose)
+}
+
 projdiff <- function(mat, g1, g2) {
     .Call('_cacoa_projdiff', PACKAGE = 'cacoa', mat, g1, g2)
 }

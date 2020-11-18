@@ -8,17 +8,32 @@
 using namespace Rcpp;
 
 // clusterFreeZScoreMat
-SEXP clusterFreeZScoreMat(const SEXP adj_mat, const SEXP count_mat, const std::vector<bool> is_control, bool verbose, double min_z);
+SEXP clusterFreeZScoreMat(const SEXP adj_mat, const SEXP count_mat, const std::vector<bool>& is_control, bool verbose, double min_z);
 RcppExport SEXP _cacoa_clusterFreeZScoreMat(SEXP adj_matSEXP, SEXP count_matSEXP, SEXP is_controlSEXP, SEXP verboseSEXP, SEXP min_zSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const SEXP >::type adj_mat(adj_matSEXP);
     Rcpp::traits::input_parameter< const SEXP >::type count_mat(count_matSEXP);
-    Rcpp::traits::input_parameter< const std::vector<bool> >::type is_control(is_controlSEXP);
+    Rcpp::traits::input_parameter< const std::vector<bool>& >::type is_control(is_controlSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
     Rcpp::traits::input_parameter< double >::type min_z(min_zSEXP);
     rcpp_result_gen = Rcpp::wrap(clusterFreeZScoreMat(adj_mat, count_mat, is_control, verbose, min_z));
+    return rcpp_result_gen;
+END_RCPP
+}
+// estimateClusterFreeExpressionShifts
+NumericVector estimateClusterFreeExpressionShifts(SEXP rmat, IntegerVector rfactor, List nn_ids, const std::vector<bool>& is_ref, bool verbose);
+RcppExport SEXP _cacoa_estimateClusterFreeExpressionShifts(SEXP rmatSEXP, SEXP rfactorSEXP, SEXP nn_idsSEXP, SEXP is_refSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type rmat(rmatSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type rfactor(rfactorSEXP);
+    Rcpp::traits::input_parameter< List >::type nn_ids(nn_idsSEXP);
+    Rcpp::traits::input_parameter< const std::vector<bool>& >::type is_ref(is_refSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimateClusterFreeExpressionShifts(rmat, rfactor, nn_ids, is_ref, verbose));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -38,6 +53,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_clusterFreeZScoreMat", (DL_FUNC) &_cacoa_clusterFreeZScoreMat, 5},
+    {"_cacoa_estimateClusterFreeExpressionShifts", (DL_FUNC) &_cacoa_estimateClusterFreeExpressionShifts, 5},
     {"_cacoa_projdiff", (DL_FUNC) &_cacoa_projdiff, 3},
     {NULL, NULL, 0}
 };

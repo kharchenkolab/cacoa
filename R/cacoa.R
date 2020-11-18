@@ -1229,6 +1229,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         estimateClusterFreeZScores(cm, is.ref=is.ref, genes=genes, verbose=verbose, ...)
 
       return(invisible(self$test.results[["cluster.free.z"]]))
+    },
+
+    #' @description Estimate Cluster-free Expression Shift
+    #' @param n.od.genes Number of overdispersed genes for estimating Z-scores
+    estimateClusterFreeExpressionShifts = function(n.od.genes=NULL, verbose=self$verbose, ...) {
+      genes <- extractOdGenes(self$data.object, n.od.genes)
+      cm <- extractJointCountMatrix(self$data.object) %>% .[, genes] %>% Matrix::t()
+
+      is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == cao$ref.level)
+
+      nns.per.cell <- extractCellGraph.Conos(self$data.object) %>%
+        igraph::as_adjacency_matrix() %>% as("dgTMatrix") %>%
+        {setNames(split(.@j, .@i + 1), rownames(.))}
+
+      shifts <- estimateClusterFreeExpressionShifts(cm, self$sample.per.cell[names(nns.per.cell)], nns.per.cell,
+                                                    is.ref, verbose=verbose)
+      self$test.results[["cluster.free.expr.shifts"]] <- shifts
+
+      return(invisible(shifts))
     }
   ),
   private = list(

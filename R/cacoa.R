@@ -1291,16 +1291,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
     },
 
-    getResults=function(name,suggestedFunction=NULL) {
-      if (is.null(self$test.results[[name]])) {
-        msg <- paste0("A result named \"", name, "\" cannot be found.");
-        if(!is.null(suggestedFunction)) {
-          msg <- paste(msg,"Please first run",suggestedFunction)
-        }
-        stop(msg)
-      } else {
+    getResults=function(name, suggested.function=NULL) {
+      if (!is.null(self$test.results[[name]]))
         return(self$test.results[[name]])
+
+      msg <- paste0("A result named \"", name, "\" cannot be found.");
+      if(!is.null(suggested.function)) {
+        msg <- paste(msg, "Please first run", suggested.function)
       }
+      stop(msg)
     }
   )
 )

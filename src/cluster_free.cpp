@@ -114,7 +114,7 @@ NumericMatrix collapseMatrixNorm(const SparseMatrix<double> &mat, const std::vec
                                  const std::vector<int> &nn_ids, const std::vector<int> &n_obs_per_samp) {
   NumericMatrix res(mat.rows(), n_obs_per_samp.size());
   for (int id : nn_ids) {
-      int fac = factor[id] - 1;
+      int fac = factor[id];
       if (fac >= res.cols() || fac < 0)
           Rcpp::stop("Wrong factor: " + std::to_string(fac) + ", id: " + std::to_string(id));
 
@@ -126,14 +126,16 @@ NumericMatrix collapseMatrixNorm(const SparseMatrix<double> &mat, const std::vec
   return res;
 }
 
-double estimateClusterFreeExpressionShift(const SparseMatrix<double> &mat, const std::vector<int> &factor, const std::vector<int> &nn_ids,
-                                          const std::vector<bool> &is_ref, int n_samples) {
+//' @param sample_per_cell must contains ids from 0 to n_samples-1
+//' @param n_samples must be equal to maximum(sample_per_cell) + 1
+double estimateClusterFreeExpressionShift(const SparseMatrix<double> &mat, const std::vector<int> &sample_per_cell,
+                                          const std::vector<int> &nn_ids, const std::vector<bool> &is_ref, int n_samples) {
   std::vector<int> n_ids_per_samp(n_samples, 0);
   for (int id : nn_ids) {
-    n_ids_per_samp[factor[id] - 1]++;
+    n_ids_per_samp[sample_per_cell[id]]++;
   }
 
-  const auto mat_collapsed = collapseMatrixNorm(mat, factor, nn_ids, n_ids_per_samp);
+  const auto mat_collapsed = collapseMatrixNorm(mat, sample_per_cell, nn_ids, n_ids_per_samp);
 
   double within_dist = 0, between_dist = 0;
   int n_within = 0, n_between = 0;
@@ -156,25 +158,34 @@ double estimateClusterFreeExpressionShift(const SparseMatrix<double> &mat, const
     }
   }
 
-  if (n_within < 2 || n_between < 2)
+  if (n_within == 0)
     return NA_REAL;
 
   return between_dist / within_dist;
 }
 
 // [[Rcpp::export]]
-NumericVector estimateClusterFreeExpressionShifts(SEXP rmat, IntegerVector rfactor, List nn_ids, const std::vector<bool> &is_ref, bool verbose=true) {
+NumericVector estimateClusterFreeExpressionShifts(SEXP rmat, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool> &is_ref, bool verbose=true) {
   auto mat = as<SparseMatrix<double>>(rmat);
-  auto factor = as<std::vector<int>>(rfactor);
+  auto samp_per_cell_c = as<std::vector<int>>(IntegerVector(sample_per_cell - 1));
   std::vector<double> res_scores;
   Progress p(LENGTH(nn_ids), verbose);
-  int n_samples = LENGTH(rfactor.attr("levels"));
+  int n_samples = 0;
+  for (int f : samp_per_cell_c) {
+    if (f < 0)
+      stop("sample_per_cell must contain only positive factors");
+
+    n_samples = std::max(n_samples, f + 1);
+  }
+
+  if (n_samples == 0)
+      stop("sample_per_cell must be a samp_per_cell_c with non-empty levels");
 
   for (auto &ids : nn_ids) {
     if (Progress::check_abort())
-      Rcpp::stop("Aborted");
+      stop("Aborted");
 
-    double score = estimateClusterFreeExpressionShift(mat, factor, as<std::vector<int>>(ids), is_ref, n_samples);
+    double score = estimateClusterFreeExpressionShift(mat, samp_per_cell_c, as<std::vector<int>>(ids), is_ref, n_samples);
     res_scores.push_back(score);
     p.increment();
   }

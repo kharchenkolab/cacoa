@@ -4,12 +4,16 @@
 #' @param adj_mat adjacency matrix with 1 on the position (r,c) if the cell r is adjacent to the cell c
 NULL
 
+#' @param sample_per_cell must contains ids from 0 to n_samples-1
+#' @param n_samples must be equal to maximum(sample_per_cell) + 1
+NULL
+
 clusterFreeZScoreMat <- function(adj_mat, count_mat, is_control, verbose = TRUE, min_z = 0.01) {
     .Call('_cacoa_clusterFreeZScoreMat', PACKAGE = 'cacoa', adj_mat, count_mat, is_control, verbose, min_z)
 }
 
-estimateClusterFreeExpressionShifts <- function(rmat, rfactor, nn_ids, is_ref, verbose = TRUE) {
-    .Call('_cacoa_estimateClusterFreeExpressionShifts', PACKAGE = 'cacoa', rmat, rfactor, nn_ids, is_ref, verbose)
+estimateClusterFreeExpressionShifts <- function(rmat, sample_per_cell, nn_ids, is_ref, verbose = TRUE) {
+    .Call('_cacoa_estimateClusterFreeExpressionShifts', PACKAGE = 'cacoa', rmat, sample_per_cell, nn_ids, is_ref, verbose)
 }
 
 projdiff <- function(mat, g1, g2) {

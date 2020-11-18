@@ -102,12 +102,21 @@ Plot sample-sample expression distance as a 2D embedding
   target.level = NULL,
   sample.groups.palette = NULL,
   cell.groups.palette = NULL,
-  embedding = NULL,
+  embedding = getEmbedding(data.object),
   n.cores = 1,
   verbose = TRUE
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{sample.groups}}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}
+
+\item{\code{verbose}}{Show progress (default: stored value)}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateExpressionShiftMagnitudes"></a>}}
@@ -154,7 +163,7 @@ Calculate expression shift magnitudes of different clusters between conditions
 
 \item{\code{n.cores}}{Number of cores (default: stored integer)}
 
-\item{\code{verbose}}{Print progress}
+\item{\code{verbose}}{Show progress (default: stored value)}
 
 \item{\code{name}}{Test name (default="expression.shifts")}
 }
@@ -182,12 +191,21 @@ a list include \itemize{
   n.subsamples = 30,
   min.cells = 10,
   n.cores = 1,
-  verbose = TRUE,
+  verbose = self$verbose,
   mean.trim = 0.1,
   name = "common.expression.shifts"
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{sample.groups}}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}
+
+\item{\code{verbose}}{Show progress (default: stored value)}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotExpressionShiftMagnitudes"></a>}}
@@ -279,6 +297,8 @@ Calculate expression shift Z scores of different clusters between conditions
 \item{\code{ignore.cache}}{(default=F)}
 
 \item{\code{name}}{(default="expression.z.scores")}
+
+\item{\code{verbose}}{Show progress (default: stored value)}
 }
 \if{html}{\out{</div>}}
 }
@@ -336,7 +356,7 @@ Estimate differential gene expression per cell type between conditions
   independent.filtering = FALSE,
   cluster.sep.chr = "<!!>",
   return.matrix = T,
-  verbose = T,
+  verbose = self$verbose,
   name = "de"
 )}\if{html}{\out{</div>}}
 }
@@ -346,7 +366,7 @@ Estimate differential gene expression per cell type between conditions
 \describe{
 \item{\code{cell.groups}}{factor specifying cell types (default=NULL)}
 
-\item{\code{sample.groups}}{a list of two character vector specifying the app groups to compare (default=NULL)}
+\item{\code{sample.groups}}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}
 
 \item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
 
@@ -370,7 +390,7 @@ Estimate differential gene expression per cell type between conditions
 
 \item{\code{return.matrix}}{Return merged matrix of results (default=TRUE)}
 
-\item{\code{verbose}}{Show progress (default=TRUE)}
+\item{\code{verbose}}{Show progress (default: stored value)}
 
 \item{\code{name}}{slot in which to save the results (default: 'de')}
 }
@@ -483,7 +503,7 @@ Save DE results as JSON files
 
 \item{\code{de.raw}}{List of DE results}
 
-\item{\code{sample.groups}}{Sample groups (default: stored vector)}
+\item{\code{sample.groups}}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}
 
 \item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
 
@@ -491,7 +511,7 @@ Save DE results as JSON files
 
 \item{\code{cluster.sep.chr}}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
 
-\item{\code{verbose}}{Show progress (default=T)}
+\item{\code{verbose}}{Show progress (default: stored value)}
 }
 \if{html}{\out{</div>}}
 }
@@ -566,7 +586,7 @@ Filter and prepare DE genes for ontology calculations
 
 \item{\code{transposed}}{Whether count matrices should be transposed (default=T)}
 
-\item{\code{verbose}}{Print progress (default=T)}
+\item{\code{verbose}}{Show progress (default: stored value)}
 
 \item{\code{n.cores}}{Number of cores to use (default: stored integer)}
 }
@@ -585,6 +605,7 @@ Plot embedding
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotEmbedding(
   embedding = self$embedding,
   plot.theme = ggplot2::theme_bw(),
+  show.legend = TRUE,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -596,7 +617,7 @@ Plot embedding
 
 \item{\code{plot.theme}}{plot theme to use (default: ggplot2::theme_bw())}
 
-\item{\code{...}}{other parameters are passed to sccore::embeddingPlot()}
+\item{\code{...}}{other parameters are passed to \link[=sccore::embeddingPlot]{sccore::embeddingPlot}}
 }
 \if{html}{\out{</div>}}
 }
@@ -641,7 +662,7 @@ Estimate ontology terms based on DEs
 
 \item{\code{readable}}{Mapping gene ID to gene name (default=T)}
 
-\item{\code{verbose}}{Print progress (default=T)}
+\item{\code{verbose}}{Show progress (default: stored value)}
 
 \item{\code{min.genes}}{Minimum number of input genes overlapping with ontologies (default=0)}
 
@@ -885,7 +906,7 @@ Plot the cell group proportions per sample
 
 \item{\code{sample.per.cell}}{Vector indicating sample name with cell names (default: stored vector)}
 
-\item{\code{sample.groups}}{Vector indicating sample groups with sample names (default: stored vector)}
+\item{\code{sample.groups}}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}
 
 \item{\code{cells.to.remove}}{Vector of cell types to remove from the composition}
 
@@ -928,7 +949,7 @@ Plot the cell numbers per sample
 
 \item{\code{sample.per.cell}}{Vector indicating sample name with cell names (default: stored vector)}
 
-\item{\code{sample.groups}}{Vector indicating sample groups with sample names (default: stored vector)}
+\item{\code{sample.groups}}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1061,6 +1082,13 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{sample.groups}}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateCellDensity"></a>}}
@@ -1212,7 +1240,7 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 
 \item{\code{cell.groups}}{Named factor with cell names defining groups/clusters (default: stored $cell.groups vector)}
 
-\item{\code{sample.groups}}{Named sample factor with cell names (default: stored $sample.groups vector)}
+\item{\code{sample.groups}}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}
 
 \item{\code{weighted.distance}}{whether to weigh the expression distance by the sizes of cell types (default: TRUE), or show distances for each individual cell type}
 
@@ -1245,8 +1273,6 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{sample.groups}}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}
-
-\item{\code{sample.groups}}{Named sample factor with cell names (default: stored $sample.groups )}
 
 \item{\code{cell.type}}{If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)}
 
@@ -1301,6 +1327,8 @@ Estimate Cluster-free Z-scores
 \describe{
 \item{\code{n.od.genes}}{Number of overdispersed genes for estimating Z-scores}
 
+\item{\code{verbose}}{Show progress (default: stored value)}
+
 \item{\code{...}}{see \link[=estimateLocalZScores]{estimateLocalZScores} parameters}
 }
 \if{html}{\out{</div>}}
@@ -1323,6 +1351,8 @@ Estimate Cluster-free Expression Shift
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{n.od.genes}}{Number of overdispersed genes for estimating Z-scores}
+
+\item{\code{verbose}}{Show progress (default: stored value)}
 }
 \if{html}{\out{</div>}}
 }

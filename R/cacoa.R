@@ -3,6 +3,8 @@
 #' @import methods
 #' @export Cacoa
 #' @exportClass Cacoa
+#' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+#' @param verbose Show progress (default: stored value)
 Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
   public = list(
     #' @field n.cores number of cores
@@ -108,14 +110,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description  Calculate expression shift magnitudes of different clusters between conditions
     #' @param cell.groups Named cell group factor with cell names (default: stored vector)
     #' @param dist 'JS' - Jensen Shannon divergence, or 'cor' - correlation distance (default="JS")
-    #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
     #' @param within.group.normalization Normalize the shift magnitude by the mean magnitude of within-group variation (default=T)
     #' @param valid.comparisons A logical matrix (rows and columns are samples) specifying valid between-sample comparisons. Note that if within.group.normalization=T, the method will automatically include all within-group comparisons of the samples for which at least one valid pair is included in the valid.comparisons (default=NULL)
     #' @param n.cells Number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)
     #' @param n.top.genes Number of top highest-expressed genes to consider (default: all genes)
     #' @param n.subsamples Number of samples to draw (default=100)
     #' @param min.cells Minimum number of cells per cluster/per sample to be included in the analysis (default=10)
-    #' @param verbose Print progress
     #' @param n.cores Number of cores (default: stored integer)
     #' @param name Test name (default="expression.shifts")
     #' @return a list include \itemize{
@@ -146,7 +146,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[[name]]))
     },
 
-    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50, n.subsamples=30, min.cells=10, n.cores=1, verbose=TRUE,  mean.trim=0.1, name='common.expression.shifts') {
+    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50, n.subsamples=30, min.cells=10, n.cores=1, verbose=self$verbose,  mean.trim=0.1, name='common.expression.shifts') {
       if (is.null(sample.groups))
         stop("'sample.groups' must be provided either during the object initialization or during this function call")
 
@@ -305,7 +305,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description  Calculate expression shift Z scores of different clusters between conditions
     #' @param cell.groups Named cell group factor with cell names (default: stored vector)
     #' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
-    #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
     #' @param sample.per.cell (default: stored vector)
     #' @param n.od.genes (default=1000)
     #' @param n.pcs (default=100)
@@ -382,7 +381,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Estimate differential gene expression per cell type between conditions
     #' @param cell.groups factor specifying cell types (default=NULL)
-    #' @param sample.groups a list of two character vector specifying the app groups to compare (default=NULL)
     #' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
     #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
     #' @param common.genes Only investigate common genes across cell groups (default=F)
@@ -394,12 +392,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param n.cores Number of cores (default=1)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
     #' @param return.matrix Return merged matrix of results (default=TRUE)
-    #' @param verbose Show progress (default=TRUE)
     #' @param name slot in which to save the results (default: 'de')
     #' @return A list of DE genes
     estimatePerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level,
                               common.genes = F, n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, max.cell.count= Inf, test='Wald', independent.filtering = FALSE,
-                              cluster.sep.chr = "<!!>", return.matrix = T, verbose=T, name ='de') {
+                              cluster.sep.chr = "<!!>", return.matrix = T, verbose=self$verbose, name ='de') {
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       if(is.null(ref.level)) stop("'ref.level' must be provided either during the object initialization or during this function call")
@@ -464,11 +461,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param saveprefix Prefix for created files (default=NULL)
     #' @param dir.name Name for directory with results (default="JSON")
     #' @param de.raw List of DE results
-    #' @param sample.groups Sample groups (default: stored vector)
     #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
     #' @param gene.metadata (default=NULL)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-    #' @param verbose Show progress (default=T)
     saveDEasJSON=function(saveprefix = NULL, dir.name = "JSON", de.raw = self$test.results$de, sample.groups = self$sample.groups, ref.level = self$ref.level, gene.metadata = NULL, cluster.sep.chr = "<!!>", verbose = T) {
       if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
 
@@ -514,7 +509,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param universe Only set this if a common background gene set is desired for all cell groups (default: NULL)
     #' @param transposed Whether count matrices should be transposed (default=T)
-    #' @param verbose Print progress (default=T)
     #' @param n.cores Number of cores to use (default: stored integer)
     #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
     prepareOntologyData=function(org.db, n.top.genes = 1e2, p.adj.cutoff = 0.05, expr.cutoff = 0.05, de.raw = self$test.results$de, cell.groups = self$cell.groups, universe = NULL, transposed = T, verbose = T, n.cores = self$n.cores) {
@@ -548,7 +542,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
     #' @param readable Mapping gene ID to gene name (default=T)
-    #' @param verbose Print progress (default=T)
     #' @param min.genes Minimum number of input genes overlapping with ontologies (default=0)
     #' @param qvalueCutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
     #' @param minGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5)
@@ -773,7 +766,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
-    #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
     #' @param cells.to.remove Vector of cell types to remove from the composition
     #' @param cells.to.remain Vector of cell types to remain in the composition
     #' @param notch Whether to show notch in the boxplots
@@ -815,7 +807,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
-    #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
     #' @return A ggplot2 object
     plotCellNumbers=function(legend.position = "right", cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups) {
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
@@ -1040,7 +1031,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Estimate cell density in giving embedding
     #' @param emb cell embedding matrix
     #' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
-    #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
     #' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
     #' @param target.level target/disease level for sample.group vector
     #' @param bins number of bins for density esitmation, default 400
@@ -1178,7 +1168,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param name Test results to plot (default=expression.shifts)
     #' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
     #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored $cell.groups vector)
-    #' @param sample.groups Named sample factor with cell names (default: stored $sample.groups vector)
     #' @param weighted.distance whether to weigh the expression distance by the sizes of cell types (default: TRUE), or show distances for each individual cell type
     #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (* < 0.05; ** < 0.01; *** < 0.001)
     #' @return A ggplot2 object
@@ -1188,9 +1177,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @title Plot sample-sample expression distance as a 2D embedding
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
-    #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
     #' @param cell.type If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)
-    #' @param sample.groups Named sample factor with cell names (default: stored $sample.groups )
     #' @param method dimension reduction methods (MDS or tSNE ) , default is MDS
     #' @param perplexity tSNE perpexity (default: 4)
     #' @param max_iter tSNE max_iter (default: 1e3)

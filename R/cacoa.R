@@ -44,7 +44,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @field cell.groups.palette a color palette for the cell.groups
     cell.groups.palette = NULL,
 
-    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, sample.groups.palette=NULL, cell.groups.palette=NULL, embedding=NULL, n.cores=1, verbose=TRUE) {
+    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, sample.groups.palette=NULL, cell.groups.palette=NULL,
+                        embedding=getEmbedding(data.object), n.cores=1, verbose=TRUE) {
       self$n.cores <- n.cores
       self$verbose <- verbose
       self$ref.level <- ref.level
@@ -63,8 +64,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         return()
       } else {
         # TODO: would be nice to support a list of count matrices as input
-        if (!('Conos' %in% class(data.object)) && !('Seurat' %in% class(data.object)))
-          stop("only Conos or Seurat v3 data objects are currently supported");
+        if (!('Conos' %in% class(data.object)))
+          stop("only Conos data objects are currently supported");
 
         self$data.object <- data.object
       }
@@ -94,16 +95,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       if(is.null(cell.groups.palette)) {
-        self$cell.groups.palette <- setNames( rainbow(length(levels(cell.groups)),s=0.9,v=0.9), levels(cell.groups))
+        self$cell.groups.palette <- setNames(rainbow(length(levels(cell.groups)),s=0.9,v=0.9), levels(cell.groups))
       } else {
         self$cell.groups.palette <- cell.groups.palette
       }
 
-      if(is.null(embedding)) {
-        # TODO: extract from the object
-      } else {
-        self$embedding <- embedding;
-      }
+      self$embedding <- embedding;
     },
 
     ### Expression shifts
@@ -536,10 +533,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description  Plot embedding
     #' @param embedding A cell embedding to use (two-column data frame with rownames corresponding to cells) (default: stored embedding object)
     #' @param plot.theme plot theme to use (default: ggplot2::theme_bw())
-    #' @param ... other parameters are passed to sccore::embeddingPlot()
-    plotEmbedding=function( embedding=self$embedding, plot.theme=ggplot2::theme_bw(), ... ) {
+    #' @param ... other parameters are passed to \link[=sccore::embeddingPlot]{sccore::embeddingPlot}
+    plotEmbedding=function(embedding=self$embedding, plot.theme=ggplot2::theme_bw(), show.legend=TRUE, ...) {
       if(is.null(embedding)) stop("embedding must be provided to cacoa constructor or to this method")
-      sccore::embeddingPlot(embedding, plot.theme=plot.theme, ...)
+      sccore::embeddingPlot(embedding, plot.theme=plot.theme, show.legend=show.legend, ...)
     },
 
     #' @description  Estimate ontology terms based on DEs

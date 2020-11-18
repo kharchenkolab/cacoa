@@ -42,3 +42,8 @@ extractSampleGroups.Conos <- function(con, ref.level = ref.level, target.level =
     ifelse(grepl(ref.level,con.names),ref.level,target.level) %>% setNames(con.names)
   }
 }
+
+getEmbedding <- function(obj) UseMethod("getEmbedding", obj)
+getEmbedding.Conos <- function(con) {
+  return(con$embedding)
+}

@@ -1237,7 +1237,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       genes <- extractOdGenes(self$data.object, n.od.genes)
       cm <- extractJointCountMatrix(self$data.object) %>% .[, genes] %>% Matrix::t()
 
-      is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == cao$ref.level)
+      is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
 
       nns.per.cell <- extractCellGraph.Conos(self$data.object) %>%
         igraph::as_adjacency_matrix() %>% as("dgTMatrix") %>%
@@ -1248,6 +1248,40 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       self$test.results[["cluster.free.expr.shifts"]] <- shifts
 
       return(invisible(shifts))
+    },
+
+    #' @description Plot cluster-free expression shift z-scores
+    #' @param cell.groups cell type labels. Set to NULL if it shouldn't be shown
+    #' @param plot.both.conditions show both case and control cells. Normally, showing control cells doesn't
+    #' @param max.shift all shift values above `max.shift` are set to this value when plotting.
+    #' make sense, as control cells always have small distance from control.
+    #' @param font.size size range for cell type labels
+    #' @param ... parameters forwarded to \link[=sccore::embeddingPlot]{`embeddingPlot`}
+    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, plot.both.conditions=FALSE, plot.na=FALSE, max.shift=3,
+                                               alpha=0.2, font.size=c(2, 3), ...) {
+      shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts")
+      if (is.null(self$embedding))
+        stop("embedding must not be NULL. Please, set the 'embedding' field.")
+
+      if (!plot.both.conditions) {
+        shifts %<>%  .[self$sample.groups[self$sample.per.cell[names(.)]] != self$ref.level]
+      }
+
+      if (!is.null(max.shift)) {
+        shifts %<>% pmin(max.shift)
+      }
+      gg <- self$plotEmbedding(colors=shifts, plot.na=plot.na, alpha=alpha, ...)
+      gg$scales$scales %<>% .[sapply(., function(s) s$aesthetics != "colour")]
+
+      if (!is.null(cell.groups)) {
+        ann.ls <- self$plotEmbedding(groups=cell.groups)$layers
+        gg <- gg + ann.ls[[which(sapply(ann.ls, function(l) "GeomLabelRepel" %in% class(l$geom)))]]
+      }
+
+      gg <- gg +
+        scale_size_continuous(range=font.size, trans='identity', guide='none') +
+        scale_color_distiller(palette="RdYlBu", name="Distance")
+      return(gg)
     }
   ),
   private = list(

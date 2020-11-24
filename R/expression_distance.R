@@ -65,7 +65,7 @@ plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.gr
         axis.text.x = element_text(angle = 90, hjust = 1),
         axis.text.y = element_text(angle = 90, hjust = 0.5)
       ) + theme(legend.position = "top") + xlab("") + ylab("expression distance") +
-      scale_y_continuous( expand=c(0, max(df2$value) * 0.1), limits=c(0, (max(df2$value) + max(df2$value) * 0.01 )))  #expand=c(0, 0),
+      scale_y_continuous( expand=c(0, max(df$value) * 0.1), limits=c(0, (max(df$value) + max(df$value) * 0.01 )))  #expand=c(0, 0),
   
       if(show.significance) gg <- gg + stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
     

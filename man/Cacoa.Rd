@@ -617,7 +617,7 @@ Plot embedding
 
 \item{\code{plot.theme}}{plot theme to use (default: ggplot2::theme_bw())}
 
-\item{\code{...}}{other parameters are passed to \link[=sccore::embeddingPlot]{sccore::embeddingPlot}}
+\item{\code{...}}{other parameters are passed to \link[sccore:embeddingPlot]{embeddingPlot}}
 }
 \if{html}{\out{</div>}}
 }
@@ -1329,7 +1329,8 @@ Estimate Cluster-free Z-scores
 
 \item{\code{verbose}}{Show progress (default: stored value)}
 
-\item{\code{...}}{see \link[=estimateLocalZScores]{estimateLocalZScores} parameters}
+\item{\code{...}}{see \link{estimateClusterFreeZScores} parameters \link[cacoa:Cacoa]{estimateClusterFreeExpressionShifts}
+\link[sccore]{embeddingPlot} [embeddingPlot::embeddingPlot()]}
 }
 \if{html}{\out{</div>}}
 }
@@ -1342,8 +1343,7 @@ Estimate Cluster-free Expression Shift
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeExpressionShifts(
   n.od.genes = NULL,
-  verbose = self$verbose,
-  ...
+  verbose = self$verbose
 )}\if{html}{\out{</div>}}
 }
 
@@ -1353,6 +1353,8 @@ Estimate Cluster-free Expression Shift
 \item{\code{n.od.genes}}{Number of overdispersed genes for estimating Z-scores}
 
 \item{\code{verbose}}{Show progress (default: stored value)}
+
+\item{\code{...}}{see also \link{Cacoa$plotClusterFreeExpressionShifts}}
 }
 \if{html}{\out{</div>}}
 }
@@ -1379,14 +1381,14 @@ Plot cluster-free expression shift z-scores
 \describe{
 \item{\code{cell.groups}}{cell type labels. Set to NULL if it shouldn't be shown}
 
-\item{\code{plot.both.conditions}}{show both case and control cells. Normally, showing control cells doesn't}
-
-\item{\code{max.shift}}{all shift values above `max.shift` are set to this value when plotting.
+\item{\code{plot.both.conditions}}{show both case and control cells. Normally, showing control cells doesn't
 make sense, as control cells always have small distance from control.}
+
+\item{\code{max.shift}}{all shift values above `max.shift` are set to this value when plotting.}
 
 \item{\code{font.size}}{size range for cell type labels}
 
-\item{\code{...}}{parameters forwarded to \link[=sccore::embeddingPlot]{`embeddingPlot`}}
+\item{\code{...}}{parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}}
 }
 \if{html}{\out{</div>}}
 }

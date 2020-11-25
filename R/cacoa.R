@@ -127,7 +127,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist='JS', within.group.normalization=TRUE, valid.comparisons=NULL,
                                                n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
                                                sample.groups=self$sample.groups, n.cores=self$n.cores, verbose=self$verbose,
-                                               name="expression.shifts") {
+                                               name="expression.shifts", ...) {
       if (is.null(sample.groups))
         stop("'sample.groups' must be provided either during the object initialization or during this function call")
 
@@ -141,12 +141,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       self$test.results[[name]] <- count.matrices %>%
         estimateExpressionShiftMagnitudes(sample.groups, cell.groups, dist=dist, within.group.normalization=within.group.normalization,
                                           valid.comparisons=valid.comparisons, n.cells=n.cells, n.top.genes=n.top.genes, n.subsamples=n.subsamples,
-                                          min.cells=min.cells, n.cores=n.cores, verbose=verbose, transposed.matrices=T)
+                                          min.cells=min.cells, n.cores=n.cores, verbose=verbose, transposed.matrices=T, ...)
 
       return(invisible(self$test.results[[name]]))
     },
 
-    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50, n.subsamples=30, min.cells=10, n.cores=1, verbose=self$verbose,  mean.trim=0.1, name='common.expression.shifts') {
+    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50,
+                                                     n.subsamples=30, min.cells=10, n.cores=1, verbose=self$verbose,  mean.trim=0.1, name='common.expression.shifts') {
       if (is.null(sample.groups))
         stop("'sample.groups' must be provided either during the object initialization or during this function call")
 
@@ -527,7 +528,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description  Plot embedding
     #' @param embedding A cell embedding to use (two-column data frame with rownames corresponding to cells) (default: stored embedding object)
     #' @param plot.theme plot theme to use (default: ggplot2::theme_bw())
-    #' @param ... other parameters are passed to \link[=sccore::embeddingPlot]{sccore::embeddingPlot}
+    #' @param ... other parameters are passed to \link[sccore:embeddingPlot]{embeddingPlot}
     plotEmbedding=function(embedding=self$embedding, plot.theme=ggplot2::theme_bw(), show.legend=TRUE, ...) {
       if(is.null(embedding)) stop("embedding must be provided to cacoa constructor or to this method")
       sccore::embeddingPlot(embedding, plot.theme=plot.theme, show.legend=show.legend, ...)
@@ -1202,14 +1203,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Estimate Cluster-free Z-scores
     #' @param n.od.genes Number of overdispersed genes for estimating Z-scores
-    #' @param ... see \link[=estimateLocalZScores]{estimateLocalZScores} parameters
+    #' @param ... see \link{estimateClusterFreeZScores} parameters
     estimateClusterFreeZScores = function(n.od.genes=NULL, verbose=self$verbose, ...) {
       cm <- extractJointCountMatrix(self$data.object)
       genes <- extractOdGenes(self$data.object, n.od.genes)
 
       is.ref <- self$sample.per.cell %>%
         {setNames(self$sample.groups[as.character(.)] == self$ref.level, names(.))}
-      self$test.results[["cluster.free.z"]] <- cacoa:::extractCellGraph.Conos(self$data.object) %>%
+      self$test.results[["cluster.free.z"]] <- extractCellGraph(self$data.object) %>%
         estimateClusterFreeZScores(cm, is.ref=is.ref, genes=genes, verbose=verbose, ...)
 
       return(invisible(self$test.results[["cluster.free.z"]]))
@@ -1217,13 +1218,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Estimate Cluster-free Expression Shift
     #' @param n.od.genes Number of overdispersed genes for estimating Z-scores
-    estimateClusterFreeExpressionShifts = function(n.od.genes=NULL, verbose=self$verbose, ...) {
+    #' @param ... see also \link{Cacoa$plotClusterFreeExpressionShifts}
+    estimateClusterFreeExpressionShifts = function(n.od.genes=NULL, verbose=self$verbose) {
       genes <- extractOdGenes(self$data.object, n.od.genes)
       cm <- extractJointCountMatrix(self$data.object) %>% .[, genes] %>% Matrix::t()
 
       is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
 
-      nns.per.cell <- extractCellGraph.Conos(self$data.object) %>%
+      nns.per.cell <- extractCellGraph(self$data.object) %>%
         igraph::as_adjacency_matrix() %>% as("dgTMatrix") %>%
         {setNames(split(.@j, .@i + 1), rownames(.))}
 
@@ -1237,10 +1239,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Plot cluster-free expression shift z-scores
     #' @param cell.groups cell type labels. Set to NULL if it shouldn't be shown
     #' @param plot.both.conditions show both case and control cells. Normally, showing control cells doesn't
-    #' @param max.shift all shift values above `max.shift` are set to this value when plotting.
     #' make sense, as control cells always have small distance from control.
+    #' @param max.shift all shift values above `max.shift` are set to this value when plotting.
     #' @param font.size size range for cell type labels
-    #' @param ... parameters forwarded to \link[=sccore::embeddingPlot]{`embeddingPlot`}
+    #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
     plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, plot.both.conditions=FALSE, plot.na=FALSE, max.shift=3,
                                                alpha=0.2, font.size=c(2, 3), ...) {
       shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts")

@@ -93,10 +93,14 @@ plotGeneComparisonBetweenCondition <- function(genes, con, condition.per.cell, z
 
   lapply(genes, function(g) {
     lst <- lapply(unique(condition.per.cell), function(sg) {
+      if (is.null(max.expr)) {
+        m.expr <- sapply(con$samples, function(s) max(conos:::getGeneExpression(s, g), na.rm=TRUE)) %>% max
+      } else {
+        m.expr <- max.expr
+      }
       con$plotGraph(gene=g, show.legend=show.legend, legend.pos=legend.pos, size=size,
                     title=paste(sg," ",g), groups=condition.per.cell, subgroups=sg,
-                    color.range=if (is.null(max.expr)) NULL else c(0, max.expr),
-                    legend.title="Expression", ...)
+                    color.range=c(0, m.expr), legend.title="Expression", ...)
     })
 
     if (!is.null(z.scores)) {

@@ -30,9 +30,9 @@ Imports:
 RoxygenNote: 7.1.1
 LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress
 NeedsCompilation: yes
-Suggests: 
+Suggests:
     clusterProfiler (>= 3.0.0),
-    ggrastr (>= 0.1.7)
-Remotes: 
-    VPetukhov/ggrastr,
+    ggrastr (>= 0.1.7),
+    fabia
+Remotes:
     hms-dbmi/sccore

@@ -5,6 +5,7 @@
 #' @exportClass Cacoa
 #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 #' @param verbose Show progress (default: stored value)
+#' @param name Field name where the test results are stored
 Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
   public = list(
     #' @field n.cores number of cores
@@ -1201,7 +1202,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     ### Cluster-free differential expression
 
-    #' @description Estimate Cluster-free Z-scores
+    #' Estimate Cluster-free Z-scores
     #' @param n.od.genes Number of overdispersed genes for estimating Z-scores
     #' @param ... see \link{estimateClusterFreeZScores} parameters
     estimateClusterFreeZScores = function(n.od.genes=NULL, verbose=self$verbose, ...) {
@@ -1216,7 +1217,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[["cluster.free.z"]]))
     },
 
-    #' @description Estimate Cluster-free Expression Shift
+    #' Estimate Cluster-free Expression Shift
     #' @param n.od.genes Number of overdispersed genes for estimating Z-scores
     #' @param ... see also \link{Cacoa$plotClusterFreeExpressionShifts}
     estimateClusterFreeExpressionShifts = function(n.od.genes=NULL, verbose=self$verbose) {
@@ -1234,6 +1235,62 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       self$test.results[["cluster.free.expr.shifts"]] <- shifts
 
       return(invisible(shifts))
+    },
+
+    #' Smooth Cluster-free Z-scores
+    #' @description Performs graph smoothing of the cluster-free DE Z-scores
+    #' @param smoothing `beta` parameter of the \link[=sccore:heatFilter]{heatFilter}. Default: 20.
+    #' @param filter graph filter function. Default: \link[=sccore:heatFilter]{heatFilter}.
+    #' @param ... parameters forwarded to the \link[=sccore:smoothSignalOnGraph]{smoothSignalOnGraph} function.
+    #' @return sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z.smoothed` field.
+    smoothClusterFreeZScores = function(smoothing=20, filter=NULL, n.cores=self$n.cores, verbose=self$verbose, ...) {
+      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeExpressionShifts")
+
+      if (is.null(filter)) {
+        filter <- function(...) sccore::heatFilter(..., beta=smoothing)
+      }
+
+      z.scores@x[is.na(z.scores@x)] <- 0
+      z.smoothed <- z.scores %>%
+        sccore::smoothSignalOnGraph(extractCellGraph(cao$data.object), filter, n.cores=n.cores,
+                                    progress=verbose, ...)
+
+      z.smoothed[is.na(z.scores)] <- NA
+      self$test.results["cluster.free.z.smoothed"] <- z.smoothed
+      return(invisible(z.smoothed))
+    },
+
+    #' Estimate Gene Programmes
+    #' @param n.programmes maximal number of gene programmes to find (parameter `p` for fabia). Default: 15.
+    #' @param ... keyword arguments forwarded to \link{estimateGeneProgrammes}
+    estimateGeneProgrammes = function(smoothed=TRUE, n.programmes=15, name="gene.programmes", ...) {
+      if (!requireNamespace("fabia", quietly=TRUE))
+        stop("fabia package must be installed to run this function")
+
+      if (smoothed) {
+        if (is.null(self$test.results["cluster.free.z.smoothed"]))
+          stop("A result named 'cluster.free.z.smoothed' can't be found.",
+               "Please run 'smoothClusterFreeZScores' first or set `smoothed=FALSE`.")
+        z.scores <- self$test.results$cluster.free.z.smoothed
+      } else {
+        z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeExpressionShifts")
+        warning("`smoothed=FALSE` is not recommended, as the raw signal is often too noisy\n")
+      }
+
+      fr <- estimateGeneProgrammes(z.scores, n.programmes, ...)
+
+      bi.clusts <- fabia::extractBic(fr)
+      mask <- bi.clusts$bic[,"bixv"] %>% {sapply(., length) > 0}
+      self$test.results[[name]] <- list(
+        scores.approx=t(t(fr@L[,mask]) %*% (Matrix::t((z.scores[,rownames(fr@L)]) - fr@center) / fr@scaleData)),
+        scores.exact=t(fr@Z[mask,]),
+        loadings=fr@L[,mask],
+        gene.scores=apply(bi.clusts$bic, 1, `[[`, "bixv")[mask],
+        fabia=fr,
+        biclusts=bi.clusts
+      )
+
+      return(invisible(self$test.results$gene.programmes))
     },
 
     #' @description Plot cluster-free expression shift z-scores

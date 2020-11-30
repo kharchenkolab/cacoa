@@ -5,6 +5,7 @@
 #' @param is.ref Boolean vector per cell indicating whether it came from the reference condition
 #' @param count.matrix.transposed Joint count matrix with cells by rows and genes by columns
 #' @param ref.level Reference condition level, e.g., wt, ctrl, or healthy
+#' @inheritDotParams clusterFreeZScoreMat
 estimateClusterFreeZScores <- function(graph, count.matrix.transposed, is.ref, genes=NULL, max.z=20, ...) {
   adj.mat <- igraph::as_adj(graph)
 

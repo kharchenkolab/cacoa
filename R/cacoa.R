@@ -285,7 +285,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         df <- do.call(rbind,lapply(cn,function(n) data.frame(val=colMeans(do.call(rbind,lapply(res,function(x) x[[n]]))),cell=n)))
       }
       odf <- na.omit(df);
-      df <- data.frame(cell=levels(df$cell),mean=tapply(df$val,df$cell,mean),se=tapply(df$val,df$cell,function(x) sd(x)/sqrt(length(x))),stringsAsFactors=F)
+      df$cell <- as.factor(df$cell)
+      df <- data.frame(cell=levels(df$cell), mean=tapply(df$val,df$cell,mean),
+                       se=tapply(df$val,df$cell, function(x) sd(x)/sqrt(length(x))), stringsAsFactors=F)
       df <- df[order(df$mean,decreasing=F),]
       df$cell <- factor(df$cell,levels=df$cell)
       df <- na.omit(df);
@@ -1284,7 +1286,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         stop("fabia package must be installed to run this function")
 
       if (smoothed) {
-        if (is.null(self$test.results["cluster.free.z.smoothed"]))
+        if (is.null(self$test.results[["cluster.free.z.smoothed"]]))
           stop("A result named 'cluster.free.z.smoothed' can't be found.",
                "Please run 'smoothClusterFreeZScores' first or set `smoothed=FALSE`.")
         z.scores <- self$test.results$cluster.free.z.smoothed
@@ -1352,10 +1354,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param cell.groups cell type labels. Set to NULL if it shouldn't be shown
     #' @param plot.both.conditions show both case and control cells. Normally, showing control cells doesn't
     #' make sense, as control cells always have small distance from control.
-    #' @param max.shift all shift values above `max.shift` are set to this value when plotting.
+    #' @param max.shift all shift values above `max.shift` are set to this value when plotting. Default: 95% of the shifts.
     #' @param font.size size range for cell type labels
     #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
-    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, plot.both.conditions=FALSE, plot.na=FALSE, max.shift=3,
+    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, plot.both.conditions=FALSE, plot.na=FALSE, max.shift=NULL,
                                                alpha=0.2, font.size=c(2, 3), ...) {
       shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts")
       if (is.null(self$embedding))
@@ -1365,7 +1367,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         shifts %<>%  .[self$sample.groups[self$sample.per.cell[names(.)]] != self$ref.level]
       }
 
-      if (!is.null(max.shift)) {
+      if (is.null(max.shift)) {
+        max.shift <- quantile(shifts, 0.95, na.rm=TRUE)
+      }
+
+      if (max.shift > 0) {
         shifts %<>% pmin(max.shift)
       }
       gg <- self$plotEmbedding(colors=shifts, plot.na=plot.na, alpha=alpha, ...)

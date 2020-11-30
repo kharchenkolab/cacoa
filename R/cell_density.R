@@ -55,7 +55,8 @@ estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.l
                               })
   }
 
-  # cordinate embedding space
+  # coordinate embedding space
+  target.density = density.fraction[[target.level]]
   mat <- matrix(target.density, ncol = bins, byrow = FALSE)
   x <- emb[, 1]
   y <- emb[, 2]
@@ -129,7 +130,7 @@ plotDensity <- function(mat, bins, col = c('blue','white','red'), show.legend = 
             axis.title.y = element_blank(), axis.text.y = element_blank()) +
       scale_y_continuous(expand = c(0,0)) + scale_x_continuous(expand = c(0,0)) +
       scale_fill_viridis(option = 'B', alpha = 1, direction = 1, limits = c(mi, ma))
-      if(!is.null(show.grid)){ #  add grid manulay
+      if(!is.null(show.grid)){ #  add grid manually
         p <- p + geom_vline(xintercept=seq(quantile(mat$x,0.1),quantile(mat$x,0.9), length.out=6), col='grey', alpha=0.1)
         p <- p + geom_hline(yintercept=seq(quantile(mat$y,0.1),quantile(mat$y,0.9),, length.out=6), col='grey', alpha=0.1)
       }

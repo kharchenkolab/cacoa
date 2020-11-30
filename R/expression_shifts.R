@@ -289,6 +289,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
 ##' @param cell.groups Named factor with cell names and clustering/annotation
 ##' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt
 estimateExpressionShiftZScores <- function(pca, sample.per.cell, sample.groups, cell.groups, ref.level, verbose = T) {
+  .Deprecated()
   sample.groups %<>% as.character() %>%
     setNames(names(sample.groups))
 

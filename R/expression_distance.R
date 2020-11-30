@@ -1,7 +1,7 @@
 
 
 
-#' @title Plot inter-sample expression distance 
+#' @title Plot inter-sample expression distance
 #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
 #' @param name Test results to plot (default=expression.shifts)
 #' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
@@ -10,7 +10,7 @@
 #' @param alpha transparency level for the individual points (default: 0.2)
 #' @param weighted.distance whether to weigh the expression distance by the sizes of cell types (default: FALSE)
 #' @param palette a set of colors to use for the conditions
-#' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (* < 0.05; ** < 0.01; *** < 0.001)  
+#' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (* < 0.05; ** < 0.01; *** < 0.001)
 #' @return A ggplot2 object
 plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.groups = NULL, weighted.distance = FALSE,  notch= TRUE, alpha=0.2, min.cells = 10, palette=NULL, show.significance = FALSE) {
   ctdml <- cluster.shifts$ctdml
@@ -23,7 +23,7 @@ plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.gr
         cross.factor <- outer(sample.groups[rownames(xm)], sample.groups[colnames(xm)], '==')
         frm <- valid.comparisons[rownames(xm), colnames(xm)] & cross.factor
         diag(xm) <- NA
-        # remove self pairs  
+        # remove self pairs
         xm[!frm] <- NA
         xm[wm < min.cells] <- NA
         if (!any(!is.na(xm)))
@@ -66,14 +66,14 @@ plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.gr
         axis.text.y = element_text(angle = 90, hjust = 0.5)
       ) + theme(legend.position = "top") + xlab("") + ylab("expression distance") +
       scale_y_continuous( expand=c(0, max(df$value) * 0.1), limits=c(0, (max(df$value) + max(df$value) * 0.01 )))  #expand=c(0, 0),
-  
-      if(show.significance) gg <- gg + stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
-    
-  } else { # weighted expression distance 
+
+      if(show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+
+  } else { # weighted expression distance
     df <- do.call(rbind, lapply(ctdml, function(ctdm) {
       # bring to a common set of cell types
       commoncell <- unique( unlist( lapply(ctdm, function(x) colnames(x)) ))
-      
+
       ctdm <-  lapply(ctdm, function(x) {
         y <- matrix(0,nrow=length(commoncell),ncol=length(commoncell)); rownames(y) <- colnames(y) <- commoncell; # can set the missing entries to zero, as they will carry zero weights
         y[rownames(x),colnames(x)] <- x;
@@ -82,27 +82,27 @@ plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.gr
         attr(y, 'cc') <- ycct
         y
       }) # reform the matrix to make sure all cell type have the same dimensions
-      
+
       x <- abind::abind(lapply(ctdm, function(x) {
         nc <- attr(x, 'cc')
         #wm <- (outer(nc,nc,FUN='pmin'))
         wm <- sqrt(outer(nc, nc, FUN = 'pmin'))
         return(x * wm)
       }), along = 3)
-      
+
       # just the weights (for total sum of weights normalization)
       y <- abind::abind(lapply(ctdm, function(x) {
         nc <- attr(x, 'cc')
         sqrt(outer(nc, nc, FUN = 'pmin'))
       }), along = 3)
-      
+
       # normalize by total weight sums
       xd <- apply(x, c(1, 2), sum) / apply(y, c(1, 2), sum)
       dim(xd)
-      
+
       cross.factor <- outer(sample.groups[rownames(xd)], sample.groups[colnames(xd)], '==')
       frm <- valid.comparisons[rownames(xd), colnames(xd)] & cross.factor
-      
+
       diag(xd) <- NA # remove self pairs
       # restrict
       xd[!frm] <- NA
@@ -114,20 +114,20 @@ plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.gr
       xmd2$type2 <- sample.groups[xmd2$Var2]
       xmd2
     }))
-    
+
     df2 <- do.call(rbind, tapply(1:nrow(df), paste(df$Var1, df$Var2, sep = '!!'), function(ii) {
       ndf <- data.frame(df[ii[1], , drop = F])
       ndf$value <- median(df$value[ii])
       ndf$n <- median(df$n[ii])
       ndf
     }))
-    
+
     df2$group = df2$type1
-    
-    gg <- ggplot(na.omit(df2), aes(x = group, y = value)) + theme_bw() + 
+
+    gg <- ggplot(na.omit(df2), aes(x = group, y = value)) + theme_bw() +
       geom_boxplot(notch = notch, outlier.shape = NA , aes(fill = group)) + ggtitle('')+
-      geom_jitter(position = position_jitter(0.2), color = adjustcolor("black", alpha = alpha)) + 
-      theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.text.y = element_text(angle = 90, hjust = 0.5)) + 
+      geom_jitter(position = position_jitter(0.2), color = adjustcolor("black", alpha = alpha)) +
+      theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.text.y = element_text(angle = 90, hjust = 0.5)) +
       theme(legend.position = "right") +
       xlab("") + ylab("expression distance") +
       theme(
@@ -136,11 +136,11 @@ plotExpressionDistance <- function(cluster.shifts, cell.groups = NULL, sample.gr
         axis.ticks.x = element_blank(),
         plot.title = element_text(size = 10)
       )
-    if(show.significance) gg <- gg + stat_compare_means(label = "p.signif", label.x = 1.5) # willcox test
+    if(show.significance) gg <- gg + ggpubr::stat_compare_means(label = "p.signif", label.x = 1.5) # willcox test
   }
-  
-  
-  if(!is.null(palette)) { gg <- gg + scale_fill_manual(values=palette) }  
+
+
+  if(!is.null(palette)) { gg <- gg + scale_fill_manual(values=palette) }
   return(gg)
 }
 
@@ -170,7 +170,7 @@ plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, method = '
     df <- lapply(ctdml, function(ctdm) {
       # bring to a common set of cell types
       commoncell <- unique( unlist( lapply(ctdm, function(x) colnames(x)) ))
-      
+
       ctdm <-  lapply(ctdm, function(x) {
         y <- matrix(0,nrow=length(commoncell),ncol=length(commoncell)); rownames(y) <- colnames(y) <- commoncell; # can set the missing entries to zero, as they will carry zero weights
         y[rownames(x),colnames(x)] <- x;
@@ -180,7 +180,7 @@ plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, method = '
         y
       }) # reform the matrix to make sure all cell type have the same dimensions
 
-      x <- abind(lapply(ctdm, function(x) {
+      x <- abind::abind(lapply(ctdm, function(x) {
         nc <- attr(x, 'cc')
         #wm <- (outer(nc,nc,FUN='pmin'))
         wm <- sqrt(outer(nc, nc, FUN = 'pmin'))
@@ -188,7 +188,7 @@ plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, method = '
       }), along = 3)
 
       # just the weights (for total sum of weights normalization)
-      y <- abind(lapply(ctdm, function(x) {
+      y <- abind::abind(lapply(ctdm, function(x) {
         nc <- attr(x, 'cc')
         sqrt(outer(nc, nc, FUN = 'pmin'))
       }), along = 3)
@@ -200,6 +200,9 @@ plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, method = '
     dfm <- Reduce(`+`, df)/length(df)
   }
   if (method == 'tSNE'){
+    if (!requireNamespace("Rtsne", quietly = TRUE))
+      stop("You have to install 'Rtsne' package to perform tSNE visualization")
+
     xde <- Rtsne::Rtsne(dfm, is_distance = TRUE, perplexity = perplexity, max_iter = max_iter)$Y
   } else if (method == 'MDS') {
     xde <- cmdscale(dfm, eig=TRUE, k=2)$points # k is the number of dim
@@ -214,6 +217,6 @@ plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, method = '
   #df$ncells <- nc[rownames(df)]
   gg <- ggplot(df, aes(x, y, color=fraction, shape=fraction)) + geom_point(size=5) + #, size=log10(ncells)
     theme_bw() + ggtitle(title) + theme(axis.title = element_blank(), axis.text = element_blank(), axis.ticks = element_blank())
-  if(!is.null(palette)) { gg <- gg + scale_color_manual(values=palette) }  
+  if(!is.null(palette)) { gg <- gg + scale_color_manual(values=palette) }
   return(gg)
 }

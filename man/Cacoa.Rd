@@ -1160,7 +1160,7 @@ Plot cell density
   legend.position = NULL,
   title = NULL,
   show.grid = NULL,
-  add.ponits = TRUE,
+  add.points = TRUE,
   condition.per.cell = NULL,
   color = "B",
   point.col = "#FCFDBFFF",
@@ -1173,11 +1173,11 @@ Plot cell density
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{add.ponits}}{default is TRUE, add points to cell density figure}
+\item{\code{add.points}}{default is TRUE, add points to cell density figure}
 
-\item{\code{condition.per.cell}}{Named group factor with cell names. Must have exactly two levels. condition.per.cell must be provided when add.ponits is TRUE}
+\item{\code{condition.per.cell}}{Named group factor with cell names. Must have exactly two levels. condition.per.cell must be provided when add.points is TRUE}
 
-\item{\code{contours}}{specify cell types for contour, mutiple cell types are also suported}
+\item{\code{contours}}{specify cell types for contour, multiple cell types are also supported}
 
 \item{\code{contour.color}}{color for contour line}
 

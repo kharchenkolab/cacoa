@@ -5,12 +5,11 @@
 ##' @param sample.groups @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 ##' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
 ##' @param target.level target/disease level for sample.group vector
-##' @param bins number of bins for density esitmation, default 400
-##' @param by.sample  if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell condition.per.cell need to be provided and density will simply esitmated by condition.per.cell.
-##' @add.ponits add.ponits  show cells in density plot
+##' @param bins number of bins for density estimation, default 400
+##' @param by.sample  if TRUE, density will estimated by sample and quantiles normalization will applied to individual sample. If FALSE, cell condition.per.cell need to be provided and density will simply esitmated by condition.per.cell.
 estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.level, target.level, condition.per.cell = NULL, by.sample = TRUE){
   if (!requireNamespace("preprocessCore", quietly = TRUE)) {
-    stop("You have to install preprocessCore package to do quantile normlization ")
+    stop("You have to install preprocessCore package from Bioconductor to do quantile normlization ")
   }
 
   if (!requireNamespace("MASS", quietly = TRUE)) {
@@ -129,7 +128,7 @@ plotDensity <- function(mat, bins, col = c('blue','white','red'), show.legend = 
       theme(axis.title.x = element_blank(), axis.text.x = element_blank(),
             axis.title.y = element_blank(), axis.text.y = element_blank()) +
       scale_y_continuous(expand = c(0,0)) + scale_x_continuous(expand = c(0,0)) +
-      scale_fill_viridis(option = 'B', alpha = 1, direction = 1, limits = c(mi, ma))
+      viridis::scale_fill_viridis(option = 'B', alpha = 1, direction = 1, limits = c(mi, ma))
       if(!is.null(show.grid)){ #  add grid manually
         p <- p + geom_vline(xintercept=seq(quantile(mat$x,0.1),quantile(mat$x,0.9), length.out=6), col='grey', alpha=0.1)
         p <- p + geom_hline(yintercept=seq(quantile(mat$y,0.1),quantile(mat$y,0.9),, length.out=6), col='grey', alpha=0.1)

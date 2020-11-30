@@ -4,24 +4,18 @@
 \alias{estimateGSEA}
 \title{Perform Gene Set Enrichment Analysis}
 \usage{
-estimateGSEA(
-  de.raw,
-  org.db = org.Hs.eg.db::org.Hs.eg.db,
-  verbose = T,
-  n.cores = 1,
-  ...
-)
+estimateGSEA(de.raw, org.db = NULL, verbose = TRUE, n.cores = 1, ...)
 }
 \arguments{
 \item{de.raw}{List with DE results}
 
-\item{org.db}{Organism Db (default = org.Hs.eg.db::org.Hs.eg.db)}
+\item{org.db}{Organism Db (default = \link[org.Hs.eg.db:org.Hs.eg.db]{org.Hs.eg.db} if installed)}
 
 \item{verbose}{Show progress (default=T)}
 
 \item{n.cores}{Number of cores (default=1)}
 
-\item{...}{Additional parameters for clusterProfiler::gseGO}
+\item{...}{Additional parameters for \link[clusterProfiler:gseGO]{clusterProfiler::gseGO}}
 }
 \description{
 Perform Gene Set Enrichment Analysis

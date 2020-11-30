@@ -17,7 +17,8 @@ NULL
 #' @return A list containing DE ENSEMBL gene IDs, and filtered DE genes
 #' @export
 prepareOntologyData <- function(cms, de.raw, cell.groups, org.db, n.top.genes = 1e2, p.adj.cutoff = 0.05, expr.cutoff = 0.05, universe = NULL, transposed = T,  verbose = T, n.cores = 1) {
-  if (!requireNamespace("clusterProfiler", quietly = TRUE)) stop("You have to install 'clusterProfiler' package to perform ontology analysis")
+  if (!requireNamespace("clusterProfiler", quietly = TRUE))
+    stop("You have to install 'clusterProfiler' package to perform ontology analysis")
 
   if(class(org.db) != "OrgDb") stop("'org.db' must be of class 'OrgDb'. Please input an organism database, e.g., org.Hs.eg.db for human data.")
 
@@ -87,6 +88,12 @@ prepareOntologyData <- function(cms, de.raw, cell.groups, org.db, n.top.genes = 
 enrichGOOpt <- function(gene, org.db, go.environment, keyType = "ENTREZID", ont = "BP", pvalueCutoff = 0.05,
                         pAdjustMethod = "BH", universe=NULL, qvalueCutoff = 0.2, minGSSize = 5,
                         maxGSSize = 500, readable = FALSE, pool = FALSE) {
+  if (!requireNamespace("clusterProfiler", quietly = TRUE))
+    stop("You have to install 'clusterProfiler' package to perform ontology analysis")
+
+  if (!requireNamespace("DOSE", quietly = TRUE))
+    stop("You have to install 'DOSE' package to perform ontology analysis")
+
   ont %<>% toupper %>% match.arg(c("BP", "CC", "MF"))
 
   res <- clusterProfiler:::enricher_internal(gene, pvalueCutoff = pvalueCutoff,
@@ -219,17 +226,21 @@ ontologyListToDf <- function(ont.list) {
 estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, go.environment = NULL, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, min.genes = 0, qvalueCutoff = 0.2, minGSSize = 10, maxGSSize = 5e2, ...) {
   dir.names <- c("down", "up", "all")
 
+  if (!requireNamespace("clusterProfiler", quietly = TRUE))
+    stop("You have to install 'clusterProfiler' package to perform ontology analysis")
+
   if(type=="DO") {
+    if (!requireNamespace("DOSE", quietly = TRUE))
+      stop("You have to install 'DOSE' package to perform ontology analysis")
+
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
-    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
-                                                                                          DOSE::enrichDO,
-                                                                                          pAdjustMethod=p.adjust.method,
-                                                                                          universe=de.gene.ids[[id]][["universe"]],
-                                                                                          readable=readable,
-                                                                                          qvalueCutoff = qvalueCutoff,
-                                                                                          minGSSize = minGSSize,
-                                                                                          maxGSSize = maxGSSize)),
-                                 n.cores=1, progress=verbose, ...) %>%
+    ont.list <- sccore:::plapply(names(de.gene.ids), function(id)
+      suppressWarnings(lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
+                              DOSE::enrichDO, pAdjustMethod=p.adjust.method,
+                              universe=de.gene.ids[[id]][["universe"]], readable=readable,
+                              qvalueCutoff = qvalueCutoff, minGSSize = minGSSize,
+                              maxGSSize = maxGSSize)),
+      n.cores=1, progress=verbose, ...) %>%
       lapply(lapply, function(x) if(length(x)) x@result else x) %>%
       setNames(names(de.gene.ids))
 
@@ -257,16 +268,13 @@ estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, go.environme
     }
 
     if(verbose) cat("Estimating enriched ontologies ... \n")
-    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
-                                                                                                      go.environment = go.environment,
-                                                                                                      universe=de.gene.ids[[id]][["universe"]],
-                                                                                                      readable=readable,
-                                                                                                      pAdjustMethod=p.adjust.method,
-                                                                                                      org.db=org.db,
-                                                                                                      qvalueCutoff = qvalueCutoff,
-                                                                                                      minGSSize = minGSSize,
-                                                                                                      maxGSSize = maxGSSize)),
-                                 progress = verbose, n.cores = 1, ...) %>%
+    ont.list <- sccore:::plapply(names(de.gene.ids), function(id)
+      suppressWarnings(estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
+                                          go.environment = go.environment, universe=de.gene.ids[[id]][["universe"]],
+                                          readable=readable, pAdjustMethod=p.adjust.method,
+                                          org.db=org.db, qvalueCutoff = qvalueCutoff,
+                                          minGSSize = minGSSize, maxGSSize = maxGSSize)),
+      progress = verbose, n.cores = 1, ...) %>%
       setNames(names(de.gene.ids))
 
     #Split into different fractions

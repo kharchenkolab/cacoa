@@ -13,26 +13,37 @@ Imports:
     candisc,
     cowplot,
     dplyr,
+    entropy,
     ggdendro,
     ggplot2,
+    ggpubr,
     ggrepel,
     igraph,
+    irlba,
+    jsonlite,
+    ks,
     lineup,
     magrittr,
+    MASS,
     Matrix,
     methods,
+    plyr,
     R6,
     RcppProgress,
     reshape2,
     sccore,
     tibble,
-    tidytree
+    tidyr,
+    tidytree,
+    viridis
 RoxygenNote: 7.1.1
 LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress
 NeedsCompilation: yes
 Suggests:
     clusterProfiler (>= 3.0.0),
+    DOSE,
     ggrastr (>= 0.1.7),
-    fabia
+    fabia,
+    Rtsne
 Remotes:
     hms-dbmi/sccore

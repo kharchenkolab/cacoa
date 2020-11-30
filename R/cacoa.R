@@ -317,7 +317,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     estimateExpressionShiftZScores=function(cell.groups=self$cell.groups, ref.level=self$ref.level, sample.groups=self$sample.groups,
                                             sample.per.cell=self$sample.per.cell, n.od.genes=1000, n.pcs=100, pca.maxit=1000, ignore.cache=F,
                                             name="expression.z.scores", verbose = self$verbose) {
-      .Deprecated("estimateExpressionShiftMagnitudes")
+      .Deprecated("estimateExpressionShiftMagnitudes") # TODO: remove dependency on irlba
       if (is.null(cell.groups))
         stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
@@ -1039,7 +1039,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param bins number of bins for density esitmation, default 400
     #' @param condition.per.cell Named group factor with cell names. Must have exactly two levels.
     #' @param by.sample  if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell condition.per.cell need to be provided and density will simply esitmated by condition.per.cell.
-    #' @add.ponits add.ponits  show cells in density plot
     estimateCellDensity = function(embedding=self$embedding, cell.groups=self$cell.groups, sample.groups=self$sample.groups, sample.per.cell = self$sample.per.cell, ref.level=self$ref.level, target.level=self$target.level, bins = 400, by.sample = TRUE){
 
       if(is.null(embedding)) stop("'embedding' must be provided either during the object initialization or during this function call")
@@ -1076,13 +1075,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Plot cell density
-    #' @param add.ponits default is TRUE, add points to cell density figure
-    #' @param condition.per.cell Named group factor with cell names. Must have exactly two levels. condition.per.cell must be provided when add.ponits is TRUE
-    #' @param contours specify cell types for contour, mutiple cell types are also suported
+    #' @param add.points default is TRUE, add points to cell density figure
+    #' @param condition.per.cell Named group factor with cell names. Must have exactly two levels. condition.per.cell must be provided when add.points is TRUE
+    #' @param contours specify cell types for contour, multiple cell types are also supported
     #' @param contour.color color for contour line
     #' @param contour.conf confidence interval of contour
     #' @return A ggplot2 object
-    plotCellDensity = function(col = c('blue','white','red'), show.legend = NULL, legend.position = NULL, title = NULL, show.grid = NULL, add.ponits = TRUE, condition.per.cell = NULL, color = 'B', point.col = '#FCFDBFFF', contours = NULL, contour.color = 'white', contour.conf = '10%') {
+    plotCellDensity = function(col = c('blue','white','red'), show.legend = NULL, legend.position = NULL, title = NULL, show.grid = NULL, add.points = TRUE, condition.per.cell = NULL, color = 'B', point.col = '#FCFDBFFF', contours = NULL, contour.color = 'white', contour.conf = '10%') {
       bins <- private$getResults('bins', 'estimateCellDensity()')
       ref <- self$ref.level
       target <- self$target.level
@@ -1104,7 +1103,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       p1 <- plotDensity(target.density, bins = bins, col = col, legend.position = legend.position, show.legend = show.legend, title =self$ref.level, show.grid = show.grid, mi = mi, ma = ma)
       p2 <- plotDensity(ref.density, bins = bins, col = col,legend.position = legend.position, show.legend = show.legend, title =self$target.level, show.grid = show.grid, mi = mi, ma = ma)
 
-      if (add.ponits){
+      if (add.points){
         if(is.null(condition.per.cell)) stop("'condition.per.cell' must be provided when add points")
         emb <- self$embedding %>% as.data.frame()
         colnames(emb) = c('x','y')

@@ -27,7 +27,7 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", 
     theme(legend.background=element_rect(fill=alpha("white", 0.4))) +
     theme_legend_position(legend.position) +
     guides(color=guide_legend(title="Cell type"))
-  
+
   if(!is.null(palette)) gg <- gg+ scale_color_manual(values=palette)
 
   return(gg)
@@ -352,12 +352,12 @@ plotProportions <- function(legend.position = "right", cell.groups, sample.per.c
     theme_legend_position(legend.position) +
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
-    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) + 
+    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
     scale_y_continuous( expand=c(0, max(df.melt$value) * 0.1), limits=c(0, (max(df.melt$value) + max(df.melt$value) * 0.05 )))  #expand=c(0, 0),
-  
-  if(show.significance) gg <- gg + stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
-  
-  
+
+  if(show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+
+
   if(!is.null(palette)) gg <- gg+ scale_color_manual(values=palette)
   gg
 }
@@ -409,11 +409,11 @@ plotProportionsSubset <- function(legend.position = "right",
           legend.title=element_blank()) +
     geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
     scale_y_continuous(limits=c(0, (max(df.melt$value) + 5))) +
-    stat_compare_means(aes(group = group), label = "p.signif") 
-  
-  if(show.significance) gg <- gg + stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
-  
-  if(!is.null(palette)) gg <- gg+scale_color_manual(values=palette)
+    ggpubr::stat_compare_means(aes(group = group), label = "p.signif")
+
+  if(show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+
+  if(!is.null(palette)) gg <- gg + scale_color_manual(values=palette)
   return(gg)
 }
 
@@ -543,9 +543,9 @@ plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch =
       theme_bw() +
       theme(axis.text.x=element_text(angle = 90, hjust=1), axis.text.y=element_text(angle=90, hjust=0.5), legend.position = 'none') +
       labs(x="", y="normalized expression distance") +
-      #ylim(c(1 - m, 1 + m)) + 
+      #ylim(c(1 - m, 1 + m)) +
       geom_hline(yintercept=1, linetype="dashed", color = "black")
-    if(!is.null(palette)) { gg <- gg + scale_fill_manual(values=palette) }  
+    if(!is.null(palette)) { gg <- gg + scale_fill_manual(values=palette) }
   } else {
     if (length(setdiff(names(cell.groups), names(sample.per.cell)))>0) warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
 
@@ -565,11 +565,11 @@ plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch =
       ylab("Median normalized distance") +
       #ylim(c(1 - m,1 + m)) +
       geom_hline(yintercept=1, linetype="dashed", color = "black")
-      
-    if(!is.null(palette)) { gg <- gg + scale_color_manual(values=palette) }  
+
+    if(!is.null(palette)) { gg <- gg + scale_color_manual(values=palette) }
   }
- 
- 
+
+
   return(gg)
 }
 

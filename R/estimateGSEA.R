@@ -3,12 +3,22 @@ NULL
 
 ##' @title Perform Gene Set Enrichment Analysis
 ##' @param de.raw List with DE results
-##' @param org.db Organism Db (default = org.Hs.eg.db::org.Hs.eg.db)
+##' @param org.db Organism Db (default = \link[org.Hs.eg.db:org.Hs.eg.db]{org.Hs.eg.db} if installed)
 ##' @param verbose Show progress (default=T)
 ##' @param n.cores Number of cores (default=1)
-##' @param ... Additional parameters for clusterProfiler::gseGO
-estimateGSEA <- function(de.raw, org.db = org.Hs.eg.db::org.Hs.eg.db, verbose = T, n.cores = 1, ...) {
-  res <- sccore:::plapply(de.raw, function(de) {
+##' @param ... Additional parameters for \link[clusterProfiler:gseGO]{clusterProfiler::gseGO}
+estimateGSEA <- function(de.raw, org.db = NULL, verbose = TRUE, n.cores = 1, ...) {
+  if (is.null(org.db)) {
+    if (!requireNamespace("org.Hs.eg.db", quietly=TRUE))
+      stop("org.db must be provided")
+
+    org.db <- org.Hs.eg.db::org.Hs.eg.db
+  }
+
+  if (!requireNamespace("clusterProfiler", quietly=TRUE))
+    stop("clusterProfiler must be installed to use this function")
+
+  res <- sccore::plapply(de.raw, function(de) {
     gene.ids <- suppressWarnings(suppressMessages(clusterProfiler::bitr(rownames(de), fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.db)))
     gene.ids <- de$log2FoldChange[match(gene.ids$SYMBOL, rownames(de))] %>%
       setNames(gene.ids$ENTREZID) %>%

@@ -25,11 +25,11 @@ estimateClusterFreeZScores <- function(graph, count.matrix.transposed, is.ref, g
   return(z.mat)
 }
 
+#' Estimate Gene Programmes
 #' @param n.programmes maximal number of gene programmes to find (parameter `p` for fabia).
 #' @param n.sampled.cells number of sub-sampled cells for estimating the gene programmes. If 0, all cells are used.
 #' it is interpreted as a vector of cell
-#' @inheritParams fabia::fabia
-#' @inheritDotParams -p -X -cyc -alpha -random
+#' @inheritDotParams fabia::fabia -p -X -cyc -alpha -random
 estimateGeneProgrammes <- function(z.scores, n.programmes, n.sampled.cells=15000, min.z=0.5, max.z=3,
                                    cyc=1500, alpha=0.2, random=-1, ...) {
   if (!requireNamespace("fabia", quietly=TRUE))

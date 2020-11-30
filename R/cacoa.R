@@ -3,9 +3,10 @@
 #' @import methods
 #' @export Cacoa
 #' @exportClass Cacoa
-#' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
-#' @param verbose Show progress (default: stored value)
-#' @param name Field name where the test results are stored
+#' @param sample.groups a two-level factor on the sample names describing the conditions being compared (default: stored vector)
+#' @param n.cores number of cores for parallelisation
+#' @param verbose show progress (default: stored value)
+#' @param name field name where the test results are stored
 Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
   public = list(
     #' @field n.cores number of cores
@@ -1202,9 +1203,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     ### Cluster-free differential expression
 
-    #' Estimate Cluster-free Z-scores
-    #' @param n.od.genes Number of overdispersed genes for estimating Z-scores
-    #' @param ... see \link{estimateClusterFreeZScores} parameters
+    #' @description Estimate differencial expression Z-scores between two conditions per individual cell
+    #' @param n.od.genes number of overdispersed genes for estimating Z-scores
+    #' @param ... parameters forwarded to \link{estimateClusterFreeZScores}
+    #' @return Sparse matrix of z-scores with genes as columns and cells as rows.
+    #' Cells that have only one condition in their expression neighborhood have NA Z-scores for all genes.
+    #' Results are also stored in the `cluster.free.z` field.
     estimateClusterFreeZScores = function(n.od.genes=NULL, verbose=self$verbose, ...) {
       cm <- extractJointCountMatrix(self$data.object)
       genes <- extractOdGenes(self$data.object, n.od.genes)
@@ -1217,9 +1221,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[["cluster.free.z"]]))
     },
 
-    #' Estimate Cluster-free Expression Shift
-    #' @param n.od.genes Number of overdispersed genes for estimating Z-scores
-    #' @param ... see also \link{Cacoa$plotClusterFreeExpressionShifts}
+    #' @description Estimate Cluster-free Expression Shift
+    #' @param n.od.genes number of overdispersed genes for estimating expression shifts
+    #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
+    #' Results are also stored in the `cluster.free.expr.shifts` field.
     estimateClusterFreeExpressionShifts = function(n.od.genes=NULL, verbose=self$verbose) {
       genes <- extractOdGenes(self$data.object, n.od.genes)
       cm <- extractJointCountMatrix(self$data.object) %>% .[, genes] %>% Matrix::t()
@@ -1237,12 +1242,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(shifts))
     },
 
-    #' Smooth Cluster-free Z-scores
     #' @description Performs graph smoothing of the cluster-free DE Z-scores
     #' @param smoothing `beta` parameter of the \link[=sccore:heatFilter]{heatFilter}. Default: 20.
     #' @param filter graph filter function. Default: \link[=sccore:heatFilter]{heatFilter}.
-    #' @param ... parameters forwarded to the \link[=sccore:smoothSignalOnGraph]{smoothSignalOnGraph} function.
-    #' @return sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z.smoothed` field.
+    #' @param ... parameters forwarded to \link[=sccore:smoothSignalOnGraph]{smoothSignalOnGraph}
+    #' @return Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z.smoothed` field.
     smoothClusterFreeZScores = function(smoothing=20, filter=NULL, n.cores=self$n.cores, verbose=self$verbose, ...) {
       z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
 
@@ -1260,9 +1264,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(z.smoothed))
     },
 
-    #' Estimate Gene Programmes
+    #' @description Estimate Gene Programmes based on cluster-free Z-scores on a subsample of
+    #' cells using \link[=fabia:fabia]{fabia}.
     #' @param n.programmes maximal number of gene programmes to find (parameter `p` for fabia). Default: 15.
     #' @param ... keyword arguments forwarded to \link{estimateGeneProgrammes}
+    #' @return a list include \itemize{
+    #'   \item{fabia: \link[=fabia:Factorization]{fabia::Factorization} object, result of the
+    #'       \link[=fabia:fabia]{fabia::fabia} call
+    #'   \item{sample.ids: ids of the subsampled cells used for fabia estimates}
+    #'   \item{scores.exact: vector of fabia estimates of gene programme scores per cell.
+    #'       Estimated only for the subsampled cells.}
+    #'   \item{scores.approx: vector of approximate gene programme scores, estimated for all cells in the dataset}
+    #'   \item{loadings: matrix with fabia gene loadings per programme}
+    #'   \item{gene.scores: list of vectors of gene scores per programme. Contains only genes,
+    #'       selected for the programme usin fabia biclustering.}
+    #'   \item{bi.clusts} fabia biclustering information, result of the \link[=fabia:extractBic]{fabia::extractBic} call
+    #' }
     estimateGeneProgrammes = function(smoothed=TRUE, n.programmes=15, name="gene.programmes", ...) {
       if (!requireNamespace("fabia", quietly=TRUE))
         stop("fabia package must be installed to run this function")
@@ -1282,8 +1299,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       bi.clusts <- fabia::extractBic(fr)
       mask <- bi.clusts$bic[,"bixv"] %>% {sapply(., length) > 0}
-      res$scores.approx <- t(t(fr@L[,mask]) %*% (Matrix::t((z.scores[,rownames(fr@L)]) - fr@center) / fr@scaleData))
       res$scores.exact <- t(fr@Z[mask,])
+      res$scores.approx <- t(t(fr@L[,mask]) %*% (Matrix::t((z.scores[,rownames(fr@L)]) - fr@center) / fr@scaleData))
       res$loadings <- fr@L[,mask]
       res$gene.scores <- apply(bi.clusts$bic, 1, `[[`, "bixv")[mask]
       res$bi.clusts <- bi.clusts
@@ -1321,6 +1338,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
       }
 
+      scores %<>% .[1:min(length(.), max.genes)]
       ggs <- scores %>% names() %>%
         lapply(function(g) self$plotEmbedding(colors=z.scores[,g], plot.na=plot.na, size=size, alpha=alpha, color.range=color.range,
                                               title=paste0(g, ": ", signif(scores[g], 3)), ...))

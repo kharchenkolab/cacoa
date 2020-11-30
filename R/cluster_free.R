@@ -35,8 +35,8 @@ estimateGeneProgrammes <- function(z.scores, n.programmes, n.sampled.cells=15000
   if (!requireNamespace("fabia", quietly=TRUE))
     stop("fabia package must be installed to run this function")
 
+  z.scores@x[is.na(z.scores@x)] <- 0
   if (min.z > 1e-10) {
-    z.scores@x[is.na(z.scores@x)] <- 0
     z.scores.bin <- z.scores
     z.scores.bin@x %<>% {as.numeric(abs(.) >= min.z)}
     genes.filt <- which(colMeans(z.scores.bin) > 0.01)
@@ -53,7 +53,7 @@ estimateGeneProgrammes <- function(z.scores, n.programmes, n.sampled.cells=15000
   fabia.res <- z.scores %>% t() %>%
     fabia::fabia(p=n.programmes, alpha=alpha, cyc=cyc, random=random, ...)
 
-  return(fabia.res)
+  return(list(fabia=fabia.res, sample.ids=sample.ids))
 }
 
 ### Selection

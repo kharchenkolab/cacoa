@@ -48,7 +48,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     cell.groups.palette = NULL,
 
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, sample.groups.palette=NULL, cell.groups.palette=NULL,
-                        embedding=getEmbedding(data.object), n.cores=1, verbose=TRUE) {
+                        embedding=extractEmbedding(data.object), n.cores=1, verbose=TRUE) {
       self$n.cores <- n.cores
       self$verbose <- verbose
       self$ref.level <- ref.level
@@ -1244,16 +1244,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param ... parameters forwarded to the \link[=sccore:smoothSignalOnGraph]{smoothSignalOnGraph} function.
     #' @return sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z.smoothed` field.
     smoothClusterFreeZScores = function(smoothing=20, filter=NULL, n.cores=self$n.cores, verbose=self$verbose, ...) {
-      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeExpressionShifts")
+      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
 
       if (is.null(filter)) {
-        filter <- function(...) sccore::heatFilter(..., beta=smoothing)
+        filter <- function(...) heatFilter(..., beta=smoothing)
       }
 
       z.scores@x[is.na(z.scores@x)] <- 0
       z.smoothed <- z.scores %>%
-        sccore::smoothSignalOnGraph(extractCellGraph(cao$data.object), filter, n.cores=n.cores,
-                                    progress=verbose, ...)
+        smoothSignalOnGraph(extractCellGraph(cao$data.object), filter, n.cores=n.cores,
+                            progress=verbose, ...)
 
       z.smoothed[is.na(z.scores)] <- NA
       self$test.results["cluster.free.z.smoothed"] <- z.smoothed
@@ -1273,24 +1273,62 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                "Please run 'smoothClusterFreeZScores' first or set `smoothed=FALSE`.")
         z.scores <- self$test.results$cluster.free.z.smoothed
       } else {
-        z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeExpressionShifts")
+        z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
         warning("`smoothed=FALSE` is not recommended, as the raw signal is often too noisy\n")
       }
 
-      fr <- estimateGeneProgrammes(z.scores, n.programmes, ...)
+      res <- estimateGeneProgrammes(z.scores, n.programmes, ...)
+      fr <- res$fabia
 
       bi.clusts <- fabia::extractBic(fr)
       mask <- bi.clusts$bic[,"bixv"] %>% {sapply(., length) > 0}
-      self$test.results[[name]] <- list(
-        scores.approx=t(t(fr@L[,mask]) %*% (Matrix::t((z.scores[,rownames(fr@L)]) - fr@center) / fr@scaleData)),
-        scores.exact=t(fr@Z[mask,]),
-        loadings=fr@L[,mask],
-        gene.scores=apply(bi.clusts$bic, 1, `[[`, "bixv")[mask],
-        fabia=fr,
-        biclusts=bi.clusts
-      )
+      res$scores.approx <- t(t(fr@L[,mask]) %*% (Matrix::t((z.scores[,rownames(fr@L)]) - fr@center) / fr@scaleData))
+      res$scores.exact <- t(fr@Z[mask,])
+      res$loadings <- fr@L[,mask]
+      res$gene.scores <- apply(bi.clusts$bic, 1, `[[`, "bixv")[mask]
+      res$bi.clusts <- bi.clusts
 
-      return(invisible(self$test.results$gene.programmes))
+      self$test.results[[name]] <- res
+
+      return(invisible(self$test.results[[name]]))
+    },
+
+    plotGeneProgrammeScores = function(name="gene.programmes", approximate=TRUE, build.panel=TRUE, nrow=NULL,
+                                       gradient.range.quantile=0.975, plot.na=approximate, legend.title="Score", ...) {
+      fr <- private$getResults(name, "estimateGeneProgrammes")
+      scores <- if (approximate) fr$scores.approx else fr$scores.exact
+
+      ggs <- lapply(1:ncol(scores), function(i) {
+        self$plotEmbedding(colors=scores[,i], gradient.range.quantile=gradient.range.quantile, plot.na=plot.na, legend.title=legend.title, ...)
+      })
+
+      if (build.panel)
+        return(cowplot::plot_grid(plotlist=ggs, nrow=nrow))
+
+      return(ggs)
+    },
+
+    plotGeneProgrammeGenes = function(programme.id, name="gene.programmes", max.genes=9, build.panel=TRUE, nrow=NULL,
+                                      color.range=c(-3, 3), smoothed=FALSE, size=0.1, alpha=0.1, plot.na=-1, ...) {
+      fr <- private$getResults(name, "estimateGeneProgrammes")
+      scores <- fr$gene.scores[[programme.id]]
+      if (is.null(scores))
+        stop("Can't find programme", programme.id)
+
+      if (smoothed) {
+        z.scores <- private$getResults("cluster.free.z.smoothed", "smoothClusterFreeZScores")
+      } else {
+        z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
+      }
+
+      ggs <- scores %>% names() %>%
+        lapply(function(g) self$plotEmbedding(colors=z.scores[,g], plot.na=plot.na, size=size, alpha=alpha, color.range=color.range,
+                                              title=paste0(g, ": ", signif(scores[g], 3)), ...))
+
+      if (build.panel)
+        return(cowplot::plot_grid(plotlist=ggs, nrow=nrow))
+
+      return(ggs)
     },
 
     #' @description Plot cluster-free expression shift z-scores

@@ -43,7 +43,12 @@ extractSampleGroups.Conos <- function(con, ref.level = ref.level, target.level =
   }
 }
 
-getEmbedding <- function(obj) UseMethod("getEmbedding", obj)
-getEmbedding.Conos <- function(con) {
+extractEmbedding <- function(obj) UseMethod("extractEmbedding", obj)
+extractEmbedding.Conos <- function(con) {
   return(con$embedding)
+}
+
+extractGeneExpression <- function(obj, gene) UseMethod("extractGeneExpression", obj)
+extractGeneExpression.Conos <- function(obj, gene) {
+  return(conos:::getGeneExpression(obj, gene))
 }

@@ -51,21 +51,6 @@ plotDEGenes <- function(de.raw, cell.groups, legend.position="none", p.adjust.cu
     geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 }
 
-#' @title Plot filtered DE genes
-#' @description Plot number of DE genes as a function of number of cells
-#' @param de.filter List of filtered differentially expressed genes, results from prepareOntologyData (default: stored list)
-#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-#' @param legend.position Position of legend in plot. See ggplot2::theme (default="bottom")
-#' @param label Show labels on plot (default=T)
-#' @export
-plotFilteredDEGenes <- function(de.filter, cell.groups, legend.position="bottom", label = T) {
-  cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
-
-  sapply(de.filter, length) %>%
-    plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Highly-expressed DE genes", legend.position=legend.position, label=label) +
-    geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
-}
-
 #' @title Plot ontology distribution
 #' @description Bar plot of ontologies per cell type
 #' @param type Ontology, must be either "GO" or "DO" (default=NULL)

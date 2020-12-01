@@ -373,7 +373,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param pvalue.cutoff P value cutoff (default=0.05)
     #' @param p.adjust whether the cutoff should be based on the adjusted P value (default: TRUE)
     #' @return A ggplot2 object
-    plotNumberOfDEGenes=function(name='de', cell.groups = self$cell.groups, legend.position = "none", label = T, p.adjust=TRUE, pvalue.cutoff=0.05, palette=self$cell.groups.palette) {
+    plotNumberOfDEGenes=function(name='de', cell.groups=self$cell.groups, legend.position="none", label=TRUE, p.adjust=TRUE, pvalue.cutoff=0.05, palette=self$cell.groups.palette) {
       de.raw <- private$getResults(name, 'estimatePerCellTypeDE()')
 
       if(p.adjust) {
@@ -381,9 +381,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       } else {
         x <- lapply(de.raw,function(x) sum(na.omit(x$res$pvalue<=pvalue.cutoff))) %>% unlist %>% sort
       }
-      p <- ggplot(data.frame(cell=names(x),nde=x),aes(x=reorder(cell,nde),y=nde,fill=cell)) + geom_bar(stat="identity")+ theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size=12),axis.title.x = element_blank()) +ylab("number of DE genes") + guides(fill=F)
+      p <- ggplot(data.frame(cell=names(x), nde=x), aes(x=reorder(cell, nde), y=nde, fill=cell)) +
+        geom_bar(stat="identity") +
+        theme_bw() +
+        theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12), axis.title.x=element_blank()) +
+        ylab("number of DE genes") + guides(fill=FALSE)
 
-      if(!is.null(palette)) p <- p+ scale_fill_manual(values=palette)
+      if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
 
       return(p)
     },
@@ -421,12 +425,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
     #' @param label Show labels on plot (default=T)
     #' @return A ggplot2 object
-    plotFilteredDEGenes=function(de.filter = self$test.results$ontology$de.filter, cell.groups = self$cell.groups, legend.position = "none", label = T) {
+    plotFilteredDEGenes=function(de.filter=self$test.results$ontology$de.filter, cell.groups = self$cell.groups, legend.position = "none", label = T) {
       if(is.null(de.filter)) stop("Please run 'estimatePerCellTypeDE' first.")
 
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
-      plotFilteredDEGenes(de.filter = de.filter, cell.groups = cell.groups, legend.position = legend.position, label = label)
+      cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
+
+      gg <- sapply(de.filter, length) %>%
+        plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Highly-expressed DE genes", legend.position=legend.position, label=label) +
+        geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
+
+      return(gg)
     },
 
     ### Onthology analysis
@@ -1102,10 +1112,29 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
     #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored $cell.groups vector)
     #' @param weighted.distance whether to weigh the expression distance by the sizes of cell types (default: TRUE), or show distances for each individual cell type
-    #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (* < 0.05; ** < 0.01; *** < 0.001)
+    #' @param show.significance whether to show statistical significance between sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
+    #' @param alpha dot transparency
     #' @return A ggplot2 object
-    plotExpressionDistance = function(name='expression.shifts', notch = TRUE, cell.groups = self$cell.groups, sample.groups = self$sample.groups, weighted.distance = TRUE,  min.cells = 10, palette=self$sample.groups.palette, show.significance = FALSE) {
-      plotExpressionDistance(private$getResults(name, 'estimateExpressionShiftMagnitudes()'), notch = notch, cell.groups = cell.groups, sample.groups = sample.groups, weighted.distance = weighted.distance,  min.cells = min.cells, palette=palette, show.significance=show.significance)
+    plotExpressionDistance = function(name='expression.shifts', notch=TRUE, sample.groups=self$sample.groups, weighted.distance=TRUE,
+                                      min.cells=10, palette=self$sample.groups.palette, show.significance=FALSE, alpha=0.2) {
+      cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
+      ctdml <- cluster.shifts$ctdml
+      valid.comparisons <- cluster.shifts$valid.comparisons
+      if (!weighted.distance) {
+        gg <- plotExpressionDistanceIndividual(ctdml, valid.comparisons, sample.groups=sample.groups, notch=notch, alpha=alpha, min.cells=min.cells, show.significance=show.significance)
+      } else {
+        gg <- plotExpressionDistanceJoint(ctdml, valid.comparisons, sample.groups=sample.groups, notch=notch, alpha=alpha, show.significance=show.significance)
+      }
+
+      if(!is.null(palette)) {
+        gg <- gg + scale_fill_manual(values=palette)
+      }
+
+      if(show.significance) {
+        gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif", label.x.npc="centre")  # willcox test
+      }
+
+      return(gg)
     },
 
     #' @title Plot sample-sample expression distance as a 2D embedding

@@ -567,17 +567,16 @@ Estimate ontology terms based on DEs
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntology(
   type = "GO",
   org.db,
-  de.gene.ids = self$test.results$ontology$de.gene.ids,
+  de.gene.ids = NULL,
   go.environment = self$test.results$GO$go.environment,
   p.adj = 0.05,
   p.adjust.method = "BH",
-  readable = T,
-  verbose = T,
+  readable = TRUE,
+  verbose = TRUE,
   min.genes = 0,
-  qvalueCutoff = 0.2,
-  minGSSize = 5,
-  maxGSSize = 500,
-  ...
+  qvalue.cutoff = 0.2,
+  min.gs.size = 5,
+  max.gs.size = 500
 )}\if{html}{\out{</div>}}
 }
 
@@ -602,15 +601,11 @@ Estimate ontology terms based on DEs
 
 \item{\code{min.genes}}{Minimum number of input genes overlapping with ontologies (default=0)}
 
-\item{\code{qvalueCutoff}}{Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
+\item{\code{qvalue.cutoff}}{Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
 
-\item{\code{minGSSize}}{Minimal geneset size, please see clusterProfiler package for more information (default=5)}
+\item{\code{min.gs.size}}{Minimal geneset size, please see clusterProfiler package for more information (default=5)}
 
-\item{\code{maxGSSize}}{Minimal geneset size, please see clusterProfiler package for more information (default=5e2)}
-
-\item{\code{...}}{Additional parameters for sccore:::plapply function}
-
-\item{\code{universe}}{All measured genes (default: stored vector)}
+\item{\code{max.gs.size}}{Minimal geneset size, please see clusterProfiler package for more information (default=5e2)}
 }
 \if{html}{\out{</div>}}
 }

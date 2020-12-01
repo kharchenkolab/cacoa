@@ -206,121 +206,101 @@ ontologyListToDf <- function(ont.list) {
   })
 }
 
-#' @title Estimate ontology
-#' @description  Calculate ontologies based on DEs
-#' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information.
-#' @param ont.data List containing DE gene IDs, and filtered DE genes
-#' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
-#' @param p.adj Adjusted P cutoff (default=0.05)
-#' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
-#' @param readable Mapping gene ID to gene name (default=T)
-#' @param n.cores Number of cores used (default: stored vector)
-#' @param verbose Print progress (default=T)
-#' @param min.genes Minimum number of input genes overlapping with ontologies (default=0)
-#' @param qvalueCutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
-#' @param minGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5)
-#' @param maxGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
-#' @param ... Additional parameters for sccore:::plapply function
-#' @return A list containing a list of ontologies per type of ontology, and a data frame with merged results
-#' @export
-estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, go.environment = NULL, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, min.genes = 0, qvalueCutoff = 0.2, minGSSize = 10, maxGSSize = 5e2, ...) {
+### Estimate Ontology
+
+estimateDO <- function(de.gene.ids, p.adj=0.05, verbose=TRUE, ...) {
   dir.names <- c("down", "up", "all")
+  if (!requireNamespace("DOSE", quietly = TRUE))
+    stop("You have to install 'DOSE' package to perform ontology analysis")
 
-  if (!requireNamespace("clusterProfiler", quietly = TRUE))
-    stop("You have to install 'clusterProfiler' package to perform ontology analysis")
+  # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
+  ont.list <- sccore:::plapply(names(de.gene.ids), function(id)
+    suppressWarnings(lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
+                            DOSE::enrichDO, universe=de.gene.ids[[id]][["universe"]],
+                            ...)),
+    n.cores=1, progress=verbose) %>%
+    lapply(lapply, function(x) if(length(x)) x@result else x) %>%
+    setNames(names(de.gene.ids))
 
-  if(type=="DO") {
-    if (!requireNamespace("DOSE", quietly = TRUE))
-      stop("You have to install 'DOSE' package to perform ontology analysis")
+  # Split into different fractions
+  ont.list <- dir.names %>%
+    lapply(function(x) lapply(ont.list, `[[`, x)) %>%
+    setNames(dir.names) %>%
+    lapply(plyr::compact) #Remove empty entries
 
-    # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
-    ont.list <- sccore:::plapply(names(de.gene.ids), function(id)
-      suppressWarnings(lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
-                              DOSE::enrichDO, pAdjustMethod=p.adjust.method,
-                              universe=de.gene.ids[[id]][["universe"]], readable=readable,
-                              qvalueCutoff = qvalueCutoff, minGSSize = minGSSize,
-                              maxGSSize = maxGSSize)),
-      n.cores=1, progress=verbose, ...) %>%
-      lapply(lapply, function(x) if(length(x)) x@result else x) %>%
-      setNames(names(de.gene.ids))
+  df <- ont.list %>% filterOntologies(p.adj = p.adj) %>% ontologyListToDf()
 
-    # Split into different fractions
-    ont.list <- dir.names %>%
-      lapply(function(x) lapply(ont.list, `[[`, x)) %>%
-      setNames(dir.names) %>%
-      lapply(plyr::compact) #Remove empty entries
+  return(list(df=df))
+}
 
-    ont.list %<>% filterOntologies(p.adj = p.adj)
+extractGOEnvironment <- function(org.db, verbose) {
+  if(class(org.db) != "OrgDb")
+    stop("'org.db' must be of class 'OrgDb'. Please input an organism database.")
 
-    res <- list(df=ont.list %>% ontologyListToDf())
-  } else if(type=="GO") {
-    if(is.null(go.environment)) {
-      if(class(org.db) != "OrgDb") stop("'org.db' must be of class 'OrgDb'. Please input an organism database.")
+  if(verbose) cat("Extracting environment data ... \n")
+  go.environment <- c("BP", "CC", "MF") %>%
+    sccore:::sn() %>%
+    sccore:::plapply(function(n) clusterProfiler:::get_GO_data(org.db, n, "ENTREZID") %>%
+                       as.list() %>%
+                       as.environment(), n.cores=1, progress=verbose)
 
-      if(verbose) cat("Extracting environment data ... \n")
-      go.environment <- c("BP", "CC", "MF") %>%
-        sccore:::sn() %>%
-        sccore:::plapply(function(n) clusterProfiler:::get_GO_data(org.db, n, "ENTREZID") %>%
-                           as.list() %>%
-                           as.environment(), n.cores=1, progress=verbose)
-    } else {
-      message("Using stored GO environment. To extract again, rerun with 'go.environment = NULL'.")
-    }
+  return(go.environment)
+}
 
-    if(verbose) cat("Estimating enriched ontologies ... \n")
-    ont.list <- sccore:::plapply(names(de.gene.ids), function(id)
-      suppressWarnings(estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
-                                          go.environment = go.environment, universe=de.gene.ids[[id]][["universe"]],
-                                          readable=readable, pAdjustMethod=p.adjust.method,
-                                          org.db=org.db, qvalueCutoff = qvalueCutoff,
-                                          minGSSize = minGSSize, maxGSSize = maxGSSize)),
-      progress = verbose, n.cores = 1, ...) %>%
-      setNames(names(de.gene.ids))
-
-    #Split into different fractions
-    ont.list <- dir.names %>%
-      lapply(function(x) lapply(ont.list, lapply, `[[`, x)) %>%
-      setNames(dir.names)
-
-    #Remove empty entries
-    ont.list %<>% lapply(lapply, plyr::compact) %>%
-      lapply(lapply, function(x) if(length(x)) x) %>%
-      lapply(plyr::compact)
-
-    ont.list %<>%
-      names() %>%
-      lapply(function(dir) {
-        lapply(ont.list[[dir]] %>% names(), function(group) {
-          lapply(ont.list[[dir]][[group]] %>% names, function(go) {
-            dplyr::mutate(ont.list[[dir]][[group]][[go]], Type = go)
-          }) %>% setNames(ont.list[[dir]][[group]] %>% names()) %>%
-            dplyr::bind_rows()
-        }) %>% setNames(ont.list[[dir]] %>% names())
-      }) %>% setNames(dir.names)
-
-    ont.list %<>% filterOntologies(p.adj = p.adj)
-
-    res <- ont.list %>% ontologyListToDf()
-
-    # Filter by min. number of genes per pathway
-    if(min.genes > 0) {
-      res %<>% lapply(function(g) {
-        if(class(g) != "character") {
-          idx <- g$GeneRatio %>%
-            strsplit("/", fixed=T) %>%
-            sapply(`[[`, 1)
-
-          return(g[idx > min.genes,])
-        }
-        g
-      })
-    }
-
-    res <- list(df=res,
-                go.environment=go.environment)
+estimateGO <- function(de.gene.ids, org.db=NULL, go.environment = NULL, p.adj=0.05, verbose=T, min.genes = 0, ...) {
+  dir.names <- c("down", "up", "all")
+  if(is.null(go.environment)) {
+    go.environment <- extractGOEnvironment(org.db, verbose=verbose)
   } else {
-    stop("'type' must be either 'GO' or 'DO'.")
+    message("Using stored GO environment. To extract again, rerun with 'go.environment = NULL'.")
   }
 
-  return(res)
+  if(verbose) cat("Estimating enriched ontologies ... \n")
+  ont.list <- sccore:::plapply(names(de.gene.ids), function(id)
+    suppressWarnings(estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
+                                        go.environment = go.environment, universe=de.gene.ids[[id]][["universe"]],
+                                        org.db=org.db, ...)),
+    progress = verbose, n.cores = 1) %>%
+    setNames(names(de.gene.ids))
+
+  #Split into different fractions
+  ont.list <- dir.names %>%
+    lapply(function(x) lapply(ont.list, lapply, `[[`, x)) %>%
+    setNames(dir.names)
+
+  #Remove empty entries
+  ont.list %<>% lapply(lapply, plyr::compact) %>%
+    lapply(lapply, function(x) if(length(x)) x) %>%
+    lapply(plyr::compact)
+
+  ont.list %<>%
+    names() %>%
+    lapply(function(dir) {
+      lapply(ont.list[[dir]] %>% names(), function(group) {
+        lapply(ont.list[[dir]][[group]] %>% names, function(go) {
+          dplyr::mutate(ont.list[[dir]][[group]][[go]], Type = go)
+        }) %>% setNames(ont.list[[dir]][[group]] %>% names()) %>%
+          dplyr::bind_rows()
+      }) %>% setNames(ont.list[[dir]] %>% names())
+    }) %>% setNames(dir.names)
+
+  ont.list %<>% filterOntologies(p.adj = p.adj)
+
+  res <- ont.list %>% ontologyListToDf()
+
+  # Filter by min. number of genes per pathway
+  if(min.genes > 0) {
+    res %<>% lapply(function(g) {
+      if(class(g) != "character") {
+        idx <- g$GeneRatio %>%
+          strsplit("/", fixed=T) %>%
+          sapply(`[[`, 1)
+
+        return(g[idx > min.genes,])
+      }
+      g
+    })
+  }
+
+  return(list(df=res, go.environment=go.environment))
 }

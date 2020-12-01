@@ -464,27 +464,41 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       sccore::embeddingPlot(embedding, plot.theme=plot.theme, show.legend=show.legend, ...)
     },
 
-    #' @description  Estimate ontology terms based on DEs
+    #' @description Estimate ontology terms based on DEs
     #' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")
     #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
     #' @param de.gene.ids List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOntologyData)
-    #' @param universe All measured genes (default: stored vector)
     #' @param go.environment Extracted GO environment. If set to NULL, the environment will be re-extracted (default: stored environment)
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
     #' @param readable Mapping gene ID to gene name (default=T)
     #' @param min.genes Minimum number of input genes overlapping with ontologies (default=0)
-    #' @param qvalueCutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
-    #' @param minGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5)
-    #' @param maxGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
-    #' @param ... Additional parameters for sccore:::plapply function
+    #' @param qvalue.cutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
+    #' @param min.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5)
+    #' @param max.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
-    estimateOntology=function(type = "GO", org.db, de.gene.ids = self$test.results$ontology$de.gene.ids, go.environment = self$test.results$GO$go.environment, p.adj = 0.05, p.adjust.method = "BH", readable = T, verbose = T, min.genes = 0, qvalueCutoff = 0.2, minGSSize = 5, maxGSSize = 5e2, ...) {
-      if(!is.null(type) & !type %in% c("GO", "DO")) stop("'type' must be 'GO' or 'DO'.")
+    estimateOntology=function(type="GO", org.db, de.gene.ids=NULL, go.environment=self$test.results$GO$go.environment, p.adj=0.05, p.adjust.method="BH",
+                              readable=TRUE, verbose=TRUE, min.genes=0, qvalue.cutoff=0.2, min.gs.size=5, max.gs.size=5e2) {
+      if(!(type %in% c("GO", "DO")))
+        stop("'type' must be 'GO' or 'DO'.")
 
-      if(is.null(de.gene.ids)) stop("Please run 'prepareOntologyData' first.")
+      if(is.null(de.gene.ids)) {
+        de.gene.ids <- private$getResults("ontology", "prepareOntologyData")$de.gene.ids
+      }
 
-      self$test.results[[type]] <- estimateOntology(type = type, org.db = org.db, de.gene.ids = de.gene.ids, go.environment = go.environment, p.adj = p.adj, p.adjust.method = p.adjust.method, readable = readable, verbose = verbose, min.genes = min.genes, qvalueCutoff = qvalueCutoff, minGSSize = minGSSize, maxGSSize = maxGSSize, ...)
+      if (!requireNamespace("clusterProfiler", quietly = TRUE))
+        stop("You have to install 'clusterProfiler' package to perform ontology analysis")
+
+      if(type=="DO") {
+        res <- estimateDO(de.gene.ids, p.adj=p.adj, verbose=verbose, pAdjustMethod=p.adjust.method, readable=readable,
+                          qvalueCutoff=qvalue.cutoff, minGSSize=min.gs.size, maxGSSize=max.gs.size)
+      } else if(type=="GO") {
+        res <- estimateGO(de.gene.ids, org.db=org.db, go.environment=go.environment, p.adj=p.adj,
+                          verbose=verbose, min.genes=min.genes, pAdjustMethod=p.adjust.method, readable=readable,
+                          qvalueCutoff=qvalue.cutoff, minGSSize=min.gs.size, maxGSSize=max.gs.size)
+      }
+
+      self$test.results[[type]] <- res
       return(invisible(self$test.results[[type]]))
     },
 

@@ -339,9 +339,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           setNames(c(ref.level, self$target.level))
       }
 
-      self$test.results[[name]] <- estimatePerCellTypeDE(extractRawCountMatrices(self$data.object, transposed=T), cell.groups = cell.groups, sample.groups = sample.groups, ref.level = ref.level, n.cores = n.cores,
-                            cooks.cutoff = cooks.cutoff, min.cell.count = min.cell.count, max.cell.count=max.cell.count, test=test, independent.filtering = independent.filtering,
-                            cluster.sep.chr = cluster.sep.chr, return.matrix = return.matrix)
+      self$test.results[[name]] <- extractRawCountMatrices(self$data.object, transposed=T) %>%
+        estimatePerCellTypeDE(cell.groups = cell.groups, sample.groups = sample.groups, ref.level = ref.level, n.cores = n.cores,
+                              cooks.cutoff = cooks.cutoff, min.cell.count = min.cell.count, max.cell.count=max.cell.count, test=test, independent.filtering = independent.filtering,
+                              cluster.sep.chr = cluster.sep.chr, return.matrix = return.matrix)
       return(invisible(self$test.results[[name]]))
     },
 

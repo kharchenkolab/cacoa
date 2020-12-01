@@ -576,78 +576,57 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Plot a barplot of ontology terms with adj. P values for a specific cell subgroup
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
-    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")
-    #' @param cell.subgroups Cell group to plot (default=NULL)
+    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")
+    #' @param cell.subgroup Cell group to plot (default=NULL)
     #' @param n Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
     #' @param p.adj Adjusted P cutoff (default=0.05)
+    #' @param log.colors Use log10 p-values for coloring (default=FALSE)
     #' @return A ggplot2 object
-    plotOntologyBarplot = function(genes = "up", type = "BP", cell.subgroups = NULL, n = 20, p.adj = 0.05) {
-      if(is.null(type) || (!type %in% c("GO","BP","CC","MF","DO"))) stop("'type' must be 'GO', BP', 'CC', 'MF', or 'DO'.")
+    plotOntologyBarplot = function(genes = "up", type = "GO", cell.subgroup = NULL, n = 20, p.adj = 0.05, log.colors=FALSE) {
+      ont.res <- private$getOntologyPvalueResults(type=type, cell.subgroup=cell.subgroup, genes=genes) %>%
+        prepareOntologyPlotDF(p.adj=p.adj, n=n, log.colors=log.colors)
 
-      if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
+      fill.label <- if (log.colors) "log10(adj. P)" else "Adj. P"
 
-      if(is.null(cell.subgroups)) stop("Please define 'cell.subgroups'.")
+      gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), GeneRatio)) +
+        coord_flip() +
+        labs(y="% DE genes of total genes per pathway", x="", fill=fill.label) +
+        theme_bw() +
+        scale_y_continuous(expand=c(0, 0), limits=c(0, (max(ont.res$GeneRatio) + 1))) +
+        getOntologyPlotTitle(genes, cell.subgroup, type) +
+        theme(plot.title=element_text(size=9)) +
+        getGeneScale(genes, type="fill") +
+        geom_col(aes(fill=p.adjust))
 
-      if(type=="DO") {
-        ont.res <- self$test.results[["DO"]][["df"]]
-      } else {
-        ont.res <- self$test.results[["GO"]][["df"]]
-      }
-
-      if(is.null(ont.res)) {
-        if(type == "DO") t <- "DO" else t <- "GO"
-        stop(paste0("No results found for ",type,". Please run estimateOntology first and specify type='",t,"'."))
-      }
-
-      ont.res %<>% .[[genes]]
-
-      if(is.null(ont.res)) stop("No results found for genes = '",genes,"'.")
-
-      if(!cell.subgroups %in% unique(ont.res$Group)) stop("'cell.subgroups' not found in results.")
-
-      ont.res %<>% dplyr::filter(Group == cell.subgroups)
-
-      if(type %in% c("BP","CC","MF")) ont.res %<>% dplyr::filter(Type == type)
-
-      plotOntologyBarplot(ont.res = ont.res, genes = genes, type = type, cell.subgroups = cell.subgroups, n = n, p.adj = p.adj)
+      return(gg)
     },
 
     #' @description Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
-    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")
-    #' @param cell.subgroups Cell group to plot (default=NULL)
+    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")
+    #' @param cell.subgroup Cell group to plot (default=NULL)
     #' @param n Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
     #' @param p.adj Adjusted P cutoff (default=0.05)
+    #' @param log.colors Use log10 p-values for coloring (default=FALSE)
     #' @return A ggplot2 object
-    plotOntologyDotplot = function(genes = "up", type = "BP", cell.subgroups = NULL, n = 20, p.adj = 0.05) {
-      if(is.null(type) || (!type %in% c("GO","BP","CC","MF","DO"))) stop("'type' must be 'GO', BP', 'CC', 'MF', or 'DO'.")
+    plotOntologyDotplot = function(genes = "up", type = "GO", cell.subgroup = NULL, n = 20, p.adj = 0.05, log.colors=FALSE) {
+      ont.res <- private$getOntologyPvalueResults(type=type, cell.subgroup=cell.subgroup, genes=genes) %>%
+        prepareOntologyPlotDF(p.adj=p.adj, n=n, log.colors=log.colors)
 
-      if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
+      fill.label <- if (log.colors) "log10(adj. P)" else "Adj. P"
 
-      if(is.null(cell.subgroups)) stop("Please define 'cell.subgroups'.")
+      gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), GeneRatio, col=p.adjust)) +
+        coord_flip() +
+        labs(y="% DE genes of total genes per pathway", x="", col=fill.label, size = "DE genes") +
+        theme_bw() +
+        scale_y_continuous(expand=c(0, 0), limits=c(0, (max(ont.res$GeneRatio) + 1))) +
+        getOntologyPlotTitle(genes, cell.subgroup, type) +
+        theme(plot.title=element_text(size=9)) +
+        getGeneScale(genes, type="color") +
+        scale_size_continuous(breaks = seq(min(ont.res$Count), max(ont.res$Count), by = 1)) +
+        geom_point(aes(size = Count))
 
-      if(type=="DO") {
-        ont.res <- self$test.results[["DO"]][["df"]]
-      } else {
-        ont.res <- self$test.results[["GO"]][["df"]]
-      }
-
-      if(is.null(ont.res)) {
-        if(type == "DO") t <- "DO" else t <- "GO"
-        stop(paste0("No results found for ",type,". Please run estimateOntology first and specify type='",t,"'."))
-      }
-
-      ont.res %<>% .[[genes]]
-
-      if(is.null(ont.res)) stop("No results found for genes = '",genes,"'.")
-
-      if(!cell.subgroups %in% unique(ont.res$Group)) stop("'cell.subgroups' not found in results.")
-
-      ont.res %<>% dplyr::filter(Group == cell.subgroups)
-
-      if(type %in% c("BP","CC","MF")) ont.res %<>% dplyr::filter(Type == type)
-
-      plotOntologyDotplot(ont.res = ont.res, genes = genes, type = type, cell.subgroups = cell.subgroups, n = n, p.adj = p.adj)
+      return(gg)
     },
 
     #' @description Plot a heatmap of ontology P values per cell type
@@ -657,31 +636,41 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms) (default="all")
     #' @param n Number of terms to show (default=10)
     #' @param cell.subgroups Cell groups to plot (default=NULL)
+    #' @param color.range vector with two values for min/max values of p-values
+    #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
-    plotOntologyHeatmap=function(genes = "up", type = "GO", legend.position = "left", selection = "all", n = 10, cell.subgroups = NULL) {
-      if(is.null(type) || (!type %in% c("GO","BP","CC","MF","DO"))) stop("'type' must be 'BP', 'CC', 'MF', or 'DO'.")
+    plotOntologyHeatmap=function(genes="up", type="GO", legend.position="left", selection="all", n=10, cell.subgroups=NULL, color.range=NULL, ...) {
+      ont.sum <- private$getOntologyPvalueResults(type=type, cell.subgroup=FALSE, genes=genes) %>%
+        getOntologySummary()
 
-      if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
+      if(!is.null(cell.subgroups)) ont.sum %<>% dplyr::select(all_of(cell.subgroups))
 
-      if(!is.null(cell.subgroups)) {
-        if(length(cell.subgroups) == 1) stop("'cell.subgroups' must contain at least two groups. Please use plotOntologyBarplot or plotOntologyDotplot instead.")
+      if(selection=="unique") {
+        ont.sum %<>%
+          .[rowSums(abs(.) > 0) == 1,]
+      } else if(selection=="common") {
+        ont.sum %<>%
+          .[rowSums(abs(.) > 0) > 1,]
       }
 
-      if(is.null(selection) || (!selection %in% c("unique","common","all"))) stop("'selection' must be one of the following: 'unique', 'common', or 'all'.")
+      if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 
-      if(type=="DO") {
-        ont.res <- self$test.results[["DO"]][["df"]]
+      if(genes == "all") {
+        l <- ggtitle(paste0("Heatmap of ",selection," ",type," terms for all DE genes"))
       } else {
-        ont.res <- self$test.results[["GO"]][["df"]]
+        l <- ggtitle(paste0("Heatmap of ",selection," ",type," terms for ",genes,"-regulated DE genes"))
       }
 
-      if(is.null(ont.res)) stop(paste0("No results found for '",type,"'. Please run 'estimateOntology' first and specify type='",type,"'."))
+      gg <- ont.sum %>%
+        .[, colSums(abs(.)) > 0] %>%
+        .[match(rowSums(.)[rowSums(abs(.)) > 0] %>%
+                  .[order(., decreasing = TRUE)] %>%
+                  names, rownames(.)),] %>%
+        tail(n) %>%
+        plotHeatmap(legend.position=legend.position, row.order=TRUE, color.range=color.range, ...) + l +
+        getGeneScale(genes=genes, type="fill", high="white", limits=color.range)
 
-      ont.res %<>% .[[genes]]
-
-      if(!is.null(cell.subgroups) && !cell.subgroups %in% unique(ont.res$Group)) stop("'cell.subgroups' not found in results.")
-
-      plotOntologyHeatmap(type = type, ont.res = ont.res, legend.position = legend.position, selection = selection, n = n, cell.subgroups = cell.subgroups, genes = genes)
+      return(gg)
     },
 
     #' @description Plot correlation matrix for ontology terms between cell types
@@ -1338,6 +1327,42 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         msg <- paste(msg, "Please first run", suggested.function)
       }
       stop(msg)
+    },
+
+    getOntologyPvalueResults=function(type, cell.subgroup, genes) {
+      if(!(type %in% c("GO","BP","CC","MF","DO")))
+        stop("'type' must be 'GO', BP', 'CC', 'MF', or 'DO'.")
+
+      if(!(genes %in% c("down","up","all")))
+        stop("'genes' must be 'down', 'up', or 'all'.")
+
+      if(type=="DO") {
+        ont.res <- self$test.results[["DO"]][["df"]]
+      } else {
+        ont.res <- self$test.results[["GO"]][["df"]]
+      }
+
+      if(is.null(ont.res)) {
+        if(type == "DO") t <- "DO" else t <- "GO"
+        stop(paste0("No results found for ",type,". Please run estimateOntology first and specify type='",t,"'."))
+      }
+
+      ont.res %<>% .[[genes]]
+
+      if(is.null(ont.res)) stop("No results found for genes = '",genes,"'.")
+
+      if(is.null(cell.subgroup))
+        stop("Please define 'cell.subgroup'.")
+
+      if (!is.logical(cell.subgroup) || cell.subgroup) {
+        if(!cell.subgroup %in% unique(ont.res$Group))
+          stop("'cell.subgroup' not found in results.")
+        ont.res %<>% dplyr::filter(Group == cell.subgroup)
+      }
+
+      if(type %in% c("BP","CC","MF")) ont.res %<>% dplyr::filter(Type == type)
+
+      return(ont.res)
     }
   )
 )

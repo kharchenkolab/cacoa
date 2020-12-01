@@ -160,14 +160,16 @@ plotOntologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, label.
 #' @param legend.key.width (default=unit(8, "pt))
 #' @param legend.title Title on plot (default="-log10(p-value)")
 #' @param x.axis.position Position of x axis (default="top")
+#' @param color.range Range for filling colors
 #' @return A ggplot2 object
 #' @export
 plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, legend.position="right",
                         legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
                         color.range=NULL) {
   if (is.null(color.range)) {
-    color.range <- c(0, max(df))
+    color.range <- c(min(0, min(df)), max(df))
   }
+
   if (is.null(row.order)) {
     row.order <- rownames(df)[dist(df) %>% hclust() %>% .$order]
   } else if (is.logical(row.order) && row.order) {
@@ -197,10 +199,10 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
     color.per.group <- color.per.group[levels(df$Group)]
   }
 
-  gg <- ggplot(df) + geom_tile(aes(x=Group, y=Pathway, fill=pmin(p.value, color.range[2])), colour = "grey50") +
+  df$p.value %<>% pmax(color.range[1]) %>% pmin(color.range[2])
+  gg <- ggplot(df) + geom_tile(aes(x=Group, y=Pathway, fill=p.value), colour = "grey50") +
     theme(axis.text.x=element_text(angle=90, hjust=0, vjust=0.5, color=color.per.group),
           axis.text=element_text(size=8), axis.ticks=element_blank(), axis.title=element_blank()) +
-    scale_fill_distiller(palette="RdYlBu", limits=color.range) +
     guides(fill=guide_colorbar(title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5))) +
     scale_y_discrete(position="right", expand=c(0, 0)) +
     scale_x_discrete(expand=c(0, 0), position=x.axis.position) +
@@ -208,52 +210,6 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
     theme(legend.key.width=legend.key.width, legend.background=element_blank())
 
   return(gg)
-}
-
-#' @title Plot ontology heatmap
-#' @description Plot a heatmap of ontology P values per cell type
-#' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default=NULL)
-#' @param ont.res Ontology resuls from estimateOntology
-#' @param genes Specify which genes are plotted, can either be 'down', 'up' or 'all' (default=NULL)
-#' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
-#' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are not unique for any cell type); 'all' (all ontology terms) (default="all")
-#' @param n Number of terms to show (default=10)
-#' @export
-plotOntologyHeatmap <- function(type = "GO", ont.res, genes = NULL, legend.position = "left", selection = "all", n = 20, cell.subgroups = NULL) {
-  if(type=="GO") {
-    ont.sum <- getOntologySummary(ont.res)
-  } else if(type=="BP" | type=="CC" | type=="MF") {
-    ont.sum <- getOntologySummary(ont.res %>% filter(Type==type))
-  } else if(type=="DO") {
-    ont.sum <- getOntologySummary(ont.res)
-  }
-
-  if(!is.null(cell.subgroups)) ont.sum %<>% dplyr::select(all_of(cell.subgroups))
-
-  if(selection=="unique") {
-      ont.sum %<>%
-        .[rowSums(. > 0) == 1,]
-  } else if(selection=="common") {
-      ont.sum %<>%
-        .[rowSums(. > 0) > 1,]
-  }
-
-  if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
-
-  if(genes == "all") {
-    l <- ggtitle(paste0("Heatmap of ",selection," ",type," terms for all DE genes"))
-  } else {
-    l <- ggtitle(paste0("Heatmap of ",selection," ",type," terms for ",genes,"-regulated DE genes"))
-  }
-
-  df <- ont.sum %>%
-    .[, colSums(.) > 0] %>%
-    .[match(rowSums(.)[rowSums(.)>0] %>%
-              .[order(., decreasing = F)] %>%
-              names, rownames(.)),] %>%
-    tail(n)
-
-  plotHeatmap(df, legend.position=legend.position, row.order=T) + l
 }
 
 # TODO should depend on merged DF, not list
@@ -322,6 +278,7 @@ plotOntologySimilarities <- function(type=NULL, ont.res, genes = NULL) {
   }
 
   plotHeatmap(p_mat, color.per.group=NULL, row.order=t_order, col.order=rev(t_order), legend.title="Similarity", color.range=c(0, 0.5)) +
+    scale_fill_distiller(palette="RdYlBu") +
     geom_vline(aes(xintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5)) +
     geom_hline(aes(yintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5)) + l
 }
@@ -449,83 +406,51 @@ plotCellNumbers <- function(legend.position = "right", cell.groups, sample.per.c
     scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 50)))
 }
 
-#' @title Plot ontologies with barplot
-#' @description Plot a barplot of ontologies with adj. P values for a specific cell subgroup
-#' @param ont.res Data frame with ontology resuls from estimateOntology
-#' @param genes Specify which genes are plotted, can either be 'down', 'up' or 'all' (default=NULL)
-#' @param n Number of ontologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
-#' @param p.adj Adjusted P cutoff (default=0.05)
-#' @return A ggplot2 object
-plotOntologyBarplot <- function(ont.res, genes = NULL, type = NULL, cell.subgroups = NULL, n = 20, p.adj = 0.05) {
-  ont.res %<>% dplyr::mutate(., gratio = sapply(.$GeneRatio, function(s) strsplit(s, "/")) %>% sapply(function(x) as.numeric(x[1])/as.numeric(x[2]) * 100)) %>%
-    dplyr::arrange(p.adjust) %>%
-    dplyr::filter(p.adjust <= p.adj) %>%
-    {if(nrow(.) > n) .[1:n,] else .}
-  ont.res$Description %<>% as.factor()
+#' Get Gene Scale
+#' @param genes type of genes ("up", "down" or "all")
+#' @param type type of scale ("fill" or "color")
+#' @param high color for the highest value
+#' @return ggplot2 fill or color scale
+#' @export
+getGeneScale <- function(genes=c("up", "down", "all"), type=c("fill", "color"), high="gray80", ...) {
+  genes <- match.arg(genes)
+  type <- match.arg(type)
 
-  if(is.null(type)) type <- "Ontology"
-
-  gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), gratio, fill=p.adjust)) +
-    geom_col() +
-    coord_flip() +
-    labs(y="% DE genes of total genes per pathway", x="", fill="Adj. P") +
-    theme_bw() +
-    scale_y_continuous(expand=c(0, 0), limits=c(0, (max(ont.res$gratio) + 1)))
-
-  if(genes == "up") {
-    gg <- gg + scale_fill_gradient(low = "red", high = "gray80")
-  } else if(genes == "down") {
-    gg <- gg + scale_fill_gradient(low = "blue", high = "gray80")
+  if (genes == "up") {
+    low <- "red"
+  } else if (genes == "down") {
+    low <- "blue"
   } else {
-    gg <- gg + scale_fill_gradient(low = "green", high = "gray80")
+    low <- "green"
   }
 
-  if(genes == "all") {
-    gg <- gg + ggtitle(paste0(cell.subgroups," ",type," terms, all DE genes")) + theme(plot.title = element_text(size=9))
-  } else {
-    gg <- gg + ggtitle(paste0(cell.subgroups," ",type," terms, ",genes,"-regulated DE genes")) + theme(plot.title = element_text(size=9))
-  }
+  if (type == "fill")
+    return(scale_fill_gradient(low=low, high=high, ...))
 
-  gg
+  return(scale_color_gradient(low=low, high=high, ...))
 }
 
-#' @title Plot ontologies with dotplot
-#' @description Plot a dotplot of ontologies with adj. P values for a specific cell subgroup
-#' @param ont.res Data frame with ontology resuls from estimateOntology
-#' @param genes Specify which genes are plotted, can either be 'down', 'up' or 'all' (default=NULL)
-#' @param n Number of ontologies to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
-#' @param p.adj Adjusted P cutoff (default=0.05)
-#' @return A ggplot2 object
-plotOntologyDotplot <- function(ont.res, genes = NULL, type = NULL, cell.subgroups = NULL, n = 20, p.adj = 0.05) {
-  ont.res %<>% dplyr::mutate(., gratio = sapply(.$GeneRatio, function(s) strsplit(s, "/")) %>% sapply(function(x) as.numeric(x[1])/as.numeric(x[2]) * 100)) %>%
-    dplyr::arrange(p.adjust) %>%
-    dplyr::filter(p.adjust <= p.adj) %>%
-    {if(nrow(.) > n) .[1:n,] else .}
-  ont.res$Description %<>% as.factor()
+prepareOntologyPlotDF <- function(ont.res, p.adj, n, log.colors) {
+  ont.res$GeneRatio %<>% sapply(function(s) strsplit(s, "/")) %>%
+    sapply(function(x) as.numeric(x[1])/as.numeric(x[2]) * 100)
 
-  gg <- ggplot(ont.res, aes(reorder(Description, -p.adjust), gratio, col=p.adjust)) +
-    geom_point(aes(size = Count)) +
-    coord_flip() +
-    labs(y="% DE genes of total genes per pathway", x="", col="Adj. P", size = "DE genes") +
-    theme_bw() +
-    scale_y_continuous(expand=c(0, 0), limits=c(0, (max(ont.res$gratio) + 1))) +
-    scale_size_continuous(breaks = seq(min(ont.res$Count), max(ont.res$Count), by = 1))
+  ont.res %<>% arrange(p.adjust) %>%
+    filter(p.adjust <= p.adj) %>%
+    {if(nrow(.) > n) .[1:n,] else .} %>%
+    mutate(Description=as.factor(Description))
 
-  if(genes == "up") {
-    gg <- gg + scale_color_gradient(low = "red", high = "gray80")
-  } else if(genes == "down") {
-    gg <- gg + scale_color_gradient(low = "blue", high = "gray80")
-  } else {
-    gg <- gg + scale_color_gradient(low = "green", high = "gray80")
+  if (log.colors) {
+    ont.res$p.adjust %<>% log10()
   }
 
-  if(genes == "all") {
-    gg <- gg + ggtitle(paste0(cell.subgroups," ",type," terms, all DE genes")) + theme(plot.title = element_text(size=9))
-  } else {
-    gg <- gg + ggtitle(paste0(cell.subgroups," ",type," terms, ",genes,"-regulated DE genes")) + theme(plot.title = element_text(size=9))
-  }
+  return(ont.res)
+}
 
-  gg
+getOntologyPlotTitle <- function(genes, cell.subgroup, type) {
+  if(genes == "all")
+    return(ggtitle(paste(cell.subgroup, type, "terms, all DE genes")))
+
+  return(ggtitle(paste0(cell.subgroup, " ", type, " terms, ", genes,"-regulated DE genes")))
 }
 
 #' @title Plot Expression Shift Magnitudes

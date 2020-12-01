@@ -163,7 +163,7 @@ getOntologySummary <- function(ont.res) {
     group_by(Group, ClustName) %>%
     summarise(p.adjust=min(p.adjust)) %>%
     ungroup %>%
-    mutate(p.adjust=-log10(p.adjust)) %>%
+    mutate(p.adjust=log10(p.adjust)) %>%
     tidyr::spread(Group, p.adjust) %>%
     as.data.frame() %>%
     set_rownames(.$ClustName) %>%

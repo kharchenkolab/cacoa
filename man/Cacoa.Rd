@@ -689,10 +689,11 @@ Plot a barplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyBarplot(
   genes = "up",
-  type = "BP",
-  cell.subgroups = NULL,
+  type = "GO",
+  cell.subgroup = NULL,
   n = 20,
-  p.adj = 0.05
+  p.adj = 0.05,
+  log.colors = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -701,13 +702,15 @@ Plot a barplot of ontology terms with adj. P values for a specific cell subgroup
 \describe{
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
-\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")}
+\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")}
 
-\item{\code{cell.subgroups}}{Cell group to plot (default=NULL)}
+\item{\code{cell.subgroup}}{Cell group to plot (default=NULL)}
 
 \item{\code{n}}{Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
 
 \item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
+
+\item{\code{log.colors}}{Use log10 p-values for coloring (default=FALSE)}
 }
 \if{html}{\out{</div>}}
 }
@@ -723,10 +726,11 @@ Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyDotplot(
   genes = "up",
-  type = "BP",
-  cell.subgroups = NULL,
+  type = "GO",
+  cell.subgroup = NULL,
   n = 20,
-  p.adj = 0.05
+  p.adj = 0.05,
+  log.colors = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -735,13 +739,15 @@ Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \describe{
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
-\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")}
+\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")}
 
-\item{\code{cell.subgroups}}{Cell group to plot (default=NULL)}
+\item{\code{cell.subgroup}}{Cell group to plot (default=NULL)}
 
 \item{\code{n}}{Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
 
 \item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
+
+\item{\code{log.colors}}{Use log10 p-values for coloring (default=FALSE)}
 }
 \if{html}{\out{</div>}}
 }
@@ -761,7 +767,9 @@ Plot a heatmap of ontology P values per cell type
   legend.position = "left",
   selection = "all",
   n = 10,
-  cell.subgroups = NULL
+  cell.subgroups = NULL,
+  color.range = NULL,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
@@ -779,6 +787,10 @@ Plot a heatmap of ontology P values per cell type
 \item{\code{n}}{Number of terms to show (default=10)}
 
 \item{\code{cell.subgroups}}{Cell groups to plot (default=NULL)}
+
+\item{\code{color.range}}{vector with two values for min/max values of p-values}
+
+\item{\code{...}}{parameters forwarded to \link{plotHeatmap}}
 }
 \if{html}{\out{</div>}}
 }

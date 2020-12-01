@@ -32,6 +32,8 @@ plotHeatmap(
 \item{legend.title}{Title on plot (default="-log10(p-value)")}
 
 \item{x.axis.position}{Position of x axis (default="top")}
+
+\item{color.range}{Range for filling colors}
 }
 \value{
 A ggplot2 object

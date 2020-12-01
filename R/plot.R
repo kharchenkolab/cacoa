@@ -1,4 +1,3 @@
-#' @import ggrepel
 #' @import tibble
 #' @import cowplot
 #' @import dplyr
@@ -10,7 +9,7 @@ theme_legend_position <- function(position) {
   theme(legend.position=position, legend.justification=position)
 }
 
-plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", label=T, size=5, palette=NULL) {
+plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", legend.position="right", label=TRUE, size=5, palette=NULL) {
   p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
 
@@ -18,10 +17,13 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", 
     geom_point(aes(color=Type)) +
     scale_x_log10() +
     ylim(0, max(p.df$N)) +
-    labs(x="Number of cells", y=y.lab) +
+    labs(x=x.lab, y=y.lab) +
     theme_bw()
 
-  if(label) gg <- gg + geom_label_repel(aes(label=Type), size=size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4))
+  if(label) {
+    gg <- gg +
+      ggrepel::geom_label_repel(aes(label=Type), size=size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4))
+  }
 
   gg <- gg +
     theme(legend.background=element_rect(fill=alpha("white", 0.4))) +
@@ -45,8 +47,7 @@ plotDEGenes <- function(de.raw, cell.groups, legend.position="none", p.adjust.cu
   cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.raw)]
 
   sapply(de.raw, function(n) n %>% dplyr::filter(padj <= p.adjust.cutoff) %>% nrow) %>%
-    plotNCellRegression(cell.groups, y.lab="Significant DE genes", legend.position=legend.position, label=label, ...) +
-    xlab("Number of cells") +
+    plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Significant DE genes", legend.position=legend.position, label=label, ...) +
     geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 }
 
@@ -61,8 +62,7 @@ plotFilteredDEGenes <- function(de.filter, cell.groups, legend.position="bottom"
   cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
 
   sapply(de.filter, length) %>%
-    plotNCellRegression(cell.groups, y.lab="Highly-expressed DE genes", legend.position=legend.position, label=label) +
-    xlab("Number of cells") +
+    plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Highly-expressed DE genes", legend.position=legend.position, label=label) +
     geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 }
 
@@ -133,9 +133,9 @@ plotOntologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, label.
 
   pg <- cowplot::plot_grid(
     ont.res$Group %>% table %>% c %>%
-      plotNCellRegression(sapply(de.filter, length), y.lab=NULL, legend.position="none", label=T) +
-      geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5) +
-      scale_x_continuous(name="Number of highly-expressed DE genes"),
+      plotNCellRegression(sapply(de.filter, length), x.lab="Number of highly-expressed DE genes",
+                          y.lab=NULL, legend.position="none", label=T) +
+      geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5),
     ont.res$Group %>% table %>% c %>%
       plotNCellRegression(cell.groups, y.lab=NULL, legend.position="none", label=T) +
       geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5),
@@ -162,9 +162,12 @@ plotOntologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, label.
 #' @param x.axis.position Position of x axis (default="top")
 #' @return A ggplot2 object
 #' @export
-plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, legend.position="right", legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top") {
-  m <- max(df)
-
+plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, legend.position="right",
+                        legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
+                        color.range=NULL) {
+  if (is.null(color.range)) {
+    color.range <- c(0, max(df))
+  }
   if (is.null(row.order)) {
     row.order <- rownames(df)[dist(df) %>% hclust() %>% .$order]
   } else if (is.logical(row.order) && row.order) {
@@ -194,10 +197,10 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
     color.per.group <- color.per.group[levels(df$Group)]
   }
 
-  gg <- ggplot(df) + geom_tile(aes(x=Group, y=Pathway, fill=pmin(p.value, m)), colour = "grey50") +
+  gg <- ggplot(df) + geom_tile(aes(x=Group, y=Pathway, fill=pmin(p.value, color.range[2])), colour = "grey50") +
     theme(axis.text.x=element_text(angle=90, hjust=0, vjust=0.5, color=color.per.group),
           axis.text=element_text(size=8), axis.ticks=element_blank(), axis.title=element_blank()) +
-    scale_fill_distiller(palette="RdYlBu", limits=c(0, m)) +
+    scale_fill_distiller(palette="RdYlBu", limits=color.range) +
     guides(fill=guide_colorbar(title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5))) +
     scale_y_discrete(position="right", expand=c(0, 0)) +
     scale_x_discrete(expand=c(0, 0), position=x.axis.position) +
@@ -243,13 +246,14 @@ plotOntologyHeatmap <- function(type = "GO", ont.res, genes = NULL, legend.posit
     l <- ggtitle(paste0("Heatmap of ",selection," ",type," terms for ",genes,"-regulated DE genes"))
   }
 
-  ont.sum %>%
+  df <- ont.sum %>%
     .[, colSums(.) > 0] %>%
     .[match(rowSums(.)[rowSums(.)>0] %>%
               .[order(., decreasing = F)] %>%
               names, rownames(.)),] %>%
-    tail(n) %>%
-    plotHeatmap(legend.position=legend.position, row.order=T) + l
+    tail(n)
+
+  plotHeatmap(df, legend.position=legend.position, row.order=T) + l
 }
 
 # TODO should depend on merged DF, not list
@@ -317,8 +321,7 @@ plotOntologySimilarities <- function(type=NULL, ont.res, genes = NULL) {
     l <- ggtitle(paste0(type," term similarities for ",genes,"-regulated DE genes"))
   }
 
-  plotHeatmap(p_mat, color.per.group=NULL, row.order=t_order, col.order=rev(t_order), legend.title="Similarity") +
-    scale_fill_distiller(palette="RdYlBu", limits=c(0, 0.5)) +
+  plotHeatmap(p_mat, color.per.group=NULL, row.order=t_order, col.order=rev(t_order), legend.title="Similarity", color.range=c(0, 0.5)) +
     geom_vline(aes(xintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5)) +
     geom_hline(aes(yintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5)) + l
 }

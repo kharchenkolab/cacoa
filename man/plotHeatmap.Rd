@@ -12,7 +12,8 @@ plotHeatmap(
   legend.position = "right",
   legend.key.width = unit(8, "pt"),
   legend.title = "-log10(p-value)",
-  x.axis.position = "top"
+  x.axis.position = "top",
+  color.range = NULL
 )
 }
 \arguments{

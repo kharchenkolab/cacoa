@@ -1061,7 +1061,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(list('ref' = p1, 'target' = p2))
     },
 
-
+    #' @title estimate graph smooth based cell density 
+    #' @param n.cores number of cores
+    #' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
+    #' @return Z score of differential cell density 
+    estimateGraphDensity = function(n.cores = 10, m = 50, verbose = TRUE){
+      ref.level <- self$ref.level
+      target.level <- self$target.level
+      sample.groups <- self$sample.groups
+      sample.per.cell <- self$sample.per.cell
+      score <-  estimateGraphDensity(sample.per.cell = sample.per.cell, sample.groups = sample.groups, ref.level = ref.level, target.level = target.level, n.cores = n.cores , m = m, verbose = verbose)
+      return(score)
+    },    
 
     #' @description esitmate differential cell density
     #' @param col color palettes,  default is c('blue','white','red')

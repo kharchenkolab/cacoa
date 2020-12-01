@@ -22,6 +22,12 @@ estimateClusterFreeZScores(
 
 \item{genes}{Genes to be tested. Procedure is slow, so it's reasonable to restrict amount of genes.}
 
+\item{...}{
+  Arguments passed on to \code{\link[=clusterFreeZScoreMat]{clusterFreeZScoreMat}}
+  \describe{
+    \item{\code{}}{}
+  }}
+
 \item{ref.level}{Reference condition level, e.g., wt, ctrl, or healthy}
 }
 \description{

@@ -51,8 +51,6 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-estimateCommonExpressionShiftMagnitudes}{\code{Cacoa$estimateCommonExpressionShiftMagnitudes()}}
 \item \href{#method-plotExpressionShiftMagnitudes}{\code{Cacoa$plotExpressionShiftMagnitudes()}}
 \item \href{#method-plotCommonExpressionShiftMagnitudes}{\code{Cacoa$plotCommonExpressionShiftMagnitudes()}}
-\item \href{#method-estimateExpressionShiftZScores}{\code{Cacoa$estimateExpressionShiftZScores()}}
-\item \href{#method-plotExpressionShiftZScores}{\code{Cacoa$plotExpressionShiftZScores()}}
 \item \href{#method-estimatePerCellTypeDE}{\code{Cacoa$estimatePerCellTypeDE()}}
 \item \href{#method-plotDEGenes}{\code{Cacoa$plotDEGenes()}}
 \item \href{#method-plotNumberOfDEGenes}{\code{Cacoa$plotNumberOfDEGenes()}}
@@ -273,86 +271,6 @@ A ggplot2 object
 \item{\code{name}}{field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateExpressionShiftZScores"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateExpressionShiftZScores}{}}}
-\subsection{Method \code{estimateExpressionShiftZScores()}}{
-Calculate expression shift Z scores of different clusters between conditions
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateExpressionShiftZScores(
-  cell.groups = self$cell.groups,
-  ref.level = self$ref.level,
-  sample.groups = self$sample.groups,
-  sample.per.cell = self$sample.per.cell,
-  n.od.genes = 1000,
-  n.pcs = 100,
-  pca.maxit = 1000,
-  ignore.cache = F,
-  name = "expression.z.scores",
-  verbose = self$verbose
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cell.groups}}{Named cell group factor with cell names (default: stored vector)}
-
-\item{\code{ref.level}}{Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)}
-
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
-
-\item{\code{sample.per.cell}}{(default: stored vector)}
-
-\item{\code{n.od.genes}}{(default=1000)}
-
-\item{\code{n.pcs}}{(default=100)}
-
-\item{\code{pca.maxit}}{(default=1000)}
-
-\item{\code{ignore.cache}}{(default=F)}
-
-\item{\code{name}}{(default="expression.z.scores")}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotExpressionShiftZScores"></a>}}
-\if{latex}{\out{\hypertarget{method-plotExpressionShiftZScores}{}}}
-\subsection{Method \code{plotExpressionShiftZScores()}}{
-Plot results from cao$estimateExpressionShiftZScores()
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionShiftZScores(
-  type.order = NULL,
-  name = "expression.z.scores",
-  size.norm = F,
-  cell.groups = self$cell.groups,
-  sample.per.cell = self$sample.per.cell
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{type.order}}{(default=NULL)}
-
-\item{\code{name}}{Test results to plot (default=expression.z.shifts)}
-
-\item{\code{size.norm}}{Show cluster size-normalized results}
-
-\item{\code{cell.groups}}{Named factor with cell names defining groups/clusters (default: stored vector)}
-
-\item{\code{sample.per.cell}}{Named sample factor with cell names (default: stored vector)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
@@ -1512,7 +1430,7 @@ Plot cluster-free expression shift z-scores
   cell.groups = self$cell.groups,
   plot.both.conditions = FALSE,
   plot.na = FALSE,
-  max.shift = 3,
+  max.shift = NULL,
   alpha = 0.2,
   font.size = c(2, 3),
   ...
@@ -1527,7 +1445,7 @@ Plot cluster-free expression shift z-scores
 \item{\code{plot.both.conditions}}{show both case and control cells. Normally, showing control cells doesn't
 make sense, as control cells always have small distance from control.}
 
-\item{\code{max.shift}}{all shift values above `max.shift` are set to this value when plotting.}
+\item{\code{max.shift}}{all shift values above `max.shift` are set to this value when plotting. Default: 95% of the shifts.}
 
 \item{\code{font.size}}{size range for cell type labels}
 

@@ -547,7 +547,8 @@ plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch =
       geom_hline(yintercept=1, linetype="dashed", color = "black")
     if(!is.null(palette)) { gg <- gg + scale_fill_manual(values=palette) }
   } else {
-    if (length(setdiff(names(cell.groups), names(sample.per.cell)))>0) warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
+    if (length(setdiff(names(cell.groups), names(sample.per.cell))) > 0)
+      warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
 
     cct <- table(cell.groups, sample.per.cell[names(cell.groups)])
     x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
@@ -569,44 +570,5 @@ plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch =
     if(!is.null(palette)) { gg <- gg + scale_color_manual(values=palette) }
   }
 
-
-  return(gg)
-}
-
-#' @title Plot Expression Shift Z Scores
-#' @description  Plot results from estimateExpressionShiftZScores
-#' @param plot.df Test results to plot
-#' @param size.norm Plot size normalized results. Requires cell.groups, and sample.per.cell (default=F)
-#' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
-#' @param sample.per.cell Named sample factor with cell names (default: stored vector)
-#' @param label Plot labels on size normalized plots (default=T)
-#' @return A ggplot2 object
-plotExpressionShiftZScores <- function(plot.df, size.norm = F, cell.groups = NULL, sample.per.cell = NULL) {
-  if (!size.norm) {
-    gg <- ggplot(plot.df, aes(x=Type, y=distance)) +
-      geom_boxplot(outlier.alpha=0, show.legend=F) +
-      geom_hline(aes(yintercept=split(distance, Type) %>% sapply(median) %>% median(), linetype="Median"), color="darkred", size=1) +
-      labs(x="", y="Normalized distance") +
-      scale_y_continuous(expand=c(0, 0)) +
-      theme_bw() +
-      theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=9)) +
-      scale_linetype_manual(name = "", values=1)
-  } else {
-    if(length(setdiff(names(cell.groups), names(sample.per.cell)))>0) warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
-
-    cct <- table(cell.groups, sample.per.cell[names(cell.groups)])
-    x <- tapply(plot.df$distance, plot.df$Type, median)
-    odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
-
-    gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
-      ggrepel::geom_text_repel() +
-      geom_point() +
-      guides(color=F) +
-      xlab("Cluster size") +
-      theme_bw() +
-      ylab("Median normalized distance") +
-      geom_hline(aes(yintercept=split(plot.df$distance, plot.df$Type) %>% sapply(median) %>% median(), linetype="Median"), color="darkred", size=1) +
-      scale_linetype_manual(name = "", values=1)
-  }
   return(gg)
 }

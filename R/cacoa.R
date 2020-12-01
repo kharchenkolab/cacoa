@@ -307,81 +307,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       p
     },
 
-    #' @description  Calculate expression shift Z scores of different clusters between conditions
-    #' @param cell.groups Named cell group factor with cell names (default: stored vector)
-    #' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
-    #' @param sample.per.cell (default: stored vector)
-    #' @param n.od.genes (default=1000)
-    #' @param n.pcs (default=100)
-    #' @param pca.maxit (default=1000)
-    #' @param ignore.cache (default=F)
-    #' @param name (default="expression.z.scores")
-    estimateExpressionShiftZScores=function(cell.groups=self$cell.groups, ref.level=self$ref.level, sample.groups=self$sample.groups,
-                                            sample.per.cell=self$sample.per.cell, n.od.genes=1000, n.pcs=100, pca.maxit=1000, ignore.cache=F,
-                                            name="expression.z.scores", verbose = self$verbose) {
-      .Deprecated("estimateExpressionShiftMagnitudes") # TODO: remove dependency on irlba
-      if (is.null(cell.groups))
-        stop("'cell.groups' must be provided either during the object initialization or during this function call")
-
-      if (is.null(ref.level))
-        stop("'ref.level' must be provided either during the object initialization or during this function call")
-
-      if (is.null(sample.groups))
-        stop("'sample.groups' must be provided either during the object initialization or during this function call")
-
-      if (is.null(sample.per.cell))
-        stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
-
-      if(!ref.level %in% sample.groups) stop(paste0("Reference group '",ref.level,"' not in 'sample.groups': ",paste(unique(sample.groups), collapse=" ")))
-
-      if(verbose) cat("Merging count matrices ... ")
-      mtx <- extractJointCountMatrix(self$data.object, raw=F)
-
-      if (n.od.genes > 0) {
-        if(verbose) cat("done!\nExtracting OD genes ... ")
-        mtx %<>% .[, extractOdGenes(self$data.object, n.od.genes)]
-      }
-
-      # TODO: use scaled count matrix here
-      if (n.pcs < ncol(mtx)) {
-        if(verbose) cat("done!\nCalculating PCs ... ")
-        pca.name <- paste("joint.pca", n.od.genes, n.pcs, sep="_")
-        if (ignore.cache || !is.null(self$cache[[pca.name]])) {
-          mtx <- self$cache[[pca.name]]
-        } else {
-          centers <- Matrix::colMeans(mtx)
-          pcs <- mtx %>% irlba::irlba(nv=n.pcs, nu=0, center=centers, right_only=F,
-                                      fastpath=T, maxit=pca.maxit, reorth=T)
-          mtx <- as.matrix(t(as(t(mtx %*% pcs$v), "dgeMatrix") - t(centers %*% pcs$v)))
-          self$cache[[pca.name]] <- mtx
-        }
-      }
-
-      if(verbose) cat("done!\n")
-      self$test.results[[name]] <- estimateExpressionShiftZScores(mtx, sample.per.cell, sample.groups, cell.groups, ref.level, verbose = verbose)
-      return(invisible(self$test.results[[name]]))
-    },
-
-    #' @description  Plot results from cao$estimateExpressionShiftZScores()
-    #' @param type.order (default=NULL)
-    #' @param name Test results to plot (default=expression.z.shifts)
-    #' @param size.norm Show cluster size-normalized results
-    #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
-    #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
-    #' @return A ggplot2 object
-    plotExpressionShiftZScores=function(type.order=NULL, name="expression.z.scores", size.norm = F, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell) {
-      .Deprecated("plotExpressionShiftMagnitudes")
-      private$checkTestResults(name)
-
-      plot.df <- self$test.results[[name]] %>% dplyr::filter(complete.cases(.))
-      if (!is.null(type.order)) {
-        plot.df %<>% dplyr::filter(Type %in% type.order) %>%
-          dplyr::mutate(Type=factor(Type, levels=type.order))
-      }
-
-      plotExpressionShiftZScores(plot.df = plot.df, size.norm = size.norm, cell.groups = cell.groups, sample.per.cell = sample.per.cell)
-    },
-
     ### Differential expression
 
     #' @description Estimate differential gene expression per cell type between conditions
@@ -1389,12 +1314,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     }
   ),
   private = list(
-    checkTestResults=function(name) {
-      if (is.null(self$test.results[[name]])) {
-        stop("Test result for ", name, " wasn't found")
-      }
-    },
-
     getResults=function(name, suggested.function=NULL) {
       if (!is.null(self$test.results[[name]]))
         return(self$test.results[[name]])

@@ -26,14 +26,17 @@ Imports:
     Matrix,
     methods,
     plyr,
+    purrr,
     R6,
     RcppProgress,
     reshape2,
+    roxygen2,
     sccore,
     tibble,
     tidyr,
     tidytree,
     viridis
+Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
 LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress
 NeedsCompilation: yes

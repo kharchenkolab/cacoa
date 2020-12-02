@@ -1061,10 +1061,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(list('ref' = p1, 'target' = p2))
     },
 
-    #' @title estimate graph smooth based cell density 
+    #' @title estimate graph smooth based cell density
     #' @param n.cores number of cores
     #' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
-    #' @return Z score of differential cell density 
+    #' @return Z score of differential cell density
     estimateGraphDensity = function(n.cores = 10, m = 50, verbose = TRUE){
       ref.level <- self$ref.level
       target.level <- self$target.level
@@ -1072,7 +1072,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       sample.per.cell <- self$sample.per.cell
       score <-  estimateGraphDensity(sample.per.cell = sample.per.cell, sample.groups = sample.groups, ref.level = ref.level, target.level = target.level, n.cores = n.cores , m = m, verbose = verbose)
       return(score)
-    },    
+    },
 
     #' @description esitmate differential cell density
     #' @param col color palettes,  default is c('blue','white','red')
@@ -1184,9 +1184,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Performs graph smoothing of the cluster-free DE Z-scores
-    #' @param smoothing `beta` parameter of the \link[=sccore:heatFilter]{heatFilter}. Default: 20.
-    #' @param filter graph filter function. Default: \link[=sccore:heatFilter]{heatFilter}.
-    #' @param ... parameters forwarded to \link[=sccore:smoothSignalOnGraph]{smoothSignalOnGraph}
+    #' @param smoothing `beta` parameter of the \link[sccore:heatFilter]{heatFilter}. Default: 20.
+    #' @param filter graph filter function. Default: \link[sccore:heatFilter]{heatFilter}.
+    #' @param ... parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}
     #' @return Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z.smoothed` field.
     smoothClusterFreeZScores = function(smoothing=20, filter=NULL, n.cores=self$n.cores, verbose=self$verbose, ...) {
       z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
@@ -1206,21 +1206,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Estimate Gene Programmes based on cluster-free Z-scores on a subsample of
-    #' cells using \link[=fabia:fabia]{fabia}.
+    #' cells using \link[fabia:fabia]{fabia}.
     #' @param n.programmes maximal number of gene programmes to find (parameter `p` for fabia). Default: 15.
     #' @param ... keyword arguments forwarded to \link{estimateGeneProgrammes}
-    #' @return a list include \itemize{
-    #'   \item{fabia: \link[=fabia:Factorization]{fabia::Factorization} object, result of the
-    #'       \link[=fabia:fabia]{fabia::fabia} call
-    #'   \item{sample.ids: ids of the subsampled cells used for fabia estimates}
-    #'   \item{scores.exact: vector of fabia estimates of gene programme scores per cell.
-    #'       Estimated only for the subsampled cells.}
-    #'   \item{scores.approx: vector of approximate gene programme scores, estimated for all cells in the dataset}
-    #'   \item{loadings: matrix with fabia gene loadings per programme}
-    #'   \item{gene.scores: list of vectors of gene scores per programme. Contains only genes,
-    #'       selected for the programme usin fabia biclustering.}
-    #'   \item{bi.clusts} fabia biclustering information, result of the \link[=fabia:extractBic]{fabia::extractBic} call
-    #' }
+    #' @return a list includes:
+    #'   - `fabia`: \link[fabia:Factorization]{fabia::Factorization} object, result of the
+    #'       \link[fabia:fabia]{fabia::fabia} call
+    #'   - `sample.ids`: ids of the subsampled cells used for fabia estimates
+    #'   - `scores.exact`: vector of fabia estimates of gene programme scores per cell. Estimated only for the
+    #'     subsampled cells.
+    #'   - `scores.approx`: vector of approximate gene programme scores, estimated for all cells in the dataset
+    #'   - `loadings`: matrix with fabia gene loadings per programme
+    #'   - `gene.scores`: list of vectors of gene scores per programme. Contains only genes, selected for
+    #'     the programme usin fabia biclustering.
+    #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
     estimateGeneProgrammes = function(smoothed=TRUE, n.programmes=15, name="gene.programmes", ...) {
       if (!requireNamespace("fabia", quietly=TRUE))
         stop("fabia package must be installed to run this function")

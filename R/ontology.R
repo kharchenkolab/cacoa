@@ -119,59 +119,21 @@ estimateEnrichedGO <- function(de.gene.ids, go.environment, ...) {
     lapply(lapply, function(x) if(length(x)) x@result else x)
 }
 
-#' @title Distance between terms
-#' @description Calculate distance matrix between ontology terms
-#' @param ont.res Results from prepareOntologyData (default: stored list)
-#' @return Distance matrix
-distanceBetweenTerms <- function(ont.res) {
-  genes.per.go <- sapply(ont.res$geneID, strsplit, "/") %>% setNames(ont.res$Description)
-  all.go.genes <- unique(unlist(genes.per.go))
-  all.gos <- unique(ont.res$Description)
+groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName") {
+  order.anno <- ont.clust.df$Group %>% unique %>% .[order(.)]
 
-  genes.per.go.mat <- matrix(0, length(all.go.genes), length(all.gos)) %>%
-    `colnames<-`(all.gos) %>% `rownames<-`(all.go.genes)
-
-  for (i in 1:length(genes.per.go)) {
-    genes.per.go.mat[genes.per.go[[i]], ont.res$Description[[i]]] <- 1
-  }
-
-  return(dist(t(genes.per.go.mat), method="binary"))
-}
-
-#' @title Get ontology summary
-#' @description Get summary
-#' @param ont.res Results from prepareOntologyData (default: stored list)
-#' @return Data frame
-getOntologySummary <- function(ont.res) {
-  go_dist <- distanceBetweenTerms(ont.res)
-  clusts <- hclust(go_dist) %>%
-    cutree(h=0.75)
-
-  ont.res %<>% mutate(Clust=clusts[Description])
-
-  name_per_clust <- ont.res %>%
-    group_by(Clust, Description) %>%
-    summarise(pvalue=exp(mean(log(pvalue)))) %>%
-    split(.$Clust) %>%
-    sapply(function(df) df$Description[which.min(df$pvalue)])
-
-  ont.res %<>% mutate(ClustName=name_per_clust[as.character(Clust)])
-
-  order.anno <- ont.res$Group %>% unique %>% .[order(.)]
-
-  df <- ont.res %>%
-    group_by(Group, ClustName) %>%
+  df <- ont.clust.df %>%
+    group_by(Group, CN=.[[field]]) %>%
     summarise(p.adjust=min(p.adjust)) %>%
-    ungroup %>%
+    ungroup() %>%
     mutate(p.adjust=log10(p.adjust)) %>%
     tidyr::spread(Group, p.adjust) %>%
     as.data.frame() %>%
-    set_rownames(.$ClustName) %>%
+    set_rownames(.$CN) %>%
     .[, 2:ncol(.)] %>%
     .[, order.anno[order.anno %in% colnames(.)]]
 
   df[is.na(df)] <- 0
-
   return(df)
 }
 
@@ -303,4 +265,44 @@ estimateGO <- function(de.gene.ids, org.db=NULL, go.environment = NULL, p.adj=0.
   }
 
   return(list(df=res, go.environment=go.environment))
+}
+
+### Clustering
+
+#' @title Distance between terms
+#' @description Calculate distance matrix between ontology terms
+#' @param ont.res Results from prepareOntologyData (default: stored list)
+#' @return Distance matrix
+distanceBetweenTerms <- function(ont.res) {
+  genes.per.go <- sapply(ont.res$geneID, strsplit, "/") %>% setNames(ont.res$Description)
+  all.go.genes <- unique(unlist(genes.per.go))
+  all.gos <- unique(ont.res$Description)
+
+  genes.per.go.mat <- matrix(0, length(all.go.genes), length(all.gos)) %>%
+    `colnames<-`(all.gos) %>% `rownames<-`(all.go.genes)
+
+  for (i in 1:length(genes.per.go)) {
+    genes.per.go.mat[genes.per.go[[i]], ont.res$Description[[i]]] <- 1
+  }
+
+  return(dist(t(genes.per.go.mat), method="binary"))
+}
+
+clusterIndividualGOs <- function(gos, cut.h) {
+  clusts.per.go <- lapply(gos, distanceBetweenTerms) %>% lapply(function(ld)
+    if (ncol(as.matrix(ld)) == 1) 1 else {hclust(ld) %>% cutree(h=cut.h)})
+
+  clust.df <- names(gos) %>%
+    lapply(function(n) mutate(gos[[n]], Cluster=clusts.per.go[[n]])) %>%
+    Reduce(rbind, .) %>%
+    mutate(Cluster=factor(Cluster, levels=c(0, unique(Cluster)))) %>%
+    select(Group, Cluster, Description) %>%
+    tidyr::spread(Group, Cluster) %>% as.data.frame() %>%
+    set_rownames(.$Description) %>% .[, 2:ncol(.)]
+
+  return(clust.df)
+}
+
+getOntClustField <- function(type, genes) {
+  return(paste(type, genes, "clusters", sep="."))
 }

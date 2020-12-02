@@ -25,6 +25,7 @@ Imports:
     MASS,
     Matrix,
     methods,
+    pbapply,
     plyr,
     R6,
     RcppProgress,

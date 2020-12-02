@@ -177,14 +177,19 @@ plotDensity <- function(mat, bins, col = c('blue','white','red'), show.legend = 
 ##' @param condition.per.cell A two-level factor on the cell names describing the conditions being compared (default: stored vector)
 ##' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
 ##' @param target.level target/disease level for sample.group vector
-##' @param method method to cacuated differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy betwwen sample grapups ; t.test: zscore of t-test,global variacen is setting for t.test;
-diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample.groups, bins, ref.level, target.level, method = 'substract', show.legend = NULL,legend.position = NULL, show.grid = TRUE, col = c('blue','white','red'), title = NULL, dcount.cutoff = 0, z.cutoff = NULL){
+##' @param method method to calcuate differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy between sample groups ; t.test: zscore of t-test,
+##' global variance is setting for t.test;
+diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample.groups, bins, ref.level, target.level, method = 'substract',
+                            show.legend = NULL,legend.position = NULL, show.grid = TRUE, col = c('blue','white','red'), title = NULL,
+                            dcount.cutoff = 0, z.cutoff = NULL){
   nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
   nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
 
-  if (method == 'substract'){
-    score = rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])
-  }else if (method == 'entropy'){
+  if (method == 'substract') {
+    score <- rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])
+  } else if (method == 'substract.norm'){
+    score <- (rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])) / rowMeans(density.mat[, nr])
+  } else if (method == 'entropy'){
     sudo <- mean(as.numeric(density.mat)) # add sudo counts
     density.mat2 <- density.mat + sudo
     s1 <- rowSums(density.mat2[, nr])
@@ -196,7 +201,7 @@ diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample
     max.ent <- (if (xt[1] > xt[2]) c(0, 1) else c(1, 0)) %>% entropy::KL.empirical(xt, unit='log2')
     entropy.per.cell <- apply(weight.sum.per.fac.cell, 1, entropy::KL.empirical, xt, unit = 'log2') / max.ent
     score <- entropy.per.cell * sign(r2 - r1)
-  }else if (method=='t.test'){
+  } else if (method=='t.test'){
     vel <- rowMeans(density.mat)
     density.mat2 <- density.mat + quantile(vel, 0.05) # add sudo counts at 5%
     score <- apply(density.mat2, 1, function(x) {
@@ -208,7 +213,7 @@ diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample
         0
       })
     })
-  } else if (method == 'willcox') {
+  } else if (method == 'wilcox') {
     vel <- rowMeans(density.mat)
     density.mat2 <- density.mat + quantile(vel, 0.05) # add sudo counts at 5%
     score <- apply(density.mat2, 1, function(x) {
@@ -220,7 +225,7 @@ diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample
       zscore <- zstat * sign(fc)
       zscore
     })
-  }
+  } else stop("Unknown method: ", method)
 
   if (is.null(title)){
     title <- method

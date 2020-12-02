@@ -512,6 +512,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[[type]]))
     },
 
+    estimateOntologyClusters=function(type="GO", genes="all", name=getOntClustField(type, genes), ind.h=0.66, total.h=0.5, verbose=self$verbose) {
+      ont.df <- private$getOntologyPvalueResults(type=type, cell.subgroup=FALSE, genes=genes)
+      clust.mat <- ont.df %>% split(.$Group) %>% clusterIndividualGOs(cut.h=ind.h) %>%
+        as.matrix() %>% t()
+
+      apply.fun <- if (verbose) pbapply::pbapply else apply
+      cl.dists <- apply.fun(clust.mat, 2, function(ct1) apply(clust.mat, 2, function(ct2) {
+        mask <- !is.na(ct1) & !is.na(ct2)
+        if (sum(mask) == 0) 1 else (1 - mean(ct1[mask] == ct2[mask]))
+      }))
+
+      cl.clusts <- as.dist(cl.dists) %>% hclust(method="average")
+      clusts <- cutree(cl.clusts, h=total.h)
+      ont.df$Cluster <- clusts[as.character(ont.df$Description)]
+
+      name.per.clust <- ont.df %>% group_by(Cluster, Description) %>% summarise(pvalue=exp(mean(log(pvalue)))) %>%
+        split(.$Cluster) %>% sapply(function(df) df$Description[which.min(df$pvalue)])
+
+      ont.df$ClusterName <- name.per.clust[ont.df$Cluster]
+      self$test.results[[name]] <- list(df=ont.df, hclust=cl.clusts)
+
+      return(invisible(self$test.results[[name]]))
+    },
+
     #' @description Bar plot of ontology terms per cell type
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
@@ -645,19 +669,34 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
     #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms) (default="all")
     #' @param n Number of terms to show (default=10)
+    #' @param clusters Whether to show GO clusters or raw GOs (default=TRUE)
     #' @param cell.subgroups Cell groups to plot (default=NULL)
     #' @param color.range vector with two values for min/max values of p-values
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
-    plotOntologyHeatmap=function(genes="up", type="GO", legend.position="left", selection="all", n=10, cell.subgroups=NULL, color.range=NULL, ...) {
-      ont.sum <- private$getOntologyPvalueResults(type=type, cell.subgroup=FALSE, genes=genes) %>%
-        getOntologySummary()
+    plotOntologyHeatmap=function(genes="up", type="GO", legend.position="left", selection="all", n=10, clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, ...) {
+      if (!clusters) {
+        ont.sum <- private$getOntologyPvalueResults(type=type, cell.subgroup=FALSE, genes=genes) %>%
+          groupOntologiesByCluster(field="Description")
+      } else {
+        name <- if (is.null(cluster.name)) getOntClustField(type, genes) else cluster.name
+        if (is.null(self$test.results[[name]])) {
+          if (!is.null(cluster.name))
+            stop("Can't find the results for ", cluster.name)
+
+          warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
+          ont.sum <- self$estimateOntologyClusters(type=type, genes=genes, name=name)$df
+        } else {
+          ont.sum <- self$test.results[[name]]$df
+        }
+
+        ont.sum %<>% groupOntologiesByCluster(field="ClusterName")
+      }
 
       if(!is.null(cell.subgroups)) ont.sum %<>% dplyr::select(all_of(cell.subgroups))
 
       if(selection=="unique") {
-        ont.sum %<>%
-          .[rowSums(abs(.) > 0) == 1,]
+        ont.sum %<>% .[rowSums(abs(.) > 0) == 1,]
       } else if(selection=="common") {
         ont.sum %<>%
           .[rowSums(abs(.) > 0) > 1,]
@@ -673,9 +712,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       gg <- ont.sum %>%
         .[, colSums(abs(.)) > 0] %>%
-        .[match(rowSums(.)[rowSums(abs(.)) > 0] %>%
-                  .[order(., decreasing = TRUE)] %>%
-                  names, rownames(.)),] %>%
+        .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing = TRUE)] %>% names, rownames(.)),] %>%
         tail(n) %>%
         plotHeatmap(legend.position=legend.position, row.order=TRUE, color.range=color.range, ...) + l +
         getGeneScale(genes=genes, type="fill", high="white", limits=color.range)
@@ -1094,12 +1131,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         if(is.null(condition.per.cell)) stop("'condition.per.cell' must be provided when entropy was used")
       }
       p <- diffCellDensity(density.emb, density.matrix, condition.per.cell = condition.per.cell, sample.groups, bins = bins, target.level = target.level, ref.level =
-                             ref.level, method = method, title = title, legend.position = legend.position, show.legend = show.legend, show.grid = show.grid, z.cutoff = z.cutoff)
+                           ref.level, method = method, title = title, legend.position = legend.position, show.legend = show.legend, show.grid = show.grid, z.cutoff = z.cutoff)
 
+      fig <- p$fig
       if (plot){
         if(!is.null(contours)){
-          cnl = do.call(c, lapply(sn(contours), function(x) getContour(self$embedding, cell.type =self$cell.groups , cell=x ,conf = contour.conf, color = contour.color)))
-          fig <- p$fig + cnl
+          cnl <- do.call(c, lapply(sn(contours), function(x)
+            getContour(self$embedding, cell.type=self$cell.groups , cell=x, conf=contour.conf, color=contour.color)))
+          fig <- fig + cnl
         }
         return(fig)
       }

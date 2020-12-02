@@ -84,6 +84,43 @@ estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.l
 }
 
 
+##' @description estimate graph  smooth based cell density
+##' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
+##' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+##' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
+##' @param target.level target/disease level for sample.group vector
+##' @param n.cores number of cores
+##' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
+
+estimateGraphDensity <- function(sample.per.cell, sample.groups, ref.level, target.level, n.cores = 1, m = 50, verbose = TRUE) {
+  tmp <-  setNames(as.numeric(sample.per.cell), names(sample.per.cell))
+  scoreL <- sccore:::plapply(sn(unique(tmp)), function(x) {
+    tryCatch({
+      x1 <-  tmp
+      x1[x1 != x] <-  0
+      x1[x1 == x] <-  1
+      sccore:::smoothSignalOnGraph(x1, con$graph, sccore:::heatFilter, m = m)
+    }, error = function(err) {
+      return(NA)
+    })
+  }, n.cores = n.cores, mc.preschedule=T, progress=verbose)
+  scM <- do.call(cbind, scoreL)
+  colnames(scM) <-  unique(sample.per.cell)
+  NT <-  sample.groups[sample.groups == target.level] %>% names()
+  NR <- sample.groups[sample.groups == ref.level] %>% names()
+  score <- apply(scM, 1, function(x) {
+    x1 <- x[NT]
+    x2 <- x[NR]
+    t.test(x1, x2)$statistic
+  })
+  names(score) <- rownames(scM)
+  # trim outliner
+  c1 <- quantile(score, 0.9999)
+  c2 <- quantile(score, 0.0001)
+  score[score > c1] <- c1
+  score[score < c2] <- c2
+  return(score)
+}
 
 
 

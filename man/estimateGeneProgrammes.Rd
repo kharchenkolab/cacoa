@@ -17,7 +17,7 @@ estimateGeneProgrammes(
 )
 }
 \arguments{
-\item{n.programmes}{maximal number of gene programmes to find (parameter `p` for fabia).}
+\item{n.programmes}{maximal number of gene programmes to find (parameter \code{p} for fabia).}
 
 \item{n.sampled.cells}{number of sub-sampled cells for estimating the gene programmes. If 0, all cells are used.
 it is interpreted as a vector of cell}

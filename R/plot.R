@@ -353,8 +353,7 @@ plotProportionsSubset <- function(legend.position = "right",
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
     geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
-    scale_y_continuous(limits=c(0, (max(df.melt$value) + 5))) +
-    ggpubr::stat_compare_means(aes(group = group), label = "p.signif")
+    scale_y_continuous(limits=c(0, (max(df.melt$value) + 5))) 
 
   if(show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
 

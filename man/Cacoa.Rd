@@ -8,6 +8,8 @@ Cacoa R6 class
 
 Cacoa R6 class
 
+estimate graph smooth based cell density
+
 Plot inter-sample expression distance
 
 Plot sample-sample expression distance as a 2D embedding
@@ -76,6 +78,7 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-extimateWilcoxonTest}{\code{Cacoa$extimateWilcoxonTest()}}
 \item \href{#method-estimateCellDensity}{\code{Cacoa$estimateCellDensity()}}
 \item \href{#method-plotCellDensity}{\code{Cacoa$plotCellDensity()}}
+\item \href{#method-estimateGraphDensity}{\code{Cacoa$estimateGraphDensity()}}
 \item \href{#method-diffCellDensity}{\code{Cacoa$diffCellDensity()}}
 \item \href{#method-plotExpressionDistance}{\code{Cacoa$plotExpressionDistance()}}
 \item \href{#method-plotExpressionDistanceEmbedding}{\code{Cacoa$plotExpressionDistanceEmbedding()}}
@@ -176,10 +179,10 @@ Calculate expression shift magnitudes of different clusters between conditions
 }
 \subsection{Returns}{
 a list include \itemize{
-  \item{df: a table with cluster distances (normalized if within.gorup.normalization=T), cell type, number of cells}
-  \item{ctdml: raw list of `n.subsamples` sampled distance matrices (cells were subsampled)}
-  \item{sample.groups: same as the provided variable}
-  \item{valid.comparisons: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)}
+\item{df: a table with cluster distances (normalized if within.gorup.normalization=T), cell type, number of cells}
+\item{ctdml: raw list of \code{n.subsamples} sampled distance matrices (cells were subsampled)}
+\item{sample.groups: same as the provided variable}
+\item{valid.comparisons: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)}
 }
 }
 }
@@ -1115,6 +1118,29 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateGraphDensity"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateGraphDensity}{}}}
+\subsection{Method \code{estimateGraphDensity()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGraphDensity(n.cores = 10, m = 50, verbose = TRUE)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{n.cores}}{number of cores}
+
+\item{\code{m}}{numeric Maximum order of Chebyshev coeff to compute (default=50)}
+
+\item{\code{verbose}}{show progress (default: stored value)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+Z score of differential cell density
+}
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-diffCellDensity"></a>}}
 \if{latex}{\out{\hypertarget{method-diffCellDensity}{}}}
 \subsection{Method \code{diffCellDensity()}}{
@@ -1281,7 +1307,7 @@ Estimate differencial expression Z-scores between two conditions per individual 
 \subsection{Returns}{
 Sparse matrix of z-scores with genes as columns and cells as rows.
 Cells that have only one condition in their expression neighborhood have NA Z-scores for all genes.
-Results are also stored in the `cluster.free.z` field.
+Results are also stored in the \code{cluster.free.z} field.
 }
 }
 \if{html}{\out{<hr>}}
@@ -1307,7 +1333,7 @@ Estimate Cluster-free Expression Shift
 }
 \subsection{Returns}{
 Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
-Results are also stored in the `cluster.free.expr.shifts` field.
+Results are also stored in the \code{cluster.free.expr.shifts} field.
 }
 }
 \if{html}{\out{<hr>}}
@@ -1328,20 +1354,20 @@ Performs graph smoothing of the cluster-free DE Z-scores
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{smoothing}}{`beta` parameter of the \link[=sccore:heatFilter]{heatFilter}. Default: 20.}
+\item{\code{smoothing}}{\code{beta} parameter of the \link[sccore:heatFilter]{heatFilter}. Default: 20.}
 
-\item{\code{filter}}{graph filter function. Default: \link[=sccore:heatFilter]{heatFilter}.}
+\item{\code{filter}}{graph filter function. Default: \link[sccore:heatFilter]{heatFilter}.}
 
 \item{\code{n.cores}}{number of cores for parallelisation}
 
 \item{\code{verbose}}{show progress (default: stored value)}
 
-\item{\code{...}}{parameters forwarded to \link[=sccore:smoothSignalOnGraph]{smoothSignalOnGraph}}
+\item{\code{...}}{parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z.smoothed` field.
+Sparse matrix of smoothed Z-scores. Results are also stored in the \code{cluster.free.z.smoothed} field.
 }
 }
 \if{html}{\out{<hr>}}
@@ -1349,7 +1375,7 @@ Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free
 \if{latex}{\out{\hypertarget{method-estimateGeneProgrammes}{}}}
 \subsection{Method \code{estimateGeneProgrammes()}}{
 Estimate Gene Programmes based on cluster-free Z-scores on a subsample of
-cells using \link[=fabia:fabia]{fabia}.
+cells using \link[fabia:fabia]{fabia}.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGeneProgrammes(
   smoothed = TRUE,
@@ -1362,7 +1388,7 @@ cells using \link[=fabia:fabia]{fabia}.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.programmes}}{maximal number of gene programmes to find (parameter `p` for fabia). Default: 15.}
+\item{\code{n.programmes}}{maximal number of gene programmes to find (parameter \code{p} for fabia). Default: 15.}
 
 \item{\code{name}}{field name where the test results are stored}
 
@@ -1371,7 +1397,19 @@ cells using \link[=fabia:fabia]{fabia}.
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-
+a list includes:
+\itemize{
+\item \code{fabia}: \link[fabia:Factorization]{fabia::Factorization} object, result of the
+\link[fabia:fabia]{fabia::fabia} call
+\item \code{sample.ids}: ids of the subsampled cells used for fabia estimates
+\item \code{scores.exact}: vector of fabia estimates of gene programme scores per cell. Estimated only for the
+subsampled cells.
+\item \code{scores.approx}: vector of approximate gene programme scores, estimated for all cells in the dataset
+\item \code{loadings}: matrix with fabia gene loadings per programme
+\item \code{gene.scores}: list of vectors of gene scores per programme. Contains only genes, selected for
+the programme usin fabia biclustering.
+\item \code{bi.clusts} fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
+}
 }
 }
 \if{html}{\out{<hr>}}
@@ -1452,7 +1490,7 @@ Plot cluster-free expression shift z-scores
 \item{\code{plot.both.conditions}}{show both case and control cells. Normally, showing control cells doesn't
 make sense, as control cells always have small distance from control.}
 
-\item{\code{max.shift}}{all shift values above `max.shift` are set to this value when plotting. Default: 95% of the shifts.}
+\item{\code{max.shift}}{all shift values above \code{max.shift} are set to this value when plotting. Default: 95\% of the shifts.}
 
 \item{\code{font.size}}{size range for cell type labels}
 

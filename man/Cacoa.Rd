@@ -61,6 +61,7 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-prepareOntologyData}{\code{Cacoa$prepareOntologyData()}}
 \item \href{#method-plotEmbedding}{\code{Cacoa$plotEmbedding()}}
 \item \href{#method-estimateOntology}{\code{Cacoa$estimateOntology()}}
+\item \href{#method-estimateOntologyClusters}{\code{Cacoa$estimateOntologyClusters()}}
 \item \href{#method-plotOntologyDistribution}{\code{Cacoa$plotOntologyDistribution()}}
 \item \href{#method-plotOntologyTerms}{\code{Cacoa$plotOntologyTerms()}}
 \item \href{#method-plotOntologyBarplot}{\code{Cacoa$plotOntologyBarplot()}}
@@ -387,7 +388,7 @@ Plot number of significant DE genes
   name = "de",
   cell.groups = self$cell.groups,
   legend.position = "none",
-  label = T,
+  label = TRUE,
   p.adjust = TRUE,
   pvalue.cutoff = 0.05,
   palette = self$cell.groups.palette
@@ -617,6 +618,49 @@ A list containing a list of terms per ontology, and a data frame with merged res
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateOntologyClusters"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateOntologyClusters}{}}}
+\subsection{Method \code{estimateOntologyClusters()}}{
+Estimate Gene Ontology clusters
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntologyClusters(
+  type = "GO",
+  genes = "all",
+  name = getOntClustField(type, genes),
+  ind.h = 0.66,
+  total.h = 0.5,
+  verbose = self$verbose
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO". Default: "GO".}
+
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all'. Default: "up".}
+
+\item{\code{name}}{Name of the field to store the results. Default: \code{paste(type, genes, "clusters", sep=".")}.}
+
+\item{\code{ind.h}}{Cut height for hierarchical clustering of terms per cell type.
+Approximately equal to the fraction of genes, shared between the GOs. Default: 0.66.}
+
+\item{\code{total.h}}{Cut height for hierarchical clustering of GOs across all subtypes.
+Approximately equal to the fraction of subtypes for which two GOs should belong to the same cluster. Default: 0.5.}
+
+\item{\code{verbose}}{show progress (default: stored value)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+List containing:
+\itemize{
+\item \code{df}: data.frame with information about individual gene ontolodies and columns \code{Cluster} and \code{ClusterName} for the clustering info
+\item \code{hclust}: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all subtypes
+}
+}
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotOntologyDistribution"></a>}}
 \if{latex}{\out{\hypertarget{method-plotOntologyDistribution}{}}}
 \subsection{Method \code{plotOntologyDistribution()}}{
@@ -770,6 +814,8 @@ Plot a heatmap of ontology P values per cell type
   legend.position = "left",
   selection = "all",
   n = 10,
+  clusters = TRUE,
+  cluster.name = NULL,
   cell.subgroups = NULL,
   color.range = NULL,
   ...
@@ -788,6 +834,10 @@ Plot a heatmap of ontology P values per cell type
 \item{\code{selection}}{Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms) (default="all")}
 
 \item{\code{n}}{Number of terms to show (default=10)}
+
+\item{\code{clusters}}{Whether to show GO clusters or raw GOs (default=TRUE)}
+
+\item{\code{cluster.name}}{Field with the results for GO clustering. Ignored if \code{clusters == FALSE}.}
 
 \item{\code{cell.subgroups}}{Cell groups to plot (default=NULL)}
 
@@ -1191,12 +1241,12 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionDistance(
   name = "expression.shifts",
   notch = TRUE,
-  cell.groups = self$cell.groups,
   sample.groups = self$sample.groups,
   weighted.distance = TRUE,
   min.cells = 10,
   palette = self$sample.groups.palette,
-  show.significance = FALSE
+  show.significance = FALSE,
+  alpha = 0.2
 )}\if{html}{\out{</div>}}
 }
 
@@ -1207,13 +1257,15 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 
 \item{\code{notch}}{Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)}
 
-\item{\code{cell.groups}}{Named factor with cell names defining groups/clusters (default: stored $cell.groups vector)}
-
 \item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
 
 \item{\code{weighted.distance}}{whether to weigh the expression distance by the sizes of cell types (default: TRUE), or show distances for each individual cell type}
 
-\item{\code{show.significance}}{whether to show statistical significance betwwen sample groups. wilcox.test was used; (* < 0.05; ** < 0.01; *** < 0.001)}
+\item{\code{show.significance}}{whether to show statistical significance between sample groups. wilcox.test was used; (\* < 0.05; \\emph{\} < 0.01; \\emph{\}\* < 0.001)}
+
+\item{\code{alpha}}{dot transparency}
+
+\item{\code{cell.groups}}{Named factor with cell names defining groups/clusters (default: stored $cell.groups vector)}
 }
 \if{html}{\out{</div>}}
 }

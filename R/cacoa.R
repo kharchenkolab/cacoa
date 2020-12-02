@@ -512,6 +512,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[[type]]))
     },
 
+    #' @description Estimate Gene Ontology clusters
+    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all'. Default: "up".
+    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO". Default: "GO".
+    #' @param name Name of the field to store the results. Default: `paste(type, genes, "clusters", sep=".")`.
+    #' @param ind.h Cut height for hierarchical clustering of terms per cell type.
+    #' Approximately equal to the fraction of genes, shared between the GOs. Default: 0.66.
+    #' @param total.h Cut height for hierarchical clustering of GOs across all subtypes.
+    #' Approximately equal to the fraction of subtypes for which two GOs should belong to the same cluster. Default: 0.5.
+    #' @return List containing:
+    #'   - `df`: data.frame with information about individual gene ontolodies and columns `Cluster` and `ClusterName` for the clustering info
+    #'   - `hclust`: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all subtypes
     estimateOntologyClusters=function(type="GO", genes="all", name=getOntClustField(type, genes), ind.h=0.66, total.h=0.5, verbose=self$verbose) {
       ont.df <- private$getOntologyPvalueResults(type=type, cell.subgroup=FALSE, genes=genes)
       clust.mat <- ont.df %>% split(.$Group) %>% clusterIndividualGOs(cut.h=ind.h) %>%
@@ -670,11 +681,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms) (default="all")
     #' @param n Number of terms to show (default=10)
     #' @param clusters Whether to show GO clusters or raw GOs (default=TRUE)
+    #' @param cluster.name Field with the results for GO clustering. Ignored if `clusters == FALSE`.
     #' @param cell.subgroups Cell groups to plot (default=NULL)
     #' @param color.range vector with two values for min/max values of p-values
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
-    plotOntologyHeatmap=function(genes="up", type="GO", legend.position="left", selection="all", n=10, clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, ...) {
+    plotOntologyHeatmap=function(genes="up", type="GO", legend.position="left", selection="all", n=10, clusters=TRUE,
+                                 cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, ...) {
       if (!clusters) {
         ont.sum <- private$getOntologyPvalueResults(type=type, cell.subgroup=FALSE, genes=genes) %>%
           groupOntologiesByCluster(field="Description")

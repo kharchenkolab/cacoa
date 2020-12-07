@@ -434,7 +434,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.raw)]
       sapply(de.raw, function(n) n %>% dplyr::filter(padj <= p.adj) %>% nrow) %>%
-        plotNCellRegression(cell.groups, y.lab="Significant DE genes", legend.position=legend.position, label=label, ...) +
+        plotNCellRegression(cell.groups, y.lab="Significant DE genes", ...) +
         xlab("Number of cells") +
         geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
     },
@@ -575,10 +575,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @return A ggplot2 object
-    plotOntologyDistribution=function(genes = c("up","down"), type = "GO", p.adj = 0.05, cell.groups = self$cell.groups) {
+    plotOntologyDistribution=function(genes = c("up","down"), type = "GO", p.adj = 0.05, min.genes = 1, cell.groups = self$cell.groups) {
       # Checks
-      if(is.null(type) || (!type %in% c("GO", "DO"))) stop("'type' must be 'GO' or 'DO'.")
-      if(is.null(genes) || (!all(genes %in% c("down","up","all")))) stop("'genes' must be 'down', 'up', 'all', or a combination of these.")
+      if(is.null(type) || (!type %in% c("GO", "DO", "GSEA"))) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
+      if(!type == "GSEA") {
+        if(is.null(genes) || (!all(genes %in% c("down","up","all")))) stop("'genes' must be 'down', 'up', 'all', or a combination of these.")
+      }
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       # Extract data
@@ -586,24 +588,28 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(ont.res)) stop(paste0("No results found for '",type,"'. Please run 'estimateOntology' first."))
 
       # Prepare data
-      ont.res %<>% preparePlotData(type, p.adj)
+      ont.res %<>% preparePlotData(type, p.adj, min.genes)
 
-      ## Check for missing results
-      classes <- sapply(ont.res[genes], class) # What is this?
-      if(any(classes == "character")) {
-        message(paste0("No significant results found for genes = '",names(classes[classes == "character"]),"'."))
-        genes <- names(classes[classes == "data.frame"])
-        if(length(genes) == 0) stop("No results to plot.")
-      }
+      if(!type == "GSEA") {
+        ## Check for missing results
+        classes <- sapply(ont.res[genes], class)
+        if(any(classes == "character")) {
+          message(paste0("No significant results found for genes = '",names(classes[classes == "character"]),"'."))
+          genes <- names(classes[classes == "data.frame"])
+          if(length(genes) == 0) stop("No results to plot.")
+        }
 
-      ont.res %<>% .[genes]
+        ont.res %<>% .[genes]
 
-      if(length(genes) > 1) {
-        ont.res %<>% names() %>%
-          lapply(function(d) ont.res[[d]] %>% dplyr::mutate(direction = d)) %>%
-          Reduce(rbind, .)
+        if(length(genes) > 1) {
+          ont.res %<>% names() %>%
+            lapply(function(d) ont.res[[d]] %>% dplyr::mutate(direction = d)) %>%
+            Reduce(rbind, .)
+        } else {
+          ont.res %<>% .[[1]] %>% dplyr::mutate(direction = genes)
+        }
       } else {
-        ont.res %<>% .[[1]] %>% dplyr::mutate(direction = genes)
+        ont.res %<>% addGroup()
       }
 
       # Prepare data further
@@ -635,6 +641,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           gg <- ggplot(p_df) +
             geom_bar(aes(x=Group, y=N), stat="identity")
         }
+      } else if(type == "GSEA") {
+        p_df <- table(ont.res$Group, ont.res$Type) %>%
+          as.data.frame() %>%
+          setNames(c("Group","Type","N")) %>%
+          dplyr::arrange(Group)
+
+          gg <- ggplot(p_df) +
+            geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
       }
 
       gg +
@@ -654,9 +668,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param label.y.pos Plot label position on y axis (default=1)
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
     #' @return A ggplot2 object
-    plotOntologyTerms=function(genes = c("up","down"), type = "GO", p.adj = 0.05, de.filter = self$test.results$gene.ids, cell.groups = self$cell.groups, label.x.pos = 0.01, label.y.pos = 1, scale = 0.93) {
+    plotOntologyTerms=function(genes = c("up","down"), type = "GO", p.adj = 0.05, min.genes = 1, de.filter = self$test.results$gene.ids, cell.groups = self$cell.groups, label.x.pos = 0.01, label.y.pos = 1, scale = 0.93) {
       # Checks
-      if(is.null(type) || (!type %in% c("GO", "DO"))) stop("'type' must be 'GO' or 'DO'.")
+      if(is.null(type) || (!type %in% c("GO", "DO", "GSEA"))) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
       if(is.null(genes) || (!all(genes %in% c("down","up","all")))) stop("'genes' must be 'down', 'up', 'all', or a combination of these.")
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
@@ -665,9 +679,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(ont.res)) stop(paste0("No results found for ",type,". Please run estimateOntology first."))
 
       # Prepare data
-      ont.res %<>% preparePlotData(type, p.adj)
+      ont.res %<>% preparePlotData(type, p.adj, min.genes)
 
-      ## Check for missing results
+      ## Check for missing results. TODO: GSEA error message
       classes <- sapply(ont.res[genes], class)
       if(any(classes == "character")) {
         message(paste0("No results found for genes = '",names(classes[classes == "character"]),"'."))
@@ -675,8 +689,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         if(length(genes) == 0) stop("No results to plot.")
       }
 
-      ont.res %<>% .[genes]
-      if(length(genes) > 1) ont.res %<>% Reduce(rbind, .) else ont.res %<>% .[[1]]
+      if(type != "GSEA") {
+        ont.res %<>% .[genes]
+        if(length(genes) > 1) ont.res %<>% Reduce(rbind, .) else ont.res %<>% .[[1]]
+      } else {
+        ont.res %<>% addGroup()
+      }
+
       if(length(unique(ont.res$Group))==1) stop("The input only contains one cell type.")
       cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
 
@@ -695,6 +714,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         y_lab <- "Number of GO terms"
       } else if(type=="DO") {
         y_lab <- "Number of DO terms"
+      } else if(type == "GSEA") {
+        y_lab <- "Number of GSEA terms"
       }
 
       cowplot::plot_grid(pg, nrow=1, scale=scale) + cowplot::draw_label(y_lab, x=0, y=0.6, vjust= 1.5, angle=90)
@@ -707,36 +728,31 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param n Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @return A ggplot2 object
-    plotOntology = function(cell.subgroups, plot = "dot", genes = "up", type = "BP", n = 20, p.adj = 0.05, min.genes = 1, ...) {
+    plotOntology = function(cell.subgroups, plot = "dot", genes = "up", type = "GO", subtype = "BP", n = 20, p.adj = 0.05, min.genes = 1, ...) {
       # Checks
       if (!requireNamespace("enrichplot", quietly = TRUE)) stop("You need 'enrichplot' to plot.")
-      if(is.null(type) || (!type %in% c("BP","CC","MF","DO","GSEA"))) stop("'type' must be 'GO', BP', 'CC', 'MF', 'DO', or 'GSEA'.")
+      if(is.null(type) || (!type %in% c("GO","DO","GSEA"))) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
+      if(is.null(subtype) || (!subtype %in% c("BP","CC","MF"))) stop("'subtype' must be 'BP', 'CC', or 'MF'.")
       if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
       if(is.null(cell.subgroups)) stop("Please define which cells to plot using 'cell.subgroups'.")
+      if(type == "GSEA" & plot == "bar") stop("No 'enrichplot' method exists for making barplots of GSEA results.")
 
-      # Extract results and do checks
-      if(type %in% c("BP","CC","MF")) {
-        ont.res <- self$test.results[["GO"]][["res"]]
-        if(is.null(ont.res)) stop(paste0("No GO results found."))
-      } else {
-        ont.res <- self$test.results[[type]][["res"]]
-        if(is.null(ont.res)) stop(paste0("No results found for ",type,"."))
-      }
-
-      # Extract cell.subgroups
+      # Extract results
+      ont.res <- self$test.results[[type]][["res"]]
+      if(is.null(ont.res)) stop(paste0("No results found for ",type,"."))
       if(!cell.subgroups %in% names(ont.res)) stop("'cell.subgroups' not found in results.")
       ont.res %<>% .[[cell.subgroups]]
-      if(type %in% c("BP","CC","MF")) ont.res %<>% .[[type]] # TODO: Does this work for DO/GSEA?
-      if(is.null(ont.res)) stop(paste0("No results found for ",type," for ",cell.subgroups,".")) # TODO: Include GSEA
-
-      # Extract genes
-      if(type %in% c("BP","CC","MF","DO")) ont.res %<>% .[[genes]]
-      if(is.null(ont.res)) stop(paste0("No results found for ",genes," genes for ",type," for ",cell.subgroups,".")) # TODO: Include GSEA
+      if(type != "DO") ont.res %<>% .[[subtype]]
+      if(is.null(ont.res)) stop(paste0("No results found for ",type,", ",subtype," for ",cell.subgroups,"."))
+      if(type %in% c("GO","DO")) ont.res %<>% .[[genes]]
+      if(is.null(ont.res)) stop(paste0("No results found for ",genes," genes for ",type,", ",subtype," for ",cell.subgroups,"."))
 
       # Prepare data
       df <- ont.res@result %>% filter(p.adjust <= p.adj)
       if(nrow(df) == 0) stop(paste0("Nothing to plot. Try relaxing 'p.adj'. The lowest adj. P value is ",min(ont.res@result$p.adjust) %>% formatC(digits = 3),"."))
-      if(p.adj != 0.05) { # Allow plotting of terms with p.adj > 0.05
+
+      # Allow plotting of terms with p.adj > 0.05
+      if(p.adj != 0.05) {
         ont.res@pvalueCutoff = 1
         ont.res@qvalueCutoff = 1
       }
@@ -766,9 +782,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param n Number of terms to show (default=10)
     #' @param cell.subgroups Cell groups to plot (default=NULL)
     #' @return A ggplot2 object
-    plotOntologyHeatmap=function(genes = "up", type = "GO", min.genes = 1, legend.position = "left", selection = "all", n = 10, cell.subgroups = NULL, min.genes = 1, p.adj = 0.05) {
+    plotOntologyHeatmap=function(genes = "up", type = "GO", subtype = "BP", min.genes = 1, p.adj = 0.05, legend.position = "left", selection = "all", n = 10, cell.subgroups = NULL) {
       # Checks
-      if(is.null(type) || (!type %in% c("GO","BP","CC","MF","DO"))) stop("'type' must be 'BP', 'CC', 'MF', or 'DO'.")
+      if(is.null(type) || (!type %in% c("GO","BP","CC","MF","DO","GSEA"))) stop("'type' must be 'BP', 'CC', 'MF', 'DO', or 'GSEA'.")
       if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
       if(!is.null(cell.subgroups)) {
         if(length(cell.subgroups) == 1) stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
@@ -776,31 +792,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(selection) || (!selection %in% c("unique","common","all"))) stop("'selection' must be one of the following: 'unique', 'common', or 'all'.")
 
       # Extract results
-      if(type %in% c("BP","MF","CC")) {
-        ont.res <- self$test.results[["GO"]][["res"]]
-      } else {
-        ont.res <- self$test.results[[type]][["res"]]
-      }
+      ont.res <- self$test.results[[type]][["res"]]
       if(is.null(ont.res)) stop(paste0("No results found for '",type,"'. Please run 'estimateOntology' first."))
 
       # Prepare data
       ont.res %<>% preparePlotData(type, p.adj, min.genes)
 
       # Extract genes and subgroups
-      if(type %in% c("GO","BP","CC","MF","DO")) ont.res %<>% .[[genes]]
+      if(type %in% c("GO","DO")) ont.res %<>% .[[genes]]
       if(is.null(ont.res)) stop(paste0("No results found for ",genes," genes for ",type," for ",cell.subgroups,".")) # TODO: Include GSEA
       if(!is.null(cell.subgroups)) {
         if(!cell.subgroups %in% names(ont.res)) stop("'cell.subgroups' not found in results.")
-        ont.res %<>% filter(Group %in% cell.subgroups)
+        ont.res %<>% .[cell.subgroups]
       }
 
       # Get summary
-      if(type=="GO") {
+      if(type == "GSEA") {
+        ont.res %<>% addGroup()
+        ont.res %<>% rename(geneID = core_enrichment)
+      }
+
+      if(is.null(subtype)) {
         ont.sum <- getOntologySummary(ont.res)
-      } else if(type=="BP" | type=="CC" | type=="MF") {
-        ont.sum <- getOntologySummary(ont.res %>% filter(Type==type))
-      } else if(type=="DO") {
-        ont.sum <- getOntologySummary(ont.res)
+      } else {
+        ont.sum <- getOntologySummary(ont.res %>% filter(Type==subtype))
       }
 
       if(selection=="unique") {
@@ -828,7 +843,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @return A ggplot2 object
     plotOntologySimilarities=function(genes = "up", type = "GO", p.adj = 0.05, min.genes = 1) {
       # Checks
-      if(is.null(type) || (!type %in% c("GO", "DO"))) stop("'type' must be 'GO' or 'DO'.") # Should it include GO subterms? What about GSEA?
+      if(is.null(type) || (!type %in% c("GO", "DO", "GSEA"))) stop("'type' must be 'GO', 'DO', or 'GSEA'.") # Should it include GO subterms?
       if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
 
       # Extract data
@@ -837,11 +852,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       # Prepare data
       ont.res %<>% preparePlotData(type, p.adj, min.genes)
-      ont.res %<>% .[[genes]]
+      if(type != "GSEA") {
+        ont.res %<>% .[[genes]]
+      } else {
+        ont.res %<>% addGroup()
+      }
+
       if((ont.res$Group %>% unique() %>% length()) == 1) stop("Only one group present, correlation cannot be performed.")
       if(nrow(ont.res) == 0) stop("No significant ontology terms identified. Try relaxing p.adj.")
 
-      if(type=="GO") {
+      if(type %in% c("GO", "GSEA")) {
         pathway_df <- unique(ont.res$Group) %>%
           lapply(function(cell.group) {
             lapply(ont.res %>%
@@ -867,9 +887,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                            Group=cell.group)
           }) %>%
           dplyr::bind_rows()
-      } else {
-        stop("'type' must be either 'GO' or 'DO'.")
       }
+
       path_bin <- pathway_df %>%
         dplyr::select(Pathway, Group) %>%
         dplyr::mutate(X=1) %>%

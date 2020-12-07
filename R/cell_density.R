@@ -214,17 +214,17 @@ plotDensity <- function(mat, bins, col = c('blue','white','red'), show.legend = 
 ##' @param condition.per.cell A two-level factor on the cell names describing the conditions being compared (default: stored vector)
 ##' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
 ##' @param target.level target/disease level for sample.group vector
-##' @param method method to calcuate differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy between sample groups ; t.test: zscore of t-test,
+##' @param method method to calcuate differential cell density of each bin; subtract: target density minus ref density; entropy: estimated kl divergence entropy between sample groups ; t.test: zscore of t-test,
 ##' global variance is setting for t.test;
-diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample.groups, bins, ref.level, target.level, method = 'substract',
+diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample.groups, bins, ref.level, target.level, method = 'subtract',
                             show.legend = NULL,legend.position = NULL, show.grid = TRUE, col = c('blue','white','red'), title = NULL,
                             dcount.cutoff = 0, z.cutoff = NULL){
   nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
   nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
 
-  if (method == 'substract') {
+  if (method == 'subtract') {
     score <- rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])
-  } else if (method == 'substract.norm'){
+  } else if (method == 'subtract.norm'){
     score <- (rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])) / rowMeans(density.mat[, nr])
   } else if (method == 'entropy'){
     sudo <- mean(as.numeric(density.mat)) # add sudo counts

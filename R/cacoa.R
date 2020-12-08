@@ -1122,14 +1122,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @return Sparse matrix of z-scores with genes as columns and cells as rows.
     #' Cells that have only one condition in their expression neighborhood have NA Z-scores for all genes.
     #' Results are also stored in the `cluster.free.z` field.
-    estimateClusterFreeZScores = function(n.od.genes=NULL, verbose=self$verbose, ...) {
+    estimateClusterFreeZScores = function(n.od.genes=NULL, verbose=self$verbose, n.cores=self$n.cores, ...) {
       cm <- extractJointCountMatrix(self$data.object)
       genes <- extractOdGenes(self$data.object, n.od.genes)
 
       is.ref <- self$sample.per.cell %>%
         {setNames(self$sample.groups[as.character(.)] == self$ref.level, names(.))}
       self$test.results[["cluster.free.z"]] <- extractCellGraph(self$data.object) %>%
-        estimateClusterFreeZScores(cm, is.ref=is.ref, genes=genes, verbose=verbose, ...)
+        estimateClusterFreeZScores(cm, is.ref=is.ref, genes=genes, verbose=verbose, n_cores=n.cores, ...)
 
       return(invisible(self$test.results[["cluster.free.z"]]))
     },

@@ -1341,6 +1341,7 @@ Estimate differencial expression Z-scores between two conditions per individual 
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeZScores(
   n.od.genes = NULL,
   verbose = self$verbose,
+  n.cores = self$n.cores,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1351,6 +1352,8 @@ Estimate differencial expression Z-scores between two conditions per individual 
 \item{\code{n.od.genes}}{number of overdispersed genes for estimating Z-scores}
 
 \item{\code{verbose}}{show progress (default: stored value)}
+
+\item{\code{n.cores}}{number of cores for parallelisation}
 
 \item{\code{...}}{parameters forwarded to \link{estimateClusterFreeZScores}}
 }

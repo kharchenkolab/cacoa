@@ -39,7 +39,7 @@ Imports:
     viridis
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
-LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress
+LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress, sccore
 NeedsCompilation: yes
 Suggests:
     clusterProfiler (>= 3.0.0),

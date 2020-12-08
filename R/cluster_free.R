@@ -1,31 +1,3 @@
-#' Estimate Local Z Scores
-#'
-#' @param graph Alignment graph adjacency matrix
-#' @param genes Genes to be tested. Procedure is slow, so it's reasonable to restrict amount of genes.
-#' @param is.ref Boolean vector per cell indicating whether it came from the reference condition
-#' @param count.matrix.transposed Joint count matrix with cells by rows and genes by columns
-#' @param ref.level Reference condition level, e.g., wt, ctrl, or healthy
-#' @inheritDotParams clusterFreeZScoreMat
-estimateClusterFreeZScores <- function(graph, count.matrix.transposed, is.ref, genes=NULL, max.z=20, ...) {
-  adj.mat <- igraph::as_adj(graph)
-
-  cell.names <- intersect(rownames(count.matrix.transposed), rownames(adj.mat)) %>%
-    intersect(names(is.ref))
-  if (length(cell.names) == 0)
-    stop("No cells in graph matching to count.matrix.transposed and is.ref")
-
-  if (!is.null(genes)) {
-    count.matrix.transposed <- count.matrix.transposed[,genes]
-  }
-
-  z.mat <- clusterFreeZScoreMat(adj.mat[cell.names, cell.names], count.matrix.transposed[cell.names,],
-                                is.ref[cell.names], ...)
-
-  z.mat@x %<>% pmin(max.z) %>% pmax(-max.z)
-
-  return(z.mat)
-}
-
 #' Estimate Gene Programmes
 #' @param n.programmes maximal number of gene programmes to find (parameter `p` for fabia).
 #' @param n.sampled.cells number of sub-sampled cells for estimating the gene programmes. If 0, all cells are used.

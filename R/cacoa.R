@@ -50,6 +50,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, sample.groups.palette=NULL, cell.groups.palette=NULL,
                         embedding=extractEmbedding(data.object), n.cores=1, verbose=TRUE) {
+      if ('Cacoa' %in% class(data.object)) { # copy constructor
+        for (n in ls(data.object)) {
+          if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
+        }
+
+        return()
+      }
+
       self$n.cores <- n.cores
       self$verbose <- verbose
       self$ref.level <- ref.level
@@ -63,19 +71,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         self$target.level <- target.level
       }
 
-      if('Cacoa' %in% class(data.object)) { # copy constructor
-        for(n in ls(data.object)) {
-          if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
-        }
+      # TODO: would be nice to support a list of count matrices as input
+      if (!('Conos' %in% class(data.object)))
+        stop("only Conos data objects are currently supported");
 
-        return()
-      } else {
-        # TODO: would be nice to support a list of count matrices as input
-        if (!('Conos' %in% class(data.object)))
-          stop("only Conos data objects are currently supported");
-
-        self$data.object <- data.object
-      }
+      self$data.object <- data.object
 
       if(is.null(sample.groups)) {
         self$sample.groups <- extractSampleGroups(data.object, ref.level, self$target.level)
@@ -1117,20 +1117,33 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     ### Cluster-free differential expression
 
     #' @description Estimate differencial expression Z-scores between two conditions per individual cell
-    #' @param n.od.genes number of overdispersed genes for estimating Z-scores
-    #' @param ... parameters forwarded to \link{estimateClusterFreeZScores}
+    #' @param n.top.genes number of genes for estimating Z-scores. Genes are ranked by the expression level.
+    #' @param max.z z-score value to winsorize the estimates for reducing impact of outliers. Default: 20.
+    #' @param min.expr.frac minimal fraction of cell expressing a gene for estimating z-scores for it. Default: 0.001.
     #' @return Sparse matrix of z-scores with genes as columns and cells as rows.
     #' Cells that have only one condition in their expression neighborhood have NA Z-scores for all genes.
     #' Results are also stored in the `cluster.free.z` field.
-    estimateClusterFreeZScores = function(n.od.genes=NULL, verbose=self$verbose, n.cores=self$n.cores, ...) {
+    estimateClusterFreeZScores = function(n.top.genes=NULL, max.z=20, min.expr.frac=0.001, verbose=self$verbose, n.cores=self$n.cores) {
       cm <- extractJointCountMatrix(self$data.object)
-      genes <- extractOdGenes(self$data.object, n.od.genes)
+
+      cm.bin <- cm
+      cm.bin@x <- 1 * (cm.bin@x > 0)
+      gene.mask <- (colMeans(cm.bin) >= min.expr.frac)
+      gene.ids <- colMeans(cm.bin) %>% order(decreasing=TRUE) %>%
+        .[gene.mask[.]] %>% .[1:min(length(.), n.top.genes)]
 
       is.ref <- self$sample.per.cell %>%
         {setNames(self$sample.groups[as.character(.)] == self$ref.level, names(.))}
-      self$test.results[["cluster.free.z"]] <- extractCellGraph(self$data.object) %>%
-        estimateClusterFreeZScores(cm, is.ref=is.ref, genes=genes, verbose=verbose, n_cores=n.cores, ...)
 
+      adj.mat <- extractCellGraph(self$data.object) %>% igraph::as_adj()
+      cell.names <- intersect(rownames(cm), rownames(adj.mat)) %>%
+        intersect(names(is.ref))
+
+      z.mat <- clusterFreeZScoreMat(adj.mat[cell.names, cell.names], cm[cell.names, gene.ids, drop=FALSE],
+                                    is.ref[cell.names], verbose=verbose, n_cores=n.cores)
+      z.mat@x %<>% pmin(max.z) %>% pmax(-max.z)
+
+      self$test.results[["cluster.free.z"]] <- z.mat
       return(invisible(self$test.results[["cluster.free.z"]]))
     },
 

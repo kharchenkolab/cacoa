@@ -1120,10 +1120,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param n.top.genes number of genes for estimating Z-scores. Genes are ranked by the expression level.
     #' @param max.z z-score value to winsorize the estimates for reducing impact of outliers. Default: 20.
     #' @param min.expr.frac minimal fraction of cell expressing a gene for estimating z-scores for it. Default: 0.001.
+    #' @param normalize whether to normalize z-scores over std for reference ("ref") or both ("both"). Default: "ref".
     #' @return Sparse matrix of z-scores with genes as columns and cells as rows.
     #' Cells that have only one condition in their expression neighborhood have NA Z-scores for all genes.
     #' Results are also stored in the `cluster.free.z` field.
-    estimateClusterFreeZScores = function(n.top.genes=NULL, max.z=20, min.expr.frac=0.001, verbose=self$verbose, n.cores=self$n.cores) {
+    estimateClusterFreeZScores = function(n.top.genes=NULL, max.z=20, min.expr.frac=0.001, normalize=c("ref", "both"),
+                                          verbose=self$verbose, n.cores=self$n.cores) {
+      normalize <- match.arg(normalize)
       cm <- extractJointCountMatrix(self$data.object)
 
       cm.bin <- cm
@@ -1140,7 +1143,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         intersect(names(is.ref))
 
       z.mat <- clusterFreeZScoreMat(adj.mat[cell.names, cell.names], cm[cell.names, gene.ids, drop=FALSE],
-                                    is.ref[cell.names], verbose=verbose, n_cores=n.cores)
+                                    is.ref[cell.names], normalize_both=(normalize == "both"), verbose=verbose, n_cores=n.cores)
       z.mat@x %<>% pmin(max.z) %>% pmax(-max.z)
 
       self$test.results[["cluster.free.z"]] <- z.mat

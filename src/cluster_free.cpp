@@ -21,9 +21,8 @@ double incrementStdAcc(double cur_std, double x, double cur_mean, double old_mea
 }
 
 double estimateCellZScore(const SparseMatrix<bool> &adj_mat, const std::vector<bool> &is_control,
-                          const VectorXd &cur_col, size_t dst_cell_id) {
-    double mean_val_control = 0.0, mean_val_case = 0.0;
-    double std_acc_control = 0.0, std_acc_case = 0.0;
+                          const VectorXd &cur_col, size_t dst_cell_id, bool normalize_both=false) {
+    double mean_val_control = 0.0, mean_val_case = 0.0, mean_val_all = 0.0, std_acc = 0.0;
     size_t n_vals_control = 0, n_vals_case = 0;
 
     // Incremental mean and std (http://datagenetics.com/blog/november22017/index.html)
@@ -36,24 +35,34 @@ double estimateCellZScore(const SparseMatrix<bool> &adj_mat, const std::vector<b
             n_vals_control++;
             double mean_old = mean_val_control;
             mean_val_control = incrementMean(mean_val_control, cur_val, n_vals_control);
-            std_acc_control = incrementStdAcc(std_acc_control, cur_val, mean_val_control, mean_old);
+
+            if (!normalize_both) {
+              std_acc = incrementStdAcc(std_acc, cur_val, mean_val_control, mean_old);
+            }
         } else {
             n_vals_case++;
             mean_val_case = incrementMean(mean_val_case, cur_val, n_vals_case);
+        }
+
+        if (normalize_both) {
+          double mean_old = mean_val_all;
+          mean_val_all = incrementMean(mean_val_all, cur_val, n_vals_control + n_vals_case);
+          std_acc = incrementStdAcc(std_acc, cur_val, mean_val_all, mean_old);
         }
     }
 
     if ((n_vals_case == 0) || (n_vals_control <= 1))
         return NA_REAL;
 
-    double std_val = sqrt(std_acc_control / (n_vals_control - 1));
+    size_t n_vals = normalize_both ? (n_vals_control + n_vals_case) : n_vals_control;
+    double std_val = sqrt(std_acc / (n_vals - 1));
     return (mean_val_case - mean_val_control) / std::max(std_val, 1e-20);
 }
 
 //' @param adj_mat adjacency matrix with 1 on the position (r,c) if the cell r is adjacent to the cell c
 SparseMatrix<double> clusterFreeZScoreMat(const SparseMatrix<bool>& adj_mat, const SparseMatrix<double>& count_mat,
                                           const std::vector<bool> &is_control, const double min_z=0.01,
-                                          bool verbose=true, int n_cores=1) {
+                                          bool normalize_both=false, bool verbose=true, int n_cores=1) {
   if (adj_mat.cols() != adj_mat.rows())
     stop("adj_mat must be squared");
 
@@ -66,14 +75,14 @@ SparseMatrix<double> clusterFreeZScoreMat(const SparseMatrix<bool>& adj_mat, con
   std::vector<Triplet<double>> z_triplets;
 
   std::mutex mut;
-  auto task = [&count_mat, &z_triplets, &adj_mat, &is_control, &min_z, &mut](int gene_id) {
+  auto task = [&count_mat, &z_triplets, &adj_mat, &is_control, &min_z, &normalize_both, &mut](int gene_id) {
     auto cur_col = VectorXd(count_mat.col(gene_id));
     for (SparseMatrix<double, ColMajor>::InnerIterator cnt_it(count_mat, gene_id); cnt_it; ++cnt_it) {
       if (cnt_it.value() < 1e-20)
         continue;
 
       auto dst_cell_id = cnt_it.row();
-      auto z_cur = estimateCellZScore(adj_mat, is_control, cur_col, dst_cell_id);
+      auto z_cur = estimateCellZScore(adj_mat, is_control, cur_col, dst_cell_id, normalize_both);
       if (z_cur == NA_REAL || std::abs(z_cur) >= min_z) {
         std::lock_guard<std::mutex> l(mut);
         z_triplets.emplace_back(dst_cell_id, gene_id, z_cur);
@@ -89,9 +98,9 @@ SparseMatrix<double> clusterFreeZScoreMat(const SparseMatrix<bool>& adj_mat, con
 
 // [[Rcpp::export]]
 SEXP clusterFreeZScoreMat(const SEXP adj_mat, const SEXP count_mat, const std::vector<bool> &is_control, double min_z=0.01,
-                          bool verbose=true, int n_cores=1) {
+                          bool normalize_both=false, bool verbose=true, int n_cores=1) {
   auto z_mat_eig = clusterFreeZScoreMat(as<SparseMatrix<bool>>(adj_mat), as<SparseMatrix<double>>(count_mat),
-          is_control, min_z, verbose, n_cores);
+          is_control, min_z, normalize_both, verbose, n_cores);
 
   S4 z_mat(wrap(z_mat_eig));
   z_mat.slot("Dimnames") = S4(count_mat).slot("Dimnames");

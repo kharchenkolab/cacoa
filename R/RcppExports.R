@@ -8,8 +8,8 @@ NULL
 #' @param n_samples must be equal to maximum(sample_per_cell) + 1
 NULL
 
-clusterFreeZScoreMat <- function(adj_mat, count_mat, is_control, min_z = 0.01, verbose = TRUE, n_cores = 1L) {
-    .Call('_cacoa_clusterFreeZScoreMat', PACKAGE = 'cacoa', adj_mat, count_mat, is_control, min_z, verbose, n_cores)
+clusterFreeZScoreMat <- function(adj_mat, count_mat, is_control, min_z = 0.01, normalize_both = FALSE, verbose = TRUE, n_cores = 1L) {
+    .Call('_cacoa_clusterFreeZScoreMat', PACKAGE = 'cacoa', adj_mat, count_mat, is_control, min_z, normalize_both, verbose, n_cores)
 }
 
 estimateClusterFreeExpressionShifts <- function(rmat, sample_per_cell, nn_ids, is_ref, verbose = TRUE) {

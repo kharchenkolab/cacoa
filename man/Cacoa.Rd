@@ -287,7 +287,7 @@ Estimate differential gene expression per cell type between conditions
   cell.groups = self$cell.groups,
   sample.groups = self$sample.groups,
   ref.level = self$ref.level,
-  common.genes = F,
+  common.genes = FALSE,
   n.cores = self$n.cores,
   cooks.cutoff = FALSE,
   min.cell.count = 10,
@@ -312,7 +312,7 @@ Estimate differential gene expression per cell type between conditions
 
 \item{\code{common.genes}}{Only investigate common genes across cell groups (default=F)}
 
-\item{\code{n.cores}}{Number of cores (default=1)}
+\item{\code{n.cores}}{number of cores for parallelisation}
 
 \item{\code{cooks.cutoff}}{cooksCutoff for DESeq2 (default=F)}
 
@@ -425,7 +425,7 @@ Save DE results as JSON files
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveDEasJSON(
   saveprefix = NULL,
   dir.name = "JSON",
-  de.raw = self$test.results$de,
+  de.raw = NULL,
   sample.groups = self$sample.groups,
   ref.level = self$ref.level,
   gene.metadata = NULL,
@@ -498,7 +498,7 @@ Filter and prepare DE genes for ontology calculations
   n.top.genes = 100,
   p.adj.cutoff = 0.05,
   expr.cutoff = 0.05,
-  de.raw = self$test.results$de,
+  de.raw = NULL,
   cell.groups = self$cell.groups,
   universe = NULL,
   transposed = T,
@@ -1008,7 +1008,6 @@ Plot Loadings
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateCellLoadings(
   n.cell.counts = 1000,
   n.seed = 239,
-  aplha = 0.01,
   cells.to.remove = NULL,
   cells.to.remain = NULL,
   samples.to.remove = NULL,
@@ -1026,12 +1025,10 @@ A ggplot2 object
 \subsection{Method \code{estimateGaPartiotion()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGaPartiotion(
-  n.cell.counts = 1000,
-  n.seed = 239,
-  aplha = 0.01,
   cells.to.remain = NULL,
   cells.to.remove = NULL,
-  samples.to.remove = NULL
+  samples.to.remove = NULL,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
@@ -1042,15 +1039,7 @@ A ggplot2 object
 \subsection{Method \code{plotCellLoadings()}}{
 Plot Loadings
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellLoadings(
-  n.cell.counts = 1000,
-  n.seed = 239,
-  aplha = 0.01,
-  font.size = NULL,
-  cells.to.remove = NULL,
-  samples.to.remove = NULL,
-  palette = self$cell.groups.palette
-)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellLoadings(alpha = 0.01, palette = self$cell.groups.palette)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -1097,8 +1086,6 @@ Estimate cell density in giving embedding
   cell.groups = self$cell.groups,
   sample.groups = self$sample.groups,
   sample.per.cell = self$sample.per.cell,
-  ref.level = self$ref.level,
-  target.level = self$target.level,
   bins = 400,
   by.sample = TRUE
 )}\if{html}{\out{</div>}}
@@ -1111,13 +1098,9 @@ Estimate cell density in giving embedding
 
 \item{\code{sample.per.cell}}{Named sample factor with cell names (default: stored vector)}
 
-\item{\code{ref.level}}{Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)}
-
-\item{\code{target.level}}{target/disease level for sample.group vector}
-
 \item{\code{bins}}{number of bins for density esitmation, default 400}
 
-\item{\code{by.sample}}{if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell condition.per.cell need to be provided and density will simply esitmated by condition.per.cell.}
+\item{\code{by.sample}}{if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell condition.per.cell need to be provided and density will simply estimated by condition.per.cell.}
 
 \item{\code{emb}}{cell embedding matrix}
 
@@ -1194,11 +1177,11 @@ Z score of differential cell density
 \if{html}{\out{<a id="method-diffCellDensity"></a>}}
 \if{latex}{\out{\hypertarget{method-diffCellDensity}{}}}
 \subsection{Method \code{diffCellDensity()}}{
-esitmate differential cell density
+estimate differential cell density
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$diffCellDensity(
   condition.per.cell = NULL,
-  method = "substract",
+  method = "subtract",
   col = c("blue", "white", "red"),
   show.legend = NULL,
   legend.position = NULL,
@@ -1217,11 +1200,12 @@ esitmate differential cell density
 \describe{
 \item{\code{condition.per.cell}}{A two-level factor on the cell names describing the conditions being compared (default: stored vector)}
 
-\item{\code{method}}{method to cacuated differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy betwwen sample grapups ; t.test: zscore of t-test,global variacen is setting for t.test;}
+\item{\code{method}}{method to calculate differential cell density of each bin; subtract: target density minus ref density; entropy: estimated kl divergence entropy between sample groups ;
+t.test: z-score of t-test, global variance is setting for t.test;}
 
 \item{\code{col}}{color palettes,  default is c('blue','white','red')}
 
-\item{\code{contours}}{specify cell types for contour, mutiple cell types are also suported}
+\item{\code{contours}}{specify cell types for contour, multiple cell types are also supported}
 
 \item{\code{contour.color}}{color for contour line}
 
@@ -1339,23 +1323,29 @@ Extract contour from embedding
 Estimate differencial expression Z-scores between two conditions per individual cell
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeZScores(
-  n.od.genes = NULL,
+  n.top.genes = NULL,
+  max.z = 20,
+  min.expr.frac = 0.001,
+  normalize = c("ref", "both"),
   verbose = self$verbose,
-  n.cores = self$n.cores,
-  ...
+  n.cores = self$n.cores
 )}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.od.genes}}{number of overdispersed genes for estimating Z-scores}
+\item{\code{n.top.genes}}{number of genes for estimating Z-scores. Genes are ranked by the expression level.}
+
+\item{\code{max.z}}{z-score value to winsorize the estimates for reducing impact of outliers. Default: 20.}
+
+\item{\code{min.expr.frac}}{minimal fraction of cell expressing a gene for estimating z-scores for it. Default: 0.001.}
+
+\item{\code{normalize}}{whether to normalize z-scores over std for reference ("ref") or both ("both"). Default: "ref".}
 
 \item{\code{verbose}}{show progress (default: stored value)}
 
 \item{\code{n.cores}}{number of cores for parallelisation}
-
-\item{\code{...}}{parameters forwarded to \link{estimateClusterFreeZScores}}
 }
 \if{html}{\out{</div>}}
 }

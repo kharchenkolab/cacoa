@@ -1154,7 +1154,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param n.od.genes number of overdispersed genes for estimating expression shifts
     #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
     #' Results are also stored in the `cluster.free.expr.shifts` field.
-    estimateClusterFreeExpressionShifts = function(n.od.genes=NULL, verbose=self$verbose) {
+    estimateClusterFreeExpressionShifts = function(n.od.genes=NULL, verbose=self$verbose, n.cores=self$n.cores) {
       genes <- extractOdGenes(self$data.object, n.od.genes)
       cm <- extractJointCountMatrix(self$data.object) %>% .[, genes] %>% Matrix::t()
 
@@ -1165,7 +1165,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         {setNames(split(.@j, .@i + 1), rownames(.))}
 
       shifts <- estimateClusterFreeExpressionShifts(cm, self$sample.per.cell[names(nns.per.cell)], nns.per.cell,
-                                                    is.ref, verbose=verbose)
+                                                    is.ref, verbose=verbose, n_cores=n.cores)
       self$test.results[["cluster.free.expr.shifts"]] <- shifts
 
       return(invisible(shifts))
@@ -1176,8 +1176,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param filter graph filter function. Default: \link[sccore:heatFilter]{heatFilter}.
     #' @param ... parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}
     #' @return Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z.smoothed` field.
-    smoothClusterFreeZScores = function(smoothing=20, filter=NULL, n.cores=self$n.cores, verbose=self$verbose, ...) {
+    smoothClusterFreeZScores = function(smoothing=20, filter=NULL, n.cores=self$n.cores, verbose=self$verbose, min.z=0.5, min.de.frac=0.05, ...) {
       z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
+      if (min.z > 1e-10) {
+        z.scores.bin <- z.scores
+        z.scores.bin@x %<>% {as.numeric(abs(.) >= min.z)}
+        genes.filt <- which(colMeans(z.scores.bin) > min.de.frac)
+        z.scores <- z.scores[,genes.filt]
+      }
 
       if (is.null(filter)) {
         filter <- function(...) heatFilter(..., beta=smoothing)

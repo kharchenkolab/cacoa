@@ -1363,7 +1363,8 @@ Estimate Cluster-free Expression Shift
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeExpressionShifts(
   n.od.genes = NULL,
-  verbose = self$verbose
+  verbose = self$verbose,
+  n.cores = self$n.cores
 )}\if{html}{\out{</div>}}
 }
 
@@ -1373,6 +1374,8 @@ Estimate Cluster-free Expression Shift
 \item{\code{n.od.genes}}{number of overdispersed genes for estimating expression shifts}
 
 \item{\code{verbose}}{show progress (default: stored value)}
+
+\item{\code{n.cores}}{number of cores for parallelisation}
 }
 \if{html}{\out{</div>}}
 }
@@ -1392,6 +1395,8 @@ Performs graph smoothing of the cluster-free DE Z-scores
   filter = NULL,
   n.cores = self$n.cores,
   verbose = self$verbose,
+  min.z = 0.5,
+  min.de.frac = 0.05,
   ...
 )}\if{html}{\out{</div>}}
 }

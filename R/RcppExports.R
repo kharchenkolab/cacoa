@@ -12,8 +12,8 @@ clusterFreeZScoreMat <- function(adj_mat, count_mat, is_control, min_z = 0.01, n
     .Call('_cacoa_clusterFreeZScoreMat', PACKAGE = 'cacoa', adj_mat, count_mat, is_control, min_z, normalize_both, verbose, n_cores)
 }
 
-estimateClusterFreeExpressionShifts <- function(rmat, sample_per_cell, nn_ids, is_ref, verbose = TRUE) {
-    .Call('_cacoa_estimateClusterFreeExpressionShifts', PACKAGE = 'cacoa', rmat, sample_per_cell, nn_ids, is_ref, verbose)
+estimateClusterFreeExpressionShifts <- function(cm, sample_per_cell, nn_ids, is_ref, verbose = TRUE, n_cores = 1L) {
+    .Call('_cacoa_estimateClusterFreeExpressionShifts', PACKAGE = 'cacoa', cm, sample_per_cell, nn_ids, is_ref, verbose, n_cores)
 }
 
 projdiff <- function(mat, g1, g2) {

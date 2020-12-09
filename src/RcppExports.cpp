@@ -25,17 +25,18 @@ BEGIN_RCPP
 END_RCPP
 }
 // estimateClusterFreeExpressionShifts
-NumericVector estimateClusterFreeExpressionShifts(SEXP rmat, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool>& is_ref, bool verbose);
-RcppExport SEXP _cacoa_estimateClusterFreeExpressionShifts(SEXP rmatSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP is_refSEXP, SEXP verboseSEXP) {
+NumericVector estimateClusterFreeExpressionShifts(const Eigen::SparseMatrix<double>& cm, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool>& is_ref, bool verbose, int n_cores);
+RcppExport SEXP _cacoa_estimateClusterFreeExpressionShifts(SEXP cmSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP is_refSEXP, SEXP verboseSEXP, SEXP n_coresSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type rmat(rmatSEXP);
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double>& >::type cm(cmSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type sample_per_cell(sample_per_cellSEXP);
     Rcpp::traits::input_parameter< List >::type nn_ids(nn_idsSEXP);
     Rcpp::traits::input_parameter< const std::vector<bool>& >::type is_ref(is_refSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    rcpp_result_gen = Rcpp::wrap(estimateClusterFreeExpressionShifts(rmat, sample_per_cell, nn_ids, is_ref, verbose));
+    Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimateClusterFreeExpressionShifts(cm, sample_per_cell, nn_ids, is_ref, verbose, n_cores));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -55,7 +56,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_clusterFreeZScoreMat", (DL_FUNC) &_cacoa_clusterFreeZScoreMat, 7},
-    {"_cacoa_estimateClusterFreeExpressionShifts", (DL_FUNC) &_cacoa_estimateClusterFreeExpressionShifts, 5},
+    {"_cacoa_estimateClusterFreeExpressionShifts", (DL_FUNC) &_cacoa_estimateClusterFreeExpressionShifts, 6},
     {"_cacoa_projdiff", (DL_FUNC) &_cacoa_projdiff, 3},
     {NULL, NULL, 0}
 };

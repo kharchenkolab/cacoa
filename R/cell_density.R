@@ -92,14 +92,14 @@ estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.l
 ##' @param n.cores number of cores
 ##' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
 
-estimateGraphDensity <- function(sample.per.cell, sample.groups, ref.level, target.level, n.cores = 1, m = 50, verbose = TRUE) {
+estimateGraphDensity <- function(graph, sample.per.cell, sample.groups, ref.level, target.level, n.cores = 1, m = 50, verbose = TRUE) {
   tmp <-  setNames(as.numeric(sample.per.cell), names(sample.per.cell))
   scoreL <- sccore:::plapply(sn(unique(tmp)), function(x) {
     tryCatch({
       x1 <-  tmp
       x1[x1 != x] <-  0
       x1[x1 == x] <-  1
-      sccore:::smoothSignalOnGraph(x1, con$graph, sccore:::heatFilter, m = m)
+      sccore:::smoothSignalOnGraph(x1, graph, sccore:::heatFilter, m = m)
     }, error = function(err) {
       return(NA)
     })
@@ -145,7 +145,7 @@ getContour <- function(emb, cell.type, cell,  color = 'white', linetype = 2, con
 ##' @description Plot cell density
 ##' @param bins number of bins for density esitmation, should keep consistent with bins in estimateCellDensity
 ##' @param col color palettes, default is c('blue','white','red')
-plotDensity <- function(mat, bins, col = c('blue','white','red'), show.legend = NULL, legend.position = NULL, title = NULL, show.grid = NULL, mi=NULL, ma=NULL, diffDensity = NULL){
+plotDensity <- function(mat, bins, col = c('blue','white','red'), show.legend = FALSE, legend.position = NULL, title = NULL, show.grid = NULL, mi=NULL, ma=NULL, diffDensity = NULL){
   #  p  <-  mat %>% as_tibble() %>% rowid_to_column(var = "X") %>%
   #    gather(key = "Y", value = "Z", -1) %>% mutate(Y = as.numeric(gsub("V", "", Y))) %>%
   #
@@ -162,7 +162,7 @@ plotDensity <- function(mat, bins, col = c('blue','white','red'), show.legend = 
       theme_bw() + theme(panel.grid.major = element_blank(),
                          panel.grid.minor = element_blank(), panel.border = element_blank(),
                          panel.background = element_blank(), plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm")) +
-      theme(axis.title.x = element_blank(), axis.text.x = element_blank(),
+      theme(axis.title.x = element_blank(), axis.text.x = element_blank(),axis.ticks = element_blank(),
             axis.title.y = element_blank(), axis.text.y = element_blank()) +
       scale_y_continuous(expand = c(0,0)) + scale_x_continuous(expand = c(0,0)) +
       viridis::scale_fill_viridis(option = 'B', alpha = 1, direction = 1, limits = c(mi, ma))
@@ -186,7 +186,7 @@ plotDensity <- function(mat, bins, col = c('blue','white','red'), show.legend = 
   p <- p + theme(panel.border = element_rect(fill=NA,color="black", size=0.5, linetype="solid"))
 
 
-  if (is.null(show.legend)){
+  if (!show.legend){
     p <- p + theme(legend.position = "none")
   }
 
@@ -214,17 +214,17 @@ plotDensity <- function(mat, bins, col = c('blue','white','red'), show.legend = 
 ##' @param condition.per.cell A two-level factor on the cell names describing the conditions being compared (default: stored vector)
 ##' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
 ##' @param target.level target/disease level for sample.group vector
-##' @param method method to calcuate differential cell density of each bin; subtract: target density minus ref density; entropy: estimated kl divergence entropy between sample groups ; t.test: zscore of t-test,
+##' @param method method to calcuate differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy between sample groups ; t.test: zscore of t-test,
 ##' global variance is setting for t.test;
-diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample.groups, bins, ref.level, target.level, method = 'subtract',
+diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample.groups, bins, ref.level, target.level, method = 'substract',
                             show.legend = NULL,legend.position = NULL, show.grid = TRUE, col = c('blue','white','red'), title = NULL,
                             dcount.cutoff = 0, z.cutoff = NULL){
   nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
   nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
 
-  if (method == 'subtract') {
+  if (method == 'substract') {
     score <- rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])
-  } else if (method == 'subtract.norm'){
+  } else if (method == 'substract.norm'){
     score <- (rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])) / rowMeans(density.mat[, nr])
   } else if (method == 'entropy'){
     sudo <- mean(as.numeric(density.mat)) # add sudo counts
@@ -274,10 +274,10 @@ diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample
 
   if (!is.null(z.cutoff))
     mat[abs(mat$z) < z.cutoff, 'z'] = 0
-
-  p <- plotDensity(mat, bins, col = col, title = title, legend.position = legend.position, show.legend = show.legend, show.grid = show.grid, diffDensity = TRUE)
-
-  return(list('fig' = p,'score' = mat))
+  #p <- plotDensity(mat, bins, col = col, title = title, legend.position = legend.position, show.legend = show.legend, show.grid = show.grid, diffDensity = TRUE)
+  #return(list('fig' = p,'score' = mat))
+  return(mat)
+  
 }
 
 

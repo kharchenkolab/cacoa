@@ -52,7 +52,7 @@ double estimateCellZScore(const SparseMatrix<bool> &adj_mat, const std::vector<b
     }
 
     if ((n_vals_case == 0) || (n_vals_control <= 1))
-        return NA_REAL;
+        return NAN;
 
     size_t n_vals = normalize_both ? (n_vals_control + n_vals_case) : n_vals_control;
     double std_val = sqrt(std_acc / (n_vals - 1));
@@ -83,7 +83,7 @@ SparseMatrix<double> clusterFreeZScoreMat(const SparseMatrix<bool>& adj_mat, con
 
       auto dst_cell_id = cnt_it.row();
       auto z_cur = estimateCellZScore(adj_mat, is_control, cur_col, dst_cell_id, normalize_both);
-      if (z_cur == NA_REAL || std::abs(z_cur) >= min_z) {
+      if (std::isnan(z_cur) || std::abs(z_cur) >= min_z) {
         std::lock_guard<std::mutex> l(mut);
         z_triplets.emplace_back(dst_cell_id, gene_id, z_cur);
       }
@@ -116,8 +116,8 @@ double estimateCosineDistance(const Eigen::VectorXd &v1, const Eigen::VectorXd &
 
   double vp = 0, v1s = 0, v2s = 0;
   for (size_t i = 0; i < v1.size(); ++i) {
-    if (R_IsNA(v1[i]) || R_IsNA(v2[i]))
-      return NA_REAL;
+    if (std::isnan(v1[i]) || std::isnan(v2[i]))
+      return NAN;
 
     vp += v1[i] * v2[i];
     v1s += v1[i] * v1[i];
@@ -127,16 +127,16 @@ double estimateCosineDistance(const Eigen::VectorXd &v1, const Eigen::VectorXd &
   return 1 - vp / std::max(std::sqrt(v1s) * std::sqrt(v2s), 1e-10);
 }
 
-Eigen::MatrixXd collapseMatrixNorm(const SparseMatrix<double> &mat, const std::vector<int> &factor,
-                                   const std::vector<int> &nn_ids, const std::vector<int> &n_obs_per_samp) {
-  MatrixXd res(mat.rows(), n_obs_per_samp.size());
+MatrixXd collapseMatrixNorm(const SparseMatrix<double> &mtx, const std::vector<int> &factor,
+                            const std::vector<int> &nn_ids, const std::vector<int> &n_obs_per_samp) {
+  MatrixXd res = MatrixXd::Zero(mtx.rows(), n_obs_per_samp.size());
   for (int id : nn_ids) {
       int fac = factor[id];
-      if (fac >= res.cols() || fac < 0)
+      if (fac >= n_obs_per_samp.size() || fac < 0)
           stop("Wrong factor: " + std::to_string(fac) + ", id: " + std::to_string(id));
 
-      for (SparseMatrix<double, ColMajor>::InnerIterator gene_it(mat, id); gene_it; ++gene_it) {
-          res(gene_it.row(), fac) += gene_it.value() / n_obs_per_samp[fac];
+      for (SparseMatrix<double, ColMajor>::InnerIterator gene_it(mtx, id); gene_it; ++gene_it) {
+          res(gene_it.row(), fac) += gene_it.value() / n_obs_per_samp.at(fac);
       }
   }
 
@@ -145,38 +145,39 @@ Eigen::MatrixXd collapseMatrixNorm(const SparseMatrix<double> &mat, const std::v
 
 //' @param sample_per_cell must contains ids from 0 to n_samples-1
 //' @param n_samples must be equal to maximum(sample_per_cell) + 1
-double estimateCellExpressionShift(const SparseMatrix<double> &mat, const std::vector<int> &sample_per_cell,
+double estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::vector<int> &sample_per_cell,
                                    const std::vector<int> &nn_ids, const std::vector<bool> &is_ref, const int n_samples) {
   std::vector<int> n_ids_per_samp(n_samples, 0);
   for (int id : nn_ids) {
     n_ids_per_samp[sample_per_cell[id]]++;
   }
 
-  const auto mat_collapsed = collapseMatrixNorm(mat, sample_per_cell, nn_ids, n_ids_per_samp);
+  const auto mat_collapsed = collapseMatrixNorm(cm, sample_per_cell, nn_ids, n_ids_per_samp);
 
   double within_dist = 0, between_dist = 0;
   int n_within = 0, n_between = 0;
   for (int s1 = 0; s1 < n_samples; ++s1) {
-    if (n_ids_per_samp[s1] == 0)
+    if (n_ids_per_samp.at(s1) == 0)
       continue;
 
     auto v1 = mat_collapsed.col(s1);
     for (int s2 = s1 + 1; s2 < n_samples; ++s2) {
-      if (n_ids_per_samp[s2] == 0)
+      if (n_ids_per_samp.at(s2) == 0)
         continue;
 
       auto v2 = mat_collapsed.col(s2);
       double dist = estimateCosineDistance(v1, v2);
-      if (is_ref[s1] && is_ref[s2]) {
+      if (is_ref.at(s1) && is_ref.at(s2)) {
         within_dist = incrementMean(within_dist, dist, ++n_within);
-      } else if (is_ref[s1] != is_ref[s2]) {
+      } else if (is_ref.at(s1) != is_ref.at(s2)) {
         between_dist = incrementMean(between_dist, dist, ++n_between);
       }
     }
   }
 
-  if (n_within == 0)
-    return NA_REAL;
+  if (n_within == 0) {
+    return NAN;
+  }
 
   return between_dist / within_dist;
 }

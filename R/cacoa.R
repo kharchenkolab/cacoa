@@ -1030,17 +1030,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       } else {
         dens.res <- private$getResults('cell.density.kde', 'estimateCellDensity()')
         mat <- dens.res %$%
-          diffCellDensity(density.emb, density.matrix, condition.per.cell=condition.per.cell, self$sample.groups, bins=bins, target.level=self$target.level,
+          diffCellDensity(density.emb, density.mat, condition.per.cell=condition.per.cell, self$sample.groups, bins=bins, target.level=self$target.level,
                           ref.level=self$ref.level, method=method, title=title, legend.position=legend.position, show.legend=show.legend, show.grid=show.grid, z.cutoff=z.cutoff)
         emb <- mat[,1:2]
         score <- mat$z
         names(score) <- rownames(mat)
       }
 
-      fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) +
-        scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0)
-
       if (plot){
+        fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) +
+          scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0)
+
         if(!is.null(contours)){
           cnl <- do.call(c, lapply(sn(contours), function(x)
             getContour(self$embedding, cell.type=self$cell.groups , cell=x, conf=contour.conf, color=contour.color)))

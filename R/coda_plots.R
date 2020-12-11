@@ -1,36 +1,3 @@
-plotCellLoadings <- function(cda.resamples, alpha = 0.01,
-                             n.significant.cells = 0,
-                             font.size = NULL,
-                             palette=NULL){
-  res.init <- t(cda.resamples$balances)
-
-  # Define order of cell types
-  # res.ordered= res.init[,order(abs(colMeans(res.init)))]
-
-  n.bal <- ncol(cda.resamples$balances)
-  n.plus <- rowSums(cda.resamples$balances[,2:n.bal] > 0)
-  n.minus <- rowSums(cda.resamples$balances[,2:n.bal] < 0)
-  frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) / mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
-  res.ordered <- res.init[,order(-frac)]
-
-  dat <- stack(as.data.frame(res.ordered))
-  p <- ggplot(dat, aes(x = ind, y = values, fill=factor(ind))) +
-    geom_boxplot(notch=TRUE, outlier.shape = NA) +
-    geom_jitter(aes(x = ind, y = values), alpha = alpha, size=1) +
-    geom_hline(yintercept = 0, color = "gray37") +
-    coord_flip() +
-    xlab('') + ylab('') +
-    theme_bw()+ theme(legend.position = "none")
-
-  if(!is.null(font.size)) {
-    p <- p + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
-  }
-  if(!is.null(palette)) p <-  p+ scale_fill_manual(values=palette)
-  if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(cda.resamples$balances) - n.significant.cells + 0.5, color='red')
-
-  return(p)
-}
-
 plotPcaSpace <- function(d.counts, d.groups, palette=NULL){
   bal <- getRndBalances(d.counts)
   pca.res <- prcomp(bal$norm)

@@ -886,16 +886,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Plot Loadings
     #' @param palette palette specification for cell types (default: stored $cell.groups.palette)
     #' @return A ggplot2 object
-    plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette){
-      if(is.null(self$test.results$cda)) {
-        warning("Can't find stored test results. for cda Running estimateCellLoadings() with default parameters...")
-        self$estimateCellLoadings()
-      }
+    plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, n.significant.cells=0, font.size=NULL) {
+      cda <- private$getResults('cda', 'estimateCellLoadings()')
+      n.bal <- ncol(cda$balances)
+      n.plus <- rowSums(cda$balances[,2:n.bal] > 0)
+      n.minus <- rowSums(cda$balances[,2:n.bal] < 0)
+      frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) / mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
+      res.ordered <- t(cda$balances)[,order(-frac)] %>% as.data.frame()
 
-      plotCellLoadings(self$test.results[['cda']],
-                       alpha = alpha,
-                       n.significant.cells = length(self$test.results$cda.top.cells),
-                       font.size = font.size, palette=palette)
+      p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
+        geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = alpha, size=1) +
+        geom_hline(yintercept = 0, color = "gray37") +
+        coord_flip() + xlab('') + ylab('') + theme_bw()+ theme(legend.position = "none")
+
+      if(!is.null(font.size)) {
+        p <- p + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
+      }
+      if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
+      if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(cda$balances) - n.significant.cells + 0.5, color='red')
+
+      return(p)
     },
 
     extimateWilcoxonTest = function(cell.groups = self$cell.groups,

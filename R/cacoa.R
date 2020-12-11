@@ -7,6 +7,10 @@
 #' @param n.cores number of cores for parallelisation
 #' @param verbose show progress (default: stored value)
 #' @param name field name where the test results are stored
+#' @param n.top.genes number of top genes for estimation
+#' @param gene.selection a method to select top genes, "change" selects genes by cluster-free Z-score change,
+#' "expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "change".
+#' @param excluded.genes list of genes to exclude during estimation. For example, a list of mitochondrial genes.
 Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
   public = list(
     #' @field n.cores number of cores
@@ -1093,8 +1097,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     ### Cluster-free differential expression
 
-    #' @description Estimate differencial expression Z-scores between two conditions per individual cell
-    #' @param n.top.genes number of genes for estimating Z-scores. Genes are ranked by the expression level.
+    #' @description Estimate differential expression Z-scores between two conditions per individual cell
     #' @param max.z z-score value to winsorize the estimates for reducing impact of outliers. Default: 20.
     #' @param min.expr.frac minimal fraction of cell expressing a gene for estimating z-scores for it. Default: 0.001.
     #' @param normalize whether to normalize z-scores over std for reference ("ref") or both ("both"). Default: "ref".
@@ -1130,6 +1133,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if (!is.null(cell.subset)) {
         z.scores <- z.scores[cell.subset,]
       }
+
       z.scores@x %<>% pmin(max.z) %>% pmax(-max.z)
       scores <- colMeans(z.scores, na.rm=TRUE) %>% sort(decreasing=TRUE) %>%
         .[setdiff(names(.), excluded.genes)] %>% .[1:min(n, length(.))]
@@ -1137,14 +1141,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Estimate Cluster-free Expression Shift
-    #' @param n.top.genes number of top genes for estimating expression shifts. Default: 3000.
-    #' @param gene.selection a method to select top genes, "change" selects genes by cluster-free Z-score change,
-    #' "expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "change".
-    #' @param excluded.genes list of genes to exclude during estimation. For example, a list of mitochondrial genes.
     #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
     #' Results are also stored in the `cluster.free.expr.shifts` field.
-    estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection=c("change", "expression", "od"),
-                                                   verbose=self$verbose, n.cores=self$n.cores, excluded.genes=NULL) {
+    estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection="change", excluded.genes=NULL,
+                                                   verbose=self$verbose, n.cores=self$n.cores) {
       cm <- extractJointCountMatrix(self$data.object)
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, excluded.genes=excluded.genes)
       cm <- Matrix::t(cm[, genes])
@@ -1167,14 +1167,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param filter graph filter function. Default: \link[sccore:heatFilter]{heatFilter}.
     #' @param ... parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}
     #' @return Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z.smoothed` field.
-    smoothClusterFreeZScores = function(smoothing=20, filter=NULL, n.cores=self$n.cores, verbose=self$verbose, min.z=0.5, min.de.frac=0.05, ...) {
+    smoothClusterFreeZScores = function(n.top.genes=1000, smoothing=20, filter=NULL, gene.selection="change", excluded.genes=NULL,
+                                        n.cores=self$n.cores, verbose=self$verbose, ...) {
       z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
-      if (min.z > 1e-10) {
-        z.scores.bin <- z.scores
-        z.scores.bin@x %<>% {as.numeric(abs(.) >= min.z)}
-        genes.filt <- which(colMeans(z.scores.bin, na.rm=TRUE) > min.de.frac)
-        z.scores <- z.scores[,genes.filt]
-      }
+      genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection,
+                                   excluded.genes=excluded.genes, included.genes=colnames(z.scores))
+      z.scores <- z.scores[,genes]
 
       if (verbose) message("Smoothing Z-scores for ", ncol(z.scores), " genes passed filtration")
       if (is.null(filter)) {
@@ -1331,32 +1329,29 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       stop(msg)
     },
 
-    getTopGenes = function(n, gene.selection=c("change", "expression", "od"), cm.joint=NULL, min.expr.frac=0.0, excluded.genes=NULL) {
+    getTopGenes = function(n, gene.selection=c("change", "expression", "od"), cm.joint=NULL, min.expr.frac=0.0, excluded.genes=NULL, included.genes=NULL) {
       gene.selection <- match.args(gene.selection)
       if ((gene.selection == "change") && is.null(self$test.results$cluster.free.z)) {
         warning("Please run estimateClusterFreeZScores() first to use gene.selection='change'. Fall back to gene.selection='expression'.")
         gene.selection <- "expression"
       }
 
-      if (gene.selection == "change")
-        return(names(self$getMostChangedGenes(n, excluded.genes=excluded.genes)))
+      if (gene.selection == "change") {
+        genes <- names(self$getMostChangedGenes(Inf))
+      } else if (gene.selection == "od") {
+        genes <- extractOdGenes(self$data.object, n + length(excluded.genes))
+      } else {
+        if (is.null(cm.joint)) {
+          cm.joint <- extractJointCountMatrix(self$data.object)
+        }
 
-      if (gene.selection == "od") {
-        genes <- extractOdGenes(self$data.object, n + length(excluded.genes)) %>%
-          setdiff(excluded.genes) %>% .[1:min(n, length(.))]
-        return(genes)
+        cm.joint@x <- 1 * (cm.joint@x > 0)
+        gene.mask <- (colMeans(cm.joint) >= min.expr.frac)
+        genes <- colMeans(cm.joint) %>% order(decreasing=TRUE) %>%
+          .[gene.mask[.]] %>% colnames(cm.joint)[.]
       }
 
-      if (is.null(cm.joint)) {
-        cm.joint <- extractJointCountMatrix(self$data.object)
-      }
-
-      cm.joint@x <- 1 * (cm.joint@x > 0)
-      gene.mask <- (colMeans(cm.joint) >= min.expr.frac)
-      genes <- colMeans(cm.joint) %>% order(decreasing=TRUE) %>%
-        .[gene.mask[.]] %>% colnames(cm.joint)[.] %>%
-        setdiff(excluded.genes) %>% .[1:min(length(.), n)]
-
+      genes %<>% setdiff(excluded.genes) %>% intersect(included.genes) %>% .[1:min(length(.), n)]
       return(genes)
     },
 

@@ -924,87 +924,78 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param method density estimation method, graphSmooth: graph smooth based density estimation. embGrid: embedding grid based density  estimation. (default: embGrid)
     #' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
     #' @param by.sample  if TRUE, density will estimated by sample and quantile normalization will applied to individual sample. If FALSE, cell condition.per.cell need to be provided and density will simply estimated by condition.per.cell.
-    estimateCellDensity = function(embedding=self$embedding, bins = 400, by.sample = TRUE, method = 'embGrid',
-                                   verbose=self$verbose, m=50, n.cores=self$n.cores, graph=NULL){
-      if(is.null(embedding)) stop("'embedding' must be provided either during the object initialization or during this function call")
+    estimateCellDensity = function(embedding=self$embedding, bins = 400, by.sample = TRUE, method = 'kde',
+                                   verbose=self$verbose, m=50, n.cores=self$n.cores){
+      if(is.null(embedding))
+        stop("'embedding' must be provided either during the object initialization or during this function call")
 
       sample.per.cell <- self$sample.per.cell
       sample.groups <- self$sample.groups
       # calculate sample.per.cell
-      condition.per.cell <- as.factor(setNames( as.character(sample.groups[ as.character(sample.per.cell)]), names(sample.per.cell) ))
+      condition.per.cell <- sample.per.cell %>%
+        {setNames(as.character(sample.groups[as.character(.)]), names(.))} %>%
+        as.factor()
 
-      self$test.results[['bins']] <- bins
+      if (method == 'kde'){
+        self$test.results[['cell.density.kde']] <- embedding %>%
+          estimateCellDensityKde(sample.per.cell=sample.per.cell, sample.groups=sample.groups, bins=bins,
+                                 condition.per.cell=condition.per.cell, by.sample=by.sample)
+        return(invisible(self$test.results[['cell.density.kde']]))
+      }
+      if (method == 'graph'){
+        self$test.results[['cell.density.graph']] <-  extractCellGraph(self$data.object) %>%
+          estimateCellDensityGraph(sample.per.cell=sample.per.cell, sample.groups=sample.groups,
+                                   ref.level=self$ref.level, target.level=self$target.level,
+                                   n.cores=n.cores, m=m, verbose=verbose)
+        return(invisible(self$test.results[['cell.density.graph']]))
+      }
 
-      if (method == 'embGrid'){
-        res <- estimateCellDensity(embedding, sample.per.cell=sample.per.cell, sample.groups=sample.groups, bins=bins,
-                                   ref.level=self$ref.level, target.level=self$target.level, condition.per.cell=condition.per.cell,
-                                   by.sample=by.sample)
-        self$test.results[['density.mat']] <- res[['density.mat']]
-        self$test.results[['target.density']] <- res[['density.fraction']][[target.level]]
-        self$test.results[['ref.density']] <- res[['density.fraction']][[ref.level]]
-        #self$test.results[['diff.density']] <- res[['density.fraction']][[target.level]] - res[['density.fraction']][[ref.level]]
-        self$test.results[['density.emb']] <- res[['density.emb']]
-      }else if (method == 'graphSmooth'){
-        if(is.null(graph)) stop("'graph' must be provided for graph smooth based density")
-        self$test.results[['density.GraphSmooth']] <-  estimateGraphDensity(graph, sample.per.cell = sample.per.cell, sample.groups = sample.groups, ref.level = ref.level, target.level = target.level, n.cores = n.cores , m = m, verbose = verbose)
-      } else stop("Unknown method: ", method)
-      return(invisible(self$density[['bins']]))
+      stop("Unknown method: ", method)
     },
 
     #' @description Plot cell density
     #' @param add.points default is TRUE, add points to cell density figure
-    #' @param condition.per.cell Named group factor with cell names. Must have exactly two levels. condition.per.cell must be provided when add.points is TRUE
     #' @param contours specify cell types for contour, multiple cell types are also supported
     #' @param contour.color color for contour line
     #' @param contour.conf confidence interval of contour
     #' @return A ggplot2 object
-    plotCellDensity = function(col = c('blue','white','red'), show.legend = FALSE, legend.position = NULL, title = NULL, show.grid = NULL, add.points = TRUE, condition.per.cell = NULL, color = 'B', point.col = '#FCFDBFFF', contours = NULL, contour.color = 'white', contour.conf = '10%') {
-      bins <- private$getResults('bins', 'estimateCellDensity()')
-      ref <- self$ref.level
-      target <- self$target.level
+    plotCellDensity = function(col=c('blue','white','red'), show.legend=FALSE, legend.position=NULL, show.grid=NULL, add.points=TRUE,
+                               point.col='#FCFDBFFF', contours=NULL, contour.color='white', contour.conf='10%') {
+      dens.res <- private$getResults('cell.density.kde', 'estimateCellDensity()')
 
       # calculate sample.per.cell
       condition.per.cell <- as.factor(setNames( as.character(self$sample.groups[ as.character(self$sample.per.cell)]), names(self$sample.per.cell) ))
 
+      target.density <- dens.res %$% data.frame(density.emb, z=density.fraction[[self$target.level]])
+      ref.density <- dens.res %$% data.frame(density.emb, z=density.fraction[[self$ref.level]])
 
-      target.density <- private$getResults('target.density', 'estimateCellDensity()')
-      ref.density <- private$getResults('ref.density', 'estimateCellDensity()')
+      mi <- min(min(ref.density$z), min(target.density$z))
+      ma <- max(max(ref.density$z), max(target.density$z))
 
-      mi <- min(c(min(ref.density), min(target.density)))
-      ma <- max(c(max(ref.density), max(target.density)))
-      emb <- private$getResults('density.emb', 'estimateCellDensity()')
-
-      target.density = data.frame(emb, 'z' = target.density)
-      ref.density = data.frame(emb, 'z' = ref.density)
-
-      p1 <- plotDensity(target.density, bins = bins, col = col, legend.position = legend.position, show.legend = show.legend, title =self$ref.level, show.grid = show.grid, mi = mi, ma = ma)
-      p2 <- plotDensity(ref.density, bins = bins, col = col,legend.position = legend.position, show.legend = show.legend, title =self$target.level, show.grid = show.grid, mi = mi, ma = ma)
+      p1 <- plotDensity(target.density, bins=dens.res$bins, col=col, legend.position=legend.position, show.legend=show.legend, title=self$ref.level, show.grid=show.grid, mi=mi, ma=ma)
+      p2 <- plotDensity(ref.density, bins=dens.res$bins, col=col,legend.position=legend.position, show.legend=show.legend, title=self$target.level, show.grid=show.grid, mi=mi, ma=ma)
 
       if (add.points){
-        if(is.null(condition.per.cell)) stop("'condition.per.cell' must be provided when add points")
         emb <- self$embedding %>% as.data.frame()
-        colnames(emb) = c('x','y')
+        colnames(emb) <- c('x','y')
         emb$z <- 1
-        emb[1:4,]
-        nname1 <- names(condition.per.cell)[condition.per.cell == ref]
-        nname1 <- sample(nname1, min(2000, nrow(emb[nname1, ])))
+        nname1 <- names(condition.per.cell)[condition.per.cell == self$ref.level] %>%
+          sample(min(2000, length(.)))
 
-        nname2 <- names(condition.per.cell)[condition.per.cell == target]
-        nname2 <- sample(nname2, min(2000, nrow(emb[nname2, ])))
+        nname2 <- names(condition.per.cell)[condition.per.cell == self$target.level] %>%
+          sample(min(2000, length(.)))
 
-        p1 <- p1 + geom_point(data = emb[nname1, ], aes(x = x, y = y), col = point.col, size = 0.00001, alpha = 0.2)
-        p2 <- p2 + geom_point(data = emb[nname2, ], aes(x = x, y = y), col = point.col, size = 0.00001, alpha = 0.2)
+        p1 <- p1 + geom_point(data=emb[nname1, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
+        p2 <- p2 + geom_point(data=emb[nname2, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
       }
 
-
       if(!is.null(contours)){
-        cnl = do.call(c, lapply(sn(contours), function(x) getContour(self$embedding, cell.type =self$cell.groups , cell=x ,conf = contour.conf, color = contour.color)))
+        cnl <- do.call(c, lapply(sn(contours), function(x) getContour(self$embedding, cell.type=self$cell.groups , cell=x ,conf=contour.conf, color=contour.color)))
         p1 <- p1 + cnl
         p2 <- p2 + cnl
       }
 
-
-      return(list('ref' = p1, 'target' = p2))
+      return(list(ref=p1, target=p2))
     },
 
 
@@ -1017,26 +1008,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param contour.color color for contour line
     #' @param z.cutoff absolute z score cutoff
     #' @param contour.conf confidence interval of contour
-    diffCellDensity = function(condition.per.cell = NULL, method = 'subtract', col = c('blue','white','red'), show.legend = FALSE, legend.position = NULL, title = NULL, show.grid = NULL, plot = TRUE, contours = NULL, contour.color = 'white', contour.conf = '10%', z.cutoff = NULL, size =0.1, ...){
+    diffCellDensity=function(condition.per.cell=NULL, method='subtract', col=c('blue','white','red'), show.legend=FALSE, legend.position=NULL, title=NULL, show.grid=NULL, plot=TRUE, contours=NULL, contour.color='white', contour.conf='10%', z.cutoff=NULL, size =0.1, ...){
       # TODO: rename it to start with estimate*
-      ref.level <- self$ref.level
-      target.level <- self$target.level
-      sample.groups <- self$sample.groups
-      bins <- private$getResults('bins', 'estimateCellDensity()')
-      density.matrix <- private$getResults('density.mat', 'estimateCellDensity()')
-      density.emb <- private$getResults('density.emb', 'estimateCellDensity()')
-
-      if (method == 'graphSmooth'){
-        score <- private$getResults('density.GraphSmooth', 'estimateCellDensity()')
+      if (method == 'graph'){
+        score <- private$getResults('cell.density.graph', 'estimateCellDensity(method="graph")')
         emb <-  self$embedding
-      }else{
-        mat <- diffCellDensity(density.emb, density.matrix, condition.per.cell=condition.per.cell, sample.groups, bins = bins, target.level = target.level, ref.level =
-                             ref.level, method = method, title = title, legend.position = legend.position, show.legend = show.legend, show.grid = show.grid, z.cutoff = z.cutoff)
-        emb = mat[,1:2]
+      } else {
+        dens.res <- private$getResults('cell.density.kde', 'estimateCellDensity()')
+        mat <- dens.res %$%
+          diffCellDensity(density.emb, density.matrix, condition.per.cell=condition.per.cell, self$sample.groups, bins=bins, target.level=self$target.level,
+                          ref.level=self$ref.level, method=method, title=title, legend.position=legend.position, show.legend=show.legend, show.grid=show.grid, z.cutoff=z.cutoff)
+        emb <- mat[,1:2]
         score <- mat$z
-        names(score) = rownames(mat)
+        names(score) <- rownames(mat)
       }
-      fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) + scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0)
+
+      fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) +
+        scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0)
+
       if (plot){
         if(!is.null(contours)){
           cnl <- do.call(c, lapply(sn(contours), function(x)
@@ -1183,7 +1172,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       z.scores@x[is.na(z.scores@x)] <- 0
       z.smoothed <- z.scores %>%
-        smoothSignalOnGraph(extractCellGraph(cao$data.object), filter, n.cores=n.cores,
+        smoothSignalOnGraph(extractCellGraph(self$data.object), filter, n.cores=n.cores,
                             progress=verbose, ...)
 
       z.smoothed[is.na(z.scores)] <- NA

@@ -2,12 +2,10 @@
 ##' @description Estimate cell density in giving embedding
 ##' @param emb cell embedding matrix
 ##' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
-##' @param sample.groups @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
-##' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
-##' @param target.level target/disease level for sample.group vector
+##' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 ##' @param bins number of bins for density estimation, default 400
 ##' @param by.sample  if TRUE, density will estimated by sample and quantiles normalization will applied to individual sample. If FALSE, cell condition.per.cell need to be provided and density will simply esitmated by condition.per.cell.
-estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.level, target.level, condition.per.cell = NULL, by.sample = TRUE){
+estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, condition.per.cell = NULL, by.sample = TRUE){
   if (!requireNamespace("preprocessCore", quietly = TRUE)) {
     stop("You have to install preprocessCore package from Bioconductor to do quantile normlization ")
   }
@@ -15,7 +13,6 @@ estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.l
   if (!requireNamespace("MASS", quietly = TRUE)) {
     stop("You have to install MASS package to estimate density ")
   }
-
 
   cname <- intersect(names(sample.per.cell), rownames(emb))
   sample.per.cell <- sample.per.cell[cname]
@@ -33,68 +30,47 @@ estimateCellDensity <- function(emb, sample.per.cell, sample.groups, bins, ref.l
 
   if (by.sample){
     density.fraction <- lapply(sccore:::sn(as.character(unique(sample.groups))),
-                              function(x) {
-                                tmp  <-  density.mat[, names(sample.groups[sample.groups == x])]
-                                rowMeans(tmp)
-                                #mmatrix(rowMeans(tmp), ncol = bins, byrow = FALSE)
-                              })
-  }else{
+                               function(x) rowMeans(density.mat[, names(sample.groups[sample.groups == x])]))
+  } else {
     if (is.null(condition.per.cell)) { stop("'condition.per.cell' must be provided") }
     list.den <- lapply(sccore:::sn(as.character(unique(condition.per.cell))), function(x) {
-      nname <- names(condition.per.cell[condition.per.cell == x])
-      tmp <- emb[nname, ]
-      f2 <- kde2d(tmp[, 1], tmp[, 2], n = bins, lims = c(range(emb[, 1]), range(emb[, 2])))
-      f2
+      tmp <- emb[names(condition.per.cell[condition.per.cell == x]), ]
+      MASS::kde2d(tmp[, 1], tmp[, 2], n = bins, lims = c(range(emb[, 1]), range(emb[, 2])))
     })
     denMatrix <- do.call("cbind", lapply(list.den, function(x) as.numeric(x$z)))
     density.fraction <- lapply(sccore:::sn(as.character(unique(sample.groups))),
-                              function(x) {
-                                denMatrix[, x]
-                                #matrix(denMatrix[, x], ncol = bins, byrow = FALSE)
-                              })
+                              function(x) denMatrix[, x])
   }
 
   # coordinate embedding space
-  target.density = density.fraction[[target.level]]
-  mat <- matrix(target.density, ncol = bins, byrow = FALSE)
+  mat <- matrix(density.fraction[[1]], ncol = bins, byrow = FALSE)
   x <- emb[, 1]
   y <- emb[, 2]
-  x1=seq(min(x),max(x),length.out = bins)
-  y1=seq(min(y),max(y),length.out = bins)
-  names(x1)=seq(bins)
-  names(y1)=seq(bins)
-  d1=setNames(melt(mat), c('x', 'y', 'z'))
-  d1$x1=x1[d1$x]
-  d1$y1=y1[d1$y]
-  emb2 <- data.frame(x = d1$x1, y = d1$y1)
+  x1 <- seq(min(x), max(x), length.out=bins) %>% setNames(seq(bins))
+  y1 <- seq(min(y), max(y), length.out=bins) %>% setNames(seq(bins))
+  d1 <- setNames(melt(mat), c('x', 'y', 'z'))
+  emb2 <- data.frame(x=x1[d1$x], y=y1[d1$y])
 
   #count cell number in each bin
-  x <- emb[,1]
-  y <- emb[,2]
-  s1 <- seq(from = min(x),
-           to = max(x),
-           length.out = bins + 1)
-  s2 <- seq(from = min(y),
-           to = max(y),
-           length.out = bins + 1)
+  s1 <- seq(from = min(x), to = max(x), length.out=bins + 1)
+  s2 <- seq(from = min(y), to = max(y), length.out=bins + 1)
   dcounts <- table(cut(x, breaks = s1), cut(y, breaks = s2)) #%>% as.matrix.data.frame
   emb2$counts <- as.numeric(dcounts)
 
-  return(list('density.mat' = density.mat, 'density.fraction' = density.fraction, 'density.emb' = emb2))
+  return(list(density.mat=density.mat, density.fraction=density.fraction, density.emb=emb2, bins=bins))
 }
 
 
-##' @description estimate graph  smooth based cell density
+##' @description estimate graph smooth based cell density
 ##' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
 ##' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 ##' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
 ##' @param target.level target/disease level for sample.group vector
 ##' @param n.cores number of cores
 ##' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
-
-estimateGraphDensity <- function(graph, sample.per.cell, sample.groups, ref.level, target.level, n.cores = 1, m = 50, verbose = TRUE) {
+estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, ref.level, target.level, n.cores = 1, m = 50, verbose = TRUE) {
   tmp <-  setNames(as.numeric(sample.per.cell), names(sample.per.cell))
-  scoreL <- sccore:::plapply(sn(unique(tmp)), function(x) {
+  scoreL <- sccore:::plapply(sccore::sn(unique(tmp)), function(x) {
     tryCatch({
       x1 <-  tmp
       x1[x1 != x] <-  0
@@ -103,7 +79,7 @@ estimateGraphDensity <- function(graph, sample.per.cell, sample.groups, ref.leve
     }, error = function(err) {
       return(NA)
     })
-  }, n.cores = n.cores, mc.preschedule=T, progress=verbose)
+  }, n.cores = n.cores, mc.preschedule=TRUE, progress=verbose)
   scM <- do.call(cbind, scoreL)
   colnames(scM) <-  unique(sample.per.cell)
   NT <-  sample.groups[sample.groups == target.level] %>% names()

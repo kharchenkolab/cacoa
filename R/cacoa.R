@@ -1128,15 +1128,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[["cluster.free.z"]]))
     },
 
-    getMostChangedGenes = function(n, max.z=10, cell.subset=NULL, excluded.genes=NULL) {
+    getMostChangedGenes = function(n, min.z=0.5, max.z=20, cell.subset=NULL, excluded.genes=NULL, included.genes=NULL) {
       z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
       if (!is.null(cell.subset)) {
         z.scores <- z.scores[cell.subset,]
       }
 
-      z.scores@x %<>% pmin(max.z) %>% pmax(-max.z)
+      if (is.null(included.genes)) {
+        included.genes <- colnames(z.scores)
+      }
+
+      z.scores@x %<>% abs() %>% pmin(max.z)
+      z.scores@x[z.scores@x < min.z] <- 0
       scores <- colMeans(z.scores, na.rm=TRUE) %>% sort(decreasing=TRUE) %>%
-        .[setdiff(names(.), excluded.genes)] %>% .[1:min(n, length(.))]
+        .[setdiff(names(.), excluded.genes)] %>% .[intersect(names(.), included.genes)] %>%
+        .[1:min(n, length(.))]
       return(scores)
     },
 
@@ -1248,28 +1254,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(ggs)
     },
 
-    plotGeneProgrammeGenes = function(programme.id, name="gene.programmes", max.genes=9, build.panel=TRUE, nrow=NULL,
-                                      color.range=c(-3, 3), smoothed=FALSE, size=0.1, alpha=0.1, plot.na=-1, ...) {
+    plotGeneProgrammeGenes = function(programme.id, name="gene.programmes", max.genes=9, plot.expression=FALSE, ...) {
       fr <- private$getResults(name, "estimateGeneProgrammes")
       scores <- fr$gene.scores[[programme.id]]
       if (is.null(scores))
         stop("Can't find programme", programme.id)
 
-      if (smoothed) {
-        z.scores <- private$getResults("cluster.free.z.smoothed", "smoothClusterFreeZScores")
-      } else {
-        z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
-      }
-
       scores %<>% .[1:min(length(.), max.genes)]
-      ggs <- scores %>% names() %>%
-        lapply(function(g) self$plotEmbedding(colors=z.scores[,g], plot.na=plot.na, size=size, alpha=alpha, color.range=color.range,
-                                              title=paste0(g, ": ", signif(scores[g], 3)), ...))
-
-      if (build.panel)
-        return(cowplot::plot_grid(plotlist=ggs, nrow=nrow))
-
-      return(ggs)
+      return(self$plotGeneExpressionComparison(scores=scores, max.z=max.z.plot, plot.expression=plot.expression, ...))
     },
 
     #' @description Plot cluster-free expression shift z-scores
@@ -1311,8 +1303,65 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                               values=c(0, 0.5 / max.shift, 1 / max.shift, 0.5 - 0.5 * max.shift, 1.0), # Ensure that 1.0 has yellow color
                               name="Ratio")
       return(gg)
+    },
+
+    plotMostChangedGenes = function(n.top.genes, min.z=0.5, max.z=20, max.z.plot=max.z, cell.subset=NULL, excluded.genes=NULL, ...) {
+      scores <- self$getMostChangedGenes(n.top.genes, min.z=min.z, max.z=max.z,
+                                         cell.subset=cell.subset, excluded.genes=excluded.genes)
+      self$plotGeneExpressionComparison(scores=scores, max.z=max.z.plot, ...)
+    },
+
+    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr=NULL, plot.z=TRUE, plot.expression=TRUE, max.z=5, smoothed=FALSE, ...) {
+      if (is.null(genes)) {
+        if (is.null(scores)) stop("Either 'genes' or 'scores' must be provided")
+        genes <- names(scores)
+      }
+
+      if (!plot.z && !plot.expression) return()
+
+      if (plot.z) {
+        if (smoothed && (is.null(self$test.results$cluster.free.z.smoothed) || !all(genes %in% colnames(self$test.results$cluster.free.z.smoothed)))) {
+          missed.genes <- setdiff(colnames(self$test.results$cluster.free.z.smoothed), genes)
+          warning("Smoothed Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See smoothClusterFreeZScores().")
+          smoothed <- FALSE
+        }
+
+        if (!smoothed && (is.null(self$test.results$cluster.free.z) || !all(genes %in% colnames(self$test.results$cluster.free.z)))) {
+          missed.genes <- setdiff(colnames(self$test.results$cluster.free.z), genes)
+          warning("Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See estimateClusterFreeZScores().")
+          plot.z <- FALSE
+        }
+      }
+
+      condition.per.cell <- self$sample.per.cell %>%
+        {setNames(as.character(self$sample.groups[as.character(.)]), names(.))} %>%
+        as.factor()
+
+      ggs <- lapply(genes, function(g) {
+        lst <- list()
+        if (plot.expression) {
+          expr <- extractGeneExpression(self$data.object, g)
+          m.expr <- if (is.null(max.expr)) max(expr) else max.expr
+          lst <- lapply(unique(condition.per.cell), function(sg) {
+            self$plotEmbedding(colors=expr, title=paste(sg, " ",g), groups=condition.per.cell, subgroups=sg,
+                               color.range=c(0, m.expr), legend.title="Expression", ...)
+          }) %>% c(lst)
+        }
+
+        if (plot.z) {
+          title <- if (is.null(scores)) g else paste0(g, ": ", signif(scores[g], 3))
+          lst <- self$plotEmbedding(colors=z.scores[,g], title=title, color.range=c(-max.z, max.z), ...) %>%
+            list() %>% c(lst)
+        }
+
+        if (length(lst) > 1) cowplot::plot_grid(plotlist=lst, ncol=3) else lst[[1]]
+      })
+
+      if (length(genes) == 1) return(ggs[[1]])
+      return(ggs)
     }
   ),
+
   private = list(
     getResults=function(name, suggested.function=NULL) {
       if (!is.null(self$test.results[[name]]))
@@ -1325,7 +1374,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       stop(msg)
     },
 
-    getTopGenes = function(n, gene.selection=c("change", "expression", "od"), cm.joint=NULL, min.expr.frac=0.0, excluded.genes=NULL, included.genes=NULL) {
+    getTopGenes = function(n, gene.selection=c("change", "expression", "od"), cm.joint=NULL,
+                           min.expr.frac=0.0, excluded.genes=NULL, included.genes=NULL, ...) {
       gene.selection <- match.arg(gene.selection)
       if ((gene.selection == "change") && is.null(self$test.results$cluster.free.z)) {
         warning("Please run estimateClusterFreeZScores() first to use gene.selection='change'. Fall back to gene.selection='expression'.")
@@ -1333,7 +1383,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       if (gene.selection == "change") {
-        genes <- names(self$getMostChangedGenes(Inf))
+        genes <- names(self$getMostChangedGenes(Inf, max.z=max.z, ...))
       } else if (gene.selection == "od") {
         genes <- extractOdGenes(self$data.object, n + length(excluded.genes))
       } else {

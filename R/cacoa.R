@@ -1204,21 +1204,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #'   - `gene.scores`: list of vectors of gene scores per programme. Contains only genes, selected for
     #'     the programme usin fabia biclustering.
     #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
-    estimateGeneProgrammes = function(smoothed=TRUE, n.programmes=15, name="gene.programmes", ...) {
+    estimateGeneProgrammes = function(n.top.genes=NULL, n.programmes=15, gene.selection="change", name="gene.programmes", ...) {
       if (!requireNamespace("fabia", quietly=TRUE))
         stop("fabia package must be installed to run this function")
 
-      if (smoothed) {
-        if (is.null(self$test.results[["cluster.free.z.smoothed"]]))
-          stop("A result named 'cluster.free.z.smoothed' can't be found.",
-               "Please run 'smoothClusterFreeZScores' first or set `smoothed=FALSE`.")
-        z.scores <- self$test.results$cluster.free.z.smoothed
-      } else {
-        z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
-        warning("`smoothed=FALSE` is not recommended, as the raw signal is often too noisy\n")
+      z.scores <- private$getResults("cluster.free.z.smoothed", "smoothClusterFreeZScores")
+      if (!is.null(n.top.genes)) {
+        genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, included.genes=colnames(z.scores))
+        z.scores <- z.scores[,genes]
       }
 
-      res <- estimateGeneProgrammes(z.scores, n.programmes, ...)
+      res <- estimateGeneProgrammesFabia(z.scores, n.programmes, ...)
       fr <- res$fabia
 
       bi.clusts <- fabia::extractBic(fr)
@@ -1330,7 +1326,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     getTopGenes = function(n, gene.selection=c("change", "expression", "od"), cm.joint=NULL, min.expr.frac=0.0, excluded.genes=NULL, included.genes=NULL) {
-      gene.selection <- match.args(gene.selection)
+      gene.selection <- match.arg(gene.selection)
       if ((gene.selection == "change") && is.null(self$test.results$cluster.free.z)) {
         warning("Please run estimateClusterFreeZScores() first to use gene.selection='change'. Fall back to gene.selection='expression'.")
         gene.selection <- "expression"
@@ -1346,11 +1342,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         }
 
         cm.joint@x <- 1 * (cm.joint@x > 0)
-        gene.mask <- (colMeans(cm.joint) >= min.expr.frac)
-        genes <- colMeans(cm.joint) %>% order(decreasing=TRUE) %>%
+        col.means <- colMeans(cm.joint, na.rm=TRUE)
+        gene.mask <- (col.means >= min.expr.frac)
+        genes <- col.means %>% order(decreasing=TRUE) %>%
           .[gene.mask[.]] %>% colnames(cm.joint)[.]
       }
 
+      if (is.null(included.genes)) {
+        included.genes <- genes
+      }
       genes %<>% setdiff(excluded.genes) %>% intersect(included.genes) %>% .[1:min(length(.), n)]
       return(genes)
     },

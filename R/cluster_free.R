@@ -1,10 +1,10 @@
-#' Estimate Gene Programmes
+#' Estimate Gene Programmes with FABIA
 #' @param n.programmes maximal number of gene programmes to find (parameter `p` for fabia).
 #' @param n.sampled.cells number of sub-sampled cells for estimating the gene programmes. If 0, all cells are used.
 #' it is interpreted as a vector of cell
 #' @inheritDotParams fabia::fabia -p -X -cyc -alpha -random
-estimateGeneProgrammes <- function(z.scores, n.programmes, n.sampled.cells=15000, min.z=0.5, max.z=3,
-                                   cyc=1500, alpha=0.2, random=-1, ...) {
+estimateGeneProgrammesFabia <- function(z.scores, n.programmes, n.sampled.cells=15000, min.z=0.5, max.z=3,
+                                        cyc=1500, alpha=0.2, random=-1, ...) {
   if (!requireNamespace("fabia", quietly=TRUE))
     stop("fabia package must be installed to run this function")
 

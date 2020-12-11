@@ -1105,15 +1105,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                           verbose=self$verbose, n.cores=self$n.cores) {
       normalize <- match.arg(normalize)
       cm <- extractJointCountMatrix(self$data.object)
-
-      cm.bin <- cm
-      cm.bin@x <- 1 * (cm.bin@x > 0)
-      gene.mask <- (colMeans(cm.bin) >= min.expr.frac)
-      gene.ids <- colMeans(cm.bin) %>% order(decreasing=TRUE) %>%
-        .[gene.mask[.]] %>% .[1:min(length(.), n.top.genes)]
+      genes <- private$getTopGenes(n.top.genes, gene.selection="expression", cm.joint=cm, min.expr.frac=min.expr.frac)
 
       if (verbose)
-        message("Estimating cluster-free Z-scores for ", length(gene.ids), " top genes")
+        message("Estimating cluster-free Z-scores for ", length(genes), " top genes")
 
       is.ref <- self$sample.per.cell %>%
         {setNames(self$sample.groups[as.character(.)] == self$ref.level, names(.))}
@@ -1122,7 +1117,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       cell.names <- intersect(rownames(cm), rownames(adj.mat)) %>%
         intersect(names(is.ref))
 
-      z.mat <- clusterFreeZScoreMat(adj.mat[cell.names, cell.names], cm[cell.names, gene.ids, drop=FALSE],
+      z.mat <- clusterFreeZScoreMat(adj.mat[cell.names, cell.names], cm[cell.names, genes, drop=FALSE],
                                     is.ref[cell.names], normalize_both=(normalize == "both"), verbose=verbose, n_cores=n.cores)
       z.mat@x %<>% pmin(max.z) %>% pmax(-max.z)
 
@@ -1130,13 +1125,29 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[["cluster.free.z"]]))
     },
 
+    getMostChangedGenes = function(n, max.z=10, cell.subset=NULL, excluded.genes=NULL) {
+      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
+      if (!is.null(cell.subset)) {
+        z.scores <- z.scores[cell.subset,]
+      }
+      z.scores@x %<>% pmin(max.z) %>% pmax(-max.z)
+      scores <- colMeans(z.scores, na.rm=TRUE) %>% sort(decreasing=TRUE) %>%
+        .[setdiff(names(.), excluded.genes)] %>% .[1:min(n, length(.))]
+      return(scores)
+    },
+
     #' @description Estimate Cluster-free Expression Shift
-    #' @param n.od.genes number of overdispersed genes for estimating expression shifts
+    #' @param n.top.genes number of top genes for estimating expression shifts. Default: 3000.
+    #' @param gene.selection a method to select top genes, "change" selects genes by cluster-free Z-score change,
+    #' "expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "change".
+    #' @param excluded.genes list of genes to exclude during estimation. For example, a list of mitochondrial genes.
     #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
     #' Results are also stored in the `cluster.free.expr.shifts` field.
-    estimateClusterFreeExpressionShifts = function(n.od.genes=NULL, verbose=self$verbose, n.cores=self$n.cores) {
-      genes <- extractOdGenes(self$data.object, n.od.genes)
-      cm <- extractJointCountMatrix(self$data.object) %>% .[, genes] %>% Matrix::t()
+    estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection=c("change", "expression", "od"),
+                                                   verbose=self$verbose, n.cores=self$n.cores, excluded.genes=NULL) {
+      cm <- extractJointCountMatrix(self$data.object)
+      genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, excluded.genes=excluded.genes)
+      cm <- Matrix::t(cm[, genes])
 
       is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
 
@@ -1318,6 +1329,35 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         msg <- paste(msg, "Please first run", suggested.function)
       }
       stop(msg)
+    },
+
+    getTopGenes = function(n, gene.selection=c("change", "expression", "od"), cm.joint=NULL, min.expr.frac=0.0, excluded.genes=NULL) {
+      gene.selection <- match.args(gene.selection)
+      if ((gene.selection == "change") && is.null(self$test.results$cluster.free.z)) {
+        warning("Please run estimateClusterFreeZScores() first to use gene.selection='change'. Fall back to gene.selection='expression'.")
+        gene.selection <- "expression"
+      }
+
+      if (gene.selection == "change")
+        return(names(self$getMostChangedGenes(n, excluded.genes=excluded.genes)))
+
+      if (gene.selection == "od") {
+        genes <- extractOdGenes(self$data.object, n + length(excluded.genes)) %>%
+          setdiff(excluded.genes) %>% .[1:min(n, length(.))]
+        return(genes)
+      }
+
+      if (is.null(cm.joint)) {
+        cm.joint <- extractJointCountMatrix(self$data.object)
+      }
+
+      cm.joint@x <- 1 * (cm.joint@x > 0)
+      gene.mask <- (colMeans(cm.joint) >= min.expr.frac)
+      genes <- colMeans(cm.joint) %>% order(decreasing=TRUE) %>%
+        .[gene.mask[.]] %>% colnames(cm.joint)[.] %>%
+        setdiff(excluded.genes) %>% .[1:min(length(.), n)]
+
+      return(genes)
     },
 
     getOntologyPvalueResults=function(type, cell.subgroup, genes) {

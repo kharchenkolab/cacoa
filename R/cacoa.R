@@ -1135,6 +1135,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       gene.ids <- colMeans(cm.bin) %>% order(decreasing=TRUE) %>%
         .[gene.mask[.]] %>% .[1:min(length(.), n.top.genes)]
 
+      if (verbose)
+        message("Estimating cluster-free Z-scores for ", length(gene.ids), " top genes")
+
       is.ref <- self$sample.per.cell %>%
         {setNames(self$sample.groups[as.character(.)] == self$ref.level, names(.))}
 
@@ -1181,10 +1184,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if (min.z > 1e-10) {
         z.scores.bin <- z.scores
         z.scores.bin@x %<>% {as.numeric(abs(.) >= min.z)}
-        genes.filt <- which(colMeans(z.scores.bin) > min.de.frac)
+        genes.filt <- which(colMeans(z.scores.bin, na.rm=TRUE) > min.de.frac)
         z.scores <- z.scores[,genes.filt]
       }
 
+      if (verbose) message("Smoothing Z-scores for ", ncol(z.scores), " genes passed filtration")
       if (is.null(filter)) {
         filter <- function(...) heatFilter(..., beta=smoothing)
       }
@@ -1195,7 +1199,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                             progress=verbose, ...)
 
       z.smoothed[is.na(z.scores)] <- NA
-      self$test.results["cluster.free.z.smoothed"] <- z.smoothed
+      self$test.results[["cluster.free.z.smoothed"]] <- z.smoothed
       return(invisible(z.smoothed))
     },
 
@@ -1239,18 +1243,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       res$gene.scores <- apply(bi.clusts$bic, 1, `[[`, "bixv")[mask]
       res$bi.clusts <- bi.clusts
 
+      colnames(res$scores.exact) <- colnames(res$scores.approx) <-
+        colnames(res$loadings) <- names(res$gene.scores) <- paste0("P", 1:ncol(res$scores.exact))
       self$test.results[[name]] <- res
 
       return(invisible(self$test.results[[name]]))
     },
 
-    plotGeneProgrammeScores = function(name="gene.programmes", approximate=TRUE, build.panel=TRUE, nrow=NULL,
+    plotGeneProgrammeScores = function(name="gene.programmes", approximate=FALSE, build.panel=TRUE, nrow=NULL,
                                        gradient.range.quantile=0.975, plot.na=approximate, legend.title="Score", ...) {
       fr <- private$getResults(name, "estimateGeneProgrammes")
       scores <- if (approximate) fr$scores.approx else fr$scores.exact
 
       ggs <- lapply(1:ncol(scores), function(i) {
-        self$plotEmbedding(colors=scores[,i], gradient.range.quantile=gradient.range.quantile, plot.na=plot.na, legend.title=legend.title, ...)
+        self$plotEmbedding(colors=scores[,i], gradient.range.quantile=gradient.range.quantile, plot.na=plot.na,
+                           legend.title=legend.title, title=colnames(scores)[i], ...)
       })
 
       if (build.panel)
@@ -1318,7 +1325,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       gg <- gg +
         scale_size_continuous(range=font.size, trans='identity', guide='none') +
-        scale_color_distiller(palette="RdYlBu", name="Distance")
+        scale_color_gradientn(colours=c('#2c7bb6', '#abd9e9', '#ffffbf', '#fdae61', '#d7191c'),
+                              values=c(0, 0.5 / max.shift, 1 / max.shift, 0.5 - 0.5 * max.shift, 1.0), # Ensure that 1.0 has yellow color
+                              name="Ratio")
       return(gg)
     }
   ),

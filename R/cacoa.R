@@ -1271,7 +1271,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         stop("Can't find programme", programme.id)
 
       scores %<>% .[1:min(length(.), max.genes)]
-      return(self$plotGeneExpressionComparison(scores=scores, max.z=max.z.plot, plot.expression=plot.expression, ...))
+      return(self$plotGeneExpressionComparison(scores=scores, plot.expression=plot.expression, ...))
     },
 
     #' @description Plot cluster-free expression shift z-scores
@@ -1321,7 +1321,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       self$plotGeneExpressionComparison(scores=scores, max.z=max.z.plot, ...)
     },
 
-    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr=NULL, plot.z=TRUE, plot.expression=TRUE, max.z=5, smoothed=FALSE, ...) {
+    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr=NULL, plot.z=TRUE, plot.expression=TRUE, max.z=5, smoothed=FALSE, plot.na=-1, ...) {
       if (is.null(genes)) {
         if (is.null(scores)) stop("Either 'genes' or 'scores' must be provided")
         genes <- names(scores)
@@ -1330,16 +1330,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if (!plot.z && !plot.expression) return()
 
       if (plot.z) {
-        if (smoothed && (is.null(self$test.results$cluster.free.z.smoothed) || !all(genes %in% colnames(self$test.results$cluster.free.z.smoothed)))) {
-          missed.genes <- setdiff(colnames(self$test.results$cluster.free.z.smoothed), genes)
-          warning("Smoothed Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See smoothClusterFreeZScores().")
-          smoothed <- FALSE
+        if (smoothed) {
+          z.scores <- self$test.results$cluster.free.z.smoothed
+          if ((is.null(z.scores) || !all(genes %in% colnames(z.scores)))){
+            missed.genes <- setdiff(colnames(z.scores), genes)
+            warning("Smoothed Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See smoothClusterFreeZScores().")
+            smoothed <- FALSE
+          }
         }
 
-        if (!smoothed && (is.null(self$test.results$cluster.free.z) || !all(genes %in% colnames(self$test.results$cluster.free.z)))) {
-          missed.genes <- setdiff(colnames(self$test.results$cluster.free.z), genes)
-          warning("Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See estimateClusterFreeZScores().")
-          plot.z <- FALSE
+        if (!smoothed) {
+          z.scores <- self$test.results$cluster.free.z
+          if ((is.null(z.scores) || !all(genes %in% colnames(z.scores)))) {
+            missed.genes <- setdiff(colnames(z.scores), genes)
+            warning("Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See estimateClusterFreeZScores().")
+            plot.z <- FALSE
+          }
         }
       }
 
@@ -1354,13 +1360,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           m.expr <- if (is.null(max.expr)) max(expr) else max.expr
           lst <- lapply(unique(condition.per.cell), function(sg) {
             self$plotEmbedding(colors=expr, title=paste(sg, " ",g), groups=condition.per.cell, subgroups=sg,
-                               color.range=c(0, m.expr), legend.title="Expression", ...)
+                               color.range=c(0, m.expr), legend.title="Expression", plot.na=FALSE, ...)
           }) %>% c(lst)
         }
 
         if (plot.z) {
           title <- if (is.null(scores)) g else paste0(g, ": ", signif(scores[g], 3))
-          lst <- self$plotEmbedding(colors=z.scores[,g], title=title, color.range=c(-max.z, max.z), ...) %>%
+          lst <- self$plotEmbedding(colors=z.scores[,g], title=title, color.range=c(-max.z, max.z), plot.na=plot.na, ...) %>%
             list() %>% c(lst)
         }
 
@@ -1393,7 +1399,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       if (gene.selection == "change") {
-        genes <- names(self$getMostChangedGenes(Inf, max.z=max.z, ...))
+        genes <- names(self$getMostChangedGenes(Inf, ...))
       } else if (gene.selection == "od") {
         genes <- extractOdGenes(self$data.object, n + length(excluded.genes))
       } else {

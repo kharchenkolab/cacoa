@@ -1,4 +1,4 @@
-plotExpressionDistanceIndividual <- function(ctdml, valid.comparisons, sample.groups=NULL, notch=TRUE, alpha=0.2, min.cells=10) {
+plotExpressionDistanceIndividual <- function(ctdml, valid.comparisons, sample.groups=NULL, notch=TRUE, alpha=0.2, min.cells=10, show.significance = FALSE) {
   df <- do.call(rbind,lapply(ctdml,function(ctdm) {
     x <- lapply(ctdm, function(xm) {
       nc <- attr(xm, 'cc')
@@ -52,11 +52,13 @@ plotExpressionDistanceIndividual <- function(ctdml, valid.comparisons, sample.gr
     ) +
     labs(x="", y="expression distance") +
     scale_y_continuous( expand=c(0, max(df$value) * 0.1), limits=c(0, (max(df$value) + max(df$value) * 0.01)))  #expand=c(0, 0),
-
+  
+  if(show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+  
   return(gg)
 }
 
-plotExpressionDistanceJoint <- function(ctdml, valid.comparisons, sample.groups=NULL, notch=TRUE, alpha=0.2) {
+plotExpressionDistanceJoint <- function(ctdml, valid.comparisons, sample.groups=NULL, notch=TRUE, alpha=0.2, show.significance = FALSE) {
   df <- do.call(rbind, lapply(ctdml, function(ctdm) {
     # bring to a common set of cell types
     commoncell <- unique( unlist( lapply(ctdm, function(x) colnames(x)) ))
@@ -123,7 +125,8 @@ plotExpressionDistanceJoint <- function(ctdml, valid.comparisons, sample.groups=
       axis.ticks.x = element_blank(),
       plot.title = element_text(size = 10)
     )
-
+  if(show.significance) gg <- gg + ggpubr::stat_compare_means(label = "p.signif", label.x = 1.5) # willcox test
+  
   return(gg)
 }
 
@@ -131,7 +134,7 @@ plotExpressionDistanceJoint <- function(ctdml, valid.comparisons, sample.groups=
 #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
 #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 #' @param cell.type Named of cell type, default is null, it set plot sample-sample expression distance in tSNE for the cell type
-#' #' @param perplexity tSNE perpexity (default: 4)
+#' @param perplexity tSNE perpexity (default: 4)
 #' @param max_iter tSNE max_iter (default: 1e3)
 #' @param method dimension reduction methods (MDS or tSNE) (default is MDS)
 #' @return A ggplot2 object

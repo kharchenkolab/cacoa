@@ -920,37 +920,34 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Estimate cell density in giving embedding
     #' @param emb cell embedding matrix
-    #' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
-    #' @param bins number of bins for density esitmation, default 400
-    #' @param condition.per.cell Named group factor with cell names. Must have exactly two levels.
-    #' @param by.sample  if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell condition.per.cell need to be provided and density will simply estimated by condition.per.cell.
-    estimateCellDensity = function(embedding=self$embedding, cell.groups=self$cell.groups, sample.groups=self$sample.groups, sample.per.cell = self$sample.per.cell, bins = 400, by.sample = TRUE) {
-
+    #' @param bins number of bins for density estimation, default 400
+    #' @param method density estimation method, graphSmooth: graph smooth based density estimation. embGrid: embedding grid based density  estimation. (default: embGrid)
+    #' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
+    #' @param by.sample  if TRUE, density will estimated by sample and quantile normalization will applied to individual sample. If FALSE, cell condition.per.cell need to be provided and density will simply estimated by condition.per.cell.
+    estimateCellDensity = function(embedding=self$embedding, bins = 400, by.sample = TRUE, method = 'embGrid',
+                                   verbose=self$verbose, m=50, n.cores=self$n.cores, graph=NULL){
       if(is.null(embedding)) stop("'embedding' must be provided either during the object initialization or during this function call")
 
-      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
-
-      if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
-
-      if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
-
+      sample.per.cell <- self$sample.per.cell
+      sample.groups <- self$sample.groups
       # calculate sample.per.cell
       condition.per.cell <- as.factor(setNames( as.character(sample.groups[ as.character(sample.per.cell)]), names(sample.per.cell) ))
 
-      ref.level <- self$ref.level
-      target.level <- self$target.level
-
       self$test.results[['bins']] <- bins
-      res <- estimateCellDensity(embedding, sample.per.cell = sample.per.cell, sample.groups = sample.groups, bins = bins, ref.level =
-                                   ref.level, target.level = target.level, condition.per.cell = condition.per.cell, by.sample =
-                                   by.sample)
-      self$test.results[['density.mat']] <- res[['density.mat']]
-      self$test.results[['target.density']] <- res[['density.fraction']][[target.level]]
-      self$test.results[['ref.density']] <- res[['density.fraction']][[ref.level]]
-      #self$test.results[['diff.density']] <- res[['density.fraction']][[target.level]] - res[['density.fraction']][[ref.level]]
 
-      self$test.results[['density.emb']] <- res[['density.emb']]
-
+      if (method == 'embGrid'){
+        res <- estimateCellDensity(embedding, sample.per.cell=sample.per.cell, sample.groups=sample.groups, bins=bins,
+                                   ref.level=self$ref.level, target.level=self$target.level, condition.per.cell=condition.per.cell,
+                                   by.sample=by.sample)
+        self$test.results[['density.mat']] <- res[['density.mat']]
+        self$test.results[['target.density']] <- res[['density.fraction']][[target.level]]
+        self$test.results[['ref.density']] <- res[['density.fraction']][[ref.level]]
+        #self$test.results[['diff.density']] <- res[['density.fraction']][[target.level]] - res[['density.fraction']][[ref.level]]
+        self$test.results[['density.emb']] <- res[['density.emb']]
+      }else if (method == 'graphSmooth'){
+        if(is.null(graph)) stop("'graph' must be provided for graph smooth based density")
+        self$test.results[['density.GraphSmooth']] <-  estimateGraphDensity(graph, sample.per.cell = sample.per.cell, sample.groups = sample.groups, ref.level = ref.level, target.level = target.level, n.cores = n.cores , m = m, verbose = verbose)
+      } else stop("Unknown method: ", method)
       return(invisible(self$density[['bins']]))
     },
 
@@ -961,7 +958,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param contour.color color for contour line
     #' @param contour.conf confidence interval of contour
     #' @return A ggplot2 object
-    plotCellDensity = function(col = c('blue','white','red'), show.legend = NULL, legend.position = NULL, title = NULL, show.grid = NULL, add.points = TRUE, condition.per.cell = NULL, color = 'B', point.col = '#FCFDBFFF', contours = NULL, contour.color = 'white', contour.conf = '10%') {
+    plotCellDensity = function(col = c('blue','white','red'), show.legend = FALSE, legend.position = NULL, title = NULL, show.grid = NULL, add.points = TRUE, condition.per.cell = NULL, color = 'B', point.col = '#FCFDBFFF', contours = NULL, contour.color = 'white', contour.conf = '10%') {
       bins <- private$getResults('bins', 'estimateCellDensity()')
       ref <- self$ref.level
       target <- self$target.level
@@ -1010,18 +1007,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(list('ref' = p1, 'target' = p2))
     },
 
-    #' @title estimate graph smooth based cell density
-    #' @param n.cores number of cores
-    #' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
-    #' @return Z score of differential cell density
-    estimateGraphDensity = function(n.cores = 10, m = 50, verbose = TRUE){
-      ref.level <- self$ref.level
-      target.level <- self$target.level
-      sample.groups <- self$sample.groups
-      sample.per.cell <- self$sample.per.cell
-      score <-  estimateGraphDensity(sample.per.cell = sample.per.cell, sample.groups = sample.groups, ref.level = ref.level, target.level = target.level, n.cores = n.cores , m = m, verbose = verbose)
-      return(score)
-    },
 
     #' @description estimate differential cell density
     #' @param col color palettes,  default is c('blue','white','red')
@@ -1032,8 +1017,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param contour.color color for contour line
     #' @param z.cutoff absolute z score cutoff
     #' @param contour.conf confidence interval of contour
-    diffCellDensity = function(condition.per.cell = NULL, method = 'subtract', col = c('blue','white','red'), show.legend = NULL, legend.position = NULL, title = NULL,
-                               show.grid = NULL, plot = TRUE, contours = NULL, contour.color = 'white', contour.conf = '10%' , z.cutoff = NULL){
+    diffCellDensity = function(condition.per.cell = NULL, method = 'subtract', col = c('blue','white','red'), show.legend = FALSE, legend.position = NULL, title = NULL, show.grid = NULL, plot = TRUE, contours = NULL, contour.color = 'white', contour.conf = '10%', z.cutoff = NULL, size =0.1, ...){
       # TODO: rename it to start with estimate*
       ref.level <- self$ref.level
       target.level <- self$target.level
@@ -1042,13 +1026,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       density.matrix <- private$getResults('density.mat', 'estimateCellDensity()')
       density.emb <- private$getResults('density.emb', 'estimateCellDensity()')
 
-      if (method == 'entropy'){
-        if(is.null(condition.per.cell)) stop("'condition.per.cell' must be provided when entropy was used")
+      if (method == 'graphSmooth'){
+        score <- private$getResults('density.GraphSmooth', 'estimateCellDensity()')
+        emb <-  self$embedding
+      }else{
+        mat <- diffCellDensity(density.emb, density.matrix, condition.per.cell=condition.per.cell, sample.groups, bins = bins, target.level = target.level, ref.level =
+                             ref.level, method = method, title = title, legend.position = legend.position, show.legend = show.legend, show.grid = show.grid, z.cutoff = z.cutoff)
+        emb = mat[,1:2]
+        score <- mat$z
+        names(score) = rownames(mat)
       }
-      p <- diffCellDensity(density.emb, density.matrix, condition.per.cell = condition.per.cell, sample.groups, bins = bins, target.level = target.level, ref.level =
-                           ref.level, method = method, title = title, legend.position = legend.position, show.legend = show.legend, show.grid = show.grid, z.cutoff = z.cutoff)
-
-      fig <- p$fig
+      fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) + scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0)
       if (plot){
         if(!is.null(contours)){
           cnl <- do.call(c, lapply(sn(contours), function(x)
@@ -1057,7 +1045,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         }
         return(fig)
       }
-      return(p$score)
+      return(score)
     },
 
     #' @title Plot inter-sample expression distance
@@ -1075,9 +1063,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       ctdml <- cluster.shifts$ctdml
       valid.comparisons <- cluster.shifts$valid.comparisons
       if (!weighted.distance) {
-        gg <- plotExpressionDistanceIndividual(ctdml, valid.comparisons, sample.groups=sample.groups, notch=notch, alpha=alpha, min.cells=min.cells)
+        gg <- plotExpressionDistanceIndividual(ctdml, valid.comparisons, sample.groups=sample.groups, notch=notch, alpha=alpha, min.cells=min.cells, show.significance=show.significance)
       } else {
-        gg <- plotExpressionDistanceJoint(ctdml, valid.comparisons, sample.groups=sample.groups, notch=notch, alpha=alpha)
+        gg <- plotExpressionDistanceJoint(ctdml, valid.comparisons, sample.groups=sample.groups, notch=notch, alpha=alpha, show.significance=show.significance)
       }
 
       if(!is.null(palette)) {

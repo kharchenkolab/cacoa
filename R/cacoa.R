@@ -570,6 +570,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[[type]]))
     },
 
+    #' @description Estimate ontology families
+    #' @return A list of results
+    estimateOntologyFamilies=function(type = "GO", p.adj = 0.05) {
+      # TODO Checks
+      if(!type %in% c("GO","GSEA")) stop("'type' must be 'GO', or 'GSEA'.")
+
+      # TODO Include DO
+      ont.list <- self$test.results[[type]]$res %>%
+        lapply(lapply, function(x) {
+          tmp <- x@result %>% filter(p.adjust <= p.adj)
+          if(nrow(tmp) > 0) return(tmp)
+        }) %>%
+        lapply(plyr::compact)
+
+      # TODO Remove empty entries, check if all NULL
+      self$test.results[[type]]$families <- estimateOntologyFamilies(ont.list = ont.list, p.adj = p.adj)
+    },
+
     #' @description Bar plot of ontology terms per cell type
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
@@ -784,7 +802,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(genes = "up", type = "GO", subtype = "BP", min.genes = 1, p.adj = 0.05, legend.position = "left", selection = "all", n = 10, cell.subgroups = NULL) {
       # Checks
-      if(is.null(type) || (!type %in% c("GO","BP","CC","MF","DO","GSEA"))) stop("'type' must be 'BP', 'CC', 'MF', 'DO', or 'GSEA'.")
+      if(is.null(type) || (!type %in% c("GO","DO","GSEA"))) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
+      if(is.null(subtype) || (!subtype %in% c("BP","CC","MF"))) stop("'subtype' must be 'BP', 'CC', or 'MF'.")
       if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
       if(!is.null(cell.subgroups)) {
         if(length(cell.subgroups) == 1) stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
@@ -914,7 +933,57 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         geom_hline(aes(yintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5))
     },
 
-    ### Proportion analysis
+    #' @description Plot ontology families heatmap
+    #' @return A ggplot2 object
+    # plotOntologyFamilyHeatmap=function(genes = "up", type = "GO", subtype = "BP", min.genes = 1, selection = "unique", n = 20, legend.position = "right") {
+    #   ont.res <- self$test.results[[type]]$res
+    #   ont.fam <- self$test.results[[type]]$families
+    #
+    #   ont.res.tmp <- mapply(function(res, fam) list(res[res$ID %in% names(fam$data),]), res = ont.res, fam = ont.fam) %>%
+    #     lapply(rename, geneID=core_enrichment)
+    #   ont.res.tmp %<>% names() %>%
+    #     lapply(function(ct) ont.res.tmp[[ct]] %>% mutate(Group = ct)) %>%
+    #     bind_rows()
+    #   ont.sum <- getOntologySummary(ont.res.tmp)
+    #
+    #   if(selection=="unique") {
+    #     ont.sum %<>%
+    #       .[rowSums(. > 0) == 1,]
+    #   } else if(selection=="common") {
+    #     ont.sum %<>%
+    #       .[rowSums(. > 0) > 1,]
+    #   }
+    #
+    #   if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
+    #
+    #   ont.sum %>%
+    #     .[, colSums(.) > 0] %>%
+    #     .[match(rowSums(.)[rowSums(.)>0] %>%
+    #               .[order(., decreasing = F)] %>%
+    #               names, rownames(.)),] %>%
+    #     tail(n) %>%
+    #     plotHeatmap(legend.position=legend.position, row.order=T) +
+    #     ggtitle(paste0("Heatmap of ontology families"))
+    # },
+
+    #' @description Plot ontology family tree
+    #' @return An Rgraphviz object
+    plotOntologyFamily=function(type = "GO", cell.subgroups, subtype = "BP", family, plot.type = "complete", show.ids = F, string.length=18, legend.label.size = 1, legend.position = "topright", verbose = T, n.cores = 1) {
+      #Checks
+      if(!is.numeric(family)) stop("'family' must be numeric.")
+      if(!is.null(plot.type) && !plot.type %in% c("complete","dense","minimal")) stop("'plot.type' must be 'complete', 'dense', or 'minimal'.")
+
+      fam.name <- paste0("Family",family)
+      ont.fam.res <- self$test.results[[type]]$families
+      if(is.null(ont.fam.res)) stop(paste0("No results found for type ",type,"."))
+      ont.fam.res %<>% .[[cell.subgroups]]
+      if(is.null(ont.fam.res)) stop(paste0("No results found for cell.subgroups ",cell.subgroups,"."))
+      ont.fam.res %<>% .[[subtype]]
+      if(is.null(ont.fam.res)) stop(paste0("No results found for subtype ",subtype,"."))
+      if(!fam.name %in% names(ont.fam.res$families)) stop("'family' not in 'ont.fam.res'.")
+
+      plotOntologyFamily(fam = ont.fam.res$families[[fam.name]], data = ont.fam.res$data, plot.type = plot.type, show.ids = show.ids, string.length = string.length, legend.label.size = legend.label.size, legend.position = legend.position, verbose = verbose, n.cores = n.cores)
+    },
 
     #' @description Plot the cell group proportions per sample
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")

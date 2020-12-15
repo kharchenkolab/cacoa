@@ -269,3 +269,116 @@ plotExpressionShiftZScores <- function(plot.df, size.norm = F, cell.groups = NUL
   }
   return(gg)
 }
+
+plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string.length=18, legend.label.size = 1, legend.position = "topright", verbose = T, n.cores = 1) {
+  parent.ids <- sapply(fam, function(x) data[[x]]$parent_go_id) %>% unlist() %>% unique()
+  parent.names <- sapply(fam, function(x) data[[x]]$parent_name) %>% unlist() %>% unique()
+  nodes <- data.frame(label = c(fam, parent.ids)) %>%
+    mutate(., name = c(sapply(fam, function(x) data[[x]]$Description) %>% unlist(), parent.names))
+
+  # Define edges
+  edges <- lapply(nodes$label, function(y) {
+    data.frame(from=y, to=nodes$label[nodes$label %in% (get_child_nodes(y)$child_go_id)])
+  }) %>%
+    bind_rows() %>%
+    as.data.frame() %>%
+    .[apply(., 1, function(x) x[1] != x[2]),] # Remove selves
+
+  # Remove redundant inheritance
+  edges %<>%
+    pull(to) %>%
+    unique() %>%
+    sccore::plapply(function(x) {
+      tmp.to <- edges[edges$to == x,]
+
+      if(class(tmp.to) == "data.frame") {
+        if(nrow(tmp.to) > 1) {
+          tmp.children <- sapply(tmp.to$from, function(parent.id) {
+            get_child_nodes(parent.id)$child_go_id
+          })
+
+          idx <- sapply(1:(tmp.children %>% length()), function(id) {
+            any(tmp.children[-id] %>% names() %in% tmp.children[[id]])
+          })
+
+          res <- tmp.to[!idx,]
+        } else if(nrow(tmp.to) == 1) {
+          res <- tmp.to
+        }
+      } else {
+        res <- NULL
+      }
+      return(res)
+    }, progress = verbose, n.cores = n.cores) %>%
+    .[!sapply(., is.null)] %>%
+    bind_rows()
+
+  # Minimize tree depending on plot.type
+  if(plot.type == "dense") { # Plots all significanct terms and their 1st order relationships
+    sig.parents <- c(fam, sapply(fam, function(x) data[[x]]$parents_in_IDs) %>% unlist())
+    edges %<>% .[apply(., 1, function(r) any(unlist(r) %in% sig.parents)),]
+  } else if(plot.type == "minimal") { # Plot significant terms only
+    sig.parents <- c(fam, sapply(fam, function(x) data[[x]]$parents_in_IDs) %>% unlist())
+    edges %<>% .[apply(., 1, function(r) all(unlist(r) %in% sig.parents)),]
+  }
+
+  # Convert IDs to names
+  if(show.ids == F) {
+    for(id in 1:nrow(nodes)) {
+      edges[edges == nodes$label[id]] <- nodes$name[id]
+    }
+  }
+
+  # Wrap strings for readability
+  edges.wrapped <- edges %>% apply(2, function(x) wrap_strings(x, string.length))
+
+  # Render graph
+  p <- graph::graphAM(igraph::get.adjacency(graph_from_data_frame(edges.wrapped)) %>% as.matrix(),
+                      edgemode = 'directed') %>%
+    Rgraphviz::layoutGraph()
+
+  # Define layout
+  ## Extract significance
+  tmp.dat <- data.frame(id = c(fam, sapply(fam, function(x) data[[x]]$parents_in_IDs) %>% unlist()),
+                        sig = c(sapply(fam, function(x) data[[x]]$Significance) %>% unlist(),
+                                sapply(fam, function(x) data[[x]]$parents_in_IDs %>% names()) %>% unlist())) %>%
+    .[match(unique(.$id), .$id),]
+
+  ## Convert IDs to names
+  for(id in tmp.dat$id) {
+    tmp.dat[tmp.dat == id] <- nodes$name[nodes$label == id]
+  }
+
+  ## Wrap names
+  tmp.dat$id %<>% wrap_strings(string.length)
+
+  ## Color by significance
+  node.color = tmp.dat$sig %>%
+    as.numeric() %>%
+    sapply(function(p) {
+      if(p <= 0.05 & p > 0.01) {
+        return("mistyrose1")
+      } else if(p <= 0.01 & p > 0.001) {
+        return("lightpink1")
+      } else {
+        return("indianred2")
+      }
+    }) %>%
+    setNames(tmp.dat$id)
+
+  ## Assign changes
+  node.names <- p@renderInfo@nodes$fill %>% names()
+  name.dif <- setdiff(node.names, names(node.color))
+  node.color %<>% c(rep("transparent", length(name.dif)) %>% setNames(name.dif)) %>% .[match(node.names, names(.))]
+  p@renderInfo@nodes$fill <- node.color %>% setNames(names(p@renderInfo@nodes$fill))
+  p@renderInfo@nodes$shape <- rep("box", length(p@renderInfo@nodes$shape)) %>% setNames(names(p@renderInfo@nodes$shape))
+
+  # Plot
+  Rgraphviz::renderGraph(p)
+  legend(legend.position,
+         legend = c("P > 0.05","P < 0.05","P < 0.01","P < 0.001"),
+         fill = c("white","mistyrose1","lightpink1","indianred2"),
+         cex = legend.label.size)
+}
+
+

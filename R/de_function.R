@@ -289,35 +289,31 @@ saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.meta
 #' @param return.matrix Return merged matrix of results (default=T)
 #' @param covariates list of covariates to include; for example, cdr, sex or age
 #' @param meta.info dataframe with possible covariates; for example, sex or age
-#' @param test.meth DE method: deseq2, edgeR, wilcoxon, ttest
-#' @param test.name test name for deseq2
-#' @param norm.meth normalization type before wilcoxon or ttest
+#' @param test DE method: deseq2, edgeR, wilcoxon, ttest
+#' @param normalization normalization type before wilcoxon or ttest
 #' @export
 estimatePerCellTypeDEmeth <- function (raw.mats, 
-                                    cell.groups = NULL, 
-                                    sample.groups = NULL, 
-                                    ref.level = NULL,
-                                    common.genes = F, 
-                                    cooks.cutoff = FALSE, 
-                                    min.cell.count = 10, 
-                                    independent.filtering = T,
-                                    n.cores = 1, 
-                                    cluster.sep.chr = "<!!>", 
-                                    return.matrix = T, 
-                                    verbose = T, 
-                                    covariates = c(),
-                                    useT=F, 
-                                    minmu=0.5, 
-                                    minReplicatesForReplace = 7, 
-                                    meta.info = NULL,
-                                    test.meth=NULL,
-                                    test.name="Wald",
-                                    norm.meth=NULL,
-                                    fix.n.cells=fix.n.cells) {
+                                       cell.groups = NULL, 
+                                       sample.groups = NULL, 
+                                       ref.level = NULL,
+                                       common.genes = F, 
+                                       cooks.cutoff = FALSE, 
+                                       min.cell.count = 10, 
+                                       max.cell.count = Inf,
+                                       independent.filtering = T,
+                                       n.cores = 1, 
+                                       cluster.sep.chr = "<!!>", 
+                                       return.matrix = T, 
+                                       verbose = T, 
+                                       useT=F, 
+                                       minmu=0.5, 
+                                       minReplicatesForReplace = 7, 
+                                       test='DESeq2.Wald',
+                                       normalization=NULL,
+                                       meta.info = NULL,
+                                       covariates = c()) {
   
-  
-  if(is.null(test.meth)) stop('DE method is not specified')
-  
+  print(sample.groups)
   validatePerCellTypeParams(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr)
   
   if(common.genes) {
@@ -329,7 +325,7 @@ estimatePerCellTypeDEmeth <- function (raw.mats,
   
   aggr2 <- raw.mats %>%
     .[sample.groups %>% unlist] %>% # Only consider samples in sample.groups
-    lapply(collapseCellsByType, groups = cell.groups, min.cell.count = min.cell.count) %>%
+    lapply(conos:::collapseCellsByType, groups=cell.groups, min.cell.count=min.cell.count, max.cell.count=max.cell.count) %>%
     .[sapply(., nrow) > 0] %>% # Remove empty samples due to min.cell.count
     rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
   
@@ -346,18 +342,13 @@ estimatePerCellTypeDEmeth <- function (raw.mats,
     levels() %>%
     sccore:::sn() %>%
     sccore:::plapply(function(l) {
-      tryCatch({
+      # tryCatch({
         
-        if(is.numeric(fix.n.cells)){
-          # TODO: apply here normalisation by the fixed number
-          cm <- aggr2[, strpart(colnames(aggr2), cluster.sep.chr, 2, fixed = TRUE) == l] %>%
-            .[rowSums(.) > 0,] # Remove genes with no counts
-        }else{
-          cm <- aggr2[, strpart(colnames(aggr2), cluster.sep.chr, 2, fixed = TRUE) == l] %>%
-            .[rowSums(.) > 0,] # Remove genes with no counts  
-        }
+        cm <- aggr2[, strpart(colnames(aggr2), cluster.sep.chr, 2, fixed = TRUE) == l] %>%
+          .[rowSums(.) > 0,] # Remove genes with no counts
         
-        meta <- data.frame(sample.id=colnames(cm), group=as.factor(unlist(lapply(colnames(cm), function(y) {
+        meta <- data.frame(sample.id=colnames(cm), 
+                           group=as.factor(unlist(lapply(colnames(cm), function(y) {
           y <- strpart(y, cluster.sep.chr, 1, fixed = TRUE)
           names(sample.groups)[unlist(lapply(sample.groups, function(x) any(x %in% y)))]}))))
         
@@ -376,7 +367,8 @@ estimatePerCellTypeDEmeth <- function (raw.mats,
         ## CDR (cell detection rate?)
         meta$cdr <- scale(Matrix::colMeans(cm > 0))
         ## External covariates
-        meta = cbind(meta, meta.info[strpart(meta$sample.id, cluster.sep.chr, 1, fixed = TRUE),])
+        if(!is.null(meta.info))
+          meta = cbind(meta, meta.info[strpart(meta$sample.id, cluster.sep.chr, 1, fixed = TRUE),])
         
         # TODO: GDR returns error
         # meta$gdr <- raw.mats %>%
@@ -392,8 +384,12 @@ estimatePerCellTypeDEmeth <- function (raw.mats,
         
         print(design.formula)
         
-        if(test.meth == 'deseq2'){
+        # if(test == 'deseq2'){
+        if(grepl('deseq2', tolower(test))){
           # ----- DESeq2 -----
+          
+          if(grepl('wald', tolower(test))) test.name = 'Wald'
+          if(grepl('lrt', tolower(test))) test.name = 'LRT'
           res1 <- suppressMessages( DESeq2::DESeqDataSetFromMatrix(cm, meta, design = design.formula) %>% 
                                       DESeq2::DESeq(quiet=T, test=test.name) %>%
                                       DESeq2::results(contrast=c('group', setdiff(names(sample.groups), ref.level), ref.level),
@@ -411,7 +407,7 @@ estimatePerCellTypeDEmeth <- function (raw.mats,
           # Avoid NA padj values
           res1$padj[is.na(res1$padj)] <- 1
           
-        }else if(test.meth == 'edgeR'){
+        }else if(test == 'edgeR'){
           
           # ----- EdgeR -----
           dge <- DGEList(cm, group = meta$group)
@@ -426,10 +422,10 @@ estimatePerCellTypeDEmeth <- function (raw.mats,
           res1 <- qlf$table %>% .[order(.$PValue),]
           colnames(res1) <- c("log2FoldChange","logCPM","stat","pvalue")
           res1$padj <- p.adjust(res1$pvalue, method = "BH")
-        }else if((test.meth == 'wilcoxon') || (meth = 'ttest')) {
+        }else if((test == 'wilcoxon') || (test = 't-test')) {
         
           # Normalization
-          if(norm.meth == 'deseq2'){
+          if(normalization == 'deseq2'){
             print('DESeq2 normalization')
             dds <- suppressMessages(DESeq2::DESeqDataSetFromMatrix(countData = cm,
                                                                    colData = meta,
@@ -438,7 +434,7 @@ estimatePerCellTypeDEmeth <- function (raw.mats,
             cnts.norm <- counts(dds, normalized=TRUE) 
             
   
-          }else if(norm.meth == 'edgeR'){
+          }else if(normalization == 'edgeR'){
             # EdgeR normalisation
             print('edgeR normalization')
             dge <- DGEList(counts = cm)
@@ -449,12 +445,12 @@ estimatePerCellTypeDEmeth <- function (raw.mats,
             cnts.norm <- cm 
           }
           
-          if(test.meth == 'wilcoxon'){
+          if(test == 'wilcoxon'){
             # Wilcoxon test
             res1 <- scran::pairwiseWilcox(cnts.norm, groups = meta$group)$statistics[[1]] %>% 
               data.frame() %>% 
               setNames(c("AUC","pvalue","padj"))  
-          }else if (test.meth == 'ttest'){
+          }else if (test == 't-test'){
             res1 <- scran::pairwiseTTests(cnts.norm, groups = meta$group)$statistics[[1]] %>% 
               data.frame() %>% 
               setNames(c("AUC","pvalue","padj"))
@@ -476,7 +472,7 @@ estimatePerCellTypeDEmeth <- function (raw.mats,
         else {
           res1
         }
-      }, error = function(err) NA)
+      # }, error = function(err) NA)
     }, n.cores = n.cores, progress=verbose) %>%
     .[!sapply(., is.logical)]
   
@@ -491,98 +487,3 @@ estimatePerCellTypeDEmeth <- function (raw.mats,
   
   return(de.res)
 }
-
-#' Differential expression with possible different resamplings
-#' @param raw.mats list of counts matrices; column for gene and row for cell
-#' @param cell.groups factor specifying cell types (default=NULL)
-#' @param sample.groups a list of two character vector specifying the app groups to compare (default=NULL)
-#' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
-#' @param common.genes Only investigate common genes across cell groups (default=F)
-#' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
-#' @param min.cell.count (default=10)
-#' @param independent.filtering independentFiltering for DESeq2 (default=F)
-#' @param n.cores Number of cores (default=1)
-#' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-#' @param return.matrix Return merged matrix of results (default=T)
-#' @param covariates list of covariates to include; for example, cdr, sex or age
-#' @param meta.info dataframe with possible covariates; for example, sex or age
-#' @param test.meth DE method: deseq2, edgeR, wilcoxon, ttest
-#' @param test.name test name for deseq2
-#' @param norm.meth normalization type before wilcoxon or ttest
-#' @param resample it can be NULL, loo (leave one out) or bootstrap
-#' @export
-estimatePerCellTypeDEnew <- function (raw.mats, 
-                                  cell.groups = NULL, 
-                                  sample.groups = NULL, 
-                                  ref.level = NULL,
-                                  common.genes = F, 
-                                  cooks.cutoff = FALSE, 
-                                  min.cell.count = 10, 
-                                  independent.filtering = T,
-                                  n.cores = 1, 
-                                  cluster.sep.chr = "<!!>", 
-                                  return.matrix = T, 
-                                  verbose = T, 
-                                  covariates = c(),
-                                  useT=F, 
-                                  minmu=0.5, 
-                                  minReplicatesForReplace = 7, 
-                                  meta.info = NULL,
-                                  test.meth=NULL,
-                                  test.name="Wald",
-                                  norm.meth=NULL,
-                                  resample=NULL,
-                                  fix.n.cells=NULL,
-                                  n.bootstrap=10,
-                                  seed.bootstrap=239) {
-  
-  if(is.null(resample)){
-    sample.groups.new = list(init = sample.groups)
-    
-  }else if (resample == 'loo'){
-    sample.groups.new = list()
-    for(i in 1:length(sample.groups))  {
-      sample.groups.new[[names(sample.groups[i])]] <- sample.groups[-i]
-    }
-    
-  }else if (resample == 'bootstrap'){
-    # TODO check for n.bootstrap
-    n.smpls = length(sample.groups)
-    sample.groups.new = list()
-    set.seed(seed.bootstrap)
-    for(i in 1:n.bootstrap){
-      sample.groups.new[[paste0(c('bootstr', as.character(i)), collapse = '')]] <- sample.groups[sample(n.smpls,n.smpls,replace = TRUE)]
-    }
-    
-  }
-  de.res = list()
-  for(resampling in names(sample.groups.new)){
-    de.res[[resampling]] <- estimatePerCellTypeDEmeth(raw.mats, 
-                                                 cell.groups, 
-                                                 sample.groups = sample.groups.new[[resampling]], 
-                                                 ref.level,common.genes, 
-                                                 cooks.cutoff, 
-                                                 min.cell.count, 
-                                                 independent.filtering,
-                                                 n.cores, 
-                                                 cluster.sep.chr, 
-                                                 return.matrix, 
-                                                 verbose, 
-                                                 covariates,
-                                                 useT, 
-                                                 minmu, 
-                                                 minReplicatesForReplace, 
-                                                 meta.info,
-                                                 test.meth,
-                                                 test.name,
-                                                 norm.meth,
-                                                 fix.n.cells)
-  }
-  
-  if(length(de.res)){ # if there were no resampling
-    return(de.res[[1]])
-  }else{
-    return(de.res)
-  }
-}
-

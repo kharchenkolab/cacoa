@@ -360,68 +360,88 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                       resampling.method=NULL,
                                       max.resamplings=10,
                                       seed.resampling=239,
-                                      meta.info = NULL,
-                                      covariates = c()) {
+                                      meta.info = NULL) {
       if(!is.list(sample.groups)) {
-        sample.groups <- list(names(sample.groups[sample.groups == ref.level]),
+        s.groups <- list(names(sample.groups[sample.groups == ref.level]),
                               names(sample.groups[sample.groups != ref.level])) %>%
           setNames(c(ref.level, self$target.level))
+      }else{
+        s.groups = sample.groups
       }
       
-      possible.tests = c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR', 'Wilcoxon', 't-test', 'limma-woom')
+      # possible.tests = c('DESeq2', 'DESeq2.Wald', 'DESeq2.LRT', 
+      #                    'edgeR', 'Wilcoxon', 't-test', 'limma-voom')
+      
+      possible.tests = c('DESeq2', 'DESeq2.Wald', 'DESeq2.LRT', 'edgeR')
       
       if(!(tolower(test) %in% tolower(possible.tests))) stop('Test is not supported') else
         print(paste0(c('DE method ', test, ' is used'), collapse = ''))
       if( !is.null(normalization) && !(test %in% c('Wilcoxon', 't-test'))) warning(paste0(c('Normalisation cannot be set for ', test, ' method'), collapse='' ))
 
-      if(is.null(resampling.method)){
-        sample.groups.new = list(de = sample.groups)
+      
+      # s.groups.new contains list of case/control groups of samples to run DE on.
+      # First element in s.groups.new corresponds to the initial grouping.
+      s.groups.new = list(initial = s.groups)
+      # If resampling is defined, new contrasts will append to s.groups.new
+      if (is.null(resampling.method)){
       }else if (resampling.method == 'loo'){
-        sample.groups.new = lapply(unlist(sample.groups, use.names = FALSE),
-                                   function(name) lapply(sample.groups, function(group) setdiff(group, name)))
-        names(sample.groups.new) <- unlist(sample.groups)
-      }else if (resample == 'bootstrap'){
-        # TODO check for n.bootstrap
-        print('TODO')
-        # n.smpls = length(sample.groups)
-        # set.seed(seed.resampling)
-        # sample.groups.new = lapply(1:n.bootstrap,
-        #                            function(x) sample.groups[sample(n.smpls,n.smpls,replace = TRUE)])
-        # names(sample.groups.new) <- sapply(1:n.bootstrap,
-        #                                    function(i) paste0(c('bootstrap', as.character(i)), collapse = ''))
+        s.groups.new = c(s.groups.new, lapply(unlist(s.groups), function(name) 
+          lapply(s.groups, function(group) setdiff(group, name)))  %>%
+          setNames(unlist(s.groups)))
+      }else if (resampling.method == 'bootstrap'){
+        all.smpls = unlist(s.groups)
+        n.smpls = length(all.smpls)
+        
+        set.seed(seed.resampling)
+        while(length(s.groups.new) < n.bootstrap){
+          idx.smpls = sample(n.smpls,n.smpls,replace = TRUE)
+          tmp.smpls = all.smpls[idx.smpls]
+          s.groups.tmp = lapply(s.groups, function(group) unname(tmp.smpls[tmp.smpls %in% group]))
+          
+          # If each group contains at least 2 sample - use it, otherwise - skip
+          if(sum(unlist(lapply(s.groups.tmp, length)) >= 2) < length(s.groups.tmp)) next
+          # TODO: Check if the tmp partiotion was already exists in s.groups.new
+          s.groups.new[[length(s.groups.new) + 1]] = s.groups.tmp
+          
+        }
+        
+        names(s.groups.new) <- sapply(1:n.bootstrap,
+                                           function(i) paste0(c('bootstrap', as.character(i)), collapse = ''))
       }
       else stop('Resampling method is not supposted')
 
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=T)
 
       de.res = list()
-      for(resampling in names(sample.groups.new)){
-        de.res[[resampling]] <- estimatePerCellTypeDEmeth(raw.mats=raw.mats,
-                                                         cell.groups = cell.groups,
-                                                         sample.groups = sample.groups.new[[resampling]],
-                                                         ref.level = ref.level,
-                                                         common.genes = common.genes,
-                                                         cooks.cutoff = cooks.cutoff,
-                                                         min.cell.count = min.cell.count,
-                                                         max.cell.count = max.cell.count,
-                                                         independent.filtering = independent.filtering,
-                                                         n.cores = n.cores,
-                                                         cluster.sep.chr = cluster.sep.chr,
-                                                         return.matrix = return.matrix,
-                                                         verbose = verbose,
-                                                         useT = useT,
-                                                         minmu = minmu,
-                                                         minReplicatesForReplace = minReplicatesForReplace,
-                                                         test = test,
-                                                         normalization = normalization,
-                                                         meta.info = meta.info,
-                                                         covariates = covariates)
+      for(resampling in names(s.groups.new)){
+        print(paste0(c('DE calculation for', resampling, 'grouping/resampling'), collapse = ' '))
+        de.res[[resampling]] <- estimatePerCellTypeDEmethods(raw.mats=raw.mats,
+                                                             cell.groups = cell.groups,
+                                                             s.groups = s.groups.new[[resampling]],
+                                                             ref.level = ref.level,
+                                                             common.genes = common.genes,
+                                                             cooks.cutoff = cooks.cutoff,
+                                                             min.cell.count = min.cell.count,
+                                                             max.cell.count = max.cell.count,
+                                                             independent.filtering = independent.filtering,
+                                                             n.cores = n.cores,
+                                                             cluster.sep.chr = cluster.sep.chr,
+                                                             return.matrix = return.matrix,
+                                                             verbose = verbose,
+                                                             useT = useT,
+                                                             minmu = minmu,
+                                                             minReplicatesForReplace = minReplicatesForReplace,
+                                                             test = test,
+                                                             normalization = normalization,
+                                                             meta.info = meta.info)
       }
 
-      if(length(de.res)){ # if there were no resampling
-        self$test.results[[name.pref]] <- de.res[[1]]
-      }else{
-        self$test.results[[paste0(c(name.pref, resampling.method), collapse = '.')]] <- de.res
+      # The firts element in the results correspond to the case without resampling
+      self$test.results[[paste0(c(name.pref, test), collapse = '.')]] <- de.res[[1]]
+      # if there was a resampling
+      if(length(de.res) > 1){ 
+        self$test.results[[paste0(c(name.pref, test, resampling.method), collapse = '.')]] <- de.res[2:length(de.res)]
+        # TODO calculate statisticks: median and variance after resampling
       }
       return(invisible(self$test.results[[name.pref]]))
     },

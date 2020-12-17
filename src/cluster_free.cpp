@@ -2,8 +2,12 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <mutex>
+#include <functional>
+#include <sccore_par.hpp>
 
 #include <progress.hpp>
+#include <unistd.h>
 
 using namespace Rcpp;
 using namespace Eigen;
@@ -16,74 +20,87 @@ double incrementStdAcc(double cur_std, double x, double cur_mean, double old_mea
   return cur_std + (x - old_mean) * (x - cur_mean);
 }
 
+double estimateCellZScore(const SparseMatrix<bool> &adj_mat, const std::vector<bool> &is_control,
+                          const VectorXd &cur_col, size_t dst_cell_id, bool normalize_both=false) {
+    double mean_val_control = 0.0, mean_val_case = 0.0, mean_val_all = 0.0, std_acc = 0.0;
+    size_t n_vals_control = 0, n_vals_case = 0;
+
+    // Incremental mean and std (http://datagenetics.com/blog/november22017/index.html)
+    for (SparseMatrix<bool, ColMajor>::InnerIterator adj_it(adj_mat, dst_cell_id); adj_it; ++adj_it) {
+        if (!adj_it.value())
+            continue;
+
+        double cur_val = cur_col(adj_it.row());
+        if (is_control.at(adj_it.row())) {
+            n_vals_control++;
+            double mean_old = mean_val_control;
+            mean_val_control = incrementMean(mean_val_control, cur_val, n_vals_control);
+
+            if (!normalize_both) {
+              std_acc = incrementStdAcc(std_acc, cur_val, mean_val_control, mean_old);
+            }
+        } else {
+            n_vals_case++;
+            mean_val_case = incrementMean(mean_val_case, cur_val, n_vals_case);
+        }
+
+        if (normalize_both) {
+          double mean_old = mean_val_all;
+          mean_val_all = incrementMean(mean_val_all, cur_val, n_vals_control + n_vals_case);
+          std_acc = incrementStdAcc(std_acc, cur_val, mean_val_all, mean_old);
+        }
+    }
+
+    if ((n_vals_case == 0) || (n_vals_control <= 1))
+        return NAN;
+
+    size_t n_vals = normalize_both ? (n_vals_control + n_vals_case) : n_vals_control;
+    double std_val = sqrt(std_acc / (n_vals - 1));
+    return (mean_val_case - mean_val_control) / std::max(std_val, 1e-20);
+}
+
 //' @param adj_mat adjacency matrix with 1 on the position (r,c) if the cell r is adjacent to the cell c
 SparseMatrix<double> clusterFreeZScoreMat(const SparseMatrix<bool>& adj_mat, const SparseMatrix<double>& count_mat,
-                                          const std::vector<bool> &is_control, bool verbose=true, double min_z=0.01) {
+                                          const std::vector<bool> &is_control, const double min_z=0.01,
+                                          bool normalize_both=false, bool verbose=true, int n_cores=1) {
   if (adj_mat.cols() != adj_mat.rows())
-    Rcpp::stop("adj_mat must be squared");
+    stop("adj_mat must be squared");
 
   if (count_mat.rows() != adj_mat.rows())
-    Rcpp::stop("adj_mat must have the same number of rows as count_mat");
+    stop("adj_mat must have the same number of rows as count_mat");
 
   if (is_control.size() != adj_mat.rows())
-    Rcpp::stop("is_control must size equal to the number of rows in count_mat");
+    stop("is_control must size equal to the number of rows in count_mat");
 
-  std::vector<Triplet<double>> z_triplets, lfc_triplets;
-  Progress p(count_mat.outerSize(), verbose);
-  for (size_t gene_id=0; gene_id < count_mat.outerSize(); ++gene_id) {
+  std::vector<Triplet<double>> z_triplets;
+
+  std::mutex mut;
+  auto task = [&count_mat, &z_triplets, &adj_mat, &is_control, &min_z, &normalize_both, &mut](int gene_id) {
     auto cur_col = VectorXd(count_mat.col(gene_id));
     for (SparseMatrix<double, ColMajor>::InnerIterator cnt_it(count_mat, gene_id); cnt_it; ++cnt_it) {
-      if (Progress::check_abort())
-        Rcpp::stop("Aborted");
-
       if (cnt_it.value() < 1e-20)
         continue;
 
       auto dst_cell_id = cnt_it.row();
-      double mean_val_control = 0.0, mean_val_case = 0.0;
-      double std_acc_control = 0.0, std_acc_case = 0.0;
-      size_t n_vals_control = 0, n_vals_case = 0;
-
-      // Incremental mean and std (http://datagenetics.com/blog/november22017/index.html)
-      for (SparseMatrix<bool, ColMajor>::InnerIterator adj_it(adj_mat, dst_cell_id); adj_it; ++adj_it) {
-        if (!adj_it.value())
-          continue;
-
-        double cur_val = cur_col(adj_it.row());
-        if (is_control.at(adj_it.row())) {
-          n_vals_control++;
-          double mean_old = mean_val_control;
-          mean_val_control = incrementMean(mean_val_control, cur_val, n_vals_control);
-          std_acc_control = incrementStdAcc(std_acc_control, cur_val, mean_val_control, mean_old);
-        } else {
-          n_vals_case++;
-          mean_val_case = incrementMean(mean_val_case, cur_val, n_vals_case);
-        }
-      }
-
-      if ((n_vals_case > 0) && (n_vals_control > 1)) {
-        double std_val = std::sqrt(std_acc_control / (n_vals_control - 1));
-        double z_score = (mean_val_case - mean_val_control) / std::max(std_val, 1e-20);
-        if (std::abs(z_score) > min_z) {
-          z_triplets.emplace_back(dst_cell_id, gene_id, z_score);
-        }
-      }
-      else {
-        z_triplets.emplace_back(dst_cell_id, gene_id, NA_REAL);
+      auto z_cur = estimateCellZScore(adj_mat, is_control, cur_col, dst_cell_id, normalize_both);
+      if (std::isnan(z_cur) || std::abs(z_cur) >= min_z) {
+        std::lock_guard<std::mutex> l(mut);
+        z_triplets.emplace_back(dst_cell_id, gene_id, z_cur);
       }
     }
+  };
 
-    p.increment();
-  }
-
+  sccore::runTaskParallelFor(0, count_mat.cols(), task, n_cores, verbose);
   SparseMatrix<double> z_mat(count_mat.rows(), count_mat.cols());
   z_mat.setFromTriplets(z_triplets.begin(), z_triplets.end());
   return z_mat;
 }
 
 // [[Rcpp::export]]
-SEXP clusterFreeZScoreMat(const SEXP adj_mat, const SEXP count_mat, const std::vector<bool> &is_control, bool verbose=true, double min_z=0.01) {
-  auto z_mat_eig = clusterFreeZScoreMat(as<SparseMatrix<bool>>(adj_mat), as<SparseMatrix<double>>(count_mat), is_control, verbose, min_z);
+SEXP clusterFreeZScoreMat(const SEXP adj_mat, const SEXP count_mat, const std::vector<bool> &is_control, double min_z=0.01,
+                          bool normalize_both=false, bool verbose=true, int n_cores=1) {
+  auto z_mat_eig = clusterFreeZScoreMat(as<SparseMatrix<bool>>(adj_mat), as<SparseMatrix<double>>(count_mat),
+          is_control, min_z, normalize_both, verbose, n_cores);
 
   S4 z_mat(wrap(z_mat_eig));
   z_mat.slot("Dimnames") = S4(count_mat).slot("Dimnames");
@@ -93,14 +110,14 @@ SEXP clusterFreeZScoreMat(const SEXP adj_mat, const SEXP count_mat, const std::v
 
 ////// Expression shifts
 
-double estimateCosineDistance(const std::vector<double> &v1, const std::vector<double> &v2) {
+double estimateCosineDistance(const Eigen::VectorXd &v1, const Eigen::VectorXd &v2) {
   if (v1.size() != v2.size())
-    Rcpp::stop("Vectors must have the same length");
+    stop("Vectors must have the same length");
 
   double vp = 0, v1s = 0, v2s = 0;
   for (size_t i = 0; i < v1.size(); ++i) {
-    if (R_IsNA(v1[i]) || R_IsNA(v2[i]))
-      return NA_REAL;
+    if (std::isnan(v1[i]) || std::isnan(v2[i]))
+      return NAN;
 
     vp += v1[i] * v2[i];
     v1s += v1[i] * v1[i];
@@ -110,16 +127,16 @@ double estimateCosineDistance(const std::vector<double> &v1, const std::vector<d
   return 1 - vp / std::max(std::sqrt(v1s) * std::sqrt(v2s), 1e-10);
 }
 
-NumericMatrix collapseMatrixNorm(const SparseMatrix<double> &mat, const std::vector<int> &factor,
-                                 const std::vector<int> &nn_ids, const std::vector<int> &n_obs_per_samp) {
-  NumericMatrix res(mat.rows(), n_obs_per_samp.size());
+MatrixXd collapseMatrixNorm(const SparseMatrix<double> &mtx, const std::vector<int> &factor,
+                            const std::vector<int> &nn_ids, const std::vector<int> &n_obs_per_samp) {
+  MatrixXd res = MatrixXd::Zero(mtx.rows(), n_obs_per_samp.size());
   for (int id : nn_ids) {
       int fac = factor[id];
-      if (fac >= res.cols() || fac < 0)
-          Rcpp::stop("Wrong factor: " + std::to_string(fac) + ", id: " + std::to_string(id));
+      if (fac >= n_obs_per_samp.size() || fac < 0)
+          stop("Wrong factor: " + std::to_string(fac) + ", id: " + std::to_string(id));
 
-      for (SparseMatrix<double, ColMajor>::InnerIterator gene_it(mat, id); gene_it; ++gene_it) {
-          res(gene_it.row(), fac) += gene_it.value() / n_obs_per_samp[fac];
+      for (SparseMatrix<double, ColMajor>::InnerIterator gene_it(mtx, id); gene_it; ++gene_it) {
+          res(gene_it.row(), fac) += gene_it.value() / n_obs_per_samp.at(fac);
       }
   }
 
@@ -128,48 +145,47 @@ NumericMatrix collapseMatrixNorm(const SparseMatrix<double> &mat, const std::vec
 
 //' @param sample_per_cell must contains ids from 0 to n_samples-1
 //' @param n_samples must be equal to maximum(sample_per_cell) + 1
-double estimateClusterFreeExpressionShift(const SparseMatrix<double> &mat, const std::vector<int> &sample_per_cell,
-                                          const std::vector<int> &nn_ids, const std::vector<bool> &is_ref, int n_samples) {
+double estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::vector<int> &sample_per_cell,
+                                   const std::vector<int> &nn_ids, const std::vector<bool> &is_ref, const int n_samples) {
   std::vector<int> n_ids_per_samp(n_samples, 0);
   for (int id : nn_ids) {
     n_ids_per_samp[sample_per_cell[id]]++;
   }
 
-  const auto mat_collapsed = collapseMatrixNorm(mat, sample_per_cell, nn_ids, n_ids_per_samp);
+  const auto mat_collapsed = collapseMatrixNorm(cm, sample_per_cell, nn_ids, n_ids_per_samp);
 
   double within_dist = 0, between_dist = 0;
   int n_within = 0, n_between = 0;
   for (int s1 = 0; s1 < n_samples; ++s1) {
-    if (n_ids_per_samp[s1] == 0)
+    if (n_ids_per_samp.at(s1) == 0)
       continue;
 
-    auto v1 = as<std::vector<double>>(NumericVector(mat_collapsed(_, s1)));
+    auto v1 = mat_collapsed.col(s1);
     for (int s2 = s1 + 1; s2 < n_samples; ++s2) {
-      if (n_ids_per_samp[s2] == 0)
+      if (n_ids_per_samp.at(s2) == 0)
         continue;
 
-      auto v2 = as<std::vector<double>>(NumericVector(mat_collapsed(_, s2)));
+      auto v2 = mat_collapsed.col(s2);
       double dist = estimateCosineDistance(v1, v2);
-      if (is_ref[s1] && is_ref[s2]) {
+      if (is_ref.at(s1) && is_ref.at(s2)) {
         within_dist = incrementMean(within_dist, dist, ++n_within);
-      } else if (is_ref[s1] != is_ref[s2]) {
+      } else if (is_ref.at(s1) != is_ref.at(s2)) {
         between_dist = incrementMean(between_dist, dist, ++n_between);
       }
     }
   }
 
-  if (n_within == 0)
-    return NA_REAL;
+  if (n_within == 0) {
+    return NAN;
+  }
 
   return between_dist / within_dist;
 }
 
 // [[Rcpp::export]]
-NumericVector estimateClusterFreeExpressionShifts(SEXP rmat, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool> &is_ref, bool verbose=true) {
-  auto mat = as<SparseMatrix<double>>(rmat);
-  auto samp_per_cell_c = as<std::vector<int>>(IntegerVector(sample_per_cell - 1));
-  std::vector<double> res_scores;
-  Progress p(LENGTH(nn_ids), verbose);
+NumericVector estimateClusterFreeExpressionShifts(const Eigen::SparseMatrix<double> &cm, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool> &is_ref,
+                                                  bool verbose=true, int n_cores=1) {
+  const auto samp_per_cell_c = as<std::vector<int>>(IntegerVector(sample_per_cell - 1));
   int n_samples = 0;
   for (int f : samp_per_cell_c) {
     if (f < 0)
@@ -181,18 +197,20 @@ NumericVector estimateClusterFreeExpressionShifts(SEXP rmat, IntegerVector sampl
   if (n_samples == 0)
       stop("sample_per_cell must be a samp_per_cell_c with non-empty levels");
 
+  std::vector<std::vector<int>> nn_ids_c;
   for (auto &ids : nn_ids) {
-    if (Progress::check_abort())
-      stop("Aborted");
-
-    double score = estimateClusterFreeExpressionShift(mat, samp_per_cell_c, as<std::vector<int>>(ids), is_ref, n_samples);
-    res_scores.push_back(score);
-    p.increment();
+    nn_ids_c.emplace_back(as<std::vector<int>>(ids));
   }
+
+  std::vector<double> res_scores(nn_ids_c.size(), 0);
+
+  auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &is_ref, &n_samples, &res_scores](int i) {
+    res_scores[i] = estimateCellExpressionShift(cm, samp_per_cell_c, nn_ids_c[i], is_ref, n_samples);
+  };
+  sccore::runTaskParallelFor(0, nn_ids_c.size(), task, n_cores, verbose);
 
   NumericVector res = wrap(res_scores);
   res.attr("names") = nn_ids.names();
-
 
   return res;
 }

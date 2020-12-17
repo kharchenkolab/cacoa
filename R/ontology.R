@@ -63,7 +63,7 @@ prepareOntologyData <- function(cms, de.raw, cell.groups, org.db, p.adj = 1, exp
          up = de %>% dplyr::filter(Z > 0) %>% .[order(.$Z, decreasing = T),] %>% rownames(),
          all = de %>% .[order((.$Z %>% abs()), decreasing = T),] %>% rownames(),
          universe = de.raw[[x]] %>% .[order(.$Z, decreasing = T),] %>% {setNames(rownames(.), .$Z)}) # Universe contains all input genes
-    }) %>% setNames(groups) %>%
+  }) %>% setNames(groups) %>%
     lapply(lapply, function(y) if(length(y)) y) %>%
     lapply(plyr::compact)
 
@@ -280,14 +280,14 @@ estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, n.top.genes 
   if(type=="DO") {
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
     res <- sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
-                                                                                          DOSE::enrichDO,
-                                                                                          pAdjustMethod=p.adjust.method,
-                                                                                          universe=de.gene.ids[[id]][["universe"]],
-                                                                                          readable=readable,
-                                                                                          qvalueCutoff = qvalueCutoff,
-                                                                                          minGSSize = minGSSize,
-                                                                                          maxGSSize = maxGSSize)),
-                                 n.cores=1, progress=verbose) %>%
+                                                                                     DOSE::enrichDO,
+                                                                                     pAdjustMethod=p.adjust.method,
+                                                                                     universe=de.gene.ids[[id]][["universe"]],
+                                                                                     readable=readable,
+                                                                                     qvalueCutoff = qvalueCutoff,
+                                                                                     minGSSize = minGSSize,
+                                                                                     maxGSSize = maxGSSize)),
+                            n.cores=1, progress=verbose) %>%
       setNames(names(de.gene.ids))
   } else if(type=="GO") {
     if(verbose) cat("Estimating enriched ontologies ... \n")
@@ -425,9 +425,9 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
       lapply(function(ct) {
         lapply(ont.res[[ct]] %>% names(), function(ont) {
           dplyr::mutate(ont.res[[ct]][[ont]], Type = ont)
-          }) %>% setNames(ont.res[[ct]] %>% names()) %>%
-            dplyr::bind_rows()
-        }) %>% setNames(ont.res %>% names())
+        }) %>% setNames(ont.res[[ct]] %>% names()) %>%
+          dplyr::bind_rows()
+      }) %>% setNames(ont.res %>% names())
 
     # Filter by min. number of genes per pathway
     if(min.genes > 1) {

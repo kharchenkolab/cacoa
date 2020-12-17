@@ -3,6 +3,14 @@
 #' @import methods enrichplot dplyr
 #' @export Cacoa
 #' @exportClass Cacoa
+#' @param sample.groups a two-level factor on the sample names describing the conditions being compared (default: stored vector)
+#' @param n.cores number of cores for parallelisation
+#' @param verbose show progress (default: stored value)
+#' @param name field name where the test results are stored
+#' @param n.top.genes number of top genes for estimation
+#' @param gene.selection a method to select top genes, "change" selects genes by cluster-free Z-score change,
+#' "expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "change".
+#' @param excluded.genes list of genes to exclude during estimation. For example, a list of mitochondrial genes.
 Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
   public = list(
     #' @field n.cores number of cores
@@ -45,10 +53,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     cell.groups.palette = NULL,
 
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, sample.groups.palette=NULL, cell.groups.palette=NULL,
-                        embedding=getEmbedding(data.object), n.cores=1, verbose=TRUE) {
+                        embedding=extractEmbedding(data.object), n.cores=1, verbose=TRUE) {
+      if ('Cacoa' %in% class(data.object)) { # copy constructor
+        for (n in ls(data.object)) {
+          if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
+        }
+
+        return()
+      }
+
       self$n.cores <- n.cores
       self$verbose <- verbose
       self$ref.level <- ref.level
+
+      if (is.null(ref.level))
+        stop("ref.level must be provided")
 
       if(is.null(target.level)) {
         self$target.level <- "target"
@@ -56,21 +75,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         self$target.level <- target.level
       }
 
-      if('Cacoa' %in% class(data.object)) { # copy constructor
-        for(n in ls(data.object)) {
-          if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
-        }
+      # TODO: would be nice to support a list of count matrices as input
+      if (!('Conos' %in% class(data.object)))
+        stop("only Conos data objects are currently supported");
 
-        return()
-      } else {
-        # TODO: would be nice to support a list of count matrices as input
-        if (!('Conos' %in% class(data.object)))
-          stop("only Conos data objects are currently supported");
+      self$data.object <- data.object
 
-        self$data.object <- data.object
-      }
-
-      if(is.null(sample.groups) && !is.null(ref.level)) {
+      if(is.null(sample.groups)) {
         self$sample.groups <- extractSampleGroups(data.object, ref.level, self$target.level)
       } else {
         self$sample.groups <- sample.groups <- as.factor(sample.groups)
@@ -108,14 +119,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description  Calculate expression shift magnitudes of different clusters between conditions
     #' @param cell.groups Named cell group factor with cell names (default: stored vector)
     #' @param dist 'JS' - Jensen Shannon divergence, or 'cor' - correlation distance (default="JS")
-    #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
     #' @param within.group.normalization Normalize the shift magnitude by the mean magnitude of within-group variation (default=T)
     #' @param valid.comparisons A logical matrix (rows and columns are samples) specifying valid between-sample comparisons. Note that if within.group.normalization=T, the method will automatically include all within-group comparisons of the samples for which at least one valid pair is included in the valid.comparisons (default=NULL)
     #' @param n.cells Number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)
     #' @param n.top.genes Number of top highest-expressed genes to consider (default: all genes)
     #' @param n.subsamples Number of samples to draw (default=100)
     #' @param min.cells Minimum number of cells per cluster/per sample to be included in the analysis (default=10)
-    #' @param verbose Print progress
     #' @param n.cores Number of cores (default: stored integer)
     #' @param name Test name (default="expression.shifts")
     #' @return a list include \itemize{
@@ -127,33 +136,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist='JS', within.group.normalization=TRUE, valid.comparisons=NULL,
                                                n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
                                                sample.groups=self$sample.groups, n.cores=self$n.cores, verbose=self$verbose,
-                                               name="expression.shifts") {
-      if (is.null(sample.groups))
-        stop("'sample.groups' must be provided either during the object initialization or during this function call")
-
-      if (is.null(cell.groups)) {
-        stop("'cell.groups' must be provided either during the object initialization or during this function call")
-      }
-
+                                               name="expression.shifts", ...) {
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
 
 
       self$test.results[[name]] <- count.matrices %>%
         estimateExpressionShiftMagnitudes(sample.groups, cell.groups, dist=dist, within.group.normalization=within.group.normalization,
                                           valid.comparisons=valid.comparisons, n.cells=n.cells, n.top.genes=n.top.genes, n.subsamples=n.subsamples,
-                                          min.cells=min.cells, n.cores=n.cores, verbose=verbose, transposed.matrices=T)
+                                          min.cells=min.cells, n.cores=n.cores, verbose=verbose, transposed.matrices=T, ...)
 
       return(invisible(self$test.results[[name]]))
     },
 
-    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50, n.subsamples=30, min.cells=10, n.cores=1, verbose=TRUE,  mean.trim=0.1, name='common.expression.shifts') {
-      if (is.null(sample.groups))
-        stop("'sample.groups' must be provided either during the object initialization or during this function call")
-
-      if (is.null(cell.groups)) {
-        stop("'cell.groups' must be provided either during the object initialization or during this function call")
-      }
-
+    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50,
+                                                     n.subsamples=30, min.cells=10, n.cores=1, verbose=self$verbose,  mean.trim=0.1, name='common.expression.shifts') {
       if(length(levels(sample.groups))!=2) stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
 
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
@@ -263,11 +259,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @return A ggplot2 object
     plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, notch = T, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, palette=self$cell.groups.palette) {
       cluster.shifts <- private$getResults(name)$df
-
-      if (is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
-
-      if (is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
-
       plotExpressionShiftMagnitudes(cluster.shifts = cluster.shifts, size.norm = size.norm, notch = notch, cell.groups = cell.groups, sample.per.cell = sample.per.cell, palette=palette)
     },
 
@@ -282,7 +273,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         df <- do.call(rbind,lapply(cn,function(n) data.frame(val=colMeans(do.call(rbind,lapply(res,function(x) x[[n]]))),cell=n)))
       }
       odf <- na.omit(df);
-      df <- data.frame(cell=levels(df$cell),mean=tapply(df$val,df$cell,mean),se=tapply(df$val,df$cell,function(x) sd(x)/sqrt(length(x))),stringsAsFactors=F)
+      df$cell <- as.factor(df$cell)
+      df <- data.frame(cell=levels(df$cell), mean=tapply(df$val,df$cell,mean),
+                       se=tapply(df$val,df$cell, function(x) sd(x)/sqrt(length(x))), stringsAsFactors=F)
       df <- df[order(df$mean,decreasing=F),]
       df$cell <- factor(df$cell,levels=df$cell)
       df <- na.omit(df);
@@ -302,87 +295,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       p
     },
 
-    #' @description  Calculate expression shift Z scores of different clusters between conditions
-    #' @param cell.groups Named cell group factor with cell names (default: stored vector)
-    #' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
-    #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
-    #' @param sample.per.cell (default: stored vector)
-    #' @param n.od.genes (default=1000)
-    #' @param n.pcs (default=100)
-    #' @param pca.maxit (default=1000)
-    #' @param ignore.cache (default=F)
-    #' @param name (default="expression.z.scores")
-    estimateExpressionShiftZScores=function(cell.groups=self$cell.groups, ref.level=self$ref.level, sample.groups=self$sample.groups,
-                                            sample.per.cell=self$sample.per.cell, n.od.genes=1000, n.pcs=100, pca.maxit=1000, ignore.cache=F,
-                                            name="expression.z.scores", verbose = self$verbose) {
-      .Deprecated("estimateExpressionShiftMagnitudes")
-      if (is.null(cell.groups))
-        stop("'cell.groups' must be provided either during the object initialization or during this function call")
-
-      if (is.null(ref.level))
-        stop("'ref.level' must be provided either during the object initialization or during this function call")
-
-      if (is.null(sample.groups))
-        stop("'sample.groups' must be provided either during the object initialization or during this function call")
-
-      if (is.null(sample.per.cell))
-        stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
-
-      if(!ref.level %in% sample.groups) stop(paste0("Reference group '",ref.level,"' not in 'sample.groups': ",paste(unique(sample.groups), collapse=" ")))
-
-      if(verbose) cat("Merging count matrices ... ")
-      mtx <- extractJointCountMatrix(self$data.object, raw=F)
-
-      if (n.od.genes > 0) {
-        if(verbose) cat("done!\nExtracting OD genes ... ")
-        mtx %<>% .[, extractOdGenes(self$data.object, n.od.genes)]
-      }
-
-      # TODO: use scaled count matrix here
-      if (n.pcs < ncol(mtx)) {
-        if(verbose) cat("done!\nCalculating PCs ... ")
-        pca.name <- paste("joint.pca", n.od.genes, n.pcs, sep="_")
-        if (ignore.cache || !is.null(self$cache[[pca.name]])) {
-          mtx <- self$cache[[pca.name]]
-        } else {
-          centers <- Matrix::colMeans(mtx)
-          pcs <- mtx %>% irlba::irlba(nv=n.pcs, nu=0, center=centers, right_only=F,
-                                      fastpath=T, maxit=pca.maxit, reorth=T)
-          mtx <- as.matrix(t(as(t(mtx %*% pcs$v), "dgeMatrix") - t(centers %*% pcs$v)))
-          self$cache[[pca.name]] <- mtx
-        }
-      }
-
-      if(verbose) cat("done!\n")
-      self$test.results[[name]] <- estimateExpressionShiftZScores(mtx, sample.per.cell, sample.groups, cell.groups, ref.level, verbose = verbose)
-      return(invisible(self$test.results[[name]]))
-    },
-
-    #' @description  Plot results from cao$estimateExpressionShiftZScores()
-    #' @param type.order (default=NULL)
-    #' @param name Test results to plot (default=expression.z.shifts)
-    #' @param size.norm Show cluster size-normalized results
-    #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
-    #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
-    #' @return A ggplot2 object
-    plotExpressionShiftZScores=function(type.order=NULL, name="expression.z.scores", size.norm = F, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell) {
-      .Deprecated("plotExpressionShiftMagnitudes")
-      private$checkTestResults(name)
-
-      plot.df <- self$test.results[[name]] %>% dplyr::filter(complete.cases(.))
-      if (!is.null(type.order)) {
-        plot.df %<>% dplyr::filter(Type %in% type.order) %>%
-          dplyr::mutate(Type=factor(Type, levels=type.order))
-      }
-
-      plotExpressionShiftZScores(plot.df = plot.df, size.norm = size.norm, cell.groups = cell.groups, sample.per.cell = sample.per.cell)
-    },
-
     ### Differential expression
 
     #' @description Estimate differential gene expression per cell type between conditions
     #' @param cell.groups factor specifying cell types (default=NULL)
-    #' @param sample.groups a list of two character vector specifying the app groups to compare (default=NULL)
     #' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
     #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
     #' @param common.genes Only investigate common genes across cell groups (default=F)
@@ -391,30 +307,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param min.cell.count minimum number of cells that need to be present in a given cell type in a given sample in order to be taken into account (default=10)
     #' @param max.cell.count maximal number of cells per cluster per sample to include in a comparison (useful for comparing the number of DE genes between cell types) (default: Inf)
     #' @param independent.filtering independentFiltering parameter for DESeq2 (default=FALSE)
-    #' @param n.cores Number of cores (default=1)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
     #' @param return.matrix Return merged matrix of results (default=TRUE)
-    #' @param verbose Show progress (default=TRUE)
     #' @param name slot in which to save the results (default: 'de')
     #' @return A list of DE genes
     estimatePerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level,
-                              common.genes = F, n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, max.cell.count= Inf, test='Wald', independent.filtering = FALSE,
-                              cluster.sep.chr = "<!!>", return.matrix = T, verbose=T, name ='de') {
-      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
-
-      if(is.null(ref.level)) stop("'ref.level' must be provided either during the object initialization or during this function call")
-
-      if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
-
+                              common.genes = FALSE, n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, max.cell.count= Inf, test='Wald', independent.filtering = FALSE,
+                              cluster.sep.chr = "<!!>", return.matrix = T, verbose=self$verbose, name ='de') {
       if(!is.list(sample.groups)) {
         sample.groups <- list(names(sample.groups[sample.groups == ref.level]),
                               names(sample.groups[sample.groups != ref.level])) %>%
           setNames(c(ref.level, self$target.level))
       }
 
-      self$test.results[[name]] <- estimatePerCellTypeDE(extractRawCountMatrices(self$data.object, transposed=T), cell.groups = cell.groups, sample.groups = sample.groups, ref.level = ref.level, n.cores = n.cores,
-                            cooks.cutoff = cooks.cutoff, min.cell.count = min.cell.count, max.cell.count=max.cell.count, test=test, independent.filtering = independent.filtering,
-                            cluster.sep.chr = cluster.sep.chr, return.matrix = return.matrix)
+      self$test.results[[name]] <- extractRawCountMatrices(self$data.object, transposed=T) %>%
+        estimatePerCellTypeDE(cell.groups = cell.groups, sample.groups = sample.groups, ref.level = ref.level, n.cores = n.cores,
+                              cooks.cutoff = cooks.cutoff, min.cell.count = min.cell.count, max.cell.count=max.cell.count, test=test, independent.filtering = independent.filtering,
+                              cluster.sep.chr = cluster.sep.chr, return.matrix = return.matrix)
       return(invisible(self$test.results[[name]]))
     },
 
@@ -433,10 +342,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.raw)]
-      sapply(de.raw, function(n) n %>% dplyr::filter(padj <= p.adj) %>% nrow) %>%
+      gg <- sapply(de.raw, function(n) n %>% dplyr::filter(padj <= p.adj) %>% nrow) %>%
         plotNCellRegression(cell.groups, y.lab="Significant DE genes", ...) +
         xlab("Number of cells") +
         geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
+
+      return(gg)
     },
 
     #' @description Plot number of significant DE genes
@@ -447,7 +358,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param pvalue.cutoff P value cutoff (default=0.05)
     #' @param p.adjust whether the cutoff should be based on the adjusted P value (default: TRUE)
     #' @return A ggplot2 object
-    plotNumberOfDEGenes=function(name='de', cell.groups = self$cell.groups, legend.position = "none", label = T, p.adjust=TRUE, pvalue.cutoff=0.05, palette=self$cell.groups.palette) {
+    plotNumberOfDEGenes=function(name='de', cell.groups=self$cell.groups, legend.position="none", label=TRUE, p.adjust=TRUE, pvalue.cutoff=0.05, palette=self$cell.groups.palette) {
       de.raw <- private$getResults(name, 'estimatePerCellTypeDE()')
 
       if(p.adjust) {
@@ -455,9 +366,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       } else {
         x <- lapply(de.raw,function(x) sum(na.omit(x$res$pvalue<=pvalue.cutoff))) %>% unlist %>% sort
       }
-      p <- ggplot(data.frame(cell=names(x),nde=x),aes(x=reorder(cell,nde),y=nde,fill=cell)) + geom_bar(stat="identity")+ theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size=12),axis.title.x = element_blank()) +ylab("number of DE genes") + guides(fill=F)
+      p <- ggplot(data.frame(cell=names(x), nde=x), aes(x=reorder(cell, nde), y=nde, fill=cell)) +
+        geom_bar(stat="identity") +
+        theme_bw() +
+        theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12), axis.title.x=element_blank()) +
+        ylab("number of DE genes") + guides(fill=FALSE)
 
-      if(!is.null(palette)) p <- p+ scale_fill_manual(values=palette)
+      if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
 
       return(p)
     },
@@ -466,23 +381,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param saveprefix Prefix for created files (default=NULL)
     #' @param dir.name Name for directory with results (default="JSON")
     #' @param de.raw List of DE results
-    #' @param sample.groups Sample groups (default: stored vector)
     #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
     #' @param gene.metadata (default=NULL)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-    #' @param verbose Show progress (default=T)
-    saveDEasJSON=function(saveprefix = NULL, dir.name = "JSON", de.raw = self$test.results$de, sample.groups = self$sample.groups, ref.level = self$ref.level, gene.metadata = NULL, cluster.sep.chr = "<!!>", verbose = T) {
-      if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
-
-      if(is.null(ref.level) & !is.list(sample.groups)) stop("'ref.level' must be provided either during the object initialization or during this function call")
+    saveDEasJSON=function(saveprefix = NULL, dir.name = "JSON", de.raw = NULL, sample.groups = self$sample.groups, ref.level = self$ref.level, gene.metadata = NULL, cluster.sep.chr = "<!!>", verbose = T) {
+      if (is.null(de.raw)) {
+        de.raw <- private$getResults("de", "estimatePerCellTypeDE")
+      }
 
       if(!is.list(sample.groups)) {
         sample.groups <- list(names(sample.groups[sample.groups == ref.level]),
                               names(sample.groups[sample.groups != ref.level])) %>%
           setNames(c(ref.level, self$target.level))
       }
-
-      if(is.null(de.raw)) stop("Please run 'estimatePerCellTypeDE' first.")
 
       if(class(de.raw[[1]]) != "list") stop("Please rerun 'estimatePerCellTypeDE' with return.matrix=T")
 
@@ -497,17 +408,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
     #' @param label Show labels on plot (default=T)
     #' @return A ggplot2 object
-    plotFilteredDEGenes=function(de.filter = self$test.results$ontology$de.filter, cell.groups = self$cell.groups, legend.position = "none", label = T) {
+    plotFilteredDEGenes=function(de.filter=self$test.results$ontology$de.filter, cell.groups = self$cell.groups, legend.position = "none", label = T) {
       if(is.null(de.filter)) stop("Please run 'estimatePerCellTypeDE' first.")
-
-      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
 
-      sapply(de.filter, length) %>%
-        plotNCellRegression(cell.groups, y.lab="Highly-expressed DE genes", legend.position=legend.position, label=label) +
-        xlab("Number of cells") +
+      gg <- sapply(de.filter, length) %>%
+        plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Highly-expressed DE genes", legend.position=legend.position, label=label) +
         geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
+
+      return(gg)
     },
 
     ### Onthology analysis
@@ -521,16 +431,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param universe Only set this if a common background gene set is desired for all cell groups (default: NULL)
     #' @param transposed Whether count matrices should be transposed (default=T)
-    #' @param verbose Print progress (default=T)
     #' @param n.cores Number of cores to use (default: stored integer)
     #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
-    prepareOntologyData=function(org.db, p.adj = 1, expr.cutoff = 0.05, de.raw = self$test.results$de, cell.groups = self$cell.groups, universe = NULL, transposed = T, verbose = T, n.cores = self$n.cores) {
-      if(is.null(de.raw)) stop("Please run 'estimatePerCellTypeDE' first.")
+    prepareOntologyData=function(org.db, p.adj = 1, expr.cutoff = 0.05, de.raw=NULL, cell.groups = self$cell.groups, universe = NULL, transposed = T, verbose = T, n.cores = self$n.cores) {
+      if (is.null(de.raw)) {
+        de.raw <- private$getResults("de", "estimatePerCellTypeDE")
+      }
 
       # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before calculating
       if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, 1)
 
-      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
+      if(is.null(cell.groups))
+        stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       self$test.results[["gene.ids"]] <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
         prepareOntologyData(org.db = org.db, p.adj = p.adj, expr.cutoff = expr.cutoff, de.raw = de.raw, cell.groups = cell.groups, universe = universe, transposed = transposed, verbose = verbose, n.cores = n.cores)
@@ -540,33 +452,37 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description  Plot embedding
     #' @param embedding A cell embedding to use (two-column data frame with rownames corresponding to cells) (default: stored embedding object)
     #' @param plot.theme plot theme to use (default: ggplot2::theme_bw())
-    #' @param ... other parameters are passed to \link[=sccore::embeddingPlot]{sccore::embeddingPlot}
+    #' @param ... other parameters are passed to \link[sccore:embeddingPlot]{embeddingPlot}
     plotEmbedding=function(embedding=self$embedding, plot.theme=ggplot2::theme_bw(), show.legend=TRUE, ...) {
       if(is.null(embedding)) stop("embedding must be provided to cacoa constructor or to this method")
       sccore::embeddingPlot(embedding, plot.theme=plot.theme, show.legend=show.legend, ...)
     },
 
-    #' @description  Estimate ontology terms based on DEs
+    #' @description Estimate ontology terms based on DEs
     #' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")
     #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
     #' @param de.gene.ids List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOntologyData)
-    #' @param universe All measured genes (default: stored vector)
     #' @param go.environment Extracted GO environment. If set to NULL, the environment will be re-extracted (default: stored environment)
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
     #' @param readable Mapping gene ID to gene name (default=T)
-    #' @param verbose Print progress (default=T)
     #' @param min.genes Minimum number of input genes overlapping with ontologies (default=0)
-    #' @param qvalueCutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
-    #' @param minGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5)
-    #' @param maxGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
-    #' @param ... Additional parameters for sccore:::plapply function
+    #' @param qvalue.cutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
+    #' @param min.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5)
+    #' @param max.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
-    estimateOntology=function(type = "GO", org.db, n.top.genes = 500, de.gene.ids = self$test.results$gene.ids, go.environment = self$test.results$GO$go.environment, p.adj = 0.05, p.adjust.method = "BH", readable = T, verbose = T, qvalueCutoff = 0.2, minGSSize = 10, maxGSSize = 5e2, ...) {
-      if(!is.null(type) & !type %in% c("GO", "DO", "GSEA")) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
-      if(is.null(de.gene.ids)) stop("Please run 'prepareOntologyData' first.")
+    estimateOntology=function(type = "GO", org.db, n.top.genes = 500, de.gene.ids=NULL, go.environment=self$test.results$GO$go.environment, p.adj=0.05, p.adjust.method="BH",
+                              readable=TRUE, verbose=TRUE, qvalueCutoff=0.2, minGSSize=10, maxGSSize=5e2, ...) {
+      if(!is.null(type) & !type %in% c("GO", "DO", "GSEA"))
+        stop("'type' must be 'GO', 'DO', or 'GSEA'.")
 
-      self$test.results[[type]] <- estimateOntology(type = type, org.db = org.db, n.top.genes = n.top.genes, de.gene.ids = de.gene.ids, go.environment = go.environment, p.adj = p.adj, p.adjust.method = p.adjust.method, readable = readable, verbose = verbose, qvalueCutoff = qvalueCutoff, minGSSize = minGSSize, maxGSSize = maxGSSize, ...)
+      if(is.null(de.gene.ids)) {
+        de.gene.ids <- private$getResults("ontology", "prepareOntologyData")$de.gene.ids
+      }
+
+      self$test.results[[type]] <- estimateOntology(type=type, org.db=org.db, n.top.genes=n.top.genes, de.gene.ids=de.gene.ids, go.environment=go.environment,
+                                                    p.adj=p.adj, p.adjust.method=p.adjust.method, readable=readable, verbose=verbose, qvalueCutoff=qvalueCutoff,
+                                                    minGSSize=minGSSize, maxGSSize=maxGSSize, ...)
       return(invisible(self$test.results[[type]]))
     },
 
@@ -586,6 +502,41 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       # TODO Remove empty entries, check if all NULL
       self$test.results[[type]]$families <- estimateOntologyFamilies(ont.list = ont.list, p.adj = p.adj)
+    },
+
+    #' @description Estimate Gene Ontology clusters
+    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all'. Default: "up".
+    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO". Default: "GO".
+    #' @param name Name of the field to store the results. Default: `paste(type, genes, "clusters", sep=".")`.
+    #' @param ind.h Cut height for hierarchical clustering of terms per cell type.
+    #' Approximately equal to the fraction of genes, shared between the GOs. Default: 0.66.
+    #' @param total.h Cut height for hierarchical clustering of GOs across all subtypes.
+    #' Approximately equal to the fraction of subtypes for which two GOs should belong to the same cluster. Default: 0.5.
+    #' @return List containing:
+    #'   - `df`: data.frame with information about individual gene ontolodies and columns `Cluster` and `ClusterName` for the clustering info
+    #'   - `hclust`: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all subtypes
+    estimateOntologyClusters=function(type="GO", genes="all", name=getOntClustField(type, genes), ind.h=0.66, total.h=0.5, verbose=self$verbose) {
+      ont.df <- private$getOntologyPvalueResults(type=type, cell.subgroup=FALSE, genes=genes)
+      clust.mat <- ont.df %>% split(.$Group) %>% clusterIndividualGOs(cut.h=ind.h) %>%
+        as.matrix() %>% t()
+
+      apply.fun <- if (verbose) pbapply::pbapply else apply
+      cl.dists <- apply.fun(clust.mat, 2, function(ct1) apply(clust.mat, 2, function(ct2) {
+        mask <- !is.na(ct1) & !is.na(ct2)
+        if (sum(mask) == 0) 1 else (1 - mean(ct1[mask] == ct2[mask]))
+      }))
+
+      cl.clusts <- as.dist(cl.dists) %>% hclust(method="average")
+      clusts <- cutree(cl.clusts, h=total.h)
+      ont.df$Cluster <- clusts[as.character(ont.df$Description)]
+
+      name.per.clust <- ont.df %>% group_by(Cluster, Description) %>% summarise(pvalue=exp(mean(log(pvalue)))) %>%
+        split(.$Cluster) %>% sapply(function(df) df$Description[which.min(df$pvalue)])
+
+      ont.df$ClusterName <- name.per.clust[ont.df$Cluster]
+      self$test.results[[name]] <- list(df=ont.df, hclust=cl.clusts)
+
+      return(invisible(self$test.results[[name]]))
     },
 
     #' @description Bar plot of ontology terms per cell type
@@ -669,12 +620,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
             geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
       }
 
-      gg +
+      gg <- gg +
         scale_y_continuous(expand=c(0, 0)) +
         theme_bw() +
         theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5),
               legend.position="right") +
         labs(x="", y=paste0("No. of ",type," terms"))
+      return(gg)
     },
 
     #' @description Plot ontology terms as a function of both number of DE genes, and number of cells.
@@ -686,11 +638,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param label.y.pos Plot label position on y axis (default=1)
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
     #' @return A ggplot2 object
-    plotOntologyTerms=function(genes = c("up","down"), type = "GO", p.adj = 0.05, min.genes = 1, de.filter = self$test.results$gene.ids, cell.groups = self$cell.groups, label.x.pos = 0.01, label.y.pos = 1, scale = 0.93) {
+    plotOntologyTerms=function(genes=c("up","down"), type="GO", p.adj=0.05, min.genes=1, de.filter=self$test.results$gene.ids, cell.groups=self$cell.groups, label.x.pos=0.01, label.y.pos=1, scale=0.93) {
       # Checks
-      if(is.null(type) || (!type %in% c("GO", "DO", "GSEA"))) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
-      if(is.null(genes) || (!all(genes %in% c("down","up","all")))) stop("'genes' must be 'down', 'up', 'all', or a combination of these.")
-      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
+      if(is.null(type) || (!type %in% c("GO", "DO", "GSEA")))
+        stop("'type' must be 'GO', 'DO', or 'GSEA'.")
+      if(is.null(genes) || (!all(genes %in% c("down","up","all"))))
+        stop("'genes' must be 'down', 'up', 'all', or a combination of these.")
+      if(is.null(cell.groups))
+        stop("'cell.groups' must be provided either during the object initialization or during this function call")
 
       # Extract results
       ont.res <- self$test.results[[type]][["res"]]
@@ -719,32 +674,33 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       pg <- cowplot::plot_grid(
         ont.res$Group %>% table %>% c %>%
-          plotNCellRegression(sapply(de.filter, function(x) length(x$all)), y.lab=NULL, legend.position="none", label=T) +
-          geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5) +
-          scale_x_continuous(name="Number of highly-expressed genes"),
+          plotNCellRegression(sapply(de.filter, function(x) length(x$all)), x.lab="Number of highly-expressed DE genes",
+                              y.lab=NULL, legend.position="none", label=TRUE) +
+          geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5),
         ont.res$Group %>% table %>% c %>%
-          plotNCellRegression(cell.groups, y.lab=NULL, legend.position="none", label=T) +
+          plotNCellRegression(cell.groups, y.lab=NULL, legend.position="none", label=TRUE) +
           geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5),
         ncol=1, labels=c("a", "b"), label_x = label.x.pos, label_y = label.y.pos
       )
 
       if(type=="GO") {
-        y_lab <- "Number of GO terms"
+        y.lab <- "Number of GO terms"
       } else if(type=="DO") {
-        y_lab <- "Number of DO terms"
+        y.lab <- "Number of DO terms"
       } else if(type == "GSEA") {
-        y_lab <- "Number of GSEA terms"
+        y.lab <- "Number of GSEA terms"
       }
 
-      cowplot::plot_grid(pg, nrow=1, scale=scale) + cowplot::draw_label(y_lab, x=0, y=0.6, vjust= 1.5, angle=90)
+      return(cowplot::plot_grid(pg, nrow=1, scale=scale) + cowplot::draw_label(y.lab, x=0, y=0.6, vjust= 1.5, angle=90))
     },
 
     #' @description Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
-    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")
-    #' @param cell.subgroups Cell group to plot (default=NULL)
+    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")
+    #' @param cell.subgroup Cell group to plot (default=NULL)
     #' @param n Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
     #' @param p.adj Adjusted P cutoff (default=0.05)
+    #' @param log.colors Use log10 p-values for coloring (default=FALSE)
     #' @return A ggplot2 object
     plotOntology = function(cell.subgroups, plot = "dot", genes = "up", type = "GO", subtype = "BP", n = 20, p.adj = 0.05, min.genes = 1, ...) {
       # Checks
@@ -785,11 +741,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       ont.res@result <- df
 
       # Plot
-      if(plot == "dot") {
-        dotplot(ont.res, showCategory = n, ...)
-      } else if(plot == "bar") {
-        barplot(ont.res, showCategory = n, ...)
-      }
+      if(plot == "dot")
+        return(dotplot(ont.res, showCategory = n, ...))
+
+      if(plot == "bar")
+        return(barplot(ont.res, showCategory = n, ...))
+
+      stop("Unknown plot type: ", plot)
     },
 
     #' @description Plot a heatmap of ontology P values per cell type
@@ -798,7 +756,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
     #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms) (default="all")
     #' @param n Number of terms to show (default=10)
+    #' @param clusters Whether to show GO clusters or raw GOs (default=TRUE)
+    #' @param cluster.name Field with the results for GO clustering. Ignored if `clusters == FALSE`.
     #' @param cell.subgroups Cell groups to plot (default=NULL)
+    #' @param color.range vector with two values for min/max values of p-values
+    #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(genes = "up", type = "GO", subtype = "BP", min.genes = 1, p.adj = 0.05, legend.position = "left", selection = "all", n = 10, cell.subgroups = NULL) {
       # Checks
@@ -847,13 +809,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 
       # Plot
-      ont.sum %>%
+      gg <- ont.sum %>%
         .[, colSums(.) > 0] %>%
         .[match(rowSums(.)[rowSums(.)>0] %>%
                   .[order(., decreasing = F)] %>%
                   names, rownames(.)),] %>%
         tail(n) %>%
         plotHeatmap(legend.position=legend.position, row.order=T)
+
+      return(gg)
     },
 
     #' @description Plot correlation matrix for ontology terms between cell types
@@ -989,7 +953,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
-    #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
     #' @param cells.to.remove Vector of cell types to remove from the composition
     #' @param cells.to.remain Vector of cell types to remain in the composition
     #' @param notch Whether to show notch in the boxplots
@@ -997,23 +960,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
     #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (* < 0.05; ** < 0.01; *** < 0.001)
     #' @return A ggplot2 object
-    plotProportions=function(legend.position = "right",
-                             cell.groups = self$cell.groups,
-                             sample.per.cell = self$sample.per.cell,
-                             sample.groups = self$sample.groups,
-                             cells.to.remove = NULL,
-                             cells.to.remain = NULL,
-                             notch = FALSE,
+    plotProportions=function(legend.position = "right", cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell,
+                             sample.groups = self$sample.groups, cells.to.remove = NULL, cells.to.remain = NULL, notch = FALSE,
                              alpha=0.2, palette=self$sample.groups.palette, show.significance = FALSE) {
-      # Checks
-      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
-      if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
-      if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
-
-      # Plot
       if(is.null(cells.to.remove) && is.null(cells.to.remain)){
-        plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups, notch=notch, alpha = alpha, palette=palette, show.significance=show.significance)
-      }else{  # Anna modified
+        plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups,
+                        notch=notch, alpha = alpha, palette=palette, show.significance=show.significance)
+      } else {  # Anna modified
         plotProportionsSubset(legend.position = legend.position,
                         cell.groups = cell.groups,
                         sample.per.cell = sample.per.cell,
@@ -1030,15 +983,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
-    #' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
     #' @return A ggplot2 object
     plotCellNumbers=function(legend.position = "right", cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups) {
-      # Checks
-      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
-      if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
-      if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
-
-      # Plot
       df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
         table %>%
         rbind %>%
@@ -1062,12 +1008,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Plot compositions in CoDA-PCA space
     #' @return A ggplot2 object
     plotPcaSpace=function(cells.to.remove = NULL, palette=self$sample.groups.palette) {
-      # Cope with levels
-      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
-      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
-      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
-      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
-
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
       d.counts <- data.frame(anno=self$cell.groups,
@@ -1084,15 +1024,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Plot compositions in CoDA-CDA space
     #' @return A ggplot2 object
-    plotCdaSpace=function(cells.to.remain = NULL,
-                          cells.to.remove = NULL,
-                          samples.to.remove = NULL) {
-      # Cope with levels
-      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
-      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
-      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
-      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
-
+    plotCdaSpace=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL) {
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
       d.counts <- data.frame(anno=self$cell.groups,
@@ -1113,14 +1045,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Plot contrast tree
     #' @return A ggplot2 object
-    plotContrastTree=function(cells.to.remain = NULL,
-                              cells.to.remove = NULL) {
-      # Cope with levels
-      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
-      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
-      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
-      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
-
+    plotContrastTree=function(cells.to.remain = NULL, cells.to.remove = NULL) {
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
       d.counts <- data.frame(anno=self$cell.groups,
@@ -1139,19 +1064,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Plot Loadings
     #' @return A ggplot2 object
-    estimateCellLoadings=function(n.cell.counts = 1000,
-                              n.seed = 239,
-                              aplha = 0.01,
-                              cells.to.remove = NULL,
-                              cells.to.remain = NULL,
-                              samples.to.remove = NULL,
-                              signif.threshold = 0.2){
-      # Cope with levels
-      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
-      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
-      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
-      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
-
+    estimateCellLoadings=function(n.cell.counts = 1000, n.seed = 239, cells.to.remove = NULL,
+                                  cells.to.remain = NULL, samples.to.remove = NULL, signif.threshold = 0.2){
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
       d.counts <- data.frame(anno=self$cell.groups,
@@ -1170,32 +1084,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                                      n.seed = n.seed)
 
 
-      balances = self$test.results$cda$balances
-      n.bal = ncol(balances)
-      n.plus = rowSums(balances[,2:n.bal] > 0)
-      n.minus = rowSums(balances[,2:n.bal] < 0)
-      perm.frac = mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) /
+      balances <- self$test.results$cda$balances
+      n.bal <- ncol(balances)
+      n.plus <- rowSums(balances[,2:n.bal] > 0)
+      n.minus <- rowSums(balances[,2:n.bal] < 0)
+      perm.frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) /
         mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
 
-      cda.top.cells = names(perm.frac)[perm.frac < signif.threshold]
+      cda.top.cells <- names(perm.frac)[perm.frac < signif.threshold]
 
       self$test.results[['cda.top.cells']] = cda.top.cells
 
       return(invisible(self$test.results[['cda']]))
     },
 
-    estimateGaPartiotion=function(n.cell.counts = 1000,
-                                  n.seed = 239,
-                                  aplha = 0.01,
-                                  cells.to.remain = NULL,
-                                  cells.to.remove = NULL,
-                                  samples.to.remove = NULL){
-      # Cope with levels
-      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
-      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
-      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
-      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
-
+    estimateGaPartiotion=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, ...){
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
       d.counts <- data.frame(anno=self$cell.groups,
@@ -1210,7 +1113,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       names(d.groups) <- rownames(d.counts)
       # ----
 
-      ga.res = gaPartition(d.counts, d.groups)
+      ga.res <- gaPartition(d.counts, d.groups, ...)
 
       self$test.results[['ga.partition']] <- rownames(t(ga.res[1,ga.res[1,] != 0,drop=FALSE]))
 
@@ -1220,29 +1123,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Plot Loadings
     #' @param palette palette specification for cell types (default: stored $cell.groups.palette)
     #' @return A ggplot2 object
-    plotCellLoadings = function(n.cell.counts = 1000,
-                              n.seed = 239,
-                              aplha = 0.01,
-                              font.size = NULL,
-                              cells.to.remove = NULL,
-                              samples.to.remove = NULL,
-                              palette=self$cell.groups.palette){
-      # Cope with levels
-      if(is.null(self$ref.level) && is.null(self$target.level)) stop('Target or Reference levels must be provided')
-      if((is.null(self$ref.level) || is.null(self$target.level)) && (length(levels(self$sample.groups)) != 2)) stop('Only two levels should be provided')
-      if(is.null(self$ref.level)) self$ref.level = setdiff(levels(self$sample.groups), self$target.level)
-      if(is.null(self$target.level)) self$target.level = setdiff(levels(self$sample.groups), self$ref.level)
+    plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, n.significant.cells=0, font.size=NULL) {
+      cda <- private$getResults('cda', 'estimateCellLoadings()')
+      n.bal <- ncol(cda$balances)
+      n.plus <- rowSums(cda$balances[,2:n.bal] > 0)
+      n.minus <- rowSums(cda$balances[,2:n.bal] < 0)
+      frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) / mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
+      res.ordered <- t(cda$balances)[,order(-frac)] %>% as.data.frame()
 
-      if(is.null(self$test.results$cda)) self$estimateCellLoadings(n.cell.counts = n.cell.counts,
-                                                     n.seed = n.seed,
-                                                     aplha = aplha,
-                                                     cells.to.remove = cells.to.remove,
-                                                     samples.to.remove = samples.to.remove)
+      p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
+        geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = alpha, size=1) +
+        geom_hline(yintercept = 0, color = "gray37") +
+        coord_flip() + xlab('') + ylab('') + theme_bw()+ theme(legend.position = "none")
 
-      plotCellLoadings(self$test.results[['cda']],
-                       aplha = aplha,
-                       n.significant.cells = length(self$test.results$cda.top.cells),
-                       font.size = font.size, palette=palette)
+      if(!is.null(font.size)) {
+        p <- p + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
+      }
+      if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
+      if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(cda$balances) - n.significant.cells + 0.5, color='red')
+
+      return(p)
     },
 
     extimateWilcoxonTest = function(cell.groups = self$cell.groups,
@@ -1271,138 +1171,121 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Estimate cell density in giving embedding
     #' @param emb cell embedding matrix
-    #' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
-    #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
-    #' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
-    #' @param target.level target/disease level for sample.group vector
-    #' @param bins number of bins for density esitmation, default 400
-    #' @param condition.per.cell Named group factor with cell names. Must have exactly two levels.
-    #' @param by.sample  if TRUE, density will esitmated by sample and quantiles normlization will applied to indivisual sample. If FALSE, cell condition.per.cell need to be provided and density will simply esitmated by condition.per.cell.
-    #' @add.ponits add.ponits  show cells in density plot
-    estimateCellDensity = function(embedding=self$embedding, cell.groups=self$cell.groups, sample.groups=self$sample.groups, sample.per.cell = self$sample.per.cell, ref.level=self$ref.level, target.level=self$target.level, bins = 400, by.sample = TRUE){
+    #' @param bins number of bins for density estimation, default 400
+    #' @param method density estimation method, graphSmooth: graph smooth based density estimation. embGrid: embedding grid based density  estimation. (default: embGrid)
+    #' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
+    #' @param by.sample  if TRUE, density will estimated by sample and quantile normalization will applied to individual sample. If FALSE, cell condition.per.cell need to be provided and density will simply estimated by condition.per.cell.
+    estimateCellDensity = function(embedding=self$embedding, bins = 400, by.sample = TRUE, method = 'kde',
+                                   verbose=self$verbose, m=50, n.cores=self$n.cores){
+      if(is.null(embedding))
+        stop("'embedding' must be provided either during the object initialization or during this function call")
 
-      if(is.null(embedding)) stop("'embedding' must be provided either during the object initialization or during this function call")
-
-      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
-
-      if(is.null(sample.groups)) stop("'sample.groups' must be provided either during the object initialization or during this function call")
-
-      if(is.null(sample.per.cell)) stop("'sample.per.cell' must be provided either during the object initialization or during this function call")
-
-      if(is.null(ref.level)) stop("'ref.level' must be provided either during the object initialization or during this function call")
-
-      if(is.null(target.level)) stop("'target.level' must be provided either during the object initialization or during this function call")
-
-      # calculate sample.per.cell
-      condition.per.cell <- as.factor(setNames( as.character(sample.groups[ as.character(sample.per.cell)]), names(sample.per.cell) ))
-
-      ref.level <- self$ref.level
-      target.level <- self$target.level
+      sample.per.cell <- self$sample.per.cell
       sample.groups <- self$sample.groups
+      # calculate sample.per.cell
+      condition.per.cell <- sample.per.cell %>%
+        {setNames(as.character(sample.groups[as.character(.)]), names(.))} %>%
+        as.factor()
 
-      self$test.results[['bins']] <- bins
-      res <- estimateCellDensity(embedding, sample.per.cell = sample.per.cell, sample.groups = sample.groups, bins = bins, ref.level =
-                                   ref.level, target.level = target.level, condition.per.cell = condition.per.cell, by.sample =
-                                   by.sample)
-      self$test.results[['density.mat']] <- res[['density.mat']]
-      self$test.results[['target.density']] <- res[['density.fraction']][[target.level]]
-      self$test.results[['ref.density']] <- res[['density.fraction']][[ref.level]]
-      #self$test.results[['diff.density']] <- res[['density.fraction']][[target.level]] - res[['density.fraction']][[ref.level]]
+      if (method == 'kde'){
+        self$test.results[['cell.density.kde']] <- embedding %>%
+          estimateCellDensityKde(sample.per.cell=sample.per.cell, sample.groups=sample.groups, bins=bins,
+                                 condition.per.cell=condition.per.cell, by.sample=by.sample)
+        return(invisible(self$test.results[['cell.density.kde']]))
+      }
+      if (method == 'graph'){
+        self$test.results[['cell.density.graph']] <-  extractCellGraph(self$data.object) %>%
+          estimateCellDensityGraph(sample.per.cell=sample.per.cell, sample.groups=sample.groups,
+                                   ref.level=self$ref.level, target.level=self$target.level,
+                                   n.cores=n.cores, m=m, verbose=verbose)
+        return(invisible(self$test.results[['cell.density.graph']]))
+      }
 
-      self$test.results[['density.emb']] <- res[['density.emb']]
-
-      return(invisible(self$density[['bins']]))
+      stop("Unknown method: ", method)
     },
 
     #' @description Plot cell density
-    #' @param add.ponits default is TRUE, add points to cell density figure
-    #' @param condition.per.cell Named group factor with cell names. Must have exactly two levels. condition.per.cell must be provided when add.ponits is TRUE
-    #' @param contours specify cell types for contour, mutiple cell types are also suported
+    #' @param add.points default is TRUE, add points to cell density figure
+    #' @param contours specify cell types for contour, multiple cell types are also supported
     #' @param contour.color color for contour line
     #' @param contour.conf confidence interval of contour
     #' @return A ggplot2 object
-    plotCellDensity = function(col = c('blue','white','red'), show.legend = NULL, legend.position = NULL, title = NULL, show.grid = NULL, add.ponits = TRUE, condition.per.cell = NULL, color = 'B', point.col = '#FCFDBFFF', contours = NULL, contour.color = 'white', contour.conf = '10%') {
-      bins <- private$getResults('bins', 'estimateCellDensity()')
-      ref <- self$ref.level
-      target <- self$target.level
+    plotCellDensity = function(col=c('blue','white','red'), show.legend=FALSE, legend.position=NULL, show.grid=NULL, add.points=TRUE,
+                               point.col='#FCFDBFFF', contours=NULL, contour.color='white', contour.conf='10%') {
+      dens.res <- private$getResults('cell.density.kde', 'estimateCellDensity()')
 
       # calculate sample.per.cell
       condition.per.cell <- as.factor(setNames( as.character(self$sample.groups[ as.character(self$sample.per.cell)]), names(self$sample.per.cell) ))
 
+      target.density <- dens.res %$% data.frame(density.emb, z=density.fraction[[self$target.level]])
+      ref.density <- dens.res %$% data.frame(density.emb, z=density.fraction[[self$ref.level]])
 
-      target.density <- private$getResults('target.density', 'estimateCellDensity()')
-      ref.density <- private$getResults('ref.density', 'estimateCellDensity()')
+      mi <- min(min(ref.density$z), min(target.density$z))
+      ma <- max(max(ref.density$z), max(target.density$z))
 
-      mi <- min(c(min(ref.density), min(target.density)))
-      ma <- max(c(max(ref.density), max(target.density)))
-      emb <- private$getResults('density.emb', 'estimateCellDensity()')
+      p1 <- plotDensity(target.density, bins=dens.res$bins, col=col, legend.position=legend.position, show.legend=show.legend, title=self$ref.level, show.grid=show.grid, mi=mi, ma=ma)
+      p2 <- plotDensity(ref.density, bins=dens.res$bins, col=col,legend.position=legend.position, show.legend=show.legend, title=self$target.level, show.grid=show.grid, mi=mi, ma=ma)
 
-      target.density = data.frame(emb, 'z' = target.density)
-      ref.density = data.frame(emb, 'z' = ref.density)
-
-      p1 <- plotDensity(target.density, bins = bins, col = col, legend.position = legend.position, show.legend = show.legend, title =self$ref.level, show.grid = show.grid, mi = mi, ma = ma)
-      p2 <- plotDensity(ref.density, bins = bins, col = col,legend.position = legend.position, show.legend = show.legend, title =self$target.level, show.grid = show.grid, mi = mi, ma = ma)
-
-      if (add.ponits){
-        if(is.null(condition.per.cell)) stop("'condition.per.cell' must be provided when add points")
+      if (add.points){
         emb <- self$embedding %>% as.data.frame()
-        colnames(emb) = c('x','y')
+        colnames(emb) <- c('x','y')
         emb$z <- 1
-        emb[1:4,]
-        nname1 <- names(condition.per.cell)[condition.per.cell == ref]
-        nname1 <- sample(nname1, min(2000, nrow(emb[nname1, ])))
+        nname1 <- names(condition.per.cell)[condition.per.cell == self$ref.level] %>%
+          sample(min(2000, length(.)))
 
-        nname2 <- names(condition.per.cell)[condition.per.cell == target]
-        nname2 <- sample(nname2, min(2000, nrow(emb[nname2, ])))
+        nname2 <- names(condition.per.cell)[condition.per.cell == self$target.level] %>%
+          sample(min(2000, length(.)))
 
-        p1 <- p1 + geom_point(data = emb[nname1, ], aes(x = x, y = y), col = point.col, size = 0.00001, alpha = 0.2)
-        p2 <- p2 + geom_point(data = emb[nname2, ], aes(x = x, y = y), col = point.col, size = 0.00001, alpha = 0.2)
+        p1 <- p1 + geom_point(data=emb[nname1, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
+        p2 <- p2 + geom_point(data=emb[nname2, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
       }
 
-
       if(!is.null(contours)){
-        cnl = do.call(c, lapply(sn(contours), function(x) getContour(self$embedding, cell.type =self$cell.groups , cell=x ,conf = contour.conf, color = contour.color)))
+        cnl <- do.call(c, lapply(sn(contours), function(x) getContour(self$embedding, cell.type=self$cell.groups , cell=x ,conf=contour.conf, color=contour.color)))
         p1 <- p1 + cnl
         p2 <- p2 + cnl
       }
 
-
-      return(list('ref' = p1, 'target' = p2))
+      return(list(ref=p1, target=p2))
     },
 
 
-
-    #' @description esitmate differential cell density
+    #' @description estimate differential cell density
     #' @param col color palettes,  default is c('blue','white','red')
     #' @param condition.per.cell A two-level factor on the cell names describing the conditions being compared (default: stored vector)
-    #' @param method method to cacuated differential cell density of each bin; substract: target density minus ref density; entropy: estimated kl divergence entropy betwwen sample grapups ; t.test: zscore of t-test,global variacen is setting for t.test;
-    #' @param contours specify cell types for contour, mutiple cell types are also suported
+    #' @param method method to calculate differential cell density of each bin; subtract: target density minus ref density; entropy: estimated kl divergence entropy between sample groups ;
+    #' t.test: z-score of t-test, global variance is setting for t.test;
+    #' @param contours specify cell types for contour, multiple cell types are also supported
     #' @param contour.color color for contour line
     #' @param z.cutoff absolute z score cutoff
     #' @param contour.conf confidence interval of contour
-    diffCellDensity = function(condition.per.cell = NULL, method = 'substract', col = c('blue','white','red'), show.legend = NULL, legend.position = NULL, title = NULL, show.grid = NULL, plot = TRUE, contours = NULL, contour.color = 'white', contour.conf = '10%' , z.cutoff = NULL){
+    diffCellDensity=function(condition.per.cell=NULL, method='subtract', col=c('blue','white','red'), show.legend=FALSE, legend.position=NULL, title=NULL, show.grid=NULL, plot=TRUE, contours=NULL, contour.color='white', contour.conf='10%', z.cutoff=NULL, size =0.1, ...){
       # TODO: rename it to start with estimate*
-      ref.level <- self$ref.level
-      target.level <- self$target.level
-      sample.groups <- self$sample.groups
-      bins <- private$getResults('bins', 'estimateCellDensity()')
-      density.matrix <- private$getResults('density.mat', 'estimateCellDensity()')
-      density.emb <- private$getResults('density.emb', 'estimateCellDensity()')
-
-      if (method == 'entropy'){
-        if(is.null(condition.per.cell)) stop("'condition.per.cell' must be provided when entropy was used")
+      if (method == 'graph'){
+        score <- private$getResults('cell.density.graph', 'estimateCellDensity(method="graph")')
+        emb <-  self$embedding
+      } else {
+        dens.res <- private$getResults('cell.density.kde', 'estimateCellDensity()')
+        mat <- dens.res %$%
+          diffCellDensity(density.emb, density.mat, condition.per.cell=condition.per.cell, self$sample.groups, bins=bins, target.level=self$target.level,
+                          ref.level=self$ref.level, method=method, title=title, legend.position=legend.position, show.legend=show.legend, show.grid=show.grid, z.cutoff=z.cutoff)
+        emb <- mat[,1:2]
+        score <- mat$z
+        names(score) <- rownames(mat)
       }
-      p <- diffCellDensity(density.emb, density.matrix, condition.per.cell = condition.per.cell, sample.groups, bins = bins, target.level = target.level, ref.level =
-                             ref.level, method = method, title = title, legend.position = legend.position, show.legend = show.legend, show.grid = show.grid, z.cutoff = z.cutoff)
 
       if (plot){
+        fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) +
+          scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0)
+
         if(!is.null(contours)){
-          cnl = do.call(c, lapply(sn(contours), function(x) getContour(self$embedding, cell.type =self$cell.groups , cell=x ,conf = contour.conf, color = contour.color)))
-          fig <- p$fig + cnl
+          cnl <- do.call(c, lapply(sn(contours), function(x)
+            getContour(self$embedding, cell.type=self$cell.groups , cell=x, conf=contour.conf, color=contour.color)))
+          fig <- fig + cnl
         }
         return(fig)
       }
-      return(p$score)
+      return(score)
     },
 
     #' @title Plot inter-sample expression distance
@@ -1410,19 +1293,35 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param name Test results to plot (default=expression.shifts)
     #' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
     #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored $cell.groups vector)
-    #' @param sample.groups Named sample factor with cell names (default: stored $sample.groups vector)
     #' @param weighted.distance whether to weigh the expression distance by the sizes of cell types (default: TRUE), or show distances for each individual cell type
-    #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (* < 0.05; ** < 0.01; *** < 0.001)
+    #' @param show.significance whether to show statistical significance between sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
+    #' @param alpha dot transparency
     #' @return A ggplot2 object
-    plotExpressionDistance = function(name='expression.shifts', notch = TRUE, cell.groups = self$cell.groups, sample.groups = self$sample.groups, weighted.distance = TRUE,  min.cells = 10, palette=self$sample.groups.palette, show.significance = FALSE) {
-      plotExpressionDistance(private$getResults(name, 'estimateExpressionShiftMagnitudes()'), notch = notch, cell.groups = cell.groups, sample.groups = sample.groups, weighted.distance = weighted.distance,  min.cells = min.cells, palette=palette, show.significance=show.significance)
+    plotExpressionDistance = function(name='expression.shifts', notch=TRUE, sample.groups=self$sample.groups, weighted.distance=TRUE,
+                                      min.cells=10, palette=self$sample.groups.palette, show.significance=FALSE, alpha=0.2) {
+      cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
+      ctdml <- cluster.shifts$ctdml
+      valid.comparisons <- cluster.shifts$valid.comparisons
+      if (!weighted.distance) {
+        gg <- plotExpressionDistanceIndividual(ctdml, valid.comparisons, sample.groups=sample.groups, notch=notch, alpha=alpha, min.cells=min.cells, show.significance=show.significance)
+      } else {
+        gg <- plotExpressionDistanceJoint(ctdml, valid.comparisons, sample.groups=sample.groups, notch=notch, alpha=alpha, show.significance=show.significance)
+      }
+
+      if(!is.null(palette)) {
+        gg <- gg + scale_fill_manual(values=palette)
+      }
+
+      if(show.significance) {
+        gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif", label.x.npc="centre")  # willcox test
+      }
+
+      return(gg)
     },
 
     #' @title Plot sample-sample expression distance as a 2D embedding
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
-    #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
     #' @param cell.type If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)
-    #' @param sample.groups Named sample factor with cell names (default: stored $sample.groups )
     #' @param method dimension reduction methods (MDS or tSNE ) , default is MDS
     #' @param perplexity tSNE perpexity (default: 4)
     #' @param max_iter tSNE max_iter (default: 1e3)
@@ -1445,48 +1344,181 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     ### Cluster-free differential expression
 
-    #' @description Estimate Cluster-free Z-scores
-    #' @param n.od.genes Number of overdispersed genes for estimating Z-scores
-    #' @param ... see \link[=estimateLocalZScores]{estimateLocalZScores} parameters
-    estimateClusterFreeZScores = function(n.od.genes=NULL, verbose=self$verbose, ...) {
+    #' @description Estimate differential expression Z-scores between two conditions per individual cell
+    #' @param max.z z-score value to winsorize the estimates for reducing impact of outliers. Default: 20.
+    #' @param min.expr.frac minimal fraction of cell expressing a gene for estimating z-scores for it. Default: 0.001.
+    #' @param normalize whether to normalize z-scores over std for reference ("ref") or both ("both"). Default: "ref".
+    #' @return Sparse matrix of z-scores with genes as columns and cells as rows.
+    #' Cells that have only one condition in their expression neighborhood have NA Z-scores for all genes.
+    #' Results are also stored in the `cluster.free.z` field.
+    estimateClusterFreeZScores = function(n.top.genes=NULL, max.z=20, min.expr.frac=0.001, normalize=c("ref", "both"),
+                                          verbose=self$verbose, n.cores=self$n.cores) {
+      normalize <- match.arg(normalize)
       cm <- extractJointCountMatrix(self$data.object)
-      genes <- extractOdGenes(self$data.object, n.od.genes)
+      genes <- private$getTopGenes(n.top.genes, gene.selection="expression", cm.joint=cm, min.expr.frac=min.expr.frac)
+
+      if (verbose)
+        message("Estimating cluster-free Z-scores for ", length(genes), " top genes")
 
       is.ref <- self$sample.per.cell %>%
         {setNames(self$sample.groups[as.character(.)] == self$ref.level, names(.))}
-      self$test.results[["cluster.free.z"]] <- cacoa:::extractCellGraph.Conos(self$data.object) %>%
-        estimateClusterFreeZScores(cm, is.ref=is.ref, genes=genes, verbose=verbose, ...)
 
+      adj.mat <- extractCellGraph(self$data.object) %>% igraph::as_adj()
+      cell.names <- intersect(rownames(cm), rownames(adj.mat)) %>%
+        intersect(names(is.ref))
+
+      z.mat <- clusterFreeZScoreMat(adj.mat[cell.names, cell.names], cm[cell.names, genes, drop=FALSE],
+                                    is.ref[cell.names], normalize_both=(normalize == "both"), verbose=verbose, n_cores=n.cores)
+      z.mat@x %<>% pmin(max.z) %>% pmax(-max.z)
+
+      self$test.results[["cluster.free.z"]] <- z.mat
       return(invisible(self$test.results[["cluster.free.z"]]))
     },
 
+    getMostChangedGenes = function(n, min.z=0.5, max.z=20, cell.subset=NULL, excluded.genes=NULL, included.genes=NULL) {
+      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
+      if (!is.null(cell.subset)) {
+        z.scores <- z.scores[cell.subset,]
+      }
+
+      if (is.null(included.genes)) {
+        included.genes <- colnames(z.scores)
+      }
+
+      z.scores@x %<>% abs() %>% pmin(max.z)
+      z.scores@x[z.scores@x < min.z] <- 0
+      scores <- colMeans(z.scores, na.rm=TRUE) %>% sort(decreasing=TRUE) %>%
+        .[setdiff(names(.), excluded.genes)] %>% .[intersect(names(.), included.genes)] %>%
+        .[1:min(n, length(.))]
+      return(scores)
+    },
+
     #' @description Estimate Cluster-free Expression Shift
-    #' @param n.od.genes Number of overdispersed genes for estimating Z-scores
-    estimateClusterFreeExpressionShifts = function(n.od.genes=NULL, verbose=self$verbose, ...) {
-      genes <- extractOdGenes(self$data.object, n.od.genes)
-      cm <- extractJointCountMatrix(self$data.object) %>% .[, genes] %>% Matrix::t()
+    #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
+    #' Results are also stored in the `cluster.free.expr.shifts` field.
+    estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection="change", excluded.genes=NULL,
+                                                   verbose=self$verbose, n.cores=self$n.cores) {
+      cm <- extractJointCountMatrix(self$data.object)
+      genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, excluded.genes=excluded.genes)
+      cm <- Matrix::t(cm[, genes])
 
       is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
 
-      nns.per.cell <- extractCellGraph.Conos(self$data.object) %>%
+      nns.per.cell <- extractCellGraph(self$data.object) %>%
         igraph::as_adjacency_matrix() %>% as("dgTMatrix") %>%
         {setNames(split(.@j, .@i + 1), rownames(.))}
 
       shifts <- estimateClusterFreeExpressionShifts(cm, self$sample.per.cell[names(nns.per.cell)], nns.per.cell,
-                                                    is.ref, verbose=verbose)
+                                                    is.ref, verbose=verbose, n_cores=n.cores)
       self$test.results[["cluster.free.expr.shifts"]] <- shifts
 
       return(invisible(shifts))
     },
 
+    #' @description Performs graph smoothing of the cluster-free DE Z-scores
+    #' @param smoothing `beta` parameter of the \link[sccore:heatFilter]{heatFilter}. Default: 20.
+    #' @param filter graph filter function. Default: \link[sccore:heatFilter]{heatFilter}.
+    #' @param ... parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}
+    #' @return Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z.smoothed` field.
+    smoothClusterFreeZScores = function(n.top.genes=1000, smoothing=20, filter=NULL, gene.selection="change", excluded.genes=NULL,
+                                        n.cores=self$n.cores, verbose=self$verbose, ...) {
+      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
+      genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection,
+                                   excluded.genes=excluded.genes, included.genes=colnames(z.scores))
+      z.scores <- z.scores[,genes]
+
+      if (verbose) message("Smoothing Z-scores for ", ncol(z.scores), " genes passed filtration")
+      if (is.null(filter)) {
+        filter <- function(...) heatFilter(..., beta=smoothing)
+      }
+
+      z.scores@x[is.na(z.scores@x)] <- 0
+      z.smoothed <- z.scores %>%
+        smoothSignalOnGraph(extractCellGraph(self$data.object), filter, n.cores=n.cores,
+                            progress=verbose, ...)
+
+      z.smoothed[is.na(z.scores)] <- NA
+      self$test.results[["cluster.free.z.smoothed"]] <- z.smoothed
+      return(invisible(z.smoothed))
+    },
+
+    #' @description Estimate Gene Programmes based on cluster-free Z-scores on a subsample of
+    #' cells using \link[fabia:fabia]{fabia}.
+    #' @param n.programmes maximal number of gene programmes to find (parameter `p` for fabia). Default: 15.
+    #' @param ... keyword arguments forwarded to \link{estimateGeneProgrammes}
+    #' @return a list includes:
+    #'   - `fabia`: \link[fabia:Factorization]{fabia::Factorization} object, result of the
+    #'       \link[fabia:fabia]{fabia::fabia} call
+    #'   - `sample.ids`: ids of the subsampled cells used for fabia estimates
+    #'   - `scores.exact`: vector of fabia estimates of gene programme scores per cell. Estimated only for the
+    #'     subsampled cells.
+    #'   - `scores.approx`: vector of approximate gene programme scores, estimated for all cells in the dataset
+    #'   - `loadings`: matrix with fabia gene loadings per programme
+    #'   - `gene.scores`: list of vectors of gene scores per programme. Contains only genes, selected for
+    #'     the programme usin fabia biclustering.
+    #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
+    estimateGeneProgrammes = function(n.top.genes=NULL, n.programmes=15, gene.selection="change", name="gene.programmes", ...) {
+      if (!requireNamespace("fabia", quietly=TRUE))
+        stop("fabia package must be installed to run this function")
+
+      z.scores <- private$getResults("cluster.free.z.smoothed", "smoothClusterFreeZScores")
+      if (!is.null(n.top.genes)) {
+        genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, included.genes=colnames(z.scores))
+        z.scores <- z.scores[,genes]
+      }
+
+      res <- estimateGeneProgrammesFabia(z.scores, n.programmes, ...)
+      fr <- res$fabia
+
+      bi.clusts <- fabia::extractBic(fr)
+      mask <- bi.clusts$bic[,"bixv"] %>% {sapply(., length) > 0}
+      res$scores.exact <- t(fr@Z[mask,])
+      res$scores.approx <- t(t(fr@L[,mask]) %*% (Matrix::t((z.scores[,rownames(fr@L)]) - fr@center) / fr@scaleData))
+      res$loadings <- fr@L[,mask]
+      res$gene.scores <- apply(bi.clusts$bic, 1, `[[`, "bixv")[mask]
+      res$bi.clusts <- bi.clusts
+
+      colnames(res$scores.exact) <- colnames(res$scores.approx) <-
+        colnames(res$loadings) <- names(res$gene.scores) <- paste0("P", 1:ncol(res$scores.exact))
+      self$test.results[[name]] <- res
+
+      return(invisible(self$test.results[[name]]))
+    },
+
+    plotGeneProgrammeScores = function(name="gene.programmes", approximate=FALSE, build.panel=TRUE, nrow=NULL,
+                                       gradient.range.quantile=0.975, plot.na=approximate, legend.title="Score", ...) {
+      fr <- private$getResults(name, "estimateGeneProgrammes")
+      scores <- if (approximate) fr$scores.approx else fr$scores.exact
+
+      ggs <- lapply(1:ncol(scores), function(i) {
+        self$plotEmbedding(colors=scores[,i], gradient.range.quantile=gradient.range.quantile, plot.na=plot.na,
+                           legend.title=legend.title, title=colnames(scores)[i], ...)
+      })
+
+      if (build.panel)
+        return(cowplot::plot_grid(plotlist=ggs, nrow=nrow))
+
+      return(ggs)
+    },
+
+    plotGeneProgrammeGenes = function(programme.id, name="gene.programmes", max.genes=9, plot.expression=FALSE, ...) {
+      fr <- private$getResults(name, "estimateGeneProgrammes")
+      scores <- fr$gene.scores[[programme.id]]
+      if (is.null(scores))
+        stop("Can't find programme", programme.id)
+
+      scores %<>% .[1:min(length(.), max.genes)]
+      return(self$plotGeneExpressionComparison(scores=scores, plot.expression=plot.expression, ...))
+    },
+
     #' @description Plot cluster-free expression shift z-scores
     #' @param cell.groups cell type labels. Set to NULL if it shouldn't be shown
     #' @param plot.both.conditions show both case and control cells. Normally, showing control cells doesn't
-    #' @param max.shift all shift values above `max.shift` are set to this value when plotting.
     #' make sense, as control cells always have small distance from control.
+    #' @param max.shift all shift values above `max.shift` are set to this value when plotting. Default: 95% of the shifts.
     #' @param font.size size range for cell type labels
-    #' @param ... parameters forwarded to \link[=sccore::embeddingPlot]{`embeddingPlot`}
-    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, plot.both.conditions=FALSE, plot.na=FALSE, max.shift=3,
+    #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
+    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, plot.both.conditions=FALSE, plot.na=FALSE, max.shift=NULL,
                                                alpha=0.2, font.size=c(2, 3), ...) {
       shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts")
       if (is.null(self$embedding))
@@ -1496,9 +1528,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         shifts %<>%  .[self$sample.groups[self$sample.per.cell[names(.)]] != self$ref.level]
       }
 
-      if (!is.null(max.shift)) {
+      if (is.null(max.shift)) {
+        max.shift <- quantile(shifts, 0.95, na.rm=TRUE)
+      }
+
+      if (max.shift > 0) {
         shifts %<>% pmin(max.shift)
       }
+
       gg <- self$plotEmbedding(colors=shifts, plot.na=plot.na, alpha=alpha, ...)
       gg$scales$scales %<>% .[sapply(., function(s) s$aesthetics != "colour")]
 
@@ -1509,17 +1546,76 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       gg <- gg +
         scale_size_continuous(range=font.size, trans='identity', guide='none') +
-        scale_color_distiller(palette="RdYlBu", name="Distance")
+        scale_color_gradientn(colours=c('#2c7bb6', '#abd9e9', '#ffffbf', '#fdae61', '#d7191c'),
+                              values=c(0, 0.5 / max.shift, 1 / max.shift, 0.5 - 0.5 * max.shift, 1.0), # Ensure that 1.0 has yellow color
+                              name="Ratio")
       return(gg)
-    }
-  ),
-  private = list(
-    checkTestResults=function(name) {
-      if (is.null(self$test.results[[name]])) {
-        stop("Test result for ", name, " wasn't found")
-      }
     },
 
+    plotMostChangedGenes = function(n.top.genes, min.z=0.5, max.z=20, max.z.plot=max.z, cell.subset=NULL, excluded.genes=NULL, ...) {
+      scores <- self$getMostChangedGenes(n.top.genes, min.z=min.z, max.z=max.z,
+                                         cell.subset=cell.subset, excluded.genes=excluded.genes)
+      self$plotGeneExpressionComparison(scores=scores, max.z=max.z.plot, ...)
+    },
+
+    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr=NULL, plot.z=TRUE, plot.expression=TRUE, max.z=5, smoothed=FALSE, plot.na=-1, ...) {
+      if (is.null(genes)) {
+        if (is.null(scores)) stop("Either 'genes' or 'scores' must be provided")
+        genes <- names(scores)
+      }
+
+      if (!plot.z && !plot.expression) return()
+
+      if (plot.z) {
+        if (smoothed) {
+          z.scores <- self$test.results$cluster.free.z.smoothed
+          if ((is.null(z.scores) || !all(genes %in% colnames(z.scores)))){
+            missed.genes <- setdiff(colnames(z.scores), genes)
+            warning("Smoothed Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See smoothClusterFreeZScores().")
+            smoothed <- FALSE
+          }
+        }
+
+        if (!smoothed) {
+          z.scores <- self$test.results$cluster.free.z
+          if ((is.null(z.scores) || !all(genes %in% colnames(z.scores)))) {
+            missed.genes <- setdiff(colnames(z.scores), genes)
+            warning("Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See estimateClusterFreeZScores().")
+            plot.z <- FALSE
+          }
+        }
+      }
+
+      condition.per.cell <- self$sample.per.cell %>%
+        {setNames(as.character(self$sample.groups[as.character(.)]), names(.))} %>%
+        as.factor()
+
+      ggs <- lapply(genes, function(g) {
+        lst <- list()
+        if (plot.expression) {
+          expr <- extractGeneExpression(self$data.object, g)
+          m.expr <- if (is.null(max.expr)) max(expr) else max.expr
+          lst <- lapply(unique(condition.per.cell), function(sg) {
+            self$plotEmbedding(colors=expr, title=paste(sg, " ",g), groups=condition.per.cell, subgroups=sg,
+                               color.range=c(0, m.expr), legend.title="Expression", plot.na=FALSE, ...)
+          }) %>% c(lst)
+        }
+
+        if (plot.z) {
+          title <- if (is.null(scores)) g else paste0(g, ": ", signif(scores[g], 3))
+          lst <- self$plotEmbedding(colors=z.scores[,g], title=title, color.range=c(-max.z, max.z), plot.na=plot.na, ...) %>%
+            list() %>% c(lst)
+        }
+
+        if (length(lst) > 1) cowplot::plot_grid(plotlist=lst, ncol=3) else lst[[1]]
+      })
+
+      if (length(genes) == 1) return(ggs[[1]])
+      return(ggs)
+    }
+  ),
+
+  private = list(
     getResults=function(name, suggested.function=NULL) {
       if (!is.null(self$test.results[[name]]))
         return(self$test.results[[name]])
@@ -1529,6 +1625,73 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         msg <- paste(msg, "Please first run", suggested.function)
       }
       stop(msg)
+    },
+
+    getTopGenes = function(n, gene.selection=c("change", "expression", "od"), cm.joint=NULL,
+                           min.expr.frac=0.0, excluded.genes=NULL, included.genes=NULL, ...) {
+      gene.selection <- match.arg(gene.selection)
+      if ((gene.selection == "change") && is.null(self$test.results$cluster.free.z)) {
+        warning("Please run estimateClusterFreeZScores() first to use gene.selection='change'. Fall back to gene.selection='expression'.")
+        gene.selection <- "expression"
+      }
+
+      if (gene.selection == "change") {
+        genes <- names(self$getMostChangedGenes(Inf, ...))
+      } else if (gene.selection == "od") {
+        genes <- extractOdGenes(self$data.object, n + length(excluded.genes))
+      } else {
+        if (is.null(cm.joint)) {
+          cm.joint <- extractJointCountMatrix(self$data.object)
+        }
+
+        cm.joint@x <- 1 * (cm.joint@x > 0)
+        col.means <- colMeans(cm.joint, na.rm=TRUE)
+        gene.mask <- (col.means >= min.expr.frac)
+        genes <- col.means %>% order(decreasing=TRUE) %>%
+          .[gene.mask[.]] %>% colnames(cm.joint)[.]
+      }
+
+      if (is.null(included.genes)) {
+        included.genes <- genes
+      }
+      genes %<>% setdiff(excluded.genes) %>% intersect(included.genes) %>% .[1:min(length(.), n)]
+      return(genes)
+    },
+
+    getOntologyPvalueResults=function(type, cell.subgroup, genes) {
+      if(!(type %in% c("GO","BP","CC","MF","DO")))
+        stop("'type' must be 'GO', BP', 'CC', 'MF', or 'DO'.")
+
+      if(!(genes %in% c("down","up","all")))
+        stop("'genes' must be 'down', 'up', or 'all'.")
+
+      if(type=="DO") {
+        ont.res <- self$test.results[["DO"]][["df"]]
+      } else {
+        ont.res <- self$test.results[["GO"]][["df"]]
+      }
+
+      if(is.null(ont.res)) {
+        if(type == "DO") t <- "DO" else t <- "GO"
+        stop(paste0("No results found for ",type,". Please run estimateOntology first and specify type='",t,"'."))
+      }
+
+      ont.res %<>% .[[genes]]
+
+      if(is.null(ont.res)) stop("No results found for genes = '",genes,"'.")
+
+      if(is.null(cell.subgroup))
+        stop("Please define 'cell.subgroup'.")
+
+      if (!is.logical(cell.subgroup) || cell.subgroup) {
+        if(!cell.subgroup %in% unique(ont.res$Group))
+          stop("'cell.subgroup' not found in results.")
+        ont.res %<>% dplyr::filter(Group == cell.subgroup)
+      }
+
+      if(type %in% c("BP","CC","MF")) ont.res %<>% dplyr::filter(Type == type)
+
+      return(ont.res)
     }
   )
 )

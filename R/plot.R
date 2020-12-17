@@ -1,4 +1,3 @@
-#' @import ggrepel
 #' @import tibble
 #' @import cowplot
 #' @import dplyr
@@ -10,7 +9,7 @@ theme_legend_position <- function(position) {
   theme(legend.position=position, legend.justification=position)
 }
 
-plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", label=T, size=5, palette=NULL) {
+plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", legend.position="right", label=TRUE, size=5, palette=NULL) {
   p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
 
@@ -18,10 +17,13 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", 
     geom_point(aes(color=Type)) +
     scale_x_log10() +
     ylim(0, max(p.df$N)) +
-    labs(x="Number of cells", y=y.lab) +
+    labs(x=x.lab, y=y.lab) +
     theme_bw()
 
-  if(label) gg <- gg + geom_label_repel(aes(label=Type), size=size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4))
+  if(label) {
+    gg <- gg +
+      ggrepel::geom_label_repel(aes(label=Type), size=size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4))
+  }
 
   gg <- gg +
     theme(legend.background=element_rect(fill=alpha("white", 0.4))) +
@@ -42,10 +44,15 @@ plotNCellRegression <- function(n, n.total, y.lab="N", legend.position="right", 
 #' @param legend.key.width (default=unit(8, "pt))
 #' @param legend.title Title on plot (default="-log10(p-value)")
 #' @param x.axis.position Position of x axis (default="top")
+#' @param color.range Range for filling colors
 #' @return A ggplot2 object
 #' @export
-plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, legend.position="right", legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top") {
-  m <- max(df)
+plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, legend.position="right",
+                        legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
+                        color.range=NULL) {
+  if (is.null(color.range)) {
+    color.range <- c(min(0, min(df)), max(df))
+  }
 
   if (is.null(row.order)) {
     row.order <- rownames(df)[dist(df) %>% hclust() %>% .$order]
@@ -76,10 +83,10 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
     color.per.group <- color.per.group[levels(df$Group)]
   }
 
-  gg <- ggplot(df) + geom_tile(aes(x=Group, y=Pathway, fill=pmin(p.value, m)), colour = "grey50") +
+  df$p.value %<>% pmax(color.range[1]) %>% pmin(color.range[2])
+  gg <- ggplot(df) + geom_tile(aes(x=Group, y=Pathway, fill=p.value), colour = "grey50") +
     theme(axis.text.x=element_text(angle=90, hjust=0, vjust=0.5, color=color.per.group),
           axis.text=element_text(size=8), axis.ticks=element_blank(), axis.title=element_blank()) +
-    scale_fill_distiller(palette="RdYlBu", limits=c(0, m)) +
     guides(fill=guide_colorbar(title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5))) +
     scale_y_discrete(position="right", expand=c(0, 0)) +
     scale_x_discrete(expand=c(0, 0), position=x.axis.position) +
@@ -121,8 +128,7 @@ plotProportions <- function(legend.position = "right", cell.groups, sample.per.c
     geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
     scale_y_continuous( expand=c(0, max(df.melt$value) * 0.1), limits=c(0, (max(df.melt$value) + max(df.melt$value) * 0.05 )))  #expand=c(0, 0),
 
-  if(show.significance) gg <- gg + stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
-
+  if(show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
 
   if(!is.null(palette)) gg <- gg+ scale_color_manual(values=palette)
   gg
@@ -174,15 +180,61 @@ plotProportionsSubset <- function(legend.position = "right",
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
     geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
-    scale_y_continuous(limits=c(0, (max(df.melt$value) + 5))) +
-    stat_compare_means(aes(group = group), label = "p.signif")
+    scale_y_continuous(limits=c(0, (max(df.melt$value) + 5)))
 
-  if(show.significance) gg <- gg + stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+  if(show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
 
-  if(!is.null(palette)) gg <- gg+scale_color_manual(values=palette)
+  if(!is.null(palette)) gg <- gg + scale_color_manual(values=palette)
+
   return(gg)
 }
 
+#' Get Gene Scale
+#' @param genes type of genes ("up", "down" or "all")
+#' @param type type of scale ("fill" or "color")
+#' @param high color for the highest value
+#' @return ggplot2 fill or color scale
+#' @export
+getGeneScale <- function(genes=c("up", "down", "all"), type=c("fill", "color"), high="gray80", ...) {
+  genes <- match.arg(genes)
+  type <- match.arg(type)
+
+  if (genes == "up") {
+    low <- "red"
+  } else if (genes == "down") {
+    low <- "blue"
+  } else {
+    low <- "green"
+  }
+
+  if (type == "fill")
+    return(scale_fill_gradient(low=low, high=high, ...))
+
+  return(scale_color_gradient(low=low, high=high, ...))
+}
+
+prepareOntologyPlotDF <- function(ont.res, p.adj, n, log.colors) {
+  ont.res$GeneRatio %<>% sapply(function(s) strsplit(s, "/")) %>%
+    sapply(function(x) as.numeric(x[1])/as.numeric(x[2]) * 100)
+
+  ont.res %<>% arrange(p.adjust) %>%
+    filter(p.adjust <= p.adj) %>%
+    {if(nrow(.) > n) .[1:n,] else .} %>%
+    mutate(Description=as.factor(Description))
+
+  if (log.colors) {
+    ont.res$p.adjust %<>% log10()
+  }
+
+  return(ont.res)
+}
+
+getOntologyPlotTitle <- function(genes, cell.subgroup, type) {
+  if(genes == "all")
+    return(ggtitle(paste(cell.subgroup, type, "terms, all DE genes")))
+
+  return(ggtitle(paste0(cell.subgroup, " ", type, " terms, ", genes,"-regulated DE genes")))
+}
 
 #' @title Plot Expression Shift Magnitudes
 #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
@@ -206,7 +258,8 @@ plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch =
       geom_hline(yintercept=1, linetype="dashed", color = "black")
     if(!is.null(palette)) { gg <- gg + scale_fill_manual(values=palette) }
   } else {
-    if (length(setdiff(names(cell.groups), names(sample.per.cell)))>0) warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
+    if (length(setdiff(names(cell.groups), names(sample.per.cell))) > 0)
+      warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
 
     cct <- table(cell.groups, sample.per.cell[names(cell.groups)])
     x <- tapply(cluster.shifts$value, cluster.shifts$Type, median)
@@ -228,45 +281,6 @@ plotExpressionShiftMagnitudes <- function(cluster.shifts, size.norm = F, notch =
     if(!is.null(palette)) { gg <- gg + scale_color_manual(values=palette) }
   }
 
-
-  return(gg)
-}
-
-#' @title Plot Expression Shift Z Scores
-#' @description  Plot results from estimateExpressionShiftZScores
-#' @param plot.df Test results to plot
-#' @param size.norm Plot size normalized results. Requires cell.groups, and sample.per.cell (default=F)
-#' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
-#' @param sample.per.cell Named sample factor with cell names (default: stored vector)
-#' @param label Plot labels on size normalized plots (default=T)
-#' @return A ggplot2 object
-plotExpressionShiftZScores <- function(plot.df, size.norm = F, cell.groups = NULL, sample.per.cell = NULL) {
-  if (!size.norm) {
-    gg <- ggplot(plot.df, aes(x=Type, y=distance)) +
-      geom_boxplot(outlier.alpha=0, show.legend=F) +
-      geom_hline(aes(yintercept=split(distance, Type) %>% sapply(median) %>% median(), linetype="Median"), color="darkred", size=1) +
-      labs(x="", y="Normalized distance") +
-      scale_y_continuous(expand=c(0, 0)) +
-      theme_bw() +
-      theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=9)) +
-      scale_linetype_manual(name = "", values=1)
-  } else {
-    if(length(setdiff(names(cell.groups), names(sample.per.cell)))>0) warning("Cell names in 'cell.groups' and 'sample.per.cell' are not identical, plotting intersect.")
-
-    cct <- table(cell.groups, sample.per.cell[names(cell.groups)])
-    x <- tapply(plot.df$distance, plot.df$Type, median)
-    odf <- data.frame(cell=names(x),size=rowSums(cct)[names(x)],md=x)
-
-    gg <- ggplot(odf, aes(size,md,color=cell,label=cell)) +
-      ggrepel::geom_text_repel() +
-      geom_point() +
-      guides(color=F) +
-      xlab("Cluster size") +
-      theme_bw() +
-      ylab("Median normalized distance") +
-      geom_hline(aes(yintercept=split(plot.df$distance, plot.df$Type) %>% sapply(median) %>% median(), linetype="Median"), color="darkred", size=1) +
-      scale_linetype_manual(name = "", values=1)
-  }
   return(gg)
 }
 

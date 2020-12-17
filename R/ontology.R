@@ -109,8 +109,7 @@ enrichGOOpt <- function(gene, org.db, go.environment, keyType = "ENTREZID", ont 
 }
 
 estimateEnrichedGO <- function(de.gene.ids, go.environment, ...) {
-  ont.list <- names(go.environment) %>%
-    sccore:::sn() %>%
+  names(go.environment) %>% sccore:::sn() %>%
     lapply(function(ont) lapply(de.gene.ids, enrichGOOpt, go.environment=go.environment[[ont]], ont=ont, ...))
 }
 
@@ -134,64 +133,25 @@ enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType = "ENTREZID", go.
 }
 
 estimateEnrichedGSEGO <- function(go.environment, ...) {
-  names(go.environment) %>%
-    sccore:::sn() %>%
+  names(go.environment) %>% sccore:::sn() %>%
     lapply(function(ont) enrichGSEGOOpt(go.environment=go.environment[[ont]], ont=ont, ...))
 }
 
-#' @title Distance between terms
-#' @description Calculate distance matrix between ontology terms
-#' @param ont.res Results from prepareOntologyData (default: stored list)
-#' @return Distance matrix
-distanceBetweenTerms <- function(ont.res) {
-  genes.per.go <- sapply(ont.res$geneID, strsplit, "/") %>% setNames(ont.res$Description)
-  all.go.genes <- unique(unlist(genes.per.go))
-  all.gos <- unique(ont.res$Description)
+groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName") {
+  order.anno <- ont.clust.df$Group %>% unique %>% .[order(.)]
 
-  genes.per.go.mat <- matrix(0, length(all.go.genes), length(all.gos)) %>%
-    `colnames<-`(all.gos) %>% `rownames<-`(all.go.genes)
-
-  for (i in 1:length(genes.per.go)) {
-    genes.per.go.mat[genes.per.go[[i]], ont.res$Description[[i]]] <- 1
-  }
-
-  return(dist(t(genes.per.go.mat), method="binary"))
-}
-
-#' @title Get ontology summary
-#' @description Get summary
-#' @param ont.res Results from prepareOntologyData (default: stored list)
-#' @return Data frame
-getOntologySummary <- function(ont.res) {
-  go_dist <- distanceBetweenTerms(ont.res)
-  clusts <- hclust(go_dist) %>%
-    cutree(h=0.75)
-
-  ont.res %<>% mutate(Clust=clusts[Description])
-
-  name_per_clust <- ont.res %>%
-    group_by(Clust, Description) %>%
-    summarise(pvalue=exp(mean(log(pvalue)))) %>%
-    split(.$Clust) %>%
-    sapply(function(df) df$Description[which.min(df$pvalue)])
-
-  ont.res %<>% mutate(ClustName=name_per_clust[as.character(Clust)])
-
-  order.anno <- ont.res$Group %>% unique %>% .[order(.)]
-
-  df <- ont.res %>%
-    group_by(Group, ClustName) %>%
+  df <- ont.clust.df %>%
+    group_by(Group, CN=.[[field]]) %>%
     summarise(p.adjust=min(p.adjust)) %>%
-    ungroup %>%
-    mutate(p.adjust=-log10(p.adjust)) %>%
+    ungroup() %>%
+    mutate(p.adjust=log10(p.adjust)) %>%
     tidyr::spread(Group, p.adjust) %>%
     as.data.frame() %>%
-    set_rownames(.$ClustName) %>%
+    set_rownames(.$CN) %>%
     .[, 2:ncol(.)] %>%
     .[, order.anno[order.anno %in% colnames(.)]]
 
   df[is.na(df)] <- 0
-
   return(df)
 }
 
@@ -231,21 +191,13 @@ ontologyListToDf <- function(ont.list) {
 #' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information.
 #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
 #' @param n.top.genes Number of most different genes to take as input. If less are left after filtering for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)
-#' @param p.adj Adjusted P cutoff (default=0.05)
-#' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
-#' @param readable Mapping gene ID to gene name (default=T)
-#' @param n.cores Number of cores used (default: stored vector)
 #' @param verbose Print progress (default=T)
-#' @param min.genes Minimum number of input genes overlapping with ontologies (default=0)
-#' @param qvalueCutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
-#' @param minGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5)
-#' @param maxGSSize Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
-#' @param ... Additional parameters for sccore:::plapply function
+#' @param qvalue.cutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
+#' @param ... Additional parameters for DO/GO/GSEA functions
 #' @return A list containing a list of ontologies per type of ontology, and a data frame with merged results
 #' @export
-estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, n.top.genes = 5e2, go.environment = NULL, keep.geneSets = F, p.adj=0.05, p.adjust.method="BH", readable=T, verbose=T, min.genes = 0, qvalueCutoff = 0.2, minGSSize = 10, maxGSSize = 5e2) {
-  # Preparations
-  dir.names <- c("down", "up", "all")
+estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, n.top.genes = 5e2, go.environment = NULL, keep.gene.sets=FALSE, verbose=TRUE,
+                             qvalue.cutoff=0.2, ...) {
   if (!requireNamespace("DOSE", quietly = TRUE)) stop("You need 'DOSE' to perform ontology analysis.")
 
   if(type %in% c("GO","DO")) {
@@ -281,12 +233,8 @@ estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, n.top.genes 
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
     res <- sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
                                                                                      DOSE::enrichDO,
-                                                                                     pAdjustMethod=p.adjust.method,
                                                                                      universe=de.gene.ids[[id]][["universe"]],
-                                                                                     readable=readable,
-                                                                                     qvalueCutoff = qvalueCutoff,
-                                                                                     minGSSize = minGSSize,
-                                                                                     maxGSSize = maxGSSize)),
+                                                                                     qvalueCutoff=qvalue.cutoff, ...)),
                             n.cores=1, progress=verbose) %>%
       setNames(names(de.gene.ids))
   } else if(type=="GO") {
@@ -294,16 +242,12 @@ estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, n.top.genes 
     ont.list <- sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
                                                                                                       go.environment = go.environment,
                                                                                                       universe=de.gene.ids[[id]][["universe"]],
-                                                                                                      readable=readable,
-                                                                                                      pAdjustMethod=p.adjust.method,
                                                                                                       org.db=org.db,
-                                                                                                      qvalueCutoff = qvalueCutoff,
-                                                                                                      minGSSize = minGSSize,
-                                                                                                      maxGSSize = maxGSSize)),
+                                                                                                      qvalueCutoff=qvalue.cutoff, ...)),
                                  progress = verbose, n.cores = 1) %>%
       setNames(names(de.gene.ids))
 
-    if(keep.geneSets == F) {
+    if(!keep.gene.sets) {
       ont.list %<>% lapply(lapply, lapply, function(x) {
         x@geneSets <- list()
         return(x)
@@ -318,15 +262,11 @@ estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, n.top.genes 
       suppressWarnings(suppressMessages(estimateEnrichedGSEGO(gene.ids = de.gene.ids[[id]]$universe %>% twist(),
                                                               org.db = org.db,
                                                               go.environment = go.environment,
-                                                              readable = readable,
-                                                              pAdjustMethod = p.adjust.method,
-                                                              minGSSize = minGSSize,
-                                                              maxGSSize = maxGSSize,
-                                                              organism = clusterProfiler:::get_organism(org.db))))
+                                                              organism = clusterProfiler:::get_organism(org.db), ...)))
     }, progress = verbose, n.cores = 1) %>%
       setNames(names(de.gene.ids))
 
-    if(keep.geneSets == F) {
+    if(!keep.gene.sets) {
       ont.list %<>% lapply(lapply, function(x) {
         x@geneSets <- list()
         return(x)
@@ -357,7 +297,7 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
     ### TODO: prep for filter ###
 
     # Filter by p.adj
-    ont.res %<>% cacoa:::filterOntologies(p.adj = p.adj) %>% cacoa:::ontologyListToDf()
+    ont.res %<>% filterOntologies(p.adj = p.adj) %>% ontologyListToDf()
 
     # Filter by min. number of genes per pathway
     if(min.genes > 1) {
@@ -372,7 +312,7 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
         g
       })
     }
-  } else if(type %in% c("GO","BP","MF","CC")) {
+  } else if(type == "GO") {
     # Split into different fractions
     ont.res <- dir.names %>%
       lapply(function(x) lapply(ont.res, lapply, `[[`, x)) %>%
@@ -399,7 +339,7 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
       }) %>% setNames(dir.names)
 
     # Filter by p.adj
-    ont.res %<>% cacoa:::filterOntologies(p.adj = p.adj) %>% cacoa:::ontologyListToDf()
+    ont.res %<>% filterOntologies(p.adj = p.adj) %>% ontologyListToDf()
 
     # Filter by min. number of genes per pathway
     if(min.genes > 1) {
@@ -450,7 +390,7 @@ twist <- function(x) {
   x %>% names() %>% as.numeric() %>% setNames(x)
 }
 
-addGroup <- function(ont.res) {
+addGseaGroup <- function(ont.res) {
   ont.res %>%
     names() %>%
     lapply(function(ct) {
@@ -633,4 +573,45 @@ estimateOntologyFamilies <- function(ont.list, p.adj = 0.05) {
       NULL;
     }
   }) %>% setNames(names(ont.fam))
+}
+
+
+### Clustering
+
+#' @title Distance between terms
+#' @description Calculate distance matrix between ontology terms
+#' @param ont.res Results from prepareOntologyData (default: stored list)
+#' @return Distance matrix
+distanceBetweenTerms <- function(ont.res) {
+  genes.per.go <- sapply(ont.res$geneID, strsplit, "/") %>% setNames(ont.res$Description)
+  all.go.genes <- unique(unlist(genes.per.go))
+  all.gos <- unique(ont.res$Description)
+
+  genes.per.go.mat <- matrix(0, length(all.go.genes), length(all.gos)) %>%
+    `colnames<-`(all.gos) %>% `rownames<-`(all.go.genes)
+
+  for (i in 1:length(genes.per.go)) {
+    genes.per.go.mat[genes.per.go[[i]], ont.res$Description[[i]]] <- 1
+  }
+
+  return(dist(t(genes.per.go.mat), method="binary"))
+}
+
+clusterIndividualGOs <- function(gos, cut.h) {
+  clusts.per.go <- lapply(gos, distanceBetweenTerms) %>% lapply(function(ld)
+    if (ncol(as.matrix(ld)) == 1) 1 else {hclust(ld) %>% cutree(h=cut.h)})
+
+  clust.df <- names(gos) %>%
+    lapply(function(n) mutate(gos[[n]], Cluster=clusts.per.go[[n]])) %>%
+    Reduce(rbind, .) %>%
+    mutate(Cluster=factor(Cluster, levels=c(0, unique(Cluster)))) %>%
+    select(Group, Cluster, Description) %>%
+    tidyr::spread(Group, Cluster) %>% as.data.frame() %>%
+    set_rownames(.$Description) %>% .[, 2:ncol(.)]
+
+  return(clust.df)
+}
+
+getOntClustField <- function(type, subtype, genes) {
+  return(paste(type, genes, paste(subtype, collapse="."), "clusters", sep="."))
 }

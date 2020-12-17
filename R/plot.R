@@ -229,13 +229,6 @@ prepareOntologyPlotDF <- function(ont.res, p.adj, n, log.colors) {
   return(ont.res)
 }
 
-getOntologyPlotTitle <- function(genes, cell.subgroup, type) {
-  if(genes == "all")
-    return(ggtitle(paste(cell.subgroup, type, "terms, all DE genes")))
-
-  return(ggtitle(paste0(cell.subgroup, " ", type, " terms, ", genes,"-regulated DE genes")))
-}
-
 #' @title Plot Expression Shift Magnitudes
 #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
 #' @param name Test results to plot (default=expression.shifts)

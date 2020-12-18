@@ -301,14 +301,14 @@ estimatePerCellTypeDEmethods=function (raw.mats,
                                     min.cell.count = 10, 
                                     max.cell.count = Inf,
                                     independent.filtering = T,
-                                    n.cores = 1, 
+                                    n.cores = 4, 
                                     cluster.sep.chr = "<!!>", 
                                     return.matrix = T, 
                                     verbose = T, 
                                     useT=F, 
                                     minmu=0.5, 
                                     test='DESeq2.Wald',
-                                    normalization=NULL,
+                                    normalization='total.count',
                                     meta.info = NULL) {
   
   
@@ -380,7 +380,6 @@ estimatePerCellTypeDEmethods=function (raw.mats,
                                 independentFiltering = independent.filtering) %>%
                 as.data.frame
         
-        
         # Avoid NA padj values
         res1$padj[is.na(res1$padj)] <- 1
         
@@ -388,10 +387,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         
         # ----- EdgeR -----
         dge <- DGEList(cm, group = meta$group)
-        # keep <- filterByExpr(dge)  # keeps rows that have worthwhile counts
-        # dge <- dge[keep,,keep.lib.sizes=FALSE]
         dge <- calcNormFactors(dge)
-        # design <- model.matrix(~ meta$group)  #
         design <- model.matrix(design.formula, meta)
         dge <- estimateDisp(dge, design = design)
         fit <- glmQLFit(dge, design = design)
@@ -400,36 +396,35 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         colnames(res1) <- c("log2FoldChange","logCPM","stat","pvalue")
         res1$padj <- p.adjust(res1$pvalue, method = "BH")
       } else if((test == 'wilcoxon') || (test == 't-test')) {
-        
         # Normalization
-        if(normalization == 'deseq2'){
+        if(normalization == 'deseq2') {
           print('DESeq2 normalization')
           cnts.norm <- cm  %>%
             DESeq2::DESeqDataSetFromMatrix(colData = meta, design= ~ group)  %>%
             estimateSizeFactors()  %>% counts(normalized=TRUE)
-        } else if(normalization == 'edgeR'){
+        } else if(normalization == 'edgeR') {
           # EdgeR normalisation
           print('edgeR normalization')
           cnts.norm <- DGEList(counts = cm) %>%
             edgeR::calcNormFactors(dge) %>% cpm
-        } else {
+        } else if((normalization == 'total.count') || (is.null(normalization))) {
           # the default should be normalization by the number of molecules!
-          print('No normalization applied')
-          cnts.norm <- cm
+          cnts.norm <- prop.table(cm, 2) # Should it be multiplied by median(colSums(cm)) ?
+        } else {
+          stop(paste('Normalization',normalization,'is not supported.'))
         }
         
-        if(test == 'wilcoxon'){
+        if(test == 'wilcoxon') {
           # Wilcoxon test
           res1 <- scran::pairwiseWilcox(cnts.norm, groups = meta$group)$statistics[[1]] %>%
             data.frame() %>%
             setNames(c("AUC","pvalue","padj"))
-        } else if (test == 't-test'){
+        } else if (test == 't-test') {
           res1 <- scran::pairwiseTTests(cnts.norm, groups = meta$group)$statistics[[1]] %>%
             data.frame() %>%
             setNames(c("AUC","pvalue","padj"))
         }
       }
-      
       
       
       # add Z scores
@@ -441,7 +436,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
       if (return.matrix) {
         list(res = res1, cm = cm)
       } else {
-        res1
+        res = res1
       }
     }, error = function(err) NA)
   }, n.cores = n.cores, progress=verbose) %>%  .[!sapply(., is.logical)]

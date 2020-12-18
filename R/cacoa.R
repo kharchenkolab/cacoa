@@ -375,8 +375,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       #                    't-test', 't-test.edgeR', 't-test.deseq2', 't-test.tot.count')
       
       possible.tests = c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR', 
-                         'Wilcoxon.edgeR', 'Wilcoxon.deseq2', 'Wilcoxon.tot.count',
-                         't-test.edgeR', 't-test.deseq2', 't-test.tot.count')
+                         'Wilcoxon.edgeR', 'Wilcoxon.deseq2', 'Wilcoxon.totcount',
+                         't-test.edgeR', 't-test.deseq2', 't-test.totcount')
       
       if(tolower(test) == tolower('DESeq2')) test = paste(test, 'Wald', sep='.')
       if(tolower(test) %in% tolower(c('Wilcoxon', 't-test')) )  test = paste(test, 'edgeR', sep='.')
@@ -450,12 +450,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         
       }
       
-      
       # The first element in the results corresponds to the case without resampling
       self$test.results[[paste0(c(name, test), collapse = '.')]] <- de.res[[1]]
       # Overwrite de results
       self$test.results[[name]] <- de.res[[1]]
-      
       
       return(invisible(self$test.results[[name]]))
     },

@@ -412,11 +412,9 @@ estimatePerCellTypeDEmethods=function (raw.mats,
           print('edgeR normalization')
           cnts.norm <- DGEList(counts = cm) %>%
             edgeR::calcNormFactors() %>% cpm
-        } else if((normalization == 'total.count') || (is.null(normalization))) {
+        } else if((normalization == 'totcount') || (is.null(normalization))) {
           # the default should be normalization by the number of molecules!
           cnts.norm <- prop.table(cm, 2) # Should it be multiplied by median(colSums(cm)) ?
-        } else {
-          stop(paste('Normalization',normalization,'is not supported.'))
         }
         
         if(test == 'wilcoxon') {

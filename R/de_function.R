@@ -308,7 +308,6 @@ estimatePerCellTypeDEmethods=function (raw.mats,
                                     useT=F, 
                                     minmu=0.5, 
                                     test='DESeq2.Wald',
-                                    normalization='total.count',
                                     meta.info = NULL) {
   
   
@@ -371,7 +370,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         # ----- DESeq2 -----
         
         test.name = 'Wald'
-        if(grepl('lrt', tolower(test))) test.name = 'LRT'
+        if(grepl('lrt', tolower(strsplit(test, split = '\\.')[[1]][2]))) test.name = 'LRT'
         
         res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
                 DESeq2::DESeq(quiet=T, test=test.name) %>%
@@ -386,27 +385,33 @@ estimatePerCellTypeDEmethods=function (raw.mats,
       } else if(tolower(test) == tolower('edgeR')){
         
         # ----- EdgeR -----
-        dge <- DGEList(cm, group = meta$group)
-        dge <- calcNormFactors(dge)
         design <- model.matrix(design.formula, meta)
-        dge <- estimateDisp(dge, design = design)
-        fit <- glmQLFit(dge, design = design)
-        qlf <- glmQLFTest(fit, coef=ncol(design))
+        
+        qlf <- DGEList(cm, group = meta$group) %>%
+          calcNormFactors() %>%
+          estimateDisp(design = design) %>%
+          glmQLFit(design = design) %>%
+          glmQLFTest(coef=ncol(design))
+        
         res1 <- qlf$table %>% .[order(.$PValue),]
         colnames(res1) <- c("log2FoldChange","logCPM","stat","pvalue")
         res1$padj <- p.adjust(res1$pvalue, method = "BH")
-      } else if((test == 'wilcoxon') || (test == 't-test')) {
+      } else if(grepl('wilcoxon', tolower(test)) || grepl('t-test', tolower(test))) {
         # Normalization
+        tmp = strsplit(test, split = '\\.')
+        test = tolower(tmp[[1]][1])
+        normalization = tolower(tmp[[1]][2])
+        
         if(normalization == 'deseq2') {
           print('DESeq2 normalization')
           cnts.norm <- cm  %>%
             DESeq2::DESeqDataSetFromMatrix(colData = meta, design= ~ group)  %>%
-            estimateSizeFactors()  %>% counts(normalized=TRUE)
-        } else if(normalization == 'edgeR') {
+            DESeq2::estimateSizeFactors()  %>% DESeq2::counts(normalized=TRUE)
+        } else if(normalization == 'edger') {
           # EdgeR normalisation
           print('edgeR normalization')
           cnts.norm <- DGEList(counts = cm) %>%
-            edgeR::calcNormFactors(dge) %>% cpm
+            edgeR::calcNormFactors() %>% cpm
         } else if((normalization == 'total.count') || (is.null(normalization))) {
           # the default should be normalization by the number of molecules!
           cnts.norm <- prop.table(cm, 2) # Should it be multiplied by median(colSums(cm)) ?
@@ -426,7 +431,6 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         }
       }
       
-      
       # add Z scores
       if(!is.na(res1[[1]][1])) {
         res1 <- addZScores(res1) %>%
@@ -436,7 +440,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
       if (return.matrix) {
         list(res = res1, cm = cm)
       } else {
-        res = res1
+        res1
       }
     }, error = function(err) NA)
   }, n.cores = n.cores, progress=verbose) %>%  .[!sapply(., is.logical)]

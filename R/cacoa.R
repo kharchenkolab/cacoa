@@ -354,7 +354,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                       verbose=self$verbose,
                                       name ='de',
                                       test='DESeq2.Wald',
-                                      normalization=NULL, # dafault - without specific normanization
                                       resampling.method=NULL, # default - without resampling
                                       max.resamplings=30,
                                       seed.resampling=239, # shouldn't this be external?
@@ -371,16 +370,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       # possible.tests = c('DESeq2', 'DESeq2.Wald', 'DESeq2.LRT', 
       #                    'edgeR', 'Wilcoxon', 't-test', 'limma-voom')
       
-      possible.tests = c('DESeq2', 'DESeq2.Wald', 'DESeq2.LRT', 'edgeR')
-      possible.normalizations = c('total.count', 'edgeR', 'DESeq2')
+      # possible.tests = c('DESeq2', 'DESeq2.Wald', 'DESeq2.LRT', 'edgeR', 
+      #                    'Wilcoxon', 'Wilcoxon.edgeR', 'Wilcoxon.deseq2', 'Wilcoxon.tot.count',
+      #                    't-test', 't-test.edgeR', 't-test.deseq2', 't-test.tot.count')
       
+      possible.tests = c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR', 
+                         'Wilcoxon.edgeR', 'Wilcoxon.deseq2', 'Wilcoxon.tot.count',
+                         't-test.edgeR', 't-test.deseq2', 't-test.tot.count')
+      
+      if(tolower(test) == tolower('DESeq2')) test = paste(test, 'Wald', sep='.')
+      if(tolower(test) %in% tolower(c('Wilcoxon', 't-test')) )  test = paste(test, 'edgeR', sep='.')
+      
+        
       if(!(tolower(test) %in% tolower(possible.tests))) stop(paste('Test',test,'is not supported. Available tests:',paste(possible.tests,collapse=', '))) else
         print(paste0(c('DE method ', test, ' is used'), collapse = ''))
-      if(test %in% c('Wilcoxon', 't-test')) {
-        if(is.null(normalization)) normalization <- 'total.count'
-      } else {
-        if(!is.null(normalization)) warning(paste0(c('Normalisation cannot be set for ', test, ' method'), collapse='' ))
-      }
       
       # s.groups.new contains list of case/control groups of samples to run DE on.
       # First element in s.groups.new corresponds to the initial grouping.
@@ -417,7 +420,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                      useT = useT,
                                      minmu = minmu,
                                      test = test,
-                                     normalization = normalization,
                                      meta.info = covariates)
       }) %>% setNames(names(s.groups.new))
       # }, n.cores=length(s.groups.new))  # parallelize the outer loop if subsampling is on
@@ -448,8 +450,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         
       }
       
+      
       # The first element in the results corresponds to the case without resampling
       self$test.results[[paste0(c(name, test), collapse = '.')]] <- de.res[[1]]
+      # Overwrite de results
+      self$test.results[[name]] <- de.res[[1]]
       
       
       return(invisible(self$test.results[[name]]))

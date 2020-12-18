@@ -3,6 +3,10 @@
 #' @import dplyr
 #' @import magrittr
 #' @importFrom reshape2 melt
+#' @importFrom igraph get.adjacency graph_from_data_frame renderGraph
+#' @importFrom Rgraphviz layoutGraph
+#' @importFrom graph graphAM
+#' @importFrom GOfuncR get_child_nodes
 NULL
 
 theme_legend_position <- function(position) {
@@ -295,7 +299,7 @@ plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string
   edges %<>%
     pull(to) %>%
     unique() %>%
-    sccore::plapply(function(x) {
+    plapply(function(x) {
       tmp.to <- edges[edges$to == x,]
 
       if(class(tmp.to) == "data.frame") {
@@ -340,9 +344,9 @@ plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string
   edges.wrapped <- edges %>% apply(2, function(x) wrap_strings(x, string.length))
 
   # Render graph
-  p <- graph::graphAM(igraph::get.adjacency(graph_from_data_frame(edges.wrapped)) %>% as.matrix(),
+  p <- graphAM(get.adjacency(graph_from_data_frame(edges.wrapped)) %>% as.matrix(),
                       edgemode = 'directed') %>%
-    Rgraphviz::layoutGraph()
+    layoutGraph()
 
   # Define layout
   ## Extract significance
@@ -381,7 +385,7 @@ plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string
   p@renderInfo@nodes$shape <- rep("box", length(p@renderInfo@nodes$shape)) %>% setNames(names(p@renderInfo@nodes$shape))
 
   # Plot
-  Rgraphviz::renderGraph(p)
+  renderGraph(p)
   legend(legend.position,
          legend = c("P > 0.05","P < 0.05","P < 0.01","P < 0.001"),
          fill = c("white","mistyrose1","lightpink1","indianred2"),

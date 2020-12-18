@@ -1245,7 +1245,7 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 
 \item{\code{weighted.distance}}{whether to weigh the expression distance by the sizes of cell types (default: TRUE), or show distances for each individual cell type}
 
-\item{\code{show.significance}}{whether to show statistical significance between sample groups. wilcox.test was used; (\* < 0.05; \\emph{\} < 0.01; \\emph{\}\* < 0.001)}
+\item{\code{show.significance}}{whether to show statistical significance between sample groups. wilcox.test was used; (\* < 0.05; \\emph{\} < 0.01; \\emph{\}\* < 0.001)}}}
 
 \item{\code{alpha}}{dot transparency}
 

@@ -1,4 +1,5 @@
-#' @import dplyr igraph Rgraphviz graph GOfuncR
+#' @import dplyr
+#' @importFrom GOfuncR get_parent_nodes get_child_nodes
 NULL
 
 #' @title Prepare ontology data
@@ -407,172 +408,177 @@ wrap_strings <- function(strings, width) {
   }))
 }
 
-estimateOntologyFamilies <- function(ont.list, p.adj = 0.05) {
-  ont.fam <- lapply(ont.list, lapply, function(ids) {
-    # ids <- tmp.ids %>% dplyr::filter(p.adjust <= p.adj)
-    tmp.parent <- get_parent_nodes(ids$ID) %>%
-      rename(parent_distance = distance) %>%
-      filter(parent_distance > 0) %>%
-      split(., .$child_go_id) %>%
-      lapply(as.list) %>%
-      lapply(function(x) x[-1])
+familyInnerFunction <- function(ids) {
+  tmp.parent <- get_parent_nodes(ids$ID) %>%
+    rename(parent_distance = distance) %>%
+    filter(parent_distance > 0) %>%
+    split(., .$child_go_id) %>%
+    lapply(as.list) %>%
+    lapply(function(x) x[-1])
 
-    tmp.children <- get_child_nodes(ids$ID) %>%
-      rename(child_distance = distance) %>%
-      filter(child_distance > 0) %>%
-      split(., .$parent_go_id) %>%
-      lapply(as.list) %>%
-      lapply(function(x) x[-1])
+  tmp.children <- get_child_nodes(ids$ID) %>%
+    rename(child_distance = distance) %>%
+    filter(child_distance > 0) %>%
+    split(., .$parent_go_id) %>%
+    lapply(as.list) %>%
+    lapply(function(x) x[-1])
 
-    # Find significant parents
-    tmp.parent %<>% lapply(function(x) {
-      x$parents_in_IDs <- x$parent_go_id %>% .[. %in% ids$ID] %>% setNames(., ids$p.adjust[match(., ids$ID)])
-      x$parent_enrichment <- length(x$parents_in_IDs)/length(x$parent_go_id)
-      return(x)
-    })
+  # Find significant parents
+  tmp.parent %<>% lapply(function(x) {
+    x$parents_in_IDs <- x$parent_go_id %>% .[. %in% ids$ID] %>% setNames(., ids$p.adjust[match(., ids$ID)])
+    x$parent_enrichment <- length(x$parents_in_IDs)/length(x$parent_go_id)
+    return(x)
+  })
 
-    # Find significant children
-    tmp.children %<>% lapply(function(x) {
-      x$children_in_IDs <- x$child_go_id %>% .[. %in% ids$ID]
-      x$children_enrichment <- length(x$children_in_IDs)/length(x$child_go_id)
-      return(x)
-    })
+  # Find significant children
+  tmp.children %<>% lapply(function(x) {
+    x$children_in_IDs <- x$child_go_id %>% .[. %in% ids$ID]
+    x$children_enrichment <- length(x$children_in_IDs)/length(x$child_go_id)
+    return(x)
+  })
 
-    tmp <- ids$ID %>% lapply(function(id) {
-      if((id %in% names(tmp.parent)) & (id %in% names(tmp.children))) {
-        append(tmp.parent[[id]], tmp.children[[id]])
-      } else if(id %in% names(tmp.parent)) {
-        append(tmp.parent[[id]],
-               list(child_go_id = NULL,
-                    child_name = NULL,
-                    child_distance = NULL,
-                    children_in_IDs = NULL,
-                    children_enrichment = NULL))
-      } else if(id %in% names(tmp.children)) {
-        append(list(parent_go_id = NULL,
-                    parent_name = NULL,
-                    parent_distance = NULL,
-                    parents_in_IDs = NULL,
-                    parent_enrichment = NULL),
-               tmp.children[[id]])
-      } else {
-        id
-      }
-    }) %>%
-      setNames(ids$ID)
+  tmp <- ids$ID %>% lapply(function(id) {
+    if((id %in% names(tmp.parent)) & (id %in% names(tmp.children))) {
+      append(tmp.parent[[id]], tmp.children[[id]])
+    } else if(id %in% names(tmp.parent)) {
+      append(tmp.parent[[id]],
+             list(child_go_id = NULL,
+                  child_name = NULL,
+                  child_distance = NULL,
+                  children_in_IDs = NULL,
+                  children_enrichment = 0))
+    } else if(id %in% names(tmp.children)) {
+      append(list(parent_go_id = NULL,
+                  parent_name = NULL,
+                  parent_distance = NULL,
+                  parents_in_IDs = NULL,
+                  parent_enrichment = 0),
+             tmp.children[[id]])
+    } else {
+      id
+    }
+  }) %>%
+    setNames(ids$ID)
 
-    # # MAY DELETE
-    # tmp %<>% lapply(function(id) {
-    #   suppressWarnings(if(length(id) == 10) {
-    #     id$combined_enrichment <- (length(id$parents_in_IDs) + length(id$children_in_IDs))/(length(id$parent_go_id) + length(id$child_go_id))
-    #   } else {
-    #     id$combined_enrichment <- NULL
-    #   })
-    #   return(id)
-    # })
+  # # MAY DELETE
+  # tmp %<>% lapply(function(id) {
+  #   suppressWarnings(if(length(id) == 10) {
+  #     id$combined_enrichment <- (length(id$parents_in_IDs) + length(id$children_in_IDs))/(length(id$parent_go_id) + length(id$child_go_id))
+  #   } else {
+  #     id$combined_enrichment <- NULL
+  #   })
+  #   return(id)
+  # })
 
-    # Add description, significance, and type.
-    # TODO: Is it faster by extracting first (= 1 search) and then select?
-    tmp %<>% names() %>% lapply(function(id) {
-      tmp[[id]] %>% append(list(Description = ids$Description[ids$ID == id],
-                                Significance = ids$p.adjust[ids$ID == id],
-                                Type = ids$Type[ids$ID == id]))
-    }) %>% setNames(names(tmp))
+  # Add description, significance, and type.
+  tmp %<>% names() %>% lapply(function(id) {
+    tmp[[id]] %>% append(list(Description = ids$Description[ids$ID == id],
+                              Significance = ids$p.adjust[ids$ID == id],
+                              Type = ids$Type[ids$ID == id]))
+  }) %>% setNames(names(tmp))
 
-    # Sort for lonely children (terms with no children) UPDATE !!!
-    idx <- tmp %>% sapply(`[[`, "children_enrichment") %>% unlist() %>% .[. == 0] # TODO: Check, does it remove too much?
-    tmp %<>% .[idx %>% names()]
+  # Sort for lonely children (terms with no children)
+  idx <- tmp %>% sapply(`[[`, "children_enrichment") %>% unlist() %>% .[. == 0]
+  tmp %<>% .[idx %>% names()]
 
-    # Rank by enrichment ### UPDATE LOWEST P VALUE !!!
-    idx <- tmp %>% sapply(function(x) x$parent_enrichment) %>% unlist() %>% .[order(., decreasing=T)]
-    tmp %<>% .[names(idx)]
+  # Rank by enrichment
+  idx <- tmp %>% sapply(function(x) x$Significance) %>% unlist() %>% .[order(., decreasing=F)]
+  tmp %<>% .[names(idx)]
 
-    return(tmp)
-  }) %>% setNames(names(ont.list))
+  return(tmp)
+}
 
-  # Collapse families
-  lapply(ont.fam, lapply, function(ont.res) {
-    if(length(ont.res) > 0) {
-      # Identify overlapping parents (seeds) between families
-      olaps <- sapply(ont.res, `[[`, "parents_in_IDs") %>% unlist() %>% table() %>% .[order(., decreasing = T)] %>% .[. > 1]
+collapseFamiliesInnerFunction <- function(ont.res) {
+  if(length(ont.res) > 0) {
+    # Identify overlapping parents (seeds) between families
+    olaps <- sapply(ont.res, `[[`, "parents_in_IDs") %>% unlist() %>% table() %>% .[order(., decreasing = T)] %>% .[. > 1]
 
-      if(length(olaps) > 1) {
-        # Create logical matrix and list of seeds and families
-        olap.matrix <- sapply(ont.res, `[[`, "parents_in_IDs") %>% sapply(function(x) names(olaps) %in% x)
-        olap.list <- lapply(1:length(olaps), function(id) {
-          olap.matrix[,olap.matrix[id,] == T] %>% `rownames<-`(names(olaps))
-        }) %>% setNames(names(olaps))
+    if(length(olaps) > 1) {
+      # Create logical matrix and list of seeds and families
+      olap.matrix <- sapply(ont.res, `[[`, "parents_in_IDs") %>% sapply(function(x) names(olaps) %in% x)
+      olap.list <- lapply(1:length(olaps), function(id) {
+        olap.matrix[,olap.matrix[id,] == T] %>% `rownames<-`(names(olaps))
+      }) %>% setNames(names(olaps))
 
-        tmp.res <- lapply(1:length(olap.list), function(x) {
-          # Investigate overlapping seeds
-          tmp.matrix <- olap.list[[x]] %>% .[!rownames(.) == names(olaps)[x],]
+      tmp.res <- lapply(1:length(olap.list), function(x) {
+        # Investigate overlapping seeds
+        tmp.matrix <- olap.list[[x]] %>% .[!rownames(.) == names(olaps)[x],]
 
-          if(is.matrix(tmp.matrix)) {
-            tmp <- c()
-            for(r in 1:nrow(tmp.matrix)) {
-              tmp <- c(tmp, any(tmp.matrix[r,]))
-            }
-          } else {
-            tmp <- any(tmp.matrix)
+        if(is.matrix(tmp.matrix)) {
+          tmp <- c()
+          for(r in 1:nrow(tmp.matrix)) {
+            tmp <- c(tmp, any(tmp.matrix[r,]))
           }
+        } else {
+          tmp <- any(tmp.matrix)
+        }
 
-          if(tmp %>% any) {
-            # Select additional seeds to merge
-            to_merge <- rownames(tmp.matrix)[tmp] %>% .[!. %in% names(olaps)[1:x]]
+        if(tmp %>% any) {
+          # Select additional seeds to merge
+          to_merge <- rownames(tmp.matrix)[tmp] %>% .[!. %in% names(olaps)[1:x]]
 
-            if(length(to_merge) > 0) {
-              pre.res <- c(olap.list[[x]] %>% colnames(), sapply(to_merge, function(x) colnames(olap.list[x][[1]])) %>% unlist()) %>% unique()
-            } else {
-              pre.res <- olap.list[[x]] %>% colnames()
-            }
+          if(length(to_merge) > 0) {
+            pre.res <- c(olap.list[[x]] %>% colnames(), sapply(to_merge, function(x) colnames(olap.list[x][[1]])) %>% unlist()) %>% unique()
           } else {
             pre.res <- olap.list[[x]] %>% colnames()
           }
-          return(pre.res)
-        })
-
-        # Filter seeds that have been merged upstream
-        idx <- sapply(length(tmp.res):2, function(x) {
-          all(tmp.res[[x]] %in% unlist(tmp.res[1:(x-1)]))
-        }) %>%
-          setNames(length(tmp.res):2) %>%
-          .[.] %>%
-          names() %>%
-          rev() %>% # Shouldn't be necessary, or what?
-          as.numeric()
-
-        # Return result with index if there are any merged seeds, or else return seed list
-        if(length(idx) > 0) {
-          res <- tmp.res[-idx]
         } else {
-          res <- tmp.res
+          pre.res <- olap.list[[x]] %>% colnames()
         }
-      } else if(length(olaps == 1)) {
-        res <- sapply(ont.res, `[[`, "parents_in_IDs") %>% sapply(function(x) names(olaps) %in% x) %>% .[.] %>% names()
+        return(pre.res)
+      })
+
+      # Filter seeds that have been merged upstream
+      idx <- sapply(length(tmp.res):2, function(x) {
+        all(tmp.res[[x]] %in% unlist(tmp.res[1:(x-1)]))
+      }) %>%
+        setNames(length(tmp.res):2) %>%
+        .[.] %>%
+        names() %>%
+        rev() %>% # Shouldn't be necessary, or what?
+        as.numeric()
+
+      # Return result with index if there are any merged seeds, or else return seed list
+      if(length(idx) > 0) {
+        res <- tmp.res[-idx]
       } else {
-        res <- list()
+        res <- tmp.res
       }
-
-      # Add remaining families, order by adj. P of lonely child
-      if(length(res) == 0) {
-        res <- ont.res %>%
-          names() %>%
-          as.list() %>%
-          setNames(sapply(1:length(ont.res), function(n) paste0("Family",n)))
-      } else {
-        # res <- append(res, as.list(names(ont.res)[!names(ont.res) %in% unlist(res)])) %>%
-        res %<>% .[order(sapply(., length), decreasing=T)] %>%
-          append(as.list(names(ont.res)[order(sapply(names(ont.res), function(p) ont.res[[p]]$Significance), decreasing = F)])) %>%
-
-          {setNames(., sapply(1:length(.), function(n) paste0("Family",n)))}
-      }
-
-      return(list(families=res,
-                  data=ont.res))
+    } else if(length(olaps == 1)) {
+      res <- sapply(ont.res, `[[`, "parents_in_IDs") %>% sapply(function(x) names(olaps) %in% x) %>% .[.] %>% names()
     } else {
-      NULL;
+      res <- list()
     }
-  }) %>% setNames(names(ont.fam))
+
+    # Add remaining families, order by adj. P of lonely child
+    if(length(res) == 0) {
+      res <- ont.res %>%
+        names() %>%
+        as.list() %>%
+        setNames(sapply(1:length(ont.res), function(n) paste0("Family",n)))
+    } else {
+      # res <- append(res, as.list(names(ont.res)[!names(ont.res) %in% unlist(res)])) %>%
+      res %<>% .[order(sapply(., length), decreasing=T)] %>%
+        append(as.list(names(ont.res)[order(sapply(names(ont.res), function(p) ont.res[[p]]$Significance), decreasing = F)])) %>%
+
+        {setNames(., sapply(1:length(.), function(n) paste0("Family",n)))}
+    }
+
+    return(list(families=res,
+                data=ont.res))
+  } else {
+    NULL;
+  }
+}
+
+estimateOntologyFamilies <- function(ont.list, type, p.adj = 0.05) {
+  if(type == "GO") {
+    ont.fam <- lapply(ont.list, lapply, lapply, familyInnerFunction) %>% setNames(names(ont.list))
+    lapply(ont.fam, lapply, lapply, collapseFamiliesInnerFunction) %>% setNames(names(ont.fam))
+  } else {
+    ont.fam <- lapply(ont.list, lapply, familyInnerFunction) %>% setNames(names(ont.list))
+    lapply(ont.fam, lapply, collapseFamiliesInnerFunction) %>% setNames(names(ont.fam))
+  }
 }
 
 

@@ -326,7 +326,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                               cluster.sep.chr = cluster.sep.chr, return.matrix = return.matrix)
       return(invisible(self$test.results[[name]]))
     },
-    
+
     #' @description Estimate differential gene expression per cell type between conditions
     #' @param cell.groups factor specifying cell types (default=NULL)
     #' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
@@ -367,9 +367,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                               names(sample.groups[sample.groups != ref.level])) %>%
           setNames(c(ref.level, self$target.level))
       }
-      
+
       possible.tests = c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR', 'Wilcoxon', 't-test', 'limma-woom')
-      
+
       if(!(tolower(test) %in% tolower(possible.tests))) stop('Test is not supported') else
         print(paste0(c('DE method ', test, ' is used'), collapse = ''))
       if( !is.null(normalization) && !(test %in% c('Wilcoxon', 't-test'))) warning(paste0(c('Normalisation cannot be set for ', test, ' method'), collapse='' ))
@@ -539,8 +539,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before calculating
       if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, 1)
 
+      if(p.adj < 1) warning("You are filtering based on adj. P value through the 'p.adj' parameter. We do not recommend this. Proceed with caution.")
+
       if(is.null(cell.groups))
-        stop("'cell.groups' must be provided either during the object initialization or during this function call")
+        stop("'cell.groups' must be provided either to Cacoa constructor or to this method.")
 
       self$test.results[["gene.ids"]] <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
         prepareOntologyData(org.db = org.db, p.adj = p.adj, expr.cutoff = expr.cutoff, de.raw = de.raw, cell.groups = cell.groups, universe = universe, transposed = transposed, verbose = verbose, n.cores = n.cores)
@@ -552,7 +554,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param plot.theme plot theme to use (default: ggplot2::theme_bw())
     #' @param ... other parameters are passed to \link[sccore:embeddingPlot]{embeddingPlot}
     plotEmbedding=function(embedding=self$embedding, plot.theme=ggplot2::theme_bw(), show.legend=TRUE, ...) {
-      if(is.null(embedding)) stop("embedding must be provided to cacoa constructor or to this method")
+      if(is.null(embedding)) stop("embedding must be provided to Cacoa constructor or to this method.")
       sccore::embeddingPlot(embedding, plot.theme=plot.theme, show.legend=show.legend, ...)
     },
 
@@ -574,7 +576,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         stop("'type' must be 'GO', 'DO', or 'GSEA'.")
 
       if(is.null(de.gene.ids)) {
-        de.gene.ids <- private$getResults("ontology", "prepareOntologyData")$de.gene.ids
+        de.gene.ids <- private$getResults("gene.ids", "prepareOntologyData")
       }
 
       self$test.results[[type]] <- estimateOntology(type=type, org.db=org.db, n.top.genes=n.top.genes, de.gene.ids=de.gene.ids, go.environment=go.environment,
@@ -586,19 +588,28 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Estimate ontology families
     #' @return A list of results
     estimateOntologyFamilies=function(type = "GO", p.adj = 0.05) {
-      # TODO Checks
-      if(!type %in% c("GO","GSEA")) stop("'type' must be 'GO', or 'GSEA'.")
+      # TODO: Checks
+      if (!requireNamespace("GOfuncR", quietly = TRUE)) stop("You need 'GOfuncR' to perform the ontology family analysis.")
+      if(!type %in% c("GO","DO","GSEA")) stop("'type' must be 'GO', or 'GSEA'.")
 
-      # TODO Include DO
-      ont.list <- self$test.results[[type]]$res %>%
-        lapply(lapply, function(x) {
-          tmp <- x@result %>% filter(p.adjust <= p.adj)
-          if(nrow(tmp) > 0) return(tmp)
-        }) %>%
-        lapply(plyr::compact)
-
-      # TODO Remove empty entries, check if all NULL
-      self$test.results[[type]]$families <- estimateOntologyFamilies(ont.list = ont.list, p.adj = p.adj)
+      # TODO: Test DO
+      if(type == "GO") {
+        ont.list <- self$test.results[[type]]$res %>%
+          lapply(lapply, lapply, function(x) {
+            tmp <- x@result %>% filter(p.adjust <= p.adj)
+            if(nrow(tmp) > 0) return(tmp)
+          }) %>%
+          lapply(lapply, plyr::compact) %>%
+          lapply(plyr::compact)
+      } else {
+        ont.list <- self$test.results[[type]]$res %>%
+          lapply(lapply, function(x) {
+            tmp <- x@result %>% filter(p.adjust <= p.adj)
+            if(nrow(tmp) > 0) return(tmp)
+          }) %>%
+          lapply(plyr::compact)
+      }
+      self$test.results[[type]]$families <- estimateOntologyFamilies(ont.list = ont.list, type = type, p.adj = p.adj)
     },
 
     #' @description Estimate Gene Ontology clusters
@@ -934,53 +945,75 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         geom_hline(aes(yintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5))
     },
 
-    #' @description Plot ontology families heatmap
-    #' @return A ggplot2 object
-    # plotOntologyFamilyHeatmap=function(genes = "up", type = "GO", subtype = "BP", min.genes = 1, selection = "unique", n = 20, legend.position = "right") {
-    #   ont.res <- self$test.results[[type]]$res
-    #   ont.fam <- self$test.results[[type]]$families
-    #
-    #   ont.res.tmp <- mapply(function(res, fam) list(res[res$ID %in% names(fam$data),]), res = ont.res, fam = ont.fam) %>%
-    #     lapply(rename, geneID=core_enrichment)
-    #   ont.res.tmp %<>% names() %>%
-    #     lapply(function(ct) ont.res.tmp[[ct]] %>% mutate(Group = ct)) %>%
-    #     bind_rows()
-    #   ont.sum <- getOntologySummary(ont.res.tmp)
-    #
-    #   if(selection=="unique") {
-    #     ont.sum %<>%
-    #       .[rowSums(. > 0) == 1,]
-    #   } else if(selection=="common") {
-    #     ont.sum %<>%
-    #       .[rowSums(. > 0) > 1,]
-    #   }
-    #
-    #   if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
-    #
-    #   ont.sum %>%
-    #     .[, colSums(.) > 0] %>%
-    #     .[match(rowSums(.)[rowSums(.)>0] %>%
-    #               .[order(., decreasing = F)] %>%
-    #               names, rownames(.)),] %>%
-    #     tail(n) %>%
-    #     plotHeatmap(legend.position=legend.position, row.order=T) +
-    #     ggtitle(paste0("Heatmap of ontology families"))
-    # },
+    #' #' @description Plot ontology families heatmap
+    #' #' @return A ggplot2 object
+    #' plotOntologyFamilyHeatmap=function(genes = "up", type = "GO", subtype = "BP", min.genes = 1, selection = "unique", n = 20, legend.position = "right") {
+    #'   # Checks
+    #'   if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
+    #'     stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
+    #'
+    #'   if(is.null(selection) || (!selection %in% c("unique","common","all")))
+    #'     stop("'selection' must be one of the following: 'unique', 'common', or 'all'.")
+    #'
+    #'   # Extract results
+    #'   if (!clusters) {
+    #'     ont.sum <- private$getOntologyPvalueResults(genes=genes, type=type, subtype=subtype, cell.subgroups=cell.subgroups,
+    #'                                                 p.adj=p.adj, min.genes=min.genes) %>%
+    #'       groupOntologiesByCluster(field="Description")
+    #'   } else {
+    #'     name <- if (is.null(cluster.name)) getOntClustField(type, subtype, genes) else cluster.name
+    #'     if (is.null(self$test.results[[name]])) {
+    #'       if (!is.null(cluster.name))
+    #'         stop("Can't find the results for ", cluster.name) # stop if user specified a wrong cluster.name
+    #'
+    #'       warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
+    #'       ont.sum <- self$estimateOntologyClusters(type=type, genes=genes, name=name, cell.subgroups=cell.subgroups,
+    #'                                                p.adj=p.adj, min.genes=min.genes)$df
+    #'     } else {
+    #'       ont.sum <- self$test.results[[name]]$df
+    #'     }
+    #'
+    #'     ont.sum %<>% groupOntologiesByCluster(field="ClusterName")
+    #'   }
+    #'
+    #'   if(selection=="unique") {
+    #'     ont.sum %<>% .[rowSums(. > 0) == 1,]
+    #'   } else if(selection=="common") {
+    #'     ont.sum %<>% .[rowSums(. > 0) > 1,]
+    #'   }
+    #'   if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
+    #'
+    #'   # Plot
+    #'   gg <- ont.sum %>%
+    #'     .[, colSums(abs(.)) > 0] %>%
+    #'     .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),] %>%
+    #'     tail(n) %>%
+    #'     plotHeatmap(legend.position=legend.position, row.order=TRUE, color.range=color.range, ...) +
+    #'     getGeneScale(genes=genes, type="fill", high="white", limits=color.range)
+    #'
+    #'   return(gg)
+    #' },
 
     #' @description Plot ontology family tree
     #' @return An Rgraphviz object
-    plotOntologyFamily=function(type = "GO", cell.subgroups, subtype = "BP", family, plot.type = "complete", show.ids = F, string.length=18, legend.label.size = 1, legend.position = "topright", verbose = T, n.cores = 1) {
+    plotOntologyFamily=function(type = "GO", cell.subgroups, family, genes = "up", subtype = "BP", plot.type = "complete", show.ids = F, string.length=18, legend.label.size = 1, legend.position = "topright", verbose = T, n.cores = 1) {
       #Checks
+      if (!requireNamespace("GOfuncR", quietly = TRUE)) stop("You need 'GOfuncR' to plot ontology families.")
+      if (!requireNamespace("igraph", quietly = TRUE)) stop("You need 'igraph' to plot ontology families.")
+      if (!requireNamespace("graph", quietly = TRUE)) stop("You need 'graph' to plot ontology families.")
+      if (!requireNamespace("Rgraphviz", quietly = TRUE)) stop("You need 'Rgraphviz' to plot ontology families.")
       if(!is.numeric(family)) stop("'family' must be numeric.")
       if(!is.null(plot.type) && !plot.type %in% c("complete","dense","minimal")) stop("'plot.type' must be 'complete', 'dense', or 'minimal'.")
 
       fam.name <- paste0("Family",family)
       ont.fam.res <- self$test.results[[type]]$families
-      if(is.null(ont.fam.res)) stop(paste0("No results found for type ",type,"."))
+      if(is.null(ont.fam.res)) stop(paste0("No results found for type '",type,"'."))
       ont.fam.res %<>% .[[cell.subgroups]]
-      if(is.null(ont.fam.res)) stop(paste0("No results found for cell.subgroups ",cell.subgroups,"."))
+      if(is.null(ont.fam.res)) stop(paste0("No results found for cell.subgroups '",cell.subgroups,"'."))
       ont.fam.res %<>% .[[subtype]]
-      if(is.null(ont.fam.res)) stop(paste0("No results found for subtype ",subtype,"."))
+      if(is.null(ont.fam.res)) stop(paste0("No results found for subtype '",subtype,"'."))
+      ont.fam.res %<>% .[[genes]]
+      if(is.null(ont.fam.res)) stop(paste0("No results found for genes '",genes,"'."))
       if(!fam.name %in% names(ont.fam.res$families)) stop("'family' not in 'ont.fam.res'.")
 
       plotOntologyFamily(fam = ont.fam.res$families[[fam.name]], data = ont.fam.res$data, plot.type = plot.type, show.ids = show.ids, string.length = string.length, legend.label.size = legend.label.size, legend.position = legend.position, verbose = verbose, n.cores = n.cores)
@@ -1721,7 +1754,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         stop(paste0("No results found for ", genes, " genes for ", type, " for ", cell.subgroups, ".")) # TODO: Include GSEA
 
       if(!is.null(cell.subgroups)) {
-        if(!cell.subgroups %in% names(ont.res))
+        if(!cell.subgroups %in% unique(ont.res$Group))
           stop("'cell.subgroups' not found in results.")
 
         ont.res %<>% .[cell.subgroups]

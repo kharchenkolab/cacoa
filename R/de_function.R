@@ -364,7 +364,6 @@ estimatePerCellTypeDEmethods=function (raw.mats,
                                                 collapse=' + ')))
       }
       
-      
       # if(test == 'deseq2'){
       if(grepl('deseq2', tolower(test))){
         # ----- DESeq2 -----
@@ -372,12 +371,30 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         test.name = 'Wald'
         if(grepl('lrt', tolower(strsplit(test, split = '\\.')[[1]][2]))) test.name = 'LRT'
         
-        res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
-                DESeq2::DESeq(quiet=T, test=test.name) %>%
-                DESeq2::results(contrast=c('group', target.level, ref.level),
-                                cooksCutoff = cooks.cutoff,
-                                independentFiltering = independent.filtering) %>%
-                as.data.frame
+        if(test.name == 'Wald') {
+          res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
+            DESeq2::DESeq(quiet=T, test=test.name) %>%
+            DESeq2::results(contrast=c('group', target.level, ref.level),
+                            cooksCutoff = cooks.cutoff,
+                            independentFiltering = independent.filtering) %>%
+            as.data.frame  
+        } else {
+          res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
+            DESeq2::DESeq(quiet=T, test=test.name, reduced = ~ 1) %>%
+            DESeq2::results(contrast=c('group', target.level, ref.level),
+                            cooksCutoff = cooks.cutoff,
+                            independentFiltering = independent.filtering) %>%
+            as.data.frame  
+        }
+        
+        
+        dds1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=~group)
+        if(test=="LRT") {
+          dds1 <- DESeq2::DESeq(dds1,test="LRT", reduced = ~ 1,quiet=T)
+        } else { # defaults to Wald 
+          dds1 <- DESeq2::DESeq(dds1,quiet=T)
+        }
+        
         
         # Avoid NA padj values
         res1$padj[is.na(res1$padj)] <- 1

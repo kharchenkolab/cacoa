@@ -311,9 +311,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param return.matrix Return merged matrix of results (default=TRUE)
     #' @param name slot in which to save the results (default: 'de')
     #' @return A list of DE genes
-    estimatePerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level,
-                              common.genes = FALSE, n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, max.cell.count= Inf, test='Wald', independent.filtering = FALSE,
-                              cluster.sep.chr = "<!!>", return.matrix = T, verbose=self$verbose, name ='de') {
+    estimatePerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level, common.genes = FALSE, n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, max.cell.count= Inf, test='Wald', independent.filtering = FALSE, cluster.sep.chr = "<!!>", return.matrix = T, verbose=self$verbose, name ='de') {
       if(!is.list(sample.groups)) {
         sample.groups <- list(names(sample.groups[sample.groups == ref.level]),
                               names(sample.groups[sample.groups != ref.level])) %>%
@@ -344,6 +342,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     estimatePerCellTypeDEnew=function(cell.groups = self$cell.groups,
                                       sample.groups = self$sample.groups,
                                       ref.level = self$ref.level,
+                                      target.level = self$target.level,
                                       common.genes = FALSE,
                                       n.cores = self$n.cores,
                                       cooks.cutoff = FALSE,
@@ -353,19 +352,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                       cluster.sep.chr = "<!!>",
                                       return.matrix = T,
                                       verbose=self$verbose,
-                                      name.pref ='de',
-                                      minReplicatesForReplace = 7,
+                                      name ='de',
                                       test='DESeq2.Wald',
-                                      normalization=NULL,
-                                      resampling.method=NULL,
-                                      max.resamplings=10,
-                                      seed.resampling=239,
-                                      meta.info = NULL) {
+                                      normalization='edgeR',
+                                      resampling.method='bootstrap',
+                                      max.resamplings=30,
+                                      seed.resampling=239, # shouldn't this be external?
+                                      covariates = NULL) {
+      
       if(!is.list(sample.groups)) {
         s.groups <- list(names(sample.groups[sample.groups == ref.level]),
                               names(sample.groups[sample.groups != ref.level])) %>%
-          setNames(c(ref.level, self$target.level))
-      }else{
+          setNames(c(ref.level, target.level))
+      } else {
         s.groups = sample.groups
       }
       
@@ -374,76 +373,62 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       
       possible.tests = c('DESeq2', 'DESeq2.Wald', 'DESeq2.LRT', 'edgeR')
       
-      if(!(tolower(test) %in% tolower(possible.tests))) stop('Test is not supported') else
+      if(!(tolower(test) %in% tolower(possible.tests))) stop(paste('Test',test,'is not supported. Available tests:',paste(possible.tests,collapse=', '))) else
         print(paste0(c('DE method ', test, ' is used'), collapse = ''))
-      if( !is.null(normalization) && !(test %in% c('Wilcoxon', 't-test'))) warning(paste0(c('Normalisation cannot be set for ', test, ' method'), collapse='' ))
-
+      if(test %in% c('Wilcoxon', 't-test')) {
+        if(is.null(normalization)) normalization <- 'edgeR'
+      } else {
+        if(!is.null(normalization)) warning(paste0(c('Normalisation cannot be set for ', test, ' method'), collapse='' ))
+      }
       
       # s.groups.new contains list of case/control groups of samples to run DE on.
       # First element in s.groups.new corresponds to the initial grouping.
       s.groups.new = list(initial = s.groups)
       # If resampling is defined, new contrasts will append to s.groups.new
       if (is.null(resampling.method)){
-      }else if (resampling.method == 'loo'){
+      } else if (resampling.method == 'loo') {
         s.groups.new = c(s.groups.new, lapply(unlist(s.groups), function(name) 
           lapply(s.groups, function(group) setdiff(group, name)))  %>%
           setNames(unlist(s.groups)))
-      }else if (resampling.method == 'bootstrap'){
-        all.smpls = unlist(s.groups)
-        n.smpls = length(all.smpls)
-        
+      } else if (resampling.method == 'bootstrap') {
+        n.bootstrap <- max.resamplings;
         set.seed(seed.resampling)
-        while(length(s.groups.new) < n.bootstrap){
-          idx.smpls = sample(n.smpls,n.smpls,replace = TRUE)
-          tmp.smpls = all.smpls[idx.smpls]
-          s.groups.tmp = lapply(s.groups, function(group) unname(tmp.smpls[tmp.smpls %in% group]))
-          
-          # If each group contains at least 2 sample - use it, otherwise - skip
-          if(sum(unlist(lapply(s.groups.tmp, length)) >= 2) < length(s.groups.tmp)) next
-          # TODO: Check if the tmp partiotion was already exists in s.groups.new
-          s.groups.new[[length(s.groups.new) + 1]] = s.groups.tmp
-          
-        }
-        
-        names(s.groups.new) <- sapply(1:n.bootstrap,
-                                           function(i) paste0(c('bootstrap', as.character(i)), collapse = ''))
-      }
-      else stop('Resampling method is not supposted')
+        s.groups.new <- c(s.groups.new, lapply(setNames(1:n.bootstrap,paste0('bootstrap.',1:n.bootstrap)),function(i) lapply(s.groups,function(x) sample(x,length(x),replace=T))))
+      } else stop(paste('Resampling method',resampling.method,'is not supported'))
 
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=T)
 
-      de.res = list()
-      for(resampling in names(s.groups.new)){
+      de.res = sccore::plapply(s.groups.new, function(resampling) {
         print(paste0(c('DE calculation for', resampling, 'grouping/resampling'), collapse = ' '))
-        de.res[[resampling]] <- estimatePerCellTypeDEmethods(raw.mats=raw.mats,
-                                                             cell.groups = cell.groups,
-                                                             s.groups = s.groups.new[[resampling]],
-                                                             ref.level = ref.level,
-                                                             common.genes = common.genes,
-                                                             cooks.cutoff = cooks.cutoff,
-                                                             min.cell.count = min.cell.count,
-                                                             max.cell.count = max.cell.count,
-                                                             independent.filtering = independent.filtering,
-                                                             n.cores = n.cores,
-                                                             cluster.sep.chr = cluster.sep.chr,
-                                                             return.matrix = return.matrix,
-                                                             verbose = verbose,
-                                                             useT = useT,
-                                                             minmu = minmu,
-                                                             minReplicatesForReplace = minReplicatesForReplace,
-                                                             test = test,
-                                                             normalization = normalization,
-                                                             meta.info = meta.info)
-      }
+        # REVIEW: I thought we can use '...' instead of re-listing every argument
+        estimatePerCellTypeDEmethods(raw.mats=raw.mats,
+                                     cell.groups = cell.groups,
+                                     s.groups = resampling,
+                                     ref.level = ref.level,
+                                     common.genes = common.genes,
+                                     cooks.cutoff = cooks.cutoff,
+                                     min.cell.count = min.cell.count,
+                                     max.cell.count = max.cell.count,
+                                     independent.filtering = independent.filtering,
+                                     n.cores = ifelse(length(s.groups.new)>1,1,n.cores),
+                                     cluster.sep.chr = cluster.sep.chr,
+                                     return.matrix = return.matrix,
+                                     verbose = verbose,
+                                     useT = useT,
+                                     minmu = minmu,
+                                     test = test,
+                                     normalization = normalization,
+                                     meta.info = covariates)
+      }, n.cores=ifelse(length(s.groups.new)>1,n.cores,1))  # parallelize the outer loop if subsampling is on
 
-      # The firts element in the results correspond to the case without resampling
-      self$test.results[[paste0(c(name.pref, test), collapse = '.')]] <- de.res[[1]]
+      # The first element in the results corresponds to the case without resampling
+      self$test.results[[paste0(c(name, test), collapse = '.')]] <- de.res[[1]]
       # if there was a resampling
       if(length(de.res) > 1){ 
-        self$test.results[[paste0(c(name.pref, test, resampling.method), collapse = '.')]] <- de.res[2:length(de.res)]
+        self$test.results[[paste0(c(name, test, resampling.method), collapse = '.')]] <- de.res[2:length(de.res)]
         # TODO calculate statisticks: median and variance after resampling
       }
-      return(invisible(self$test.results[[name.pref]]))
+      return(invisible(self$test.results[[name]]))
     },
 
     #' @description Plot number of significant DE genes as a function of number of cells

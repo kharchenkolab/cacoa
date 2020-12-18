@@ -307,7 +307,6 @@ estimatePerCellTypeDEmethods=function (raw.mats,
                                     verbose = T, 
                                     useT=F, 
                                     minmu=0.5, 
-                                    minReplicatesForReplace = 7, 
                                     test='DESeq2.Wald',
                                     normalization=NULL,
                                     meta.info = NULL) {
@@ -360,7 +359,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
       ## External covariates
       if(is.null(meta.info)){
         design.formula = as.formula('~ group')
-      }else{
+      } else{
         design.formula = as.formula(paste('~ ',
                                           paste(c(colnames(meta.info), 'group'), 
                                                 collapse=' + ')))
@@ -385,7 +384,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         # Avoid NA padj values
         res1$padj[is.na(res1$padj)] <- 1
         
-      }else if(tolower(test) == tolower('edgeR')){
+      } else if(tolower(test) == tolower('edgeR')){
         
         # ----- EdgeR -----
         dge <- DGEList(cm, group = meta$group)
@@ -400,7 +399,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         res1 <- qlf$table %>% .[order(.$PValue),]
         colnames(res1) <- c("log2FoldChange","logCPM","stat","pvalue")
         res1$padj <- p.adjust(res1$pvalue, method = "BH")
-      }else if((test == 'wilcoxon') || (test == 't-test')) {
+      } else if((test == 'wilcoxon') || (test == 't-test')) {
         
         # Normalization
         if(normalization == 'deseq2'){
@@ -408,13 +407,13 @@ estimatePerCellTypeDEmethods=function (raw.mats,
           cnts.norm <- cm  %>%
             DESeq2::DESeqDataSetFromMatrix(colData = meta, design= ~ group)  %>%
             estimateSizeFactors()  %>% counts(normalized=TRUE)
-        }else if(normalization == 'edgeR'){
+        } else if(normalization == 'edgeR'){
           # EdgeR normalisation
           print('edgeR normalization')
           cnts.norm <- DGEList(counts = cm) %>%
             edgeR::calcNormFactors(dge) %>% cpm
-           
-        }else{
+        } else {
+          # the default should be normalization by the number of molecules!
           print('No normalization applied')
           cnts.norm <- cm
         }
@@ -424,7 +423,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
           res1 <- scran::pairwiseWilcox(cnts.norm, groups = meta$group)$statistics[[1]] %>%
             data.frame() %>%
             setNames(c("AUC","pvalue","padj"))
-        }else if (test == 't-test'){
+        } else if (test == 't-test'){
           res1 <- scran::pairwiseTTests(cnts.norm, groups = meta$group)$statistics[[1]] %>%
             data.frame() %>%
             setNames(c("AUC","pvalue","padj"))
@@ -441,8 +440,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
       
       if (return.matrix) {
         list(res = res1, cm = cm)
-      }
-      else {
+      } else {
         res1
       }
     }, error = function(err) NA)

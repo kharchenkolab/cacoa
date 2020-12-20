@@ -350,7 +350,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                       max.cell.count= Inf,
                                       independent.filtering = FALSE,
                                       cluster.sep.chr = "<!!>",
-                                      # return.matrix = T,
                                       verbose=self$verbose,
                                       name ='de',
                                       test='DESeq2.Wald',
@@ -376,7 +375,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       
       possible.tests = c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR', 
                          'Wilcoxon.edgeR', 'Wilcoxon.deseq2', 'Wilcoxon.totcount',
-                         't-test.edgeR', 't-test.deseq2', 't-test.totcount')
+                         't-test.edgeR', 't-test.deseq2', 't-test.totcount',
+                         'limma-voom')
       
       if(tolower(test) == tolower('DESeq2')) test = paste(test, 'Wald', sep='.')
       if(tolower(test) %in% tolower(c('Wilcoxon', 't-test')) )  test = paste(test, 'edgeR', sep='.')
@@ -408,6 +408,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                      cell.groups = cell.groups,
                                      s.groups = s.groups.new[[resampling.name]],
                                      ref.level = ref.level,
+                                     target.level = target.level,
                                      common.genes = common.genes,
                                      cooks.cutoff = cooks.cutoff,
                                      min.cell.count = min.cell.count,

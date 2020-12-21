@@ -360,50 +360,51 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       
       if(!is.list(sample.groups)) {
         s.groups <- list(names(sample.groups[sample.groups == ref.level]),
-                              names(sample.groups[sample.groups != ref.level])) %>%
+                         names(sample.groups[sample.groups != ref.level])) %>%
           setNames(c(ref.level, target.level))
       } else {
         s.groups = sample.groups
       }
       
-      # possible.tests = c('DESeq2', 'DESeq2.Wald', 'DESeq2.LRT', 
-      #                    'edgeR', 'Wilcoxon', 't-test', 'limma-voom')
-      
-      # possible.tests = c('DESeq2', 'DESeq2.Wald', 'DESeq2.LRT', 'edgeR', 
-      #                    'Wilcoxon', 'Wilcoxon.edgeR', 'Wilcoxon.deseq2', 'Wilcoxon.tot.count',
-      #                    't-test', 't-test.edgeR', 't-test.deseq2', 't-test.tot.count')
-      
       possible.tests = c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR', 
-                         'Wilcoxon.edgeR', 'Wilcoxon.deseq2', 'Wilcoxon.totcount',
-                         't-test.edgeR', 't-test.deseq2', 't-test.totcount',
+                         'Wilcoxon.edgeR', 'Wilcoxon.DESeq2', 'Wilcoxon.totcount',
+                         't-test.edgeR', 't-test.DESeq2', 't-test.totcount',
                          'limma-voom')
       
+      # Default test for DESeq2 is Wald
       if(tolower(test) == tolower('DESeq2')) test = paste(test, 'Wald', sep='.')
+      # Default normalization for Wilcoxon and t-test is edgeR
       if(tolower(test) %in% tolower(c('Wilcoxon', 't-test')) )  test = paste(test, 'edgeR', sep='.')
       
-        
-      if(!(tolower(test) %in% tolower(possible.tests))) stop(paste('Test',test,'is not supported. Available tests:',paste(possible.tests,collapse=', '))) else
-        print(paste0(c('DE method ', test, ' is used'), collapse = ''))
+      if(!(tolower(test) %in% tolower(possible.tests))) stop(paste('Test', test, 'is not supported. Available tests:',paste(possible.tests,collapse=', '))) 
+      
+      test = possible.tests[tolower(test) == tolower(possible.tests)]
+      message(paste0(c('DE method ', test, ' is used'), collapse = ''))
       
       # s.groups.new contains list of case/control groups of samples to run DE on.
       # First element in s.groups.new corresponds to the initial grouping.
-
+      
       s.groups.new = list(initial = s.groups)
       # If resampling is defined, new contrasts will append to s.groups.new
       if (is.null(resampling.method)){
       } else if (resampling.method == 'loo') {
         s.groups.new = c(s.groups.new, lapply(unlist(s.groups), function(name) 
           lapply(s.groups, function(group) setdiff(group, name)))  %>%
-          setNames(unlist(s.groups)))
+            setNames(unlist(s.groups)))
       } else if (resampling.method == 'bootstrap') {
-        n.bootstrap <- max.resamplings;
-        set.seed(seed.resampling)
-        s.groups.new <- c(s.groups.new, lapply(setNames(1:n.bootstrap,paste0('bootstrap.',1:n.bootstrap)),function(i) lapply(s.groups,function(x) sample(x,length(x),replace=T))))
+        if(max.resamplings < 2) {
+          warning('Bootstrap was not applied, because the number of resamplings was less than 2')
+        } else {
+          n.bootstrap <- max.resamplings
+          set.seed(seed.resampling)
+          s.groups.new <- c(s.groups.new, lapply(setNames(1:n.bootstrap,paste0('bootstrap.',1:n.bootstrap)),function(i) lapply(s.groups,function(x) sample(x,length(x),replace=T))))
+        }
       } else stop(paste('Resampling method', resampling.method, 'is not supported'))
-
+      
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=T)
-
+      
       de.res = sccore::plapply(names(s.groups.new), function(resampling.name) {
+        
         estimatePerCellTypeDEmethods(raw.mats=raw.mats,
                                      cell.groups = cell.groups,
                                      s.groups = s.groups.new[[resampling.name]],
@@ -424,23 +425,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                      meta.info = covariates)
       }) %>% setNames(names(s.groups.new))
       # }, n.cores=length(s.groups.new))  # parallelize the outer loop if subsampling is on
-
+      
+      # 
       # if resampling: calculate median and variance on ranks after resampling
-      if(length(de.res) > 1){
+      if(length(de.res) > 1) {
         var.to.sort = 'pvalue' # Variable to calculate ranks
-        for(cell.type in names(de.res[[1]])){
+        for(cell.type in names(de.res[[1]])) {
           genes.init <- genes.common <- rownames(de.res[[1]][[cell.type]]$res)
           mx.stat <- matrix(nrow = length(genes.common), ncol = 0, dimnames = list(genes.common,c()))
           for(i in 2:length(de.res)){
+            if(!(cell.type %in% names(de.res[[i]]))) next
             genes.common = intersect(genes.common, rownames(de.res[[i]][[cell.type]]))
             mx.stat = cbind(mx.stat[genes.common,], de.res[[i]][[cell.type]][genes.common, var.to.sort])
           }
-
+          
           mx.stat = apply(mx.stat, 2, rank)
           stab.mean.rank = rowMeans(mx.stat) # stab - for stability
           stab.median.rank = apply(mx.stat, 1, median)
           stab.var.rank = apply(mx.stat, 1, var)
-
+          
           de.res[[1]][[cell.type]]$res$stab.median.rank = stab.median.rank[genes.init]
           de.res[[1]][[cell.type]]$res$stab.mean.rank = stab.mean.rank[genes.init]
           de.res[[1]][[cell.type]]$res$stab.var.rank = stab.var.rank[genes.init]
@@ -448,12 +451,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           # Save subsamples
           de.res[[1]][[cell.type]]$subsamples <- lapply(de.res[2:length(de.res)], function(de) de[[cell.type]])
         }
-        
       }
       
-      # The first element in the results corresponds to the case without resampling
-      self$test.results[[paste0(c(name, test), collapse = '.')]] <- de.res[[1]]
-      # Overwrite de results
+      # Append DE results to 'de.all' slot
+      if( !('de.all' %in% names(self$test.results)) ) self$test.results$de.all = list()
+      if(test %in% names(self$test.results$de.all)) warning(paste('Previous results for', test, 'were overwritten'))
+      self$test.results$de.all[[test]] <- de.res[[1]]
+      
+      # # The first element in the results corresponds to the case without resampling
+      # self$test.results[[paste0(c(name, test), collapse = '.')]] <- de.res[[1]]
+      
+      # Overwrite 'de' slot with the last result
       self$test.results[[name]] <- de.res[[1]]
       
       return(invisible(self$test.results[[name]]))

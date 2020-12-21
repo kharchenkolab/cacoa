@@ -291,7 +291,6 @@ saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.meta
 #' @param meta.info dataframe with possible covariates; for example, sex or age
 #' @param test DE method: deseq2, edgeR, wilcoxon, ttest
 #' @export
-
 estimatePerCellTypeDEmethods=function (raw.mats, 
                                        cell.groups = NULL, 
                                        s.groups = NULL, 
@@ -353,7 +352,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
       if (length(unique(as.character(meta$group))) < 2)  stop("The cluster is not present in both conditions")
       
       
-
+      
       ## External covariates
       if(is.null(meta.info)) {
         design.formula = as.formula('~ group')
@@ -363,7 +362,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
                                                 collapse=' + ')))
       }
       
-
+      
       
       if(grepl('deseq2', tolower(test))) {
         # ----- DESeq2 -----
@@ -412,16 +411,16 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         # cnts.norm <- DGEList(counts = cm) %>%
         #   edgeR::calcNormFactors() %>% cpm
         cnts.norm = cm
-
-        y <- voom(cnts.norm, mm, plot = T)
+        
+        y <- voom(cnts.norm, mm, plot = F)
         fit <- lmFit(y, mm)
         
         contr <- makeContrasts(paste(c('group', target.level), collapse = ''),
                                levels = colnames(coef(fit)))
-
+        
         tmp <- contrasts.fit(fit, contr)
         tmp <- eBayes(tmp)
-
+        
         res1 <- topTable(tmp, sort.by = "P", n = Inf)
         colnames(res1) <- c('log2FoldChange', 'AveExpr', 'stat', 'pvalue', 'padj', 'B')
         
@@ -456,6 +455,11 @@ estimatePerCellTypeDEmethods=function (raw.mats,
             data.frame() %>%
             setNames(c("AUC","pvalue","padj"))
         }
+        
+        
+        res1$log2FoldChange <- apply(log(cnts.norm+1, base=2), 1, function(x) {
+          mean(x[meta$group == target.level]) - mean(x[meta$group == ref.level])})
+        
       }
       
       # add Z scores

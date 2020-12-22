@@ -910,7 +910,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Plot compositions in CoDA-PCA space
     #' @return A ggplot2 object
-    plotPcaSpace=function(cells.to.remove = NULL, palette=self$sample.groups.palette) {
+    plotPcaSpace=function(cells.to.remove = NULL, font.size=NULL, palette=self$sample.groups.palette) {
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
       d.counts <- data.frame(anno=self$cell.groups,
@@ -922,12 +922,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       names(d.groups) <- rownames(d.counts)
       # ----
 
-      plotPcaSpace(d.counts, d.groups, palette=palette)
+      plotPcaSpace(d.counts, d.groups, self$ref.level, self$target.level, font.size, palette=palette)
     },
 
     #' @description Plot compositions in CoDA-CDA space
     #' @return A ggplot2 object
-    plotCdaSpace=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL) {
+    plotCdaSpace=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, font.size=NULL) {
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
       d.counts <- data.frame(anno=self$cell.groups,
@@ -942,7 +942,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       names(d.groups) <- rownames(d.counts)
       # ----
 
-      plotCdaSpace(d.counts, d.groups)
+      plotCdaSpace(d.counts, d.groups, self$ref.level, self$target.level, font.size)
 
     },
 
@@ -962,13 +962,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       names(d.groups) <- rownames(d.counts)
       # ----
 
-      plotContrastTree(d.counts, d.groups)
+      plotContrastTree(d.counts, d.groups, self$ref.level, self$target.level)
     },
 
     #' @description Plot Loadings
     #' @return A ggplot2 object
     estimateCellLoadings=function(n.cell.counts = 1000, n.seed = 239, cells.to.remove = NULL,
-                                  cells.to.remain = NULL, samples.to.remove = NULL, signif.threshold = 0.2){
+                                  cells.to.remain = NULL, samples.to.remove = NULL, n.iter=1000){
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
       d.counts <- data.frame(anno=self$cell.groups,
@@ -984,19 +984,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       self$test.results[['cda']] <- resampleContrast(d.counts, d.groups,
                                                      n.cell.counts = n.cell.counts,
-                                                     n.seed = n.seed)
-
-
-      balances <- self$test.results$cda$balances
-      n.bal <- ncol(balances)
-      n.plus <- rowSums(balances[,2:n.bal] > 0)
-      n.minus <- rowSums(balances[,2:n.bal] < 0)
-      perm.frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) /
-        mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
-
-      cda.top.cells <- names(perm.frac)[perm.frac < signif.threshold]
-
-      self$test.results[['cda.top.cells']] = cda.top.cells
+                                                     n.seed = n.seed, n.iter = n.iter)
+      
+      self$test.results$cda$pvals = getCellSignificance(self$test.results$cda$balances)
 
       return(invisible(self$test.results[['cda']]))
     },
@@ -1026,25 +1016,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Plot Loadings
     #' @param palette palette specification for cell types (default: stored $cell.groups.palette)
     #' @return A ggplot2 object
-    plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, n.significant.cells=0, font.size=NULL) {
-      cda <- private$getResults('cda', 'estimateCellLoadings()')
-      n.bal <- ncol(cda$balances)
-      n.plus <- rowSums(cda$balances[,2:n.bal] > 0)
-      n.minus <- rowSums(cda$balances[,2:n.bal] < 0)
-      frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) / mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
-      res.ordered <- t(cda$balances)[,order(-frac)] %>% as.data.frame()
-
-      p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
-        geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = alpha, size=1) +
-        geom_hline(yintercept = 0, color = "gray37") +
-        coord_flip() + xlab('') + ylab('') + theme_bw()+ theme(legend.position = "none")
-
-      if(!is.null(font.size)) {
-        p <- p + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
+    plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, font.size=NULL,
+                                ordering='by.pvalue', signif.threshold=0.05, show.pvals=F) {
+      possible.ordering = c('by.pvalue', 'by.mean', 'by.median')
+      if(!(ordering %in% possible.ordering)){
+        warning('Defaulf ordiring \'by.pvalue\' is applied ' )
+        ordering = 'by.pvalue'
       }
-      if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
-      if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(cda$balances) - n.significant.cells + 0.5, color='red')
-
+      
+      cda <- private$getResults('cda', 'estimateCellLoadings()')
+      p <- plotCellLoadings(cda, ordering, signif.threshold, font.size, alpha, palette, show.pvals,
+                            self$ref.level, self$target.level)
+      
       return(p)
     },
 

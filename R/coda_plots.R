@@ -1,4 +1,4 @@
-plotPcaSpace <- function(d.counts, d.groups, palette=NULL){
+plotPcaSpace <- function(d.counts, d.groups, ref.level, target.level, font.size, palette=NULL){
   bal <- getRndBalances(d.counts)
   pca.res <- prcomp(bal$norm)
   pca.loadings <- bal$psi %*% pca.res$rotation
@@ -11,7 +11,7 @@ plotPcaSpace <- function(d.counts, d.groups, palette=NULL){
 
 
   # ----------- PLOT -----------
-  group.names <- c('Control', 'Case')
+  group.names <- c(ref.level, target.level)
   options(repr.plot.width = 15, repr.plot.height = 10)
   rda.plot <- ggplot(df.pca, aes(x=PC1, y=PC2)) +
     #   geom_text(aes(label=rownames(df_pca) %in% samplegroups$trgt),size=4) +
@@ -41,10 +41,13 @@ plotPcaSpace <- function(d.counts, d.groups, palette=NULL){
   dy <- max(dy, max(df.loadings[,'pc2']) - min(df.loadings[,'pc2']))
 
   rda.biplot <- rda.biplot + coord_fixed(ratio = dx / dy)
+  if(!is.null(font.size)) {
+    rda.biplot <- rda.biplot + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
+  }
   return(rda.biplot)
 }
 
-plotCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
+plotCdaSpace <- function(d.counts, d.groups, ref.level, target.level, font.size, thresh.pc.var = 0.95, n.dim = 2){
 
   cell.loadings <- c()
   sample.pos <- c()
@@ -65,21 +68,14 @@ plotCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
     sample.pos <- d.used
   }
 
-
-
   colnames(cell.loadings) <- paste('C', 1:n.dim, sep = '')
   colnames(sample.pos) <- paste('Score', 1:n.dim, sep = '')
-
-  cell.loadings
-  sample.pos
-
 
   df.pca <- as.data.frame(sample.pos)
   df.loadings <- as.data.frame(cell.loadings * 8)
 
-
   # ----------- PLOT -----------
-  group.names <- c('Control', 'Case')
+  group.names <- c(ref.level, target.level)
   options(repr.plot.width = 15, repr.plot.height = 10)
   rda.plot <- ggplot(df.pca, aes(x=Score1, y=Score2)) +
     #   geom_text(aes(label=rownames(df_pca) %in% samplegroups$trgt),size=4) +
@@ -105,6 +101,10 @@ plotCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
   dy <- max(dy, max(df.loadings[,'C2']) - min(df.loadings[,'C2']))
 
   rda.biplot <- rda.biplot + coord_fixed(ratio = dx / dy)
+  
+  if(!is.null(font.size)) {
+    rda.biplot <- rda.biplot + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
+  }
 
   return(rda.biplot)
 }
@@ -120,7 +120,7 @@ ggdend <- function(dend.data, a = 90) {
               hjust = 1, angle = a, size = 3) + ylim(-0.5, NA)
 }
 
-plotContrastTree <- function(d.counts, d.groups, p.threshold = 0.01){
+plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, p.threshold = 0.01){
   log.f <- getLogFreq(d.counts)
 
   t.cur <- constructCanonicalTree(d.counts, d.groups)
@@ -161,7 +161,7 @@ plotContrastTree <- function(d.counts, d.groups, p.threshold = 0.01){
     res <- aov(balance~group,data=as.data.frame(aov.data))
     p.val <- c(p.val,summary(res)[[1]][1,5])
   }
-  p.val <- p.adjust(p.val, method = 'fdr')
+  # p.val <- p.adjust(p.val, method = 'fdr')
   p.val[is.na(p.val)] <- 1
 
   px <- ggdend(dend.data)
@@ -215,29 +215,85 @@ plotContrastTree <- function(d.counts, d.groups, p.threshold = 0.01){
     bc.m <- c(bc.m, TRUE, FALSE)
   }
 
-  group.names <- c('Control', 'Case')
+  group.names <- c(ref.level, target.level)
   df.balance.points <- data.frame(x = bx, y = by, group = group.names[bc+1])
   df.balance.mean <- data.frame(x = bx.m, y = by.m, group = group.names[bc.m+1])
   df.balance.range <- data.frame(x = x.range, y = y.range, s = n.range)
   df.pval <- data.frame(x = pval.x, y = pval.y)
 
 
-  # px <- px + geom_point(data = df.balance.points,
-  #                      aes(x=x, y=y, col = as.factor(group)), alpha = 0.5, size = 1) +
-  #   geom_point(data = df.balance.mean,
-  #              aes(x=x, y=y, col = as.factor(group)),
-  #              size = 3, shape = 18, stroke = 2) +
-  #   labs(col="Group") +
-  #   geom_text(data=df.balance.range, mapping=aes(x=x, y=y, label=sprintf('%2.1f',s)), vjust=0, hjust=0)
+  px <- px + geom_point(data = df.balance.points,
+                       aes(x=x, y=y, col = as.factor(group)), alpha = 0.5, size = 1) +
+    geom_point(data = df.balance.mean,
+               aes(x=x, y=y, col = as.factor(group)),
+               size = 3, shape = 18, stroke = 2) +
+    labs(col=" ") +
+    geom_text(data=df.balance.range, mapping=aes(x=x, y=y, label=sprintf('%2.1f',s)), vjust=0, hjust=0)
 
-  # if(length(pval.x) > 0){
-  #   px <- px + geom_point(data = df.pval, aes(x=x, y=y, size = 2)) +
-  #     labs(size= sprintf('p-value < %1.1e',p.threshold))
-  # }
+  if(length(pval.x) > 0){
+    px <- px + geom_point(data = df.pval, aes(x=x, y=y)) +
+      # labs(size= sprintf('p-value < %1.2f',p.threshold))
+      guides(size = FALSE)
+  }
 
 
   return(px)
 }
 
 
+plotCellLoadings <- function(cda, ordering, signif.threshold, font.size, alpha, palette, show.pvals, ref.level, target.level) {
+  balances = cda$balances
+  if(ordering == 'by.pvalue'){
+    # ordering by median
+    balances <- balances[order(abs(apply(balances, 1, median))), ]
+    # additional ordering by p-value
+    frac <- getCellSignificance(balances)
+    balances <- balances[order(-frac),]
+    
+    # Get significant cells
+    n.significant.cells = sum(frac <= signif.threshold)
+    
+  } else if(ordering == 'by.mean') {
+    balances <- balances[order(abs(rowMeans(balances))),]
+    n.significant.cells = 0
+  } else if(ordering == 'by.median') {
+    balances <- balances[order(abs(apply(balances, 1, median))), ]
+    n.significant.cells = 0
+  }
+  
+  frac <- getCellSignificance(balances)
+  res.ordered <- t(balances) %>% as.data.frame()  
+  ymax = max(balances)
 
+  p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
+    geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = alpha, size=1) +
+    geom_hline(yintercept = 0, color = "gray37") +
+    coord_flip() + xlab('') + ylab('') + theme_bw()+ theme(legend.position = "none") +
+    scale_x_discrete(position = "top") + ylim(-ymax, ymax)
+  
+  # Add text
+  p <- p + 
+    annotate('text', x = 1, y = -ymax, label = paste('\u2190', ref.level), hjust = 'left') + 
+    annotate('text', x = 1, y = ymax, label = paste(target.level, '\u2192'), hjust = 'right')
+  
+  if(!is.null(font.size)) {
+    p <- p + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
+  }
+  if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
+  if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(balances) - n.significant.cells + 0.5, color='red')
+  
+  
+  if(show.pvals){
+    d = data.frame(x = names(frac), y=frac)
+    d$x <- factor(d$x, levels = d$x)
+    p.pval <- ggplot(d, aes(x=x,y=-log(y,base = 10) )) + geom_bar(stat="identity") +
+      coord_flip() + xlab('') + ylab('-log(p-value)') + theme_bw()+ theme(legend.position = "none") +
+      geom_hline(yintercept=-log(signif.threshold,base = 10)) + theme(axis.text.y = element_blank())
+    
+    p.combo <- ggarrange(p, p.pval, ncol = 2, widths = c(2, 1))  
+    return(p.combo)
+  }
+  
+  return(p)
+  
+}

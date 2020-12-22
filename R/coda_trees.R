@@ -114,7 +114,7 @@ sbp2tree <- function(sbpart, ...){
   collapse <- sbpart
   rownames(collapse) <- 1:n.cells
 
-  for(i in (n.cells - 1):-1:1){
+  for(i in rev(1:(n.cells - 1)) ){
     ids <- which(collapse[,i] != 0)
 
     edges <- rbind(edges, as.integer(c(id, rownames(collapse)[ids[1]])))

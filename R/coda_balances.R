@@ -157,13 +157,13 @@ getCdaLoadings <- function(d.counts, d.groups, n.seed = 239){
 
   for (i in 0:n.pc) {
     stop.loop <- TRUE
-    # print(d.groups)
     model <- lm(as.matrix(df.pca[,1:(n.pc-i)]) ~ d.groups)
     tryCatch(suppressWarnings(cda <- candisc::candisc(model, ndim=1)), error = function(e) { stop.loop <<- FALSE})
     if(stop.loop)
       break
   }
 
+  # Positive values of loadings are for disease(targer.level), negative - for control(ref.level)
   if (mean(cda$scores[d.groups,'Can1']) < mean(cda$scores[!d.groups,'Can1'])) {
     cda$structure <- -cda$structure
   }
@@ -339,4 +339,14 @@ calcWilcoxonTest <- function(cell.groups,
   options(warn=0)
 
   p.vals.res
+}
+
+getCellSignificance <- function(balances){
+  n.bal <- ncol(balances)
+  n.plus <- rowSums(balances[,2:n.bal] > 0)
+  n.minus <- rowSums(balances[,2:n.bal] < 0)
+  perm.frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) /
+    mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
+  
+  perm.frac
 }

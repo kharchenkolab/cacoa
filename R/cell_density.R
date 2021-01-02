@@ -192,7 +192,7 @@ plotDensity <- function(mat, bins, col = c('blue','white','red'), show.legend = 
 ##' global variance is setting for t.test;
 diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample.groups, bins, ref.level, target.level, method = 'subtract',
                             show.legend = NULL,legend.position = NULL, show.grid = TRUE, col = c('blue','white','red'), title = NULL,
-                            dcount.cutoff = 0, z.cutoff = NULL){
+                            dcount.cutoff = 0, z.cutoff = NULL, adjust.pvalues=TRUE){
   nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
   nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
 
@@ -219,11 +219,13 @@ diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample
       x1 <- x[nt]
       x2 <- x[nr]
       tryCatch({
-        t.test(x1, x2)$statistic
+        x <- t.test(x1, x2)
+        qnorm(pt(x$statistic,x$parameter)) # calculate zscore
       }, error = function(e) {
         0
       })
     })
+    if(adjust.pvalues) score <- sign(score) * qnorm(p.adjust(pnorm(abs(score),lower.tail=F),method='BH'),lower.tail=F)
   } else if (method == 'wilcox') {
     vel <- rowMeans(density.mat)
     density.mat2 <- density.mat + quantile(vel, 0.05) # add sudo counts at 5%
@@ -236,9 +238,10 @@ diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample
       zscore <- zstat * sign(fc)
       zscore
     })
+    if(adjust.pvalues) score <- sign(score) * qnorm(p.adjust(pnorm(abs(score),lower.tail=F),method='BH'),lower.tail=F)
   } else stop("Unknown method: ", method)
 
-  if (is.null(title)){
+  if (is.null(title)) {
     title <- method
   }
   #density.score <- matrix(score, ncol = bins, byrow = FALSE)
@@ -246,8 +249,9 @@ diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample
   mat <-  data.frame(density.emb, 'z' = score)
   mat <-  mat[mat$counts > dcount.cutoff, ]
 
-  if (!is.null(z.cutoff))
+  if (!is.null(z.cutoff)) {
     mat[abs(mat$z) < z.cutoff, 'z'] = 0
+  }
   #p <- plotDensity(mat, bins, col = col, title = title, legend.position = legend.position, show.legend = show.legend, show.grid = show.grid, diffDensity = TRUE)
   #return(list('fig' = p,'score' = mat))
   return(mat)

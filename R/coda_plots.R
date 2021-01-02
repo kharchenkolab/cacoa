@@ -284,13 +284,13 @@ plotCellLoadings <- function(cda, ordering, signif.threshold, font.size, alpha, 
   
   
   if(show.pvals){
-    d = data.frame(x = names(frac), y=frac)
+    d <- data.frame(x = names(frac), y=frac)
     d$x <- factor(d$x, levels = d$x)
     p.pval <- ggplot(d, aes(x=x,y=-log(y,base = 10) )) + geom_bar(stat="identity") +
       coord_flip() + xlab('') + ylab('-log(p-value)') + theme_bw()+ theme(legend.position = "none") +
       geom_hline(yintercept=-log(signif.threshold,base = 10)) + theme(axis.text.y = element_blank())
     
-    p.combo <- ggarrange(p, p.pval, ncol = 2, widths = c(2, 1))  
+    p.combo <- cowplot::plot_grid(plotlist=list(p,p.pval),nrow=1,rel_widths=c(2,1))
     return(p.combo)
   }
   

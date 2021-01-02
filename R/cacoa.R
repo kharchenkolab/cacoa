@@ -148,8 +148,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[[name]]))
     },
 
-    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50,
-                                                     n.subsamples=30, min.cells=10, n.cores=1, verbose=self$verbose,  mean.trim=0.1, name='common.expression.shifts') {
+    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50, n.subsamples=30, min.cells=10, n.cores=self$n.cores, verbose=self$verbose,  mean.trim=0.1, name='common.expression.shifts') {
       if(length(levels(sample.groups))!=2) stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
 
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
@@ -1046,7 +1045,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       self$test.results[['p.vals.balances']] <- p.vals
       return(self$test.results[['p.vals.balances']])
 
-      cda = resampleContrast(d.counts, d.groups,
+      cda <- resampleContrast(d.counts, d.groups,
                              n.cell.counts = n.cell.counts,
                              n.seed = n.seed)
       plotCellLoadings(cda$balances, aplha = aplha)
@@ -1145,7 +1144,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param contour.color color for contour line
     #' @param z.cutoff absolute z score cutoff
     #' @param contour.conf confidence interval of contour
-    diffCellDensity=function(condition.per.cell=NULL, method='subtract', col=c('blue','white','red'), show.legend=FALSE, legend.position=NULL, title=NULL, show.grid=NULL, plot=TRUE, contours=NULL, contour.color='white', contour.conf='10%', z.cutoff=NULL, size =0.1, ...){
+    diffCellDensity=function(condition.per.cell=NULL, method='subtract', col=c('blue','white','red'), show.legend=FALSE, legend.position=NULL, title=NULL, show.grid=NULL, plot=TRUE, contours=NULL, contour.color='white', contour.conf='10%', z.cutoff=NULL, size =0.1, adjust.pvalues=TRUE, ...){
       # TODO: rename it to start with estimate*
       if (method == 'graph'){
         score <- private$getResults('cell.density.graph', 'estimateCellDensity(method="graph")')
@@ -1153,16 +1152,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       } else {
         dens.res <- private$getResults('cell.density.kde', 'estimateCellDensity()')
         mat <- dens.res %$%
-          diffCellDensity(density.emb, density.mat, condition.per.cell=condition.per.cell, self$sample.groups, bins=bins, target.level=self$target.level,
-                          ref.level=self$ref.level, method=method, title=title, legend.position=legend.position, show.legend=show.legend, show.grid=show.grid, z.cutoff=z.cutoff)
+          diffCellDensity(density.emb, density.mat, condition.per.cell=condition.per.cell, self$sample.groups, bins=bins, target.level=self$target.level,ref.level=self$ref.level, method=method, title=title, legend.position=legend.position, show.legend=show.legend, show.grid=show.grid, z.cutoff=z.cutoff, adjust.pvalues=adjust.pvalues)
         emb <- mat[,1:2]
         score <- mat$z
         names(score) <- rownames(mat)
       }
 
       if (plot){
-        fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) +
-          scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0)
+        fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) + scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0) +theme(legend.background = element_blank())
 
         if(!is.null(contours)){
           cnl <- do.call(c, lapply(sn(contours), function(x)

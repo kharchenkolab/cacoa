@@ -256,13 +256,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
     #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
     #' @return A ggplot2 object
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, notch = T, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, palette=self$cell.groups.palette) {
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, notch = T, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell) {
       cluster.shifts <- private$getResults(name)$df
-      plotExpressionShiftMagnitudes(cluster.shifts = cluster.shifts, size.norm = size.norm, notch = notch, cell.groups = cell.groups, sample.per.cell = sample.per.cell, palette=palette)
+      plotExpressionShiftMagnitudes(cluster.shifts = cluster.shifts, size.norm = size.norm, notch = notch, cell.groups = cell.groups, sample.per.cell = sample.per.cell, palette=self$cell.groups.palette)
     },
 
-
-    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.subsampling.variability=FALSE, show.jitter=FALSE, jitter.alpha=0.05, palette=self$cell.groups.palette) {
+    ##' Plot common expression shift estimates across cell types
+    ##'
+    ##' @param name result slot name (default: common.expression.shifts
+    ##' @param show.subsampling.variability  
+    ##' @param show.jitter whether to show indiivudal data points (default: FALSE)
+    ##' @param jitter.alpha transparency value for the data points (default: 0.05)
+    ##' @param type - type of a plot "bar" (default) or "box"
+    ##' @param notch - whether to show notches in the boxplot version (default=TRUE)
+    ##' @return A ggplot2 object
+    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.subsampling.variability=FALSE, show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE) {
       res <- private$getResults(name)
       cn <- setNames(names(res[[1]]),names(res[[1]]))
       if(show.subsampling.variability) { # average across patient pairs
@@ -279,17 +287,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       df$cell <- factor(df$cell,levels=df$cell)
       df <- na.omit(df);
 
-      p <- ggplot(df,aes(x=cell,y=mean,fill=cell))+
-        geom_bar(stat='identity') +
-        geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)+
-        geom_hline(yintercept = 1,linetype=2,color='gray50')+
+      odf$cell <- factor(odf$cell,levels=df$cell)
+      
+      
+      if(type=='box') {
+        p <- ggplot(odf,aes(x=cell,y=val,fill=cell)) + geom_boxplot(notch=notch, outlier.shape=NA)
+      } else if(type=='point') {
+        p <- ggplot(df,aes(x=cell,y=mean,color=cell)) + geom_point(size=3)+ geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)+ scale_color_manual(values=self$cell.groups.palette)
+      } else {
+        p <- ggplot(df,aes(x=cell,y=mean,fill=cell)) + geom_bar(stat='identity')+ geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)
+      }
+      p <- p+ geom_hline(yintercept = 1,linetype=2,color='gray50')+
         theme_bw() +
         theme(axis.text.x=element_text(angle = 90, hjust=1, size=12), axis.text.y=element_text(angle=90, hjust=0.5, size=12))+ guides(fill=FALSE)+
         theme(legend.position = "none")+
         labs(x="", y="normalized distance (common)")
-      if(show.jitter) p <- p+geom_jitter(data=odf,aes(x=cell,y=val),position=position_jitter(0.1),show.legend=FALSE,alpha=jitter.alpha);
-      if(!is.null(palette)) {
-        p <- p+ scale_fill_manual(values=palette)
+      if(show.jitter) p <- p+geom_jitter(data=odf,aes(x=cell,y=val),color=1, position=position_jitter(0.1),show.legend=FALSE,alpha=jitter.alpha);
+      if(!is.null(self$cell.groups.palette)) {
+        p <- p+ scale_fill_manual(values=self$cell.groups.palette)
       }
       p
     },

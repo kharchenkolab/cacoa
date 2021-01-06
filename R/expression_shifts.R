@@ -282,3 +282,5 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
   if(verbose) cat('done!\n')
   return(list(df=df, ctdml=ctdml, sample.groups=sample.groups, valid.comparisons=valid.comparisons))
 }
+
+

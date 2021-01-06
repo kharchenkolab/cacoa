@@ -324,6 +324,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
     lapply(conos:::collapseCellsByType, groups=cell.groups, min.cell.count=min.cell.count, max.cell.count=max.cell.count) %>%
     .[sapply(., nrow) > 0] %>% # Remove empty samples due to min.cell.count
     rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
+  mode(aggr2) <- 'integer'
   
   # Adjust s.groups
   passed.samples <- strpart(colnames(aggr2), cluster.sep.chr, 1, fixed = TRUE) %>% unique()
@@ -333,6 +334,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
     }
   }
   s.groups %<>% lapply(function(n) n[n %in% passed.samples])
+  
   
   ## For every cell type get differential expression results
   de.res <- sccore::plapply( sccore::sn( levels(cell.groups) ), function(l) {

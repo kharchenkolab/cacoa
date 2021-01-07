@@ -9,8 +9,7 @@ prepareOntologyData(
   de.raw,
   cell.groups,
   org.db,
-  n.top.genes = 100,
-  p.adj.cutoff = 0.05,
+  p.adj = 1,
   expr.cutoff = 0.05,
   universe = NULL,
   transposed = T,
@@ -27,10 +26,6 @@ prepareOntologyData(
 
 \item{org.db}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'}
 
-\item{n.top.genes}{Number of most different genes to take as input. If less are left after filtering for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)}
-
-\item{p.adj.cutoff}{Adj. P cutoff for filtering DE genes (default=0.05)}
-
 \item{expr.cutoff}{Cutoff for cells per group expressing a DE gene, i.e., cutoff for highly-expressed genes (default=0.05)}
 
 \item{universe}{Background gene list, NULL will take all input genes in de.raw (default=NULL)}
@@ -40,6 +35,8 @@ prepareOntologyData(
 \item{verbose}{Print progress (default=T)}
 
 \item{n.cores}{Number of cores to use (default=1)}
+
+\item{p.adj.cutoff}{Adj. P cutoff for filtering DE genes (default=0.05)}
 }
 \value{
 A list containing DE ENSEMBL gene IDs, and filtered DE genes

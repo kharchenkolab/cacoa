@@ -669,7 +669,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Estimate Gene Ontology clusters
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all'. Default: "up".
     #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO". Default: "GO".
-    #' @param name Name of the field to store the results. Default: `paste(type, genes, "clusters", sep=".")`.
+    #' @param name Name of the field to store the results. Default: `cacoa:::getOntClustField(type, subtype, genes)`.
     #' @param ind.h Cut height for hierarchical clustering of terms per cell type.
     #' Approximately equal to the fraction of genes, shared between the GOs. Default: 0.66.
     #' @param total.h Cut height for hierarchical clustering of GOs across all subtypes.
@@ -678,7 +678,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #'   - `df`: data.frame with information about individual gene ontolodies and columns `Cluster` and `ClusterName` for the clustering info
     #'   - `hclust`: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all subtypes
     estimateOntologyClusters=function(type="GO", subtype=NULL, genes="all", ind.h=0.66, total.h=0.5, verbose=self$verbose,
-                                      p.adj=p.adj, min.genes=min.genes) {
+                                      p.adj=p.adj, min.genes=min.genes, name=getOntClustField(type, subtype, genes)) {
       ont.df <- private$getOntologyPvalueResults(genes=genes, type=type, p.adj=p.adj, min.genes=min.genes)
       clust.mat <- ont.df %>% split(.$Group) %>% clusterIndividualGOs(cut.h=ind.h) %>%
         as.matrix() %>% t()
@@ -900,8 +900,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
             stop("Can't find the results for ", cluster.name) # stop if user specified a wrong cluster.name
 
           warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
-          ont.sum <- self$estimateOntologyClusters(type=type, genes=genes, name=name, cell.subgroups=cell.subgroups,
-                                                   p.adj=p.adj, min.genes=min.genes)$df
+          ont.sum <- self$estimateOntologyClusters(type=type, genes=genes, name=name, p.adj=p.adj, min.genes=min.genes)$df
         } else {
           ont.sum <- self$test.results[[name]]$df
         }
@@ -910,9 +909,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       if(selection=="unique") {
-        ont.sum %<>% .[rowSums(. > 0) == 1,]
+        ont.sum %<>% .[rowSums(abs(.) > 0) == 1,]
       } else if(selection=="common") {
-        ont.sum %<>% .[rowSums(. > 0) > 1,]
+        ont.sum %<>% .[rowSums(abs(.) > 0) > 1,]
       }
       if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 

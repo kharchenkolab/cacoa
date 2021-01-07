@@ -290,191 +290,194 @@ saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.meta
 #' @param covariates list of covariates to include; for example, cdr, sex or age
 #' @param meta.info dataframe with possible covariates; for example, sex or age
 #' @param test DE method: deseq2, edgeR, wilcoxon, ttest
-#' @param normalization normalization type before wilcoxon or ttest
 #' @export
-estimatePerCellTypeDEmeth <- function (raw.mats, 
+estimatePerCellTypeDEmethods=function (raw.mats, 
                                        cell.groups = NULL, 
-                                       sample.groups = NULL, 
+                                       s.groups = NULL, 
                                        ref.level = NULL,
+                                       target.level = NULL,
                                        common.genes = F, 
                                        cooks.cutoff = FALSE, 
                                        min.cell.count = 10, 
                                        max.cell.count = Inf,
                                        independent.filtering = T,
-                                       n.cores = 1, 
+                                       n.cores = 4, 
                                        cluster.sep.chr = "<!!>", 
                                        return.matrix = T, 
                                        verbose = T, 
                                        useT=F, 
                                        minmu=0.5, 
-                                       minReplicatesForReplace = 7, 
-                                       test='DESeq2.Wald',
-                                       normalization=NULL,
-                                       meta.info = NULL,
-                                       covariates = c()) {
+                                       test='Wald',
+                                       meta.info = NULL) {
   
-  print(sample.groups)
-  validatePerCellTypeParams(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr)
+  validatePerCellTypeParams(raw.mats, cell.groups, s.groups, ref.level, cluster.sep.chr)
   
   if(common.genes) {
-    raw.mats <- rawMatricesWithCommonGenes(raw.mats, sample.groups)
+    raw.mats <- rawMatricesWithCommonGenes(raw.mats, s.groups)
   } else {
     gene.union <- lapply(raw.mats, colnames) %>% Reduce(union, .)
     raw.mats <- sccore:::plapply(raw.mats, sccore:::extendMatrix, gene.union, n.cores = n.cores)
   }
   
   aggr2 <- raw.mats %>%
-    .[sample.groups %>% unlist] %>% # Only consider samples in sample.groups
+    .[s.groups %>% unlist] %>% # Only consider samples in s.groups
     lapply(conos:::collapseCellsByType, groups=cell.groups, min.cell.count=min.cell.count, max.cell.count=max.cell.count) %>%
     .[sapply(., nrow) > 0] %>% # Remove empty samples due to min.cell.count
     rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
+  mode(aggr2) <- 'integer'
   
-  # Adjust sample.groups
+  # Adjust s.groups
   passed.samples <- strpart(colnames(aggr2), cluster.sep.chr, 1, fixed = TRUE) %>% unique()
   if(verbose) {
-    if(length(passed.samples) != length(unlist(sample.groups))) {
-      warning("Excluded ",length(unlist(sample.groups)) - length(passed.samples)," sample(s) due to 'min.cell.count'.")
+    if(length(passed.samples) != length(unlist(s.groups))) {
+      warning("Excluded ",length(unlist(s.groups)) - length(passed.samples)," sample(s) due to 'min.cell.count'.")
     }
   }
-  sample.groups %<>% lapply(function(n) n[n %in% passed.samples])
+  s.groups %<>% lapply(function(n) n[n %in% passed.samples])
   
-  de.res <- cell.groups %>%
-    levels() %>%
-    sccore:::sn() %>%
-    sccore:::plapply(function(l) {
-      # tryCatch({
-        
-        cm <- aggr2[, strpart(colnames(aggr2), cluster.sep.chr, 2, fixed = TRUE) == l] %>%
-          .[rowSums(.) > 0,] # Remove genes with no counts
-        
-        meta <- data.frame(sample.id=colnames(cm), 
-                           group=as.factor(unlist(lapply(colnames(cm), function(y) {
+  
+  ## For every cell type get differential expression results
+  de.res <- sccore::plapply( sccore::sn( levels(cell.groups) ), function(l) {
+    tryCatch({
+      ## Get count matrix
+      cm <- aggr2[, strpart(colnames(aggr2), cluster.sep.chr, 2, fixed = TRUE) == l] %>% .[rowSums(.) > 0,] # Remove genes with no counts
+      ## Generate metadata
+      meta <- data.frame(
+        sample.id=colnames(cm),
+        group=as.factor(unlist(lapply(colnames(cm), function(y) {
           y <- strpart(y, cluster.sep.chr, 1, fixed = TRUE)
-          names(sample.groups)[unlist(lapply(sample.groups, function(x) any(x %in% y)))]}))))
-        
-        if (!ref.level %in% levels(meta$group))
-          stop("The reference level is absent in this comparison")
-        if (length(levels(meta$group)) == 1)
-          stop("The case level is absent in this comparison")
-        meta$group <- relevel(meta$group, ref = ref.level)
-        if (length(unique(as.character(meta$group))) < 2)
-          stop("The cluster is not present in both conditions")
-        
-        # --------------
-        # Prepare design
-        
-        # Possible additional covariates:
-        ## CDR (cell detection rate?)
-        meta$cdr <- scale(Matrix::colMeans(cm > 0))
-        ## External covariates
-        if(!is.null(meta.info))
-          meta = cbind(meta, meta.info[strpart(meta$sample.id, cluster.sep.chr, 1, fixed = TRUE),])
-        
-        # TODO: GDR returns error
-        # meta$gdr <- raw.mats %>%
-        #   sccore:::plapply(function(x) apply(x, 1, function(y) Matrix::nnzero(y, F)), n.cores=16) %>%
-        #   sapply(mean)
-        # # GDR subset ?!
-        
-        # Create design formula for given covariates
-        possible.covariates = c('cdr', names(meta.info))
-        design.formula = as.formula(paste('~ ', 
-                                          paste(c(intersect(possible.covariates, covariates), 'group'), 
+          names(s.groups)[unlist(lapply(s.groups, function(x) any(x %in% y)))]})))
+      )
+      
+      if (!ref.level %in% levels(meta$group))  stop("The reference level is absent in this comparison")
+      meta$group <- relevel(meta$group, ref = ref.level)
+      if (length(unique(as.character(meta$group))) < 2)  stop("The cluster is not present in both conditions")
+      
+      
+      
+      ## External covariates
+      if(is.null(meta.info)) {
+        design.formula = as.formula('~ group')
+      } else {
+        design.formula = as.formula(paste('~ ',
+                                          paste(c(colnames(meta.info), 'group'), 
                                                 collapse=' + ')))
+      }
+      
+      
+      
+      if(grepl('deseq2', tolower(test))) {
+        # ----- DESeq2 -----
         
-        print(design.formula)
+        test.name = 'Wald'
+        if(grepl('lrt', tolower(strsplit(test, split = '\\.')[[1]][2]))) test.name = 'LRT'
         
-        # if(test == 'deseq2'){
-        if(grepl('deseq2', tolower(test))){
-          # ----- DESeq2 -----
-          
-          if(grepl('wald', tolower(test))) test.name = 'Wald'
-          if(grepl('lrt', tolower(test))) test.name = 'LRT'
-          res1 <- suppressMessages( DESeq2::DESeqDataSetFromMatrix(cm, meta, design = design.formula) %>% 
-                                      DESeq2::DESeq(quiet=T, test=test.name) %>%
-                                      DESeq2::results(contrast=c('group', setdiff(names(sample.groups), ref.level), ref.level),
-                                                      cooksCutoff = cooks.cutoff, 
-                                                      independentFiltering = independent.filtering) %>%
-                                      as.data.frame)
-          
-          # DESeq2::DESeq(quiet=T, 
-          #               useT=useT, 
-          #               minReplicatesForReplace = minReplicatesForReplace, 
-          #               minmu = minmu, 
-          #               test=test, 
-          #               reduced=~1)
-          
-          # Avoid NA padj values
-          res1$padj[is.na(res1$padj)] <- 1
-          
-        }else if(test == 'edgeR'){
-          
-          # ----- EdgeR -----
-          dge <- DGEList(cm, group = meta$group)
-          # keep <- filterByExpr(dge)  # keeps rows that have worthwhile counts
-          # dge <- dge[keep,,keep.lib.sizes=FALSE]
-          dge <- calcNormFactors(dge)
-          # design <- model.matrix(~ meta$group)  # 
-          design <- model.matrix(design.formula, meta)
-          dge <- estimateDisp(dge, design = design)
-          fit <- glmQLFit(dge, design = design)
-          qlf <- glmQLFTest(fit, coef=ncol(design))
-          res1 <- qlf$table %>% .[order(.$PValue),]
-          colnames(res1) <- c("log2FoldChange","logCPM","stat","pvalue")
-          res1$padj <- p.adjust(res1$pvalue, method = "BH")
-        }else if((test == 'wilcoxon') || (test = 't-test')) {
-        
-          # Normalization
-          if(normalization == 'deseq2'){
-            print('DESeq2 normalization')
-            dds <- suppressMessages(DESeq2::DESeqDataSetFromMatrix(countData = cm,
-                                                                   colData = meta,
-                                                                   design= ~ group))
-            dds <- estimateSizeFactors(dds)
-            cnts.norm <- counts(dds, normalized=TRUE) 
-            
-  
-          }else if(normalization == 'edgeR'){
-            # EdgeR normalisation
-            print('edgeR normalization')
-            dge <- DGEList(counts = cm)
-            dge <- edgeR::calcNormFactors(dge)
-            cnts.norm <- cpm(dge)
-          }else{
-            print('No normalization')
-            cnts.norm <- cm 
-          }
-          
-          if(test == 'wilcoxon'){
-            # Wilcoxon test
-            res1 <- scran::pairwiseWilcox(cnts.norm, groups = meta$group)$statistics[[1]] %>% 
-              data.frame() %>% 
-              setNames(c("AUC","pvalue","padj"))  
-          }else if (test == 't-test'){
-            res1 <- scran::pairwiseTTests(cnts.norm, groups = meta$group)$statistics[[1]] %>% 
-              data.frame() %>% 
-              setNames(c("AUC","pvalue","padj"))
-          }
-          
+        if(test.name == 'Wald') {
+          res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
+            DESeq2::DESeq(quiet=T, test=test.name) %>%
+            DESeq2::results(contrast=c('group', target.level, ref.level),
+                            cooksCutoff = cooks.cutoff,
+                            independentFiltering = independent.filtering) %>%
+            as.data.frame  
+        } else {
+          res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
+            DESeq2::DESeq(quiet=T, test=test.name, reduced = ~ 1) %>%
+            DESeq2::results(contrast=c('group', target.level, ref.level),
+                            cooksCutoff = cooks.cutoff,
+                            independentFiltering = independent.filtering) %>%
+            as.data.frame  
         }
         
-        # --------------
+        # Avoid NA padj values
+        res1$padj[is.na(res1$padj)] <- 1
         
-        # add Z scores
-        if(!is.na(res1[[1]][1])) {  # strange condition
-          res1 <- addZScores(res1) %>%
-            .[order(.$pvalue,decreasing=F),]
+      } else if(tolower(test) == tolower('edgeR')) {
+        
+        # ----- EdgeR -----
+        design <- model.matrix(design.formula, meta)
+        
+        qlf <- DGEList(cm, group = meta$group) %>%
+          calcNormFactors() %>%
+          estimateDisp(design = design) %>%
+          glmQLFit(design = design) %>%
+          glmQLFTest(coef=ncol(design))
+        
+        res1 <- qlf$table %>% .[order(.$PValue),]
+        colnames(res1) <- c("log2FoldChange","logCPM","stat","pvalue")
+        res1$padj <- p.adjust(res1$pvalue, method = "BH")
+        
+      } else if(tolower(test) == tolower('limma-voom')) {
+        
+        mm <- model.matrix(design.formula, meta)
+        
+        # cnts.norm <- DGEList(counts = cm) %>%
+        #   edgeR::calcNormFactors() %>% cpm
+        cnts.norm = cm
+        
+        y <- voom(cnts.norm, mm, plot = F)
+        fit <- lmFit(y, mm)
+        
+        contr <- makeContrasts(paste(c('group', target.level), collapse = ''),
+                               levels = colnames(coef(fit)))
+        
+        tmp <- contrasts.fit(fit, contr)
+        tmp <- eBayes(tmp)
+        
+        res1 <- topTable(tmp, sort.by = "P", n = Inf)
+        colnames(res1) <- c('log2FoldChange', 'AveExpr', 'stat', 'pvalue', 'padj', 'B')
+        
+      } else if(grepl('wilcoxon', tolower(test)) || grepl('t-test', tolower(test))) {
+        # Normalization
+        tmp = strsplit(test, split = '\\.')
+        test = tolower(tmp[[1]][1])
+        normalization = tolower(tmp[[1]][2])
+        
+        if(normalization == 'deseq2') {
+          print('DESeq2 normalization')
+          cnts.norm <- cm  %>%
+            DESeq2::DESeqDataSetFromMatrix(colData = meta, design= ~ group)  %>%
+            DESeq2::estimateSizeFactors()  %>% DESeq2::counts(normalized=TRUE)
+        } else if(normalization == 'edger') {
+          # EdgeR normalisation
+          print('edgeR normalization')
+          cnts.norm <- DGEList(counts = cm) %>%
+            edgeR::calcNormFactors() %>% cpm
+        } else if((normalization == 'totcount') || (is.null(normalization))) {
+          # the default should be normalization by the number of molecules!
+          cnts.norm <- prop.table(cm, 2) # Should it be multiplied by median(colSums(cm)) ?
         }
         
-        if (return.matrix) {
-          list(res = res1, cm = cm)
+        if(test == 'wilcoxon') {
+          # Wilcoxon test
+          res1 <- scran::pairwiseWilcox(cnts.norm, groups = meta$group)$statistics[[1]] %>%
+            data.frame() %>%
+            setNames(c("AUC","pvalue","padj"))
+        } else if (test == 't-test') {
+          res1 <- scran::pairwiseTTests(cnts.norm, groups = meta$group)$statistics[[1]] %>%
+            data.frame() %>%
+            setNames(c("AUC","pvalue","padj"))
         }
-        else {
-          res1
-        }
-      # }, error = function(err) NA)
-    }, n.cores = n.cores, progress=verbose) %>%
-    .[!sapply(., is.logical)]
+        
+        
+        res1$log2FoldChange <- apply(log(cnts.norm+1, base=2), 1, function(x) {
+          mean(x[meta$group == target.level]) - mean(x[meta$group == ref.level])})
+        
+      }
+      
+      # add Z scores
+      if(!is.na(res1[[1]][1])) {
+        res1 <- addZScores(res1) %>%
+          .[order(.$pvalue,decreasing=F),]
+      }
+      
+      if (return.matrix) {
+        list(res = res1, cm = cm)
+      }
+      else {
+        res1
+      }
+    }, error = function(err) NA)
+  }, n.cores = n.cores, progress=verbose) %>%  .[!sapply(., is.logical)]
   
   
   if(verbose) {

@@ -148,8 +148,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[[name]]))
     },
 
-    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50,
-                                                     n.subsamples=30, min.cells=10, n.cores=1, verbose=self$verbose,  mean.trim=0.1, name='common.expression.shifts') {
+    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50, n.subsamples=30, min.cells=10, n.cores=self$n.cores, verbose=self$verbose,  mean.trim=0.1, name='common.expression.shifts') {
       if(length(levels(sample.groups))!=2) stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
 
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
@@ -251,19 +250,41 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
-    #' @param name Test results to plot (default=expression.shifts)
-    #' @param size.norm Plot size normalized results. Requires cell.groups, and sample.per.cell (default=F)
-    #' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
-    #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored vector)
-    #' @param sample.per.cell Named sample factor with cell names (default: stored vector)
+    #' @param name - results slot name (default: 'expression.shifts')
+    #' @param show.jitter whether to show indiivudal data points (default: FALSE)
+    #' @param jitter.alpha transparency value for the data points (default: 0.05)
+    #' @param type - type of a plot "bar" (default) or "box"
+    #' @param notch - whether to show notches in the boxplot version (default=TRUE)
+    #' @param show.size.depenency whether to show mean vs. number of cells in a cell type instead
+    #' @param font.size font size for the cell type labels in the size dependency plot
+    #' @param show.regression whether to show a slope line in the size dependency plot
+    #' @param show.regression whether to show a whiskers in the size dependency plot
     #' @return A ggplot2 object
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", size.norm=F, notch = T, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, palette=self$cell.groups.palette) {
-      cluster.shifts <- private$getResults(name)$df
-      plotExpressionShiftMagnitudes(cluster.shifts = cluster.shifts, size.norm = size.norm, notch = notch, cell.groups = cell.groups, sample.per.cell = sample.per.cell, palette=palette)
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch = TRUE, show.jitter=TRUE, jitter.alpha=0.05, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
+      df <- private$getResults(name)$df
+      df <- data.frame(cell=df$Type, val=df$value)
+
+      if(show.size.dependency) {
+        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='normalized expression distance', yline=NA, show.whiskers=show.whiskers, show.regression=show.regression)
+      } else { 
+        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette, ylab='normalized expression distance')
+      }
     },
 
-
-    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.subsampling.variability=FALSE, show.jitter=FALSE, jitter.alpha=0.05, palette=self$cell.groups.palette) {
+    ##' Plot common expression shift estimates across cell types
+    ##'
+    ##' @param name result slot name (default: common.expression.shifts
+    ##' @param show.subsampling.variability  - whether the spread should illustrate subsampling variability instead of the inter-sample variability (default: FALSE)
+    ##' @param show.jitter whether to show indiivudal data points (default: FALSE)
+    ##' @param jitter.alpha transparency value for the data points (default: 0.05)
+    ##' @param type - type of a plot "bar" (default) or "box"
+    ##' @param notch - whether to show notches in the boxplot version (default=TRUE)
+    ##' @param show.size.depenency whether to show mean vs. number of cells in a cell type instead
+    ##' @param font.size font size for the cell type labels in the size dependency plot
+    ##' @param show.regression whether to show a slope line in the size dependency plot
+    ##' @param show.regression whether to show a whiskers in the size dependency plot
+    ##' @return A ggplot2 object
+    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.subsampling.variability=FALSE, show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
       res <- private$getResults(name)
       cn <- setNames(names(res[[1]]),names(res[[1]]))
       if(show.subsampling.variability) { # average across patient pairs
@@ -272,27 +293,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       } else { # average across subsampling rounds
         df <- do.call(rbind,lapply(cn,function(n) data.frame(val=colMeans(do.call(rbind,lapply(res,function(x) x[[n]]))),cell=n)))
       }
-      odf <- na.omit(df);
-      df$cell <- as.factor(df$cell)
-      df <- data.frame(cell=levels(df$cell), mean=tapply(df$val,df$cell,mean),
-                       se=tapply(df$val,df$cell, function(x) sd(x)/sqrt(length(x))), stringsAsFactors=F)
-      df <- df[order(df$mean,decreasing=F),]
-      df$cell <- factor(df$cell,levels=df$cell)
-      df <- na.omit(df);
 
-      p <- ggplot(df,aes(x=cell,y=mean,fill=cell))+
-        geom_bar(stat='identity') +
-        geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)+
-        geom_hline(yintercept = 1,linetype=2,color='gray50')+
-        theme_bw() +
-        theme(axis.text.x=element_text(angle = 90, hjust=1, size=12), axis.text.y=element_text(angle=90, hjust=0.5, size=12))+ guides(fill=FALSE)+
-        theme(legend.position = "none")+
-        labs(x="", y="normalized distance (common)")
-      if(show.jitter) p <- p+geom_jitter(data=odf,aes(x=cell,y=val),position=position_jitter(0.1),show.legend=FALSE,alpha=jitter.alpha);
-      if(!is.null(palette)) {
-        p <- p+ scale_fill_manual(values=palette)
+      if(show.size.dependency) {
+        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='common expression distance', yline=NA, show.whiskers=show.whiskers, show.regression=show.regression)
+      } else { 
+        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette, ylab='common expression distance')
       }
-      p
     },
 
     ### Differential expression
@@ -311,9 +317,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param return.matrix Return merged matrix of results (default=TRUE)
     #' @param name slot in which to save the results (default: 'de')
     #' @return A list of DE genes
-    estimatePerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level,
-                              common.genes = FALSE, n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, max.cell.count= Inf, test='Wald', independent.filtering = FALSE,
-                              cluster.sep.chr = "<!!>", return.matrix = T, verbose=self$verbose, name ='de') {
+    estimatePerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level, common.genes = FALSE, n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, max.cell.count= Inf, test='Wald', independent.filtering = FALSE, cluster.sep.chr = "<!!>", return.matrix = T, verbose=self$verbose, name ='de') {
       if(!is.list(sample.groups)) {
         sample.groups <- list(names(sample.groups[sample.groups == ref.level]),
                               names(sample.groups[sample.groups != ref.level])) %>%
@@ -339,11 +343,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param independent.filtering independentFiltering parameter for DESeq2 (default=FALSE)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
     #' @param return.matrix Return merged matrix of results (default=TRUE)
+    #' @param resampling.method which resampling method should be used "loo" for leave-one-out or "bootstrap", (default:NULL no resampling)
     #' @param name slot in which to save the results (default: 'de')
     #' @return A list of DE genes
     estimatePerCellTypeDEnew=function(cell.groups = self$cell.groups,
                                       sample.groups = self$sample.groups,
                                       ref.level = self$ref.level,
+                                      target.level = self$target.level,
                                       common.genes = FALSE,
                                       n.cores = self$n.cores,
                                       cooks.cutoff = FALSE,
@@ -351,79 +357,110 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                       max.cell.count= Inf,
                                       independent.filtering = FALSE,
                                       cluster.sep.chr = "<!!>",
-                                      return.matrix = T,
                                       verbose=self$verbose,
-                                      name.pref ='de',
-                                      minReplicatesForReplace = 7,
+                                      name ='de',
                                       test='DESeq2.Wald',
-                                      normalization=NULL,
-                                      resampling.method=NULL,
-                                      max.resamplings=10,
-                                      seed.resampling=239,
-                                      meta.info = NULL,
-                                      covariates = c()) {
+                                      resampling.method=NULL, # default - without resampling
+                                      max.resamplings=30,
+                                      seed.resampling=239, # shouldn't this be external?
+                                      covariates = NULL) {
+      
       if(!is.list(sample.groups)) {
-        sample.groups <- list(names(sample.groups[sample.groups == ref.level]),
-                              names(sample.groups[sample.groups != ref.level])) %>%
-          setNames(c(ref.level, self$target.level))
+        s.groups <- list(names(sample.groups[sample.groups == ref.level]),
+                         names(sample.groups[sample.groups != ref.level])) %>%
+          setNames(c(ref.level, target.level))
+      } else {
+        s.groups = sample.groups
       }
+      
+      possible.tests <- c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR', 
+                          'Wilcoxon.edgeR', 'Wilcoxon.DESeq2', 'Wilcoxon.totcount',
+                          't-test.edgeR', 't-test.DESeq2', 't-test.totcount',
+                          'limma-voom')
 
-      possible.tests = c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR', 'Wilcoxon', 't-test', 'limma-woom')
+      # Default test for DESeq2 is Wald
+      if(tolower(test) == tolower('DESeq2')) test = paste(test, 'Wald', sep='.')
+      # Default normalization for Wilcoxon and t-test is edgeR
+      if(tolower(test) %in% tolower(c('Wilcoxon', 't-test')) )  test = paste(test, 'edgeR', sep='.')
 
-      if(!(tolower(test) %in% tolower(possible.tests))) stop('Test is not supported') else
-        print(paste0(c('DE method ', test, ' is used'), collapse = ''))
-      if( !is.null(normalization) && !(test %in% c('Wilcoxon', 't-test'))) warning(paste0(c('Normalisation cannot be set for ', test, ' method'), collapse='' ))
+      if(!(tolower(test) %in% tolower(possible.tests))) stop(paste('Test', test, 'is not supported. Available tests:',paste(possible.tests,collapse=', '))) 
 
-      if(is.null(resampling.method)){
-        sample.groups.new = list(de = sample.groups)
-      }else if (resampling.method == 'loo'){
-        sample.groups.new = lapply(unlist(sample.groups, use.names = FALSE),
-                                   function(name) lapply(sample.groups, function(group) setdiff(group, name)))
-        names(sample.groups.new) <- unlist(sample.groups)
-      }else if (resample == 'bootstrap'){
-        # TODO check for n.bootstrap
-        print('TODO')
-        # n.smpls = length(sample.groups)
-        # set.seed(seed.resampling)
-        # sample.groups.new = lapply(1:n.bootstrap,
-        #                            function(x) sample.groups[sample(n.smpls,n.smpls,replace = TRUE)])
-        # names(sample.groups.new) <- sapply(1:n.bootstrap,
-        #                                    function(i) paste0(c('bootstrap', as.character(i)), collapse = ''))
-      }
-      else stop('Resampling method is not supposted')
-
+      test <- possible.tests[tolower(test) == tolower(possible.tests)]
+      message(paste0(c('DE method ', test, ' is used'), collapse = ''))
+      
+      # s.groups.new contains list of case/control groups of samples to run DE on.
+      # First element in s.groups.new corresponds to the initial grouping.
+      
+      s.groups.new = list(initial = s.groups)
+      # If resampling is defined, new contrasts will append to s.groups.new
+      if (is.null(resampling.method)){
+      } else if (resampling.method == 'loo') {
+        s.groups.new = c(s.groups.new, lapply(unlist(s.groups), function(name) 
+          lapply(s.groups, function(group) setdiff(group, name)))  %>%
+            setNames(unlist(s.groups)))
+      } else if (resampling.method == 'bootstrap') {
+        if(max.resamplings < 2) {
+          warning('Bootstrap was not applied, because the number of resamplings was less than 2')
+        } else {
+          n.bootstrap <- max.resamplings
+          set.seed(seed.resampling)
+          s.groups.new <- c(s.groups.new, lapply(setNames(1:n.bootstrap,paste0('bootstrap.',1:n.bootstrap)),function(i) lapply(s.groups,function(x) sample(x,length(x),replace=T))))
+        }
+      } else stop(paste('Resampling method', resampling.method, 'is not supported'))
+      
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=T)
+      
+      de.res = sccore::plapply(names(s.groups.new), function(resampling.name) {
+        
+        estimatePerCellTypeDEmethods(raw.mats=raw.mats,
+                                     cell.groups = cell.groups,
+                                     s.groups = s.groups.new[[resampling.name]],
+                                     ref.level = ref.level,
+                                     target.level = target.level,
+                                     common.genes = common.genes,
+                                     cooks.cutoff = cooks.cutoff,
+                                     min.cell.count = min.cell.count,
+                                     max.cell.count = max.cell.count,
+                                     independent.filtering = independent.filtering,
+                                     n.cores = ifelse(length(s.groups.new)>=n.cores,1,n.cores),
+                                     cluster.sep.chr = cluster.sep.chr,
+                                     return.matrix = ifelse(resampling.name == 'initial',T,F),
+                                     verbose = length(s.groups.new)<n.cores,
+                                     useT = useT,
+                                     minmu = minmu,
+                                     test = test,
+                                     meta.info = covariates)
+      },n.cores=ifelse(length(s.groups.new)>=n.cores,n.cores,1),progress=length(s.groups.new)>=n.cores) %>% setNames(names(s.groups.new)) # parallelize the outer loop if subsampling is on
+      
 
-      de.res = list()
-      for(resampling in names(sample.groups.new)){
-        de.res[[resampling]] <- estimatePerCellTypeDEmeth(raw.mats=raw.mats,
-                                                         cell.groups = cell.groups,
-                                                         sample.groups = sample.groups.new[[resampling]],
-                                                         ref.level = ref.level,
-                                                         common.genes = common.genes,
-                                                         cooks.cutoff = cooks.cutoff,
-                                                         min.cell.count = min.cell.count,
-                                                         max.cell.count = max.cell.count,
-                                                         independent.filtering = independent.filtering,
-                                                         n.cores = n.cores,
-                                                         cluster.sep.chr = cluster.sep.chr,
-                                                         return.matrix = return.matrix,
-                                                         verbose = verbose,
-                                                         useT = useT,
-                                                         minmu = minmu,
-                                                         minReplicatesForReplace = minReplicatesForReplace,
-                                                         test = test,
-                                                         normalization = normalization,
-                                                         meta.info = meta.info,
-                                                         covariates = covariates)
+      # if resampling: calculate median and variance on ranks after resampling
+      if(length(de.res) > 1) {
+        var.to.sort = 'pvalue' # Variable to calculate ranks
+        for(cell.type in names(de.res[[1]])) {
+          genes.init <- genes.common <- rownames(de.res[[1]][[cell.type]]$res)
+          mx.stat <- matrix(nrow = length(genes.common), ncol = 0, dimnames = list(genes.common,c()))
+          for(i in 2:length(de.res)){
+            if(!(cell.type %in% names(de.res[[i]]))) next
+            genes.common = intersect(genes.common, rownames(de.res[[i]][[cell.type]]))
+            mx.stat = cbind(mx.stat[genes.common,], de.res[[i]][[cell.type]][genes.common, var.to.sort])
+          }
+          
+          mx.stat = apply(mx.stat, 2, rank)
+          stab.mean.rank = rowMeans(mx.stat) # stab - for stability
+          stab.median.rank = apply(mx.stat, 1, median)
+          stab.var.rank = apply(mx.stat, 1, var)
+          
+          de.res[[1]][[cell.type]]$res$stab.median.rank = stab.median.rank[genes.init]
+          de.res[[1]][[cell.type]]$res$stab.mean.rank = stab.mean.rank[genes.init]
+          de.res[[1]][[cell.type]]$res$stab.var.rank = stab.var.rank[genes.init]
+          
+          # Save subsamples
+          de.res[[1]][[cell.type]]$subsamples <- lapply(de.res[2:length(de.res)], function(de) de[[cell.type]])
+        }
       }
-
-      if(length(de.res)){ # if there were no resampling
-        self$test.results[[name.pref]] <- de.res[[1]]
-      }else{
-        self$test.results[[paste0(c(name.pref, resampling.method), collapse = '.')]] <- de.res
-      }
-      return(invisible(self$test.results[[name.pref]]))
+      
+      # Overwrite 'de' slot with the last result
+      return(invisible(self$test.results[[name]] <- de.res[[1]]))
     },
 
     #' @description Plot number of significant DE genes as a function of number of cells
@@ -456,24 +493,41 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param label Show labels on plot (default=T)
     #' @param pvalue.cutoff P value cutoff (default=0.05)
     #' @param p.adjust whether the cutoff should be based on the adjusted P value (default: TRUE)
+    #' @param show.resampling.results whether to show uncertainty based on resampling results (default: TRUE)
+    #' @param show.size.depenency whether to show mean vs. number of cells in a cell type instead (default: FALSE)
+    #' @param font.size font size for the cell type labels in the size dependency plot
+    #' @param show.regression whether to show a slope line in the size dependency plot (default:TRUE)
+    #' @param show.whiskers whether to show a whiskers in the size dependency plot (default:TRUE)
     #' @return A ggplot2 object
-    plotNumberOfDEGenes=function(name='de', cell.groups=self$cell.groups, legend.position="none", label=TRUE, p.adjust=TRUE, pvalue.cutoff=0.05, palette=self$cell.groups.palette) {
+    plotNumberOfDEGenes=function(name='de', legend.position="none", label=TRUE, p.adjust=TRUE, pvalue.cutoff=0.05, show.resampling.results=TRUE, show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
+      
       de.raw <- private$getResults(name, 'estimatePerCellTypeDE()')
-
-      if(p.adjust) {
-        x <- lapply(de.raw,function(x) sum(na.omit(x$res$padj<=pvalue.cutoff))) %>% unlist %>% sort
+      
+      if(show.resampling.results) {
+        if(!all(unlist(lapply(de.raw,function(x) !is.null(x$subsamples))))) {
+          warning("resampling results are missing for at least some cell types, falling back to point estimates. Please rerun estimatePerCellTypeDE() with resampling='bootstrap' or resampling='loo'")
+          rl <- lapply(de.raw,function(x) x$res)
+        } else {
+          rl <- setNames( unlist(lapply(de.raw,function(x) x$subsamples),recursive=F), rep(names(de.raw),unlist(lapply(de.raw,function(x) length(x$subsamples)))))
+        }
       } else {
-        x <- lapply(de.raw,function(x) sum(na.omit(x$res$pvalue<=pvalue.cutoff))) %>% unlist %>% sort
+        rl <- lapply(de.raw,function(x) x$res)
       }
-      p <- ggplot(data.frame(cell=names(x), nde=x), aes(x=reorder(cell, nde), y=nde, fill=cell)) +
-        geom_bar(stat="identity") +
-        theme_bw() +
-        theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12), axis.title.x=element_blank()) +
-        ylab("number of DE genes") + guides(fill=FALSE)
+      # convert to dataframe for plotting
+      df <- do.call(rbind,lapply(1:length(rl),function(i) {
+        if(p.adjust) {
+          ndiff <- sum(na.omit(rl[[i]]$padj<=pvalue.cutoff))
+        } else {
+          ndiff <- sum(na.omit(rl[[i]]$pvalue<=pvalue.cutoff))
+        }
+        data.frame(cell=names(rl)[i],val=ndiff,stringsAsFactors=FALSE)
+      }))
 
-      if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
-
-      return(p)
+      if(show.size.dependency) {
+        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='number of DE genes', yline=NA, show.whiskers=show.whiskers, show.regression=show.regression)
+      } else { 
+        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette, ylab='number of DE genes',yline=NA)
+      }
     },
 
     #' @description Save DE results as JSON files
@@ -1077,7 +1131,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Plot compositions in CoDA-PCA space
     #' @return A ggplot2 object
-    plotPcaSpace=function(cells.to.remove = NULL, palette=self$sample.groups.palette) {
+    plotPcaSpace=function(cells.to.remove = NULL, font.size=NULL, palette=self$sample.groups.palette) {
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
       d.counts <- data.frame(anno=self$cell.groups,
@@ -1089,12 +1143,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       names(d.groups) <- rownames(d.counts)
       # ----
 
-      plotPcaSpace(d.counts, d.groups, palette=palette)
+      plotPcaSpace(d.counts, d.groups, self$ref.level, self$target.level, font.size, palette=palette)
     },
 
     #' @description Plot compositions in CoDA-CDA space
     #' @return A ggplot2 object
-    plotCdaSpace=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL) {
+    plotCdaSpace=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, font.size=NULL) {
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
       d.counts <- data.frame(anno=self$cell.groups,
@@ -1109,7 +1163,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       names(d.groups) <- rownames(d.counts)
       # ----
 
-      plotCdaSpace(d.counts, d.groups)
+      plotCdaSpace(d.counts, d.groups, self$ref.level, self$target.level, font.size)
 
     },
 
@@ -1129,13 +1183,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       names(d.groups) <- rownames(d.counts)
       # ----
 
-      plotContrastTree(d.counts, d.groups)
+      plotContrastTree(d.counts, d.groups, self$ref.level, self$target.level)
     },
 
     #' @description Plot Loadings
     #' @return A ggplot2 object
     estimateCellLoadings=function(n.cell.counts = 1000, n.seed = 239, cells.to.remove = NULL,
-                                  cells.to.remain = NULL, samples.to.remove = NULL, signif.threshold = 0.2){
+                                  cells.to.remain = NULL, samples.to.remove = NULL, n.iter=1000){
       # Construct sample groups and count data
       # ---- The following can be significantly reduced
       d.counts <- data.frame(anno=self$cell.groups,
@@ -1151,19 +1205,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       self$test.results[['cda']] <- resampleContrast(d.counts, d.groups,
                                                      n.cell.counts = n.cell.counts,
-                                                     n.seed = n.seed)
-
-
-      balances <- self$test.results$cda$balances
-      n.bal <- ncol(balances)
-      n.plus <- rowSums(balances[,2:n.bal] > 0)
-      n.minus <- rowSums(balances[,2:n.bal] < 0)
-      perm.frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) /
-        mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
-
-      cda.top.cells <- names(perm.frac)[perm.frac < signif.threshold]
-
-      self$test.results[['cda.top.cells']] = cda.top.cells
+                                                     n.seed = n.seed, n.iter = n.iter)
+      
+      self$test.results$cda$pvals = getCellSignificance(self$test.results$cda$balances)
 
       return(invisible(self$test.results[['cda']]))
     },
@@ -1193,25 +1237,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Plot Loadings
     #' @param palette palette specification for cell types (default: stored $cell.groups.palette)
     #' @return A ggplot2 object
-    plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, n.significant.cells=0, font.size=NULL) {
-      cda <- private$getResults('cda', 'estimateCellLoadings()')
-      n.bal <- ncol(cda$balances)
-      n.plus <- rowSums(cda$balances[,2:n.bal] > 0)
-      n.minus <- rowSums(cda$balances[,2:n.bal] < 0)
-      frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) / mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
-      res.ordered <- t(cda$balances)[,order(-frac)] %>% as.data.frame()
-
-      p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
-        geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = alpha, size=1) +
-        geom_hline(yintercept = 0, color = "gray37") +
-        coord_flip() + xlab('') + ylab('') + theme_bw()+ theme(legend.position = "none")
-
-      if(!is.null(font.size)) {
-        p <- p + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
+    plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, font.size=NULL,
+                                ordering='by.pvalue', signif.threshold=0.05, show.pvals=F) {
+      possible.ordering = c('by.pvalue', 'by.mean', 'by.median')
+      if(!(ordering %in% possible.ordering)){
+        warning('Defaulf ordiring \'by.pvalue\' is applied ' )
+        ordering = 'by.pvalue'
       }
-      if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
-      if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(cda$balances) - n.significant.cells + 0.5, color='red')
-
+      
+      cda <- private$getResults('cda', 'estimateCellLoadings()')
+      p <- plotCellLoadings(cda, ordering, signif.threshold, font.size, alpha, palette, show.pvals,
+                            self$ref.level, self$target.level)
+      
       return(p)
     },
 
@@ -1230,7 +1267,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       self$test.results[['p.vals.balances']] <- p.vals
       return(self$test.results[['p.vals.balances']])
 
-      cda = resampleContrast(d.counts, d.groups,
+      cda <- resampleContrast(d.counts, d.groups,
                              n.cell.counts = n.cell.counts,
                              n.seed = n.seed)
       plotCellLoadings(cda$balances, aplha = aplha)
@@ -1329,7 +1366,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param contour.color color for contour line
     #' @param z.cutoff absolute z score cutoff
     #' @param contour.conf confidence interval of contour
-    diffCellDensity=function(condition.per.cell=NULL, method='subtract', col=c('blue','white','red'), show.legend=FALSE, legend.position=NULL, title=NULL, show.grid=NULL, plot=TRUE, contours=NULL, contour.color='white', contour.conf='10%', z.cutoff=NULL, size =0.1, ...){
+    diffCellDensity=function(condition.per.cell=NULL, method='subtract', col=c('blue','white','red'), show.legend=FALSE, legend.position=NULL, title=NULL, show.grid=NULL, plot=TRUE, contours=NULL, contour.color='white', contour.conf='10%', z.cutoff=NULL, size =0.1, adjust.pvalues=TRUE, ...){
       # TODO: rename it to start with estimate*
       if (method == 'graph'){
         score <- private$getResults('cell.density.graph', 'estimateCellDensity(method="graph")')
@@ -1337,16 +1374,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       } else {
         dens.res <- private$getResults('cell.density.kde', 'estimateCellDensity()')
         mat <- dens.res %$%
-          diffCellDensity(density.emb, density.mat, condition.per.cell=condition.per.cell, self$sample.groups, bins=bins, target.level=self$target.level,
-                          ref.level=self$ref.level, method=method, title=title, legend.position=legend.position, show.legend=show.legend, show.grid=show.grid, z.cutoff=z.cutoff)
+          diffCellDensity(density.emb, density.mat, condition.per.cell=condition.per.cell, self$sample.groups, bins=bins, target.level=self$target.level,ref.level=self$ref.level, method=method, title=title, legend.position=legend.position, show.legend=show.legend, show.grid=show.grid, z.cutoff=z.cutoff, adjust.pvalues=adjust.pvalues)
         emb <- mat[,1:2]
         score <- mat$z
         names(score) <- rownames(mat)
       }
 
       if (plot){
-        fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) +
-          scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0)
+        fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) + scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0) +theme(legend.background = element_blank())
 
         if(!is.null(contours)){
           cnl <- do.call(c, lapply(sn(contours), function(x)
@@ -1564,7 +1599,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         self$plotEmbedding(colors=scores[,i], gradient.range.quantile=gradient.range.quantile, plot.na=plot.na,
                            legend.title=legend.title, title=colnames(scores)[i], ...)
       })
-
+      ggs <- lapply(ggs,function(x) x+theme(legend.background = element_blank()))
       if (build.panel)
         return(cowplot::plot_grid(plotlist=ggs, nrow=nrow))
 
@@ -1589,7 +1624,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param font.size size range for cell type labels
     #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
     plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, plot.both.conditions=FALSE, plot.na=FALSE, max.shift=NULL,
-                                               alpha=0.2, font.size=c(2, 3), ...) {
+                                               alpha=0.2, font.size=c(3,5), ...) {
       shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts")
       if (is.null(self$embedding))
         stop("embedding must not be NULL. Please, set the 'embedding' field.")
@@ -1618,7 +1653,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         scale_size_continuous(range=font.size, trans='identity', guide='none') +
         scale_color_gradientn(colours=c('#2c7bb6', '#abd9e9', '#ffffbf', '#fdae61', '#d7191c'),
                               values=c(0, 0.5 / max.shift, 1 / max.shift, 0.5 - 0.5 * max.shift, 1.0), # Ensure that 1.0 has yellow color
-                              name="Ratio")
+                              name="Ratio") +theme(legend.background = element_blank())
       return(gg)
     },
 
@@ -1676,7 +1711,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           lst <- self$plotEmbedding(colors=z.scores[,g], title=title, color.range=c(-max.z, max.z), plot.na=plot.na, ...) %>%
             list() %>% c(lst)
         }
-
+        lst <- lapply(lst,function(x) x+theme(legend.background = element_blank()))
         if (length(lst) > 1) cowplot::plot_grid(plotlist=lst, ncol=3) else lst[[1]]
       })
 

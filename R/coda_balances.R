@@ -12,11 +12,20 @@ resampleContrast <- function(d.counts, d.groups, n.cell.counts = 500, n.seed = 2
 
   cda.resamples <- matrix(cda.loadings[colnames(d.counts),], ncol = 1)
   d.all <- c()
+  n.skip.resampl <- 0
   for(iter in 1:n.iter){
-
     d.resampled <- resampleCounts(d.counts, d.groups = d.groups, n.tot.count = n.cell.counts, n.seed = rnd.seeds[iter])
     d.all <- rbind(d.all, d.resampled)
-    cda.loadings <- getCdaLoadings(d.resampled, d.groups[rownames(d.resampled)], n.seed = rnd.seeds[iter])
+    
+    cda.loadings = NULL
+    tryCatch(expr = {
+        cda.loadings <- getCdaLoadings(d.resampled, d.groups[rownames(d.resampled)], n.seed = rnd.seeds[iter])
+      },error = function(e){})  
+    
+    if(is.null(cda.loadings)) {
+      n.skip.resampl <- n.skip.resampl + 1
+      next
+    }
 
     x <- cda.loadings[colnames(d.counts),]
     # if(length(cda.resamples) > 0){
@@ -27,6 +36,8 @@ resampleContrast <- function(d.counts, d.groups, n.cell.counts = 500, n.seed = 2
     # }
     cda.resamples <- cbind(cda.resamples, x)
   }
+
+  if(n.skip.resampl > 0) warning(paste('Numer of skipped resamplings:', as.character(n.skip.resampl)))
   return(list(balances = cda.resamples, data = d.all))
 }
 
@@ -146,13 +157,13 @@ getCdaLoadings <- function(d.counts, d.groups, n.seed = 239){
 
   for (i in 0:n.pc) {
     stop.loop <- TRUE
-    # print(d.groups)
     model <- lm(as.matrix(df.pca[,1:(n.pc-i)]) ~ d.groups)
     tryCatch(suppressWarnings(cda <- candisc::candisc(model, ndim=1)), error = function(e) { stop.loop <<- FALSE})
     if(stop.loop)
       break
   }
 
+  # Positive values of loadings are for disease(targer.level), negative - for control(ref.level)
   if (mean(cda$scores[d.groups,'Can1']) < mean(cda$scores[!d.groups,'Can1'])) {
     cda$structure <- -cda$structure
   }
@@ -328,4 +339,14 @@ calcWilcoxonTest <- function(cell.groups,
   options(warn=0)
 
   p.vals.res
+}
+
+getCellSignificance <- function(balances){
+  n.bal <- ncol(balances)
+  n.plus <- rowSums(balances[,2:n.bal] > 0)
+  n.minus <- rowSums(balances[,2:n.bal] < 0)
+  perm.frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) /
+    mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
+  
+  perm.frac
 }

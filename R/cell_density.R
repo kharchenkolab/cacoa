@@ -5,7 +5,7 @@
 ##' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 ##' @param bins number of bins for density estimation, default 400
 ##' @param by.sample  if TRUE, density will estimated by sample and quantiles normalization will applied to individual sample. If FALSE, cell condition.per.cell need to be provided and density will simply esitmated by condition.per.cell.
-estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, condition.per.cell = NULL, by.sample = TRUE){
+estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, condition.per.cell = NULL, by.sample = TRUE, expansion.mult=0.05){
   if (!requireNamespace("preprocessCore", quietly = TRUE)) {
     stop("You have to install preprocessCore package from Bioconductor to do quantile normlization ")
   }
@@ -13,6 +13,7 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, co
   if (!requireNamespace("MASS", quietly = TRUE)) {
     stop("You have to install MASS package to estimate density ")
   }
+  lims <- as.numeric(apply(emb,2,function(x) ggplot2:::expand_limits_continuous(range(x),expansion(mult=expansion.mult))))
 
   cname <- intersect(names(sample.per.cell), rownames(emb))
   sample.per.cell <- sample.per.cell[cname]
@@ -21,7 +22,7 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, co
   list.den <- lapply(sccore:::sn(as.character(unique(sample.per.cell))), function(x) {
     nname <- names(sample.per.cell[sample.per.cell == x])
     tmp <- emb[nname, ]
-    f2 <- MASS::kde2d(tmp[, 1], tmp[, 2], n = bins, lims = c(range(emb[, 1]), range(emb[, 2])))
+    f2 <- MASS::kde2d(tmp[, 1], tmp[, 2], n = bins, lims = lims)
     f2
   })
   den.mat <- do.call("cbind", lapply(list.den, function(x) as.numeric(x$z)))
@@ -35,26 +36,23 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, co
     if (is.null(condition.per.cell)) { stop("'condition.per.cell' must be provided") }
     list.den <- lapply(sccore:::sn(as.character(unique(condition.per.cell))), function(x) {
       tmp <- emb[names(condition.per.cell[condition.per.cell == x]), ]
-      MASS::kde2d(tmp[, 1], tmp[, 2], n = bins, lims = c(range(emb[, 1]), range(emb[, 2])))
+      MASS::kde2d(tmp[, 1], tmp[, 2], n = bins, lims = lims)
     })
     denMatrix <- do.call("cbind", lapply(list.den, function(x) as.numeric(x$z)))
-    density.fraction <- lapply(sccore:::sn(as.character(unique(sample.groups))),
-                              function(x) denMatrix[, x])
+    density.fraction <- lapply(sccore:::sn(as.character(unique(sample.groups))), function(x) denMatrix[, x])
   }
 
   # coordinate embedding space
   mat <- matrix(density.fraction[[1]], ncol = bins, byrow = FALSE)
-  x <- emb[, 1]
-  y <- emb[, 2]
-  x1 <- seq(min(x), max(x), length.out=bins) %>% setNames(seq(bins))
-  y1 <- seq(min(y), max(y), length.out=bins) %>% setNames(seq(bins))
+  x1 <- seq(lims[1], lims[2], length.out=bins) %>% setNames(seq(bins))
+  y1 <- seq(lims[3], lims[4], length.out=bins) %>% setNames(seq(bins))
   d1 <- setNames(melt(mat), c('x', 'y', 'z'))
   emb2 <- data.frame(x=x1[d1$x], y=y1[d1$y])
 
   #count cell number in each bin
-  s1 <- seq(from = min(x), to = max(x), length.out=bins + 1)
-  s2 <- seq(from = min(y), to = max(y), length.out=bins + 1)
-  dcounts <- table(cut(x, breaks = s1), cut(y, breaks = s2)) #%>% as.matrix.data.frame
+  s1 <- seq(from = lims[1], to = lims[2], length.out=bins + 1)
+  s2 <- seq(from = lims[3], to = lims[4], length.out=bins + 1)
+  dcounts <- table(cut(emb[,1], breaks = s1), cut(emb[,2], breaks = s2)) #%>% as.matrix.data.frame
   emb2$counts <- as.numeric(dcounts)
 
   return(list(density.mat=density.mat, density.fraction=density.fraction, density.emb=emb2, bins=bins))
@@ -194,7 +192,7 @@ plotDensity <- function(mat, bins, col = c('blue','white','red'), show.legend = 
 ##' global variance is setting for t.test;
 diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample.groups, bins, ref.level, target.level, method = 'subtract',
                             show.legend = NULL,legend.position = NULL, show.grid = TRUE, col = c('blue','white','red'), title = NULL,
-                            dcount.cutoff = 0, z.cutoff = NULL){
+                            dcount.cutoff = 0, z.cutoff = NULL, adjust.pvalues=TRUE){
   nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
   nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
 
@@ -221,11 +219,13 @@ diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample
       x1 <- x[nt]
       x2 <- x[nr]
       tryCatch({
-        t.test(x1, x2)$statistic
+        x <- t.test(x1, x2)
+        qnorm(pt(x$statistic,x$parameter)) # calculate zscore
       }, error = function(e) {
         0
       })
     })
+    if(adjust.pvalues) score <- sign(score) * qnorm(p.adjust(pnorm(abs(score),lower.tail=F),method='BH'),lower.tail=F)
   } else if (method == 'wilcox') {
     vel <- rowMeans(density.mat)
     density.mat2 <- density.mat + quantile(vel, 0.05) # add sudo counts at 5%
@@ -238,9 +238,10 @@ diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample
       zscore <- zstat * sign(fc)
       zscore
     })
+    if(adjust.pvalues) score <- sign(score) * qnorm(p.adjust(pnorm(abs(score),lower.tail=F),method='BH'),lower.tail=F)
   } else stop("Unknown method: ", method)
 
-  if (is.null(title)){
+  if (is.null(title)) {
     title <- method
   }
   #density.score <- matrix(score, ncol = bins, byrow = FALSE)
@@ -248,8 +249,9 @@ diffCellDensity <- function(density.emb, density.mat, condition.per.cell, sample
   mat <-  data.frame(density.emb, 'z' = score)
   mat <-  mat[mat$counts > dcount.cutoff, ]
 
-  if (!is.null(z.cutoff))
+  if (!is.null(z.cutoff)) {
     mat[abs(mat$z) < z.cutoff, 'z'] = 0
+  }
   #p <- plotDensity(mat, bins, col = col, title = title, legend.position = legend.position, show.legend = show.legend, show.grid = show.grid, diffDensity = TRUE)
   #return(list('fig' = p,'score' = mat))
   return(mat)

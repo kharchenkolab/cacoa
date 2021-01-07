@@ -189,7 +189,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
     if(verbose) cat('setting group size of ',n.cells,' cells for comparisons\n')
   }
 
-  if(verbose) cat('running',n.subsamples,'subsamples ... \n')
+  if(verbose) cat('running',n.subsamples,'subsamples using ',n.cores,'cores ...\n')
   ctdml <- sccore:::plapply(1:n.subsamples,function(i) {
     # subsample cells
 
@@ -232,7 +232,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
       tcd
     })
 
-  },n.cores=n.cores, mc.preschedule=TRUE, mc.allow.recursive=FALSE, progress=verbose)
+  },n.cores=n.cores, mc.preschedule=TRUE, progress=verbose)
 
   if(verbose) cat('calculating distances ... ')
   df <- do.call(rbind,lapply(ctdml,function(ctdm) {
@@ -282,3 +282,5 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
   if(verbose) cat('done!\n')
   return(list(df=df, ctdml=ctdml, sample.groups=sample.groups, valid.comparisons=valid.comparisons))
 }
+
+

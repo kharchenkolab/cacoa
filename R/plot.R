@@ -13,7 +13,20 @@ theme_legend_position <- function(position) {
   theme(legend.position=position, legend.justification=position)
 }
 
-plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", legend.position="right", label=TRUE, size=5, palette=NULL) {
+
+#' @title Plot Number of Cells Regression
+#' @param n the regressed variable
+#' @param n.total number of cells
+#' @param x.lab x axis label (default: "Number of cells").
+#' @param y.lab y axis label (default: "N")
+#' @param legend.position legend position (default: "right")
+#' @param label show cell type labels (default: TRUE)
+#' @param size label text size (default: 4)
+#' @param palette color palette
+#' @param plot.line plot the robust regression (default: TRUE)
+#' @param line.width regression line width (default: 0.5)
+plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", legend.position="right", label=TRUE, size=4,
+                                palette=NULL, plot.line=TRUE, line.width=0.5) {
   p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
 
@@ -34,7 +47,14 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
     theme_legend_position(legend.position) +
     guides(color=guide_legend(title="Cell type"))
 
-  if(!is.null(palette)) gg <- gg+ scale_color_manual(values=palette)
+  if(!is.null(palette)) {
+    gg <- gg+ scale_color_manual(values=palette)
+  }
+
+  if (plot.line) {
+    gg <- gg +
+      geom_smooth(method=MASS::rlm, formula = y~x, se=FALSE, color="black", size=line.width)
+  }
 
   return(gg)
 }
@@ -262,7 +282,7 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
 
   # order cell types according to the mean
   odf$cell <- factor(odf$cell,levels=df$cell)
-  
+
   if(type=='box') { # boxplot
     p <- ggplot(odf,aes(x=cell,y=val,fill=cell)) + geom_boxplot(notch=notch, outlier.shape=NA)
   } else if(type=='point') { # point + se
@@ -281,7 +301,7 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
     p <- p+ scale_fill_manual(values=palette)
   }
   p
-  
+
 }
 
 ##' show a scatter plot of cell-type values vs. number of cells per cell type
@@ -295,7 +315,7 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
 ##' @return ggplot2 object
 plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab='expression distance', yline=1, show.regression=TRUE, show.whiskers=TRUE) {
   cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.raw)]
-  
+
   # calculate mean, se and median
   odf <- na.omit(df); # full df is now in odf
   # calculate mean and se
@@ -324,9 +344,9 @@ plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab
   if(!is.null(palette)) {
     p <- p+ scale_fill_manual(values=palette)
   }
-  
+
   p
-  
+
 }
 
 plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string.length=18, legend.label.size = 1, legend.position = "topright", verbose = T, n.cores = 1) {

@@ -781,40 +781,34 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Plot ontology terms as a function of both number of DE genes, and number of cells.
-    #' @param genes Specify which genes to plot, can either be 'down', 'up', 'all' or a combination of these (default=c("up","down"))
+    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default='all')
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @param de.filter Filtered DE genes, results from prepareOntologyData (default: stored list)
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param label.x.pos Plot label position on x axis (default=0.01)
     #' @param label.y.pos Plot label position on y axis (default=1)
-    #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
+    #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See \link[cowplot:plot_grid]{cowplot::plot_grid} for more info (default=1.0)
+    #' @param ... parameters forwarded to \link{plotNCellRegression}
     #' @return A ggplot2 object
-    plotOntologyTerms=function(genes=c("up","down"), type="GO", p.adj=0.05, min.genes=1, de.filter=self$test.results$gene.ids, cell.groups=self$cell.groups, label.x.pos=0.01, label.y.pos=1, scale=0.93) {
+    plotOntologyTerms=function(genes='all', type="GO", p.adj=0.05, min.genes=1, de.filter=self$test.results$gene.ids,
+                               cell.groups=self$cell.groups, label.x.pos=0.01, label.y.pos=1, scale=1.0, ...) {
       ont.res <- private$getOntologyPvalueResults(genes=genes, type=type, p.adj=p.adj, min.genes=min.genes)
 
       if(length(unique(ont.res$Group))==1) stop("The input only contains one cell type.")
       cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
 
+      n.go.per.type <- table(ont.res$Group) %>% c()
+      n.de.per.type <- sapply(de.filter, function(x) length(x$all))
+
+      y.lab <- paste("Number of", type, "terms")
       pg <- cowplot::plot_grid(
-        ont.res$Group %>% table %>% c %>%
-          plotNCellRegression(sapply(de.filter, function(x) length(x$all)), x.lab="Number of highly-expressed DE genes",
-                              y.lab=NULL, legend.position="none", label=TRUE) +
-          geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5),
-        ont.res$Group %>% table %>% c %>%
-          plotNCellRegression(cell.groups, y.lab=NULL, legend.position="none", label=TRUE) +
-          geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5),
-        ncol=1, labels=c("a", "b"), label_x = label.x.pos, label_y = label.y.pos
+        plotNCellRegression(n.go.per.type, n.de.per.type, x.lab="Number of highly-expressed DE genes",
+                            y.lab=y.lab, legend.position="none", label=TRUE, ...),
+        plotNCellRegression(n.go.per.type, cell.groups, y.lab=y.lab, legend.position="none", label=TRUE, ...),
+        ncol=1, labels=c("a", "b"), label_x=label.x.pos, label_y=label.y.pos, scale=scale
       )
 
-      if(type=="GO") {
-        y.lab <- "Number of GO terms"
-      } else if(type=="DO") {
-        y.lab <- "Number of DO terms"
-      } else if(type == "GSEA") {
-        y.lab <- "Number of GSEA terms"
-      }
-
-      return(cowplot::plot_grid(pg, nrow=1, scale=scale) + cowplot::draw_label(y.lab, x=0, y=0.6, vjust= 1.5, angle=90))
+      return(pg)
     },
 
     #' @description Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
@@ -1770,7 +1764,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
         stop("'subtype' must be 'BP', 'CC', or 'MF'.")
 
-      if(!genes %in% c("down","up","all"))
+      if((length(genes) != 1) || (!genes %in% c("down","up","all")))
         stop("'genes' must be 'down', 'up', or 'all'.")
 
       ont.res <- self$test.results[[type]][["res"]]
@@ -1786,7 +1780,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       if(is.null(ont.res))
-        stop(paste0("No results found for ", genes, " genes for ", type, " for ", cell.subgroups, ".")) # TODO: Include GSEA
+        stop(paste0("No results found for ", genes, " genes for ", type, ".")) # TODO: Include GSEA
 
       if(!is.null(cell.subgroups)) {
         if(!cell.subgroups %in% unique(ont.res$Group))

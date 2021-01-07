@@ -48,9 +48,9 @@ Suggests:
     enrichplot,
     fabia,
     ggrastr (>= 0.1.7),
+    GOfuncR,
     Rtsne,
     graph,
-    igraph,
     Rgraphviz
 Remotes:
     hms-dbmi/sccore

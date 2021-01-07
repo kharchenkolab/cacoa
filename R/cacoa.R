@@ -1043,12 +1043,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Plot ontology family tree
     #' @return An Rgraphviz object
-    plotOntologyFamily=function(type = "GO", cell.subgroups, family, genes = "up", subtype = "BP", plot.type = "complete", show.ids = F, string.length=18, legend.label.size = 1, legend.position = "topright", verbose = T, n.cores = 1) {
+    plotOntologyFamily=function(type = "GO", cell.subgroups, family, genes = "up", subtype = "BP", plot.type = "complete", show.ids = FALSE,
+                                string.length=18, legend.label.size = 1, legend.position = "topright", verbose = self$verbose, n.cores = self$n.cores) {
       #Checks
-      if (!requireNamespace("GOfuncR", quietly = TRUE)) stop("You need 'GOfuncR' to plot ontology families.")
-      if (!requireNamespace("igraph", quietly = TRUE)) stop("You need 'igraph' to plot ontology families.")
-      if (!requireNamespace("graph", quietly = TRUE)) stop("You need 'graph' to plot ontology families.")
-      if (!requireNamespace("Rgraphviz", quietly = TRUE)) stop("You need 'Rgraphviz' to plot ontology families.")
+      if (!requireNamespace("GOfuncR", quietly = TRUE))
+        stop("You need 'GOfuncR' to plot ontology families. Use `BiocManager::install('GOfuncR')`.")
+      if (!requireNamespace("graph", quietly = TRUE))
+        stop("You need 'graph' to plot ontology families. Use `BiocManager::install('graph')`.")
+      if (!requireNamespace("Rgraphviz", quietly = TRUE))
+        stop("You need 'Rgraphviz' to plot ontology families. Use `BiocManager::install('Rgraphviz')`.")
+
       if(!is.numeric(family)) stop("'family' must be numeric.")
       if(!is.null(plot.type) && !plot.type %in% c("complete","dense","minimal")) stop("'plot.type' must be 'complete', 'dense', or 'minimal'.")
 

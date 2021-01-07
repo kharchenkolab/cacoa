@@ -3,10 +3,6 @@
 #' @import dplyr
 #' @import magrittr
 #' @importFrom reshape2 melt
-#' @importFrom igraph get.adjacency graph_from_data_frame renderGraph
-#' @importFrom Rgraphviz layoutGraph
-#' @importFrom graph graphAM
-#' @importFrom GOfuncR get_child_nodes
 NULL
 
 theme_legend_position <- function(position) {
@@ -357,7 +353,7 @@ plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string
 
   # Define edges
   edges <- lapply(nodes$label, function(y) {
-    data.frame(from=y, to=nodes$label[nodes$label %in% (get_child_nodes(y)$child_go_id)])
+    data.frame(from=y, to=nodes$label[nodes$label %in% (GOfuncR::get_child_nodes(y)$child_go_id)])
   }) %>%
     bind_rows() %>%
     as.data.frame() %>%
@@ -373,7 +369,7 @@ plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string
       if(class(tmp.to) == "data.frame") {
         if(nrow(tmp.to) > 1) {
           tmp.children <- sapply(tmp.to$from, function(parent.id) {
-            get_child_nodes(parent.id)$child_go_id
+            GOfuncR::get_child_nodes(parent.id)$child_go_id
           })
 
           idx <- sapply(1:(tmp.children %>% length()), function(id) {
@@ -412,9 +408,8 @@ plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string
   edges.wrapped <- edges %>% apply(2, function(x) wrap_strings(x, string.length))
 
   # Render graph
-  p <- graphAM(get.adjacency(graph_from_data_frame(edges.wrapped)) %>% as.matrix(),
-                      edgemode = 'directed') %>%
-    layoutGraph()
+  p <- igraph::graph_from_data_frame(edges.wrapped) %>% igraph::get.adjacency() %>%
+    as.matrix() %>% graph::graphAM(edgemode = 'directed') %>% Rgraphviz::layoutGraph()
 
   # Define layout
   ## Extract significance
@@ -453,7 +448,7 @@ plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string
   p@renderInfo@nodes$shape <- rep("box", length(p@renderInfo@nodes$shape)) %>% setNames(names(p@renderInfo@nodes$shape))
 
   # Plot
-  renderGraph(p)
+  Rgraphviz::renderGraph(p)
   legend(legend.position,
          legend = c("P > 0.05","P < 0.05","P < 0.01","P < 0.001"),
          fill = c("white","mistyrose1","lightpink1","indianred2"),

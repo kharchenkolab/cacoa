@@ -1,5 +1,4 @@
 #' @import dplyr
-#' @importFrom GOfuncR get_parent_nodes get_child_nodes
 NULL
 
 #' @title Prepare ontology data
@@ -409,14 +408,14 @@ wrap_strings <- function(strings, width) {
 }
 
 familyInnerFunction <- function(ids) {
-  tmp.parent <- get_parent_nodes(ids$ID) %>%
+  tmp.parent <- GOfuncR::get_parent_nodes(ids$ID) %>%
     rename(parent_distance = distance) %>%
     filter(parent_distance > 0) %>%
     split(., .$child_go_id) %>%
     lapply(as.list) %>%
     lapply(function(x) x[-1])
 
-  tmp.children <- get_child_nodes(ids$ID) %>%
+  tmp.children <- GOfuncR::get_child_nodes(ids$ID) %>%
     rename(child_distance = distance) %>%
     filter(child_distance > 0) %>%
     split(., .$parent_go_id) %>%

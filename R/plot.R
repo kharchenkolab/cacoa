@@ -9,7 +9,20 @@ theme_legend_position <- function(position) {
   theme(legend.position=position, legend.justification=position)
 }
 
-plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", legend.position="right", label=TRUE, size=5, palette=NULL) {
+
+#' @title Plot Number of Cells Regression
+#' @param n the regressed variable
+#' @param n.total number of cells
+#' @param x.lab x axis label (default: "Number of cells").
+#' @param y.lab y axis label (default: "N")
+#' @param legend.position legend position (default: "right")
+#' @param label show cell type labels (default: TRUE)
+#' @param size label text size (default: 4)
+#' @param palette color palette
+#' @param plot.line plot the robust regression (default: TRUE)
+#' @param line.width regression line width (default: 0.5)
+plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", legend.position="right", label=TRUE, size=4,
+                                palette=NULL, plot.line=TRUE, line.width=0.5) {
   p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
 
@@ -30,110 +43,16 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
     theme_legend_position(legend.position) +
     guides(color=guide_legend(title="Cell type"))
 
-  if(!is.null(palette)) gg <- gg+ scale_color_manual(values=palette)
+  if(!is.null(palette)) {
+    gg <- gg+ scale_color_manual(values=palette)
+  }
+
+  if (plot.line) {
+    gg <- gg +
+      geom_smooth(method=MASS::rlm, formula = y~x, se=FALSE, color="black", size=line.width)
+  }
 
   return(gg)
-}
-
-#' @title Plot raw DE genes
-#' @description Plot number of DE genes as a function of number of cells
-#' @param de.raw List of differentially expressed genes per cell type, results from getPerCellTypeDE (default: stored list)
-#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-#' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
-#' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
-#' @return A ggplot2 object
-#' @export
-plotDEGenes <- function(de.raw, cell.groups, legend.position="none", p.adjust.cutoff = 0.05, label = T, palette=NULL, ...) {
-  cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.raw)]
-
-  sapply(de.raw, function(n) n %>% dplyr::filter(padj <= p.adjust.cutoff) %>% nrow) %>%
-    plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Significant DE genes", legend.position=legend.position, label=label, ...) +
-    geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
-}
-
-#' @title Plot ontology distribution
-#' @description Bar plot of ontologies per cell type
-#' @param type Ontology, must be either "GO" or "DO" (default=NULL)
-#' @param ont.res Ontology resuls from estimateOntology
-#' @return A ggplot2 object
-#' @export
-plotOntologyDistribution <- function(type = NULL, ont.res, cell.groups) {
-  if(type=="GO") {
-    p_df <- table(ont.res$Group, ont.res$Type, ont.res$direction) %>%
-      as.data.frame() %>%
-      setNames(c("Group","Type","direction","N")) %>%
-      dplyr::arrange(Group)
-
-    if(length(unique(p_df$direction)) > 1) {
-      gg <- ggplot(p_df, aes(x=Group, y=N, fill=Type, group=Group)) +
-        geom_bar(stat="identity") +
-        facet_grid(~direction, switch="x")
-    } else {
-      gg <- ggplot(p_df) +
-        geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
-    }
-  } else if(type=="DO") {
-    p_df <- table(ont.res$Group, ont.res$direction) %>%
-      as.data.frame() %>%
-      setNames(c("Group","direction","N")) %>%
-      dplyr::arrange(Group)
-
-    if(length(unique(p_df$direction)) > 1) {
-      gg <- ggplot(p_df) +
-        geom_bar(aes(x=Group, y=N, fill=direction), stat="identity", position="dodge") +
-        labs(fill="Gene set")
-    } else {
-      gg <- ggplot(p_df) +
-        geom_bar(aes(x=Group, y=N), stat="identity")
-    }
-  } else {
-    stop("'type' must be either 'GO' or 'DO'.")
-  }
-
-  gg +
-    scale_y_continuous(expand=c(0, 0)) +
-    theme_bw() +
-    theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5),
-          legend.position="right") +
-    labs(x="", y=paste0("No. of ",type," terms"))
-}
-
-#' @title Plot ontology terms
-#' @description Plot ontology terms as a function of both number of DE genes, and number of cells.
-#' @param ont.res Ontology results in a data frame
-#' @param type Ontology, must be either "GO" or "DO" (default=NULL)
-#' @param de.filter List of filtered differentially expressed genes, results from prepareOntologyData (default: stored list)
-#' @param cell.groups Vector indicating cell group sizes with cell group names
-#' @param label.x.pos Plot label position on x axis (default=0.01)
-#' @param label.y.pos Plot label position on y axis (default=1)
-#' @param scale Scaling of plots, adjust if e.g. label is misplaced. See cowplot::plot_grid for more info (default=0.93)
-#' @return A ggplot2 object
-#' @export
-plotOntologyTerms <- function(type=NULL, ont.res, de.filter, cell.groups, label.x.pos=0.01, label.y.pos=1, scale = 0.93) {
-  if(length(unique(ont.res$Type))==1) stop("The input only contains one cell type.")
-
-  if(is.null(type) & type!="GO" & type!="DO") stop("'type' must be 'GO' or 'DO'.")
-
-  cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
-
-  pg <- cowplot::plot_grid(
-    ont.res$Group %>% table %>% c %>%
-      plotNCellRegression(sapply(de.filter, length), x.lab="Number of highly-expressed DE genes",
-                          y.lab=NULL, legend.position="none", label=T) +
-      geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5),
-    ont.res$Group %>% table %>% c %>%
-      plotNCellRegression(cell.groups, y.lab=NULL, legend.position="none", label=T) +
-      geom_smooth(method=MASS::rlm, formula = y~x, se=F, color="black", size=0.5),
-    ncol=1, labels=c("a", "b"), label_x = label.x.pos, label_y = label.y.pos
-  )
-
-  if(type=="GO") {
-    y_lab <- "Number of GO terms"
-  } else if(type=="DO") {
-    y_lab <- "Number of DO terms"
-  }
-
-  cowplot::plot_grid(pg, nrow=1, scale=scale) + draw_label(y_lab, x=0, y=0.6, vjust= 1.5, angle=90)
 }
 
 #' @title Plot heatmap
@@ -197,77 +116,6 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
   return(gg)
 }
 
-# TODO should depend on merged DF, not list
-#' @title Plot ontology correlations
-#' @description Plot correlation matrix for ontologies between cell types
-#' @param ont.res Data frame with ontology resuls from estimateOntology
-#' @param type Ontology, must be either "GO" or "DO" (default=NULL)
-#' @param genes Specify which genes are plotted, can either be 'down', 'up' or 'all' (default=NULL)
-#' @return A ggplot2 object
-#' @export
-plotOntologySimilarities <- function(type=NULL, ont.res, genes = NULL) {
-  if(type=="GO") {
-    pathway_df <- unique(ont.res$Group) %>%
-      lapply(function(cell.group) {
-        lapply(ont.res %>%
-                 dplyr::filter(Group == cell.group) %>%
-                 dplyr::pull(Type) %>%
-                 as.factor() %>%
-                 levels(), function(go) {
-                   tibble::tibble(Pathway=ont.res %>%
-                                    dplyr::filter(Group == cell.group) %>%
-                                    dplyr::filter(Type==go) %>%
-                                    dplyr::pull(Description),
-                                  Group=cell.group,
-                                  GO=go)
-                   }) %>% dplyr::bind_rows()
-        }) %>%
-      dplyr::bind_rows()
-    } else if(type=="DO") {
-      pathway_df <- unique(ont.res$Group) %>%
-        lapply(function(cell.group) {
-          tibble::tibble(Pathway=ont.res %>%
-                           dplyr::filter(Group == cell.group) %>%
-                           dplyr::pull(Description),
-                         Group=cell.group)
-          }) %>%
-        dplyr::bind_rows()
-  } else {
-    stop("'type' must be either 'GO' or 'DO'.")
-  }
-  path_bin <- pathway_df %>%
-    dplyr::select(Pathway, Group) %>%
-    dplyr::mutate(X=1) %>%
-    tidyr::spread(Pathway, X) %>%
-    as.data.frame() %>%
-    magrittr::set_rownames(.$Group) %>%
-    .[, 2:ncol(.)] %>%
-    as.matrix()
-  path_bin[is.na(path_bin)] <- 0
-
-  p_mat <- (1 - (path_bin %>% dist(method="binary") %>% as.matrix)) %>% pmin(0.5)
-
-  t_tree <- dist(p_mat) %>% hclust()
-  t_order <- t_tree %$% labels[order]
-  t_cls <- cutree(t_tree, h=0.7) %>% .[t_order]
-  t_cls[t_cls %in% names(which(table(t_cls) < 5))] <- max(t_cls) + 1
-
-  t_cl_lengths <- rle(t_cls)$lengths %>% rev
-
-  diag(p_mat) <- 1
-
-  if(genes == "all") {
-    l <- ggtitle(paste0(type," term similarities for all DE genes"))
-  } else {
-    l <- ggtitle(paste0(type," term similarities for ",genes,"-regulated DE genes"))
-  }
-
-  plotHeatmap(p_mat, color.per.group=NULL, row.order=t_order, col.order=rev(t_order), legend.title="Similarity", color.range=c(0, 0.5)) +
-    scale_fill_distiller(palette="RdYlBu") +
-    geom_vline(aes(xintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5)) +
-    geom_hline(aes(yintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5)) + l
-}
-
 #' @title Plot proportions
 #' @description Plot the cell group proportions per sample
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
@@ -301,7 +149,6 @@ plotProportions <- function(legend.position = "right", cell.groups, sample.per.c
     scale_y_continuous( expand=c(0, max(df.melt$value) * 0.1), limits=c(0, (max(df.melt$value) + max(df.melt$value) * 0.05 )))  #expand=c(0, 0),
 
   if(show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
-
 
   if(!is.null(palette)) gg <- gg+ scale_color_manual(values=palette)
   gg
@@ -353,41 +200,13 @@ plotProportionsSubset <- function(legend.position = "right",
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
     geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
-    scale_y_continuous(limits=c(0, (max(df.melt$value) + 5))) 
+    scale_y_continuous(limits=c(0, (max(df.melt$value) + 5)))
 
   if(show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
 
   if(!is.null(palette)) gg <- gg + scale_color_manual(values=palette)
+
   return(gg)
-}
-
-
-#' @title Plot proportions
-#' @description Plot the cell group proportions per sample
-#' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
-#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-#' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
-#' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
-#' @return A ggplot2 object
-plotCellNumbers <- function(legend.position = "right", cell.groups, sample.per.cell, sample.groups) {
-  df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
-    table %>%
-    rbind %>%
-    t %>%
-    as.data.frame %>%
-    dplyr::mutate(group = sample.groups[match(levels(sample.per.cell), names(sample.groups))]) %>%
-    reshape2::melt(., id.vars="group")
-
-  ggplot(df.melt, aes(x=variable, y=value, by=group)) +
-    geom_boxplot(position=position_dodge(), outlier.shape = NA) +
-    ylab("Cells per sample") +
-    xlab("") +
-    theme_bw() +
-    theme_legend_position(legend.position) +
-    theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
-          legend.title=element_blank()) +
-    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=0.4) +
-    scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 50)))
 }
 
 #' Get Gene Scale
@@ -437,7 +256,6 @@ getOntologyPlotTitle <- function(genes, cell.subgroup, type) {
   return(ggtitle(paste0(cell.subgroup, " ", type, " terms, ", genes,"-regulated DE genes")))
 }
 
-
 #' @title Plot bar, point or boxplots showing mean/median values per cell type
 #' @description  Generic function for plotting mean or median values per cell type (used for expression shift distances and others)
 #' @param df - data frame containing the results, including $val and $cell slots which will be summarized
@@ -460,7 +278,7 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
 
   # order cell types according to the mean
   odf$cell <- factor(odf$cell,levels=df$cell)
-  
+
   if(type=='box') { # boxplot
     p <- ggplot(odf,aes(x=cell,y=val,fill=cell)) + geom_boxplot(notch=notch, outlier.shape=NA)
   } else if(type=='point') { # point + se
@@ -479,7 +297,7 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
     p <- p+ scale_fill_manual(values=palette)
   }
   p
-  
+
 }
 
 ##' show a scatter plot of cell-type values vs. number of cells per cell type
@@ -493,7 +311,7 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
 ##' @return ggplot2 object
 plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab='expression distance', yline=1, show.regression=TRUE, show.whiskers=TRUE) {
   cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.raw)]
-  
+
   # calculate mean, se and median
   odf <- na.omit(df); # full df is now in odf
   # calculate mean and se
@@ -522,7 +340,119 @@ plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab
   if(!is.null(palette)) {
     p <- p+ scale_fill_manual(values=palette)
   }
-  
+
   p
-  
+
 }
+
+plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string.length=18, legend.label.size = 1, legend.position = "topright", verbose = T, n.cores = 1) {
+  parent.ids <- sapply(fam, function(x) data[[x]]$parent_go_id) %>% unlist() %>% unique()
+  parent.names <- sapply(fam, function(x) data[[x]]$parent_name) %>% unlist() %>% unique()
+  nodes <- data.frame(label = c(fam, parent.ids)) %>%
+    mutate(., name = c(sapply(fam, function(x) data[[x]]$Description) %>% unlist(), parent.names))
+
+  # Define edges
+  edges <- lapply(nodes$label, function(y) {
+    data.frame(from=y, to=nodes$label[nodes$label %in% (GOfuncR::get_child_nodes(y)$child_go_id)])
+  }) %>%
+    bind_rows() %>%
+    as.data.frame() %>%
+    .[apply(., 1, function(x) x[1] != x[2]),] # Remove selves
+
+  # Remove redundant inheritance
+  edges %<>%
+    pull(to) %>%
+    unique() %>%
+    plapply(function(x) {
+      tmp.to <- edges[edges$to == x,]
+
+      if(class(tmp.to) == "data.frame") {
+        if(nrow(tmp.to) > 1) {
+          tmp.children <- sapply(tmp.to$from, function(parent.id) {
+            GOfuncR::get_child_nodes(parent.id)$child_go_id
+          })
+
+          idx <- sapply(1:(tmp.children %>% length()), function(id) {
+            any(tmp.children[-id] %>% names() %in% tmp.children[[id]])
+          })
+
+          res <- tmp.to[!idx,]
+        } else if(nrow(tmp.to) == 1) {
+          res <- tmp.to
+        }
+      } else {
+        res <- NULL
+      }
+      return(res)
+    }, progress = verbose, n.cores = n.cores) %>%
+    .[!sapply(., is.null)] %>%
+    bind_rows()
+
+  # Minimize tree depending on plot.type
+  if(plot.type == "dense") { # Plots all significanct terms and their 1st order relationships
+    sig.parents <- c(fam, sapply(fam, function(x) data[[x]]$parents_in_IDs) %>% unlist())
+    edges %<>% .[apply(., 1, function(r) any(unlist(r) %in% sig.parents)),]
+  } else if(plot.type == "minimal") { # Plot significant terms only
+    sig.parents <- c(fam, sapply(fam, function(x) data[[x]]$parents_in_IDs) %>% unlist())
+    edges %<>% .[apply(., 1, function(r) all(unlist(r) %in% sig.parents)),]
+  }
+
+  # Convert IDs to names
+  if(show.ids == F) {
+    for(id in 1:nrow(nodes)) {
+      edges[edges == nodes$label[id]] <- nodes$name[id]
+    }
+  }
+
+  # Wrap strings for readability
+  edges.wrapped <- edges %>% apply(2, function(x) wrap_strings(x, string.length))
+
+  # Render graph
+  p <- igraph::graph_from_data_frame(edges.wrapped) %>% igraph::get.adjacency() %>%
+    as.matrix() %>% graph::graphAM(edgemode = 'directed') %>% Rgraphviz::layoutGraph()
+
+  # Define layout
+  ## Extract significance
+  tmp.dat <- data.frame(id = c(fam, sapply(fam, function(x) data[[x]]$parents_in_IDs) %>% unlist()),
+                        sig = c(sapply(fam, function(x) data[[x]]$Significance) %>% unlist(),
+                                sapply(fam, function(x) data[[x]]$parents_in_IDs %>% names()) %>% unlist())) %>%
+    .[match(unique(.$id), .$id),]
+
+  ## Convert IDs to names
+  for(id in tmp.dat$id) {
+    tmp.dat[tmp.dat == id] <- nodes$name[nodes$label == id]
+  }
+
+  ## Wrap names
+  tmp.dat$id %<>% wrap_strings(string.length)
+
+  ## Color by significance
+  node.color = tmp.dat$sig %>%
+    as.numeric() %>%
+    sapply(function(p) {
+      if(p <= 0.05 & p > 0.01) {
+        return("mistyrose1")
+      } else if(p <= 0.01 & p > 0.001) {
+        return("lightpink1")
+      } else {
+        return("indianred2")
+      }
+    }) %>%
+    setNames(tmp.dat$id)
+
+  ## Assign changes
+  node.names <- p@renderInfo@nodes$fill %>% names()
+  name.dif <- setdiff(node.names, names(node.color))
+  node.color %<>% c(rep("transparent", length(name.dif)) %>% setNames(name.dif)) %>% .[match(node.names, names(.))]
+  p@renderInfo@nodes$fill <- node.color %>% setNames(names(p@renderInfo@nodes$fill))
+  p@renderInfo@nodes$shape <- rep("box", length(p@renderInfo@nodes$shape)) %>% setNames(names(p@renderInfo@nodes$shape))
+
+  # Plot
+  Rgraphviz::renderGraph(p)
+  legend(legend.position,
+         legend = c("P > 0.05","P < 0.05","P < 0.01","P < 0.001"),
+         fill = c("white","mistyrose1","lightpink1","indianred2"),
+         cex = legend.label.size)
+}
+
+

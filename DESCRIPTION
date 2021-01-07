@@ -45,8 +45,12 @@ Suggests:
     clusterProfiler (>= 3.0.0),
     DESeq2,
     DOSE,
-    ggrastr (>= 0.1.7),
+    enrichplot,
     fabia,
-    Rtsne
+    ggrastr (>= 0.1.7),
+    GOfuncR,
+    Rtsne,
+    graph,
+    Rgraphviz
 Remotes:
     hms-dbmi/sccore

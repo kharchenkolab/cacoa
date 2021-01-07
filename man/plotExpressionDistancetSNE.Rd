@@ -19,8 +19,9 @@ plotExpressionDistancetSNE(
 
 \item{method}{dimension reduction methods (MDS or tSNE) (default is MDS)}
 
-\item{cell.type}{Named of cell type, default is null, it set plot sample-sample expression distance in tSNE for the cell type
-#' @param perplexity tSNE perpexity (default: 4)}
+\item{cell.type}{Named of cell type, default is null, it set plot sample-sample expression distance in tSNE for the cell type}
+
+\item{perplexity}{tSNE perpexity (default: 4)}
 
 \item{max_iter}{tSNE max_iter (default: 1e3)}
 }

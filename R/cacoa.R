@@ -829,7 +829,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(type == "GSEA" & plot == "bar") stop("No 'enrichplot' method exists for making barplots of GSEA results.")
 
       # Extract results
-      ont.res <- self$test.results[[type]][["res"]]
+      ont.res <- self$test.results[[type]]$res
       if(is.null(ont.res)) stop(paste0("No results found for ",type,"."))
       if(!cell.subgroups %in% names(ont.res)) stop("'cell.subgroups' not found in results.")
       ont.res %<>% .[[cell.subgroups]]
@@ -859,10 +859,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       # Plot
       if(plot == "dot")
-        return(dotplot(ont.res, showCategory = n, ...))
+        return(dotplot(ont.res, showCategory=n, orderBy="x", ...))
 
       if(plot == "bar")
-        return(barplot(ont.res, showCategory = n, ...))
+        return(barplot(ont.res, showCategory=n, ...))
 
       stop("Unknown plot type: ", plot)
     },

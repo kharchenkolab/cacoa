@@ -1222,7 +1222,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       cda <- resampleContrast(d.counts, d.groups,
                              n.cell.counts = n.cell.counts,
                              n.seed = n.seed)
-      plotCellLoadings(cda$balances, aplha = aplha)
+      plotCellLoadings(cda$balances, alpha = alpha)
     },
 
 

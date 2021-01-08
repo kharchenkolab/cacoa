@@ -345,22 +345,9 @@ plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab
 
 }
 
-plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string.length=18, legend.label.size = 1, legend.position = "topright", verbose = T, n.cores = 1) {
-  parent.ids <- sapply(fam, function(x) data[[x]]$parent_go_id) %>% unlist() %>% unique()
-  parent.names <- sapply(fam, function(x) data[[x]]$parent_name) %>% unlist() %>% unique()
-  nodes <- data.frame(label = c(fam, parent.ids)) %>%
-    mutate(., name = c(sapply(fam, function(x) data[[x]]$Description) %>% unlist(), parent.names))
-
-  # Define edges
-  edges <- lapply(nodes$label, function(y) {
-    data.frame(from=y, to=nodes$label[nodes$label %in% (GOfuncR::get_child_nodes(y)$child_go_id)])
-  }) %>%
-    bind_rows() %>%
-    as.data.frame() %>%
-    .[apply(., 1, function(x) x[1] != x[2]),] # Remove selves
-
-  # Remove redundant inheritance
-  edges %<>%
+# TODO: Improve speed of this function. No need to check BP/MF/CC all the time
+reduceEdges <- function(edges, verbose = T, n.cores = 1) {
+  edges %>%
     pull(to) %>%
     unique() %>%
     plapply(function(x) {
@@ -387,14 +374,52 @@ plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string
     }, progress = verbose, n.cores = n.cores) %>%
     .[!sapply(., is.null)] %>%
     bind_rows()
+}
+
+##' @title Plot ontology families
+##' @description Plot related ontologies in one hierarchical network plot
+##' @param fam List of ontology IDs for the chosen family
+##' @param data Data frane if raw ontology data for the chosen cell type
+##' @param plot.type How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) (default: complete)
+##' @param show.ids Whether to show ontology IDs instead of names (default: F)
+##' @param string.length Length of strings for wrapping in order to fit text within boxes (default: 18)
+##' @param legend.label.size Size og legend labels (default: 1)
+##' @param legend.position Position of legend (default: topright)
+##' @param verbose Print messages (default: T)
+##' @param n.cores Number of cores to use (default: 1)
+##' @return Rgraphviz object
+plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids = F, string.length=18, legend.label.size = 1, legend.position = "topright", verbose = T, n.cores = 1) {
+  # Define nodes
+  parent.ids <- sapply(fam, function(x) data[[x]]$parent_go_id) %>%
+    unlist() %>%
+    unique()
+  parent.names <- sapply(fam, function(x) data[[x]]$parent_name) %>%
+    unlist() %>%
+    unique()
+  nodes <- data.frame(label = c(fam, parent.ids)) %>%
+    mutate(., name = c(sapply(fam, function(x) data[[x]]$Description) %>% unlist(), parent.names))
+
+  # Define edges
+  edges <- lapply(nodes$label, function(y) {
+    data.frame(from=y, to=nodes$label[nodes$label %in% (GOfuncR::get_child_nodes(y)$child_go_id)])
+  }) %>%
+    bind_rows() %>%
+    as.data.frame() %>%
+    .[apply(., 1, function(x) x[1] != x[2]),] # Remove selves
+
+  # Remove redundant inheritance
+  edges %<>%
+    reduceEdges(verbose = verbose, n.cores = n.cores)
 
   # Minimize tree depending on plot.type
   if(plot.type == "dense") { # Plots all significanct terms and their 1st order relationships
     sig.parents <- c(fam, sapply(fam, function(x) data[[x]]$parents_in_IDs) %>% unlist())
-    edges %<>% .[apply(., 1, function(r) any(unlist(r) %in% sig.parents)),]
+    edges %<>%
+      .[apply(., 1, function(r) any(unlist(r) %in% sig.parents)),]
   } else if(plot.type == "minimal") { # Plot significant terms only
     sig.parents <- c(fam, sapply(fam, function(x) data[[x]]$parents_in_IDs) %>% unlist())
-    edges %<>% .[apply(., 1, function(r) all(unlist(r) %in% sig.parents)),]
+    edges %<>%
+      .[apply(., 1, function(r) all(unlist(r) %in% sig.parents)),]
   }
 
   # Convert IDs to names
@@ -405,11 +430,15 @@ plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string
   }
 
   # Wrap strings for readability
-  edges.wrapped <- edges %>% apply(2, function(x) wrap_strings(x, string.length))
+  edges.wrapped <- edges %>%
+    apply(2, function(x) wrap_strings(x, string.length))
 
   # Render graph
-  p <- igraph::graph_from_data_frame(edges.wrapped) %>% igraph::get.adjacency() %>%
-    as.matrix() %>% graph::graphAM(edgemode = 'directed') %>% Rgraphviz::layoutGraph()
+  p <- igraph::graph_from_data_frame(edges.wrapped) %>%
+    igraph::get.adjacency() %>%
+    as.matrix() %>%
+    graph::graphAM(edgemode = 'directed') %>%
+    Rgraphviz::layoutGraph()
 
   # Define layout
   ## Extract significance
@@ -419,6 +448,7 @@ plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string
     .[match(unique(.$id), .$id),]
 
   ## Convert IDs to names
+  # TODO: Dependent on show.ids?
   for(id in tmp.dat$id) {
     tmp.dat[tmp.dat == id] <- nodes$name[nodes$label == id]
   }
@@ -441,11 +471,16 @@ plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string
     setNames(tmp.dat$id)
 
   ## Assign changes
-  node.names <- p@renderInfo@nodes$fill %>% names()
+  node.names <- p@renderInfo@nodes$fill %>%
+    names()
   name.dif <- setdiff(node.names, names(node.color))
-  node.color %<>% c(rep("transparent", length(name.dif)) %>% setNames(name.dif)) %>% .[match(node.names, names(.))]
-  p@renderInfo@nodes$fill <- node.color %>% setNames(names(p@renderInfo@nodes$fill))
-  p@renderInfo@nodes$shape <- rep("box", length(p@renderInfo@nodes$shape)) %>% setNames(names(p@renderInfo@nodes$shape))
+  node.color %<>%
+    c(rep("transparent", length(name.dif)) %>% setNames(name.dif)) %>%
+    .[match(node.names, names(.))]
+  p@renderInfo@nodes$fill <- node.color %>%
+    setNames(names(p@renderInfo@nodes$fill))
+  p@renderInfo@nodes$shape <- rep("box", length(p@renderInfo@nodes$shape)) %>%
+    setNames(names(p@renderInfo@nodes$shape))
 
   # Plot
   Rgraphviz::renderGraph(p)
@@ -454,5 +489,3 @@ plotOntologyFamily <- function(fam, data, plot.type = NULL, show.ids = F, string
          fill = c("white","mistyrose1","lightpink1","indianred2"),
          cex = legend.label.size)
 }
-
-

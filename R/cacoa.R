@@ -1401,7 +1401,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       names(score) <- rownames(mat)
       
       if (plot){
-        fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) + scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0) +theme(legend.background = element_blank())
+        fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) + scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0) +theme(legend.background = element_blank()) +  labs(color='Zscore') 
         
         if(!is.null(contours)){
           cnl <- do.call(c, lapply(sn(contours), function(x)

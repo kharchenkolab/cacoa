@@ -310,7 +310,7 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
 ##' @param yline value at which a horizontal reference value should be plotted
 ##' @return ggplot2 object
 plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab='expression distance', yline=1, show.regression=TRUE, show.whiskers=TRUE) {
-  cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.raw)]
+  cell.groups <- table(cell.groups) # %>% .[names(.) %in% names(de.raw)]
 
   # calculate mean, se and median
   odf <- na.omit(df); # full df is now in odf

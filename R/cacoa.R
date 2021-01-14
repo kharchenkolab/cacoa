@@ -524,6 +524,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }))
 
       if(show.size.dependency) {
+        
         plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='number of DE genes', yline=NA, show.whiskers=show.whiskers, show.regression=show.regression)
       } else {
         plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette, ylab='number of DE genes',yline=NA)

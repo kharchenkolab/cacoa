@@ -674,3 +674,21 @@ clusterIndividualGOs <- function(gos, cut.h) {
 getOntClustField <- function(type, subtype, genes) {
   return(paste(type, genes, paste(subtype, collapse="."), "clusters", sep="."))
 }
+
+getHeatmapData <- function(ont.sum, fams, type, subtype, genes) {
+  fams %<>%
+    lapply(function(x) {
+      x[[subtype]][[genes]]$families %>% unlist() %>% unique()
+    }) %>%
+    setNames(names(fams))
+
+  ont.sum %<>% split(., .$Group)
+
+  ont.sum %<>%
+    names() %>%
+    lapply(function(x) {
+      ont.sum[[x]] %>% filter(ID %in% fams[[x]])
+    }) %>%
+    bind_rows() %>%
+    groupOntologiesByCluster(field="Description")
+}

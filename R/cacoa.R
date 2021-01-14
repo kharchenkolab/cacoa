@@ -994,70 +994,84 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         geom_hline(aes(yintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5))
     },
 
-    #' #' @description Plot ontology families heatmap
-    #' #' @return A ggplot2 object
-    #' plotOntologyFamilyHeatmap=function(genes = "up", type = "GO", subtype = "BP", min.genes = 1, selection = "unique", n = 20, legend.position = "right") {
-    #'   # Checks
-    #'   if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
-    #'     stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
-    #'
-    #'   if(is.null(selection) || (!selection %in% c("unique","common","all")))
-    #'     stop("'selection' must be one of the following: 'unique', 'common', or 'all'.")
-    #'
-    #'   # Extract results
-    #'   if (!clusters) {
-    #'     ont.sum <- private$getOntologyPvalueResults(genes=genes, type=type, subtype=subtype, cell.subgroups=cell.subgroups,
-    #'                                                 p.adj=p.adj, min.genes=min.genes) %>%
-    #'       groupOntologiesByCluster(field="Description")
-    #'   } else {
-    #'     name <- if (is.null(cluster.name)) getOntClustField(type, subtype, genes) else cluster.name
-    #'     if (is.null(self$test.results[[name]])) {
-    #'       if (!is.null(cluster.name))
-    #'         stop("Can't find the results for ", cluster.name) # stop if user specified a wrong cluster.name
-    #'
-    #'       warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
-    #'       ont.sum <- self$estimateOntologyClusters(type=type, genes=genes, name=name, cell.subgroups=cell.subgroups,
-    #'                                                p.adj=p.adj, min.genes=min.genes)$df
-    #'     } else {
-    #'       ont.sum <- self$test.results[[name]]$df
-    #'     }
-    #'
-    #'     ont.sum %<>% groupOntologiesByCluster(field="ClusterName")
-    #'   }
-    #'
-    #'   if(selection=="unique") {
-    #'     ont.sum %<>% .[rowSums(. > 0) == 1,]
-    #'   } else if(selection=="common") {
-    #'     ont.sum %<>% .[rowSums(. > 0) > 1,]
-    #'   }
-    #'   if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
-    #'
-    #'   # Plot
-    #'   gg <- ont.sum %>%
-    #'     .[, colSums(abs(.)) > 0] %>%
-    #'     .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),] %>%
-    #'     tail(n) %>%
-    #'     plotHeatmap(legend.position=legend.position, row.order=TRUE, color.range=color.range, ...) +
-    #'     getGeneScale(genes=genes, type="fill", high="white", limits=color.range)
-    #'
-    #'   return(gg)
-    #' },
+    #' @description Plot a heatmap of collapsed (family) ontology P values per cell type
+    #' @param genes Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all' (default="up")
+    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")
+    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
+    #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms) (default="all")
+    #' @param n Number of terms to show (default=10)
+    #' @param clusters Whether to show GO clusters or raw GOs (default=TRUE)
+    #' @param cluster.name Field with the results for GO clustering. Ignored if `clusters == FALSE`.
+    #' @param cell.subgroups Cell groups to plot (default=NULL)
+    #' @param color.range vector with two values for min/max values of p-values
+    #' @param ... parameters forwarded to \link{plotHeatmap}
+    #' @return A ggplot2 object
+    plotOntologyFamilyHeatmap=function(genes = "up", type = "GO", subtype = "BP", min.genes = 1, selection = "all", n = 10,
+                                       legend.position = "left", cell.subgroups = NULL, clusters = T, cluster.name = NULL, color.range = NULL, ...) {
+      # Checks
+      if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
+        stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
 
-    ##' @title Plot ontology families
-    ##' @description Plot related ontologies in one hierarchical network plot
-    ##' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
-    ##' @param cell.subgroups Cell subtype to plot
-    ##' @param family Family within cell subtype to plot (numeric value)
-    ##' @param genes Only for GO results: Direction of genes, must be "up", "down", or "all" (default: up)
-    ##' @param subtype Only for GO results: Type of result, must be "BP", "MF", or "CC" (default: BP)
-    ##' @param plot.type How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) (default: complete)
-    ##' @param show.ids Whether to show ontology IDs instead of names (default: F)
-    ##' @param string.length Length of strings for wrapping in order to fit text within boxes (default: 18)
-    ##' @param legend.label.size Size og legend labels (default: 1)
-    ##' @param legend.position Position of legend (default: topright)
-    ##' @param verbose Print messages (default: stored value)
-    ##' @param n.cores Number of cores to use (default: stored value)
-    ##' @return Rgraphviz object
+      if(is.null(selection) || (!selection %in% c("unique","common","all")))
+        stop("'selection' must be one of the following: 'unique', 'common', or 'all'.")
+
+      fams <- self$test.results[[type]]$families
+      if(is.null(fams))
+        stop("No ontology family results found, please run 'estimateOntologyFamilies' first.")
+
+      # Extract results
+      if (!clusters) {
+        ont.sum <- private$getOntologyPvalueResults(genes=genes, type=type, subtype=subtype, cell.subgroups=cell.subgroups,
+                                                    p.adj=p.adj, min.genes=min.genes)
+        ont.sum %<>% getHeatmapData(fams = fams, type = type, subtype = subtype, genes = genes)
+      } else {
+        name <- if (is.null(cluster.name)) getOntClustField(type, subtype, genes) else cluster.name
+        if (is.null(self$test.results[[name]])) {
+          if (!is.null(cluster.name))
+            stop("Can't find the results for ", cluster.name) # stop if user specified a wrong cluster.name
+
+          warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
+          ont.sum <- self$estimateOntologyClusters(type=type, genes=genes, name=name, p.adj=p.adj, min.genes=min.genes)$df
+        } else {
+          ont.sum <- self$test.results[[name]]$df
+        }
+
+        ont.sum %<>% getHeatmapData(fams = fams, type = type, subtype = subtype, genes = genes)
+      }
+
+      if(selection=="unique") {
+        ont.sum %<>% .[rowSums(abs(.) > 0) == 1,]
+      } else if(selection=="common") {
+        ont.sum %<>% .[rowSums(abs(.) > 0) > 1,]
+      }
+      if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
+
+      # Plot
+      gg <- ont.sum %>%
+        .[, colSums(abs(.)) > 0] %>%
+        .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),] %>%
+        tail(n) %>%
+        plotHeatmap(legend.position=legend.position, row.order=TRUE, color.range=color.range, ...) +
+        getGeneScale(genes=genes, type="fill", high="white", limits=color.range)
+
+      return(gg)
+    },
+
+    #' @title Plot ontology families
+    #' @description Plot related ontologies in one hierarchical network plot
+    #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
+    #' @param cell.subgroups Cell subtype to plot
+    #' @param family Family within cell subtype to plot (numeric value)
+    #' @param genes Only for GO results: Direction of genes, must be "up", "down", or "all" (default: up)
+    #' @param subtype Only for GO results: Type of result, must be "BP", "MF", or "CC" (default: BP)
+    #' @param plot.type How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) (default: complete)
+    #' @param show.ids Whether to show ontology IDs instead of names (default: F)
+    #' @param string.length Length of strings for wrapping in order to fit text within boxes (default: 18)
+    #' @param legend.label.size Size og legend labels (default: 1)
+    #' @param legend.position Position of legend (default: topright)
+    #' @param verbose Print messages (default: stored value)
+    #' @param n.cores Number of cores to use (default: stored value)
+    #' @return Rgraphviz object
     plotOntologyFamily=function(type = "GO", cell.subgroups, family, genes = "up", subtype = "BP", plot.type = "complete", show.ids = FALSE,
                                 string.length=18, legend.label.size = 1, legend.position = "topright", verbose = self$verbose, n.cores = self$n.cores) {
       #Checks
@@ -1145,30 +1159,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Plot compositions in CoDA-PCA space
     #' @return A ggplot2 object
     plotPcaSpace=function(cells.to.remove = NULL, font.size=NULL, palette=self$sample.groups.palette) {
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell)
-      plotPcaSpace(tmp[[d.counts]], tmp[[d.groups]], self$ref.level, self$target.level, font.size, palette=palette)
+      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
+      plotPcaSpace(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, font.size, palette=palette)
     },
 
     #' @description Plot compositions in CoDA-CDA space
     #' @return A ggplot2 object
     plotCdaSpace=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, font.size=NULL) {
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, samples.to.remove = samples.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell)
-      plotCdaSpace(tmp[[d.counts]], tmp[[d.groups]], self$ref.level, self$target.level, font.size)
+      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, samples.to.remove = samples.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
+      plotCdaSpace(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, font.size)
     },
 
     #' @description Plot contrast tree
     #' @return A ggplot2 object
     plotContrastTree=function(cells.to.remain = NULL, cells.to.remove = NULL) {
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell)
-      plotContrastTree(tmp[[d.counts]], tmp[[d.groups]], self$ref.level, self$target.level)
+      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
+      plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level)
     },
 
     #' @description Plot Loadings
     #' @return A ggplot2 object
     estimateCellLoadings=function(n.cell.counts = 1000, n.seed = 239, cells.to.remove = NULL,
                                   cells.to.remain = NULL, samples.to.remove = NULL, n.iter=1000){
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, samples.to.remove = samples.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell)
-      self$test.results[['cda']] <- resampleContrast(tmp[[d.counts]], tmp[[d.groups]],
+      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, samples.to.remove = samples.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
+      self$test.results[['cda']] <- resampleContrast(tmp$d.counts, tmp$d.groups,
                                                      n.cell.counts = n.cell.counts,
                                                      n.seed = n.seed, n.iter = n.iter)
 
@@ -1177,9 +1191,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[['cda']]))
     },
 
-    estimateGaPartiotion=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, ...){
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, samples.to.remove = samples.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell)
-      ga.res <- gaPartition(tmp[[d.counts]], tmp[[d.groups]], ...)
+    estimateGaPartition=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, ...){
+      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, samples.to.remove = samples.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
+      ga.res <- gaPartition(tmp$d.counts, tmp$d.groups, ...)
 
       self$test.results[['ga.partition']] <- rownames(t(ga.res[1,ga.res[1,] != 0,drop=FALSE]))
 

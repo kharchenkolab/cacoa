@@ -1,4 +1,4 @@
-extractCodaData=function(cells.to.remove = NULL, cells.to.remain = NULL, samples.to.remove = NULL, cell.groups, sample.per.cell) {
+extractCodaData=function(cells.to.remove = NULL, cells.to.remain = NULL, samples.to.remove = NULL, sample.groups, target.level, cell.groups, sample.per.cell) {
   d.counts <- data.frame(anno=cell.groups,
                          group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
     table() %>%
@@ -9,7 +9,7 @@ extractCodaData=function(cells.to.remove = NULL, cells.to.remain = NULL, samples
   if(!is.null(cells.to.remain)) d.counts %<>% .[,colnames(.) %in% cells.to.remain]
   if(!is.null(samples.to.remove)) d.counts %<>% .[!(rownames(.) %in% samples.to.remove),]
 
-  d.groups <- (self$sample.groups[rownames(d.counts)] == self$target.level) %>%
+  d.groups <- (sample.groups[rownames(d.counts)] == target.level) %>%
     `names<-`(d.counts %>% rownames())
 
   return(list(d.counts = d.counts,

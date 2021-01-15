@@ -463,6 +463,57 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[[name]] <- de.res[[1]]))
     },
 
+    #' @description  Plot DE stability per cell type
+    #' @param name - results slot name (default: 'de')
+    #' @param show.pairs transparency value for the data points (default: 0.05)
+    #' @param notch - whether to show notches in the boxplot version (default=TRUE)
+    #' @return A ggplot2 object
+    plotDeStabilityPerCellType=function(name='de', 
+                                       notch = T, 
+                                       show.jitter = T, 
+                                       jitter.alpha = 0.05, 
+                                       show.pairs = F,
+                                       top.n.genes = 200) {
+      de.res <- private$getResults(name)
+      if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
+      
+      jaccard.pw.top <- function(subsamples, top.thresh){
+        jac.all = c()
+        for(i in 1:length(subsamples)) {
+          for(j in 1:length(subsamples)) {
+            if (j <= i) next
+            set1 <- rownames(subsamples[[i]])[rank(subsamples[[i]]$pvalue) <= top.thresh]
+            set2 <- rownames(subsamples[[j]])[rank(subsamples[[j]]$pvalue) <= top.thresh]
+            jac.all <- length(intersect(set1, set2)) / length(unique(c(set1, set2)))
+          }
+        }
+        return(jac.all)
+      }
+      
+      data.all = data.frame()
+      for(cell.type in names(de.res)){
+        subsamples <- de.res[[cell.type]]$subsamples
+        jacc.tmp <- jaccard.pw.top(subsamples, top.n.genes)
+        data.tmp <- data.frame(group = cell.type, 
+                               value = jacc.tmp, 
+                               cmp = 1:length(jacc.tmp))
+        data.all <- rbind(data.all, data.tmp)
+      }
+      
+      if(! show.pairs) {
+        p <- ggplot(data.all, aes(x=group, y=value, fill=group, 
+                                  group=group)) + geom_boxplot(outlier.shape = NA) + geom_jitter(alpha=0.05)
+      } else {
+        p <- ggplot(data.all, aes(x=group, y=value, fill=group, 
+                                  group=cmp, color=cmp)) + geom_line()
+      }
+      
+      p + theme(legend.position = "none") + 
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+        ylab('Jaccard index') + xlab('cell type') + 
+        ggtitle(paste(cao$target.level, '. Top', as.character(top.n.genes), 'genes', sep=' '))
+    },
+    
     #' @description Plot number of significant DE genes as a function of number of cells
     #' @param name results slot in which the DE results should be stored (default: 'de')
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)

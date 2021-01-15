@@ -1,3 +1,21 @@
+extractCodaData=function(cells.to.remove = NULL, cells.to.remain = NULL, samples.to.remove = NULL, sample.groups, target.level, cell.groups, sample.per.cell) {
+  d.counts <- data.frame(anno=cell.groups,
+                         group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
+    table() %>%
+    rbind() %>%
+    t()
+
+  if(!is.null(cells.to.remove)) d.counts %<>% .[,!(colnames(.) %in% cells.to.remove)]
+  if(!is.null(cells.to.remain)) d.counts %<>% .[,colnames(.) %in% cells.to.remain]
+  if(!is.null(samples.to.remove)) d.counts %<>% .[!(rownames(.) %in% samples.to.remove),]
+
+  d.groups <- (sample.groups[rownames(d.counts)] == target.level) %>%
+    `names<-`(d.counts %>% rownames())
+
+  return(list(d.counts = d.counts,
+              d.groups = d.groups))
+}
+
 plotPcaSpace <- function(d.counts, d.groups, ref.level, target.level, font.size, palette=NULL){
   bal <- getRndBalances(d.counts)
   pca.res <- prcomp(bal$norm)
@@ -101,7 +119,7 @@ plotCdaSpace <- function(d.counts, d.groups, ref.level, target.level, font.size,
   dy <- max(dy, max(df.loadings[,'C2']) - min(df.loadings[,'C2']))
 
   rda.biplot <- rda.biplot + coord_fixed(ratio = dx / dy)
-  
+
   if(!is.null(font.size)) {
     rda.biplot <- rda.biplot + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
   }
@@ -249,10 +267,10 @@ plotCellLoadings <- function(cda, ordering, signif.threshold, font.size, alpha, 
     # additional ordering by p-value
     frac <- getCellSignificance(balances)
     balances <- balances[order(-frac),]
-    
+
     # Get significant cells
     n.significant.cells = sum(frac <= signif.threshold)
-    
+
   } else if(ordering == 'by.mean') {
     balances <- balances[order(abs(rowMeans(balances))),]
     n.significant.cells = 0
@@ -260,9 +278,9 @@ plotCellLoadings <- function(cda, ordering, signif.threshold, font.size, alpha, 
     balances <- balances[order(abs(apply(balances, 1, median))), ]
     n.significant.cells = 0
   }
-  
+
   frac <- getCellSignificance(balances)
-  res.ordered <- t(balances) %>% as.data.frame()  
+  res.ordered <- t(balances) %>% as.data.frame()
   ymax = max(balances)
 
   p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
@@ -270,30 +288,30 @@ plotCellLoadings <- function(cda, ordering, signif.threshold, font.size, alpha, 
     geom_hline(yintercept = 0, color = "gray37") +
     coord_flip() + xlab('') + ylab('') + theme_bw()+ theme(legend.position = "none") +
     scale_x_discrete(position = "top") + ylim(-ymax, ymax)
-  
+
   # Add text
-  p <- p + 
-    annotate('text', x = 1, y = -ymax, label = paste('\u2190', ref.level), hjust = 'left') + 
+  p <- p +
+    annotate('text', x = 1, y = -ymax, label = paste('\u2190', ref.level), hjust = 'left') +
     annotate('text', x = 1, y = ymax, label = paste(target.level, '\u2192'), hjust = 'right')
-  
+
   if(!is.null(font.size)) {
     p <- p + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
   }
   if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
   if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(balances) - n.significant.cells + 0.5, color='red')
-  
-  
+
+
   if(show.pvals){
     d <- data.frame(x = names(frac), y=frac)
     d$x <- factor(d$x, levels = d$x)
     p.pval <- ggplot(d, aes(x=x,y=-log(y,base = 10) )) + geom_bar(stat="identity") +
       coord_flip() + xlab('') + ylab('-log(p-value)') + theme_bw()+ theme(legend.position = "none") +
       geom_hline(yintercept=-log(signif.threshold,base = 10)) + theme(axis.text.y = element_blank())
-    
+
     p.combo <- cowplot::plot_grid(plotlist=list(p,p.pval),nrow=1,rel_widths=c(2,1))
     return(p.combo)
   }
-  
+
   return(p)
-  
+
 }

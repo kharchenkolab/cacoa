@@ -281,6 +281,13 @@ estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, n.top.genes 
   return(res)
 }
 
+#' @title Prepare plot data
+#' @description Prepare ontology results for plotting
+#' @param ont.res List of results from estimateOntology
+#' @param type Type of ontology results, i.e., GO, GSEA, or DO
+#' @param p.adj Cut-off for adj. P values
+#' @param min.genes Min. number of significant genes per pathway
+#' @return List of ontology data for plotting
 preparePlotData <- function(ont.res, type, p.adj, min.genes) {
   dir.names <- c("down", "up", "all")
 
@@ -294,7 +301,16 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
     # Extract results
     ont.res %<>% lapply(lapply, function(x) if(length(x)) x@result else x)
 
-    ### TODO: prep for filter ###
+    ### TODO: Check functionality of prep for filter
+    # Prep for filter
+    ont.res %<>%
+      names() %>%
+      lapply(function(ct) {
+        lapply(ont.res[[ct]] %>% names(), function(ont) {
+          dplyr::mutate(ont.res[[ct]][[ont]], Type = ont)
+        }) %>% setNames(ont.res[[ct]] %>% names()) %>%
+          dplyr::bind_rows()
+      }) %>% setNames(ont.res %>% names())
 
     # Filter by p.adj
     ont.res %<>% filterOntologies(p.adj = p.adj) %>% ontologyListToDf()
@@ -386,6 +402,10 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
   return(ont.res)
 }
 
+#' @title Swap character strings for their numeric names
+#' @description Set numeric names as output and set names as input character strings
+#' @param x Character string with numeric names
+#' @return Numeric vector with character names
 twist <- function(x) {
   x %>% names() %>% as.numeric() %>% setNames(x)
 }
@@ -400,6 +420,11 @@ addGseaGroup <- function(ont.res) {
     bind_rows()
 }
 
+#' @title Wrap strings for readibility on plots
+#' @description Handy function for wrapping long text strings for usage in plots
+#' @param strings Text strings
+#' @param width Max length before inserting line shift
+#' @return Text strings with inserted line shifts
 # Source: http://stackoverflow.com/a/7367534/496488
 wrap_strings <- function(strings, width) {
   as.character(sapply(strings, function(s) {
@@ -407,7 +432,11 @@ wrap_strings <- function(strings, width) {
   }))
 }
 
-familyInnerFunction <- function(ids) {
+#' @title Identify ontology families
+#' @description Identify parents and/or children of significant ontology terms
+#' @param ids Data frame of cell type-specific ontology results from estimateOntology
+#' @return List of families and ontology data
+identifyFamilies <- function(ids) {
   tmp.parent <- GOfuncR::get_parent_nodes(ids$ID) %>%
     rename(parent_distance = distance) %>%
     filter(parent_distance > 0) %>%
@@ -459,49 +488,61 @@ familyInnerFunction <- function(ids) {
   }) %>%
     setNames(ids$ID)
 
-  # # MAY DELETE
-  # tmp %<>% lapply(function(id) {
-  #   suppressWarnings(if(length(id) == 10) {
-  #     id$combined_enrichment <- (length(id$parents_in_IDs) + length(id$children_in_IDs))/(length(id$parent_go_id) + length(id$child_go_id))
-  #   } else {
-  #     id$combined_enrichment <- NULL
-  #   })
-  #   return(id)
-  # })
-
   # Add description, significance, and type.
-  tmp %<>% names() %>% lapply(function(id) {
-    tmp[[id]] %>% append(list(Description = ids$Description[ids$ID == id],
-                              Significance = ids$p.adjust[ids$ID == id],
-                              Type = ids$Type[ids$ID == id]))
-  }) %>% setNames(names(tmp))
+  tmp %<>%
+    names() %>%
+    lapply(function(id) {
+      tmp[[id]] %>% append(list(Description = ids$Description[ids$ID == id],
+                                Significance = ids$p.adjust[ids$ID == id],
+                                Type = ids$Type[ids$ID == id]))
+    }) %>%
+    setNames(names(tmp))
 
   # Sort for lonely children (terms with no children)
-  idx <- tmp %>% sapply(`[[`, "children_enrichment") %>% unlist() %>% .[. == 0]
-  tmp %<>% .[idx %>% names()]
+  idx <- tmp %>%
+    sapply(`[[`, "children_enrichment") %>%
+    unlist() %>%
+    .[. == 0]
+  tmp %<>%
+    .[idx %>% names()]
 
   # Rank by enrichment
-  idx <- tmp %>% sapply(function(x) x$Significance) %>% unlist() %>% .[order(., decreasing=F)]
-  tmp %<>% .[names(idx)]
+  idx <- tmp %>%
+    sapply(function(x) x$Significance) %>%
+    unlist() %>%
+    .[order(., decreasing=F)]
+  tmp %<>%
+    .[names(idx)]
 
   return(tmp)
 }
 
-collapseFamiliesInnerFunction <- function(ont.res) {
+#' @title Collapse ontology families
+#' @description Collapse ontology families based on overlaps between parents and/or children of significant ontology terms
+#' @param ont.res Results from identifyFamilies
+#' @return List of collapsed families and ontology data
+collapseFamilies <- function(ont.res) {
   if(length(ont.res) > 0) {
     # Identify overlapping parents (seeds) between families
-    olaps <- sapply(ont.res, `[[`, "parents_in_IDs") %>% unlist() %>% table() %>% .[order(., decreasing = T)] %>% .[. > 1]
+    olaps <- sapply(ont.res, `[[`, "parents_in_IDs") %>%
+      unlist() %>%
+      table() %>%
+      .[order(., decreasing = T)] %>%
+      .[. > 1]
 
     if(length(olaps) > 1) {
       # Create logical matrix and list of seeds and families
-      olap.matrix <- sapply(ont.res, `[[`, "parents_in_IDs") %>% sapply(function(x) names(olaps) %in% x)
+      olap.matrix <- sapply(ont.res, `[[`, "parents_in_IDs") %>%
+        sapply(function(x) names(olaps) %in% x)
       olap.list <- lapply(1:length(olaps), function(id) {
         olap.matrix[,olap.matrix[id,] == T] %>% `rownames<-`(names(olaps))
-      }) %>% setNames(names(olaps))
+      }) %>%
+        setNames(names(olaps))
 
       tmp.res <- lapply(1:length(olap.list), function(x) {
         # Investigate overlapping seeds
-        tmp.matrix <- olap.list[[x]] %>% .[!rownames(.) == names(olaps)[x],]
+        tmp.matrix <- olap.list[[x]] %>%
+          .[!rownames(.) == names(olaps)[x],]
 
         if(is.matrix(tmp.matrix)) {
           tmp <- c()
@@ -514,15 +555,19 @@ collapseFamiliesInnerFunction <- function(ont.res) {
 
         if(tmp %>% any) {
           # Select additional seeds to merge
-          to_merge <- rownames(tmp.matrix)[tmp] %>% .[!. %in% names(olaps)[1:x]]
+          to_merge <- rownames(tmp.matrix)[tmp] %>%
+            .[!. %in% names(olaps)[1:x]]
 
           if(length(to_merge) > 0) {
-            pre.res <- c(olap.list[[x]] %>% colnames(), sapply(to_merge, function(x) colnames(olap.list[x][[1]])) %>% unlist()) %>% unique()
+            pre.res <- c(olap.list[[x]] %>% colnames(), sapply(to_merge, function(x) colnames(olap.list[x][[1]])) %>% unlist()) %>%
+              unique()
           } else {
-            pre.res <- olap.list[[x]] %>% colnames()
+            pre.res <- olap.list[[x]] %>%
+              colnames()
           }
         } else {
-          pre.res <- olap.list[[x]] %>% colnames()
+          pre.res <- olap.list[[x]] %>%
+            colnames()
         }
         return(pre.res)
       })
@@ -544,7 +589,10 @@ collapseFamiliesInnerFunction <- function(ont.res) {
         res <- tmp.res
       }
     } else if(length(olaps == 1)) {
-      res <- sapply(ont.res, `[[`, "parents_in_IDs") %>% sapply(function(x) names(olaps) %in% x) %>% .[.] %>% names()
+      res <- sapply(ont.res, `[[`, "parents_in_IDs") %>%
+        sapply(function(x) names(olaps) %in% x) %>%
+        .[.] %>%
+        names()
     } else {
       res <- list()
     }
@@ -556,10 +604,8 @@ collapseFamiliesInnerFunction <- function(ont.res) {
         as.list() %>%
         setNames(sapply(1:length(ont.res), function(n) paste0("Family",n)))
     } else {
-      # res <- append(res, as.list(names(ont.res)[!names(ont.res) %in% unlist(res)])) %>%
       res %<>% .[order(sapply(., length), decreasing=T)] %>%
         append(as.list(names(ont.res)[order(sapply(names(ont.res), function(p) ont.res[[p]]$Significance), decreasing = F)])) %>%
-
         {setNames(., sapply(1:length(.), function(n) paste0("Family",n)))}
     }
 
@@ -570,16 +616,24 @@ collapseFamiliesInnerFunction <- function(ont.res) {
   }
 }
 
-estimateOntologyFamilies <- function(ont.list, type, p.adj = 0.05) {
+#' @title Estimate ontology families
+#' @description Estimate ontology families based on ontology results
+#' @param ont.list List of results from estimateOntology
+#' @param type Type of ontology result, i.e., GO, GSEA, or DO
+#' @return List of families and ontology data per cell type
+estimateOntologyFamilies <- function(ont.list, type) {
   if(type == "GO") {
-    ont.fam <- lapply(ont.list, lapply, lapply, familyInnerFunction) %>% setNames(names(ont.list))
-    lapply(ont.fam, lapply, lapply, collapseFamiliesInnerFunction) %>% setNames(names(ont.fam))
+    ont.fam <- lapply(ont.list, lapply, lapply, identifyFamilies) %>%
+      setNames(names(ont.list))
+    lapply(ont.fam, lapply, lapply, collapseFamilies) %>%
+      setNames(names(ont.fam))
   } else {
-    ont.fam <- lapply(ont.list, lapply, familyInnerFunction) %>% setNames(names(ont.list))
-    lapply(ont.fam, lapply, collapseFamiliesInnerFunction) %>% setNames(names(ont.fam))
+    ont.fam <- lapply(ont.list, lapply, identifyFamilies) %>%
+      setNames(names(ont.list))
+    lapply(ont.fam, lapply, collapseFamilies) %>%
+      setNames(names(ont.fam))
   }
 }
-
 
 ### Clustering
 
@@ -619,4 +673,22 @@ clusterIndividualGOs <- function(gos, cut.h) {
 
 getOntClustField <- function(type, subtype, genes) {
   return(paste(type, genes, paste(subtype, collapse="."), "clusters", sep="."))
+}
+
+getHeatmapData <- function(ont.sum, fams, type, subtype, genes) {
+  fams %<>%
+    lapply(function(x) {
+      x[[subtype]][[genes]]$families %>% unlist() %>% unique()
+    }) %>%
+    setNames(names(fams))
+
+  ont.sum %<>% split(., .$Group)
+
+  ont.sum %<>%
+    names() %>%
+    lapply(function(x) {
+      ont.sum[[x]] %>% filter(ID %in% fams[[x]])
+    }) %>%
+    bind_rows() %>%
+    groupOntologiesByCluster(field="Description")
 }

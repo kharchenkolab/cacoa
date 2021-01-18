@@ -1189,33 +1189,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(gg)
     },
 
-    #' @description Plot compositions in CoDA-PCA space
+    #' @description Plot compositions in CoDA space (PCA or CDA)
+    #' @param space either 'PCA' or 'CDA'
     #' @return A ggplot2 object
-    plotPcaSpace=function(cells.to.remove=NULL, palette=self$sample.groups.palette) {
-      tmp <- extractCodaData(cells.to.remove=cells.to.remove, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell,
-                             sample.groups=self$sample.groups, target.level=self$target.level)
-      bal <- getRndBalances(tmp$d.counts)
-      pca.res <- prcomp(bal$norm)
-      pca.loadings <- bal$psi %*% pca.res$rotation
-
-      df.pca <- as.data.frame(pca.res$x) %>% set_colnames(c("S1", "S2"))
-      df.loadings <- (10 * as.data.frame(pca.loadings[,1:2])) %>% set_colnames(c("S1", "S2"))
-      gg <- plotCodaSpace(df.pca, df.loadings, d.groups=tmp$d.groups, ref.level=self$ref.level, target.level=self$target.level, palette=palette) +
-        labs(x="PC1", y="PC2")
-      return(gg + self$plot.theme)
-    },
-
-    #' @description Plot compositions in CoDA-CDA space
-    #' @return A ggplot2 object
-    plotCdaSpace=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL) {
+    plotCodaSpace=function(space='CDA', cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, palette=self$sample.groups.palette) {
       tmp <- extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove, cell.groups=self$cell.groups,
                              sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups, target.level=self$target.level)
 
-      dfs <- estimateCdaSpace(tmp$d.counts, tmp$d.groups)
+      if (space == 'PCA') {
+        bal <- getRndBalances(tmp$d.counts)
+        pca.res <- prcomp(bal$norm)
+        pca.loadings <- bal$psi %*% pca.res$rotation
 
-      gg <- plotCodaSpace(dfs$cda, dfs$loadings, d.groups=tmp$d.groups, ref.level=self$ref.level, target.level=self$target.level, palette=palette) +
-        labs(x="Score 1", y="Score 2")
-      return(gg + self$plot.theme)
+        dfs <- list(
+          red=as.data.frame(pca.res$x) %>% set_colnames(c("S1", "S2")),
+          loadings=(10 * as.data.frame(pca.loadings[,1:2])) %>% set_colnames(c("S1", "S2"))
+        )
+        gg.labs <- labs(x="PC1", y="PC2")
+      } else if (space == 'CDA') {
+        dfs <- estimateCdaSpace(tmp$d.counts, tmp$d.groups)
+        gg.labs <- labs(x="Score 1", y="Score 2")
+      }
+
+      gg <- plotCodaSpaceInner(dfs$red, dfs$loadings, d.groups=tmp$d.groups, ref.level=self$ref.level, target.level=self$target.level, palette=palette)
+      return(gg + gg.labs + self$plot.theme)
     },
 
     #' @description Plot contrast tree

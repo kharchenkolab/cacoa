@@ -41,10 +41,10 @@ estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2
   cn <- paste('S', 1:n.dim, sep = '')
   df.cda <- as.data.frame(sample.pos) %>% set_colnames(cn)
   df.loadings <- as.data.frame(cell.loadings * 8) %>% set_colnames(cn)
-  return(list(cda=df.cda, loadings=df.loadings))
+  return(list(red=df.cda, loadings=df.loadings))
 }
 
-plotCodaSpace <- function(df.space, df.loadings, d.groups, ref.level, target.level, palette=NULL) {
+plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, target.level, palette=NULL) {
   group.names <- c(ref.level, target.level)
   rda.plot <- ggplot(df.space, aes(x=S1, y=S2)) +
     #   geom_text(aes(label=rownames(df_pca) %in% samplegroups$trgt),size=4) +

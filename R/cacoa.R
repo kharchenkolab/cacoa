@@ -1163,7 +1163,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     plotCellGroupProportions=function(legend.position = "right", cell.groups = self$cell.groups,
                              cells.to.remove = NULL, cells.to.remain = NULL,
                              palette=self$sample.groups.palette, show.significance = FALSE, ...) {
-      df.melt <- extractCodaData(cell.groups=cell.groups, sample.per.cell=self$sample.per.cell, cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain)
+      df.melt <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, ret.groups=FALSE)
 
       df.melt %<>% {100 * . / rowSums(.)} %>% as.data.frame() %>%
         dplyr::mutate(group=self$sample.groups[levels(self$sample.per.cell)]) %>%
@@ -1180,7 +1180,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
     plotCellGroupSizes=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette, ...) {
-      df.melt <- extractCodaData(cell.groups=cell.groups, sample.per.cell=self$sample.per.cell) %>%
+      df.melt <- private$extractCodaData(cell.groups=cell.groups, ret.groups=FALSE) %>%
         as.data.frame() %>%
         dplyr::mutate(group=self$sample.groups[levels(self$sample.per.cell)]) %>%
         reshape2::melt(id.vars="group")
@@ -1192,9 +1192,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Plot compositions in CoDA space (PCA or CDA)
     #' @param space either 'PCA' or 'CDA'
     #' @return A ggplot2 object
-    plotCodaSpace=function(space='CDA', cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, palette=self$sample.groups.palette) {
-      tmp <- extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove, cell.groups=self$cell.groups,
-                             sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups, target.level=self$target.level)
+    plotCodaSpace=function(space='CDA', cell.groups=self$cell.groups, cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, palette=self$sample.groups.palette) {
+      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove, cell.groups=cell.groups)
 
       if (space == 'PCA') {
         bal <- getRndBalances(tmp$d.counts)
@@ -1217,8 +1216,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Plot contrast tree
     #' @return A ggplot2 object
-    plotContrastTree=function(cells.to.remain = NULL, cells.to.remove = NULL) {
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
+    plotContrastTree=function(cell.groups=self$cell.groups, cells.to.remain = NULL, cells.to.remove = NULL) {
+      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
       plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level)
     },
 
@@ -1226,18 +1225,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @return A ggplot2 object
     estimateCellLoadings=function(n.cell.counts = 1000, n.seed = 239, cells.to.remove = NULL,
                                   cells.to.remain = NULL, samples.to.remove = NULL, n.iter=1000){
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, samples.to.remove = samples.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
-      self$test.results[['cda']] <- resampleContrast(tmp$d.counts, tmp$d.groups,
-                                                     n.cell.counts = n.cell.counts,
-                                                     n.seed = n.seed, n.iter = n.iter)
+      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
+      self$test.results[['cda']] <- tmp %$%
+        resampleContrast(d.counts, d.groups, n.cell.counts=n.cell.counts, n.seed=n.seed, n.iter=n.iter)
 
-      self$test.results$cda$pvals = getCellSignificance(self$test.results$cda$balances)
+      self$test.results$cda$pvals <- getCellSignificance(self$test.results$cda$balances)
 
       return(invisible(self$test.results[['cda']]))
     },
 
     estimateGaPartition=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, ...){
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, samples.to.remove = samples.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
+      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
       ga.res <- gaPartition(tmp$d.counts, tmp$d.groups, ...)
 
       self$test.results[['ga.partition']] <- rownames(t(ga.res[1,ga.res[1,] != 0,drop=FALSE]))
@@ -1838,6 +1836,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       return(gg.emb + ls[[1]] + scale_size_continuous(limits=font.size, guide='none'))
+    },
+
+    extractCodaData = function(ret.groups=TRUE, cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL, samples.to.remove=NULL) {
+      d.counts <- cell.groups %>% data.frame(anno=., group=self$sample.per.cell[names(.)]) %>%
+        table() %>% rbind() %>% t()
+
+      if(!is.null(cells.to.remove)) d.counts %<>% .[,!(colnames(.) %in% cells.to.remove)]
+      if(!is.null(cells.to.remain)) d.counts %<>% .[,colnames(.) %in% cells.to.remain]
+      if(!is.null(samples.to.remove)) d.counts %<>% .[!(rownames(.) %in% samples.to.remove),]
+
+      if (!ret.groups)
+        return(d.counts)
+
+      d.groups <- (self$sample.groups[rownames(d.counts)] == self$target.level) %>%
+        setNames(rownames(d.counts))
+
+      return(list(d.counts = d.counts,
+                  d.groups = d.groups))
     }
   )
 )

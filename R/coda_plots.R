@@ -1,24 +1,3 @@
-extractCodaData=function(cell.groups, sample.per.cell, sample.groups=NULL, target.level=NULL, cells.to.remove = NULL, cells.to.remain = NULL, samples.to.remove = NULL) {
-  d.counts <- data.frame(anno=cell.groups,
-                         group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
-    table() %>%
-    rbind() %>%
-    t()
-
-  if(!is.null(cells.to.remove)) d.counts %<>% .[,!(colnames(.) %in% cells.to.remove)]
-  if(!is.null(cells.to.remain)) d.counts %<>% .[,colnames(.) %in% cells.to.remain]
-  if(!is.null(samples.to.remove)) d.counts %<>% .[!(rownames(.) %in% samples.to.remove),]
-
-  if (is.null(sample.groups))
-    return(d.counts)
-
-  d.groups <- (sample.groups[rownames(d.counts)] == target.level) %>%
-    setNames(rownames(d.counts))
-
-  return(list(d.counts = d.counts,
-              d.groups = d.groups))
-}
-
 estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
   cell.loadings <- c()
   sample.pos <- c()

@@ -52,8 +52,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @field cell.groups.palette a color palette for the cell.groups
     cell.groups.palette = NULL,
 
-    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, sample.groups.palette=NULL, cell.groups.palette=NULL,
-                        embedding=extractEmbedding(data.object), n.cores=1, verbose=TRUE) {
+    #' @field plot.theme ggplot2 theme for all plots
+    plot.theme=NULL,
+
+    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL,
+                        sample.groups.palette=NULL, cell.groups.palette=NULL, embedding=extractEmbedding(data.object), n.cores=1, verbose=TRUE,
+                        plot.theme=theme_bw()) {
       if ('Cacoa' %in% class(data.object)) { # copy constructor
         for (n in ls(data.object)) {
           if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
@@ -111,6 +115,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         self$cell.groups.palette <- cell.groups.palette
       }
 
+      self$plot.theme <- plot.theme
       self$embedding <- embedding;
     },
 
@@ -467,15 +472,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param show.pairs transparency value for the data points (default: 0.05)
     #' @param notch - whether to show notches in the boxplot version (default=TRUE)
     #' @return A ggplot2 object
-    plotDeStabilityPerCellType=function(name='de', 
-                                       notch = T, 
-                                       show.jitter = T, 
-                                       jitter.alpha = 0.05, 
+    plotDeStabilityPerCellType=function(name='de',
+                                       notch = T,
+                                       show.jitter = T,
+                                       jitter.alpha = 0.05,
                                        show.pairs = F,
                                        top.n.genes = 200) {
       de.res <- private$getResults(name)
       if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
-      
+
       jaccard.pw.top <- function(subsamples, top.thresh){
         jac.all = c()
         for(i in 1:length(subsamples)) {
@@ -488,31 +493,31 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         }
         return(jac.all)
       }
-      
+
       data.all = data.frame()
       for(cell.type in names(de.res)){
         subsamples <- de.res[[cell.type]]$subsamples
         jacc.tmp <- jaccard.pw.top(subsamples, top.n.genes)
-        data.tmp <- data.frame(group = cell.type, 
-                               value = jacc.tmp, 
+        data.tmp <- data.frame(group = cell.type,
+                               value = jacc.tmp,
                                cmp = 1:length(jacc.tmp))
         data.all <- rbind(data.all, data.tmp)
       }
-      
+
       if(! show.pairs) {
-        p <- ggplot(data.all, aes(x=group, y=value, fill=group, 
+        p <- ggplot(data.all, aes(x=group, y=value, fill=group,
                                   group=group)) + geom_boxplot(outlier.shape = NA) + geom_jitter(alpha=0.05)
       } else {
-        p <- ggplot(data.all, aes(x=group, y=value, fill=group, 
+        p <- ggplot(data.all, aes(x=group, y=value, fill=group,
                                   group=cmp, color=cmp)) + geom_line()
       }
-      
-      p + theme(legend.position = "none") + 
-        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
-        ylab('Jaccard index') + xlab('cell type') + 
+
+      p + theme(legend.position = "none") +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+        ylab('Jaccard index') + xlab('cell type') +
         ggtitle(paste(cao$target.level, '. Top', as.character(top.n.genes), 'genes', sep=' '))
     },
-    
+
     #' @description Plot number of significant DE genes as a function of number of cells
     #' @param name results slot in which the DE results should be stored (default: 'de')
     #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
@@ -1325,63 +1330,54 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
 
     #' @description Plot cell density
-    #' @param method density estimation method (graph, ked)
+    #' @param method density estimation method (graph or kde, default: 'kde')
     #' @param add.points default is TRUE, add points to cell density figure
     #' @param contours specify cell types for contour, multiple cell types are also supported
     #' @param contour.color color for contour line
     #' @param contour.conf confidence interval of contour
     #' @param name slot in which to saved results from estimateCellDensity (default: 'cell.density')
+    #' @param ... plot style parameters forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}
     #' @return A ggplot2 object
-    plotCellDensity = function(method='kde', show.legend=FALSE, legend.position=NULL, show.grid=TRUE, add.points=TRUE,size=0.1,
-                               point.col='#FCFDBFFF', contours=NULL, contour.color='white', contour.conf='10%', name='cell.density') {
-      dens.res <- private$getResults(name)
+    plotCellDensity = function(method='kde', show.grid=TRUE, add.points=TRUE, size=0.1, show.legend=FALSE,
+                               point.col='#FCFDBFFF', contours=NULL, contour.color='white', contour.conf='10%',
+                               name='cell.density', ...) {
+      dens.res <- private$getResults(name, 'estimateCellDensity()')
+      cond.levels <- c(ref=self$ref.level, target=self$target.level)
 
       if (method == 'kde'){
         if (dens.res$method!='kde') stop('please estimate cell density with estimateCellDensity(method="kde")')
         # calculate sample.per.cell
-        condition.per.cell <- as.factor(setNames( as.character(self$sample.groups[ as.character(self$sample.per.cell)]), names(self$sample.per.cell) ))
+        condition.per.cell <- self$getConditionPerCell()
+        lims <- dens.res$density.fraction %>% unlist() %>% range()
 
-        target.density <- dens.res %$% data.frame(density.emb, z=density.fraction[[self$target.level]])
-        ref.density <- dens.res %$% data.frame(density.emb, z=density.fraction[[self$ref.level]])
+        ps <- lapply(cond.levels, function(l) {
+          p <- dens.res %$% data.frame(density.emb, z=density.fraction[[l]]) %>%
+            plotDensityKde(bins=dens.res$bins, lims=lims, title=l, show.legend=show.legend,
+                           show.grid=show.grid, plot.theme=self$plot.theme, ...)
 
-        mi <- min(min(ref.density$z), min(target.density$z))
-        ma <- max(max(ref.density$z), max(target.density$z))
-
-        p1 <- plotDensity(target.density, bins=dens.res$bins, legend.position=legend.position, show.legend=show.legend, title=self$ref.level, show.grid=show.grid, mi=mi, ma=ma)
-        p2 <- plotDensity(ref.density, bins=dens.res$bins, legend.position=legend.position, show.legend=show.legend, title=self$target.level, show.grid=show.grid, mi=mi, ma=ma)
-
-        if (add.points){
-          emb <- self$embedding %>% as.data.frame()
-          colnames(emb) <- c('x','y')
-          emb$z <- 1
-          nname1 <- names(condition.per.cell)[condition.per.cell == self$ref.level] %>%
-            sample(min(2000, length(.)))
-
-          nname2 <- names(condition.per.cell)[condition.per.cell == self$target.level] %>%
-            sample(min(2000, length(.)))
-
-          p1 <- p1 + geom_point(data=emb[nname1, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
-          p2 <- p2 + geom_point(data=emb[nname2, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
-        }
-      }
-      else if (method =='graph'){
+          if (add.points){
+            emb <- as.data.frame(dens.res$cell.emb) %>% set_colnames(c('x','y')) %>% cbind(z=1)
+            nnames <- condition.per.cell %>% {names(.)[. == l]} %>% sample(min(2000, length(.)))
+            p <- p + geom_point(data=emb[nnames, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
+          }
+          p
+        })
+      } else if (method =='graph'){
         if (dens.res$method != 'graph') stop('please estimate cell density with estimateCellDensity(method="graph")')
-        emb <- self$embedding
-        target.density <- dens.res %$% density.fraction[[self$target.level]]
-        ref.density <- dens.res %$% density.fraction[[self$ref.level]]
-        p1 <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = target.density, size = size,title = self$target.level, legend.position = legend.position, show.legend = show.legend) +
-          #scale_fill_gradient2(low = col[1], high = col[3], mid = col[2], midpoint = 0, limits = c(mi, ma)) +
-          theme(legend.background = element_blank())
-        p2 <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = ref.density, size = size,, title=self$ref.level, legend.position = legend.position, show.legend = show.legend) +
-          #scale_fill_gradient2(low = col[1], high = col[3], mid = col[2], midpoint = 0, limits = c(mi, ma)) +
-          theme(legend.background = element_blank())
-      }else stop("Unknown method: ", method)
+        ps <- lapply(cond.levels, function(l) {
+          sccore::embeddingPlot(self$embedding, plot.theme=self$plot.theme, colors=dens.res$density.fraction[[l]],
+                                size=size, title=l, show.legend=show.legend, ...)
+        })
+      } else stop("Unknown method: ", method)
+
       if(!is.null(contours)){
-        cnl <- do.call(c, lapply(sn(contours), function(x) getContour(self$embedding, cell.type=self$cell.groups , cell=x ,conf=contour.conf, color=contour.color)))
-        p1 <- p1 + cnl
-        p2 <- p2 + cnl
+        cnl <- do.call(c, lapply(sn(contours), function(x)
+          getContour(self$embedding, cell.type=self$cell.groups, cell=x, conf=contour.conf, color=contour.color)))
+        ps %<>% lapply(`+`, cnl)
       }
-      return(list(ref=p1, target=p2))
+
+      ps %<>% lapply(`+`, theme(legend.background=element_blank()))
+      return(ps)
     },
 
 
@@ -1731,9 +1727,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         }
       }
 
-      condition.per.cell <- self$sample.per.cell %>%
-        {setNames(as.character(self$sample.groups[as.character(.)]), names(.))} %>%
-        as.factor()
+      condition.per.cell <- self$getConditionPerCell()
 
       ggs <- lapply(genes, function(g) {
         lst <- list()
@@ -1757,6 +1751,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if (length(genes) == 1) return(ggs[[1]])
       return(ggs)
+    },
+
+    getConditionPerCell = function() {
+      self$sample.per.cell %>%
+        {setNames(as.character(self$sample.groups[as.character(.)]), names(.))} %>%
+        as.factor()
     }
   ),
 

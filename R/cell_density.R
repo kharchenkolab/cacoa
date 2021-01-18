@@ -17,19 +17,16 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ex
   cname <- intersect(names(sample.per.cell), rownames(emb))
   sample.per.cell <- sample.per.cell[cname]
   emb <- emb[cname, ]
-  list.den <- lapply(sccore:::sn(as.character(unique(sample.per.cell))), function(x) {
-    nname <- names(sample.per.cell[sample.per.cell == x])
-    tmp <- emb[nname, ]
-    f2 <- MASS::kde2d(tmp[, 1], tmp[, 2], n = bins, lims = lims)
-    f2
-  })
-  den.mat <- do.call("cbind", lapply(list.den, function(x) as.numeric(x$z)))
-  density.mat <- preprocessCore::normalize.quantiles(den.mat)    #quantile normalization
-  colnames(density.mat) <- colnames(den.mat)
+  cells.per.samp <- split(names(sample.per.cell), sample.per.cell)
+  density.mat <-lapply(cells.per.samp, function(nn) {
+      MASS::kde2d(emb[nn, 1], emb[nn, 2], n = bins, lims = lims)$z %>% as.numeric()
+    }) %>% do.call("cbind", .) %>%
+    preprocessCore::normalize.quantiles() %>%
+    set_colnames(names(cells.per.samp))
 
-  density.fraction <- lapply(sccore:::sn(as.character(unique(sample.groups))),
-                             function(x) rowMeans(density.mat[, names(sample.groups[sample.groups == x])]))
-  
+  density.fraction <- split(names(sample.groups), sample.groups) %>%
+    lapply(function(ns) rowMeans(density.mat[,ns]))
+
   # coordinate embedding space
   mat <- matrix(density.fraction[[1]], ncol = bins, byrow = FALSE)
   x1 <- seq(lims[1], lims[2], length.out=bins) %>% setNames(seq(bins))
@@ -43,7 +40,8 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ex
   dcounts <- table(cut(emb[,1], breaks = s1), cut(emb[,2], breaks = s2)) #%>% as.matrix.data.frame
   emb2$counts <- as.numeric(dcounts)
 
-  return(list(density.mat=density.mat,density.fraction=density.fraction, density.emb=emb2, bins=bins,'method'='kde'))
+  return(list(density.mat=density.mat, density.fraction=density.fraction, density.emb=emb2, bins=bins,
+              method='kde', cell.emb=emb))
 }
 
 
@@ -66,10 +64,10 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
   }, n.cores = n.cores, mc.preschedule=TRUE, progress=verbose)
   scM <- do.call(cbind, scoreL)
   colnames(scM) <-  unique(sample.per.cell)
- 
+
   density.fraction <- lapply(sccore:::sn(as.character(unique(sample.groups))),
                              function(x) rowMeans(scM[, names(sample.groups[sample.groups == x])]))
-  
+
   return(list(density.mat=scM,density.fraction=density.fraction,'method'='graph'))
 }
 
@@ -95,43 +93,32 @@ getContour <- function(emb, cell.type, cell,  color = 'white', linetype = 2, con
 
 ##' @description Plot cell density
 ##' @param bins number of bins for density estimation, should keep consistent with bins in estimateCellDensity
-##' @param col color palettes, default is c('blue','white','red')
-plotDensity <- function(mat, bins, show.legend = FALSE, legend.position = NULL, title = NULL, show.grid = TRUE, mi=NULL, ma=NULL, method = NULL){
-  if (is.null(mi)){
-    mi <- min(mat$z)
+plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.labels=FALSE, show.ticks=FALSE, ...){
+  if (is.null(lims)){
+    lims <- c(min(mat$z), max(mat$z)*1.1)
   }
-  if (is.null(ma)){
-    ma <- max(mat$z)*1.1
-  }
-  
+
+  breaks <- lapply(mat[c('x', 'y')], function(m) {
+    seq(quantile(m, 0.1), quantile(m, 0.9), length.out=6) %>%
+      signif(digits=3)
+  })
+
   p <- ggplot(mat, aes(x, y, fill = z)) +
     geom_raster() +
-    theme_bw() + theme(panel.grid.major = element_blank(),
-                       panel.grid.minor = element_blank(), panel.border = element_blank(),
-                       panel.background = element_blank())+ #, plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm")) +
-    theme(axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks = element_blank(),
-          axis.title.y = element_blank(), axis.text.y = element_blank()) +
-    scale_y_continuous(expand = c(0,0)) + scale_x_continuous(expand = c(0,0)) +
-    viridis::scale_fill_viridis(option = 'B', alpha = 1, direction = 1, limits = c(mi, ma))
-    if(show.grid){ #  add grid manually
-      p <- p + geom_vline(xintercept=seq(quantile(mat$x,0.1),quantile(mat$x,0.9), length.out=6), col='grey', alpha=0.1)
-      p <- p + geom_hline(yintercept=seq(quantile(mat$y,0.1),quantile(mat$y,0.9),, length.out=6), col='grey', alpha=0.1)
-    }
-    if (!show.legend){
-      p <- p + theme(legend.position = "none")
-    }
-    if (!is.null(legend.position)){
-      p <- p + theme(legend.position = legend.position)
-    }
-    if(!is.null(title)){
-      p <- p + ggtitle(title)
-    }
+    scale_x_continuous(breaks=breaks$x, expand = c(0,0)) +
+    scale_y_continuous(breaks=breaks$y, expand = c(0,0)) +
+    viridis::scale_fill_viridis(option='B', alpha=1, direction=1, limits=lims)
+
+  p %<>% sccore::styleEmbeddingPlot(show.labels=show.labels, show.ticks=show.ticks, ...)
+
+  if(show.grid){ #  add grid manually
+    p <- p +
+      geom_vline(xintercept=breaks$x, col='grey', alpha=0.1) +
+      geom_hline(yintercept=breaks$y, col='grey', alpha=0.1)
+  }
+
   return(p)
 }
-
-
-
-
 
 
 ##' @description estimate differential cell density
@@ -152,7 +139,7 @@ diffCellDensity <- function(density.emb, density.mat, sample.groups, bins, ref.l
   #} else if (type == 'subtract.norm'){
   #  score <- (rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])) / rowMeans(density.mat[, nr])
   } else if (type=='t.test'){
-    score <- matrixTests::row_t_welch(density.mat[,nt], density.mat[,nr])$statistic 
+    score <- matrixTests::row_t_welch(density.mat[,nt], density.mat[,nr])$statistic
     if(adjust.pvalues) score <- sign(score) * qnorm(p.adjust(pnorm(abs(score),lower.tail=F),method='BH'),lower.tail=F)
   } else if (type == 'wilcox') {
     pvalue = matrixTests::row_wilcoxon_twosample(density.mat[,nt], density.mat[,nr])$pvalue

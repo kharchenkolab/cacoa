@@ -50,17 +50,18 @@ plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, targe
 }
 
 # helper function for creating dendograms
-ggdend <- function(dend.data, a = 90) {
+ggdend <- function(dend.data, a = 90, plot.theme=theme_get()) {
   ggplot() +
     geom_segment(data = dend.data$segments, aes(x=x, y=y, xend=xend, yend=yend)) +
-    labs(x = "", y = "")  + theme_minimal() +
+    labs(x = "", y = "") + plot.theme +
     theme(axis.text = element_blank(), axis.ticks = element_blank(),
-          panel.grid = element_blank()) +
+          panel.grid = element_blank(), panel.border=element_blank(),
+          axis.line=element_blank()) +
     geom_text(data = dend.data$labels, aes(x, y, label = label),
               hjust = 1, angle = a, size = 3) + ylim(-0.5, NA)
 }
 
-plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, p.threshold = 0.01){
+plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme, p.threshold = 0.01){
   log.f <- getLogFreq(d.counts)
 
   t.cur <- constructCanonicalTree(d.counts, d.groups)
@@ -104,7 +105,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, p.thre
   # p.val <- p.adjust(p.val, method = 'fdr')
   p.val[is.na(p.val)] <- 1
 
-  px <- ggdend(dend.data)
+  px <- ggdend(dend.data, plot.theme=plot.theme)
 
   if(sum(p.val < p.threshold) == 0)
     return(px)
@@ -181,7 +182,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, p.thre
 }
 
 
-plotCellLoadings <- function(cda, ordering, signif.threshold, font.size, alpha, palette, show.pvals, ref.level, target.level) {
+plotCellLoadings <- function(cda, ordering, signif.threshold, alpha, palette, show.pvals, ref.level, target.level, plot.theme) {
   balances = cda$balances
   if(ordering == 'by.pvalue'){
     # ordering by median
@@ -208,7 +209,7 @@ plotCellLoadings <- function(cda, ordering, signif.threshold, font.size, alpha, 
   p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
     geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = alpha, size=1) +
     geom_hline(yintercept = 0, color = "gray37") +
-    coord_flip() + xlab('') + ylab('') + theme_bw()+ theme(legend.position = "none") +
+    coord_flip() + xlab('') + ylab('') + plot.theme + theme(legend.position = "none") +
     scale_x_discrete(position = "top") + ylim(-ymax, ymax)
 
   # Add text
@@ -216,21 +217,21 @@ plotCellLoadings <- function(cda, ordering, signif.threshold, font.size, alpha, 
     annotate('text', x = 1, y = -ymax, label = paste('\u2190', ref.level), hjust = 'left') +
     annotate('text', x = 1, y = ymax, label = paste(target.level, '\u2192'), hjust = 'right')
 
-  if(!is.null(font.size)) {
-    p <- p + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
-  }
   if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
   if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(balances) - n.significant.cells + 0.5, color='red')
 
 
   if(show.pvals){
-    d <- data.frame(x = names(frac), y=frac)
-    d$x <- factor(d$x, levels = d$x)
-    p.pval <- ggplot(d, aes(x=x,y=-log(y,base = 10) )) + geom_bar(stat="identity") +
-      coord_flip() + xlab('') + ylab('-log(p-value)') + theme_bw()+ theme(legend.position = "none") +
-      geom_hline(yintercept=-log(signif.threshold,base = 10)) + theme(axis.text.y = element_blank())
+    d <- names(frac) %>% factor(., levels=.) %>% data.frame(x=., y=frac)
+    p.pval <- ggplot(d, aes(x=x, y=-log(y,base = 10), fill=factor(x))) +
+      geom_bar(stat="identity") +
+      geom_hline(yintercept=-log(signif.threshold,base = 10)) +
+      coord_flip() + labs(x='', y='-log(p-value)') +
+      plot.theme + theme(legend.position = "none") + theme(axis.text.y = element_blank())
 
-    p.combo <- cowplot::plot_grid(plotlist=list(p,p.pval),nrow=1,rel_widths=c(2,1))
+    if(!is.null(palette)) p.pval <- p.pval + scale_fill_manual(values=palette)
+
+    p.combo <- cowplot::plot_grid(p, p.pval, nrow=1, rel_widths=c(2,1))
     return(p.combo)
   }
 

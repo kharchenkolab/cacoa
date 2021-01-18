@@ -1218,7 +1218,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @return A ggplot2 object
     plotContrastTree=function(cell.groups=self$cell.groups, cells.to.remain = NULL, cells.to.remove = NULL) {
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
-      plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level)
+      gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, plot.theme=self$plot.theme)
+      return(gg)
     },
 
     #' @description Plot Loadings
@@ -1255,8 +1256,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       cda <- private$getResults('cda', 'estimateCellLoadings()')
-      p <- plotCellLoadings(cda, ordering, signif.threshold, font.size, alpha, palette, show.pvals,
-                            self$ref.level, self$target.level)
+      p <- plotCellLoadings(cda, ordering, signif.threshold, alpha, palette, show.pvals,
+                            ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme)
 
       return(p)
     },

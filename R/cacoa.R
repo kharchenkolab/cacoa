@@ -4,6 +4,7 @@
 #' @export Cacoa
 #' @exportClass Cacoa
 #' @param sample.groups a two-level factor on the sample names describing the conditions being compared (default: stored vector)
+#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
 #' @param n.cores number of cores for parallelisation
 #' @param verbose show progress (default: stored value)
 #' @param name field name where the test results are stored
@@ -512,15 +513,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                   group=cmp, color=cmp)) + geom_line()
       }
 
-      p + theme(legend.position = "none") +
-        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-        ylab('Jaccard index') + xlab('cell type') +
-        ggtitle(paste(cao$target.level, '. Top', as.character(top.n.genes), 'genes', sep=' '))
+      p + self$plot.theme + theme(legend.position = "none") +
+        theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1)) +
+        labs(x='cell type', y='Jaccard index') +
+        ggtitle(paste0(cao$target.level, '. Top ', as.character(top.n.genes), ' genes'))
     },
 
     #' @description Plot number of significant DE genes as a function of number of cells
     #' @param name results slot in which the DE results should be stored (default: 'de')
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param palette cell group palette (default: stored $cell.groups.palette)
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
     #' @param label Show labels on plot (default=T)
@@ -538,39 +538,38 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                             legend.position=legend.position, label=label, size=size, palette=palette) +
         geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 
-      return(gg)
+      return(gg + self$plot.theme)
     },
 
     #' @description Plot number of significant DE genes
     #' @param name results slot in which the DE results should be stored (default: 'de')
-    #' @param palette cell group palette (default: stored $cell.groups.palette)
-    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
-    #' @param label Show labels on plot (default=T)
     #' @param pvalue.cutoff P value cutoff (default=0.05)
     #' @param p.adjust whether the cutoff should be based on the adjusted P value (default: TRUE)
     #' @param show.resampling.results whether to show uncertainty based on resampling results (default: TRUE)
     #' @param show.size.depenency whether to show mean vs. number of cells in a cell type instead (default: FALSE)
-    #' @param font.size font size for the cell type labels in the size dependency plot
     #' @param show.regression whether to show a slope line in the size dependency plot (default:TRUE)
     #' @param show.whiskers whether to show a whiskers in the size dependency plot (default:TRUE)
     #' @return A ggplot2 object
-    plotNumberOfDEGenes=function(name='de', legend.position="none", label=TRUE, p.adjust=TRUE, pvalue.cutoff=0.05, show.resampling.results=TRUE, show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
+    plotNumberOfDEGenes=function(name='de', p.adjust=TRUE, pvalue.cutoff=0.05, show.resampling.results=TRUE, show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE,
+                                 show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE) {
 
       de.raw <- private$getResults(name, 'estimatePerCellTypeDE()')
 
       if(show.resampling.results) {
         if(!all(unlist(lapply(de.raw,function(x) !is.null(x$subsamples))))) {
           warning("resampling results are missing for at least some cell types, falling back to point estimates. Please rerun estimatePerCellTypeDE() with resampling='bootstrap' or resampling='loo'")
-          rl <- lapply(de.raw,function(x) x$res)
+          rl <- lapply(de.raw, `[[`, 'res')
         } else {
-          rl <- setNames( unlist(lapply(de.raw,function(x) x$subsamples),recursive=F), rep(names(de.raw),unlist(lapply(de.raw,function(x) length(x$subsamples)))))
+          subsamples <- lapply(de.raw, `[[`, 'subsamples')
+          rl <- unlist(subsamples, recursive=FALSE) %>%
+            setNames(rep(names(de.raw), sapply(subsamples, length)))
         }
       } else {
-        rl <- lapply(de.raw,function(x) x$res)
+        rl <- lapply(de.raw, `[[`, 'res')
       }
       # convert to dataframe for plotting
       df <- do.call(rbind,lapply(1:length(rl),function(i) {
-        if(p.adjust) {
+        if (p.adjust) {
           ndiff <- sum(na.omit(rl[[i]]$padj<=pvalue.cutoff))
         } else {
           ndiff <- sum(na.omit(rl[[i]]$pvalue<=pvalue.cutoff))
@@ -579,11 +578,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }))
 
       if(show.size.dependency) {
-
-        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='number of DE genes', yline=NA, show.whiskers=show.whiskers, show.regression=show.regression)
+        p <- plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='number of DE genes', yline=NA, show.whiskers=show.whiskers, show.regression=show.regression)
       } else {
-        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette, ylab='number of DE genes',yline=NA)
+        p <- plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette, ylab='number of DE genes',yline=NA)
       }
+
+      return(p + self$plot.theme)
     },
 
     #' @description Save DE results as JSON files
@@ -613,7 +613,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Plot number of highly-expressed DE genes as a function of number of cells
     #' @param de.filter Filtered DE genes, results from prepareOntologyData (default: stored list)
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
     #' @param label Show labels on plot (default=T)
     #' @return A ggplot2 object
@@ -624,7 +623,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       gg <- sapply(de.filter, length) %>%
         plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Highly-expressed DE genes", legend.position=legend.position, label=label) +
-        geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
+        geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5) +
+        self$plot.theme
 
       return(gg)
     },
@@ -637,7 +637,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param p.adj Cutoff for filtering highly-expressed DE genes (default=0.05)
     #' @param expr.cutoff Cutoff for cells per group expressing a DE gene, i.e., cutoff for highly-expressed genes (default=0.05)
     #' @param de.raw Differentially expressed genes per cell group, results from estimatePerCellTypeDE (default: stored list)
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param universe Only set this if a common background gene set is desired for all cell groups (default: NULL)
     #' @param transposed Whether count matrices should be transposed (default=T)
     #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
@@ -661,9 +660,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description  Plot embedding
     #' @param embedding A cell embedding to use (two-column data frame with rownames corresponding to cells) (default: stored embedding object)
-    #' @param plot.theme plot theme to use (default: ggplot2::theme_bw())
+    #' @param plot.theme plot theme to use (default: `self$plot.theme`)
     #' @param ... other parameters are passed to \link[sccore:embeddingPlot]{embeddingPlot}
-    plotEmbedding=function(embedding=self$embedding, plot.theme=ggplot2::theme_bw(), show.legend=TRUE, ...) {
+    plotEmbedding=function(embedding=self$embedding, plot.theme=self$plot.theme, show.legend=TRUE, ...) {
       if(is.null(embedding)) stop("embedding must be provided to Cacoa constructor or to this method.")
       sccore::embeddingPlot(embedding, plot.theme=plot.theme, show.legend=show.legend, ...)
     },
@@ -763,7 +762,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Bar plot of ontology terms per cell type
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="all")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @return A ggplot2 object
     plotOntologyDistribution=function(genes="all", type="GO", p.adj=0.05, min.genes=1, cell.groups=self$cell.groups) {
       if (length(genes) > 0) {
@@ -831,7 +829,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       gg <- gg +
         scale_y_continuous(expand=c(0, 0)) +
-        theme_bw() +
+        self$plot.theme +
         theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5),
               legend.position="right") +
         labs(x="", y=paste0("No. of ",type," terms"))
@@ -842,7 +840,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default='all')
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @param de.filter Filtered DE genes, results from prepareOntologyData (default: stored list)
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param label.x.pos Plot label position on x axis (default=0.01)
     #' @param label.y.pos Plot label position on y axis (default=1)
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See \link[cowplot:plot_grid]{cowplot::plot_grid} for more info (default=1.0)
@@ -861,8 +858,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       y.lab <- paste("Number of", type, "terms")
       pg <- cowplot::plot_grid(
         plotNCellRegression(n.go.per.type, n.de.per.type, x.lab="Number of highly-expressed DE genes",
-                            y.lab=y.lab, legend.position="none", label=TRUE, ...),
-        plotNCellRegression(n.go.per.type, cell.groups, y.lab=y.lab, legend.position="none", label=TRUE, ...),
+                            y.lab=y.lab, legend.position="none", label=TRUE, ...) + self$plot.theme,
+        plotNCellRegression(n.go.per.type, cell.groups, y.lab=y.lab, legend.position="none", label=TRUE, ...) + self$plot.theme,
         ncol=1, labels=c("a", "b"), label_x=label.x.pos, label_y=label.y.pos, scale=scale
       )
 
@@ -979,7 +976,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),] %>%
         tail(n) %>%
         plotHeatmap(legend.position=legend.position, row.order=TRUE, color.range=color.range, ...) +
-        getGeneScale(genes=genes, type="fill", high="white", limits=color.range)
+        getGeneScale(genes=genes, type="fill", high="white", limits=color.range) +
+        self$plot.theme
 
       return(gg)
     },
@@ -998,24 +996,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         stop("No significant ontology terms identified. Try relaxing p.adj.")
 
       if(type %in% c("GO", "GSEA")) {
-        pathway_df <- unique(ont.res$Group) %>%
+        pathway.df <- unique(ont.res$Group) %>%
           lapply(function(cell.group) {
-            lapply(ont.res %>%
-                     dplyr::filter(Group == cell.group) %>%
-                     dplyr::pull(Type) %>%
-                     as.factor() %>%
-                     levels(), function(go) {
-                       tibble::tibble(Pathway=ont.res %>%
-                                        dplyr::filter(Group == cell.group) %>%
-                                        dplyr::filter(Type==go) %>%
-                                        dplyr::pull(Description),
-                                      Group=cell.group,
-                                      GO=go)
-                     }) %>% dplyr::bind_rows()
+            ont.res %>%
+              dplyr::filter(Group == cell.group) %>%
+              dplyr::pull(Type) %>% as.factor() %>% levels() %>%
+              lapply(function(go) {
+                dplyr::filter(Group == cell.group) %>%
+                  dplyr::filter(Type==go) %>%
+                  dplyr::pull(Description) %>%
+                  tibble::tibble(Pathway=., Group=cell.group, GO=go)
+                }) %>% dplyr::bind_rows()
           }) %>%
           dplyr::bind_rows()
       } else if(type=="DO") {
-        pathway_df <- unique(ont.res$Group) %>%
+        pathway.df <- unique(ont.res$Group) %>%
           lapply(function(cell.group) {
             tibble::tibble(Pathway=ont.res %>%
                              dplyr::filter(Group == cell.group) %>%
@@ -1025,7 +1020,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           dplyr::bind_rows()
       }
 
-      path_bin <- pathway_df %>%
+      path.bin <- pathway.df %>%
         dplyr::select(Pathway, Group) %>%
         dplyr::mutate(X=1) %>%
         tidyr::spread(Pathway, X) %>%
@@ -1033,21 +1028,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         magrittr::set_rownames(.$Group) %>%
         .[, 2:ncol(.)] %>%
         as.matrix()
-      path_bin[is.na(path_bin)] <- 0
+      path.bin[is.na(path.bin)] <- 0
 
-      p_mat <- (1 - (path_bin %>% dist(method="binary") %>% as.matrix)) %>% pmin(0.5)
-      t_tree <- dist(p_mat) %>% hclust()
-      t_order <- t_tree %$% labels[order]
-      t_cls <- cutree(t_tree, h=0.7) %>% .[t_order]
-      t_cls[t_cls %in% names(which(table(t_cls) < 5))] <- max(t_cls) + 1
-      t_cl_lengths <- rle(t_cls)$lengths %>% rev
-      diag(p_mat) <- 1
+      p.mat <- (1 - (path.bin %>% dist(method="binary") %>% as.matrix)) %>% pmin(0.5)
+      cl.tree <- dist(p.mat) %>% hclust()
+      clusts <- cl.tree %$% {cutree(., h=0.7)[labels[order]]}
+      clusts[clusts %in% names(which(table(clusts) < 5))] <- max(clusts) + 1
+      clust.lengths <- rle(clusts)$lengths %>% rev
+      diag(p.mat) <- 1
 
       # Plot
-      plotHeatmap(p_mat, color.per.group=NULL, row.order=t_order, col.order=rev(t_order), legend.title="Similarity") +
+      plotHeatmap(p.mat, color.per.group=NULL, row.order=t_order, col.order=rev(t_order), legend.title="Similarity") +
         scale_fill_distiller(palette="RdYlBu", limits=c(0, 0.5)) +
-        geom_vline(aes(xintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5)) +
-        geom_hline(aes(yintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5))
+        geom_vline(aes(xintercept=x), data.frame(x=cumsum(clust.lengths)[clust.lengths > 1] + 0.5)) +
+        geom_hline(aes(yintercept=x), data.frame(x=cumsum(clust.lengths)[clust.lengths > 1] + 0.5)) +
+        self$plot.theme
     },
 
     #' @description Plot a heatmap of collapsed (family) ontology P values per cell type
@@ -1105,10 +1100,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       # Plot
       gg <- ont.sum %>%
         .[, colSums(abs(.)) > 0] %>%
-        .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),] %>%
+        .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names(), rownames(.)),] %>%
         tail(n) %>%
         plotHeatmap(legend.position=legend.position, row.order=TRUE, color.range=color.range, ...) +
-        getGeneScale(genes=genes, type="fill", high="white", limits=color.range)
+        getGeneScale(genes=genes, type="fill", high="white", limits=color.range) +
+        self$plot.theme
 
       return(gg)
     },
@@ -1153,37 +1149,48 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(ont.fam.res)) stop(paste0("No results found for genes '",genes,"'."))
       if(!fam.name %in% names(ont.fam.res$families)) stop("'family' not in 'ont.fam.res'.")
 
-      plotOntologyFamily(fam = ont.fam.res$families[[fam.name]], data = ont.fam.res$data, plot.type = plot.type, show.ids = show.ids, string.length = string.length, legend.label.size = legend.label.size, legend.position = legend.position, verbose = verbose, n.cores = n.cores)
+      plotOntologyFamily(fam = ont.fam.res$families[[fam.name]], data = ont.fam.res$data, plot.type = plot.type, show.ids = show.ids,
+                         string.length = string.length, legend.label.size = legend.label.size, legend.position = legend.position, verbose = verbose, n.cores = n.cores)
     },
 
     #' @description Plot the cell group proportions per sample
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-    #' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
     #' @param cells.to.remove Vector of cell types to remove from the composition
     #' @param cells.to.remain Vector of cell types to remain in the composition
     #' @param notch Whether to show notch in the boxplots
     #' @param alpha Transparency level on the data points (default: 0.2)
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
-    #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (* < 0.05; ** < 0.01; *** < 0.001)
+    #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
     #' @return A ggplot2 object
-    plotProportions=function(legend.position = "right", cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell,
-                             sample.groups = self$sample.groups, cells.to.remove = NULL, cells.to.remain = NULL, notch = FALSE,
+    plotProportions=function(legend.position = "right", cell.groups = self$cell.groups,
+                             cells.to.remove = NULL, cells.to.remain = NULL, notch = FALSE,
                              alpha=0.2, palette=self$sample.groups.palette, show.significance = FALSE) {
-      if(is.null(cells.to.remove) && is.null(cells.to.remain)){
-        plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups,
-                        notch=notch, alpha = alpha, palette=palette, show.significance=show.significance)
-      } else {  # Anna modified
-        plotProportionsSubset(legend.position = legend.position,
-                        cell.groups = cell.groups,
-                        sample.per.cell = sample.per.cell,
-                        sample.groups = sample.groups,
-                        cells.to.remove = cells.to.remove,
-                        cells.to.remain = cells.to.remain,
-                        notch=notch,
-                        alpha = alpha, palette=palette,
-                        show.significance=show.significance)
-      }
+      df.melt <- data.frame(anno=cell.groups, group=self$sample.per.cell[match(names(cell.groups), names(self$sample.per.cell))]) %>%
+        table() %>% rbind()
+
+      if(!is.null(cells.to.remove)) df.melt = df.melt[!(rownames(df.melt) %in% cells.to.remove),]
+      if(!is.null(cells.to.remain)) df.melt = df.melt[rownames(df.melt) %in% cells.to.remain,]
+
+      df.melt %<>% t() %>% as.data.frame() %>% apply(2, as.numeric) %>%
+        as.data.frame() %>% divide_by(rowSums(.)) %>% multiply_by(1e2) %>%
+        dplyr::mutate(group=self$sample.groups[match(levels(self$sample.per.cell), names(self$sample.groups))]) %>%
+        reshape2::melt(id.vars="group")
+
+      gg <- ggplot(df.melt, aes(x=variable, y=value, by=group)) +
+        geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
+        labs(x="", y="% cells per sample") +
+        self$plot.theme +
+        theme_legend_position(legend.position) +
+        theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
+              legend.title=element_blank()) +
+        geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
+        scale_y_continuous(expand=c(0, max(df.melt$value) * 0.1), limits=c(0, max(df.melt$value)))
+
+      if(show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+
+      if(!is.null(palette)) gg <- gg + scale_color_manual(values=palette)
+
+      return(gg)
     },
 
     #' @description Plot the cell numbers per sample

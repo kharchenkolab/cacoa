@@ -30,8 +30,7 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
     geom_point(aes(color=Type)) +
     scale_x_log10() +
     ylim(0, max(p.df$N)) +
-    labs(x=x.lab, y=y.lab) +
-    theme_bw()
+    labs(x=x.lab, y=y.lab)
 
   if(label) {
     gg <- gg +
@@ -116,99 +115,6 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
   return(gg)
 }
 
-#' @title Plot proportions
-#' @description Plot the cell group proportions per sample
-#' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
-#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-#' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
-#' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
-#' @param alpha Transparency level on the data points (default: 0.1)
-#' @return A ggplot2 object
-plotProportions <- function(legend.position = "right", cell.groups, sample.per.cell, sample.groups, notch=FALSE, alpha=0.1, palette=NULL, show.significance = FALSE) {
-  df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
-    table %>%
-    rbind %>%
-    t %>%
-    as.data.frame %>%
-    apply(2, as.numeric) %>%
-    as.data.frame %>%
-    magrittr::divide_by(rowSums(.)) %>%
-    magrittr::multiply_by(1e2) %>%
-    dplyr::mutate(group = sample.groups[match(levels(sample.per.cell), names(sample.groups))]) %>%
-    reshape2::melt(., id.vars="group")
-
-  gg <- ggplot(df.melt, aes(x=variable, y=value, by=group)) +
-    geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
-    ylab("% cells per sample") +
-    xlab("") +
-    theme_bw() +
-    theme_legend_position(legend.position) +
-    theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
-          legend.title=element_blank()) +
-    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
-    scale_y_continuous( expand=c(0, max(df.melt$value) * 0.1), limits=c(0, (max(df.melt$value) + max(df.melt$value) * 0.05 )))  #expand=c(0, 0),
-
-  if(show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
-
-  if(!is.null(palette)) gg <- gg+ scale_color_manual(values=palette)
-  gg
-}
-
-
-#' @title Plot proportions for a subset of cell types
-#' @description Plot the cell group proportions per sample
-#' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
-#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-#' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
-#' @param sample.groups Vector indicating sample groups with sample names (default: stored vector)
-#' @param cells.to.remain Vector of cell types to remain in the composition
-#' @param cells.to.remove Vector of cell types to remove from the composition
-#' #' @param alpha Transparency level on the data points (default: 0.1)
-#' @return A ggplot2 object
-plotProportionsSubset <- function(legend.position = "right",
-                                  cell.groups,
-                                  sample.per.cell,
-                                  sample.groups,
-                                  cells.to.remove,
-                                  cells.to.remain,
-                                  notch = FALSE,
-                                  alpha = 0.1, palette=NULL,
-                                  show.significance = FALSE) {
-  df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
-    table  %>%
-    rbind
-
-  if(!is.null(cells.to.remove)) df.melt = df.melt[!(rownames(df.melt) %in% cells.to.remove),]
-  if(!is.null(cells.to.remain)) df.melt = df.melt[rownames(df.melt) %in% cells.to.remain,]
-
-  df.melt <- df.melt %>%
-    t %>%
-    as.data.frame  %>%
-    apply(2, as.numeric) %>%
-    as.data.frame %>%
-    magrittr::divide_by(rowSums(.)) %>%
-    magrittr::multiply_by(1e2) %>%
-    dplyr::mutate(group = sample.groups[match(levels(sample.per.cell), names(sample.groups))]) %>%
-    reshape2::melt(., id.vars="group")
-
-  gg <- ggplot(df.melt, aes(x=variable, y=value, by=group)) +
-    geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
-    ylab("% cells per sample") +
-    xlab("") +
-    theme_bw() +
-    theme_legend_position(legend.position) +
-    theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
-          legend.title=element_blank()) +
-    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
-    scale_y_continuous(limits=c(0, (max(df.melt$value) + 5)))
-
-  if(show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
-
-  if(!is.null(palette)) gg <- gg + scale_color_manual(values=palette)
-
-  return(gg)
-}
-
 #' Get Gene Scale
 #' @param genes type of genes ("up", "down" or "all")
 #' @param type type of scale ("fill" or "color")
@@ -288,16 +194,16 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
     p <- ggplot(df,aes(x=cell,y=mean,fill=cell)) + geom_bar(stat='identity')+ geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)
   }
   if(!is.na(yline)) { p <- p+ geom_hline(yintercept = 1,linetype=2,color='gray50') }
-  p <- p+ theme_bw() +
-    theme(axis.text.x=element_text(angle = 90, hjust=1, size=12), axis.text.y=element_text(angle=90, hjust=0.5, size=12))+ guides(fill=FALSE)+
+  p <- p +
+    theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12), axis.text.y=element_text(angle=90, hjust=0.5, size=12))+ guides(fill=FALSE)+
     theme(legend.position = "none")+
     labs(x="", y=ylab)
-  if(show.jitter) p <- p+geom_jitter(data=odf,aes(x=cell,y=val),color=1, position=position_jitter(0.1),show.legend=FALSE,alpha=jitter.alpha);
+  if(show.jitter) p <- p + geom_jitter(data=odf,aes(x=cell,y=val),color=1, position=position_jitter(0.1),show.legend=FALSE,alpha=jitter.alpha);
   if(!is.null(palette)) {
-    p <- p+ scale_fill_manual(values=palette)
+    p <- p + scale_fill_manual(values=palette)
   }
-  p
 
+  return(p)
 }
 
 ##' show a scatter plot of cell-type values vs. number of cells per cell type
@@ -333,16 +239,15 @@ plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab
   }
 
   if(!is.na(yline)) { p <- p+ geom_hline(yintercept = 1,linetype=2,color='gray50') }
-  p <- p+ theme_bw() +
+  p <- p +
     guides(fill=FALSE)+
     theme(legend.position = "none")+
     labs(x="number of cells", y=ylab)
   if(!is.null(palette)) {
-    p <- p+ scale_fill_manual(values=palette)
+    p <- p + scale_fill_manual(values=palette)
   }
 
-  p
-
+  return(p)
 }
 
 # TODO: Improve speed of this function. No need to check BP/MF/CC all the time

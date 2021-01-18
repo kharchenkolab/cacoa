@@ -1154,75 +1154,45 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Plot the cell group proportions per sample
-    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
     #' @param cells.to.remove Vector of cell types to remove from the composition
     #' @param cells.to.remain Vector of cell types to remain in the composition
-    #' @param notch Whether to show notch in the boxplots
-    #' @param alpha Transparency level on the data points (default: 0.2)
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
     #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
+    #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
     plotProportions=function(legend.position = "right", cell.groups = self$cell.groups,
-                             cells.to.remove = NULL, cells.to.remain = NULL, notch = FALSE,
-                             alpha=0.2, palette=self$sample.groups.palette, show.significance = FALSE) {
-      df.melt <- data.frame(anno=cell.groups, group=self$sample.per.cell[match(names(cell.groups), names(self$sample.per.cell))]) %>%
-        table() %>% rbind()
+                             cells.to.remove = NULL, cells.to.remain = NULL,
+                             palette=self$sample.groups.palette, show.significance = FALSE, ...) {
+      df.melt <- extractCodaData(cell.groups=cell.groups, sample.per.cell=self$sample.per.cell, cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain)
 
-      if(!is.null(cells.to.remove)) df.melt = df.melt[!(rownames(df.melt) %in% cells.to.remove),]
-      if(!is.null(cells.to.remain)) df.melt = df.melt[rownames(df.melt) %in% cells.to.remain,]
-
-      df.melt %<>% t() %>% as.data.frame() %>% apply(2, as.numeric) %>%
-        as.data.frame() %>% divide_by(rowSums(.)) %>% multiply_by(1e2) %>%
-        dplyr::mutate(group=self$sample.groups[match(levels(self$sample.per.cell), names(self$sample.groups))]) %>%
+      df.melt %<>% {100 * . / rowSums(.)} %>% as.data.frame() %>%
+        dplyr::mutate(group=self$sample.groups[levels(self$sample.per.cell)]) %>%
         reshape2::melt(id.vars="group")
 
-      gg <- ggplot(df.melt, aes(x=variable, y=value, by=group)) +
-        geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
-        labs(x="", y="% cells per sample") +
-        self$plot.theme +
-        theme_legend_position(legend.position) +
-        theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
-              legend.title=element_blank()) +
-        geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
-        scale_y_continuous(expand=c(0, max(df.melt$value) * 0.1), limits=c(0, max(df.melt$value)))
-
-      if(show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
-
-      if(!is.null(palette)) gg <- gg + scale_color_manual(values=palette)
+      gg <- plotCountBoxplotsPerType(df.melt, y.lab="% cells per sample", y.expand=c(0, max(df.melt$value) * 0.1),
+                                     show.significance=show.significance, palette=palette, plot.theme=self$plot.theme, ...)
 
       return(gg)
     },
 
     #' @description Plot the cell numbers per sample
-    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-    #' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
+    #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
+    #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    plotCellNumbers=function(legend.position = "right", cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups) {
-      df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
-        table %>%
-        rbind %>%
-        t %>%
-        as.data.frame %>%
-        dplyr::mutate(group = sample.groups[match(levels(sample.per.cell), names(sample.groups))]) %>%
-        reshape2::melt(., id.vars="group")
+    plotCellNumbers=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette, ...) {
+      df.melt <- extractCodaData(cell.groups=cell.groups, sample.per.cell=self$sample.per.cell) %>%
+        as.data.frame() %>%
+        dplyr::mutate(group=self$sample.groups[levels(self$sample.per.cell)]) %>%
+        reshape2::melt(id.vars="group")
 
-      ggplot(df.melt, aes(x=variable, y=value, by=group)) +
-        geom_boxplot(position=position_dodge(), outlier.shape = NA) +
-        ylab("Cells per sample") +
-        xlab("") +
-        theme_bw() +
-        theme_legend_position(legend.position) +
-        theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
-              legend.title=element_blank()) +
-        geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=0.4) +
-        scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 50)))
+      gg <- plotCountBoxplotsPerType(df.melt, y.lab="Num. cells per sample", palette=palette, plot.theme=self$plot.theme, ...)
+      return(gg)
     },
 
     #' @description Plot compositions in CoDA-PCA space
     #' @return A ggplot2 object
     plotPcaSpace=function(cells.to.remove = NULL, font.size=NULL, palette=self$sample.groups.palette) {
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
+      tmp <- extractCodaData(cells.to.remove=cells.to.remove, cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups, target.level=self$target.level)
       plotPcaSpace(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, font.size, palette=palette)
     },
 

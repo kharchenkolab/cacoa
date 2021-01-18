@@ -1160,7 +1160,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
     #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    plotProportions=function(legend.position = "right", cell.groups = self$cell.groups,
+    plotCellGroupProportions=function(legend.position = "right", cell.groups = self$cell.groups,
                              cells.to.remove = NULL, cells.to.remain = NULL,
                              palette=self$sample.groups.palette, show.significance = FALSE, ...) {
       df.melt <- extractCodaData(cell.groups=cell.groups, sample.per.cell=self$sample.per.cell, cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain)
@@ -1179,7 +1179,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
     #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    plotCellNumbers=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette, ...) {
+    plotCellGroupSizes=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette, ...) {
       df.melt <- extractCodaData(cell.groups=cell.groups, sample.per.cell=self$sample.per.cell) %>%
         as.data.frame() %>%
         dplyr::mutate(group=self$sample.groups[levels(self$sample.per.cell)]) %>%

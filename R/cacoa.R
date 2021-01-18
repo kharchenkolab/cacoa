@@ -1329,28 +1329,28 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
 
 
-    #' @description Plot cell density
-    #' @param method density estimation method (graph or kde, default: 'kde')
+    #' @description Plot cell density depending on the method that was used for estimating `cao$test.resulst[[name]]`
     #' @param add.points default is TRUE, add points to cell density figure
     #' @param contours specify cell types for contour, multiple cell types are also supported
     #' @param contour.color color for contour line
     #' @param contour.conf confidence interval of contour
     #' @param name slot in which to saved results from estimateCellDensity (default: 'cell.density')
-    #' @param ... plot style parameters forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}
+    #' @param ... plot style parameters forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}.
     #' @return A ggplot2 object
-    plotCellDensity = function(method='kde', show.grid=TRUE, add.points=TRUE, size=0.1, show.legend=FALSE,
+    plotCellDensity = function(show.grid=TRUE, add.points=TRUE, size=0.1, show.legend=FALSE,
                                point.col='#FCFDBFFF', contours=NULL, contour.color='white', contour.conf='10%',
-                               name='cell.density', ...) {
+                               name='cell.density', show.cell.groups=TRUE, cell.groups=self$cell.groups, font.size=c(2,4), ...) {
       dens.res <- private$getResults(name, 'estimateCellDensity()')
       cond.levels <- c(ref=self$ref.level, target=self$target.level)
 
-      if (method == 'kde'){
-        if (dens.res$method!='kde') stop('please estimate cell density with estimateCellDensity(method="kde")')
-        # calculate sample.per.cell
-        condition.per.cell <- self$getConditionPerCell()
-        lims <- dens.res$density.fraction %>% unlist() %>% range()
+      ps <- lapply(cond.levels, function(l) {
+        if (dens.res$method =='graph') {
+          p <- sccore::embeddingPlot(self$embedding, plot.theme=self$plot.theme, colors=dens.res$density.fraction[[l]],
+                                     size=size, title=l, show.legend=show.legend, ...)
+        } else {# dens.res$method =='kde'
+          condition.per.cell <- self$getConditionPerCell()
+          lims <- dens.res$density.fraction %>% unlist() %>% range()
 
-        ps <- lapply(cond.levels, function(l) {
           p <- dens.res %$% data.frame(density.emb, z=density.fraction[[l]]) %>%
             plotDensityKde(bins=dens.res$bins, lims=lims, title=l, show.legend=show.legend,
                            show.grid=show.grid, plot.theme=self$plot.theme, ...)
@@ -1360,15 +1360,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
             nnames <- condition.per.cell %>% {names(.)[. == l]} %>% sample(min(2000, length(.)))
             p <- p + geom_point(data=emb[nnames, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
           }
-          p
-        })
-      } else if (method =='graph'){
-        if (dens.res$method != 'graph') stop('please estimate cell density with estimateCellDensity(method="graph")')
-        ps <- lapply(cond.levels, function(l) {
-          sccore::embeddingPlot(self$embedding, plot.theme=self$plot.theme, colors=dens.res$density.fraction[[l]],
-                                size=size, title=l, show.legend=show.legend, ...)
-        })
-      } else stop("Unknown method: ", method)
+        }
+
+        if (show.cell.groups) {
+          p %<>% private$addCellGroupsToEmbedding(cell.groups=cell.groups, font.size=font.size)
+        }
+        p
+      })
 
       if(!is.null(contours)){
         cnl <- do.call(c, lapply(sn(contours), function(x)
@@ -1840,6 +1838,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       return(ont.res)
+    },
+
+    addCellGroupsToEmbedding = function(gg.emb, cell.groups=self$cell.groups, font.size=c(2,4)) {
+      gg.ann <- self$plotEmbedding(groups=cell.groups)
+      ls <- gg.ann$layers %>% .[sapply(., function(l) "GeomLabelRepel" %in% class(l$geom))]
+      if (length(ls) != 1) {
+        warning("Can't find annotation layer\n")
+        return(gg.emb)
+      }
+
+      return(gg.emb + ls[[1]] + scale_size_continuous(limits=font.size, guide='none'))
     }
   )
 )

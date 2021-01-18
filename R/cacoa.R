@@ -137,8 +137,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                                n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
                                                sample.groups=self$sample.groups, n.cores=self$n.cores, verbose=self$verbose,
                                                name="expression.shifts", ...) {
-      count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
-
+      count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
       self$test.results[[name]] <- count.matrices %>%
         estimateExpressionShiftMagnitudes(sample.groups, cell.groups, dist=dist, within.group.normalization=within.group.normalization,
@@ -575,7 +574,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }))
 
       if(show.size.dependency) {
-        
+
         plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='number of DE genes', yline=NA, show.whiskers=show.whiskers, show.regression=show.regression)
       } else {
         plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette, ylab='number of DE genes',yline=NA)
@@ -1297,17 +1296,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Estimate cell density in giving embedding
     #' @param emb cell embedding matrix
     #' @param bins number of bins for density estimation, default 400
-    #' @param method density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: embGrid)
+    #' @param method density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')
     #' @param m numeric Maximum order of Chebyshev coeff to compute (default=50) for graph based cell density
     #' @param name slot in which to save the results (default: 'cell.density')
-    estimateCellDensity = function(embedding=self$embedding, bins = 400, method = 'kde',
-                                   verbose=self$verbose, m=50, n.cores=self$n.cores,name='cell.density'){
+    estimateCellDensity = function(embedding=self$embedding, bins=400, method='kde', name='cell.density',
+                                   m=50, verbose=self$verbose, n.cores=self$n.cores){
       if(is.null(embedding))
         stop("'embedding' must be provided either during the object initialization or during this function call")
-      
+
       sample.per.cell <- self$sample.per.cell
       sample.groups <- self$sample.groups
-      
+
       if (method == 'kde'){
         self$test.results[[name]] <- embedding %>%
           estimateCellDensityKde(sample.per.cell=sample.per.cell, sample.groups=sample.groups, bins=bins)
@@ -1319,12 +1318,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                    n.cores=n.cores, m=m, verbose=verbose)
         return(invisible(self$test.results[[name]]))
       }
-      
+
       stop("Unknown method: ", method)
     },
 
-    
-    
+
+
     #' @description Plot cell density
     #' @param method density estimation method (graph, ked)
     #' @param add.points default is TRUE, add points to cell density figure
@@ -1333,47 +1332,47 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param contour.conf confidence interval of contour
     #' @param name slot in which to saved results from estimateCellDensity (default: 'cell.density')
     #' @return A ggplot2 object
-    plotCellDensity = function(method ='kde', show.legend=FALSE, legend.position=NULL, show.grid=TRUE, add.points=TRUE,size=0.1,
+    plotCellDensity = function(method='kde', show.legend=FALSE, legend.position=NULL, show.grid=TRUE, add.points=TRUE,size=0.1,
                                point.col='#FCFDBFFF', contours=NULL, contour.color='white', contour.conf='10%', name='cell.density') {
       dens.res <- private$getResults(name)
-      
+
       if (method == 'kde'){
         if (dens.res$method!='kde') stop('please estimate cell density with estimateCellDensity(method="kde")')
         # calculate sample.per.cell
         condition.per.cell <- as.factor(setNames( as.character(self$sample.groups[ as.character(self$sample.per.cell)]), names(self$sample.per.cell) ))
-        
+
         target.density <- dens.res %$% data.frame(density.emb, z=density.fraction[[self$target.level]])
         ref.density <- dens.res %$% data.frame(density.emb, z=density.fraction[[self$ref.level]])
-        
+
         mi <- min(min(ref.density$z), min(target.density$z))
         ma <- max(max(ref.density$z), max(target.density$z))
-        
+
         p1 <- plotDensity(target.density, bins=dens.res$bins, legend.position=legend.position, show.legend=show.legend, title=self$ref.level, show.grid=show.grid, mi=mi, ma=ma)
         p2 <- plotDensity(ref.density, bins=dens.res$bins, legend.position=legend.position, show.legend=show.legend, title=self$target.level, show.grid=show.grid, mi=mi, ma=ma)
-        
+
         if (add.points){
           emb <- self$embedding %>% as.data.frame()
           colnames(emb) <- c('x','y')
           emb$z <- 1
           nname1 <- names(condition.per.cell)[condition.per.cell == self$ref.level] %>%
             sample(min(2000, length(.)))
-          
+
           nname2 <- names(condition.per.cell)[condition.per.cell == self$target.level] %>%
             sample(min(2000, length(.)))
-          
+
           p1 <- p1 + geom_point(data=emb[nname1, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
           p2 <- p2 + geom_point(data=emb[nname2, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
         }
-      }  
+      }
       else if (method =='graph'){
         if (dens.res$method != 'graph') stop('please estimate cell density with estimateCellDensity(method="graph")')
         emb <- self$embedding
         target.density <- dens.res %$% density.fraction[[self$target.level]]
-        ref.density <- dens.res %$% density.fraction[[self$ref.level]]        
-        p1 <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = target.density, size = size,title = self$target.level, legend.position = legend.position, show.legend = show.legend) + 
+        ref.density <- dens.res %$% density.fraction[[self$ref.level]]
+        p1 <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = target.density, size = size,title = self$target.level, legend.position = legend.position, show.legend = show.legend) +
           #scale_fill_gradient2(low = col[1], high = col[3], mid = col[2], midpoint = 0, limits = c(mi, ma)) +
           theme(legend.background = element_blank())
-        p2 <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = ref.density, size = size,, title=self$ref.level, legend.position = legend.position, show.legend = show.legend) + 
+        p2 <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = ref.density, size = size,, title=self$ref.level, legend.position = legend.position, show.legend = show.legend) +
           #scale_fill_gradient2(low = col[1], high = col[3], mid = col[2], midpoint = 0, limits = c(mi, ma)) +
           theme(legend.background = element_blank())
       }else stop("Unknown method: ", method)
@@ -1415,15 +1414,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         density.emb <- density.emb[index,1:2]
         density.mat <- density.mat[index,]
       }else stop("Unknown method: ", method)
-      
+
       mat <- diffCellDensity(density.emb, density.mat, self$sample.groups, bins=bins, target.level=self$target.level,ref.level=self$ref.level, type=type, z.cutoff=z.cutoff, adjust.pvalues=adjust.pvalues)
       emb <- mat[,1:2]
       score <- mat$z
       names(score) <- rownames(mat)
-      
+
       if (plot){
-        fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) + scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0) +theme(legend.background = element_blank()) +  labs(color='Zscore') 
-        
+        fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) + scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0) +theme(legend.background = element_blank()) +  labs(color='Zscore')
+
         if(!is.null(contours)){
           cnl <- do.call(c, lapply(sn(contours), function(x)
             getContour(self$embedding, cell.type=self$cell.groups , cell=x, conf=contour.conf, color=contour.color)))

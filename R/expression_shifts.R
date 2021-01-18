@@ -155,18 +155,18 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
   } else {
     # clean up valid.comparisons
     if(!all(rownames(valid.comparisons)==colnames(valid.comparisons))) stop('valid.comparisons must have the same row and column names')
-    valid.comparisons <- valid.comparisons | t(valid.comparisons)
-    valid.comparisons <- valid.comparisons[rowSums(valid.comparisons)>0,colSums(valid.comparisons)>0]
+    valid.comparisons %<>% {. | t(.)} %>% .[rowSums(.) > 0, colSums(.) > 0]
     # ensure that only valid.comp groups are in the sample.groups
-    sample.groups <- droplevels(sample.groups[names(sample.groups) %in% c(rownames(valid.comparisons),colnames(valid.comparisons))])
+    sample.groups %<>% .[names(.) %in% c(rownames(valid.comparisons), colnames(valid.comparisons))] %>% droplevels()
     if(length(levels(sample.groups))!=2) stop("insufficient number of levels in sample.groups after intersecting with valid.comparisons")
 
     # intersect with the cross-level pairs
-    comp.matrix <- outer(sample.groups[rownames(valid.comparisons)],sample.groups[colnames(valid.comparisons)],'!='); diag(comp.matrix) <- FALSE
+    comp.matrix <- sample.groups %>% outer(.[rownames(valid.comparisons)], .[colnames(valid.comparisons)],'!=')
+    diag(comp.matrix) <- FALSE
     valid.comparisons <- valid.comparisons & comp.matrix;
     # reduce and check again
     valid.comparisons <- valid.comparisons[rowSums(valid.comparisons)>0,colSums(valid.comparisons)>0]
-    sample.groups <- droplevels(sample.groups[names(sample.groups) %in% c(rownames(valid.comparisons),colnames(valid.comparisons))])
+    sample.groups %<>% .[names(.) %in% c(rownames(valid.comparisons), colnames(valid.comparisons))] %>% droplevels()
     if(length(levels(sample.groups))!=2) stop("insufficient number of levels in sample.groups after intersecting with valid.comparisons and sample.groups pairs")
     if(verbose) cat('a total of',(nrow(which(valid.comparisons,arr.ind=T))/2),'comparisons left after intersecting with valid.comparisons and sample.group pairs\n')
   }
@@ -190,7 +190,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
   }
 
   if(verbose) cat('running',n.subsamples,'subsamples using ',n.cores,'cores ...\n')
-  ctdml <- sccore:::plapply(1:n.subsamples,function(i) {
+  ctdml <- plapply(1:n.subsamples,function(i) {
     # subsample cells
 
     ## # draw cells without sample stratification - this can drop certain samples, particularly those with lower total cell numbers

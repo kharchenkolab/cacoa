@@ -118,6 +118,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       self$plot.theme <- plot.theme
       self$embedding <- embedding;
+      private$checkCellEmbedding()
     },
 
     ### Expression shifts
@@ -664,6 +665,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param ... other parameters are passed to \link[sccore:embeddingPlot]{embeddingPlot}
     plotEmbedding=function(embedding=self$embedding, plot.theme=self$plot.theme, show.legend=TRUE, ...) {
       if(is.null(embedding)) stop("embedding must be provided to Cacoa constructor or to this method.")
+      private$checkCellEmbedding(embedding)
       sccore::embeddingPlot(embedding, plot.theme=plot.theme, show.legend=show.legend, ...)
     },
 
@@ -1273,21 +1275,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     ### Segmentation-free cell density
 
     #' @description Estimate cell density in giving embedding
-    #' @param emb cell embedding matrix
     #' @param bins number of bins for density estimation, default 400
     #' @param method density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')
     #' @param m numeric Maximum order of Chebyshev coeff to compute (default=50) for graph based cell density
     #' @param name slot in which to save the results (default: 'cell.density')
-    estimateCellDensity = function(embedding=self$embedding, bins=400, method='kde', name='cell.density',
+    estimateCellDensity = function(bins=400, method='kde', name='cell.density',
                                    m=50, verbose=self$verbose, n.cores=self$n.cores){
-      if(is.null(embedding))
-        stop("'embedding' must be provided either during the object initialization or during this function call")
-
       sample.per.cell <- self$sample.per.cell
       sample.groups <- self$sample.groups
 
       if (method == 'kde'){
-        self$test.results[[name]] <- embedding %>%
+        private$checkCellEmbedding()
+        self$test.results[[name]] <- self$embedding %>%
           estimateCellDensityKde(sample.per.cell=sample.per.cell, sample.groups=sample.groups, bins=bins)
         return(invisible(self$test.results[[name]]))
       }
@@ -1315,12 +1314,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                point.col='#FCFDBFFF', contours=NULL, contour.color='white', contour.conf='10%',
                                name='cell.density', show.cell.groups=TRUE, cell.groups=self$cell.groups, font.size=c(2,4), ...) {
       dens.res <- private$getResults(name, 'estimateCellDensity()')
-      cond.levels <- c(ref=self$ref.level, target=self$target.level)
+      private$checkCellEmbedding()
 
+      cond.levels <- c(ref=self$ref.level, target=self$target.level)
       ps <- lapply(cond.levels, function(l) {
         if (dens.res$method =='graph') {
-          p <- sccore::embeddingPlot(self$embedding, plot.theme=self$plot.theme, colors=dens.res$density.fraction[[l]],
-                                     size=size, title=l, show.legend=show.legend, ...)
+          p <- self$plotEmbedding(colors=dens.res$density.fraction[[l]], size=size, title=l, show.legend=show.legend, ...)
         } else {# dens.res$method =='kde'
           condition.per.cell <- self$getConditionPerCell()
           lims <- dens.res$density.fraction %>% unlist() %>% range()
@@ -1330,7 +1329,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                            show.grid=show.grid, plot.theme=self$plot.theme, ...)
 
           if (add.points){
-            emb <- as.data.frame(dens.res$cell.emb) %>% set_colnames(c('x','y')) %>% cbind(z=1)
+            emb <- as.data.frame(self$embedding) %>% set_colnames(c('x','y')) %>% cbind(z=1)
             nnames <- condition.per.cell %>% {names(.)[. == l]} %>% sample(min(2000, length(.)))
             p <- p + geom_point(data=emb[nnames, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
           }
@@ -1343,9 +1342,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       })
 
       if(!is.null(contours)){
-        cnl <- do.call(c, lapply(sn(contours), function(x)
-          getContour(self$embedding, cell.type=self$cell.groups, cell=x, conf=contour.conf, color=contour.color)))
-        ps %<>% lapply(`+`, cnl)
+        cn.geoms <- private$getDensityContours(groups=contours, conf=contour.conf, color=contour.color)
+        ps %<>% lapply(`+`, cn.geoms)
       }
 
       ps %<>% lapply(`+`, theme(legend.background=element_blank()))
@@ -1361,44 +1359,60 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param contour.color color for contour line
     #' @param z.cutoff absolute z score cutoff
     #' @param contour.conf confidence interval of contour
-    #' @param name slot in which to saved results from estimateCellDensity (default: 'cell.density')
-    diffCellDensity=function(method = 'kde', type='subtract', col=c('blue','white','red'), show.legend=FALSE, legend.position=NULL, title=NULL, show.grid=NULL, plot=TRUE, contours=NULL, contour.color='white', contour.conf='10%', z.cutoff=NULL, size =0.2, adjust.pvalues=TRUE, name = 'cell.density', ...){
-      # TODO: rename it to start with estimate*
-      dens.res <- private$getResults(name)
-      if (method == 'graph'){
-        if (dens.res$method != 'graph') stop('please estimate cell density with estimateCellDensity(method="graph")')
-        density.emb <-  self$embedding
-        density.mat <-  dens.res$density.mat
-        cname <- intersect(rownames(density.emb),rownames(density.mat))
-        density.emb <- density.emb[cname,]
-        density.mat <- density.mat[cname,]
+    #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
+    estimateDiffCellDensity=function(type='subtract', z.cutoff=NULL, adjust.pvalues=TRUE, name='cell.density'){
+      dens.res <- private$getResults(name, 'estimateCellDensity')
+      density.mat <- dens.res$density.mat
+      if (dens.res$method == 'kde'){
+        density.mat <- density.mat[dens.res$density.emb$counts > 0,]
       }
-      else if (method == 'kde'){
-        if (dens.res$method != 'kde') stop('please estimate cell density with estimateCellDensity(method="kde")')
-        density.emb <- dens.res$density.emb
-        density.mat <- dens.res$density.mat
-        # remove empty bins
-        index = density.emb$counts > 0
-        density.emb <- density.emb[index,1:2]
-        density.mat <- density.mat[index,]
-      }else stop("Unknown method: ", method)
 
-      mat <- diffCellDensity(density.emb, density.mat, self$sample.groups, bins=bins, target.level=self$target.level,ref.level=self$ref.level, type=type, z.cutoff=z.cutoff, adjust.pvalues=adjust.pvalues)
-      emb <- mat[,1:2]
-      score <- mat$z
-      names(score) <- rownames(mat)
+      scores <- diffCellDensity(density.mat, self$sample.groups, ref.level=self$ref.level, target.level=self$target.level,
+                                type=type, z.cutoff=z.cutoff, adjust.pvalues=adjust.pvalues)
 
-      if (plot){
-        fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) + scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0) +theme(legend.background = element_blank()) +  labs(color='Zscore')
+      self$test.results[[name]]$diff[[type]] <- scores
 
-        if(!is.null(contours)){
-          cnl <- do.call(c, lapply(sn(contours), function(x)
-            getContour(self$embedding, cell.type=self$cell.groups , cell=x, conf=contour.conf, color=contour.color)))
-          fig <- fig + cnl
-        }
-        return(fig)
+      return(invisible(self$test.results[[name]]))
+    },
+
+    #' @description estimate differential cell density
+    #' @param method density estimation method (graph or ked)
+    #' @param col color palettes,  default is c('blue','white','red')
+    #' @param type method to calculate differential cell density; t.test, wilcox or subtract (target subtract ref density);
+    #' @param contours specify cell types for contour, multiple cell types are also supported
+    #' @param contour.color color for contour line
+    #' @param z.cutoff absolute z score cutoff
+    #' @param contour.conf confidence interval of contour
+    #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
+    plotDiffCellDensity=function(type='subtract', name='cell.density', size=0.2, palette=colorRampPalette(c('blue','white','red')),
+                                 contours=NULL, contour.color='white', contour.conf='10%', ...){
+      private$checkCellEmbedding()
+      dens.res <- private$getResults(name, 'estimateCellDensity')
+      scores <- dens.res$diff[[type]]
+      if (is.null(scores)) {
+        warning("Can't find results for name, '", name, "' and type '", type, "'. Running estimateDiffCellDensity with default parameters.")
+        self$estimateDiffCellDensity(type=type, name=name)
+        dens.res <- self$test.results[[name]]
+        scores <- dens.res$diff[[type]]
       }
-      return(mat)
+
+      if (dens.res$method == 'graph'){
+        density.emb <- self$embedding
+        scores %<>% .[intersect(names(.), rownames(density.emb))]
+      } else if (dens.res$method == 'kde') {
+        density.emb <- dens.res$density.emb[,1:2]
+      } else stop("Unknown method: ", dens.res$method)
+
+      density.mat <- dens.res$density.mat[names(scores),]
+      density.emb <- density.emb[names(scores),]
+
+      leg.title <- if (type == 'subtract') 'Prop. change' else 'Z-score'
+      gg <- self$plotEmbedding(density.emb, colors=scores, size=size, legend.title=leg.title, palette=palette, midpoint=0, ...)
+
+      if(!is.null(contours)){
+        gg <- gg + private$getDensityContours(groups=contours, conf=contour.conf, color=contour.color)
+      }
+      return(gg)
     },
 
     #' @title Plot inter-sample expression distance
@@ -1444,16 +1458,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       plotExpressionDistancetSNE(cluster.shifts, sample.groups = sample.groups, cell.type = cell.type, method = method, perplexity=perplexity, max_iter=max_iter, palette=palette)
     },
-
-    #' @description Extract contour from embedding
-    #' @param cell specify cell types for contour, mutiple cell types are also suported
-    #' @param conf confidence interval of contour
-    getContour = function(cells,  color = 'white', linetype = 2, conf = "10%") {
-      cnl <- do.call(c, lapply(sn(cells), function(x) getContour(self$embedding, cell.type=self$cell.groups, linetype = linetype,
-                                                                 cell=x ,conf = conf, color = color)))
-      return(cnl)
-    },
-
 
     ### Cluster-free differential expression
 
@@ -1634,8 +1638,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, plot.both.conditions=FALSE, plot.na=FALSE, max.shift=NULL,
                                                alpha=0.2, font.size=c(3,5), ...) {
       shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts")
-      if (is.null(self$embedding))
-        stop("embedding must not be NULL. Please, set the 'embedding' field.")
+      private$checkCellEmbedding()
 
       if (!plot.both.conditions) {
         shifts %<>%  .[self$sample.groups[self$sample.per.cell[names(.)]] != self$ref.level]
@@ -1841,6 +1844,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       return(list(d.counts = d.counts,
                   d.groups = d.groups))
+    },
+
+    #' @description Extract contours from embedding
+    #' @param groups specify cell groups for contour, multiple cell groups are also supported
+    #' @param conf confidence interval of contour
+    getDensityContours = function(groups, color='white', linetype=2, conf="10%") {
+      cnl <- sn(groups) %>%
+        lapply(function(x) getDensityContour(self$embedding, cell.type=self$cell.groups, linetype=linetype,
+                                             group=x, conf=conf, color=color)) %>%
+        do.call(c, .)
+      return(cnl)
+    },
+
+    checkCellEmbedding = function(embedding=self$embedding) {
+      if(is.null(embedding) || ncol(embedding) != 2)
+        stop("self$embedding must contain 2D cell embedding")
+
+      if(is.null(rownames(embedding)))
+        stop("self$embedding must have rownames, equal to cell ids")
     }
   )
 )

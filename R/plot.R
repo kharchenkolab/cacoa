@@ -59,16 +59,18 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 #' @param notch Whether to show notch in the boxplots
 #' @param alpha Transparency level on the data points (default: 0.2)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
+#' @param size marker size (default: 0.5)
+#' @param jitter.width width of the point jitter (default: 0.15)
 plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=c(0, 0), show.significance=FALSE, palette=NULL,
-                                     notch=FALSE, legend.position="right", alpha=0.2, plot.theme=theme_get()) {
-  gg <- ggplot(count.df, aes(x=variable, y=value, by=group)) +
+                                     notch=FALSE, legend.position="right", alpha=0.2, plot.theme=theme_get(), size=0.5, jitter.width=0.15) {
+  gg <- ggplot(count.df, aes(x=variable, y=value, by=group, fill=group)) +
     geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
     labs(x=x.lab, y=y.lab) +
     plot.theme +
     theme_legend_position(legend.position) +
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
-    geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=alpha) +
+    geom_point(position=position_jitterdodge(jitter.width=jitter.width), color="black", size=size, alpha=alpha) +
     scale_y_continuous(expand=y.expand, limits=c(0, max(count.df$value) * 1.05))
 
   if (show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test

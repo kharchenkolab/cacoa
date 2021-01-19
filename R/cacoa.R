@@ -1418,29 +1418,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @title Plot inter-sample expression distance
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
     #' @param name Test results to plot (default=expression.shifts)
-    #' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
     #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored $cell.groups vector)
-    #' @param weighted.distance whether to weigh the expression distance by the sizes of cell types (default: TRUE), or show distances for each individual cell type
+    #' @param joint whether to show joint boxplot with the expression distance weighed by the sizes of cell types (default: TRUE), or show distances for each individual cell type
     #' @param show.significance whether to show statistical significance between sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
-    #' @param alpha dot transparency
+    #' @param ... other plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    plotExpressionDistance = function(name='expression.shifts', notch=TRUE, sample.groups=self$sample.groups, weighted.distance=TRUE,
-                                      min.cells=10, palette=self$sample.groups.palette, show.significance=FALSE, alpha=0.2) {
+    plotExpressionDistance = function(name='expression.shifts', sample.groups=self$sample.groups, joint=FALSE,
+                                      min.cells=10, palette=self$sample.groups.palette, show.significance=FALSE, ...) {
       cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       ctdml <- cluster.shifts$ctdml
       valid.comparisons <- cluster.shifts$valid.comparisons
-      if (!weighted.distance) {
-        gg <- plotExpressionDistanceIndividual(ctdml, valid.comparisons, sample.groups=sample.groups, notch=notch, alpha=alpha, min.cells=min.cells, show.significance=show.significance)
+      if (!joint) {
+        gg <- plotExpressionDistanceIndividual(ctdml, valid.comparisons, sample.groups=sample.groups, min.cells=min.cells,
+                                               show.significance=show.significance, plot.theme=self$plot.theme, palette=palette, ...)
       } else {
-        gg <- plotExpressionDistanceJoint(ctdml, valid.comparisons, sample.groups=sample.groups, notch=notch, alpha=alpha, show.significance=show.significance)
-      }
-
-      if(!is.null(palette)) {
-        gg <- gg + scale_fill_manual(values=palette)
-      }
-
-      if(show.significance) {
-        gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif", label.x.npc="centre")  # willcox test
+        gg <- plotExpressionDistanceJoint(ctdml, valid.comparisons, sample.groups=sample.groups, show.significance=show.significance,
+                                          plot.theme=self$plot.theme, palette=palette, ...)
       }
 
       return(gg)

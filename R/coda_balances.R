@@ -16,12 +16,12 @@ resampleContrast <- function(d.counts, d.groups, n.cell.counts = 500, n.seed = 2
   for(iter in 1:n.iter){
     d.resampled <- resampleCounts(d.counts, d.groups = d.groups, n.tot.count = n.cell.counts, n.seed = rnd.seeds[iter])
     d.all <- rbind(d.all, d.resampled)
-    
+
     cda.loadings = NULL
     tryCatch(expr = {
         cda.loadings <- getCdaLoadings(d.resampled, d.groups[rownames(d.resampled)], n.seed = rnd.seeds[iter])
-      },error = function(e){})  
-    
+      },error = function(e){})
+
     if(is.null(cda.loadings)) {
       n.skip.resampl <- n.skip.resampl + 1
       next
@@ -272,7 +272,6 @@ removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
 #' @param cell.set2 Set#1
 #' @return Balance values
 calcBalancesOnCellSets <- function(d.counts, cell.set1, cell.set2 = NULL){
-
   checkData(d.counts)
   checkDataAndCells(d.counts, cell.set1)
   if(is.null(cell.set2)) cell.set2 = setdiff(colnames(d.counts), cell.set1)
@@ -292,25 +291,8 @@ calcBalancesOnCellSets <- function(d.counts, cell.set1, cell.set2 = NULL){
 }
 
 
-calcWilcoxonTest <- function(cell.groups,
-                             sample.per.cell,
-                             sample.groups,
-                             cells.to.remain = NULL,
-                             cells.to.remove = NULL){
-
-  d.counts <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
-    table  %>%
-    rbind  %>%  t
-
-  if(!is.null(cells.to.remain)) d.counts <- d.counts[,colnames(d.counts) %in% cells.to.remain]
-  if(!is.null(cells.to.remove)) d.counts <- d.counts[,!(colnames(d.counts) %in% cells.to.remove)]
-
+calcWilcoxonTest <- function(d.counts, d.groups){
   d.freqs <- d.counts %>% magrittr::divide_by(rowSums(.))
-
-  d.groups <- cao$sample.groups[rownames(d.counts)] == cao$target.level
-  names(d.groups) <- rownames(d.counts)
-
-  options(warn=-1)
 
   p.vals.balances <- c()
   for(cell.set1 in colnames(d.counts)){
@@ -324,21 +306,14 @@ calcWilcoxonTest <- function(cell.groups,
     p.vals.balances <- c(p.vals.balances, res$p.value)
   }
 
-  p.vals.freqs <- c()
-  for(cell.type in colnames(d.counts)){
-    x <- d.freqs[d.groups, cell.type]
-    y <- d.freqs[!d.groups, cell.type]
-
-    res <- wilcox.test(x, y)
-    p.vals.freqs <- c(p.vals.freqs, res$p.value)
-  }
+  p.vals.freqs <- colnames(d.counts) %>% sapply(function(cell.type) {
+    wilcox.test(d.freqs[d.groups, cell.type], d.freqs[!d.groups, cell.type])$p.value
+  })
 
   p.vals.res <- cbind(p.vals.balances, p.vals.freqs)
   rownames(p.vals.res) <- colnames(d.counts)
 
-  options(warn=0)
-
-  p.vals.res
+  return(p.vals.res)
 }
 
 getCellSignificance <- function(balances){
@@ -347,6 +322,6 @@ getCellSignificance <- function(balances){
   n.minus <- rowSums(balances[,2:n.bal] < 0)
   perm.frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) /
     mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
-  
+
   perm.frac
 }

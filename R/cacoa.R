@@ -1262,25 +1262,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(p)
     },
 
-    extimateWilcoxonTest = function(cell.groups = self$cell.groups,
-                                     sample.per.cell = self$sample.per.cell,
-                                     sample.groups = self$sample.groups,
-                                     cells.to.remove = NULL,
-                                     cells.to.remain = NULL){
-
-      p.vals <- calcWilcoxonTest(cell.groups = cell.groups,
-                                 sample.per.cell = sample.per.cell,
-                                 sample.groups = sample.groups,
-                                 cells.to.remove = cells.to.remove,
-                                 cells.to.remain = cells.to.remain)
-
+    estimateWilcoxonTest = function(cell.groups=self$cell.groups, cells.to.remove = NULL, cells.to.remain = NULL){
+      tmp <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain)
+      p.vals <- calcWilcoxonTest(tmp$d.counts, tmp$d.groups)
       self$test.results[['p.vals.balances']] <- p.vals
-      return(self$test.results[['p.vals.balances']])
-
-      cda <- resampleContrast(d.counts, d.groups,
-                             n.cell.counts = n.cell.counts,
-                             n.seed = n.seed)
-      plotCellLoadings(cda$balances, alpha = alpha)
+      return(invisible(p.vals))
     },
 
 

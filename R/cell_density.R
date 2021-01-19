@@ -90,20 +90,10 @@ getDensityContour <- function(emb, cell.groups, group,  color='white', linetype 
 
 ##' @description Plot cell density
 ##' @param bins number of bins for density estimation, should keep consistent with bins in estimateCellDensity
-##' @param palette either 'virdis', color brewer palette name or a function that accepts color `limits` and returns fill scale
-plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.labels=FALSE, show.ticks=FALSE, palette='virdis', ...){
+##' @param palette color palette function. Default: `viridis::viridis_pal(option="B")`
+plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.labels=FALSE, show.ticks=FALSE, palette=viridis::viridis_pal(option="B"), ...){
   if (is.null(lims)){
     lims <- c(min(mat$z), max(mat$z)*1.1)
-  }
-
-  if (is.character(palette)) {
-    if (palette == 'virdis') {
-      fill.scale <- viridis::scale_fill_viridis(option='B', alpha=1, direction=1, limits=lims)
-    } else {
-      fill.scale <- scale_fill_distiller(palette=palette, limits=lims)
-    }
-  } else {
-    fill.scale <- palette(limits=lims)
   }
 
   breaks <- lapply(mat[c('x', 'y')], function(m) {
@@ -115,7 +105,7 @@ plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.
     geom_raster() +
     scale_x_continuous(breaks=breaks$x, expand = c(0,0)) +
     scale_y_continuous(breaks=breaks$y, expand = c(0,0)) +
-    fill.scale
+    val2ggcol(mat$z, palette=palette, color.range=lims, return.fill=TRUE)
 
   p %<>% sccore::styleEmbeddingPlot(show.labels=show.labels, show.ticks=show.ticks, ...)
 

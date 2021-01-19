@@ -207,8 +207,8 @@ plotExpressionDistanceIndividual <- function(ctdml, valid.comparisons, sample.gr
   return(gg)
 }
 
-plotExpressionDistanceJoint <- function(ctdml, valid.comparisons, sample.groups=NULL, ...) {
-  df <- do.call(rbind, lapply(ctdml, function(ctdm) {
+prepareJointExpressionDistance <- function(ctdml, valid.comparisons=NULL, sample.groups=NULL) {
+  df <- lapply(ctdml, function(ctdm) {
     # bring to a common set of cell types
     commoncell <- unique( unlist( lapply(ctdm, function(x) colnames(x)) ))
 
@@ -236,7 +236,9 @@ plotExpressionDistanceJoint <- function(ctdml, valid.comparisons, sample.groups=
 
     # normalize by total weight sums
     xd <- apply(x, c(1, 2), sum) / apply(y, c(1, 2), sum)
-    dim(xd)
+
+    if (is.null(valid.comparisons))
+      return(xd)
 
     cross.factor <- outer(sample.groups[rownames(xd)], sample.groups[colnames(xd)], '==')
     frm <- valid.comparisons[rownames(xd), colnames(xd)] & cross.factor
@@ -251,8 +253,14 @@ plotExpressionDistanceJoint <- function(ctdml, valid.comparisons, sample.groups=
     xmd2$type1 <- sample.groups[xmd2$Var1]
     xmd2$type2 <- sample.groups[xmd2$Var2]
     xmd2
-  }))
+  })
 
+  return(df)
+}
+
+plotExpressionDistanceJoint <- function(ctdml, valid.comparisons, sample.groups=NULL, ...) {
+  df <- prepareJointExpressionDistance(ctdml, valid.comparisons=valid.comparisons, sample.groups=sample.groups) %>%
+    do.call(rbind, .)
   df2 <- do.call(rbind, tapply(1:nrow(df), paste(df$Var1, df$Var2, sep = '!!'), function(ii) {
     ndf <- data.frame(df[ii[1],, drop = FALSE])
     ndf$value <- median(df$value[ii])
@@ -267,79 +275,5 @@ plotExpressionDistanceJoint <- function(ctdml, valid.comparisons, sample.groups=
     theme(axis.title.x=element_blank(), axis.text.x=element_blank(),
           axis.ticks.x=element_blank(), panel.grid.major.x=element_blank())
 
-  return(gg)
-}
-
-#' @title Plot sample-sample expression distance in tSNE
-#' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
-#' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
-#' @param cell.type Named of cell type, default is null, it set plot sample-sample expression distance in tSNE for the cell type
-#' @param perplexity tSNE perpexity (default: 4)
-#' @param max_iter tSNE max_iter (default: 1e3)
-#' @param method dimension reduction methods (MDS or tSNE) (default is MDS)
-#' @return A ggplot2 object
-plotExpressionDistancetSNE <- function(cluster.shifts, sample.groups, method = 'MDS', cell.type = NULL,  perplexity=4, max_iter=1e3, palette=NULL) {
-  ctdml <- cluster.shifts$ctdml
-  if (!is.null(cell.type)) { # use distances based on the specified cell type
-    title <- cell.type
-    #if (is.null(cell.type) stop('please speficy cell type')
-    df <- lapply(ctdml, function(ctdm) {
-      xm <-  ctdm[[cell.type]]
-      xm
-    })
-    dfm <- Reduce(`+`, df)/length(df)
-  } else { # weighetd expression distance across all cell types
-    title <- ''
-    df <- lapply(ctdml, function(ctdm) {
-      # bring to a common set of cell types
-      commoncell <- unique( unlist( lapply(ctdm, function(x) colnames(x)) ))
-
-      ctdm <-  lapply(ctdm, function(x) {
-        y <- matrix(0,nrow=length(commoncell),ncol=length(commoncell)); rownames(y) <- colnames(y) <- commoncell; # can set the missing entries to zero, as they will carry zero weights
-        y[rownames(x),colnames(x)] <- x;
-        ycct <- setNames(rep(0,length(commoncell)), commoncell);
-        ycct[colnames(x)] <- attr(x,'cc')
-        attr(y, 'cc') <- ycct
-        y
-      }) # reform the matrix to make sure all cell type have the same dimensions
-
-      x <- abind::abind(lapply(ctdm, function(x) {
-        nc <- attr(x, 'cc')
-        #wm <- (outer(nc,nc,FUN='pmin'))
-        wm <- sqrt(outer(nc, nc, FUN = 'pmin'))
-        return(x * wm)
-      }), along = 3)
-
-      # just the weights (for total sum of weights normalization)
-      y <- abind::abind(lapply(ctdm, function(x) {
-        nc <- attr(x, 'cc')
-        sqrt(outer(nc, nc, FUN = 'pmin'))
-      }), along = 3)
-
-      # normalize by total weight sums
-      xd <- apply(x, c(1, 2), sum) / apply(y, c(1, 2), sum)
-      xd
-    })
-    dfm <- Reduce(`+`, df)/length(df)
-  }
-  if (method == 'tSNE'){
-    if (!requireNamespace("Rtsne", quietly = TRUE))
-      stop("You have to install 'Rtsne' package to perform tSNE visualization")
-
-    xde <- Rtsne::Rtsne(dfm, is_distance = TRUE, perplexity = perplexity, max_iter = max_iter)$Y
-  } else if (method == 'MDS') {
-    xde <- cmdscale(dfm, eig=TRUE, k=2)$points # k is the number of dim
-  } else {
-    stop("unknown embedding method")
-  }
-  df <- data.frame(xde)
-  rownames(df) <- rownames(dfm)
-  colnames(df) <- c("x", "y")
-  df$fraction <- sample.groups[rownames(df)]
-  df$sample=rownames(df)
-  #df$ncells <- nc[rownames(df)]
-  gg <- ggplot(df, aes(x, y, color=fraction, shape=fraction)) + geom_point(size=5) + #, size=log10(ncells)
-    theme_bw() + ggtitle(title) + theme(axis.title = element_blank(), axis.text = element_blank(), axis.ticks = element_blank())
-  if(!is.null(palette)) { gg <- gg + scale_color_manual(values=palette) }
   return(gg)
 }

@@ -1446,10 +1446,47 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param perplexity tSNE perpexity (default: 4)
     #' @param max_iter tSNE max_iter (default: 1e3)
     #' @param palette a set of colors to use for conditions (default: stored $sample.groups.palette)
+    #' @param font.size font size of the sample labels. If NULL, the labels are not shown. (Default: NULL)
     #' @return A ggplot2 object
-    plotExpressionDistanceEmbedding = function(name='expression.shifts', sample.groups = self$sample.groups, cell.type = NULL, method = 'tSNE', perplexity=4, max_iter=1e3, palette=self$sample.groups.palette) {
-      cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
-      plotExpressionDistancetSNE(cluster.shifts, sample.groups = sample.groups, cell.type = cell.type, method = method, perplexity=perplexity, max_iter=max_iter, palette=palette)
+    plotExpressionDistanceEmbedding = function(name='expression.shifts', sample.groups = self$sample.groups, cell.type = NULL, method = 'tSNE', perplexity=4, max_iter=1e3,
+                                               palette=self$sample.groups.palette, font.size=NULL) {
+      ctdml <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')$ctdml
+      if (!is.null(cell.type)) { # use distances based on the specified cell type
+        title <- cell.type
+        df <- lapply(ctdml, `[[`, cell.type)
+      } else { # weighted expression distance across all cell types
+        title <- ''
+        df <- prepareJointExpressionDistance(ctdml, valid.comparisons=NULL)
+      }
+      dfm <- Reduce(`+`, df) / length(df)
+
+      if (method == 'tSNE'){
+        if (!requireNamespace("Rtsne", quietly = TRUE))
+          stop("You have to install 'Rtsne' package to perform tSNE visualization")
+
+        xde <- Rtsne::Rtsne(dfm, is_distance = TRUE, perplexity = perplexity, max_iter = max_iter)$Y
+      } else if (method == 'MDS') {
+        xde <- cmdscale(dfm, eig=TRUE, k=2)$points # k is the number of dim
+      } else {
+        stop("unknown embedding method")
+      }
+
+      df <- data.frame(xde) %>% set_rownames(rownames(dfm)) %>% set_colnames(c("x", "y")) %>%
+        mutate(sample=rownames(.), condition=sample.groups[sample])
+
+      gg <- ggplot(df, aes(x, y, color=condition, shape=condition)) +
+        geom_point(size=5) + #, size=log10(ncells)
+        ggtitle(title) + self$plot.theme +
+        theme(axis.title=element_blank(), axis.text=element_blank(), axis.ticks=element_blank())
+
+      if (!is.null(font.size)) {
+        gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
+      }
+
+      if(!is.null(palette)) {
+        gg <- gg + scale_color_manual(values=palette)
+      }
+      return(gg)
     },
 
     ### Cluster-free differential expression

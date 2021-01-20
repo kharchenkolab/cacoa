@@ -1,72 +1,4 @@
-extractCodaData=function(cells.to.remove = NULL, cells.to.remain = NULL, samples.to.remove = NULL, sample.groups, target.level, cell.groups, sample.per.cell) {
-  d.counts <- data.frame(anno=cell.groups,
-                         group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
-    table() %>%
-    rbind() %>%
-    t()
-
-  if(!is.null(cells.to.remove)) d.counts %<>% .[,!(colnames(.) %in% cells.to.remove)]
-  if(!is.null(cells.to.remain)) d.counts %<>% .[,colnames(.) %in% cells.to.remain]
-  if(!is.null(samples.to.remove)) d.counts %<>% .[!(rownames(.) %in% samples.to.remove),]
-
-  d.groups <- (sample.groups[rownames(d.counts)] == target.level) %>%
-    `names<-`(d.counts %>% rownames())
-
-  return(list(d.counts = d.counts,
-              d.groups = d.groups))
-}
-
-plotPcaSpace <- function(d.counts, d.groups, ref.level, target.level, font.size, palette=NULL){
-  bal <- getRndBalances(d.counts)
-  pca.res <- prcomp(bal$norm)
-  pca.loadings <- bal$psi %*% pca.res$rotation
-
-  df.pca <- as.data.frame(pca.res$x)
-
-  pc1 <- pca.loadings[,1]
-  pc2 <- pca.loadings[,2]
-  df.loadings <- as.data.frame(cbind(pc1, pc2) * 10)
-
-
-  # ----------- PLOT -----------
-  group.names <- c(ref.level, target.level)
-  options(repr.plot.width = 15, repr.plot.height = 10)
-  rda.plot <- ggplot(df.pca, aes(x=PC1, y=PC2)) +
-    #   geom_text(aes(label=rownames(df_pca) %in% samplegroups$trgt),size=4) +
-    geom_hline(yintercept=0, linetype="dotted") +
-    geom_vline(xintercept=0, linetype="dotted") +
-    geom_point(aes(colour = factor(group.names[d.groups + 1] ))) +
-    labs(colour="Group") +
-    coord_fixed()
-
-  if(!is.null(palette)) rda.plot <- rda.plot + scale_fill_manual(values=palette)
-
-  dx <- max(df.pca[,'PC1']) - min(df.pca[,'PC1'])
-  dy <- max(df.pca[,'PC2']) - min(df.pca[,'PC2'])
-
-
-  rda.biplot <- rda.plot +
-    geom_segment(data=df.loadings, aes(x=0, xend=pc1, y=0, yend=pc2),
-                 color="grey", arrow=arrow(length=unit(0.01,"npc")))  +
-    coord_flip(clip = "off") +
-    geom_text(data=df.loadings,
-              aes(x=pc1,y=pc2,label=rownames(df.loadings)),
-              color="black", size=3)
-
-
-
-  dx <- max(dx, max(df.loadings[,'pc1']) - min(df.loadings[,'pc1']))
-  dy <- max(dy, max(df.loadings[,'pc2']) - min(df.loadings[,'pc2']))
-
-  rda.biplot <- rda.biplot + coord_fixed(ratio = dx / dy)
-  if(!is.null(font.size)) {
-    rda.biplot <- rda.biplot + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
-  }
-  return(rda.biplot)
-}
-
-plotCdaSpace <- function(d.counts, d.groups, ref.level, target.level, font.size, thresh.pc.var = 0.95, n.dim = 2){
-
+estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
   cell.loadings <- c()
   sample.pos <- c()
 
@@ -78,67 +10,58 @@ plotCdaSpace <- function(d.counts, d.groups, ref.level, target.level, font.size,
       res.remove <- removeGroupEffect(d.used, d.groups, thresh.pc.var = 0.9)
       cell.loadings <- cbind(cell.loadings, bal$psi %*% res.remove$rotation)
       sample.pos <- cbind(sample.pos, res.remove$scores)
-      # d.used <- res.remove$remain
       d.used <- d.used - res.remove$used.part
     }
-  }else{
+  } else {
     cell.loadings <- bal$psi
     sample.pos <- d.used
   }
 
-  colnames(cell.loadings) <- paste('C', 1:n.dim, sep = '')
-  colnames(sample.pos) <- paste('Score', 1:n.dim, sep = '')
+  cn <- paste('S', 1:n.dim, sep = '')
+  df.cda <- as.data.frame(sample.pos) %>% set_colnames(cn)
+  df.loadings <- as.data.frame(cell.loadings * 8) %>% set_colnames(cn)
+  return(list(red=df.cda, loadings=df.loadings))
+}
 
-  df.pca <- as.data.frame(sample.pos)
-  df.loadings <- as.data.frame(cell.loadings * 8)
-
-  # ----------- PLOT -----------
+plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, target.level, palette=NULL) {
   group.names <- c(ref.level, target.level)
-  options(repr.plot.width = 15, repr.plot.height = 10)
-  rda.plot <- ggplot(df.pca, aes(x=Score1, y=Score2)) +
+  rda.plot <- ggplot(df.space, aes(x=S1, y=S2)) +
     #   geom_text(aes(label=rownames(df_pca) %in% samplegroups$trgt),size=4) +
     geom_hline(yintercept=0, linetype="dotted") +
     geom_vline(xintercept=0, linetype="dotted") +
     geom_point(aes(colour = factor(group.names[d.groups + 1] ))) +
-    labs(colour="Group") +
-    coord_fixed()
+    labs(colour="Condition")
 
-  dx <- max(df.pca[,'Score1']) - min(df.pca[,'Score1'])
-  dy <- max(df.pca[,'Score2']) - min(df.pca[,'Score2'])
-
+  if(!is.null(palette)) rda.plot <- rda.plot + scale_fill_manual(values=palette)
 
   rda.biplot <- rda.plot +
-    geom_segment(data=df.loadings, aes(x=0, xend=C1, y=0, yend=C2),
+    geom_segment(data=df.loadings, aes(x=0, xend=S1, y=0, yend=S2),
                  color="grey", arrow=arrow(length=unit(0.01,"npc")))  +
     geom_text(data=df.loadings,
-              aes(x=C1,y=C2,label=rownames(df.loadings)),
+              aes(x=S1, y=S2, label=rownames(df.loadings)),
               color="black", size=3)
 
+  dx <- max(diff(range(df.space$S1)), diff(range(df.loadings$S1)))
+  dy <- max(diff(range(df.space$S2)), diff(range(df.loadings$S2)))
 
-  dx <- max(dx, max(df.loadings[,'C1']) - min(df.loadings[,'C1']))
-  dy <- max(dy, max(df.loadings[,'C2']) - min(df.loadings[,'C2']))
-
-  rda.biplot <- rda.biplot + coord_fixed(ratio = dx / dy)
-
-  if(!is.null(font.size)) {
-    rda.biplot <- rda.biplot + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
-  }
+  rda.biplot <- rda.biplot + coord_fixed(ratio=dy/dx)
 
   return(rda.biplot)
 }
 
 # helper function for creating dendograms
-ggdend <- function(dend.data, a = 90) {
+ggdend <- function(dend.data, a = 90, plot.theme=theme_get()) {
   ggplot() +
     geom_segment(data = dend.data$segments, aes(x=x, y=y, xend=xend, yend=yend)) +
-    labs(x = "", y = "")  + theme_minimal() +
+    labs(x = "", y = "") + plot.theme +
     theme(axis.text = element_blank(), axis.ticks = element_blank(),
-          panel.grid = element_blank()) +
+          panel.grid = element_blank(), panel.border=element_blank(),
+          axis.line=element_blank()) +
     geom_text(data = dend.data$labels, aes(x, y, label = label),
               hjust = 1, angle = a, size = 3) + ylim(-0.5, NA)
 }
 
-plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, p.threshold = 0.01){
+plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme, p.threshold = 0.01){
   log.f <- getLogFreq(d.counts)
 
   t.cur <- constructCanonicalTree(d.counts, d.groups)
@@ -182,7 +105,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, p.thre
   # p.val <- p.adjust(p.val, method = 'fdr')
   p.val[is.na(p.val)] <- 1
 
-  px <- ggdend(dend.data)
+  px <- ggdend(dend.data, plot.theme=plot.theme)
 
   if(sum(p.val < p.threshold) == 0)
     return(px)
@@ -259,7 +182,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, p.thre
 }
 
 
-plotCellLoadings <- function(cda, ordering, signif.threshold, font.size, alpha, palette, show.pvals, ref.level, target.level) {
+plotCellLoadings <- function(cda, ordering, signif.threshold, alpha, palette, show.pvals, ref.level, target.level, plot.theme) {
   balances = cda$balances
   if(ordering == 'by.pvalue'){
     # ordering by median
@@ -286,7 +209,7 @@ plotCellLoadings <- function(cda, ordering, signif.threshold, font.size, alpha, 
   p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
     geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = alpha, size=1) +
     geom_hline(yintercept = 0, color = "gray37") +
-    coord_flip() + xlab('') + ylab('') + theme_bw()+ theme(legend.position = "none") +
+    coord_flip() + xlab('') + ylab('') + plot.theme + theme(legend.position = "none") +
     scale_x_discrete(position = "top") + ylim(-ymax, ymax)
 
   # Add text
@@ -294,21 +217,21 @@ plotCellLoadings <- function(cda, ordering, signif.threshold, font.size, alpha, 
     annotate('text', x = 1, y = -ymax, label = paste('\u2190', ref.level), hjust = 'left') +
     annotate('text', x = 1, y = ymax, label = paste(target.level, '\u2192'), hjust = 'right')
 
-  if(!is.null(font.size)) {
-    p <- p + theme(axis.text=element_text(size=font.size), axis.title=element_text(size=font.size))
-  }
   if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
   if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(balances) - n.significant.cells + 0.5, color='red')
 
 
   if(show.pvals){
-    d <- data.frame(x = names(frac), y=frac)
-    d$x <- factor(d$x, levels = d$x)
-    p.pval <- ggplot(d, aes(x=x,y=-log(y,base = 10) )) + geom_bar(stat="identity") +
-      coord_flip() + xlab('') + ylab('-log(p-value)') + theme_bw()+ theme(legend.position = "none") +
-      geom_hline(yintercept=-log(signif.threshold,base = 10)) + theme(axis.text.y = element_blank())
+    d <- names(frac) %>% factor(., levels=.) %>% data.frame(x=., y=frac)
+    p.pval <- ggplot(d, aes(x=x, y=-log(y,base = 10), fill=factor(x))) +
+      geom_bar(stat="identity") +
+      geom_hline(yintercept=-log(signif.threshold,base = 10)) +
+      coord_flip() + labs(x='', y='-log(p-value)') +
+      plot.theme + theme(legend.position = "none") + theme(axis.text.y = element_blank())
 
-    p.combo <- cowplot::plot_grid(plotlist=list(p,p.pval),nrow=1,rel_widths=c(2,1))
+    if(!is.null(palette)) p.pval <- p.pval + scale_fill_manual(values=palette)
+
+    p.combo <- cowplot::plot_grid(p, p.pval, nrow=1, rel_widths=c(2,1))
     return(p.combo)
   }
 

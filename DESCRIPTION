@@ -24,6 +24,7 @@ Imports:
     magrittr,
     MASS,
     Matrix,
+    matrixTests,
     methods,
     pbapply,
     plyr,

@@ -4,6 +4,7 @@
 #' @export Cacoa
 #' @exportClass Cacoa
 #' @param sample.groups a two-level factor on the sample names describing the conditions being compared (default: stored vector)
+#' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
 #' @param n.cores number of cores for parallelisation
 #' @param verbose show progress (default: stored value)
 #' @param name field name where the test results are stored
@@ -52,8 +53,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @field cell.groups.palette a color palette for the cell.groups
     cell.groups.palette = NULL,
 
-    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL, sample.groups.palette=NULL, cell.groups.palette=NULL,
-                        embedding=extractEmbedding(data.object), n.cores=1, verbose=TRUE) {
+    #' @field plot.theme ggplot2 theme for all plots
+    plot.theme=NULL,
+
+    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL,
+                        sample.groups.palette=NULL, cell.groups.palette=NULL, embedding=extractEmbedding(data.object), n.cores=1, verbose=TRUE,
+                        plot.theme=theme_bw()) {
       if ('Cacoa' %in% class(data.object)) { # copy constructor
         for (n in ls(data.object)) {
           if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
@@ -111,7 +116,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         self$cell.groups.palette <- cell.groups.palette
       }
 
+      self$plot.theme <- plot.theme
       self$embedding <- embedding;
+      private$checkCellEmbedding()
     },
 
     ### Expression shifts
@@ -137,8 +144,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                                n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
                                                sample.groups=self$sample.groups, n.cores=self$n.cores, verbose=self$verbose,
                                                name="expression.shifts", ...) {
-      count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
-
+      count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
       self$test.results[[name]] <- count.matrices %>%
         estimateExpressionShiftMagnitudes(sample.groups, cell.groups, dist=dist, within.group.normalization=within.group.normalization,
@@ -260,14 +266,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param show.regression whether to show a slope line in the size dependency plot
     #' @param show.regression whether to show a whiskers in the size dependency plot
     #' @return A ggplot2 object
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch = TRUE, show.jitter=TRUE, jitter.alpha=0.05, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch = TRUE, show.jitter=TRUE, jitter.alpha=0.05, show.size.dependency=FALSE,
+                                           show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
       df <- private$getResults(name)$df
       df <- data.frame(cell=df$Type, val=df$value)
 
       if(show.size.dependency) {
-        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='normalized expression distance', yline=NA, show.whiskers=show.whiskers, show.regression=show.regression)
+        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette, ylab='normalized expression distance', yline=NA,
+                            show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme)
       } else {
-        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette, ylab='normalized expression distance')
+        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
+                                     palette=self$cell.groups.palette, ylab='normalized expression distance', plot.theme=self$plot.theme)
       }
     },
 
@@ -284,7 +293,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     ##' @param show.regression whether to show a slope line in the size dependency plot
     ##' @param show.regression whether to show a whiskers in the size dependency plot
     ##' @return A ggplot2 object
-    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.subsampling.variability=FALSE, show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
+    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.subsampling.variability=FALSE, show.jitter=FALSE, jitter.alpha=0.05, type='box',
+                                                 notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
       res <- private$getResults(name)
       cn <- setNames(names(res[[1]]),names(res[[1]]))
       if(show.subsampling.variability) { # average across patient pairs
@@ -295,9 +305,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       if(show.size.dependency) {
-        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='common expression distance', yline=NA, show.whiskers=show.whiskers, show.regression=show.regression)
+        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='common expression distance', yline=NA,
+                            show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme)
       } else {
-        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette, ylab='common expression distance')
+        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette,
+                                     ylab='common expression distance', plot.theme=self$plot.theme)
       }
     },
 
@@ -486,15 +498,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param show.pairs transparency value for the data points (default: 0.05)
     #' @param notch - whether to show notches in the boxplot version (default=TRUE)
     #' @return A ggplot2 object
-    plotDeStabilityPerCellType=function(name='de', 
-                                       notch = T, 
-                                       show.jitter = T, 
-                                       jitter.alpha = 0.05, 
+    plotDeStabilityPerCellType=function(name='de',
+                                       notch = T,
+                                       show.jitter = T,
+                                       jitter.alpha = 0.05,
                                        show.pairs = F,
                                        top.n.genes = 200) {
       de.res <- private$getResults(name)
       if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
-      
+
       jaccard.pw.top <- function(subsamples, top.thresh){
         jac.all = c()
         for(i in 1:length(subsamples)) {
@@ -507,14 +519,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         }
         return(jac.all)
       }
-      
+
       data.all = data.frame()
       for(cell.type in names(de.res)){
         # print(cell.type)
         subsamples <- de.res[[cell.type]]$subsamples
         # TODO remove some subsamples due to the min.cell.counts
         # coomare resampling results with "initial"
-        
 
         jacc.init = c()
         for(subs.name in names(subsamples)){
@@ -527,29 +538,28 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         if(length(subsamples) <= 2) next
         
         jacc.tmp <- jaccard.pw.top(subsamples, top.n.genes)
-        data.tmp <- data.frame(group = cell.type, 
-                               value = jacc.tmp, 
+        data.tmp <- data.frame(group = cell.type,
+                               value = jacc.tmp,
                                cmp = 1:length(jacc.tmp))
         data.all <- rbind(data.all, data.tmp)
       }
-      
+
       if(! show.pairs) {
-        p <- ggplot(data.all, aes(x=group, y=value, fill=group, 
+        p <- ggplot(data.all, aes(x=group, y=value, fill=group,
                                   group=group)) + geom_boxplot(outlier.shape = NA) + geom_jitter(alpha=0.05)
       } else {
-        p <- ggplot(data.all, aes(x=group, y=value, fill=group, 
+        p <- ggplot(data.all, aes(x=group, y=value, fill=group,
                                   group=cmp, color=cmp)) + geom_line()
       }
-      
-      p + theme(legend.position = "none") + 
-        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
-        ylab('Jaccard index') + xlab('cell type') + 
-        ggtitle(paste(cao$target.level, '. Top', as.character(top.n.genes), 'genes', sep=' '))
+
+      p + self$plot.theme + theme(legend.position = "none") +
+        theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1)) +
+        labs(x='cell type', y='Jaccard index') +
+        ggtitle(paste0(cao$target.level, '. Top ', as.character(top.n.genes), ' genes'))
     },
-    
+
     #' @description Plot number of significant DE genes as a function of number of cells
     #' @param name results slot in which the DE results should be stored (default: 'de')
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param palette cell group palette (default: stored $cell.groups.palette)
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
     #' @param label Show labels on plot (default=T)
@@ -567,39 +577,38 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                             legend.position=legend.position, label=label, size=size, palette=palette) +
         geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 
-      return(gg)
+      return(gg + self$plot.theme)
     },
 
     #' @description Plot number of significant DE genes
     #' @param name results slot in which the DE results should be stored (default: 'de')
-    #' @param palette cell group palette (default: stored $cell.groups.palette)
-    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
-    #' @param label Show labels on plot (default=T)
     #' @param pvalue.cutoff P value cutoff (default=0.05)
     #' @param p.adjust whether the cutoff should be based on the adjusted P value (default: TRUE)
     #' @param show.resampling.results whether to show uncertainty based on resampling results (default: TRUE)
     #' @param show.size.depenency whether to show mean vs. number of cells in a cell type instead (default: FALSE)
-    #' @param font.size font size for the cell type labels in the size dependency plot
     #' @param show.regression whether to show a slope line in the size dependency plot (default:TRUE)
     #' @param show.whiskers whether to show a whiskers in the size dependency plot (default:TRUE)
     #' @return A ggplot2 object
-    plotNumberOfDEGenes=function(name='de', legend.position="none", label=TRUE, p.adjust=TRUE, pvalue.cutoff=0.05, show.resampling.results=TRUE, show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
+    plotNumberOfDEGenes=function(name='de', p.adjust=TRUE, pvalue.cutoff=0.05, show.resampling.results=TRUE, show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE,
+                                 show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE) {
 
       de.raw <- private$getResults(name, 'estimatePerCellTypeDE()')
 
       if(show.resampling.results) {
         if(!all(unlist(lapply(de.raw,function(x) !is.null(x$subsamples))))) {
           warning("resampling results are missing for at least some cell types, falling back to point estimates. Please rerun estimatePerCellTypeDE() with resampling='bootstrap' or resampling='loo'")
-          rl <- lapply(de.raw,function(x) x$res)
+          rl <- lapply(de.raw, `[[`, 'res')
         } else {
-          rl <- setNames( unlist(lapply(de.raw,function(x) x$subsamples),recursive=F), rep(names(de.raw),unlist(lapply(de.raw,function(x) length(x$subsamples)))))
+          subsamples <- lapply(de.raw, `[[`, 'subsamples')
+          rl <- unlist(subsamples, recursive=FALSE) %>%
+            setNames(rep(names(de.raw), sapply(subsamples, length)))
         }
       } else {
-        rl <- lapply(de.raw,function(x) x$res)
+        rl <- lapply(de.raw, `[[`, 'res')
       }
       # convert to dataframe for plotting
       df <- do.call(rbind,lapply(1:length(rl),function(i) {
-        if(p.adjust) {
+        if (p.adjust) {
           ndiff <- sum(na.omit(rl[[i]]$padj<=pvalue.cutoff))
         } else {
           ndiff <- sum(na.omit(rl[[i]]$pvalue<=pvalue.cutoff))
@@ -608,11 +617,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }))
 
       if(show.size.dependency) {
-        
-        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='number of DE genes', yline=NA, show.whiskers=show.whiskers, show.regression=show.regression)
+        p <- plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='number of DE genes', yline=NA, show.whiskers=show.whiskers,
+                                 show.regression=show.regression, plot.theme=self$plot.theme)
       } else {
-        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette, ylab='number of DE genes',yline=NA)
+        p <- plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette,
+                                          ylab='number of DE genes',yline=NA, plot.theme=self$plot.theme)
       }
+
+      return(p)
     },
 
     #' @description Save DE results as JSON files
@@ -642,7 +654,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Plot number of highly-expressed DE genes as a function of number of cells
     #' @param de.filter Filtered DE genes, results from prepareOntologyData (default: stored list)
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
     #' @param label Show labels on plot (default=T)
     #' @return A ggplot2 object
@@ -653,7 +664,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       gg <- sapply(de.filter, length) %>%
         plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Highly-expressed DE genes", legend.position=legend.position, label=label) +
-        geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
+        geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5) +
+        self$plot.theme
 
       return(gg)
     },
@@ -666,7 +678,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param p.adj Cutoff for filtering highly-expressed DE genes (default=0.05)
     #' @param expr.cutoff Cutoff for cells per group expressing a DE gene, i.e., cutoff for highly-expressed genes (default=0.05)
     #' @param de.raw Differentially expressed genes per cell group, results from estimatePerCellTypeDE (default: stored list)
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param universe Only set this if a common background gene set is desired for all cell groups (default: NULL)
     #' @param transposed Whether count matrices should be transposed (default=T)
     #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
@@ -690,10 +701,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description  Plot embedding
     #' @param embedding A cell embedding to use (two-column data frame with rownames corresponding to cells) (default: stored embedding object)
-    #' @param plot.theme plot theme to use (default: ggplot2::theme_bw())
+    #' @param plot.theme plot theme to use (default: `self$plot.theme`)
     #' @param ... other parameters are passed to \link[sccore:embeddingPlot]{embeddingPlot}
-    plotEmbedding=function(embedding=self$embedding, plot.theme=ggplot2::theme_bw(), show.legend=TRUE, ...) {
+    plotEmbedding=function(embedding=self$embedding, plot.theme=self$plot.theme, show.legend=TRUE, ...) {
       if(is.null(embedding)) stop("embedding must be provided to Cacoa constructor or to this method.")
+      private$checkCellEmbedding(embedding)
       sccore::embeddingPlot(embedding, plot.theme=plot.theme, show.legend=show.legend, ...)
     },
 
@@ -792,7 +804,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Bar plot of ontology terms per cell type
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="all")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @return A ggplot2 object
     plotOntologyDistribution=function(genes="all", type="GO", p.adj=0.05, min.genes=1, cell.groups=self$cell.groups) {
       if (length(genes) > 0) {
@@ -860,7 +871,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       gg <- gg +
         scale_y_continuous(expand=c(0, 0)) +
-        theme_bw() +
+        self$plot.theme +
         theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5),
               legend.position="right") +
         labs(x="", y=paste0("No. of ",type," terms"))
@@ -871,7 +882,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default='all')
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @param de.filter Filtered DE genes, results from prepareOntologyData (default: stored list)
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
     #' @param label.x.pos Plot label position on x axis (default=0.01)
     #' @param label.y.pos Plot label position on y axis (default=1)
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See \link[cowplot:plot_grid]{cowplot::plot_grid} for more info (default=1.0)
@@ -890,8 +900,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       y.lab <- paste("Number of", type, "terms")
       pg <- cowplot::plot_grid(
         plotNCellRegression(n.go.per.type, n.de.per.type, x.lab="Number of highly-expressed DE genes",
-                            y.lab=y.lab, legend.position="none", label=TRUE, ...),
-        plotNCellRegression(n.go.per.type, cell.groups, y.lab=y.lab, legend.position="none", label=TRUE, ...),
+                            y.lab=y.lab, legend.position="none", label=TRUE, ...) + self$plot.theme,
+        plotNCellRegression(n.go.per.type, cell.groups, y.lab=y.lab, legend.position="none", label=TRUE, ...) + self$plot.theme,
         ncol=1, labels=c("a", "b"), label_x=label.x.pos, label_y=label.y.pos, scale=scale
       )
 
@@ -1008,7 +1018,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),] %>%
         tail(n) %>%
         plotHeatmap(legend.position=legend.position, row.order=TRUE, color.range=color.range, ...) +
-        getGeneScale(genes=genes, type="fill", high="white", limits=color.range)
+        getGeneScale(genes=genes, type="fill", high="white", limits=color.range) +
+        self$plot.theme
 
       return(gg)
     },
@@ -1027,24 +1038,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         stop("No significant ontology terms identified. Try relaxing p.adj.")
 
       if(type %in% c("GO", "GSEA")) {
-        pathway_df <- unique(ont.res$Group) %>%
+        pathway.df <- unique(ont.res$Group) %>%
           lapply(function(cell.group) {
-            lapply(ont.res %>%
-                     dplyr::filter(Group == cell.group) %>%
-                     dplyr::pull(Type) %>%
-                     as.factor() %>%
-                     levels(), function(go) {
-                       tibble::tibble(Pathway=ont.res %>%
-                                        dplyr::filter(Group == cell.group) %>%
-                                        dplyr::filter(Type==go) %>%
-                                        dplyr::pull(Description),
-                                      Group=cell.group,
-                                      GO=go)
-                     }) %>% dplyr::bind_rows()
+            ont.res %>%
+              dplyr::filter(Group == cell.group) %>%
+              dplyr::pull(Type) %>% as.factor() %>% levels() %>%
+              lapply(function(go) {
+                dplyr::filter(Group == cell.group) %>%
+                  dplyr::filter(Type==go) %>%
+                  dplyr::pull(Description) %>%
+                  tibble::tibble(Pathway=., Group=cell.group, GO=go)
+                }) %>% dplyr::bind_rows()
           }) %>%
           dplyr::bind_rows()
       } else if(type=="DO") {
-        pathway_df <- unique(ont.res$Group) %>%
+        pathway.df <- unique(ont.res$Group) %>%
           lapply(function(cell.group) {
             tibble::tibble(Pathway=ont.res %>%
                              dplyr::filter(Group == cell.group) %>%
@@ -1054,7 +1062,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           dplyr::bind_rows()
       }
 
-      path_bin <- pathway_df %>%
+      path.bin <- pathway.df %>%
         dplyr::select(Pathway, Group) %>%
         dplyr::mutate(X=1) %>%
         tidyr::spread(Pathway, X) %>%
@@ -1062,21 +1070,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         magrittr::set_rownames(.$Group) %>%
         .[, 2:ncol(.)] %>%
         as.matrix()
-      path_bin[is.na(path_bin)] <- 0
+      path.bin[is.na(path.bin)] <- 0
 
-      p_mat <- (1 - (path_bin %>% dist(method="binary") %>% as.matrix)) %>% pmin(0.5)
-      t_tree <- dist(p_mat) %>% hclust()
-      t_order <- t_tree %$% labels[order]
-      t_cls <- cutree(t_tree, h=0.7) %>% .[t_order]
-      t_cls[t_cls %in% names(which(table(t_cls) < 5))] <- max(t_cls) + 1
-      t_cl_lengths <- rle(t_cls)$lengths %>% rev
-      diag(p_mat) <- 1
+      p.mat <- (1 - (path.bin %>% dist(method="binary") %>% as.matrix)) %>% pmin(0.5)
+      cl.tree <- dist(p.mat) %>% hclust()
+      clusts <- cl.tree %$% {cutree(., h=0.7)[labels[order]]}
+      clusts[clusts %in% names(which(table(clusts) < 5))] <- max(clusts) + 1
+      clust.lengths <- rle(clusts)$lengths %>% rev
+      diag(p.mat) <- 1
 
       # Plot
-      plotHeatmap(p_mat, color.per.group=NULL, row.order=t_order, col.order=rev(t_order), legend.title="Similarity") +
+      plotHeatmap(p.mat, color.per.group=NULL, row.order=t_order, col.order=rev(t_order), legend.title="Similarity") +
         scale_fill_distiller(palette="RdYlBu", limits=c(0, 0.5)) +
-        geom_vline(aes(xintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5)) +
-        geom_hline(aes(yintercept=x), data.frame(x=cumsum(t_cl_lengths)[t_cl_lengths > 1] + 0.5))
+        geom_vline(aes(xintercept=x), data.frame(x=cumsum(clust.lengths)[clust.lengths > 1] + 0.5)) +
+        geom_hline(aes(yintercept=x), data.frame(x=cumsum(clust.lengths)[clust.lengths > 1] + 0.5)) +
+        self$plot.theme
     },
 
     #' @description Plot a heatmap of collapsed (family) ontology P values per cell type
@@ -1134,10 +1142,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       # Plot
       gg <- ont.sum %>%
         .[, colSums(abs(.)) > 0] %>%
-        .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),] %>%
+        .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names(), rownames(.)),] %>%
         tail(n) %>%
         plotHeatmap(legend.position=legend.position, row.order=TRUE, color.range=color.range, ...) +
-        getGeneScale(genes=genes, type="fill", high="white", limits=color.range)
+        getGeneScale(genes=genes, type="fill", high="white", limits=color.range) +
+        self$plot.theme
 
       return(gg)
     },
@@ -1182,102 +1191,93 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(ont.fam.res)) stop(paste0("No results found for genes '",genes,"'."))
       if(!fam.name %in% names(ont.fam.res$families)) stop("'family' not in 'ont.fam.res'.")
 
-      plotOntologyFamily(fam = ont.fam.res$families[[fam.name]], data = ont.fam.res$data, plot.type = plot.type, show.ids = show.ids, string.length = string.length, legend.label.size = legend.label.size, legend.position = legend.position, verbose = verbose, n.cores = n.cores)
+      plotOntologyFamily(fam = ont.fam.res$families[[fam.name]], data = ont.fam.res$data, plot.type = plot.type, show.ids = show.ids,
+                         string.length = string.length, legend.label.size = legend.label.size, legend.position = legend.position, verbose = verbose, n.cores = n.cores)
     },
 
     #' @description Plot the cell group proportions per sample
-    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-    #' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
     #' @param cells.to.remove Vector of cell types to remove from the composition
     #' @param cells.to.remain Vector of cell types to remain in the composition
-    #' @param notch Whether to show notch in the boxplots
-    #' @param alpha Transparency level on the data points (default: 0.2)
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
-    #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (* < 0.05; ** < 0.01; *** < 0.001)
+    #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
+    #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    plotProportions=function(legend.position = "right", cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell,
-                             sample.groups = self$sample.groups, cells.to.remove = NULL, cells.to.remain = NULL, notch = FALSE,
-                             alpha=0.2, palette=self$sample.groups.palette, show.significance = FALSE) {
-      if(is.null(cells.to.remove) && is.null(cells.to.remain)){
-        plotProportions(legend.position = legend.position, cell.groups = cell.groups, sample.per.cell = sample.per.cell, sample.groups = sample.groups,
-                        notch=notch, alpha = alpha, palette=palette, show.significance=show.significance)
-      } else {  # Anna modified
-        plotProportionsSubset(legend.position = legend.position,
-                        cell.groups = cell.groups,
-                        sample.per.cell = sample.per.cell,
-                        sample.groups = sample.groups,
-                        cells.to.remove = cells.to.remove,
-                        cells.to.remain = cells.to.remain,
-                        notch=notch,
-                        alpha = alpha, palette=palette,
-                        show.significance=show.significance)
-      }
+    plotCellGroupProportions=function(cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL,
+                                      palette=self$sample.groups.palette, show.significance=FALSE, ...) {
+      df.melt <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, ret.groups=FALSE)
+
+      df.melt %<>% {100 * . / rowSums(.)} %>% as.data.frame() %>%
+        dplyr::mutate(group=self$sample.groups[levels(self$sample.per.cell)]) %>%
+        reshape2::melt(id.vars="group")
+
+      gg <- plotCountBoxplotsPerType(df.melt, y.lab="% cells per sample", y.expand=c(0, max(df.melt$value) * 0.1),
+                                     show.significance=show.significance, palette=palette, plot.theme=self$plot.theme, ...)
+
+      return(gg)
     },
 
     #' @description Plot the cell numbers per sample
-    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
-    #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-    #' @param sample.per.cell Vector indicating sample name with cell names (default: stored vector)
+    #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
+    #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    plotCellNumbers=function(legend.position = "right", cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups) {
-      df.melt <- data.frame(anno=cell.groups, group=sample.per.cell[match(names(cell.groups), names(sample.per.cell))]) %>%
-        table %>%
-        rbind %>%
-        t %>%
-        as.data.frame %>%
-        dplyr::mutate(group = sample.groups[match(levels(sample.per.cell), names(sample.groups))]) %>%
-        reshape2::melt(., id.vars="group")
+    plotCellGroupSizes=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette, ...) {
+      df.melt <- private$extractCodaData(cell.groups=cell.groups, ret.groups=FALSE) %>%
+        as.data.frame() %>%
+        dplyr::mutate(group=self$sample.groups[levels(self$sample.per.cell)]) %>%
+        reshape2::melt(id.vars="group")
 
-      ggplot(df.melt, aes(x=variable, y=value, by=group)) +
-        geom_boxplot(position=position_dodge(), outlier.shape = NA) +
-        ylab("Cells per sample") +
-        xlab("") +
-        theme_bw() +
-        theme_legend_position(legend.position) +
-        theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
-              legend.title=element_blank()) +
-        geom_point(position=position_jitterdodge(jitter.width=0.15), aes(col=group), alpha=0.4) +
-        scale_y_continuous(expand=c(0, 0), limits=c(0, (max(df.melt$value) + 50)))
+      gg <- plotCountBoxplotsPerType(df.melt, y.lab="Num. cells per sample", palette=palette, plot.theme=self$plot.theme, ...)
+      return(gg)
     },
 
-    #' @description Plot compositions in CoDA-PCA space
+    #' @description Plot compositions in CoDA space (PCA or CDA)
+    #' @param space either 'PCA' or 'CDA'
     #' @return A ggplot2 object
-    plotPcaSpace=function(cells.to.remove = NULL, font.size=NULL, palette=self$sample.groups.palette) {
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
-      plotPcaSpace(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, font.size, palette=palette)
-    },
+    plotCodaSpace=function(space='CDA', cell.groups=self$cell.groups, cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, palette=self$sample.groups.palette) {
+      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove, cell.groups=cell.groups)
 
-    #' @description Plot compositions in CoDA-CDA space
-    #' @return A ggplot2 object
-    plotCdaSpace=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, font.size=NULL) {
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, samples.to.remove = samples.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
-      plotCdaSpace(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, font.size)
+      if (space == 'PCA') {
+        bal <- getRndBalances(tmp$d.counts)
+        pca.res <- prcomp(bal$norm)
+        pca.loadings <- bal$psi %*% pca.res$rotation
+
+        dfs <- list(
+          red=as.data.frame(pca.res$x) %>% set_colnames(c("S1", "S2")),
+          loadings=(10 * as.data.frame(pca.loadings[,1:2])) %>% set_colnames(c("S1", "S2"))
+        )
+        gg.labs <- labs(x="PC1", y="PC2")
+      } else if (space == 'CDA') {
+        dfs <- estimateCdaSpace(tmp$d.counts, tmp$d.groups)
+        gg.labs <- labs(x="Score 1", y="Score 2")
+      }
+
+      gg <- plotCodaSpaceInner(dfs$red, dfs$loadings, d.groups=tmp$d.groups, ref.level=self$ref.level, target.level=self$target.level, palette=palette)
+      return(gg + gg.labs + self$plot.theme)
     },
 
     #' @description Plot contrast tree
     #' @return A ggplot2 object
-    plotContrastTree=function(cells.to.remain = NULL, cells.to.remove = NULL) {
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
-      plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level)
+    plotContrastTree=function(cell.groups=self$cell.groups, cells.to.remain = NULL, cells.to.remove = NULL) {
+      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
+      gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, plot.theme=self$plot.theme)
+      return(gg)
     },
 
     #' @description Plot Loadings
     #' @return A ggplot2 object
     estimateCellLoadings=function(n.cell.counts = 1000, n.seed = 239, cells.to.remove = NULL,
                                   cells.to.remain = NULL, samples.to.remove = NULL, n.iter=1000){
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, samples.to.remove = samples.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
-      self$test.results[['cda']] <- resampleContrast(tmp$d.counts, tmp$d.groups,
-                                                     n.cell.counts = n.cell.counts,
-                                                     n.seed = n.seed, n.iter = n.iter)
+      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
+      self$test.results[['cda']] <- tmp %$%
+        resampleContrast(d.counts, d.groups, n.cell.counts=n.cell.counts, n.seed=n.seed, n.iter=n.iter)
 
-      self$test.results$cda$pvals = getCellSignificance(self$test.results$cda$balances)
+      self$test.results$cda$pvals <- getCellSignificance(self$test.results$cda$balances)
 
       return(invisible(self$test.results[['cda']]))
     },
 
     estimateGaPartition=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, ...){
-      tmp <- extractCodaData(cells.to.remove = cells.to.remove, cells.to.remain = cells.to.remain, samples.to.remove = samples.to.remove, cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, sample.groups = self$sample.groups, target.level = self$target.level)
+      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
       ga.res <- gaPartition(tmp$d.counts, tmp$d.groups, ...)
 
       self$test.results[['ga.partition']] <- rownames(t(ga.res[1,ga.res[1,] != 0,drop=FALSE]))
@@ -1297,52 +1297,35 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       cda <- private$getResults('cda', 'estimateCellLoadings()')
-      p <- plotCellLoadings(cda, ordering, signif.threshold, font.size, alpha, palette, show.pvals,
-                            self$ref.level, self$target.level)
+      p <- plotCellLoadings(cda, ordering, signif.threshold, alpha, palette, show.pvals,
+                            ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme)
 
       return(p)
     },
 
-    extimateWilcoxonTest = function(cell.groups = self$cell.groups,
-                                     sample.per.cell = self$sample.per.cell,
-                                     sample.groups = self$sample.groups,
-                                     cells.to.remove = NULL,
-                                     cells.to.remain = NULL){
-
-      p.vals <- calcWilcoxonTest(cell.groups = cell.groups,
-                                 sample.per.cell = sample.per.cell,
-                                 sample.groups = sample.groups,
-                                 cells.to.remove = cells.to.remove,
-                                 cells.to.remain = cells.to.remain)
-
+    estimateWilcoxonTest = function(cell.groups=self$cell.groups, cells.to.remove = NULL, cells.to.remain = NULL){
+      tmp <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain)
+      p.vals <- calcWilcoxonTest(tmp$d.counts, tmp$d.groups)
       self$test.results[['p.vals.balances']] <- p.vals
-      return(self$test.results[['p.vals.balances']])
-
-      cda <- resampleContrast(d.counts, d.groups,
-                             n.cell.counts = n.cell.counts,
-                             n.seed = n.seed)
-      plotCellLoadings(cda$balances, alpha = alpha)
+      return(invisible(p.vals))
     },
 
 
     ### Segmentation-free cell density
 
     #' @description Estimate cell density in giving embedding
-    #' @param emb cell embedding matrix
     #' @param bins number of bins for density estimation, default 400
-    #' @param method density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: embGrid)
+    #' @param method density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')
     #' @param m numeric Maximum order of Chebyshev coeff to compute (default=50) for graph based cell density
     #' @param name slot in which to save the results (default: 'cell.density')
-    estimateCellDensity = function(embedding=self$embedding, bins = 400, method = 'kde',
-                                   verbose=self$verbose, m=50, n.cores=self$n.cores,name='cell.density'){
-      if(is.null(embedding))
-        stop("'embedding' must be provided either during the object initialization or during this function call")
-      
+    estimateCellDensity = function(bins=400, method='kde', name='cell.density',
+                                   m=50, verbose=self$verbose, n.cores=self$n.cores){
       sample.per.cell <- self$sample.per.cell
       sample.groups <- self$sample.groups
-      
+
       if (method == 'kde'){
-        self$test.results[[name]] <- embedding %>%
+        private$checkCellEmbedding()
+        self$test.results[[name]] <- self$embedding %>%
           estimateCellDensityKde(sample.per.cell=sample.per.cell, sample.groups=sample.groups, bins=bins)
         return(invisible(self$test.results[[name]]))
       }
@@ -1352,70 +1335,58 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                                    n.cores=n.cores, m=m, verbose=verbose)
         return(invisible(self$test.results[[name]]))
       }
-      
+
       stop("Unknown method: ", method)
     },
 
-    
-    
-    #' @description Plot cell density
-    #' @param method density estimation method (graph, ked)
+
+
+    #' @description Plot cell density depending on the method that was used for estimating `cao$test.resulst[[name]]`
     #' @param add.points default is TRUE, add points to cell density figure
     #' @param contours specify cell types for contour, multiple cell types are also supported
     #' @param contour.color color for contour line
     #' @param contour.conf confidence interval of contour
     #' @param name slot in which to saved results from estimateCellDensity (default: 'cell.density')
+    #' @param ... plot style parameters forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}.
     #' @return A ggplot2 object
-    plotCellDensity = function(method ='kde', show.legend=FALSE, legend.position=NULL, show.grid=TRUE, add.points=TRUE,size=0.1,
-                               point.col='#FCFDBFFF', contours=NULL, contour.color='white', contour.conf='10%', name='cell.density') {
-      dens.res <- private$getResults(name)
-      
-      if (method == 'kde'){
-        if (dens.res$method!='kde') stop('please estimate cell density with estimateCellDensity(method="kde")')
-        # calculate sample.per.cell
-        condition.per.cell <- as.factor(setNames( as.character(self$sample.groups[ as.character(self$sample.per.cell)]), names(self$sample.per.cell) ))
-        
-        target.density <- dens.res %$% data.frame(density.emb, z=density.fraction[[self$target.level]])
-        ref.density <- dens.res %$% data.frame(density.emb, z=density.fraction[[self$ref.level]])
-        
-        mi <- min(min(ref.density$z), min(target.density$z))
-        ma <- max(max(ref.density$z), max(target.density$z))
-        
-        p1 <- plotDensity(target.density, bins=dens.res$bins, legend.position=legend.position, show.legend=show.legend, title=self$ref.level, show.grid=show.grid, mi=mi, ma=ma)
-        p2 <- plotDensity(ref.density, bins=dens.res$bins, legend.position=legend.position, show.legend=show.legend, title=self$target.level, show.grid=show.grid, mi=mi, ma=ma)
-        
-        if (add.points){
-          emb <- self$embedding %>% as.data.frame()
-          colnames(emb) <- c('x','y')
-          emb$z <- 1
-          nname1 <- names(condition.per.cell)[condition.per.cell == self$ref.level] %>%
-            sample(min(2000, length(.)))
-          
-          nname2 <- names(condition.per.cell)[condition.per.cell == self$target.level] %>%
-            sample(min(2000, length(.)))
-          
-          p1 <- p1 + geom_point(data=emb[nname1, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
-          p2 <- p2 + geom_point(data=emb[nname2, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
+    plotCellDensity = function(show.grid=TRUE, add.points=TRUE, size=0.1, show.legend=FALSE,
+                               point.col='#FCFDBFFF', contours=NULL, contour.color='white', contour.conf='10%',
+                               name='cell.density', show.cell.groups=TRUE, cell.groups=self$cell.groups, font.size=c(2,4), ...) {
+      dens.res <- private$getResults(name, 'estimateCellDensity()')
+      private$checkCellEmbedding()
+
+      cond.levels <- c(ref=self$ref.level, target=self$target.level)
+      ps <- lapply(cond.levels, function(l) {
+        if (dens.res$method =='graph') {
+          p <- self$plotEmbedding(colors=dens.res$density.fraction[[l]], size=size, title=l, show.legend=show.legend, ...)
+        } else {# dens.res$method =='kde'
+          condition.per.cell <- self$getConditionPerCell()
+          lims <- dens.res$density.fraction %>% unlist() %>% range()
+
+          p <- dens.res %$% data.frame(density.emb, z=density.fraction[[l]]) %>%
+            plotDensityKde(bins=dens.res$bins, lims=lims, title=l, show.legend=show.legend,
+                           show.grid=show.grid, plot.theme=self$plot.theme, ...)
+
+          if (add.points){
+            emb <- as.data.frame(self$embedding) %>% set_colnames(c('x','y')) %>% cbind(z=1)
+            nnames <- condition.per.cell %>% {names(.)[. == l]} %>% sample(min(2000, length(.)))
+            p <- p + geom_point(data=emb[nnames, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
+          }
         }
-      }  
-      else if (method =='graph'){
-        if (dens.res$method != 'graph') stop('please estimate cell density with estimateCellDensity(method="graph")')
-        emb <- self$embedding
-        target.density <- dens.res %$% density.fraction[[self$target.level]]
-        ref.density <- dens.res %$% density.fraction[[self$ref.level]]        
-        p1 <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = target.density, size = size,title = self$target.level, legend.position = legend.position, show.legend = show.legend) + 
-          #scale_fill_gradient2(low = col[1], high = col[3], mid = col[2], midpoint = 0, limits = c(mi, ma)) +
-          theme(legend.background = element_blank())
-        p2 <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = ref.density, size = size,, title=self$ref.level, legend.position = legend.position, show.legend = show.legend) + 
-          #scale_fill_gradient2(low = col[1], high = col[3], mid = col[2], midpoint = 0, limits = c(mi, ma)) +
-          theme(legend.background = element_blank())
-      }else stop("Unknown method: ", method)
+
+        if (show.cell.groups) {
+          p %<>% private$addCellGroupsToEmbedding(cell.groups=cell.groups, font.size=font.size)
+        }
+        p
+      })
+
       if(!is.null(contours)){
-        cnl <- do.call(c, lapply(sn(contours), function(x) getContour(self$embedding, cell.type=self$cell.groups , cell=x ,conf=contour.conf, color=contour.color)))
-        p1 <- p1 + cnl
-        p2 <- p2 + cnl
+        cn.geoms <- private$getDensityContours(groups=contours, conf=contour.conf, color=contour.color)
+        ps %<>% lapply(`+`, cn.geoms)
       }
-      return(list(ref=p1, target=p2))
+
+      ps %<>% lapply(`+`, theme(legend.background=element_blank()))
+      return(ps)
     },
 
 
@@ -1427,72 +1398,81 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param contour.color color for contour line
     #' @param z.cutoff absolute z score cutoff
     #' @param contour.conf confidence interval of contour
-    #' @param name slot in which to saved results from estimateCellDensity (default: 'cell.density')
-    diffCellDensity=function(method = 'kde', type='subtract', col=c('blue','white','red'), show.legend=FALSE, legend.position=NULL, title=NULL, show.grid=NULL, plot=TRUE, contours=NULL, contour.color='white', contour.conf='10%', z.cutoff=NULL, size =0.2, adjust.pvalues=TRUE, name = 'cell.density', ...){
-      # TODO: rename it to start with estimate*
-      dens.res <- private$getResults(name)
-      if (method == 'graph'){
-        if (dens.res$method != 'graph') stop('please estimate cell density with estimateCellDensity(method="graph")')
-        density.emb <-  self$embedding
-        density.mat <-  dens.res$density.mat
-        cname <- intersect(rownames(density.emb),rownames(density.mat))
-        density.emb <- density.emb[cname,]
-        density.mat <- density.mat[cname,]
+    #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
+    estimateDiffCellDensity=function(type='subtract', z.cutoff=NULL, adjust.pvalues=TRUE, name='cell.density'){
+      dens.res <- private$getResults(name, 'estimateCellDensity')
+      density.mat <- dens.res$density.mat
+      if (dens.res$method == 'kde'){
+        density.mat <- density.mat[dens.res$density.emb$counts > 0,]
       }
-      else if (method == 'kde'){
-        if (dens.res$method != 'kde') stop('please estimate cell density with estimateCellDensity(method="kde")')
-        density.emb <- dens.res$density.emb
-        density.mat <- dens.res$density.mat
-        # remove empty bins
-        index = density.emb$counts > 0
-        density.emb <- density.emb[index,1:2]
-        density.mat <- density.mat[index,]
-      }else stop("Unknown method: ", method)
-      
-      mat <- diffCellDensity(density.emb, density.mat, self$sample.groups, bins=bins, target.level=self$target.level,ref.level=self$ref.level, type=type, z.cutoff=z.cutoff, adjust.pvalues=adjust.pvalues)
-      emb <- mat[,1:2]
-      score <- mat$z
-      names(score) <- rownames(mat)
-      
-      if (plot){
-        fig <- sccore::embeddingPlot(emb, plot.theme=ggplot2::theme_bw(), colors = score, size=size,title = title, legend.position = legend.position, show.legend = show.legend, ...) + scale_color_gradient2(low = col[1], high = col[3], mid = col[2],, midpoint = 0) +theme(legend.background = element_blank()) +  labs(color='Zscore') 
-        
-        if(!is.null(contours)){
-          cnl <- do.call(c, lapply(sn(contours), function(x)
-            getContour(self$embedding, cell.type=self$cell.groups , cell=x, conf=contour.conf, color=contour.color)))
-          fig <- fig + cnl
-        }
-        return(fig)
+
+      scores <- diffCellDensity(density.mat, self$sample.groups, ref.level=self$ref.level, target.level=self$target.level,
+                                type=type, z.cutoff=z.cutoff, adjust.pvalues=adjust.pvalues)
+
+      self$test.results[[name]]$diff[[type]] <- scores
+
+      return(invisible(self$test.results[[name]]))
+    },
+
+    #' @description estimate differential cell density
+    #' @param method density estimation method (graph or ked)
+    #' @param col color palettes,  default is c('blue','white','red')
+    #' @param type method to calculate differential cell density; t.test, wilcox or subtract (target subtract ref density);
+    #' @param contours specify cell types for contour, multiple cell types are also supported
+    #' @param contour.color color for contour line
+    #' @param z.cutoff absolute z score cutoff
+    #' @param contour.conf confidence interval of contour
+    #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
+    plotDiffCellDensity=function(type='subtract', name='cell.density', size=0.2, palette=colorRampPalette(c('blue','white','red')),
+                                 contours=NULL, contour.color='black', contour.conf='10%', ...){
+      private$checkCellEmbedding()
+      dens.res <- private$getResults(name, 'estimateCellDensity')
+      scores <- dens.res$diff[[type]]
+      if (is.null(scores)) {
+        warning("Can't find results for name, '", name, "' and type '", type, "'. Running estimateDiffCellDensity with default parameters.")
+        self$estimateDiffCellDensity(type=type, name=name)
+        dens.res <- self$test.results[[name]]
+        scores <- dens.res$diff[[type]]
       }
-      return(mat)
+
+      if (dens.res$method == 'graph'){
+        density.emb <- self$embedding
+        scores %<>% .[intersect(names(.), rownames(density.emb))]
+      } else if (dens.res$method == 'kde') {
+        density.emb <- dens.res$density.emb[,1:2]
+      } else stop("Unknown method: ", dens.res$method)
+
+      density.mat <- dens.res$density.mat[names(scores),]
+      density.emb <- density.emb[names(scores),]
+
+      leg.title <- if (type == 'subtract') 'Prop. change' else 'Z-score'
+      gg <- self$plotEmbedding(density.emb, colors=scores, size=size, legend.title=leg.title, palette=palette, midpoint=0, ...)
+
+      if(!is.null(contours)){
+        gg <- gg + private$getDensityContours(groups=contours, conf=contour.conf, color=contour.color)
+      }
+      return(gg)
     },
 
     #' @title Plot inter-sample expression distance
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
     #' @param name Test results to plot (default=expression.shifts)
-    #' @param notch Show notches in plot, see ggplot2::geom_boxplot for more info (default=T)
     #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored $cell.groups vector)
-    #' @param weighted.distance whether to weigh the expression distance by the sizes of cell types (default: TRUE), or show distances for each individual cell type
+    #' @param joint whether to show joint boxplot with the expression distance weighed by the sizes of cell types (default: TRUE), or show distances for each individual cell type
     #' @param show.significance whether to show statistical significance between sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
-    #' @param alpha dot transparency
+    #' @param ... other plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    plotExpressionDistance = function(name='expression.shifts', notch=TRUE, sample.groups=self$sample.groups, weighted.distance=TRUE,
-                                      min.cells=10, palette=self$sample.groups.palette, show.significance=FALSE, alpha=0.2) {
+    plotExpressionDistance = function(name='expression.shifts', sample.groups=self$sample.groups, joint=FALSE,
+                                      min.cells=10, palette=self$sample.groups.palette, show.significance=FALSE, ...) {
       cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       ctdml <- cluster.shifts$ctdml
       valid.comparisons <- cluster.shifts$valid.comparisons
-      if (!weighted.distance) {
-        gg <- plotExpressionDistanceIndividual(ctdml, valid.comparisons, sample.groups=sample.groups, notch=notch, alpha=alpha, min.cells=min.cells, show.significance=show.significance)
+      if (!joint) {
+        gg <- plotExpressionDistanceIndividual(ctdml, valid.comparisons, sample.groups=sample.groups, min.cells=min.cells,
+                                               show.significance=show.significance, plot.theme=self$plot.theme, palette=palette, ...)
       } else {
-        gg <- plotExpressionDistanceJoint(ctdml, valid.comparisons, sample.groups=sample.groups, notch=notch, alpha=alpha, show.significance=show.significance)
-      }
-
-      if(!is.null(palette)) {
-        gg <- gg + scale_fill_manual(values=palette)
-      }
-
-      if(show.significance) {
-        gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif", label.x.npc="centre")  # willcox test
+        gg <- plotExpressionDistanceJoint(ctdml, valid.comparisons, sample.groups=sample.groups, show.significance=show.significance,
+                                          plot.theme=self$plot.theme, palette=palette, ...)
       }
 
       return(gg)
@@ -1505,21 +1485,48 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param perplexity tSNE perpexity (default: 4)
     #' @param max_iter tSNE max_iter (default: 1e3)
     #' @param palette a set of colors to use for conditions (default: stored $sample.groups.palette)
+    #' @param font.size font size of the sample labels. If NULL, the labels are not shown. (Default: NULL)
     #' @return A ggplot2 object
-    plotExpressionDistanceEmbedding = function(name='expression.shifts', sample.groups = self$sample.groups, cell.type = NULL, method = 'tSNE', perplexity=4, max_iter=1e3, palette=self$sample.groups.palette) {
-      cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
-      plotExpressionDistancetSNE(cluster.shifts, sample.groups = sample.groups, cell.type = cell.type, method = method, perplexity=perplexity, max_iter=max_iter, palette=palette)
-    },
+    plotExpressionDistanceEmbedding = function(name='expression.shifts', sample.groups = self$sample.groups, cell.type = NULL, method = 'tSNE', perplexity=4, max_iter=1e3,
+                                               palette=self$sample.groups.palette, font.size=NULL) {
+      ctdml <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')$ctdml
+      if (!is.null(cell.type)) { # use distances based on the specified cell type
+        title <- cell.type
+        df <- lapply(ctdml, `[[`, cell.type)
+      } else { # weighted expression distance across all cell types
+        title <- ''
+        df <- prepareJointExpressionDistance(ctdml, valid.comparisons=NULL)
+      }
+      dfm <- Reduce(`+`, df) / length(df)
 
-    #' @description Extract contour from embedding
-    #' @param cell specify cell types for contour, mutiple cell types are also suported
-    #' @param conf confidence interval of contour
-    getContour = function(cells,  color = 'white', linetype = 2, conf = "10%") {
-      cnl <- do.call(c, lapply(sn(cells), function(x) getContour(self$embedding, cell.type=self$cell.groups, linetype = linetype,
-                                                                 cell=x ,conf = conf, color = color)))
-      return(cnl)
-    },
+      if (method == 'tSNE'){
+        if (!requireNamespace("Rtsne", quietly = TRUE))
+          stop("You have to install 'Rtsne' package to perform tSNE visualization")
 
+        xde <- Rtsne::Rtsne(dfm, is_distance = TRUE, perplexity = perplexity, max_iter = max_iter)$Y
+      } else if (method == 'MDS') {
+        xde <- cmdscale(dfm, eig=TRUE, k=2)$points # k is the number of dim
+      } else {
+        stop("unknown embedding method")
+      }
+
+      df <- data.frame(xde) %>% set_rownames(rownames(dfm)) %>% set_colnames(c("x", "y")) %>%
+        mutate(sample=rownames(.), condition=sample.groups[sample])
+
+      gg <- ggplot(df, aes(x, y, color=condition, shape=condition)) +
+        geom_point(size=5) + #, size=log10(ncells)
+        ggtitle(title) + self$plot.theme +
+        theme(axis.title=element_blank(), axis.text=element_blank(), axis.ticks=element_blank())
+
+      if (!is.null(font.size)) {
+        gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
+      }
+
+      if(!is.null(palette)) {
+        gg <- gg + scale_color_manual(values=palette)
+      }
+      return(gg)
+    },
 
     ### Cluster-free differential expression
 
@@ -1651,10 +1658,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       bi.clusts <- fabia::extractBic(fr)
       mask <- bi.clusts$bic[,"bixv"] %>% {sapply(., length) > 0}
-      res$scores.exact <- t(fr@Z[mask,])
-      res$scores.approx <- t(t(fr@L[,mask]) %*% (Matrix::t((z.scores[,rownames(fr@L)]) - fr@center) / fr@scaleData))
-      res$loadings <- fr@L[,mask]
-      res$gene.scores <- apply(bi.clusts$bic, 1, `[[`, "bixv")[mask]
+      res$scores.exact <- t(fr@Z[mask,, drop=FALSE])
+      res$scores.approx <- t(t(fr@L[,mask, drop=FALSE]) %*% (Matrix::t((z.scores[,rownames(fr@L)]) - fr@center) / fr@scaleData))
+      res$loadings <- fr@L[,mask, drop=FALSE]
+      res$gene.scores <- apply(bi.clusts$bic, 1, `[[`, "bixv")[mask, drop=FALSE]
       res$bi.clusts <- bi.clusts
 
       colnames(res$scores.exact) <- colnames(res$scores.approx) <-
@@ -1700,8 +1707,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, plot.both.conditions=FALSE, plot.na=FALSE, max.shift=NULL,
                                                alpha=0.2, font.size=c(3,5), ...) {
       shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts")
-      if (is.null(self$embedding))
-        stop("embedding must not be NULL. Please, set the 'embedding' field.")
+      private$checkCellEmbedding()
 
       if (!plot.both.conditions) {
         shifts %<>%  .[self$sample.groups[self$sample.per.cell[names(.)]] != self$ref.level]
@@ -1765,9 +1771,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         }
       }
 
-      condition.per.cell <- self$sample.per.cell %>%
-        {setNames(as.character(self$sample.groups[as.character(.)]), names(.))} %>%
-        as.factor()
+      condition.per.cell <- self$getConditionPerCell()
 
       ggs <- lapply(genes, function(g) {
         lst <- list()
@@ -1782,7 +1786,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
         if (plot.z) {
           title <- if (is.null(scores)) g else paste0(g, ": ", signif(scores[g], 3))
-          lst <- self$plotEmbedding(colors=z.scores[,g], title=title, color.range=c(-max.z, max.z), plot.na=plot.na, ...) %>%
+          lst <- self$plotEmbedding(colors=z.scores[,g], title=title, color.range=c(-max.z, max.z),
+                                    plot.na=plot.na, legend.title='Z-score', ...) %>%
             list() %>% c(lst)
         }
         lst <- lapply(lst,function(x) x+theme(legend.background = element_blank()))
@@ -1791,6 +1796,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if (length(genes) == 1) return(ggs[[1]])
       return(ggs)
+    },
+
+    getConditionPerCell = function() {
+      self$sample.per.cell %>%
+        {setNames(as.character(self$sample.groups[as.character(.)]), names(.))} %>%
+        as.factor()
     }
   ),
 
@@ -1874,6 +1885,54 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       return(ont.res)
+    },
+
+    addCellGroupsToEmbedding = function(gg.emb, cell.groups=self$cell.groups, font.size=c(2,4)) {
+      gg.ann <- self$plotEmbedding(groups=cell.groups)
+      ls <- gg.ann$layers %>% .[sapply(., function(l) "GeomLabelRepel" %in% class(l$geom))]
+      if (length(ls) != 1) {
+        warning("Can't find annotation layer\n")
+        return(gg.emb)
+      }
+
+      return(gg.emb + ls[[1]] + scale_size_continuous(limits=font.size, guide='none'))
+    },
+
+    extractCodaData = function(ret.groups=TRUE, cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL, samples.to.remove=NULL) {
+      d.counts <- cell.groups %>% data.frame(anno=., group=self$sample.per.cell[names(.)]) %>%
+        table() %>% rbind() %>% t()
+
+      if(!is.null(cells.to.remove)) d.counts %<>% .[,!(colnames(.) %in% cells.to.remove)]
+      if(!is.null(cells.to.remain)) d.counts %<>% .[,colnames(.) %in% cells.to.remain]
+      if(!is.null(samples.to.remove)) d.counts %<>% .[!(rownames(.) %in% samples.to.remove),]
+
+      if (!ret.groups)
+        return(d.counts)
+
+      d.groups <- (self$sample.groups[rownames(d.counts)] == self$target.level) %>%
+        setNames(rownames(d.counts))
+
+      return(list(d.counts = d.counts,
+                  d.groups = d.groups))
+    },
+
+    #' @description Extract contours from embedding
+    #' @param groups specify cell groups for contour, multiple cell groups are also supported
+    #' @param conf confidence interval of contour
+    getDensityContours = function(groups, color='white', linetype=2, conf="10%") {
+      cnl <- sn(groups) %>%
+        lapply(function(x) getDensityContour(self$embedding, cell.groups=self$cell.groups, linetype=linetype,
+                                             group=x, conf=conf, color=color)) %>%
+        do.call(c, .)
+      return(cnl)
+    },
+
+    checkCellEmbedding = function(embedding=self$embedding) {
+      if(is.null(embedding) || ncol(embedding) != 2)
+        stop("self$embedding must contain 2D cell embedding")
+
+      if(is.null(rownames(embedding)))
+        stop("self$embedding must have rownames, equal to cell ids")
     }
   )
 )

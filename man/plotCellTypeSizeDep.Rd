@@ -12,7 +12,8 @@ plotCellTypeSizeDep(
   ylab = "expression distance",
   yline = 1,
   show.regression = TRUE,
-  show.whiskers = TRUE
+  show.whiskers = TRUE,
+  plot.theme = theme_get()
 )
 }
 \arguments{

@@ -1752,7 +1752,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
         if (plot.z) {
           title <- if (is.null(scores)) g else paste0(g, ": ", signif(scores[g], 3))
-          lst <- self$plotEmbedding(colors=z.scores[,g], title=title, color.range=c(-max.z, max.z), plot.na=plot.na, ...) %>%
+          lst <- self$plotEmbedding(colors=z.scores[,g], title=title, color.range=c(-max.z, max.z),
+                                    plot.na=plot.na, legend.title='Z-score', ...) %>%
             list() %>% c(lst)
         }
         lst <- lapply(lst,function(x) x+theme(legend.background = element_blank()))

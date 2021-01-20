@@ -1624,10 +1624,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       bi.clusts <- fabia::extractBic(fr)
       mask <- bi.clusts$bic[,"bixv"] %>% {sapply(., length) > 0}
-      res$scores.exact <- t(fr@Z[mask,])
-      res$scores.approx <- t(t(fr@L[,mask]) %*% (Matrix::t((z.scores[,rownames(fr@L)]) - fr@center) / fr@scaleData))
-      res$loadings <- fr@L[,mask]
-      res$gene.scores <- apply(bi.clusts$bic, 1, `[[`, "bixv")[mask]
+      res$scores.exact <- t(fr@Z[mask,, drop=FALSE])
+      res$scores.approx <- t(t(fr@L[,mask, drop=FALSE]) %*% (Matrix::t((z.scores[,rownames(fr@L)]) - fr@center) / fr@scaleData))
+      res$loadings <- fr@L[,mask, drop=FALSE]
+      res$gene.scores <- apply(bi.clusts$bic, 1, `[[`, "bixv")[mask, drop=FALSE]
       res$bi.clusts <- bi.clusts
 
       colnames(res$scores.exact) <- colnames(res$scores.approx) <-

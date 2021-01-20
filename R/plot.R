@@ -22,7 +22,7 @@ theme_legend_position <- function(position) {
 #' @param plot.line plot the robust regression (default: TRUE)
 #' @param line.width regression line width (default: 0.5)
 plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", legend.position="right", label=TRUE, size=4,
-                                palette=NULL, plot.line=TRUE, line.width=0.5) {
+                                palette=NULL, plot.line=TRUE, line.width=0.5, plot.theme=theme_get()) {
   p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
 
@@ -38,6 +38,7 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
   }
 
   gg <- gg +
+    plot.theme +
     theme(legend.background=element_rect(fill=alpha("white", 0.4))) +
     theme_legend_position(legend.position) +
     guides(color=guide_legend(title="Cell type"))
@@ -93,7 +94,7 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 #' @export
 plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, legend.position="right",
                         legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
-                        color.range=NULL) {
+                        color.range=NULL, plot.theme=theme_get()) {
   if (is.null(color.range)) {
     color.range <- c(min(0, min(df)), max(df))
   }
@@ -129,6 +130,7 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
 
   df$p.value %<>% pmax(color.range[1]) %>% pmin(color.range[2])
   gg <- ggplot(df) + geom_tile(aes(x=Group, y=Pathway, fill=p.value), colour = "grey50") +
+    plot.theme +
     theme(axis.text.x=element_text(angle=90, hjust=0, vjust=0.5, color=color.per.group),
           axis.text=element_text(size=8), axis.ticks=element_blank(), axis.title=element_blank()) +
     guides(fill=guide_colorbar(title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5))) +

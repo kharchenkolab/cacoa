@@ -406,6 +406,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           set.seed(seed.resampling)
           s.groups.new <- c(s.groups.new, lapply(setNames(1:n.bootstrap,paste0('bootstrap.',1:n.bootstrap)),function(i) lapply(s.groups,function(x) sample(x,length(x),replace=T))))
         }
+      } else if (resampling.method == 'fix.count') {
+        if(max.resamplings < 2) {
+          warning('Resampling was not applied, because the number of resamplings was less than 2')
+        } else {
+          n.bootstrap <- max.resamplings
+          set.seed(seed.resampling)
+          s.groups.new <- c(s.groups.new, lapply(setNames(1:n.bootstrap,paste0('fix.',1:n.bootstrap)),function(i) s.groups))
+        }
+        
+        if(is.infinite(max.cell.count)){
+          warning('Fixed number of cells were not provided, it was set to 100')
+          max.cell.count = 100
+          min.cell.count = 100
+        } else {
+          message(paste('Number of cell counts is fixed to', max.cell.count, sep = ' '))
+          min.cell.count = max.cell.count
+        }
+        
       } else stop(paste('Resampling method', resampling.method, 'is not supported'))
 
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=T)
@@ -496,6 +514,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         subsamples <- de.res[[cell.type]]$subsamples
         # TODO remove some subsamples due to the min.cell.counts
         # coomare resampling results with "initial"
+        
+
+        jacc.init = c()
+        for(subs.name in names(subsamples)){
+          subsamples.tmp = list(de.res[[cell.type]]$subsamples[[subs.name]], 
+                                de.res[[cell.type]]$res)
+          jacc.init = c(jacc.init, jaccard.pw.top(subsamples.tmp, 200))
+        }
+        subsamples <- subsamples[(jacc.init != 0) & (jacc.init != 1)]
+        
+        if(length(subsamples) <= 2) next
         
         jacc.tmp <- jaccard.pw.top(subsamples, top.n.genes)
         data.tmp <- data.frame(group = cell.type, 

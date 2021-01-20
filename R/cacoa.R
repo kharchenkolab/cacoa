@@ -496,7 +496,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
             if (j <= i) next
             set1 <- rownames(subsamples[[i]])[rank(subsamples[[i]]$pvalue) <= top.thresh]
             set2 <- rownames(subsamples[[j]])[rank(subsamples[[j]]$pvalue) <= top.thresh]
-            jac.all <- length(intersect(set1, set2)) / length(unique(c(set1, set2)))
+            jac.all <- c(jac.all, length(intersect(set1, set2)) / length(unique(c(set1, set2))))
           }
         }
         return(jac.all)
@@ -504,7 +504,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       data.all = data.frame()
       for(cell.type in names(de.res)){
+        # print(cell.type)
         subsamples <- de.res[[cell.type]]$subsamples
+        # TODO remove some subsamples due to the min.cell.counts
+        # coomare resampling results with "initial"
+        
         jacc.tmp <- jaccard.pw.top(subsamples, top.n.genes)
         data.tmp <- data.frame(group = cell.type,
                                value = jacc.tmp,

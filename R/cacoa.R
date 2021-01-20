@@ -426,7 +426,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           set.seed(seed.resampling)
           s.groups.new <- c(s.groups.new, lapply(setNames(1:n.bootstrap,paste0('fix.',1:n.bootstrap)),function(i) s.groups))
         }
-        
+
         if(is.infinite(max.cell.count)){
           warning('Fixed number of cells were not provided, it was set to 100')
           max.cell.count = 100
@@ -435,7 +435,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
           message(paste('Number of cell counts is fixed to', max.cell.count, sep = ' '))
           min.cell.count = max.cell.count
         }
-        
+
       } else stop(paste('Resampling method', resampling.method, 'is not supported'))
 
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=T)
@@ -529,14 +529,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
         jacc.init = c()
         for(subs.name in names(subsamples)){
-          subsamples.tmp = list(de.res[[cell.type]]$subsamples[[subs.name]], 
+          subsamples.tmp = list(de.res[[cell.type]]$subsamples[[subs.name]],
                                 de.res[[cell.type]]$res)
           jacc.init = c(jacc.init, jaccard.pw.top(subsamples.tmp, 200))
         }
         subsamples <- subsamples[(jacc.init != 0) & (jacc.init != 1)]
-        
+
         if(length(subsamples) <= 2) next
-        
+
         jacc.tmp <- jaccard.pw.top(subsamples, top.n.genes)
         data.tmp <- data.frame(group = cell.type,
                                value = jacc.tmp,
@@ -1037,23 +1037,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         stop("No significant ontology terms identified. Try relaxing p.adj.")
 
       if(type %in% c("GO", "GSEA")) {
-        # TODO: is this code just
-        # ont.res[c("Description", "Group", "Type")] %>% rename(Pathway=Description, GO=Type)
-        # with some sorting?
-        pathway.df <- unique(ont.res$Group) %>%
-          lapply(function(cell.group) {
-            ont.res %>%
-              dplyr::filter(Group == cell.group) %>%
-              dplyr::pull(Type) %>% as.factor() %>% levels() %>%
-              lapply(function(go) {
-                ont.res %>%
-                  dplyr::filter(Group == cell.group) %>%
-                  dplyr::filter(Type==go) %>%
-                  dplyr::pull(Description) %>%
-                  tibble::tibble(Pathway=., Group=cell.group, GO=go)
-                }) %>% dplyr::bind_rows()
-          }) %>%
-          dplyr::bind_rows()
+        pathway.df <- ont.res[c("Description", "Group", "Type")] %>% rename(Pathway=Description, GO=Type)
       } else if(type=="DO") {
         pathway.df <- unique(ont.res$Group) %>%
           lapply(function(cell.group) {
@@ -1863,7 +1847,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if((length(genes) != 1) || (!genes %in% c("down","up","all")))
         stop("'genes' must be 'down', 'up', or 'all'.")
 
-      ont.res <- self$test.results[[type]][["res"]]
+      ont.res <- self$test.results[[type]]$res
       if(is.null(ont.res)) stop(paste0("No results found for '", type, "'. Please run 'estimateOntology' first."))
 
       ont.res %<>% preparePlotData(type, p.adj, min.genes)

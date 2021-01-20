@@ -231,20 +231,18 @@ estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, n.top.genes 
   # Estimate ontologies
   if(type=="DO") {
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
-    res <- sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
-                                                                                     DOSE::enrichDO,
-                                                                                     universe=de.gene.ids[[id]][["universe"]],
-                                                                                     qvalueCutoff=qvalue.cutoff, ...)),
-                            n.cores=1, progress=verbose) %>%
+    res <- sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(
+      lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])], DOSE::enrichDO,
+             universe=de.gene.ids[[id]][["universe"]], qvalueCutoff=qvalue.cutoff, ...)
+      ), n.cores=1, progress=verbose) %>%
       setNames(names(de.gene.ids))
+    res <- list(res=res)
   } else if(type=="GO") {
     if(verbose) cat("Estimating enriched ontologies ... \n")
-    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])],
-                                                                                                      go.environment = go.environment,
-                                                                                                      universe=de.gene.ids[[id]][["universe"]],
-                                                                                                      org.db=org.db,
-                                                                                                      qvalueCutoff=qvalue.cutoff, ...)),
-                                 progress = verbose, n.cores = 1) %>%
+    ont.list <- sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(
+      estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])], go.environment = go.environment,
+                         universe=de.gene.ids[[id]][["universe"]], org.db=org.db, qvalueCutoff=qvalue.cutoff, ...)
+      ), progress = verbose, n.cores = 1) %>%
       setNames(names(de.gene.ids))
 
     if(!keep.gene.sets) {
@@ -254,8 +252,7 @@ estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, n.top.genes 
       })
     }
 
-    res <- list(res=ont.list,
-                go.environment=go.environment)
+    res <- list(res=ont.list, go.environment=go.environment)
   } else if(type == "GSEA") {
     if(verbose) cat("Estimating enriched ontologies ... \n")
     ont.list <- sccore:::plapply(names(de.gene.ids), function(id) {
@@ -273,8 +270,7 @@ estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, n.top.genes 
       })
     }
 
-    res <- list(res=ont.list,
-                go.environment=go.environment)
+    res <- list(res=ont.list, go.environment=go.environment)
   } else {
     stop("'type' must be 'GO', 'DO', or 'GSEA'.")
   }

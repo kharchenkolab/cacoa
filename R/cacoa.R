@@ -573,11 +573,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.raw)]
       gg <- sapply(de.raw, function(d) sum(d$padj <= p.adj)) %>%
-        plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Significant DE genes",
+        plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Significant DE genes", plot.theme=self$plot.theme,
                             legend.position=legend.position, label=label, size=size, palette=palette) +
         geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 
-      return(gg + self$plot.theme)
+      return(gg)
     },
 
     #' @description Plot number of significant DE genes
@@ -663,9 +663,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
 
       gg <- sapply(de.filter, length) %>%
-        plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Highly-expressed DE genes", legend.position=legend.position, label=label) +
-        geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5) +
-        self$plot.theme
+        plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Highly-expressed DE genes",
+                            plot.theme=self$plot.theme, legend.position=legend.position, label=label) +
+        geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
 
       return(gg)
     },
@@ -900,8 +900,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       y.lab <- paste("Number of", type, "terms")
       pg <- cowplot::plot_grid(
         plotNCellRegression(n.go.per.type, n.de.per.type, x.lab="Number of highly-expressed DE genes",
-                            y.lab=y.lab, legend.position="none", label=TRUE, ...) + self$plot.theme,
-        plotNCellRegression(n.go.per.type, cell.groups, y.lab=y.lab, legend.position="none", label=TRUE, ...) + self$plot.theme,
+                            y.lab=y.lab, legend.position="none", label=TRUE, plot.theme=self$plot.theme, ...),
+        plotNCellRegression(n.go.per.type, cell.groups, y.lab=y.lab, legend.position="none", label=TRUE, plot.theme=self$plot.theme, ...),
         ncol=1, labels=c("a", "b"), label_x=label.x.pos, label_y=label.y.pos, scale=scale
       )
 
@@ -1017,9 +1017,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         .[, colSums(abs(.)) > 0] %>%
         .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),] %>%
         tail(n) %>%
-        plotHeatmap(legend.position=legend.position, row.order=TRUE, color.range=color.range, ...) +
-        getGeneScale(genes=genes, type="fill", high="white", limits=color.range) +
-        self$plot.theme
+        plotHeatmap(legend.position=legend.position, row.order=TRUE, color.range=color.range, plot.theme=self$plot.theme, ...) +
+        getGeneScale(genes=genes, type="fill", high="white", limits=color.range)
 
       return(gg)
     },
@@ -1038,13 +1037,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         stop("No significant ontology terms identified. Try relaxing p.adj.")
 
       if(type %in% c("GO", "GSEA")) {
+        # TODO: is this code just
+        # ont.res[c("Description", "Group", "Type")] %>% rename(Pathway=Description, GO=Type)
+        # with some sorting?
         pathway.df <- unique(ont.res$Group) %>%
           lapply(function(cell.group) {
             ont.res %>%
               dplyr::filter(Group == cell.group) %>%
               dplyr::pull(Type) %>% as.factor() %>% levels() %>%
               lapply(function(go) {
-                dplyr::filter(Group == cell.group) %>%
+                ont.res %>%
+                  dplyr::filter(Group == cell.group) %>%
                   dplyr::filter(Type==go) %>%
                   dplyr::pull(Description) %>%
                   tibble::tibble(Pathway=., Group=cell.group, GO=go)
@@ -1074,17 +1077,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       p.mat <- (1 - (path.bin %>% dist(method="binary") %>% as.matrix)) %>% pmin(0.5)
       cl.tree <- dist(p.mat) %>% hclust()
-      clusts <- cl.tree %$% {cutree(., h=0.7)[labels[order]]}
+      clust.order <- cl.tree %$% labels[order]
+      clusts <- cutree(cl.tree, h=0.7)[clust.order]
       clusts[clusts %in% names(which(table(clusts) < 5))] <- max(clusts) + 1
       clust.lengths <- rle(clusts)$lengths %>% rev
       diag(p.mat) <- 1
 
       # Plot
-      plotHeatmap(p.mat, color.per.group=NULL, row.order=t_order, col.order=rev(t_order), legend.title="Similarity") +
+      plotHeatmap(p.mat, color.per.group=NULL, row.order=clust.order, col.order=rev(clust.order),
+                  legend.title="Similarity", plot.theme=self$plot.theme) +
         scale_fill_distiller(palette="RdYlBu", limits=c(0, 0.5)) +
         geom_vline(aes(xintercept=x), data.frame(x=cumsum(clust.lengths)[clust.lengths > 1] + 0.5)) +
-        geom_hline(aes(yintercept=x), data.frame(x=cumsum(clust.lengths)[clust.lengths > 1] + 0.5)) +
-        self$plot.theme
+        geom_hline(aes(yintercept=x), data.frame(x=cumsum(clust.lengths)[clust.lengths > 1] + 0.5))
     },
 
     #' @description Plot a heatmap of collapsed (family) ontology P values per cell type

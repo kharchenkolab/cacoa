@@ -2,7 +2,6 @@
 
 export(Cacoa)
 export(addZScores)
-export(cluster.expression.distances)
 export(estimateExpressionShiftMagnitudes)
 export(estimateOntology)
 export(estimatePerCellTypeDE)

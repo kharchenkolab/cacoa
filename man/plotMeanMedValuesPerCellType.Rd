@@ -8,11 +8,12 @@ plotMeanMedValuesPerCellType(
   df,
   type = "bar",
   show.jitter = TRUE,
-  notch = T,
+  notch = TRUE,
   jitter.alpha = 0.05,
   palette = NULL,
   ylab = "expression distance",
-  yline = 1
+  yline = 1,
+  plot.theme = theme_get()
 )
 }
 \arguments{

@@ -30,7 +30,7 @@ plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, targe
     geom_hline(yintercept=0, linetype="dotted") +
     geom_vline(xintercept=0, linetype="dotted") +
     geom_point(aes(colour = factor(group.names[d.groups + 1] ))) +
-    labs(colour="Group")
+    labs(colour="Condition")
 
   if(!is.null(palette)) rda.plot <- rda.plot + scale_fill_manual(values=palette)
 

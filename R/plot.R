@@ -196,7 +196,7 @@ getOntologyPlotTitle <- function(genes, cell.subgroup, type) {
 #' @param notch - whether to show notches in the boxplot version (default=TRUE)
 #' @param palette - cell type palette
 #' @return A ggplot2 object
-plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch = T, jitter.alpha=0.05, palette=NULL, ylab='expression distance', yline=1) {
+plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch=TRUE, jitter.alpha=0.05, palette=NULL, ylab='expression distance', yline=1, plot.theme=theme_get()) {
 
   # calculate mean, se and median
   odf <- na.omit(df); # full df is now in odf
@@ -213,17 +213,18 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
   if(type=='box') { # boxplot
     p <- ggplot(odf,aes(x=cell,y=val,fill=cell)) + geom_boxplot(notch=notch, outlier.shape=NA)
   } else if(type=='point') { # point + se
-    p <- ggplot(df,aes(x=cell,y=mean,color=cell)) + geom_point(size=3)+ geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)
-    if(!is.null(palette)) {p <- p+scale_color_manual(values=palette)}
+    p <- ggplot(df,aes(x=cell,y=mean,color=cell)) + geom_point(size=3) + geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)
+    if(!is.null(palette)) {p <- p + scale_color_manual(values=palette)}
   } else { # default to barplot
     p <- ggplot(df,aes(x=cell,y=mean,fill=cell)) + geom_bar(stat='identity')+ geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)
   }
-  if(!is.na(yline)) { p <- p+ geom_hline(yintercept = 1,linetype=2,color='gray50') }
+  if(!is.na(yline)) { p <- p + geom_hline(yintercept = 1,linetype=2,color='gray50') }
   p <- p +
+    plot.theme +
     theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12), axis.text.y=element_text(angle=90, hjust=0.5, size=12))+ guides(fill=FALSE)+
     theme(legend.position = "none")+
     labs(x="", y=ylab)
-  if(show.jitter) p <- p + geom_jitter(data=odf,aes(x=cell,y=val),color=1, position=position_jitter(0.1),show.legend=FALSE,alpha=jitter.alpha);
+  if(show.jitter) p <- p + geom_jitter(data=odf, aes(x=cell,y=val),color=1, position=position_jitter(0.1), show.legend=FALSE, alpha=jitter.alpha);
   if(!is.null(palette)) {
     p <- p + scale_fill_manual(values=palette)
   }
@@ -240,7 +241,8 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
 ##' @param ylab y axis label
 ##' @param yline value at which a horizontal reference value should be plotted
 ##' @return ggplot2 object
-plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab='expression distance', yline=1, show.regression=TRUE, show.whiskers=TRUE) {
+plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab='expression distance', yline=1,
+                                show.regression=TRUE, show.whiskers=TRUE, plot.theme=theme_get()) {
   cell.groups <- table(cell.groups) # %>% .[names(.) %in% names(de.raw)]
 
   # calculate mean, se and median
@@ -256,7 +258,7 @@ plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab
   # order cell types according to the mean
   odf$cell <- factor(odf$cell,levels=df$cell)
   p <- ggplot(df,aes(x=size,y=mean,color=cell)) + geom_point(size=3)
-  p <- p+ggrepel::geom_label_repel(aes(label=cell), size=font.size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=NA)
+  p <- p + ggrepel::geom_label_repel(aes(label=cell), size=font.size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=NA)
   if(show.whiskers) p <- p+geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)
   if(!is.null(palette)) {p <- p+scale_color_manual(values=palette)}
   if(show.regression) {
@@ -265,6 +267,7 @@ plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab
 
   if(!is.na(yline)) { p <- p+ geom_hline(yintercept = 1,linetype=2,color='gray50') }
   p <- p +
+    plot.theme +
     guides(fill=FALSE)+
     theme(legend.position = "none")+
     labs(x="number of cells", y=ylab)

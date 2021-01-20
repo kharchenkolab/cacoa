@@ -266,14 +266,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param show.regression whether to show a slope line in the size dependency plot
     #' @param show.regression whether to show a whiskers in the size dependency plot
     #' @return A ggplot2 object
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch = TRUE, show.jitter=TRUE, jitter.alpha=0.05, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch = TRUE, show.jitter=TRUE, jitter.alpha=0.05, show.size.dependency=FALSE,
+                                           show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
       df <- private$getResults(name)$df
       df <- data.frame(cell=df$Type, val=df$value)
 
       if(show.size.dependency) {
-        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='normalized expression distance', yline=NA, show.whiskers=show.whiskers, show.regression=show.regression)
+        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette, ylab='normalized expression distance', yline=NA,
+                            show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme)
       } else {
-        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette, ylab='normalized expression distance')
+        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
+                                     palette=self$cell.groups.palette, ylab='normalized expression distance', plot.theme=self$plot.theme)
       }
     },
 
@@ -290,7 +293,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     ##' @param show.regression whether to show a slope line in the size dependency plot
     ##' @param show.regression whether to show a whiskers in the size dependency plot
     ##' @return A ggplot2 object
-    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.subsampling.variability=FALSE, show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
+    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.subsampling.variability=FALSE, show.jitter=FALSE, jitter.alpha=0.05, type='box',
+                                                 notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
       res <- private$getResults(name)
       cn <- setNames(names(res[[1]]),names(res[[1]]))
       if(show.subsampling.variability) { # average across patient pairs
@@ -301,9 +305,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       if(show.size.dependency) {
-        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='common expression distance', yline=NA, show.whiskers=show.whiskers, show.regression=show.regression)
+        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='common expression distance', yline=NA,
+                            show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme)
       } else {
-        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette, ylab='common expression distance')
+        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette,
+                                     ylab='common expression distance', plot.theme=self$plot.theme)
       }
     },
 
@@ -1162,9 +1168,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
     #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    plotCellGroupProportions=function(legend.position = "right", cell.groups = self$cell.groups,
-                             cells.to.remove = NULL, cells.to.remain = NULL,
-                             palette=self$sample.groups.palette, show.significance = FALSE, ...) {
+    plotCellGroupProportions=function(cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL,
+                                      palette=self$sample.groups.palette, show.significance=FALSE, ...) {
       df.melt <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, ret.groups=FALSE)
 
       df.melt %<>% {100 * . / rowSums(.)} %>% as.data.frame() %>%
@@ -1385,7 +1390,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param contour.conf confidence interval of contour
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
     plotDiffCellDensity=function(type='subtract', name='cell.density', size=0.2, palette=colorRampPalette(c('blue','white','red')),
-                                 contours=NULL, contour.color='white', contour.conf='10%', ...){
+                                 contours=NULL, contour.color='black', contour.conf='10%', ...){
       private$checkCellEmbedding()
       dens.res <- private$getResults(name, 'estimateCellDensity')
       scores <- dens.res$diff[[type]]
@@ -1881,7 +1886,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param conf confidence interval of contour
     getDensityContours = function(groups, color='white', linetype=2, conf="10%") {
       cnl <- sn(groups) %>%
-        lapply(function(x) getDensityContour(self$embedding, cell.type=self$cell.groups, linetype=linetype,
+        lapply(function(x) getDensityContour(self$embedding, cell.groups=self$cell.groups, linetype=linetype,
                                              group=x, conf=conf, color=color)) %>%
         do.call(c, .)
       return(cnl)

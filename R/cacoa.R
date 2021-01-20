@@ -508,7 +508,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         subsamples <- de.res[[cell.type]]$subsamples
         # TODO remove some subsamples due to the min.cell.counts
         # coomare resampling results with "initial"
-        
+
         jacc.tmp <- jaccard.pw.top(subsamples, top.n.genes)
         data.tmp <- data.frame(group = cell.type,
                                value = jacc.tmp,
@@ -589,12 +589,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }))
 
       if(show.size.dependency) {
-        p <- plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='number of DE genes', yline=NA, show.whiskers=show.whiskers, show.regression=show.regression)
+        p <- plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='number of DE genes', yline=NA, show.whiskers=show.whiskers,
+                                 show.regression=show.regression, plot.theme=self$plot.theme)
       } else {
-        p <- plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette, ylab='number of DE genes',yline=NA)
+        p <- plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette,
+                                          ylab='number of DE genes',yline=NA, plot.theme=self$plot.theme)
       }
 
-      return(p + self$plot.theme)
+      return(p)
     },
 
     #' @description Save DE results as JSON files

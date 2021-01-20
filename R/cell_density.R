@@ -51,14 +51,14 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ex
 ##' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 ##' @param n.cores number of cores
 ##' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
-estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.cores = 1, m = 50, verbose = TRUE) {
+estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.cores=1, beta=30, m=50, verbose = TRUE) {
   tmp <-  setNames(as.numeric(sample.per.cell), names(sample.per.cell))
   scores.smoothed <- sccore:::plapply(sccore::sn(unique(tmp)), function(x) {
     tryCatch({
       x1 <-  tmp
       x1[x1 != x] <-  0
       x1[x1 == x] <-  1
-      sccore:::smoothSignalOnGraph(x1, graph, sccore:::heatFilter, m = m)
+      sccore:::smoothSignalOnGraph(x1, graph, function(...) sccore:::heatFilter(..., beta=beta), m = m)
     }, error = function(err) {
       return(NA)
     })

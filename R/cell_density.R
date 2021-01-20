@@ -66,8 +66,14 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
   score.mat <- do.call(cbind, scores.smoothed)
   colnames(score.mat) <-  unique(sample.per.cell)
 
-  density.fraction <- lapply(sccore:::sn(as.character(unique(sample.groups))),
-                             function(x) rowMeans(score.mat[, names(sample.groups[sample.groups == x])]))
+
+  score.mat %<>% {t(.) / colSums(.)} %>% t() %>% # Normalize by columns to adjust on the number of cells per sample
+    {. / rowSums(.)} # Then, by row to put make them sum into 1 (perhaps, only for visualization)
+
+  density.fraction <- split(names(sample.groups), sample.groups) %>%
+    sapply(function(samps) apply(score.mat[,samps], 1, mean, trim=0.2)) %>% # Robust estimator of sum
+    {. / rowSums(.)}
+  density.fraction %<>% {list(.[,1], .[,2])} %>% setNames(colnames(density.fraction))
 
   return(list(density.mat=score.mat, density.fraction=density.fraction, method='graph'))
 }

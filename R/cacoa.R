@@ -1304,10 +1304,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Estimate cell density in giving embedding
     #' @param bins number of bins for density estimation, default 400
     #' @param method density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')
-    #' @param beta smoothing strength parameter of the \link[sccore:heatFilter]{heatFilter} for graph based cell density (default: 70)
+    #' @param beta smoothing strength parameter of the \link[sccore:heatFilter]{heatFilter} for graph based cell density (default: 30)
     #' @param m numeric Maximum order of Chebyshev coeff to compute for graph based cell density (default: 50)
     #' @param name slot in which to save the results (default: 'cell.density')
-    estimateCellDensity = function(bins=400, method='kde', name='cell.density', beta=70, m=50,
+    estimateCellDensity = function(bins=400, method='kde', name='cell.density', beta=30, m=50,
                                    verbose=self$verbose, n.cores=self$n.cores){
       sample.per.cell <- self$sample.per.cell
       sample.groups <- self$sample.groups

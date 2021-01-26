@@ -722,7 +722,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param max.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
     estimateOntology=function(type = "GO", org.db, n.top.genes = 500, de.gene.ids=NULL, go.environment=self$test.results$GO$go.environment, p.adjust.method="BH",
-                              readable=TRUE, verbose=TRUE, qvalue.cutoff=0.2, min.gs.size=10, max.gs.size=5e2, ...) {
+                              readable=TRUE, verbose=TRUE, qvalue.cutoff=0.2, min.gs.size=10, max.gs.size=5e2, keep.gene.sets = F, ...) {
       if(!is.null(type) & !type %in% c("GO", "DO", "GSEA"))
         stop("'type' must be 'GO', 'DO', or 'GSEA'.")
 
@@ -732,7 +732,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       self$test.results[[type]] <- estimateOntology(type=type, org.db=org.db, n.top.genes=n.top.genes, de.gene.ids=de.gene.ids, go.environment=go.environment,
                                                     verbose=verbose, qvalue.cutoff=qvalue.cutoff, pAdjustMethod=p.adjust.method, readable=readable,
-                                                    minGSSize=min.gs.size, maxGSSize=max.gs.size, ...)
+                                                    minGSSize=min.gs.size, maxGSSize=max.gs.size, keep.gene.sets = keep.gene.sets, ...)
       return(invisible(self$test.results[[type]]))
     },
 

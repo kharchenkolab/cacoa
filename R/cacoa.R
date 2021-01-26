@@ -1382,13 +1382,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description estimate differential cell density
     #' @param method density estimation method (graph or ked)
     #' @param col color palettes,  default is c('blue','white','red')
-    #' @param type method to calculate differential cell density; t.test, wilcox or subtract (target subtract ref density);
+    #' @param type method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);
     #' @param contours specify cell types for contour, multiple cell types are also supported
     #' @param contour.color color for contour line
     #' @param z.cutoff absolute z score cutoff
     #' @param contour.conf confidence interval of contour
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    estimateDiffCellDensity=function(type='subtract', z.cutoff=NULL, adjust.pvalues=TRUE, name='cell.density'){
+    estimateDiffCellDensity=function(type='subtract', z.cutoff=NULL, adjust.pvalues=TRUE, name='cell.density', verbose=self$verbose){
       dens.res <- private$getResults(name, 'estimateCellDensity')
       density.mat <- dens.res$density.mat
       if (dens.res$method == 'kde'){
@@ -1396,7 +1396,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       scores <- diffCellDensity(density.mat, self$sample.groups, ref.level=self$ref.level, target.level=self$target.level,
-                                type=type, z.cutoff=z.cutoff, adjust.pvalues=adjust.pvalues)
+                                type=type, z.cutoff=z.cutoff, adjust.pvalues=adjust.pvalues, verbose=verbose)
 
       self$test.results[[name]]$diff[[type]] <- scores
 

@@ -50,8 +50,9 @@ Suggests:
     fabia,
     ggrastr (>= 0.1.7),
     GOfuncR,
-    Rtsne,
     graph,
-    Rgraphviz
+    Rgraphviz,
+    robustbase,
+    Rtsne
 Remotes:
-    hms-dbmi/sccore
+    kharchenkolab/sccore

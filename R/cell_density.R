@@ -138,7 +138,7 @@ adjustPvalueScores <- function(scores) {
 ##' @param type method to calculate differential cell density of each bin; subtract: target density minus ref density; entropy: estimated kl divergence entropy between sample groups ; t.test: zscore of t-test,
 ##' global variance is setting for t.test;
 diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level, type = 'subtract',
-                            z.cutoff = NULL, adjust.pvalues=TRUE){
+                            z.cutoff = NULL, adjust.pvalues=TRUE, verbose=TRUE, n.permutations=200){
   nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
   nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
 
@@ -149,14 +149,26 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
   } else if (type=='t.test'){
     score <- matrixTests::row_t_welch(density.mat[,nt], density.mat[,nr])$statistic %>%
       setNames(rownames(density.mat))
-    if(adjust.pvalues) score %<>% adjustPvalueScores()
   } else if (type == 'wilcox') {
     pvalue <- matrixTests::row_wilcoxon_twosample(density.mat[,nt], density.mat[,nr])$pvalue
     zstat <- abs(qnorm(pvalue / 2))
     fc <- rowMeans(density.mat[,nt]) - rowMeans(density.mat[,nr])
     score <- zstat * sign(fc)
-    if(adjust.pvalues) score %<>% adjustPvalueScores()
+  } else if (type == 'permutation') {
+    if (!requireNamespace("robustbase", quietly=TRUE))
+      stop("robustbase package must be installed to run this function")
+
+    density.mat <- t(density.mat)
+    dm.shuffled <- density.mat
+    permut.diffs <- plapply(1:n.permutations, function(i) { # Null distribution looks normal, so we don't need a lot of samples
+      rownames(dm.shuffled) %<>% sample()
+      robustbase::colMedians(dm.shuffled[nt,]) - robustbase::colMedians(dm.shuffled[nr,])
+    }, progress=verbose, n.cores=1) %>% Reduce(cbind, .)
+
+    score <- (robustbase::colMedians(density.mat[nt,]) - robustbase::colMedians(density.mat[nr,])) / apply(permut.diffs, 1, sd)
   } else stop("Unknown method: ", type)
+
+  if((type != 'subtract') && adjust.pvalues) score %<>% adjustPvalueScores()
 
   if (!is.null(z.cutoff)) {
     score[abs(score) < z.cutoff] <- 0

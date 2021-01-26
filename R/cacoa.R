@@ -1309,21 +1309,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       if (method == 'kde'){
         private$checkCellEmbedding()
-        self$test.results[[name]] <- self$embedding %>%
+        res <- self$embedding %>%
           estimateCellDensityKde(sample.per.cell=sample.per.cell, sample.groups=sample.groups, bins=bins)
-        return(invisible(self$test.results[[name]]))
-      }
-      if (method == 'graph'){
-        self$test.results[[name]] <-  extractCellGraph(self$data.object) %>%
+      } else if (method == 'graph'){
+        res <-  extractCellGraph(self$data.object) %>%
           estimateCellDensityGraph(sample.per.cell=sample.per.cell, sample.groups=sample.groups,
                                    n.cores=n.cores, m=m, beta=beta, verbose=verbose)
-        return(invisible(self$test.results[[name]]))
-      }
+      } else stop("Unknown method: ", method)
 
-      stop("Unknown method: ", method)
+      nt <- self$sample.groups %>% {names(.[. == self$target.level])}
+      nr <- self$sample.groups %>% {names(.[. == self$ref.level])}
+
+      res$density.mad <- res %$% {(apply(density.mat[,nt], 1, mad) + apply(density.mat[,nr], 1, mad))}
+      res$density.sd <- res %$% {(apply(density.mat[,nt], 1, sd) + apply(density.mat[,nr], 1, sd))}
+      res$missed.sample.frac <- res$density.mat %>% {(. / rowMeans(.)) < 0.01} %>% rowMeans()
+
+      self$test.results[[name]] <- res
+
+      return(invisible(res))
     },
-
-
 
     #' @description Plot cell density depending on the method that was used for estimating `cao$test.resulst[[name]]`
     #' @param add.points default is TRUE, add points to cell density figure
@@ -1373,6 +1377,38 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(ps)
     },
 
+    plotCellDensityVariation = function(type='mad', plot.type='embedding', name='cell.density', cutoff=NULL, ...) {
+      dens.res <- private$getResults(name, 'estimateCellDensity()')
+      if (type == 'mad') {
+        name <- 'MAD'
+        scores <- dens.res$density.mad
+      } else if (type == 'sd') {
+        name <- 'SD'
+        scores <- dens.res$density.sd
+      } else if (type == 'sample.frac') {
+        name <- 'Missed sample frac.'
+        scores <- dens.res$missed.sample.frac
+      } else stop("Unknown type: ", type)
+
+      if (plot.type == 'hist') {
+        gg <- ggplot(data.frame(var=scores), aes(x=scores)) + geom_histogram() +
+          xlab(name) + self$plot.theme
+      } else if (plot.type == 'embedding') {
+        if (!is.null(cutoff)) {
+          scores <- scores[abs(scores) > cutoff]
+        }
+
+        if (dens.res$method == 'graph') {
+          gg <- self$plotEmbedding(colors=scores, plot.na=FALSE, legend.title=name, ...)
+        } else {
+          gg <- dens.res %$% data.frame(density.emb, z=scores) %>%
+            plotDensityKde(bins=dens.res$bins, plot.theme=self$plot.theme, ...)
+        }
+
+      } else stop("Unknown plot.type: ", plot.type)
+
+      return(gg)
+    },
 
     #' @description estimate differential cell density
     #' @param type method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);

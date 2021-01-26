@@ -231,12 +231,11 @@ estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, n.top.genes 
   # Estimate ontologies
   if(type=="DO") {
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
-    res <- sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(
+    res <- list(res = sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(
       lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])], DOSE::enrichDO,
              universe=de.gene.ids[[id]][["universe"]], qvalueCutoff=qvalue.cutoff, ...)
       ), n.cores=1, progress=verbose) %>%
-      setNames(names(de.gene.ids))
-    res <- list(res=res)
+      setNames(names(de.gene.ids)))
   } else if(type=="GO") {
     if(verbose) cat("Estimating enriched ontologies ... \n")
     ont.list <- sccore:::plapply(names(de.gene.ids), function(id) suppressWarnings(
@@ -287,7 +286,7 @@ estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, n.top.genes 
 preparePlotData <- function(ont.res, type, p.adj, min.genes) {
   dir.names <- c("down", "up", "all")
 
-  if(type == "DO") { # Functionality needs check
+  if(type == "DO") {
     # Split into fractions
     ont.res <- dir.names %>%
       lapply(function(x) lapply(ont.res, `[[`, x)) %>%
@@ -297,15 +296,13 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
     # Extract results
     ont.res %<>% lapply(lapply, function(x) if(length(x)) x@result else x)
 
-    ### TODO: Check functionality of prep for filter
     # Prep for filter
     ont.res %<>%
       names() %>%
-      lapply(function(ct) {
-        lapply(ont.res[[ct]] %>% names(), function(ont) {
-          dplyr::mutate(ont.res[[ct]][[ont]], Type = ont)
-        }) %>% setNames(ont.res[[ct]] %>% names()) %>%
-          dplyr::bind_rows()
+      lapply(function(dir) {
+        lapply(ont.res[[dir]] %>% names(), function(ct) {
+          dplyr::mutate(ont.res[[dir]][[ct]], Type = "DO")
+        }) %>% setNames(ont.res[[dir]] %>% names())
       }) %>% setNames(ont.res %>% names())
 
     # Filter by p.adj

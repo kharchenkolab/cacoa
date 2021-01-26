@@ -1380,15 +1380,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
 
     #' @description estimate differential cell density
-    #' @param method density estimation method (graph or ked)
-    #' @param col color palettes,  default is c('blue','white','red')
     #' @param type method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);
-    #' @param contours specify cell types for contour, multiple cell types are also supported
-    #' @param contour.color color for contour line
-    #' @param z.cutoff absolute z score cutoff
-    #' @param contour.conf confidence interval of contour
+    #' @param adjust.pvalues whether to adjust Z-scores for multiple comparison using BH method (default: TRUE)
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    estimateDiffCellDensity=function(type='subtract', z.cutoff=NULL, adjust.pvalues=TRUE, name='cell.density', verbose=self$verbose){
+    estimateDiffCellDensity=function(type='subtract', adjust.pvalues=TRUE, name='cell.density', verbose=self$verbose){
       dens.res <- private$getResults(name, 'estimateCellDensity')
       density.mat <- dens.res$density.mat
       if (dens.res$method == 'kde'){
@@ -1396,7 +1391,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       scores <- diffCellDensity(density.mat, self$sample.groups, ref.level=self$ref.level, target.level=self$target.level,
-                                type=type, z.cutoff=z.cutoff, adjust.pvalues=adjust.pvalues, verbose=verbose)
+                                type=type, adjust.pvalues=adjust.pvalues, verbose=verbose)
 
       self$test.results[[name]]$diff[[type]] <- scores
 
@@ -1404,16 +1399,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description estimate differential cell density
-    #' @param method density estimation method (graph or ked)
-    #' @param col color palettes,  default is c('blue','white','red')
+    #' @param palette color palette, default is c('blue','white','red')
     #' @param type method to calculate differential cell density; t.test, wilcox or subtract (target subtract ref density);
-    #' @param contours specify cell types for contour, multiple cell types are also supported
-    #' @param contour.color color for contour line
-    #' @param z.cutoff absolute z score cutoff
-    #' @param contour.conf confidence interval of contour
+    #' @param contours specify cell types for contour, multiple cell types are also supported (default: NULL)
+    #' @param contour.color color for contour line (default: 'black')
+    #' @param z.cutoff absolute z score cutoff (default: NULL)
+    #' @param contour.conf confidence interval of contour (default: '10%')
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    plotDiffCellDensity=function(type='subtract', name='cell.density', size=0.2, palette=colorRampPalette(c('blue','white','red')),
-                                 contours=NULL, contour.color='black', contour.conf='10%', ...){
+    plotDiffCellDensity=function(type='subtract', name='cell.density', size=0.2, z.cutoff=NULL, palette=colorRampPalette(c('blue','white','red')),
+                                 contours=NULL, contour.color='black', contour.conf='10%', plot.na=FALSE, ...){
       private$checkCellEmbedding()
       dens.res <- private$getResults(name, 'estimateCellDensity')
       scores <- dens.res$diff[[type]]
@@ -1434,8 +1428,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       density.mat <- dens.res$density.mat[names(scores),]
       density.emb <- density.emb[names(scores),]
 
+      if (!is.null(z.cutoff)) {
+        scores %<>% .[abs(.) >= z.cutoff]
+      }
+
       leg.title <- if (type == 'subtract') 'Prop. change' else 'Z-score'
-      gg <- self$plotEmbedding(density.emb, colors=scores, size=size, legend.title=leg.title, palette=palette, midpoint=0, ...)
+      gg <- self$plotEmbedding(density.emb, colors=scores, size=size, legend.title=leg.title, palette=palette, midpoint=0, plot.na=plot.na, ...)
 
       if(!is.null(contours)){
         gg <- gg + private$getDensityContours(groups=contours, conf=contour.conf, color=contour.color)

@@ -138,7 +138,7 @@ adjustPvalueScores <- function(scores) {
 ##' @param type method to calculate differential cell density of each bin; subtract: target density minus ref density; entropy: estimated kl divergence entropy between sample groups ; t.test: zscore of t-test,
 ##' global variance is setting for t.test;
 diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level, type = 'subtract',
-                            z.cutoff = NULL, adjust.pvalues=TRUE, verbose=TRUE, n.permutations=200){
+                            adjust.pvalues=TRUE, verbose=TRUE, n.permutations=200){
   nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
   nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
 
@@ -169,10 +169,6 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
   } else stop("Unknown method: ", type)
 
   if((type != 'subtract') && adjust.pvalues) score %<>% adjustPvalueScores()
-
-  if (!is.null(z.cutoff)) {
-    score[abs(score) < z.cutoff] <- 0
-  }
 
   return(score)
 }

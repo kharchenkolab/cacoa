@@ -5,13 +5,8 @@
 ##' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 ##' @param bins number of bins for density estimation, default 400
 estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, expansion.mult=0.05){
-  if (!requireNamespace("preprocessCore", quietly = TRUE)) {
-    stop("You have to install preprocessCore package from Bioconductor to do quantile normlization ")
-  }
+  checkPackageInstalled('preprocessCore', bioc=TRUE, details="for KDE estimation")
 
-  if (!requireNamespace("MASS", quietly = TRUE)) {
-    stop("You have to install MASS package to estimate density ")
-  }
   lims <- as.numeric(apply(emb,2,function(x) ggplot2:::expand_limits_continuous(range(x),expansion(mult=expansion.mult))))
 
   cname <- intersect(names(sample.per.cell), rownames(emb))
@@ -155,8 +150,7 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
     fc <- rowMeans(density.mat[,nt]) - rowMeans(density.mat[,nr])
     score <- zstat * sign(fc)
   } else if (type == 'permutation') {
-    if (!requireNamespace("robustbase", quietly=TRUE))
-      stop("robustbase package must be installed to run this function")
+    checkPackageInstalled("robustbase", "install.packages('robustbase')", details="for `type='permutation'`")
 
     density.mat <- t(density.mat)
     dm.shuffled <- density.mat

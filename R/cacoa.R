@@ -742,7 +742,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param p.adj Cut-off for adj. P values (default: 0.05)
     #' @return List of families and ontology data per cell type
     estimateOntologyFamilies=function(type = "GO", p.adj = 0.05) {
-      if (!requireNamespace("GOfuncR", quietly = TRUE)) stop("You need 'GOfuncR' to perform the ontology family analysis.")
+      checkPackageInstalled("GOfuncR", bioc=TRUE)
       if(!type %in% c("GO","DO","GSEA")) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
 
       # TODO: Test DO
@@ -918,7 +918,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @return A ggplot2 object
     plotOntology = function(cell.subgroups, plot = "dot", genes = "up", type = "GO", subtype = "BP", n = 20, p.adj = 0.05, min.genes = 1, ...) {
       # Checks
-      if (!requireNamespace("enrichplot", quietly = TRUE)) stop("You need 'enrichplot' to plot.")
+      checkPackageInstalled("enrichplot", bioc=TRUE)
       if(is.null(type) || (!type %in% c("GO","DO","GSEA"))) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
       if(is.null(subtype) || (!subtype %in% c("BP","CC","MF"))) stop("'subtype' must be 'BP', 'CC', or 'MF'.")
       if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
@@ -1157,12 +1157,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     plotOntologyFamily=function(type = "GO", cell.subgroups, family, genes = "up", subtype = "BP", plot.type = "complete", show.ids = FALSE,
                                 string.length=18, legend.label.size = 1, legend.position = "topright", verbose = self$verbose, n.cores = self$n.cores) {
       #Checks
-      if (!requireNamespace("GOfuncR", quietly = TRUE))
-        stop("You need 'GOfuncR' to plot ontology families. Use `BiocManager::install('GOfuncR')`.")
-      if (!requireNamespace("graph", quietly = TRUE))
-        stop("You need 'graph' to plot ontology families. Use `BiocManager::install('graph')`.")
-      if (!requireNamespace("Rgraphviz", quietly = TRUE))
-        stop("You need 'Rgraphviz' to plot ontology families. Use `BiocManager::install('Rgraphviz')`.")
+      checkPackageInstalled(c("GOfuncR", "graph", "Rgraphviz"), bioc=TRUE)
 
       if(!is.numeric(family)) stop("'family' must be numeric.")
       if(!is.null(plot.type) && !plot.type %in% c("complete","dense","minimal")) stop("'plot.type' must be 'complete', 'dense', or 'minimal'.")
@@ -1487,8 +1482,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       dfm <- Reduce(`+`, df) / length(df)
 
       if (method == 'tSNE'){
-        if (!requireNamespace("Rtsne", quietly = TRUE))
-          stop("You have to install 'Rtsne' package to perform tSNE visualization")
+        checkPackageInstalled('Rtsne', cran=TRUE, details='for `method="tSNE"`')
 
         xde <- Rtsne::Rtsne(dfm, is_distance = TRUE, perplexity = perplexity, max_iter = max_iter)$Y
       } else if (method == 'MDS') {
@@ -1631,8 +1625,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #'     the programme usin fabia biclustering.
     #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
     estimateGeneProgrammes = function(n.top.genes=NULL, n.programmes=15, gene.selection="change", name="gene.programmes", ...) {
-      if (!requireNamespace("fabia", quietly=TRUE))
-        stop("fabia package must be installed to run this function")
+      checkPackageInstalled('Rtsne', bioc=TRUE)
 
       z.scores <- private$getResults("cluster.free.z.smoothed", "smoothClusterFreeZScores")
       if (!is.null(n.top.genes)) {

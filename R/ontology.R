@@ -17,8 +17,8 @@ NULL
 #' @export
 prepareOntologyData <- function(cms, de.raw, cell.groups, org.db, p.adj = 1, expr.cutoff = 0.05, universe = NULL, transposed = T,  verbose = T, n.cores = 1) {
   # Checks
-  if (!requireNamespace("clusterProfiler", quietly = TRUE)) stop("You need 'clusterProfiler' to perform ontology analysis.")
-  if(class(org.db) != "OrgDb") stop("'org.db' must be of class 'OrgDb'. Please input an organism database, e.g., org.Hs.eg.db for human data.")
+  checkPackageInstalled("clusterProfiler", bioc=TRUE)
+  if(!(class(org.db) %in% "OrgDb")) stop("'org.db' must be of class 'OrgDb'. Please input an organism database, e.g., org.Hs.eg.db for human data.")
 
   # Filter by p.adj and remove NA p-values
   de.filtered <- lapply(de.raw, function(df) {
@@ -198,7 +198,7 @@ ontologyListToDf <- function(ont.list) {
 #' @export
 estimateOntology <- function(type = "GO", org.db=NULL, de.gene.ids, n.top.genes = 5e2, go.environment = NULL, keep.gene.sets=FALSE, verbose=TRUE,
                              qvalue.cutoff=0.2, ...) {
-  if (!requireNamespace("DOSE", quietly = TRUE)) stop("You need 'DOSE' to perform ontology analysis.")
+  checkPackageInstalled("DOSE", bioc=TRUE)
 
   if(type %in% c("GO","DO")) {
     # Adjust to n.top.genes

@@ -8,9 +8,7 @@ NULL
 ##' @param ref.level Reference cluster level in 'sample.groups', e.g., ctrl, healthy, wt
 ##' @param cluster.sep.chr Character string of length 1 specifying a delimiter to separate cluster and app names
 validatePerCellTypeParams <- function(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr) {
-  if (!requireNamespace("DESeq2", quietly = TRUE)) {
-    stop("You have to install DESeq2 package to use differential expression")
-  }
+  checkPackageInstalled("DESeq2", bioc=TRUE)
 
   if ( is.null(cell.groups) ) stop('"cell.groups" must be specified');
   if ( is.null(sample.groups) ) stop('"sample.groups" must be specified')
@@ -98,7 +96,7 @@ addZScores <- function(df) {
 estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NULL, ref.level = NULL,
                            common.genes = FALSE, test="LRT", cooks.cutoff = FALSE, min.cell.count = 10,max.cell.count=Inf, independent.filtering = T,
                            n.cores = 1, cluster.sep.chr = "<!!>", return.matrix = T, verbose = T) {
-  
+
   validatePerCellTypeParams(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr)
 
   if(common.genes) {
@@ -135,7 +133,7 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
           y <- strpart(y, cluster.sep.chr, 1, fixed = TRUE)
           names(sample.groups)[unlist(lapply(sample.groups, function(x) any(x %in% y)))]})))
       )
-      
+
       if (!ref.level %in% levels(meta$group))  stop("The reference level is absent in this comparison")
       meta$group <- relevel(meta$group, ref = ref.level)
       if (length(unique(as.character(meta$group))) < 2)  stop("The cluster is not present in both conditions")
@@ -143,11 +141,11 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
       dds1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=~group)
       if(test=="LRT") {
         dds1 <- DESeq2::DESeq(dds1,test="LRT", reduced = ~ 1,quiet=T)
-      } else { # defaults to Wald 
+      } else { # defaults to Wald
         dds1 <- DESeq2::DESeq(dds1,quiet=T)
       }
       res1 <- DESeq2::results(dds1, cooksCutoff = cooks.cutoff, independentFiltering = independent.filtering) %>% as.data.frame
-      
+
       # add Z scores
       if(!is.na(res1[[1]][1])) {
         res1 <- addZScores(res1) %>%
@@ -291,41 +289,41 @@ saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.meta
 #' @param meta.info dataframe with possible covariates; for example, sex or age
 #' @param test DE method: deseq2, edgeR, wilcoxon, ttest
 #' @export
-estimatePerCellTypeDEmethods=function (raw.mats, 
-                                       cell.groups = NULL, 
-                                       s.groups = NULL, 
+estimatePerCellTypeDEmethods=function (raw.mats,
+                                       cell.groups = NULL,
+                                       s.groups = NULL,
                                        ref.level = NULL,
                                        target.level = NULL,
-                                       common.genes = F, 
-                                       cooks.cutoff = FALSE, 
-                                       min.cell.count = 10, 
+                                       common.genes = F,
+                                       cooks.cutoff = FALSE,
+                                       min.cell.count = 10,
                                        max.cell.count = Inf,
                                        independent.filtering = T,
-                                       n.cores = 4, 
-                                       cluster.sep.chr = "<!!>", 
-                                       return.matrix = T, 
-                                       verbose = T, 
-                                       useT=F, 
-                                       minmu=0.5, 
+                                       n.cores = 4,
+                                       cluster.sep.chr = "<!!>",
+                                       return.matrix = T,
+                                       verbose = T,
+                                       useT=F,
+                                       minmu=0.5,
                                        test='Wald',
                                        meta.info = NULL) {
-  
+
   validatePerCellTypeParams(raw.mats, cell.groups, s.groups, ref.level, cluster.sep.chr)
-  
+
   if(common.genes) {
     raw.mats <- rawMatricesWithCommonGenes(raw.mats, s.groups)
   } else {
     gene.union <- lapply(raw.mats, colnames) %>% Reduce(union, .)
     raw.mats <- sccore:::plapply(raw.mats, sccore:::extendMatrix, gene.union, n.cores = n.cores)
   }
-  
+
   aggr2 <- raw.mats %>%
     .[s.groups %>% unlist] %>% # Only consider samples in s.groups
     lapply(conos:::collapseCellsByType, groups=cell.groups, min.cell.count=min.cell.count, max.cell.count=max.cell.count) %>%
     .[sapply(., nrow) > 0] %>% # Remove empty samples due to min.cell.count
     rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
   mode(aggr2) <- 'integer'
-  
+
   # Adjust s.groups
   passed.samples <- strpart(colnames(aggr2), cluster.sep.chr, 1, fixed = TRUE) %>% unique()
   if(verbose) {
@@ -334,8 +332,8 @@ estimatePerCellTypeDEmethods=function (raw.mats,
     }
   }
   s.groups %<>% lapply(function(n) n[n %in% passed.samples])
-  
-  
+
+
   ## For every cell type get differential expression results
   de.res <- sccore::plapply( sccore::sn( levels(cell.groups) ), function(l) {
     tryCatch({
@@ -348,90 +346,90 @@ estimatePerCellTypeDEmethods=function (raw.mats,
           y <- strpart(y, cluster.sep.chr, 1, fixed = TRUE)
           names(s.groups)[unlist(lapply(s.groups, function(x) any(x %in% y)))]})))
       )
-      
+
       if (!ref.level %in% levels(meta$group))  stop("The reference level is absent in this comparison")
       meta$group <- relevel(meta$group, ref = ref.level)
       if (length(unique(as.character(meta$group))) < 2)  stop("The cluster is not present in both conditions")
-      
-      
-      
+
+
+
       ## External covariates
       if(is.null(meta.info)) {
         design.formula = as.formula('~ group')
       } else {
         design.formula = as.formula(paste('~ ',
-                                          paste(c(colnames(meta.info), 'group'), 
+                                          paste(c(colnames(meta.info), 'group'),
                                                 collapse=' + ')))
       }
-      
-      
-      
+
+
+
       if(grepl('deseq2', tolower(test))) {
         # ----- DESeq2 -----
-        
+
         test.name = 'Wald'
         if(grepl('lrt', tolower(strsplit(test, split = '\\.')[[1]][2]))) test.name = 'LRT'
-        
+
         if(test.name == 'Wald') {
           res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
             DESeq2::DESeq(quiet=T, test=test.name) %>%
             DESeq2::results(contrast=c('group', target.level, ref.level),
                             cooksCutoff = cooks.cutoff,
                             independentFiltering = independent.filtering) %>%
-            as.data.frame  
+            as.data.frame
         } else {
           res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
             DESeq2::DESeq(quiet=T, test=test.name, reduced = ~ 1) %>%
             DESeq2::results(contrast=c('group', target.level, ref.level),
                             cooksCutoff = cooks.cutoff,
                             independentFiltering = independent.filtering) %>%
-            as.data.frame  
+            as.data.frame
         }
-        
+
         # Avoid NA padj values
         res1$padj[is.na(res1$padj)] <- 1
-        
+
       } else if(tolower(test) == tolower('edgeR')) {
-        
+
         # ----- EdgeR -----
         design <- model.matrix(design.formula, meta)
-        
+
         qlf <- DGEList(cm, group = meta$group) %>%
           calcNormFactors() %>%
           estimateDisp(design = design) %>%
           glmQLFit(design = design) %>%
           glmQLFTest(coef=ncol(design))
-        
+
         res1 <- qlf$table %>% .[order(.$PValue),]
         colnames(res1) <- c("log2FoldChange","logCPM","stat","pvalue")
         res1$padj <- p.adjust(res1$pvalue, method = "BH")
-        
+
       } else if(tolower(test) == tolower('limma-voom')) {
-        
+
         mm <- model.matrix(design.formula, meta)
-        
+
         # cnts.norm <- DGEList(counts = cm) %>%
         #   edgeR::calcNormFactors() %>% cpm
         cnts.norm = cm
-        
+
         y <- voom(cnts.norm, mm, plot = F)
         fit <- lmFit(y, mm)
-        
+
         contr <- makeContrasts(paste(c('group', target.level), collapse = ''),
                                levels = colnames(coef(fit)))
-        
+
         tmp <- contrasts.fit(fit, contr)
         tmp <- eBayes(tmp)
-        
+
         res1 <- topTable(tmp, sort.by = "P", n = Inf)
         colnames(res1) <- c('log2FoldChange', 'AveExpr', 'stat', 'pvalue', 'padj', 'B')
-        
+
       } else if(grepl('wilcoxon', tolower(test)) || grepl('t-test', tolower(test))) {
         # Normalization
         tmp = strsplit(test, split = '\\.')
         test = tolower(tmp[[1]][1])
         normalization = tolower(tmp[[1]][2])
-        
+
         if(normalization == 'deseq2') {
           print('DESeq2 normalization')
           cnts.norm <- cm  %>%
@@ -446,7 +444,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
           # the default should be normalization by the number of molecules!
           cnts.norm <- prop.table(cm, 2) # Should it be multiplied by median(colSums(cm)) ?
         }
-        
+
         if(test == 'wilcoxon') {
           # Wilcoxon test
           res1 <- scran::pairwiseWilcox(cnts.norm, groups = meta$group)$statistics[[1]] %>%
@@ -457,19 +455,19 @@ estimatePerCellTypeDEmethods=function (raw.mats,
             data.frame() %>%
             setNames(c("AUC","pvalue","padj"))
         }
-        
-        
+
+
         res1$log2FoldChange <- apply(log(cnts.norm+1, base=2), 1, function(x) {
           mean(x[meta$group == target.level]) - mean(x[meta$group == ref.level])})
-        
+
       }
-      
+
       # add Z scores
       if(!is.na(res1[[1]][1])) {
         res1 <- addZScores(res1) %>%
           .[order(.$pvalue,decreasing=F),]
       }
-      
+
       if (return.matrix) {
         list(res = res1, cm = cm)
       }
@@ -478,8 +476,8 @@ estimatePerCellTypeDEmethods=function (raw.mats,
       }
     }, error = function(err) NA)
   }, n.cores = n.cores, progress=verbose) %>%  .[!sapply(., is.logical)]
-  
-  
+
+
   if(verbose) {
     dif <- setdiff(levels(cell.groups), names(de.res))
     if(length(dif) > 0) {
@@ -487,6 +485,6 @@ estimatePerCellTypeDEmethods=function (raw.mats,
       print(dif)
     }
   }
-  
+
   return(de.res)
 }

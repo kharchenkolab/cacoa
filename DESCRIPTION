@@ -18,6 +18,7 @@ Imports:
     ggplot2,
     ggpubr,
     ggrepel,
+    grDevices,
     igraph,
     jsonlite,
     ks,
@@ -51,6 +52,7 @@ Suggests:
     ggrastr (>= 0.1.7),
     GOfuncR,
     graph,
+    RColorBrewer,
     Rgraphviz,
     robustbase,
     Rtsne

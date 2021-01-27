@@ -2,6 +2,7 @@
 
 export(Cacoa)
 export(addZScores)
+export(brewerPalette)
 export(estimateExpressionShiftMagnitudes)
 export(estimateOntology)
 export(estimatePerCellTypeDE)

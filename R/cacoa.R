@@ -555,7 +555,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       p + self$plot.theme + theme(legend.position = "none") +
         theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1)) +
         labs(x='cell type', y='Jaccard index') +
-        ggtitle(paste0(cao$target.level, '. Top ', as.character(top.n.genes), ' genes'))
+        ggtitle(paste0(self$target.level, '. Top ', as.character(top.n.genes), ' genes'))
     },
 
     #' @description Plot number of significant DE genes as a function of number of cells
@@ -1199,6 +1199,33 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(gg)
     },
 
+    plotCellGroupAbundanceVariation=function(cell.groups=self$cell.groups, type='mad', rotate.xticks=TRUE, min.rel.abundance=0.05) {
+      n.cells.per.samp <- table(self$sample.per.cell)
+      vars.per.group <- cell.groups %>%
+        {split(names(.), .)} %>% sapply(function(ids) {
+          sample.fracs <- table(self$sample.per.cell[ids]) / n.cells.per.samp / length(ids)
+          if (type == 'mad') return(mad(sample.fracs))
+          if (type == 'sd') return(sd(sample.fracs))
+
+          is.missed <- sample.fracs %>% {. / mean(.) < min.rel.abundance}
+          if (type == 'sample.num') return(sum(is.missed))
+          if (type == 'sample.frac') return(mean(is.missed))
+          stop("Unknown type: ", type)
+        }) %>% {data.frame(var=., type=factor(names(.), levels=names(.)[order(.)]))}
+
+      gg <- ggplot(vars.per.group) +
+        geom_bar(aes(x=type, y=var), stat="identity") +
+        self$plot.theme +
+        scale_y_continuous(expand=c(0, 0), limits=c(0, max(vars.per.group$var) * 1.05), name=type) +
+        theme(axis.title.x=element_blank())
+
+      if (rotate.xticks) {
+        gg <- gg + theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5))
+      }
+
+      return(gg)
+    },
+
     #' @description Plot the cell numbers per sample
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
     #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
@@ -1322,7 +1349,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       res$density.mad <- res %$% {(apply(density.mat[,nt], 1, mad) + apply(density.mat[,nr], 1, mad))}
       res$density.sd <- res %$% {(apply(density.mat[,nt], 1, sd) + apply(density.mat[,nr], 1, sd))}
-      res$missed.sample.frac <- res$density.mat %>% {(. / rowMeans(.)) < 0.01} %>% rowMeans()
+      res$missed.sample.frac <- res$density.mat %>% {(. / rowMeans(.)) < 0.05} %>% rowMeans()
 
       self$test.results[[name]] <- res
 
@@ -1437,7 +1464,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param z.cutoff absolute z score cutoff (default: NULL)
     #' @param contour.conf confidence interval of contour (default: '10%')
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    plotDiffCellDensity=function(type='subtract', name='cell.density', size=0.2, z.cutoff=NULL, palette=colorRampPalette(c('blue','white','red')),
+    plotDiffCellDensity=function(type='subtract', name='cell.density', size=0.2, z.cutoff=NULL, palette=grDevices::colorRampPalette(c('blue','white','red')),
                                  contours=NULL, contour.color='black', contour.conf='10%', plot.na=FALSE, ...){
       private$checkCellEmbedding()
       dens.res <- private$getResults(name, 'estimateCellDensity')

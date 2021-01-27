@@ -9,6 +9,14 @@ theme_legend_position <- function(position) {
   theme(legend.position=position, legend.justification=position)
 }
 
+#' @export
+brewerPalette <- function(name, n=NULL, rev=TRUE) {
+  checkPackageInstalled("RColorBrewer", cran=TRUE)
+  if (is.null(n)) n <- RColorBrewer::brewer.pal.info[name,]$maxcolors
+  pal <- RColorBrewer::brewer.pal(n, name)
+  if (rev) pal <- rev(pal)
+  return(grDevices::colorRampPalette(pal))
+}
 
 #' @title Plot Number of Cells Regression
 #' @param n the regressed variable

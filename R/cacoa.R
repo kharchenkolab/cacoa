@@ -1373,7 +1373,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       cond.levels <- c(ref=self$ref.level, target=self$target.level)
       ps <- lapply(cond.levels, function(l) {
         if (dens.res$method =='graph') {
-          p <- self$plotEmbedding(colors=dens.res$density.fraction[[l]], size=size, title=l, show.legend=show.legend, ...)
+          p <- self$plotEmbedding(colors=dens.res$density.fraction[[l]], size=size, title=l, show.legend=show.legend,
+                                  legend.title='Proportion', ...)
         } else {# dens.res$method =='kde'
           condition.per.cell <- self$getConditionPerCell()
           lims <- dens.res$density.fraction %>% unlist() %>% range()

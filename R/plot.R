@@ -289,31 +289,25 @@ plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab
 }
 
 # TODO: Improve speed of this function. No need to check BP/MF/CC all the time
-reduceEdges <- function(edges, verbose = T, n.cores = 1) {
+reduceEdges <- function(edges, verbose=TRUE, n.cores = 1) {
   edges %>%
     pull(to) %>%
     unique() %>%
     plapply(function(x) {
       tmp.to <- edges[edges$to == x,]
 
-      if(class(tmp.to) == "data.frame") {
-        if(nrow(tmp.to) > 1) {
-          tmp.children <- sapply(tmp.to$from, function(parent.id) {
-            GOfuncR::get_child_nodes(parent.id)$child_go_id
-          })
+      if(!("data.frame" %in% class(tmp.to)) || nrow(tmp.to) == 0) return(NULL)
+      if(nrow(tmp.to) == 1) return(tmp.to)
 
-          idx <- sapply(1:(tmp.children %>% length()), function(id) {
-            any(tmp.children[-id] %>% names() %in% tmp.children[[id]])
-          })
+      tmp.children <- sapply(tmp.to$from, function(parent.id) {
+        GOfuncR::get_child_nodes(parent.id)$child_go_id
+      })
 
-          res <- tmp.to[!idx,]
-        } else if(nrow(tmp.to) == 1) {
-          res <- tmp.to
-        }
-      } else {
-        res <- NULL
-      }
-      return(res)
+      idx <- sapply(1:length(tmp.children), function(id) {
+        any(names(tmp.children[-id]) %in% tmp.children[[id]])
+      })
+
+      return(tmp.to[!idx,])
     }, progress = verbose, n.cores = n.cores) %>%
     .[!sapply(., is.null)] %>%
     bind_rows()
@@ -331,7 +325,8 @@ reduceEdges <- function(edges, verbose = T, n.cores = 1) {
 ##' @param verbose Print messages (default: T)
 ##' @param n.cores Number of cores to use (default: 1)
 ##' @return Rgraphviz object
-plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids = F, string.length=18, legend.label.size = 1, legend.position = "topright", verbose = T, n.cores = 1) {
+plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, string.length=18, legend.label.size = 1,
+                               legend.position="topright", verbose=TRUE, n.cores=1, reduce.edges=TRUE) {
   # Define nodes
   parent.ids <- sapply(fam, function(x) data[[x]]$parent_go_id) %>%
     unlist() %>%
@@ -344,15 +339,17 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids = F, 
 
   # Define edges
   edges <- lapply(nodes$label, function(y) {
-    data.frame(from=y, to=nodes$label[nodes$label %in% (GOfuncR::get_child_nodes(y)$child_go_id)])
+    child.nodes <- GOfuncR::get_child_nodes(y) %$% child_go_id[distance == 1]
+    to.nodes <- nodes$label[nodes$label %in% child.nodes]
+    if (length(to.nodes) == 0) return(data.frame())
+    data.frame(from=y, to=to.nodes)
   }) %>%
     bind_rows() %>%
     as.data.frame() %>%
     .[apply(., 1, function(x) x[1] != x[2]),] # Remove selves
 
   # Remove redundant inheritance
-  edges %<>%
-    reduceEdges(verbose = verbose, n.cores = n.cores)
+  if (reduce.edges) edges %<>% reduceEdges(verbose=verbose, n.cores=n.cores)
 
   # Minimize tree depending on plot.type
   if(plot.type == "dense") { # Plots all significanct terms and their 1st order relationships
@@ -431,4 +428,6 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids = F, 
          legend = c("P > 0.05","P < 0.05","P < 0.01","P < 0.001"),
          fill = c("white","mistyrose1","lightpink1","indianred2"),
          cex = legend.label.size)
+
+  return(p)
 }

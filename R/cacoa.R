@@ -1517,8 +1517,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       p.dist.info <- cluster.shifts$p.dist.info
       valid.comparisons <- cluster.shifts$valid.comparisons
       if (!joint) {
-        gg <- plotExpressionDistanceIndividual(p.dist.info, valid.comparisons, sample.groups=sample.groups, min.cells=min.cells,
-                                               show.significance=show.significance, plot.theme=self$plot.theme, palette=palette, ...)
+        df <- aggregateExpressionShiftMagnitudes(p.dist.info, valid.comparisons, sample.groups, min.cells=min.cells, comp.filter='==')
+        gg <- df %>% rename(group=Condition, variable=Type) %>%
+          plotCountBoxplotsPerType(y.lab="expression distance", y.expand=c(0, max(.$value) * 0.1),
+                                   show.significance=show.significance, plot.theme=self$plot.theme, palette=palette, ...)
       } else {
         gg <- plotExpressionDistanceJoint(p.dist.info, valid.comparisons, sample.groups=sample.groups, show.significance=show.significance,
                                           plot.theme=self$plot.theme, palette=palette, ...)

@@ -16,8 +16,7 @@
 estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cell.groups, dist='JS', within.group.normalization=TRUE,
                                               valid.comparisons=NULL, n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
                                               n.cores=1, verbose=FALSE, transposed.matrices=FALSE) {
-  if(!is.factor(sample.groups)) sample.groups <- as.factor(sample.groups)
-  sample.groups <- droplevels(na.omit(sample.groups))
+  sample.groups <- as.factor(sample.groups) %>% na.omit() %>% droplevels()
   if(length(levels(sample.groups))!=2) stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
 
   if (!transposed.matrices) {
@@ -27,43 +26,14 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
   common.genes <- Reduce(intersect, lapply(count.matrices, colnames))
   count.matrices %<>% lapply(`[`, , common.genes)
 
-  comp.matrix <- outer(sample.groups,sample.groups,'!='); diag(comp.matrix) <- FALSE
-
   # set up comparison mask
-  if(is.null(valid.comparisons)) {
-    # all cross-level pairs will be compared
-    valid.comparisons <- comp.matrix;
-  } else {
-    # clean up valid.comparisons
-    if(!all(rownames(valid.comparisons)==colnames(valid.comparisons))) stop('valid.comparisons must have the same row and column names')
-    valid.comparisons %<>% {. | t(.)} %>% .[rowSums(.) > 0, colSums(.) > 0]
-    # ensure that only valid.comp groups are in the sample.groups
-    sample.groups %<>% .[names(.) %in% c(rownames(valid.comparisons), colnames(valid.comparisons))] %>% droplevels()
-    if(length(levels(sample.groups))!=2) stop("insufficient number of levels in sample.groups after intersecting with valid.comparisons")
-
-    # intersect with the cross-level pairs
-    comp.matrix <- sample.groups %>% outer(.[rownames(valid.comparisons)], .[colnames(valid.comparisons)],'!=')
-    diag(comp.matrix) <- FALSE
-    valid.comparisons <- valid.comparisons & comp.matrix;
-    # reduce and check again
-    valid.comparisons <- valid.comparisons[rowSums(valid.comparisons)>0,colSums(valid.comparisons)>0]
-    sample.groups %<>% .[names(.) %in% c(rownames(valid.comparisons), colnames(valid.comparisons))] %>% droplevels()
-    if(length(levels(sample.groups))!=2) stop("insufficient number of levels in sample.groups after intersecting with valid.comparisons and sample.groups pairs")
-    if(verbose) cat('a total of',(nrow(which(valid.comparisons,arr.ind=T))/2),'comparisons left after intersecting with valid.comparisons and sample.group pairs\n')
-  }
-
-  if(within.group.normalization) {
-    control.matrix <- outer(sample.groups,sample.groups,'==');
-    valid.comparisons <- valid.comparisons | control.matrix[rownames(valid.comparisons),colnames(valid.comparisons)]
-  }
+  vc.res <- extractValidComparisons(valid.comparisons, sample.groups, within.group.normalization=within.group.normalization)
+  valid.comparisons <- vc.res$valid.comparisons; sample.groups <- vc.res$sample.groups
 
   # get a cell sample factor, restricted to the samples being contrasted
   cl <- lapply(count.matrices[names(sample.groups)], rownames)
   cl <- rep(names(cl), sapply(cl, length)) %>% setNames(unlist(cl)) %>%  as.factor()
-
-  # cell factor
-  cf <- cell.groups
-  cf <- cf[names(cf) %in% names(cl)]
+  cell.groups %<>% .[names(.) %in% names(cl)]
 
   if(is.null(n.cells)) {
     n.cells <- min(table(cf)) # use the size of the smallest group
@@ -71,71 +41,119 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
   }
 
   if(verbose) cat('running',n.subsamples,'subsamples using ',n.cores,'cores ...\n')
-  ctdml <- plapply(1:n.subsamples,function(i) {
-    # subsample cells
 
-    ## # draw cells without sample stratification - this can drop certain samples, particularly those with lower total cell numbers
-    ## cf <- tapply(names(cf),cf,function(x) {
-    ##   if(length(x)<=n.cells) { return(cf[x]) } else { setNames(rep(cf[x[1]],n.cells), sample(x,n.cells)) }
-    ## })
-
-    # calculate expected mean number of cells per sample and aim to sample that
-    n.cells.scaled <- max(min.cells,ceiling(n.cells/length(sample.groups)));
-    cf <- tapply(names(cf),list(cf,cl[names(cf)]),function(x) {
-      if(length(x)<=n.cells.scaled) { return(cf[x]) } else { setNames(rep(cf[x[1]],n.cells.scaled), sample(x,n.cells.scaled)) }
-    })
-
-    cf <- as.factor(setNames(unlist(lapply(cf,as.character)),unlist(lapply(cf,names))))
-
-    # table of sample types and cells
-    cct <- table(cf,cl[names(cf)])
-    caggr <- lapply(count.matrices, collapseCellsByType, groups=as.factor(cf), min.cell.count=1) %>%
-      .[names(sample.groups)]
-
-    # note: this is not efficient, as it will compare all samples on the two sides of the sample.groups
-    #       would be faster to go only through the valid comparisons
-    ctdm <- lapply(sccore:::sn(levels(cf)),function(ct) {
-      tcm <- na.omit(do.call(rbind,lapply(caggr,function(x) x[match(ct,rownames(x)),])))
-
-      # restrict to top expressed genes
-      if(n.top.genes<ncol(tcm)) tcm <- tcm[,rank(-colSums(tcm))>=n.top.genes]
-
-      if(dist=='JS') {
-        tcm <- t(tcm/pmax(1,rowSums(tcm)))
-        tcd <- pagoda2:::jsDist(tcm, ncores = 1); dimnames(tcd) <- list(colnames(tcm),colnames(tcm));
-      } else {
-        tcm <- log10(t(tcm/pmax(1,rowSums(tcm)))*1e3+1)
-        tcd <- 1-cor(tcm)
-        tcd[is.na(tcd)] <- 1;
-      }
-      # calculate how many cells there are
-      attr(tcd,'cc') <- cct[ct,colnames(tcm)]
-      tcd
-    })
-
+  n.cells.scaled <- max(min.cells, ceiling(n.cells / length(sample.groups)))
+  p.dist.info <- plapply(1:n.subsamples, function(i) {
+    subsamplePairwiseExpressionDistances(count.matrices, cl=cl, cell.groups=cell.groups, n.top.genes=n.top.genes,
+                                         sample.groups=sample.groups, n.cells.scaled=n.cells.scaled, dist=dist)
   },n.cores=n.cores, mc.preschedule=TRUE, progress=verbose)
 
   if(verbose) cat('calculating distances ... ')
-  df <- do.call(rbind,lapply(ctdml,function(ctdm) {
+  df <- aggregateExpressionShiftMagnitudes(p.dist.info, valid.comparisons, sample.groups, min.cells=min.cells,
+                                           within.group.normalization=within.group.normalization, comp.filter='!=') %>%
+    mutate(Type=factor(Type, levels=names(sort(tapply(value, Type, median))))) # sort cell types
+  if(verbose) cat('done!\n')
 
-    x <- lapply(ctdm,function(xm) {
-      nc <- attr(xm,'cc');
-      wm <- outer(nc,nc,FUN='pmin')
+  return(list(df=df, p.dist.info=p.dist.info, sample.groups=sample.groups, valid.comparisons=valid.comparisons))
+}
 
-      cross.factor <- outer(sample.groups[rownames(xm)],sample.groups[colnames(xm)],'!=');
+extractValidComparisons <- function(valid.comparisons, sample.groups, within.group.normalization) {
+  # set up comparison mask
+  if(is.null(valid.comparisons)) {
+    # all cross-level pairs will be compared
+    valid.comparisons <- outer(sample.groups, sample.groups, '!=')
+    diag(valid.comparisons) <- FALSE
+  } else {
+    # clean up valid.comparisons
+    if(!all(rownames(valid.comparisons) == colnames(valid.comparisons))) stop('valid.comparisons must have the same row and column names')
+    valid.comparisons %<>% {. | t(.)} %>% .[rowSums(.) > 0, colSums(.) > 0]
+    # ensure that only valid.comp groups are in the sample.groups
+    sample.groups %<>% .[names(.) %in% c(rownames(valid.comparisons), colnames(valid.comparisons))] %>% droplevels()
+    if(length(levels(sample.groups))!=2) stop("insufficient number of levels in sample.groups after intersecting with valid.comparisons")
+
+    # intersect with the cross-level pairs
+    comp.matrix <- sample.groups %>% outer(.[rownames(valid.comparisons)], .[colnames(valid.comparisons)], '!=')
+    diag(comp.matrix) <- FALSE
+    valid.comparisons <- valid.comparisons & comp.matrix;
+    # reduce and check again
+    valid.comparisons %<>% .[rowSums(.) > 0, colSums(.) > 0]
+    sample.groups %<>% .[names(.) %in% c(rownames(valid.comparisons), colnames(valid.comparisons))] %>% droplevels()
+    if(length(levels(sample.groups))!=2) stop("insufficient number of levels in sample.groups after intersecting with valid.comparisons and sample.groups pairs")
+    if(verbose) cat('a total of', (nrow(which(valid.comparisons, arr.ind=TRUE)) / 2), 'comparisons left after intersecting with valid.comparisons and sample.group pairs\n')
+  }
+
+  if(within.group.normalization) {
+    control.matrix <- outer(sample.groups, sample.groups, '==');
+    valid.comparisons <- valid.comparisons | control.matrix[rownames(valid.comparisons), colnames(valid.comparisons)]
+  }
+
+  return(list(valid.comparisons=valid.comparisons, sample.groups=sample.groups))
+}
+
+subsamplePairwiseExpressionDistances <- function(count.matrices, cl, cell.groups, sample.groups, n.cells.scaled,
+                                                 n.top.genes, dist) {
+  ## # draw cells without sample stratification - this can drop certain samples, particularly those with lower total cell numbers
+  ## cf <- tapply(names(cf),cf,function(x) {
+  ##   if(length(x)<=n.cells) { return(cf[x]) } else { setNames(rep(cf[x[1]],n.cells), sample(x,n.cells)) }
+  ## })
+
+  # calculate expected mean number of cells per sample and aim to sample that
+  cf <- tapply(names(cell.groups), list(cell.groups, cl[names(cell.groups)]),function(x) {
+    if(length(x)<=n.cells.scaled) { return(cell.groups[x]) } else { setNames(rep(cell.groups[x[1]], n.cells.scaled), sample(x, n.cells.scaled)) }
+  })
+
+  cf <- as.factor(setNames(unlist(lapply(cf,as.character)),unlist(lapply(cf,names))))
+
+  # table of sample types and cells
+  cct <- table(cf, cl[names(cf)])
+  caggr <- lapply(count.matrices, collapseCellsByType, groups=as.factor(cf), min.cell.count=1) %>%
+    .[names(sample.groups)]
+
+  # note: this is not efficient, as it will compare all samples on the two sides of the sample.groups
+  #       would be faster to go only through the valid comparisons
+  ctdm <- lapply(sccore:::sn(levels(cf)),function(ct) {
+    tcm <- na.omit(do.call(rbind,lapply(caggr,function(x) x[match(ct,rownames(x)),])))
+
+    # restrict to top expressed genes
+    if(n.top.genes<ncol(tcm)) tcm <- tcm[,rank(-colSums(tcm))>=n.top.genes]
+
+    if(dist=='JS') {
+      tcm <- t(tcm/pmax(1,rowSums(tcm)))
+      tcd <- pagoda2:::jsDist(tcm, ncores = 1); dimnames(tcd) <- list(colnames(tcm),colnames(tcm));
+    } else {
+      tcm <- log10(t(tcm/pmax(1,rowSums(tcm)))*1e3+1)
+      tcd <- 1-cor(tcm)
+      tcd[is.na(tcd)] <- 1;
+    }
+    # calculate how many cells there are
+    attr(tcd, 'n.cells') <- cct[ct, colnames(tcm)]
+    tcd
+  })
+
+  return(ctdm)
+}
+
+aggregateExpressionShiftMagnitudes <- function(p.dist.info, valid.comparisons, sample.groups, min.cells,
+                                               within.group.normalization=FALSE, comp.filter='!=') {
+  df <- do.call(rbind, lapply(p.dist.info, function(ctdm) {
+    x <- lapply(ctdm, function(xm) {
+      n.cells <- attr(xm, 'n.cells');
+      wm <- outer(n.cells, n.cells, FUN='pmin')
+
+      cross.factor <- outer(sample.groups[rownames(xm)], sample.groups[colnames(xm)], comp.filter);
       frm <- valid.comparisons[rownames(xm),colnames(xm)] & cross.factor
 
-      if(within.group.normalization) {
+      if (within.group.normalization) {
         frm.cont <- valid.comparisons[rownames(xm),colnames(xm)] & !cross.factor
         med.cont <- median(na.omit(xm[frm.cont]))
-        xm <- xm/med.cont
+        xm <- xm / med.cont
       }
 
       diag(xm) <- NA;
 
-      # restrict
+      # remove self pairs
       xm[!frm] <- NA;
-      xm[wm<min.cells] <- NA;
+      xm[wm < min.cells] <- NA;
       if(!any(!is.na(xm))) return(NULL);
       xmd <- na.omit(reshape2::melt(xm))
       wm[is.na(xm)] <- NA;
@@ -143,68 +161,17 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
       return(xmd);
     })
 
-    x <- x[!unlist(lapply(x,is.null))]
-    df <- do.call(rbind,lapply(sccore:::sn(names(x)),function(n) { z <- x[[n]]; z$Type <- n; z }))
-    df$patient <- df$Var1
+    x <- x[!sapply(x, is.null)]
+    df <- names(x) %>% lapply(function(n) cbind(x[[n]], Type=n)) %>% do.call(rbind, .)
     df
   }))
 
-  # median across pairs
-  df <- do.call(rbind,tapply(1:nrow(df),paste(df$Var1,df$Var2,df$Type,sep='!!'),function(ii) {
-    ndf <- data.frame(df[ii[1],,drop=F]);
-    ndf$value <- median(df$value[ii])
-    ndf$n <- median(df$n[ii])
-    ndf
-  }))
+  df %<>% group_by(Var1, Var2, Type) %>%
+    summarize(value=median(value), n=median(n)) %>%
+    mutate(Condition=sample.groups[as.character(Var1)]) %>%
+    na.omit()
 
-  # sort cell types
-  df$Type <- factor(df$Type,levels=names(sort(tapply(df$value,as.factor(df$Type),median))))
-
-  if(verbose) cat('done!\n')
-  return(list(df=df, p.dist.info=ctdml, sample.groups=sample.groups, valid.comparisons=valid.comparisons))
-}
-
-
-plotExpressionDistanceIndividual <- function(p.dist.info, valid.comparisons, sample.groups=NULL, min.cells=10, ...) {
-  df <- do.call(rbind,lapply(p.dist.info, function(ctdm) {
-    x <- lapply(ctdm, function(xm) {
-      nc <- attr(xm, 'cc')
-      wm <- outer(nc, nc, FUN = 'pmin')
-      cross.factor <- outer(sample.groups[rownames(xm)], sample.groups[colnames(xm)], '==')
-      frm <- valid.comparisons[rownames(xm), colnames(xm)] & cross.factor
-      diag(xm) <- NA
-      # remove self pairs
-      xm[!frm] <- NA
-      xm[wm < min.cells] <- NA
-      if (!any(!is.na(xm)))
-        return(NULL)
-      xmd <- na.omit(reshape2::melt(xm))
-      wm[is.na(xm)] <- NA
-      xmd$n <- na.omit(reshape2::melt(wm))$value
-      return(xmd)
-    })
-    x <- x[!unlist(lapply(x, is.null))]
-    df <- do.call(rbind, lapply(sccore:::sn(names(x)), function(n) {
-      z <- x[[n]]
-      z$type <- n
-      z
-    }))
-    df$patient <- df$Var1
-    df$type1 <- sample.groups[df$Var1]
-    df$type2 <- sample.groups[df$Var2]
-    df
-  }))
-
-  # median across pairs
-  df <- tapply(1:nrow(df), paste(df$Var1, df$Var2, df$type, sep = '!!'), function(ii) {
-    data.frame(df[ii[1],, drop = F]) %>%
-      mutate(value=median(df$value[ii]), n=median(df$n[ii]))
-  }) %>%
-    do.call(rbind, .) %>% rename(group=type1, variable=type) %>% na.omit()
-
-  gg <- plotCountBoxplotsPerType(df, y.lab="expression distance", y.expand=c(0, max(df$value) * 0.1), ...)
-
-  return(gg)
+  return(df)
 }
 
 prepareJointExpressionDistance <- function(p.dist.info, valid.comparisons=NULL, sample.groups=NULL) {
@@ -216,13 +183,13 @@ prepareJointExpressionDistance <- function(p.dist.info, valid.comparisons=NULL, 
       y <- matrix(0,nrow=length(commoncell),ncol=length(commoncell)); rownames(y) <- colnames(y) <- commoncell; # can set the missing entries to zero, as they will carry zero weights
       y[rownames(x),colnames(x)] <- x;
       ycct <- setNames(rep(0,length(commoncell)), commoncell);
-      ycct[colnames(x)] <- attr(x,'cc')
-      attr(y, 'cc') <- ycct
+      ycct[colnames(x)] <- attr(x, 'n.cells')
+      attr(y, 'n.cells') <- ycct
       y
     }) # reform the matrix to make sure all cell type have the same dimensions
 
     x <- abind::abind(lapply(ctdm, function(x) {
-      nc <- attr(x, 'cc')
+      nc <- attr(x, 'n.cells')
       #wm <- (outer(nc,nc,FUN='pmin'))
       wm <- sqrt(outer(nc, nc, FUN = 'pmin'))
       return(x * wm)
@@ -230,7 +197,7 @@ prepareJointExpressionDistance <- function(p.dist.info, valid.comparisons=NULL, 
 
     # just the weights (for total sum of weights normalization)
     y <- abind::abind(lapply(ctdm, function(x) {
-      nc <- attr(x, 'cc')
+      nc <- attr(x, 'n.cells')
       sqrt(outer(nc, nc, FUN = 'pmin'))
     }), along = 3)
 

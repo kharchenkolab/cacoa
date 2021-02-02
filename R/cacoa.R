@@ -1506,25 +1506,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @title Plot inter-sample expression distance
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
     #' @param name Test results to plot (default=expression.shifts)
-    #' @param cell.groups Named factor with cell names defining groups/clusters (default: stored $cell.groups vector)
     #' @param joint whether to show joint boxplot with the expression distance weighed by the sizes of cell types (default: TRUE), or show distances for each individual cell type
     #' @param show.significance whether to show statistical significance between sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
     #' @param ... other plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    plotExpressionDistance = function(name='expression.shifts', sample.groups=self$sample.groups, joint=FALSE,
-                                      min.cells=10, palette=self$sample.groups.palette, show.significance=FALSE, ...) {
+    plotExpressionDistance = function(name='expression.shifts', joint=FALSE, min.cells=10, palette=self$sample.groups.palette, show.significance=FALSE, ...) {
       cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
-      p.dist.info <- cluster.shifts$p.dist.info
-      valid.comparisons <- cluster.shifts$valid.comparisons
       if (!joint) {
-        df <- aggregateExpressionShiftMagnitudes(p.dist.info, valid.comparisons, sample.groups, min.cells=min.cells, comp.filter='==')
-        gg <- df %>% rename(group=Condition, variable=Type) %>%
-          plotCountBoxplotsPerType(y.lab="expression distance", y.expand=c(0, max(.$value) * 0.1),
-                                   show.significance=show.significance, plot.theme=self$plot.theme, palette=palette, ...)
+        df <- cluster.shifts %$%
+          aggregateExpressionShiftMagnitudes(p.dist.info, valid.comparisons, sample.groups, min.cells=min.cells, comp.filter='==') %>%
+          rename(group=Condition, variable=Type)
+        plot.theme <- self$plot.theme
       } else {
-        gg <- plotExpressionDistanceJoint(p.dist.info, valid.comparisons, sample.groups=sample.groups, show.significance=show.significance,
-                                          plot.theme=self$plot.theme, palette=palette, ...)
+        df <- cluster.shifts %$%
+          prepareJointExpressionDistance(p.dist.info, valid.comparisons=valid.comparisons, sample.groups=sample.groups) %>%
+          do.call(rbind, .) %>% group_by(Var1, Var2, type1) %>%
+          summarize(value=median(value)) %>%
+          mutate(group=type1, variable="")
+        plot.theme <- self$plot.theme +
+          theme(axis.title.x=element_blank(), axis.text.x=element_blank(),
+                axis.ticks.x=element_blank(), panel.grid.major.x=element_blank())
       }
+
+      gg <- plotCountBoxplotsPerType(df, y.lab="expression distance", y.expand=c(0, max(df$value) * 0.1),
+                                     show.significance=show.significance, plot.theme=plot.theme, palette=palette, ...)
 
       return(gg)
     },

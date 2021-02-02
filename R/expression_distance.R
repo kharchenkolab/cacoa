@@ -224,23 +224,3 @@ prepareJointExpressionDistance <- function(p.dist.info, valid.comparisons=NULL, 
 
   return(df)
 }
-
-plotExpressionDistanceJoint <- function(p.dist.info, valid.comparisons, sample.groups=NULL, ...) {
-  df <- prepareJointExpressionDistance(p.dist.info, valid.comparisons=valid.comparisons, sample.groups=sample.groups) %>%
-    do.call(rbind, .)
-  df2 <- do.call(rbind, tapply(1:nrow(df), paste(df$Var1, df$Var2, sep = '!!'), function(ii) {
-    ndf <- data.frame(df[ii[1],, drop = FALSE])
-    ndf$value <- median(df$value[ii])
-    ndf$n <- median(df$n[ii])
-    ndf
-  }))
-
-  df2$group <- df2$type1
-  df2$variable <- ""
-
-  gg <- plotCountBoxplotsPerType(df2, y.lab="expression distance", y.expand=c(0, max(df$value) * 0.1), ...) +
-    theme(axis.title.x=element_blank(), axis.text.x=element_blank(),
-          axis.ticks.x=element_blank(), panel.grid.major.x=element_blank())
-
-  return(gg)
-}

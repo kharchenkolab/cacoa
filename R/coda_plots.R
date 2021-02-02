@@ -209,7 +209,7 @@ plotCellLoadings <- function(cda, ordering, signif.threshold, alpha, palette, sh
   p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
     geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = alpha, size=1) +
     geom_hline(yintercept = 0, color = "gray37") +
-    coord_flip() + xlab('') + ylab('') + plot.theme + theme(legend.position = "none") +
+    coord_flip() + xlab('') + ylab('loadings') + plot.theme + theme(legend.position = "none") +
     scale_x_discrete(position = "top") + ylim(-ymax, ymax)
 
   # Add text

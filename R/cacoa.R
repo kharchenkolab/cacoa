@@ -315,33 +315,33 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     ### Differential expression
 
-    #' @description Estimate differential gene expression per cell type between conditions
-    #' @param cell.groups factor specifying cell types (default=NULL)
-    #' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
-    #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
-    #' @param common.genes Only investigate common genes across cell groups (default=F)
-    #' @param test which DESeq2 test to use (options: "LRT" (default), "Wald")
-    #' @param cooks.cutoff cooksCutoff for DESeq2 (default=FALSE)
-    #' @param min.cell.count minimum number of cells that need to be present in a given cell type in a given sample in order to be taken into account (default=10)
-    #' @param max.cell.count maximal number of cells per cluster per sample to include in a comparison (useful for comparing the number of DE genes between cell types) (default: Inf)
-    #' @param independent.filtering independentFiltering parameter for DESeq2 (default=FALSE)
-    #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-    #' @param return.matrix Return merged matrix of results (default=TRUE)
-    #' @param name slot in which to save the results (default: 'de')
-    #' @return A list of DE genes
-    estimatePerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level, common.genes = FALSE, n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, max.cell.count= Inf, test='Wald', independent.filtering = FALSE, cluster.sep.chr = "<!!>", return.matrix = T, verbose=self$verbose, name ='de') {
-      if(!is.list(sample.groups)) {
-        sample.groups <- list(names(sample.groups[sample.groups == ref.level]),
-                              names(sample.groups[sample.groups != ref.level])) %>%
-          setNames(c(ref.level, self$target.level))
-      }
-
-      self$test.results[[name]] <- extractRawCountMatrices(self$data.object, transposed=T) %>%
-        estimatePerCellTypeDE(cell.groups = cell.groups, sample.groups = sample.groups, ref.level = ref.level, n.cores = n.cores,
-                              cooks.cutoff = cooks.cutoff, min.cell.count = min.cell.count, max.cell.count=max.cell.count, test=test, independent.filtering = independent.filtering,
-                              cluster.sep.chr = cluster.sep.chr, return.matrix = return.matrix)
-      return(invisible(self$test.results[[name]]))
-    },
+    # #' @description Estimate differential gene expression per cell type between conditions
+    # #' @param cell.groups factor specifying cell types (default=NULL)
+    # #' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
+    # #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
+    # #' @param common.genes Only investigate common genes across cell groups (default=F)
+    # #' @param test which DESeq2 test to use (options: "LRT" (default), "Wald")
+    # #' @param cooks.cutoff cooksCutoff for DESeq2 (default=FALSE)
+    # #' @param min.cell.count minimum number of cells that need to be present in a given cell type in a given sample in order to be taken into account (default=10)
+    # #' @param max.cell.count maximal number of cells per cluster per sample to include in a comparison (useful for comparing the number of DE genes between cell types) (default: Inf)
+    # #' @param independent.filtering independentFiltering parameter for DESeq2 (default=FALSE)
+    # #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
+    # #' @param return.matrix Return merged matrix of results (default=TRUE)
+    # #' @param name slot in which to save the results (default: 'de')
+    # #' @return A list of DE genes
+    # estimatePerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level, common.genes = FALSE, n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, max.cell.count= Inf, test='Wald', independent.filtering = FALSE, cluster.sep.chr = "<!!>", return.matrix = T, verbose=self$verbose, name ='de') {
+    #   if(!is.list(sample.groups)) {
+    #     sample.groups <- list(names(sample.groups[sample.groups == ref.level]),
+    #                           names(sample.groups[sample.groups != ref.level])) %>%
+    #       setNames(c(ref.level, self$target.level))
+    #   }
+    # 
+    #   self$test.results[[name]] <- extractRawCountMatrices(self$data.object, transposed=T) %>%
+    #     estimatePerCellTypeDE(cell.groups = cell.groups, sample.groups = sample.groups, ref.level = ref.level, n.cores = n.cores,
+    #                           cooks.cutoff = cooks.cutoff, min.cell.count = min.cell.count, max.cell.count=max.cell.count, test=test, independent.filtering = independent.filtering,
+    #                           cluster.sep.chr = cluster.sep.chr, return.matrix = return.matrix)
+    #   return(invisible(self$test.results[[name]]))
+    # },
 
     #' @description Estimate differential gene expression per cell type between conditions
     #' @param cell.groups factor specifying cell types (default=NULL)
@@ -358,7 +358,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param resampling.method which resampling method should be used "loo" for leave-one-out or "bootstrap", (default:NULL no resampling)
     #' @param name slot in which to save the results (default: 'de')
     #' @return A list of DE genes
-    estimatePerCellTypeDEnew=function(cell.groups = self$cell.groups,
+    estimatePerCellTypeDE=function(cell.groups = self$cell.groups,
                                       sample.groups = self$sample.groups,
                                       ref.level = self$ref.level,
                                       target.level = self$target.level,

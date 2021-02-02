@@ -161,12 +161,12 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
   df$Type <- factor(df$Type,levels=names(sort(tapply(df$value,as.factor(df$Type),median))))
 
   if(verbose) cat('done!\n')
-  return(list(df=df, ctdml=ctdml, sample.groups=sample.groups, valid.comparisons=valid.comparisons))
+  return(list(df=df, p.dist.info=ctdml, sample.groups=sample.groups, valid.comparisons=valid.comparisons))
 }
 
 
-plotExpressionDistanceIndividual <- function(ctdml, valid.comparisons, sample.groups=NULL, min.cells=10, ...) {
-  df <- do.call(rbind,lapply(ctdml,function(ctdm) {
+plotExpressionDistanceIndividual <- function(p.dist.info, valid.comparisons, sample.groups=NULL, min.cells=10, ...) {
+  df <- do.call(rbind,lapply(p.dist.info, function(ctdm) {
     x <- lapply(ctdm, function(xm) {
       nc <- attr(xm, 'cc')
       wm <- outer(nc, nc, FUN = 'pmin')
@@ -207,8 +207,8 @@ plotExpressionDistanceIndividual <- function(ctdml, valid.comparisons, sample.gr
   return(gg)
 }
 
-prepareJointExpressionDistance <- function(ctdml, valid.comparisons=NULL, sample.groups=NULL) {
-  df <- lapply(ctdml, function(ctdm) {
+prepareJointExpressionDistance <- function(p.dist.info, valid.comparisons=NULL, sample.groups=NULL) {
+  df <- lapply(p.dist.info, function(ctdm) {
     # bring to a common set of cell types
     commoncell <- unique( unlist( lapply(ctdm, function(x) colnames(x)) ))
 
@@ -258,8 +258,8 @@ prepareJointExpressionDistance <- function(ctdml, valid.comparisons=NULL, sample
   return(df)
 }
 
-plotExpressionDistanceJoint <- function(ctdml, valid.comparisons, sample.groups=NULL, ...) {
-  df <- prepareJointExpressionDistance(ctdml, valid.comparisons=valid.comparisons, sample.groups=sample.groups) %>%
+plotExpressionDistanceJoint <- function(p.dist.info, valid.comparisons, sample.groups=NULL, ...) {
+  df <- prepareJointExpressionDistance(p.dist.info, valid.comparisons=valid.comparisons, sample.groups=sample.groups) %>%
     do.call(rbind, .)
   df2 <- do.call(rbind, tapply(1:nrow(df), paste(df$Var1, df$Var2, sep = '!!'), function(ii) {
     ndf <- data.frame(df[ii[1],, drop = FALSE])

@@ -100,9 +100,9 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 #' @param color.range Range for filling colors
 #' @return A ggplot2 object
 #' @export
-plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, legend.position="right",
+plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=NULL, legend.position="right",
                         legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
-                        color.range=NULL, plot.theme=theme_get()) {
+                        color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL) {
   if (is.null(color.range)) {
     color.range <- c(min(0, min(df)), max(df))
   }
@@ -119,25 +119,25 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
     col.order <- colnames(df)
   }
 
-  df %<>% tibble::as_tibble(rownames="Pathway") %>%
-    reshape2::melt(id.vars="Pathway", variable.name="Group", value.name="p.value")
+  df %<>% tibble::as_tibble(rownames="G1") %>%
+    reshape2::melt(id.vars="G1", variable.name="G2", value.name="value")
 
   if (!is.logical(row.order)) {
-    df %<>% dplyr::mutate(Pathway=factor(Pathway, levels=row.order))
+    df %<>% dplyr::mutate(G1=factor(G1, levels=row.order))
   }
 
   if (!is.logical(col.order)) {
-    df %<>% dplyr::mutate(Group=factor(Group, levels=col.order))
+    df %<>% dplyr::mutate(G2=factor(G2, levels=col.order))
   }
 
   if (is.null(color.per.group)) {
     color.per.group <- "black"
   } else {
-    color.per.group <- color.per.group[levels(df$Group)]
+    color.per.group <- color.per.group[levels(df$G2)]
   }
 
-  df$p.value %<>% pmax(color.range[1]) %>% pmin(color.range[2])
-  gg <- ggplot(df) + geom_tile(aes(x=Group, y=Pathway, fill=p.value), colour = "grey50") +
+  df$value %<>% pmax(color.range[1]) %>% pmin(color.range[2])
+  gg <- ggplot(df) + geom_tile(aes(x=G2, y=G1, fill=value), color="gray50") +
     plot.theme +
     theme(axis.text.x=element_text(angle=90, hjust=0, vjust=0.5, color=color.per.group),
           axis.text=element_text(size=8), axis.ticks=element_blank(), axis.title=element_blank()) +
@@ -145,20 +145,23 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=F, l
     scale_y_discrete(position="right", expand=c(0, 0)) +
     scale_x_discrete(expand=c(0, 0), position=x.axis.position) +
     theme_legend_position(legend.position) +
-    theme(legend.key.width=legend.key.width, legend.background=element_blank())
+    theme(legend.key.width=legend.key.width, legend.background=element_blank()) +
+    val2ggcol(df$value, palette=palette, color.range=color.range, return.fill=TRUE)
+
+  if (symmetric) {
+    gg <- gg + theme(axis.text.y=element_text(color=color.per.group))
+  }
 
   return(gg)
 }
 
 #' Get Gene Scale
 #' @param genes type of genes ("up", "down" or "all")
-#' @param type type of scale ("fill" or "color")
-#' @param high color for the highest value
-#' @return ggplot2 fill or color scale
+#' @param high color for the highest value (default: "gray80")
+#' @return palette function
 #' @export
-getGeneScale <- function(genes=c("up", "down", "all"), type=c("fill", "color"), high="gray80", ...) {
+getGenePalette <- function(genes=c("up", "down", "all"), high="gray80") {
   genes <- match.arg(genes)
-  type <- match.arg(type)
 
   if (genes == "up") {
     low <- "red"
@@ -168,10 +171,7 @@ getGeneScale <- function(genes=c("up", "down", "all"), type=c("fill", "color"), 
     low <- "green"
   }
 
-  if (type == "fill")
-    return(scale_fill_gradient(low=low, high=high, ...))
-
-  return(scale_color_gradient(low=low, high=high, ...))
+  return(colorRampPalette(c(low, high)))
 }
 
 prepareOntologyPlotDF <- function(ont.res, p.adj, n, log.colors) {
@@ -218,7 +218,7 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
   df <- df[!is.na(df$mean),]
 
   # order cell types according to the mean
-  odf$cell <- factor(odf$cell,levels=df$cell)
+  odf$cell <- factor(odf$cell, levels=df$cell)
 
   if(type=='box') { # boxplot
     p <- ggplot(odf,aes(x=cell,y=val,fill=cell)) + geom_boxplot(notch=notch, outlier.shape=NA)

@@ -136,7 +136,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param name Test name (default="expression.shifts")
     #' @return a list include \itemize{
     #'   \item{df: a table with cluster distances (normalized if within.gorup.normalization=T), cell type, number of cells}
-    #'   \item{ctdml: raw list of `n.subsamples` sampled distance matrices (cells were subsampled)}
+    #'   \item{p.dist.info: raw list of `n.subsamples` sampled distance matrices (cells were subsampled)}
     #'   \item{sample.groups: same as the provided variable}
     #'   \item{valid.comparisons: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)}
     #' }
@@ -335,7 +335,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #                           names(sample.groups[sample.groups != ref.level])) %>%
     #       setNames(c(ref.level, self$target.level))
     #   }
-    # 
+    #
     #   self$test.results[[name]] <- extractRawCountMatrices(self$data.object, transposed=T) %>%
     #     estimatePerCellTypeDE(cell.groups = cell.groups, sample.groups = sample.groups, ref.level = ref.level, n.cores = n.cores,
     #                           cooks.cutoff = cooks.cutoff, min.cell.count = min.cell.count, max.cell.count=max.cell.count, test=test, independent.filtering = independent.filtering,
@@ -977,7 +977,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left", selection="all", n=10,
-                                 clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, ...) {
+                                 clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, palette=NULL, ...) {
       # Checks
       if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
         stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
@@ -1013,12 +1013,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 
       # Plot
+      if (is.null(palette)) palette <- getGenePalette(genes, high="white")
       gg <- ont.sum %>%
         .[, colSums(abs(.)) > 0] %>%
         .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),] %>%
         tail(n) %>%
-        plotHeatmap(legend.position=legend.position, row.order=TRUE, color.range=color.range, plot.theme=self$plot.theme, ...) +
-        getGeneScale(genes=genes, type="fill", high="white", limits=color.range)
+        plotHeatmap(legend.position=legend.position, row.order=TRUE, col.order=FALSE, color.range=color.range,
+                    plot.theme=self$plot.theme, palette=palette, ...)
 
       return(gg)
     },
@@ -1087,8 +1088,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param color.range vector with two values for min/max values of p-values
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
-    plotOntologyFamilyHeatmap=function(genes = "up", type = "GO", subtype = "BP", min.genes = 1, selection = "all", n = 10,
-                                       legend.position = "left", cell.subgroups = NULL, clusters = T, cluster.name = NULL, color.range = NULL, ...) {
+    plotOntologyFamilyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, selection="all", n=10,
+                                       legend.position="left", cell.subgroups=NULL, clusters=TRUE, cluster.name=NULL, color.range=NULL,
+                                       palette=NULL, ...) {
       # Checks
       if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
         stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
@@ -1127,14 +1129,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
       if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 
+      if (is.null(palette)) palette <- getGenePalette(genes=genes, high="white")
       # Plot
       gg <- ont.sum %>%
         .[, colSums(abs(.)) > 0] %>%
         .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names(), rownames(.)),] %>%
         tail(n) %>%
-        plotHeatmap(legend.position=legend.position, row.order=TRUE, color.range=color.range, ...) +
-        getGeneScale(genes=genes, type="fill", high="white", limits=color.range) +
-        self$plot.theme
+        plotHeatmap(legend.position=legend.position, row.order=TRUE, col.order=FALSE, color.range=color.range,
+                    palette=palette, plot.theme=self$plot.theme, ...)
+
 
       return(gg)
     },
@@ -1511,13 +1514,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     plotExpressionDistance = function(name='expression.shifts', sample.groups=self$sample.groups, joint=FALSE,
                                       min.cells=10, palette=self$sample.groups.palette, show.significance=FALSE, ...) {
       cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
-      ctdml <- cluster.shifts$ctdml
+      p.dist.info <- cluster.shifts$p.dist.info
       valid.comparisons <- cluster.shifts$valid.comparisons
       if (!joint) {
-        gg <- plotExpressionDistanceIndividual(ctdml, valid.comparisons, sample.groups=sample.groups, min.cells=min.cells,
+        gg <- plotExpressionDistanceIndividual(p.dist.info, valid.comparisons, sample.groups=sample.groups, min.cells=min.cells,
                                                show.significance=show.significance, plot.theme=self$plot.theme, palette=palette, ...)
       } else {
-        gg <- plotExpressionDistanceJoint(ctdml, valid.comparisons, sample.groups=sample.groups, show.significance=show.significance,
+        gg <- plotExpressionDistanceJoint(p.dist.info, valid.comparisons, sample.groups=sample.groups, show.significance=show.significance,
                                           plot.theme=self$plot.theme, palette=palette, ...)
       }
 
@@ -1527,41 +1530,65 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @title Plot sample-sample expression distance as a 2D embedding
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
     #' @param cell.type If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)
-    #' @param method dimension reduction methods (MDS or tSNE ) , default is MDS
-    #' @param perplexity tSNE perpexity (default: 4)
-    #' @param max_iter tSNE max_iter (default: 1e3)
+    #' @param method dimension reduction methods: MDS, tSNE or heatmap (default: MDS)
+    #' @param perplexity tSNE perplexity (default: 4)
+    #' @param max.iter tSNE max_iter (default: 1e3)
     #' @param palette a set of colors to use for conditions (default: stored $sample.groups.palette)
-    #' @param font.size font size of the sample labels. If NULL, the labels are not shown. (Default: NULL)
+    #' @param font.size font size of the sample labels. If NULL, the labels are not shown. (default: NULL)
+    #' @param show.sample.size make point size proportional to the log10 of the number of cells per sample (default: FALSE)
+    #' @param show.ticks show tick labels on axes (default: FALSE)
+    #' @param show.labels show axis labels (default: FALSE)
+    #' @param size point size. For `show.sample.size==TRUE`, it can be vector of length 2.  (default: 5)
+    #' @param ... arguments, forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}.
     #' @return A ggplot2 object
-    plotExpressionDistanceEmbedding = function(name='expression.shifts', sample.groups = self$sample.groups, cell.type = NULL, method = 'tSNE', perplexity=4, max_iter=1e3,
-                                               palette=self$sample.groups.palette, font.size=NULL) {
-      ctdml <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')$ctdml
+    plotExpressionDistanceEmbedding = function(name='expression.shifts', sample.groups=self$sample.groups, cell.type=NULL, method='MDS',
+                                               perplexity=4, max.iter=1e3, palette=self$sample.groups.palette, font.size=NULL, show.sample.size=FALSE,
+                                               show.ticks=FALSE, show.labels=FALSE, size=5, ...) {
+      # TODO: rename the function to account for heatmap visualization
+      p.dist.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')$p.dist.info
       if (!is.null(cell.type)) { # use distances based on the specified cell type
         title <- cell.type
-        df <- lapply(ctdml, `[[`, cell.type)
+        p.dists.per.subsample <- lapply(p.dist.info, `[[`, cell.type)
       } else { # weighted expression distance across all cell types
         title <- ''
-        df <- prepareJointExpressionDistance(ctdml, valid.comparisons=NULL)
+        p.dists.per.subsample <- prepareJointExpressionDistance(p.dist.info)
       }
-      dfm <- Reduce(`+`, df) / length(df)
+      p.dists <- Reduce(`+`, p.dists.per.subsample) / length(p.dists.per.subsample)
 
       if (method == 'tSNE'){
         checkPackageInstalled('Rtsne', cran=TRUE, details='for `method="tSNE"`')
 
-        xde <- Rtsne::Rtsne(dfm, is_distance = TRUE, perplexity = perplexity, max_iter = max_iter)$Y
+        emb <- Rtsne::Rtsne(p.dists, is_distance=TRUE, perplexity=perplexity, max_iter=max.iter)$Y
       } else if (method == 'MDS') {
-        xde <- cmdscale(dfm, eig=TRUE, k=2)$points # k is the number of dim
+        emb <- cmdscale(p.dists, eig=TRUE, k=2)$points # k is the number of dim
+      } else if (method == 'heatmap') {
+        color.per.group <- setNames(palette[sample.groups], names(sample.groups))
+        gg <- plotHeatmap(p.dists, color.per.group=color.per.group, legend.title="Distance",
+                          symmetric=TRUE)
+        return(gg)
       } else {
         stop("unknown embedding method")
       }
 
-      df <- data.frame(xde) %>% set_rownames(rownames(dfm)) %>% set_colnames(c("x", "y")) %>%
-        mutate(sample=rownames(.), condition=sample.groups[sample])
+      n.cells.per.samp <- table(self$sample.per.cell)
+      df <- data.frame(emb) %>% set_rownames(rownames(p.dists)) %>% set_colnames(c("x", "y")) %>%
+        mutate(sample=rownames(.), condition=sample.groups[sample], n.cells=as.vector(n.cells.per.samp[sample]))
 
       gg <- ggplot(df, aes(x, y, color=condition, shape=condition)) +
-        geom_point(size=5) + #, size=log10(ncells)
-        ggtitle(title) + self$plot.theme +
-        theme(axis.title=element_blank(), axis.text=element_blank(), axis.ticks=element_blank())
+        self$plot.theme
+
+      if (show.sample.size) {
+        if (length(size) == 1) {
+          size <- c(size * 0.5, size * 1.5)
+        }
+        gg <- gg + geom_point(aes(size=n.cells)) +
+          scale_size_continuous(trans="log10", range=size, name="Num. cells")
+      } else {
+        gg <- gg + geom_point(size=size)
+      }
+
+
+      gg %<>% sccore:::styleEmbeddingPlot(title=title, show.ticks=show.ticks, show.labels=show.labels, ...)
 
       if (!is.null(font.size)) {
         gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")

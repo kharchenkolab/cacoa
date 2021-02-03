@@ -149,12 +149,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       self$test.results[[name]] <- count.matrices %>%
         estimateExpressionShiftMagnitudes(sample.groups, cell.groups, dist=dist, within.group.normalization=within.group.normalization,
                                           valid.comparisons=valid.comparisons, n.cells=n.cells, n.top.genes=n.top.genes, n.subsamples=n.subsamples,
-                                          min.cells=min.cells, n.cores=n.cores, verbose=verbose, transposed.matrices=T, ...)
+                                          min.cells=min.cells, n.cores=n.cores, verbose=verbose, transposed.matrices=TRUE, ...)
 
       return(invisible(self$test.results[[name]]))
     },
 
-    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50, n.subsamples=30, min.cells=10, n.cores=self$n.cores, verbose=self$verbose,  mean.trim=0.1, name='common.expression.shifts') {
+    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50, n.subsamples=30, min.cells=10,
+                                                     n.cores=self$n.cores, verbose=self$verbose,  mean.trim=0.1, name='common.expression.shifts') {
       if(length(levels(sample.groups))!=2) stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
 
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
@@ -268,14 +269,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @return A ggplot2 object
     plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch = TRUE, show.jitter=TRUE, jitter.alpha=0.05, show.size.dependency=FALSE,
                                            show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
-      df <- private$getResults(name)$df
-      df <- data.frame(cell=df$Type, val=df$value)
+      df <- private$getResults(name, "estimateExpressionShiftMagnitudes()")$dist.df %$%
+        data.frame(cell=Type, val=value)
 
       if(show.size.dependency) {
         plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette, ylab='normalized expression distance', yline=NA,
                             show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme)
       } else {
-        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
+        plotMeanMedValuesPerCellType(df, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
                                      palette=self$cell.groups.palette, ylab='normalized expression distance', plot.theme=self$plot.theme)
       }
     },
@@ -1548,17 +1549,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param size point size. For `show.sample.size==TRUE`, it can be vector of length 2.  (default: 5)
     #' @param ... arguments, forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}.
     #' @return A ggplot2 object
-    plotExpressionDistanceEmbedding = function(name='expression.shifts', sample.groups=self$sample.groups, cell.type=NULL, method='MDS',
-                                               perplexity=4, max.iter=1e3, palette=self$sample.groups.palette, font.size=NULL, show.sample.size=FALSE,
+    plotExpressionDistanceEmbedding = function(name='expression.shifts', cell.type=NULL, method='MDS', perplexity=4, max.iter=1e3,
+                                               palette=self$sample.groups.palette, font.size=NULL, show.sample.size=TRUE,
                                                show.ticks=FALSE, show.labels=FALSE, size=5, ...) {
       # TODO: rename the function to account for heatmap visualization
-      p.dist.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')$p.dist.info
+      clust.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
+      sample.groups <- clust.info$sample.groups
       if (!is.null(cell.type)) { # use distances based on the specified cell type
         title <- cell.type
-        p.dists.per.subsample <- lapply(p.dist.info, `[[`, cell.type)
+        p.dists.per.subsample <- lapply(clust.info$p.dist.info, `[[`, cell.type)
+        n.cells.per.samp <- self$sample.per.cell %>% .[clust.info$cell.groups[names(.)] == cell.type] %>% table()
       } else { # weighted expression distance across all cell types
         title <- ''
-        p.dists.per.subsample <- prepareJointExpressionDistance(p.dist.info)
+        p.dists.per.subsample <- prepareJointExpressionDistance(clust.info$p.dist.info)
+        n.cells.per.samp <- table(self$sample.per.cell)
       }
       p.dists <- Reduce(`+`, p.dists.per.subsample) / length(p.dists.per.subsample)
 
@@ -1577,7 +1581,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         stop("unknown embedding method")
       }
 
-      n.cells.per.samp <- table(self$sample.per.cell)
       df <- data.frame(emb) %>% set_rownames(rownames(p.dists)) %>% set_colnames(c("x", "y")) %>%
         mutate(sample=rownames(.), condition=sample.groups[sample], n.cells=as.vector(n.cells.per.samp[sample]))
 

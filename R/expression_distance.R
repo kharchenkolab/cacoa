@@ -31,30 +31,31 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
   valid.comparisons <- vc.res$valid.comparisons; sample.groups <- vc.res$sample.groups
 
   # get a cell sample factor, restricted to the samples being contrasted
-  cl <- lapply(count.matrices[names(sample.groups)], rownames)
-  cl <- rep(names(cl), sapply(cl, length)) %>% setNames(unlist(cl)) %>%  as.factor()
-  cell.groups %<>% .[names(.) %in% names(cl)]
+  sample.per.cell <- lapply(count.matrices[names(sample.groups)], rownames)
+  sample.per.cell <- sample.per.cell %>% {rep(names(.), sapply(., length))} %>%
+    setNames(unlist(sample.per.cell)) %>%  as.factor()
+  cell.groups %<>% .[names(.) %in% names(sample.per.cell)]
 
   if(is.null(n.cells)) {
-    n.cells <- min(table(cf)) # use the size of the smallest group
-    if(verbose) cat('setting group size of ',n.cells,' cells for comparisons\n')
+    n.cells <- min(table(cell.groups)) # use the size of the smallest group
+    if(verbose) cat('setting group size of ', n.cells, ' cells for comparisons\n')
   }
 
-  if(verbose) cat('running',n.subsamples,'subsamples using ',n.cores,'cores ...\n')
+  if(verbose) cat('running', n.subsamples, 'subsamples using ', n.cores, 'cores ...\n')
 
   n.cells.scaled <- max(min.cells, ceiling(n.cells / length(sample.groups)))
   p.dist.info <- plapply(1:n.subsamples, function(i) {
-    subsamplePairwiseExpressionDistances(count.matrices, cl=cl, cell.groups=cell.groups, n.top.genes=n.top.genes,
+    subsamplePairwiseExpressionDistances(count.matrices, sample.per.cell=sample.per.cell, cell.groups=cell.groups, n.top.genes=n.top.genes,
                                          sample.groups=sample.groups, n.cells.scaled=n.cells.scaled, dist=dist)
   },n.cores=n.cores, mc.preschedule=TRUE, progress=verbose)
 
   if(verbose) cat('calculating distances ... ')
-  df <- aggregateExpressionShiftMagnitudes(p.dist.info, valid.comparisons, sample.groups, min.cells=min.cells,
-                                           within.group.normalization=within.group.normalization, comp.filter='!=') %>%
+  dist.df <- aggregateExpressionShiftMagnitudes(p.dist.info, valid.comparisons, sample.groups, min.cells=min.cells,
+                                                within.group.normalization=within.group.normalization, comp.filter='!=') %>%
     mutate(Type=factor(Type, levels=names(sort(tapply(value, Type, median))))) # sort cell types
   if(verbose) cat('done!\n')
 
-  return(list(df=df, p.dist.info=p.dist.info, sample.groups=sample.groups, valid.comparisons=valid.comparisons))
+  return(list(dist.df=dist.df, p.dist.info=p.dist.info, sample.groups=sample.groups, cell.groups=cell.groups, valid.comparisons=valid.comparisons))
 }
 
 extractValidComparisons <- function(valid.comparisons, sample.groups, within.group.normalization) {
@@ -90,22 +91,22 @@ extractValidComparisons <- function(valid.comparisons, sample.groups, within.gro
   return(list(valid.comparisons=valid.comparisons, sample.groups=sample.groups))
 }
 
-subsamplePairwiseExpressionDistances <- function(count.matrices, cl, cell.groups, sample.groups, n.cells.scaled,
-                                                 n.top.genes, dist) {
+subsamplePairwiseExpressionDistances <- function(count.matrices, sample.per.cell, cell.groups, sample.groups,
+                                                 n.cells.scaled, n.top.genes, dist) {
   ## # draw cells without sample stratification - this can drop certain samples, particularly those with lower total cell numbers
   ## cf <- tapply(names(cf),cf,function(x) {
   ##   if(length(x)<=n.cells) { return(cf[x]) } else { setNames(rep(cf[x[1]],n.cells), sample(x,n.cells)) }
   ## })
 
   # calculate expected mean number of cells per sample and aim to sample that
-  cf <- tapply(names(cell.groups), list(cell.groups, cl[names(cell.groups)]),function(x) {
+  cf <- tapply(names(cell.groups), list(cell.groups, sample.per.cell[names(cell.groups)]),function(x) {
     if(length(x)<=n.cells.scaled) { return(cell.groups[x]) } else { setNames(rep(cell.groups[x[1]], n.cells.scaled), sample(x, n.cells.scaled)) }
   })
 
   cf <- as.factor(setNames(unlist(lapply(cf,as.character)),unlist(lapply(cf,names))))
 
   # table of sample types and cells
-  cct <- table(cf, cl[names(cf)])
+  cct <- table(cf, sample.per.cell[names(cf)])
   caggr <- lapply(count.matrices, collapseCellsByType, groups=as.factor(cf), min.cell.count=1) %>%
     .[names(sample.groups)]
 
@@ -115,54 +116,62 @@ subsamplePairwiseExpressionDistances <- function(count.matrices, cl, cell.groups
     tcm <- na.omit(do.call(rbind,lapply(caggr,function(x) x[match(ct,rownames(x)),])))
 
     # restrict to top expressed genes
-    if(n.top.genes<ncol(tcm)) tcm <- tcm[,rank(-colSums(tcm))>=n.top.genes]
+    if(n.top.genes < ncol(tcm)) {
+      tcm <- tcm[, rank(-colSums(tcm)) >= n.top.genes]
+    }
 
     if(dist=='JS') {
       tcm <- t(tcm/pmax(1,rowSums(tcm)))
-      tcd <- pagoda2:::jsDist(tcm, ncores = 1); dimnames(tcd) <- list(colnames(tcm),colnames(tcm));
+      dist.mat <- pagoda2:::jsDist(tcm, ncores = 1) %>%
+        set_rownames(colnames(tcm)) %>% set_colnames(colnames(tcm))
     } else {
-      tcm <- log10(t(tcm/pmax(1,rowSums(tcm)))*1e3+1)
-      tcd <- 1-cor(tcm)
-      tcd[is.na(tcd)] <- 1;
+      tcm <- log10(t(tcm / pmax(1, rowSums(tcm))) * 1e3 + 1)
+      dist.mat <- 1 - cor(tcm)
+      dist.mat[is.na(dist.mat)] <- 1;
     }
     # calculate how many cells there are
-    attr(tcd, 'n.cells') <- cct[ct, colnames(tcm)]
-    tcd
+    attr(dist.mat, 'n.cells') <- cct[ct, colnames(tcm)]
+    dist.mat
   })
 
   return(ctdm)
 }
 
+estimateCellTypeExpressionShiftDf <- function(dist.mat, valid.comparisons, sample.groups, min.cells,
+                                              within.group.normalization=FALSE, comp.filter='!=') {
+  # Select comparisons
+  cross.factor <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], comp.filter);
+  comp.mask <- valid.comparisons[rownames(dist.mat),colnames(dist.mat)] & cross.factor
+
+  if (within.group.normalization) {
+    if (comp.filter == '==') stop("within.group.normalization is not allowed for `comp.filter='=='`")
+    comp.mask.within <- valid.comparisons[rownames(dist.mat), colnames(dist.mat)] & !cross.factor
+    diag(comp.mask.within) <- NA
+    dist.mat <- dist.mat / median(dist.mat[comp.mask.within], na.rm=TRUE)
+  }
+
+  diag(dist.mat) <- NA;
+  dist.mat[!comp.mask] <- NA;
+
+  # Filter comparisons with low number of cells
+  n.cells <- attr(dist.mat, 'n.cells');
+  n.cell.mat <- outer(n.cells, n.cells, FUN='pmin')
+  dist.mat[n.cell.mat < min.cells] <- NA;
+
+  if(all(is.na(dist.mat))) return(NULL);
+
+  # Convert to data.frame
+  dist.df <- reshape2::melt(dist.mat) %>% na.omit()
+  n.cell.mat[is.na(dist.mat)] <- NA;
+  dist.df$n <- reshape2::melt(n.cell.mat) %>% na.omit() %>% .$value
+  return(dist.df);
+}
+
 aggregateExpressionShiftMagnitudes <- function(p.dist.info, valid.comparisons, sample.groups, min.cells,
                                                within.group.normalization=FALSE, comp.filter='!=') {
   df <- do.call(rbind, lapply(p.dist.info, function(p.dist.per.type) {
-    x <- lapply(p.dist.per.type, function(dist.mat) {
-      # Select comparisons
-      cross.factor <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], comp.filter);
-      comp.mask <- valid.comparisons[rownames(dist.mat),colnames(dist.mat)] & cross.factor
-
-      if (within.group.normalization) {
-        comp.mask.cont <- valid.comparisons[rownames(dist.mat),colnames(dist.mat)] & !cross.factor
-        med.cont <- median(na.omit(dist.mat[comp.mask.cont]))
-        dist.mat <- dist.mat / med.cont
-      }
-
-      diag(dist.mat) <- NA;
-      dist.mat[!comp.mask] <- NA;
-
-      # Filter comparisons with low number of cells
-      n.cells <- attr(dist.mat, 'n.cells');
-      n.cell.mat <- outer(n.cells, n.cells, FUN='pmin')
-      dist.mat[n.cell.mat < min.cells] <- NA;
-
-      if(all(is.na(dist.mat))) return(NULL);
-
-      # Convert to data.frame
-      dist.df <- reshape2::melt(dist.mat) %>% na.omit()
-      n.cell.mat[is.na(dist.mat)] <- NA;
-      dist.df$n <- reshape2::melt(n.cell.mat) %>% na.omit() %>% .$value
-      return(dist.df);
-    })
+    x <- lapply(p.dist.per.type, estimateCellTypeExpressionShiftDf, valid.comparisons, sample.groups,
+                min.cells=min.cells, within.group.normalization=within.group.normalization, comp.filter=comp.filter)
 
     x <- x[!sapply(x, is.null)]
     df <- names(x) %>% lapply(function(n) cbind(x[[n]], Type=n)) %>% do.call(rbind, .)

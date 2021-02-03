@@ -84,7 +84,7 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 
   if (show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
 
-  if (!is.null(palette)) gg <- gg + scale_color_manual(values=palette)
+  if (!is.null(palette)) gg <- gg + scale_fill_manual(values=palette)
   return(gg)
 }
 

@@ -58,7 +58,6 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-plotExpressionShiftMagnitudes}{\code{Cacoa$plotExpressionShiftMagnitudes()}}
 \item \href{#method-plotCommonExpressionShiftMagnitudes}{\code{Cacoa$plotCommonExpressionShiftMagnitudes()}}
 \item \href{#method-estimatePerCellTypeDE}{\code{Cacoa$estimatePerCellTypeDE()}}
-\item \href{#method-estimatePerCellTypeDEnew}{\code{Cacoa$estimatePerCellTypeDEnew()}}
 \item \href{#method-plotDeStabilityPerCellType}{\code{Cacoa$plotDeStabilityPerCellType()}}
 \item \href{#method-plotDEGenes}{\code{Cacoa$plotDEGenes()}}
 \item \href{#method-plotNumberOfDEGenes}{\code{Cacoa$plotNumberOfDEGenes()}}
@@ -77,6 +76,7 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-plotOntologyFamilyHeatmap}{\code{Cacoa$plotOntologyFamilyHeatmap()}}
 \item \href{#method-plotOntologyFamily}{\code{Cacoa$plotOntologyFamily()}}
 \item \href{#method-plotCellGroupProportions}{\code{Cacoa$plotCellGroupProportions()}}
+\item \href{#method-plotCellGroupAbundanceVariation}{\code{Cacoa$plotCellGroupAbundanceVariation()}}
 \item \href{#method-plotCellGroupSizes}{\code{Cacoa$plotCellGroupSizes()}}
 \item \href{#method-plotCodaSpace}{\code{Cacoa$plotCodaSpace()}}
 \item \href{#method-plotContrastTree}{\code{Cacoa$plotContrastTree()}}
@@ -86,6 +86,7 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-estimateWilcoxonTest}{\code{Cacoa$estimateWilcoxonTest()}}
 \item \href{#method-estimateCellDensity}{\code{Cacoa$estimateCellDensity()}}
 \item \href{#method-plotCellDensity}{\code{Cacoa$plotCellDensity()}}
+\item \href{#method-plotCellDensityVariation}{\code{Cacoa$plotCellDensityVariation()}}
 \item \href{#method-estimateDiffCellDensity}{\code{Cacoa$estimateDiffCellDensity()}}
 \item \href{#method-plotDiffCellDensity}{\code{Cacoa$plotDiffCellDensity()}}
 \item \href{#method-plotExpressionDistance}{\code{Cacoa$plotExpressionDistance()}}
@@ -101,6 +102,7 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-plotMostChangedGenes}{\code{Cacoa$plotMostChangedGenes()}}
 \item \href{#method-plotGeneExpressionComparison}{\code{Cacoa$plotGeneExpressionComparison()}}
 \item \href{#method-getConditionPerCell}{\code{Cacoa$getConditionPerCell()}}
+\item \href{#method-getJointCountMatrix}{\code{Cacoa$getJointCountMatrix()}}
 \item \href{#method-clone}{\code{Cacoa$clone()}}
 }
 }
@@ -193,9 +195,10 @@ Calculate expression shift magnitudes of different clusters between conditions
 }
 \subsection{Returns}{
 a list include \itemize{
-\item{df: a table with cluster distances (normalized if within.gorup.normalization=T), cell type, number of cells}
-\item{ctdml: raw list of \code{n.subsamples} sampled distance matrices (cells were subsampled)}
+\item{dist.df: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells}
+\item{p.dist.info: raw list of \code{n.subsamples} sampled distance matrices (cells were subsampled)}
 \item{sample.groups: same as the provided variable}
+\item{cell.groups: same as the provided variable}
 \item{valid.comparisons: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)}
 }
 }
@@ -349,69 +352,6 @@ A ggplot2 object
 Estimate differential gene expression per cell type between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimatePerCellTypeDE(
-  cell.groups = self$cell.groups,
-  sample.groups = self$sample.groups,
-  ref.level = self$ref.level,
-  common.genes = FALSE,
-  n.cores = self$n.cores,
-  cooks.cutoff = FALSE,
-  min.cell.count = 10,
-  max.cell.count = Inf,
-  test = "Wald",
-  independent.filtering = FALSE,
-  cluster.sep.chr = "<!!>",
-  return.matrix = T,
-  verbose = self$verbose,
-  name = "de"
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cell.groups}}{factor specifying cell types (default=NULL)}
-
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
-
-\item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
-
-\item{\code{common.genes}}{Only investigate common genes across cell groups (default=F)}
-
-\item{\code{n.cores}}{number of cores for parallelisation}
-
-\item{\code{cooks.cutoff}}{cooksCutoff for DESeq2 (default=F)}
-
-\item{\code{cooks.cutoff}}{cooksCutoff for DESeq2 (default=FALSE)}
-
-\item{\code{min.cell.count}}{minimum number of cells that need to be present in a given cell type in a given sample in order to be taken into account (default=10)}
-
-\item{\code{max.cell.count}}{maximal number of cells per cluster per sample to include in a comparison (useful for comparing the number of DE genes between cell types) (default: Inf)}
-
-\item{\code{test}}{which DESeq2 test to use (options: "LRT" (default), "Wald")}
-
-\item{\code{independent.filtering}}{independentFiltering parameter for DESeq2 (default=FALSE)}
-
-\item{\code{cluster.sep.chr}}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
-
-\item{\code{return.matrix}}{Return merged matrix of results (default=TRUE)}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-
-\item{\code{name}}{slot in which to save the results (default: 'de')}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A list of DE genes
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimatePerCellTypeDEnew"></a>}}
-\if{latex}{\out{\hypertarget{method-estimatePerCellTypeDEnew}{}}}
-\subsection{Method \code{estimatePerCellTypeDEnew()}}{
-Estimate differential gene expression per cell type between conditions
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimatePerCellTypeDEnew(
   cell.groups = self$cell.groups,
   sample.groups = self$sample.groups,
   ref.level = self$ref.level,
@@ -754,6 +694,7 @@ Estimate ontology terms based on DEs
   qvalue.cutoff = 0.2,
   min.gs.size = 10,
   max.gs.size = 500,
+  keep.gene.sets = F,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -993,6 +934,7 @@ Plot a heatmap of ontology P values per cell type
   cluster.name = NULL,
   cell.subgroups = NULL,
   color.range = NULL,
+  palette = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1068,9 +1010,10 @@ Plot a heatmap of collapsed (family) ontology P values per cell type
   n = 10,
   legend.position = "left",
   cell.subgroups = NULL,
-  clusters = T,
+  clusters = TRUE,
   cluster.name = NULL,
   color.range = NULL,
+  palette = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1194,6 +1137,27 @@ Plot the cell group proportions per sample
 }
 \subsection{Returns}{
 A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotCellGroupAbundanceVariation"></a>}}
+\if{latex}{\out{\hypertarget{method-plotCellGroupAbundanceVariation}{}}}
+\subsection{Method \code{plotCellGroupAbundanceVariation()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellGroupAbundanceVariation(
+  cell.groups = self$cell.groups,
+  type = "mad",
+  rotate.xticks = TRUE,
+  min.rel.abundance = 0.05
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+}
+\if{html}{\out{</div>}}
 }
 }
 \if{html}{\out{<hr>}}
@@ -1368,6 +1332,7 @@ Estimate cell density in giving embedding
   bins = 400,
   method = "kde",
   name = "cell.density",
+  beta = 30,
   m = 50,
   verbose = self$verbose,
   n.cores = self$n.cores
@@ -1383,7 +1348,9 @@ Estimate cell density in giving embedding
 
 \item{\code{name}}{slot in which to save the results (default: 'cell.density')}
 
-\item{\code{m}}{numeric Maximum order of Chebyshev coeff to compute (default=50) for graph based cell density}
+\item{\code{beta}}{smoothing strength parameter of the \link[sccore:heatFilter]{heatFilter} for graph based cell density (default: 30)}
+
+\item{\code{m}}{numeric Maximum order of Chebyshev coeff to compute for graph based cell density (default: 50)}
 
 \item{\code{verbose}}{show progress (default: stored value)}
 
@@ -1439,6 +1406,28 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotCellDensityVariation"></a>}}
+\if{latex}{\out{\hypertarget{method-plotCellDensityVariation}{}}}
+\subsection{Method \code{plotCellDensityVariation()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellDensityVariation(
+  type = "mad",
+  plot.type = "embedding",
+  name = "cell.density",
+  cutoff = NULL,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{field name where the test results are stored}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateDiffCellDensity"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateDiffCellDensity}{}}}
 \subsection{Method \code{estimateDiffCellDensity()}}{
@@ -1446,30 +1435,22 @@ estimate differential cell density
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDiffCellDensity(
   type = "subtract",
-  z.cutoff = NULL,
   adjust.pvalues = TRUE,
-  name = "cell.density"
+  name = "cell.density",
+  verbose = self$verbose
 )}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{type}}{method to calculate differential cell density; t.test, wilcox or subtract (target subtract ref density);}
+\item{\code{type}}{method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);}
 
-\item{\code{z.cutoff}}{absolute z score cutoff}
+\item{\code{adjust.pvalues}}{whether to adjust Z-scores for multiple comparison using BH method (default: TRUE)}
 
 \item{\code{name}}{slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')}
 
-\item{\code{method}}{density estimation method (graph or ked)}
-
-\item{\code{col}}{color palettes,  default is c('blue','white','red')}
-
-\item{\code{contours}}{specify cell types for contour, multiple cell types are also supported}
-
-\item{\code{contour.color}}{color for contour line}
-
-\item{\code{contour.conf}}{confidence interval of contour}
+\item{\code{verbose}}{show progress (default: stored value)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1484,10 +1465,12 @@ estimate differential cell density
   type = "subtract",
   name = "cell.density",
   size = 0.2,
-  palette = colorRampPalette(c("blue", "white", "red")),
+  z.cutoff = NULL,
+  palette = grDevices::colorRampPalette(c("blue", "white", "red")),
   contours = NULL,
   contour.color = "black",
   contour.conf = "10\%",
+  plot.na = FALSE,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1499,17 +1482,15 @@ estimate differential cell density
 
 \item{\code{name}}{slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')}
 
-\item{\code{contours}}{specify cell types for contour, multiple cell types are also supported}
+\item{\code{z.cutoff}}{absolute z score cutoff (default: NULL)}
 
-\item{\code{contour.color}}{color for contour line}
+\item{\code{palette}}{color palette, default is c('blue','white','red')}
 
-\item{\code{contour.conf}}{confidence interval of contour}
+\item{\code{contours}}{specify cell types for contour, multiple cell types are also supported (default: NULL)}
 
-\item{\code{method}}{density estimation method (graph or ked)}
+\item{\code{contour.color}}{color for contour line (default: 'black')}
 
-\item{\code{col}}{color palettes,  default is c('blue','white','red')}
-
-\item{\code{z.cutoff}}{absolute z score cutoff}
+\item{\code{contour.conf}}{confidence interval of contour (default: '10\%')}
 }
 \if{html}{\out{</div>}}
 }
@@ -1522,7 +1503,6 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionDistance(
   name = "expression.shifts",
-  sample.groups = self$sample.groups,
   joint = FALSE,
   min.cells = 10,
   palette = self$sample.groups.palette,
@@ -1536,15 +1516,11 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \describe{
 \item{\code{name}}{Test results to plot (default=expression.shifts)}
 
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
-
 \item{\code{joint}}{whether to show joint boxplot with the expression distance weighed by the sizes of cell types (default: TRUE), or show distances for each individual cell type}
 
 \item{\code{show.significance}}{whether to show statistical significance between sample groups. wilcox.test was used; (\* < 0.05; \\emph{\} < 0.01; \\emph{\}\* < 0.001)}
 
 \item{\code{...}}{other plot parameters, forwarded to \link{plotCountBoxplotsPerType}}
-
-\item{\code{cell.groups}}{Named factor with cell names defining groups/clusters (default: stored $cell.groups vector)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1560,13 +1536,17 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionDistanceEmbedding(
   name = "expression.shifts",
-  sample.groups = self$sample.groups,
   cell.type = NULL,
-  method = "tSNE",
+  method = "MDS",
   perplexity = 4,
-  max_iter = 1000,
+  max.iter = 1000,
   palette = self$sample.groups.palette,
-  font.size = NULL
+  font.size = NULL,
+  show.sample.size = TRUE,
+  show.ticks = FALSE,
+  show.labels = FALSE,
+  size = 5,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
@@ -1575,19 +1555,27 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \describe{
 \item{\code{name}}{field name where the test results are stored}
 
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
-
 \item{\code{cell.type}}{If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)}
 
-\item{\code{method}}{dimension reduction methods (MDS or tSNE ) , default is MDS}
+\item{\code{method}}{dimension reduction methods: MDS, tSNE or heatmap (default: MDS)}
 
-\item{\code{perplexity}}{tSNE perpexity (default: 4)}
+\item{\code{perplexity}}{tSNE perplexity (default: 4)}
 
-\item{\code{max_iter}}{tSNE max_iter (default: 1e3)}
+\item{\code{max.iter}}{tSNE max_iter (default: 1e3)}
 
 \item{\code{palette}}{a set of colors to use for conditions (default: stored $sample.groups.palette)}
 
-\item{\code{font.size}}{font size of the sample labels. If NULL, the labels are not shown. (Default: NULL)}
+\item{\code{font.size}}{font size of the sample labels. If NULL, the labels are not shown. (default: NULL)}
+
+\item{\code{show.sample.size}}{make point size proportional to the log10 of the number of cells per sample (default: FALSE)}
+
+\item{\code{show.ticks}}{show tick labels on axes (default: FALSE)}
+
+\item{\code{show.labels}}{show axis labels (default: FALSE)}
+
+\item{\code{size}}{point size. For \code{show.sample.size==TRUE}, it can be vector of length 2.  (default: 5)}
+
+\item{\code{...}}{arguments, forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}.}
 }
 \if{html}{\out{</div>}}
 }
@@ -1667,6 +1655,11 @@ Estimate Cluster-free Expression Shift
   n.top.genes = 3000,
   gene.selection = "change",
   excluded.genes = NULL,
+  min.n.between = 2,
+  min.n.within = max(min.n.between, 1),
+  min.n.obs.per.samp = 3,
+  norm.all = FALSE,
+  robust = TRUE,
   verbose = self$verbose,
   n.cores = self$n.cores
 )}\if{html}{\out{</div>}}
@@ -1845,6 +1838,7 @@ Plot cluster-free expression shift z-scores
   max.shift = NULL,
   alpha = 0.2,
   font.size = c(3, 5),
+  palette = brewerPalette("RdYlBu"),
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1917,6 +1911,15 @@ make sense, as control cells always have small distance from control.}
 \subsection{Method \code{getConditionPerCell()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getConditionPerCell()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getJointCountMatrix"></a>}}
+\if{latex}{\out{\hypertarget{method-getJointCountMatrix}{}}}
+\subsection{Method \code{getJointCountMatrix()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$getJointCountMatrix(force = FALSE)}\if{html}{\out{</div>}}
 }
 
 }

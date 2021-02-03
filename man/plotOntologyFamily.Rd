@@ -12,8 +12,9 @@ plotOntologyFamily(
   string.length = 18,
   legend.label.size = 1,
   legend.position = "topright",
-  verbose = T,
-  n.cores = 1
+  verbose = TRUE,
+  n.cores = 1,
+  reduce.edges = TRUE
 )
 }
 \arguments{

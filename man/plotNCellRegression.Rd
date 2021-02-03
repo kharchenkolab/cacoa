@@ -14,7 +14,8 @@ plotNCellRegression(
   size = 4,
   palette = NULL,
   plot.line = TRUE,
-  line.width = 0.5
+  line.width = 0.5,
+  plot.theme = theme_get()
 )
 }
 \arguments{

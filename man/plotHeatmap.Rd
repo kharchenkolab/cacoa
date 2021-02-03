@@ -8,12 +8,15 @@ plotHeatmap(
   df,
   color.per.group = NULL,
   row.order = NULL,
-  col.order = F,
+  col.order = NULL,
   legend.position = "right",
   legend.key.width = unit(8, "pt"),
   legend.title = "-log10(p-value)",
   x.axis.position = "top",
-  color.range = NULL
+  color.range = NULL,
+  plot.theme = theme_get(),
+  symmetric = FALSE,
+  palette = NULL
 )
 }
 \arguments{

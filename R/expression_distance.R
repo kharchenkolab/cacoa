@@ -135,30 +135,33 @@ subsamplePairwiseExpressionDistances <- function(count.matrices, cl, cell.groups
 
 aggregateExpressionShiftMagnitudes <- function(p.dist.info, valid.comparisons, sample.groups, min.cells,
                                                within.group.normalization=FALSE, comp.filter='!=') {
-  df <- do.call(rbind, lapply(p.dist.info, function(ctdm) {
-    x <- lapply(ctdm, function(xm) {
-      n.cells <- attr(xm, 'n.cells');
-      wm <- outer(n.cells, n.cells, FUN='pmin')
-
-      cross.factor <- outer(sample.groups[rownames(xm)], sample.groups[colnames(xm)], comp.filter);
-      frm <- valid.comparisons[rownames(xm),colnames(xm)] & cross.factor
+  df <- do.call(rbind, lapply(p.dist.info, function(p.dist.per.type) {
+    x <- lapply(p.dist.per.type, function(dist.mat) {
+      # Select comparisons
+      cross.factor <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], comp.filter);
+      comp.mask <- valid.comparisons[rownames(dist.mat),colnames(dist.mat)] & cross.factor
 
       if (within.group.normalization) {
-        frm.cont <- valid.comparisons[rownames(xm),colnames(xm)] & !cross.factor
-        med.cont <- median(na.omit(xm[frm.cont]))
-        xm <- xm / med.cont
+        comp.mask.cont <- valid.comparisons[rownames(dist.mat),colnames(dist.mat)] & !cross.factor
+        med.cont <- median(na.omit(dist.mat[comp.mask.cont]))
+        dist.mat <- dist.mat / med.cont
       }
 
-      diag(xm) <- NA;
+      diag(dist.mat) <- NA;
+      dist.mat[!comp.mask] <- NA;
 
-      # remove self pairs
-      xm[!frm] <- NA;
-      xm[wm < min.cells] <- NA;
-      if(!any(!is.na(xm))) return(NULL);
-      xmd <- na.omit(reshape2::melt(xm))
-      wm[is.na(xm)] <- NA;
-      xmd$n <- na.omit(reshape2::melt(wm))$value
-      return(xmd);
+      # Filter comparisons with low number of cells
+      n.cells <- attr(dist.mat, 'n.cells');
+      n.cell.mat <- outer(n.cells, n.cells, FUN='pmin')
+      dist.mat[n.cell.mat < min.cells] <- NA;
+
+      if(all(is.na(dist.mat))) return(NULL);
+
+      # Convert to data.frame
+      dist.df <- reshape2::melt(dist.mat) %>% na.omit()
+      n.cell.mat[is.na(dist.mat)] <- NA;
+      dist.df$n <- reshape2::melt(n.cell.mat) %>% na.omit() %>% .$value
+      return(dist.df);
     })
 
     x <- x[!sapply(x, is.null)]

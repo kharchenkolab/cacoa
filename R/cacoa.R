@@ -505,7 +505,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       
       
       if( (!is.null(padj.threshold)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or padj.threshold) should be provided')
-      if(!is.null(padj.threshold) & !is.null(top.n.genes)) stop('At least one threshold (top.n.genes or padj.threshold) should be provided')
+      if(is.null(padj.threshold) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or padj.threshold) should be provided')
       
       de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
       
@@ -516,6 +516,153 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       self$test.results[[name]] <- jaccards
     },
     
+    
+    estimateDeStabilityPerTest=function(de.names,
+                                        name='jacc.per.test',
+                                        top.n.genes = NULL,
+                                        padj.threshold = NULL) {
+      
+      if( (!is.null(padj.threshold)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or padj.threshold) should be provided')
+      if(is.null(padj.threshold) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or padj.threshold) should be provided')
+      
+      jaccards.all <- data.frame()
+      for(de.name in de.names){
+        de.res <- private$getResults(de.name)
+        if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
+        jaccards <- estimateStabilityPerCellType(de.res = de.res,
+                                                 top.n.genes = top.n.genes,
+                                                 padj.threshold = padj.threshold)
+        jacc.medians <- sapply(unique(jaccards$group), function(x) median(jaccards$value[jaccards$group == x]))
+        
+        jaccards.tmp <- data.frame(group = de.name, value = jacc.medians,
+                                   cmp = names(jacc.medians))
+        jaccards.all <- rbind(jaccards.all, jaccards.tmp)
+        
+      }
+      
+      self$test.results[[name]] <- jaccards.all
+    },
+    
+    
+    estimateDEStabilityBetweenTests=function(de.names,
+                                             name='jacc.bw.tests',
+                                             top.n.genes = NULL,
+                                             padj.threshold = NULL){
+      
+      if( (!is.null(padj.threshold)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or padj.threshold) should be provided')
+      if(is.null(padj.threshold) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or padj.threshold) should be provided')
+      
+      data.all = data_frame()
+      cell.types = levels(self$cell.groups)
+      for(cell.type in cell.types) {
+        data.cell.type = data_frame()
+        for(i in 1:length(de.names)) {
+          for(j in 1:length(de.names)) {
+            if(j <= i) next
+            
+            common.resamplings = intersect(names(self$test.results[[de.names[i]]][[cell.type]]$subsamples), 
+                                           names(self$test.results[[de.names[j]]][[cell.type]]$subsamples))
+            if (length(common.resamplings) == 0){
+              message(paste('There is no corresponding resamplings for', 
+                            de.names[i], 'and', de.names[j], 'in', cell.type))
+              next
+            }
+            for(sample.name in common.resamplings) {
+              
+              s1 = self$test.results[[de.names[i]]][[cell.type]]$subsamples[[sample.name]]
+              s2 = self$test.results[[de.names[j]]][[cell.type]]$subsamples[[sample.name]]
+              if(is.null(padj.threshold)) {
+                val = jaccard.pw.top(list(s1, s2), top.n.genes)
+              } else {
+                val = jaccard.pw.pval(list(s1, s2), padj.threshold)
+              }
+              
+              data.tmp = data_frame(s1 = de.names[i], s2 = de.names[j], val = val, cell.type = cell.type)
+              data.cell.type = rbind(data.cell.type, data.tmp)
+              data.tmp = data_frame(s1 = de.names[j], s2 = de.names[i], val = val, cell.type = cell.type)
+              data.cell.type = rbind(data.cell.type, data.tmp)
+              
+            }
+          }
+          data.tmp = data_frame(s1 = de.names[i], s2 = de.names[i], val = 1, cell.type = cell.type)
+          data.cell.type = rbind(data.cell.type, data.tmp)
+        }
+        data.cell.type <- data.cell.type[!duplicated(data.cell.type), ]
+        data.all <- rbind(data.all, data.cell.type)
+      }
+      
+      self$test.results[[name]] <- data.all
+    },
+    
+    estimateDEStabilityTrend=function(de.name='de',
+                                      name='de.trend',
+                                      top.n.genes = c(100,200,300,400,500)) {
+      top.n.genes = sort(top.n.genes)
+      de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
+      
+      data.all = data.frame()
+      for(i in 1:length(top.n.genes)) {
+        jaccards <- estimateStabilityPerCellType(de.res = de.res, top.n.genes = top.n.genes[i],
+                                                 padj.threshold = NULL)
+        jacc.medians <- sapply(unique(jaccards$group), function(x) median(jaccards$value[jaccards$group == x]))
+        
+        data.tmp <- data.frame(group = top.n.genes[i],
+                              value = jacc.medians,
+                              cmp = names(jacc.medians))
+        
+        data.all <- rbind(data.all, data.tmp)
+        
+      }
+      self$test.results[[name]] <- data.all
+      
+    },
+    
+    
+    plotDeStabilityTrend=function(name='de.trend',
+                                        notch = T,
+                                        show.jitter = T,
+                                        jitter.alpha = 0.05,
+                                        show.pairs = F,
+                                        sort.order = F) {
+      
+      jaccards <- private$getResults(name, 'estimateDEStabilityTrend()')
+      p <- plotStability(jaccards = jaccards,
+                         notch = notch,
+                         show.jitter = show.jitter,
+                         jitter.alpha = jitter.alpha,
+                         show.pairs = show.pairs,
+                         sort.order = sort.order,
+                         xlabel = 'Top n genes',
+                         ylabel = 'Jaccard Index',
+                         palette=self$cell.groups.palette,
+      )
+      return(p)
+    },
+    
+    
+    plotDEStabilityBetweenTests=function(name='jacc.bw.tests',
+                                         cell.types = NULL) {
+      data.all <- private$getResults(name, 'estimateDEStabilityBetweenTests()')
+      
+      if(is.null(cell.types)) cell.types = levels(self$cell.groups)
+      data.all.median <- data.frame()
+      
+      unique.combinations <- data.all[!duplicated(data.all[,1:2]),1:2]
+      for(i in 1:nrow(unique.combinations)) {
+        idx = (data.all$s1 == unique.combinations$s1[i]) & (data.all$s2 == unique.combinations$s2[i]) &
+          (data.all$cell.type %in% cell.types)
+        data.tmp = data.frame(s1 = unique.combinations$s1[i],
+                              s2 = unique.combinations$s2[i],
+                              val = median(data.all$val[idx]))
+        data.all.median = rbind(data.all.median, data.tmp) 
+      }
+        
+      p <- ggplot(data.all.median, aes(x=s1, y=s2, fill= val)) + 
+        geom_tile() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+        ylab('tests') + xlab('tests')
+      
+      return(p)
+    },
     
     estimateGOStability=function(org.db,
                                  de.name='de',
@@ -542,8 +689,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                             de.raw = de.res.cell.type, cell.groups = cell.groups, universe = universe, 
                             transposed = transposed, verbose = verbose, n.cores = n.cores)
       
-      
-
       self$test.results[[name]] <- res
     },
     
@@ -573,33 +718,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(p)
     },
     
-    estimateDeStabilityPerTest=function(de.names,
-                                           name='de.jacc.tests',
-                                           top.n.genes = NULL,
-                                           padj.threshold = NULL) {
-      
-      if( (!is.null(padj.threshold)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or padj.threshold) should be provided')
-      if(is.null(padj.threshold) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or padj.threshold) should be provided')
-      
-      jaccards.all <- data.frame()
-      for(de.name in de.names){
-        de.res <- private$getResults(de.name)
-        if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
-        jaccards <- estimateStabilityPerCellType(de.res = de.res,
-                                                 top.n.genes = top.n.genes,
-                                                 padj.threshold = padj.threshold)
-        jacc.medians <- sapply(unique(jaccards$group), function(x) median(jaccards$value[jaccards$group == x]))
-        
-        jaccards.tmp <- data.frame(group = de.name, value = jacc.medians,
-                                   cmp = names(jacc.medians))
-        jaccards.all <- rbind(jaccards.all, jaccards.tmp)
-        
-      }
-      
-      self$test.results[[name]] <- jaccards.all
-    },
     
-    plotDeStabilityPerTest=function(name='de.jacc.tests',
+    
+    plotDeStabilityPerTest=function(name='jacc.per.test',
                                         notch = T,
                                         show.jitter = T,
                                         jitter.alpha = 0.05,
@@ -839,12 +960,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
                               p.adjust.method="BH",
                               readable=TRUE, verbose=TRUE, 
                               qvalue.cutoff=0.2, min.gs.size=10, 
-                              max.gs.size=5e2, keep.gene.sets = F, ...) {
+                              max.gs.size=5e2, keep.gene.sets = F,
+                              name = 'gene.ids',...) {
       if(!is.null(type) & !type %in% c("GO", "DO", "GSEA"))
         stop("'type' must be 'GO', 'DO', or 'GSEA'.")
 
       if(is.null(de.gene.ids)) {
-        de.gene.ids <- private$getResults("gene.ids", "prepareOntologyData")
+        de.gene.ids <- private$getResults(name, "prepareOntologyData()")
       }
 
       self$test.results[[type]] <- estimateOntology(type=type, org.db=org.db, 

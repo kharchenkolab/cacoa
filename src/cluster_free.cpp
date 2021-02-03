@@ -20,6 +20,19 @@ double incrementStdAcc(double cur_std, double x, double cur_mean, double old_mea
   return cur_std + (x - old_mean) * (x - cur_mean);
 }
 
+double median(std::vector<double> &vec) {
+  assert(!vec.empty());
+  const auto median_it1 = vec.begin() + vec.size() / 2;
+  std::nth_element(vec.begin(), median_it1 , vec.end());
+
+  if (vec.size() % 2 != 0)
+    return *median_it1;
+
+  const auto median_it2 = vec.begin() + vec.size() / 2 - 1;
+  std::nth_element(vec.begin(), median_it2 , vec.end());
+  return (*median_it1 + *median_it2) / 2;
+}
+
 double estimateCellZScore(const SparseMatrix<bool> &adj_mat, const std::vector<bool> &is_control,
                           const VectorXd &cur_col, size_t dst_cell_id, bool normalize_both=false) {
     double mean_val_control = 0.0, mean_val_case = 0.0, mean_val_all = 0.0, std_acc = 0.0;
@@ -146,7 +159,8 @@ MatrixXd collapseMatrixNorm(const SparseMatrix<double> &mtx, const std::vector<i
 //' @param sample_per_cell must contains ids from 0 to n_samples-1
 //' @param n_samples must be equal to maximum(sample_per_cell) + 1
 double estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::vector<int> &sample_per_cell,
-                                   const std::vector<int> &nn_ids, const std::vector<bool> &is_ref, const int n_samples) {
+                                   const std::vector<int> &nn_ids, const std::vector<bool> &is_ref, const int n_samples,
+                                   const int min_n_between, const int min_n_within, const int min_n_obs_per_samp, bool norm_all, bool robust) {
   std::vector<int> n_ids_per_samp(n_samples, 0);
   for (int id : nn_ids) {
     n_ids_per_samp[sample_per_cell[id]]++;
@@ -154,37 +168,47 @@ double estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::ve
 
   const auto mat_collapsed = collapseMatrixNorm(cm, sample_per_cell, nn_ids, n_ids_per_samp);
 
-  double within_dist = 0, between_dist = 0;
-  int n_within = 0, n_between = 0;
+
+  std::vector<double> within_dists, between_dists;
   for (int s1 = 0; s1 < n_samples; ++s1) {
-    if (n_ids_per_samp.at(s1) == 0)
+    if (n_ids_per_samp.at(s1) < min_n_obs_per_samp)
       continue;
 
     auto v1 = mat_collapsed.col(s1);
     for (int s2 = s1 + 1; s2 < n_samples; ++s2) {
-      if (n_ids_per_samp.at(s2) == 0)
+      if (n_ids_per_samp.at(s2) < min_n_obs_per_samp)
         continue;
 
       auto v2 = mat_collapsed.col(s2);
       double dist = estimateCosineDistance(v1, v2);
-      if (is_ref.at(s1) && is_ref.at(s2)) {
-        within_dist = incrementMean(within_dist, dist, ++n_within);
+      bool is_within = norm_all ? (is_ref.at(s1) == is_ref.at(s2)) : (is_ref.at(s1) && is_ref.at(s2));
+      if (is_within) {
+        within_dists.push_back(dist);
       } else if (is_ref.at(s1) != is_ref.at(s2)) {
-        between_dist = incrementMean(between_dist, dist, ++n_between);
+        between_dists.push_back(dist);
       }
     }
   }
 
-  if (n_within == 0) {
+  if ((within_dists.size() < min_n_within) || (between_dists.size() < min_n_between))
     return NAN;
+
+  double within_dist = 0, between_dist = 0;
+  if (!robust) {
+    between_dist = std::accumulate(between_dists.begin(), between_dists.end(), 0.0) / between_dists.size();
+    within_dist = std::accumulate(within_dists.begin(), within_dists.end(), 0.0) / within_dists.size();
+  } else {
+    between_dist = median(between_dists);
+    within_dist = median(within_dists);
   }
 
   return between_dist / within_dist;
 }
 
 // [[Rcpp::export]]
-NumericVector estimateClusterFreeExpressionShifts(const Eigen::SparseMatrix<double> &cm, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool> &is_ref,
-                                                  bool verbose=true, int n_cores=1) {
+NumericVector estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double> &cm, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool> &is_ref,
+                                                   const int min_n_between=1, const int min_n_within=1, const int min_n_obs_per_samp=1, bool norm_all=false, bool robust=true,
+                                                   bool verbose=true, int n_cores=1) {
   const auto samp_per_cell_c = as<std::vector<int>>(IntegerVector(sample_per_cell - 1));
   int n_samples = 0;
   for (int f : samp_per_cell_c) {
@@ -204,8 +228,9 @@ NumericVector estimateClusterFreeExpressionShifts(const Eigen::SparseMatrix<doub
 
   std::vector<double> res_scores(nn_ids_c.size(), 0);
 
-  auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &is_ref, &n_samples, &res_scores](int i) {
-    res_scores[i] = estimateCellExpressionShift(cm, samp_per_cell_c, nn_ids_c[i], is_ref, n_samples);
+  auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &is_ref, &n_samples, &res_scores, &min_n_between, &min_n_within, &min_n_obs_per_samp, &norm_all, robust](int i) {
+    res_scores[i] = estimateCellExpressionShift(cm, samp_per_cell_c, nn_ids_c[i], is_ref, n_samples,
+                                                min_n_between, min_n_within, min_n_obs_per_samp, norm_all, robust);
   };
   sccore::runTaskParallelFor(0, nn_ids_c.size(), task, n_cores, verbose);
 

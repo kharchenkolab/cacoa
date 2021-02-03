@@ -135,9 +135,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param n.cores Number of cores (default: stored integer)
     #' @param name Test name (default="expression.shifts")
     #' @return a list include \itemize{
-    #'   \item{df: a table with cluster distances (normalized if within.gorup.normalization=T), cell type, number of cells}
+    #'   \item{dist.df: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells}
     #'   \item{p.dist.info: raw list of `n.subsamples` sampled distance matrices (cells were subsampled)}
     #'   \item{sample.groups: same as the provided variable}
+    #'   \item{cell.groups: same as the provided variable}
     #'   \item{valid.comparisons: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)}
     #' }
     estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist='JS', within.group.normalization=TRUE, valid.comparisons=NULL,
@@ -1622,7 +1623,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     estimateClusterFreeZScores = function(n.top.genes=NULL, max.z=20, min.expr.frac=0.001, normalize=c("ref", "both"),
                                           verbose=self$verbose, n.cores=self$n.cores) {
       normalize <- match.arg(normalize)
-      cm <- extractJointCountMatrix(self$data.object)
+      cm <- self$getJointCountMatrix()
       genes <- private$getTopGenes(n.top.genes, gene.selection="expression", cm.joint=cm, min.expr.frac=min.expr.frac)
 
       if (verbose)
@@ -1665,8 +1666,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
     #' Results are also stored in the `cluster.free.expr.shifts` field.
     estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection="change", excluded.genes=NULL,
+                                                   min.n.between=2, min.n.within=max(min.n.between, 1), min.n.obs.per.samp=3, norm.all=FALSE, robust=TRUE,
                                                    verbose=self$verbose, n.cores=self$n.cores) {
-      cm <- extractJointCountMatrix(self$data.object)
+      cm <- self$getJointCountMatrix()
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, excluded.genes=excluded.genes)
       cm <- Matrix::t(cm[, genes])
 
@@ -1676,8 +1678,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         igraph::as_adjacency_matrix() %>% as("dgTMatrix") %>%
         {setNames(split(.@j, .@i + 1), rownames(.))}
 
-      shifts <- estimateClusterFreeExpressionShifts(cm, self$sample.per.cell[names(nns.per.cell)], nns.per.cell,
-                                                    is.ref, verbose=verbose, n_cores=n.cores)
+      shifts <- estimateClusterFreeExpressionShiftsC(cm, self$sample.per.cell[names(nns.per.cell)], nns.per.cell,
+                                                     is.ref, min_n_between=min.n.between, min_n_within=min.n.within, min_n_obs_per_samp=min.n.obs.per.samp,
+                                                     norm_all=norm.all, robust=robust, verbose=verbose, n_cores=n.cores)
       self$test.results[["cluster.free.expr.shifts"]] <- shifts
 
       return(invisible(shifts))
@@ -1786,8 +1789,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param font.size size range for cell type labels
     #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
     plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, plot.both.conditions=FALSE, plot.na=FALSE, max.shift=NULL,
-                                               alpha=0.2, font.size=c(3,5), ...) {
-      shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts")
+                                               alpha=0.2, font.size=c(3,5), palette=brewerPalette("RdYlBu"), ...) {
+      shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts") %>% na.omit()
       private$checkCellEmbedding()
 
       if (!plot.both.conditions) {
@@ -1795,7 +1798,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       if (is.null(max.shift)) {
-        max.shift <- quantile(shifts, 0.95, na.rm=TRUE)
+        max.shift <- quantile(shifts, 0.95)
       }
 
       if (max.shift > 0) {
@@ -1810,11 +1813,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         gg <- gg + ann.ls[[which(sapply(ann.ls, function(l) "GeomLabelRepel" %in% class(l$geom)))]]
       }
 
+      colors <- palette(11)
+      # Ensure that 1.0 is in the middle (e.g. yellow)
+      col.vals <- c(seq(0, 1, length.out=6)[1:5], seq(1, max.shift, length.out=6)) %>%
+        scales::rescale()
       gg <- gg +
         scale_size_continuous(range=font.size, trans='identity', guide='none') +
-        scale_color_gradientn(colours=c('#2c7bb6', '#abd9e9', '#ffffbf', '#fdae61', '#d7191c'),
-                              values=c(0, 0.5 / max.shift, 1 / max.shift, 0.5 - 0.5 * max.shift, 1.0), # Ensure that 1.0 has yellow color
-                              name="Ratio") +theme(legend.background = element_blank())
+        scale_color_gradientn(colors=colors, values=col.vals, name="Ratio", limits=c(0, max.shift)) +
+        theme(legend.background = element_blank())
       return(gg)
     },
 
@@ -1883,6 +1889,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       self$sample.per.cell %>%
         {setNames(as.character(self$sample.groups[as.character(.)]), names(.))} %>%
         as.factor()
+    },
+
+    getJointCountMatrix = function(force=FALSE) {
+      if (force || is.null(self$cache$joint.count.matrix)) {
+        self$cache$joint.count.matrix <- extractJointCountMatrix(self$data.object)
+      }
+
+      return(self$cache$joint.count.matrix)
     }
   ),
 
@@ -1912,7 +1926,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         genes <- extractOdGenes(self$data.object, n + length(excluded.genes))
       } else {
         if (is.null(cm.joint)) {
-          cm.joint <- extractJointCountMatrix(self$data.object)
+          cm.joint <- self$getJointCountMatrix()
         }
 
         cm.joint@x <- 1 * (cm.joint@x > 0)

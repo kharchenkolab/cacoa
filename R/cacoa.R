@@ -14,7 +14,6 @@
 #' @param excluded.genes list of genes to exclude during estimation. For example, a list of mitochondrial genes.
 Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
   public = list(
-    #' @field n.cores number of cores
     n.cores = 1,
 
     #' @field verbose print diagnostic messages
@@ -493,71 +492,177 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(invisible(self$test.results[[name]] <- de.res[[1]]))
     },
 
+    
     #' @description  Plot DE stability per cell type
     #' @param name - results slot name (default: 'de')
     #' @param show.pairs transparency value for the data points (default: 0.05)
     #' @param notch - whether to show notches in the boxplot version (default=TRUE)
     #' @return A ggplot2 object
-    plotDeStabilityPerCellType=function(name='de',
+    estimateDEStability=function(de.name='de',
+                                 name='de.jaccards',
+                                 top.n.genes = NULL,
+                                 padj.threshold = NULL){
+      
+      
+      if( (!is.null(padj.threshold)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or padj.threshold) should be provided')
+      if(!is.null(padj.threshold) & !is.null(top.n.genes)) stop('At least one threshold (top.n.genes or padj.threshold) should be provided')
+      
+      de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
+      
+      if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
+      jaccards <- estimateStabilityPerCellType(de.res,
+                                          top.n.genes,
+                                          padj.threshold)
+      self$test.results[[name]] <- jaccards
+    },
+    
+    
+    estimateGOStability=function(org.db,
+                                 de.name='de',
+                                 name='go.stability',
+                                 p.adj=1, 
+                                 expr.cutoff=0.05, 
+                                 de.raw=NULL, 
+                                 cell.groups=self$cell.groups, 
+                                 universe=NULL, 
+                                 transposed=TRUE, 
+                                 verbose=self$verbose, 
+                                 n.cores=self$n.cores){
+      
+      de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
+      if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
+      
+      
+      de.res.cell.type = de.res$Id2_Lamp5$subsamples
+      
+      res <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
+        prepareOntologyData(org.db = org.db, 
+                            p.adj = p.adj, 
+                            expr.cutoff = expr.cutoff, 
+                            de.raw = de.res.cell.type, cell.groups = cell.groups, universe = universe, 
+                            transposed = transposed, verbose = verbose, n.cores = n.cores)
+      
+      
+
+      self$test.results[[name]] <- res
+    },
+    
+    #' @description  Plot DE stability per cell type
+    #' @param name - results slot name (default: 'de')
+    #' @param show.pairs transparency value for the data points (default: 0.05)
+    #' @param notch - whether to show notches in the boxplot version (default=TRUE)
+    #' @return A ggplot2 object
+    plotDeStabilityPerCellType=function(name='de.jaccards',
                                        notch = T,
                                        show.jitter = T,
                                        jitter.alpha = 0.05,
                                        show.pairs = F,
-                                       top.n.genes = 200) {
-      de.res <- private$getResults(name)
-      if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
+                                       sort.order = F) {
 
-      jaccard.pw.top <- function(subsamples, top.thresh){
-        jac.all = c()
-        for(i in 1:length(subsamples)) {
-          for(j in 1:length(subsamples)) {
-            if (j <= i) next
-            set1 <- rownames(subsamples[[i]])[rank(subsamples[[i]]$pvalue) <= top.thresh]
-            set2 <- rownames(subsamples[[j]])[rank(subsamples[[j]]$pvalue) <= top.thresh]
-            jac.all <- c(jac.all, length(intersect(set1, set2)) / length(unique(c(set1, set2))))
-          }
-        }
-        return(jac.all)
-      }
-
-      data.all = data.frame()
-      for(cell.type in names(de.res)){
-        # print(cell.type)
-        subsamples <- de.res[[cell.type]]$subsamples
-        # TODO remove some subsamples due to the min.cell.counts
-        # coomare resampling results with "initial"
-
-        jacc.init = c()
-        for(subs.name in names(subsamples)){
-          subsamples.tmp = list(de.res[[cell.type]]$subsamples[[subs.name]],
-                                de.res[[cell.type]]$res)
-          jacc.init = c(jacc.init, jaccard.pw.top(subsamples.tmp, 200))
-        }
-        subsamples <- subsamples[(jacc.init != 0) & (jacc.init != 1)]
-
-        if(length(subsamples) <= 2) next
-
-        jacc.tmp <- jaccard.pw.top(subsamples, top.n.genes)
-        data.tmp <- data.frame(group = cell.type,
-                               value = jacc.tmp,
-                               cmp = 1:length(jacc.tmp))
-        data.all <- rbind(data.all, data.tmp)
-      }
-
-      if(! show.pairs) {
-        p <- ggplot(data.all, aes(x=group, y=value, fill=group,
-                                  group=group)) + geom_boxplot(outlier.shape = NA) + geom_jitter(alpha=0.05)
-      } else {
-        p <- ggplot(data.all, aes(x=group, y=value, fill=group,
-                                  group=cmp, color=cmp)) + geom_line()
-      }
-
-      p + self$plot.theme + theme(legend.position = "none") +
-        theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1)) +
-        labs(x='cell type', y='Jaccard index') +
-        ggtitle(paste0(self$target.level, '. Top ', as.character(top.n.genes), ' genes'))
+      jaccards <- private$getResults(name, 'estimateDEStability()')
+      p <- plotStability(jaccards = jaccards,
+                         notch = notch,
+                         show.jitter = show.jitter,
+                         jitter.alpha = jitter.alpha,
+                         show.pairs = show.pairs,
+                         sort.order = sort.order,
+                         xlabel = 'Cell Type',
+                         ylabel = 'Jaccard Index',
+                         palette=self$cell.groups.palette,
+                         )
+      return(p)
     },
-
+    
+    estimateDeStabilityPerTest=function(de.names,
+                                           name='de.jacc.tests',
+                                           top.n.genes = NULL,
+                                           padj.threshold = NULL) {
+      
+      if( (!is.null(padj.threshold)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or padj.threshold) should be provided')
+      if(is.null(padj.threshold) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or padj.threshold) should be provided')
+      
+      jaccards.all <- data.frame()
+      for(de.name in de.names){
+        de.res <- private$getResults(de.name)
+        if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
+        jaccards <- estimateStabilityPerCellType(de.res = de.res,
+                                                 top.n.genes = top.n.genes,
+                                                 padj.threshold = padj.threshold)
+        jacc.medians <- sapply(unique(jaccards$group), function(x) median(jaccards$value[jaccards$group == x]))
+        
+        jaccards.tmp <- data.frame(group = de.name, value = jacc.medians,
+                                   cmp = names(jacc.medians))
+        jaccards.all <- rbind(jaccards.all, jaccards.tmp)
+        
+      }
+      
+      self$test.results[[name]] <- jaccards.all
+    },
+    
+    plotDeStabilityPerTest=function(name='de.jacc.tests',
+                                        notch = T,
+                                        show.jitter = T,
+                                        jitter.alpha = 0.05,
+                                        show.pairs = F,
+                                        sort.order = F) {
+      
+      jaccards <- private$getResults(name, 'estimateDEStability()')
+      p <- plotStability(jaccards = jaccards,
+                         notch = notch,
+                         show.jitter = show.jitter,
+                         jitter.alpha = jitter.alpha,
+                         show.pairs = show.pairs,
+                         sort.order = sort.order,
+                         xlabel = 'Test name',
+                         ylabel = 'Jaccard Index')
+      return(p)
+    },
+    
+    plotNumberOfDEGenesStability=function(name = 'de',
+                                          p.adjust = TRUE, 
+                                          pvalue.cutoff=0.05,
+                                          notch = T,
+                                          show.jitter = T,
+                                          jitter.alpha = 0.1,
+                                          show.pairs = F,
+                                          sort.order = F,
+                                          log.y.axis = F){
+      de.res <- private$getResults(name, 'estimatePerCellTypeDE()')
+      if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
+      
+      de.numbers <- estimateNumberOfTermsStability(de.res, 
+                                                   p.adjust = p.adjust,
+                                                   pvalue.cutoff = pvalue.cutoff)
+      
+      p <- plotStability(jaccards = de.numbers,
+                         notch = notch,
+                         show.jitter = show.jitter,
+                         jitter.alpha = jitter.alpha,
+                         show.pairs = show.pairs,
+                         sort.order = sort.order,
+                         xlabel = 'Cell Type',
+                         ylabel = 'Number of Significant DE genes',
+                         log.y.axis = log.y.axis)
+      return(p)
+    },
+    
+    
+    plotDEStabilityPerGene = function(name = 'de',
+                                      cell.type = NULL,
+                                      stability.score = 'stab.median.rank'){
+      de.res <- private$getResults(name, 'estimatePerCellTypeDE()')
+      possible.scores = c('stab.median.rank', 'stab.mean.rank', 'stab.var.rank')
+      if ( !(stability.score %in% possible.scores) ) stop('Please provide correct name of the stability core')
+      if ( !(cell.type %in% names(de.res)) ) stop('Please provide correct cell type to visualise')
+      if ( !(stability.score %in% names(de.res[[cell.type]]$res)) ) stop('Stability score was not calculated')
+      
+      p <- smoothScatter(x = rank(de.res[[cell.type]]$res$pvalue),
+                          y = rank(de.res[[cell.type]]$res[[stability.score]]),
+                         xlab = 'rank of DE gene', ylab = 'stability score')
+      
+      
+    },
+        
     #' @description Plot number of significant DE genes as a function of number of cells
     #' @param name results slot in which the DE results should be stored (default: 'de')
     #' @param palette cell group palette (default: stored $cell.groups.palette)
@@ -681,9 +786,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param universe Only set this if a common background gene set is desired for all cell groups (default: NULL)
     #' @param transposed Whether count matrices should be transposed (default=T)
     #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
-    prepareOntologyData=function(org.db, p.adj=1, expr.cutoff=0.05, de.raw=NULL, cell.groups=self$cell.groups, universe=NULL, transposed=TRUE, verbose=self$verbose, n.cores=self$n.cores) {
+    prepareOntologyData=function(org.db, p.adj=1, expr.cutoff=0.05, de.raw=NULL, 
+                                 cell.groups=self$cell.groups, 
+                                 universe=NULL, transposed=TRUE, 
+                                 verbose=self$verbose, n.cores=self$n.cores,
+                                 de.name = 'de',
+                                 name = 'gene.ids') {
       if (is.null(de.raw)) {
-        de.raw <- private$getResults("de", "estimatePerCellTypeDE")
+        de.raw <- private$getResults(de.name, "estimatePerCellTypeDE()")
       }
 
       # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before calculating
@@ -694,9 +804,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       if(is.null(cell.groups))
         stop("'cell.groups' must be provided either to Cacoa constructor or to this method.")
 
-      self$test.results[["gene.ids"]] <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
-        prepareOntologyData(org.db = org.db, p.adj = p.adj, expr.cutoff = expr.cutoff, de.raw = de.raw, cell.groups = cell.groups, universe = universe, transposed = transposed, verbose = verbose, n.cores = n.cores)
-      return(invisible(self$test.results[["gene.ids"]]))
+      self$test.results[[name]] <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
+        prepareOntologyData(org.db = org.db, p.adj = p.adj, expr.cutoff = expr.cutoff, 
+                            de.raw = de.raw, cell.groups = cell.groups, universe = universe, 
+                            transposed = transposed, verbose = verbose, n.cores = n.cores)
+      return(invisible(self$test.results[[name]]))
     },
 
     #' @description  Plot embedding
@@ -721,8 +833,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param min.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5)
     #' @param max.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
-    estimateOntology=function(type = "GO", org.db, n.top.genes = 500, de.gene.ids=NULL, go.environment=self$test.results$GO$go.environment, p.adjust.method="BH",
-                              readable=TRUE, verbose=TRUE, qvalue.cutoff=0.2, min.gs.size=10, max.gs.size=5e2, keep.gene.sets = F, ...) {
+    estimateOntology=function(type = "GO", org.db, n.top.genes = 500, 
+                              de.gene.ids=NULL, 
+                              go.environment=self$test.results$GO$go.environment, 
+                              p.adjust.method="BH",
+                              readable=TRUE, verbose=TRUE, 
+                              qvalue.cutoff=0.2, min.gs.size=10, 
+                              max.gs.size=5e2, keep.gene.sets = F, ...) {
       if(!is.null(type) & !type %in% c("GO", "DO", "GSEA"))
         stop("'type' must be 'GO', 'DO', or 'GSEA'.")
 
@@ -730,9 +847,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         de.gene.ids <- private$getResults("gene.ids", "prepareOntologyData")
       }
 
-      self$test.results[[type]] <- estimateOntology(type=type, org.db=org.db, n.top.genes=n.top.genes, de.gene.ids=de.gene.ids, go.environment=go.environment,
-                                                    verbose=verbose, qvalue.cutoff=qvalue.cutoff, pAdjustMethod=p.adjust.method, readable=readable,
-                                                    minGSSize=min.gs.size, maxGSSize=max.gs.size, keep.gene.sets = keep.gene.sets, ...)
+      self$test.results[[type]] <- estimateOntology(type=type, org.db=org.db, 
+                                                    n.top.genes=n.top.genes, de.gene.ids=de.gene.ids, 
+                                                    go.environment=go.environment,
+                                                    verbose=verbose, qvalue.cutoff=qvalue.cutoff, 
+                                                    pAdjustMethod=p.adjust.method, readable=readable,
+                                                    minGSSize=min.gs.size, maxGSSize=max.gs.size, 
+                                                    keep.gene.sets = keep.gene.sets, ...)
       return(invisible(self$test.results[[type]]))
     },
 

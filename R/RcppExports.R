@@ -12,8 +12,8 @@ clusterFreeZScoreMat <- function(adj_mat, count_mat, is_control, min_z = 0.01, n
     .Call('_cacoa_clusterFreeZScoreMat', PACKAGE = 'cacoa', adj_mat, count_mat, is_control, min_z, normalize_both, verbose, n_cores)
 }
 
-estimateClusterFreeExpressionShiftsC <- function(cm, sample_per_cell, nn_ids, is_ref, min_n_between = 1L, min_n_within = 1L, min_n_obs_per_samp = 1L, norm_all = FALSE, robust = TRUE, verbose = TRUE, n_cores = 1L) {
-    .Call('_cacoa_estimateClusterFreeExpressionShiftsC', PACKAGE = 'cacoa', cm, sample_per_cell, nn_ids, is_ref, min_n_between, min_n_within, min_n_obs_per_samp, norm_all, robust, verbose, n_cores)
+estimateClusterFreeExpressionShiftsC <- function(cm, sample_per_cell, nn_ids, is_ref, min_n_between = 1L, min_n_within = 1L, min_n_obs_per_samp = 1L, norm_all = FALSE, robust = TRUE, verbose = TRUE, n_cores = 1L, dist = "cosine", log_vecs = FALSE) {
+    .Call('_cacoa_estimateClusterFreeExpressionShiftsC', PACKAGE = 'cacoa', cm, sample_per_cell, nn_ids, is_ref, min_n_between, min_n_within, min_n_obs_per_samp, norm_all, robust, verbose, n_cores, dist, log_vecs)
 }
 
 projdiff <- function(mat, g1, g2) {

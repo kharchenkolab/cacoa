@@ -1663,11 +1663,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Estimate Cluster-free Expression Shift
+    #' @param n.top.genes number of top genes for the distance estimation (default: 3000)
+    #' @param gene.selection the criterion for selecting top genes.
+    #' Options: "change" (most changed), "expression" (most expressed), "od" (over-dispersed). (default: "changed")
+    #' @param excluded.genes genes, excluded from the analysis, e.g. mitochondrial genes (default: NULL)
+    #' @param min.n.between minimal number of pairs between condition for distance estimation (default: 2)
+    #' @param min.n.within minimal number of pairs within one condition for distance estimation (default: `min.n.between`)
+    #' @param min.n.obs.per.samp minimal number of cells per sample for using it in distance estimation (default: 3)
+    #' @param norm.all whether to normalize results relative to distances within both conditions (TRUE) or only to the control (FALSE)
+    #' @param dist distance measure. Options: "cor" (correlation), "cosine" or "js" (Jensen–Shannon)
+    #' @param log.vectors whether to use log10 on the normalized expression before estimating the distance.
+    #' In most cases, must be TRUE for "cosine" and "cor" distances and always must be FALSE for "js". (default: `dist != 'js'`)
     #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
     #' Results are also stored in the `cluster.free.expr.shifts` field.
     estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection="change", excluded.genes=NULL,
                                                    min.n.between=2, min.n.within=max(min.n.between, 1), min.n.obs.per.samp=3, norm.all=FALSE, robust=TRUE,
-                                                   verbose=self$verbose, n.cores=self$n.cores) {
+                                                   verbose=self$verbose, n.cores=self$n.cores, dist="cor", log.vectors=(dist != "js")) {
       cm <- self$getJointCountMatrix()
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, excluded.genes=excluded.genes)
       cm <- Matrix::t(cm[, genes])
@@ -1680,7 +1691,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       shifts <- estimateClusterFreeExpressionShiftsC(cm, self$sample.per.cell[names(nns.per.cell)], nns.per.cell,
                                                      is.ref, min_n_between=min.n.between, min_n_within=min.n.within, min_n_obs_per_samp=min.n.obs.per.samp,
-                                                     norm_all=norm.all, robust=robust, verbose=verbose, n_cores=n.cores)
+                                                     norm_all=norm.all, robust=robust, verbose=verbose, n_cores=n.cores,
+                                                     dist=dist, log_vecs=log.vectors)
       self$test.results[["cluster.free.expr.shifts"]] <- shifts
 
       return(invisible(shifts))
@@ -1788,8 +1800,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param max.shift all shift values above `max.shift` are set to this value when plotting. Default: 95% of the shifts.
     #' @param font.size size range for cell type labels
     #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
-    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, plot.both.conditions=FALSE, plot.na=FALSE, max.shift=NULL,
-                                               alpha=0.2, font.size=c(3,5), palette=brewerPalette("RdYlBu"), ...) {
+    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, plot.both.conditions=FALSE, plot.na=FALSE, color.range=c("0", "97.5%"),
+                                               alpha=0.2, font.size=c(3,5), palette=brewerPalette("RdYlBu"), rescale=TRUE, ...) {
       shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts") %>% na.omit()
       private$checkCellEmbedding()
 
@@ -1797,13 +1809,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         shifts %<>%  .[self$sample.groups[self$sample.per.cell[names(.)]] != self$ref.level]
       }
 
-      if (is.null(max.shift)) {
-        max.shift <- quantile(shifts, 0.95)
+      if (is.null(color.range)) {
+        color.range <- range(shifts)
+      } else if (is.character(color.range)) {
+        color.range[grep("%", color.range)] %<>%
+          sapply(function(q) {as.numeric(strsplit(q, "%")[[1]]) / 100}) %>%
+          quantile(shifts, .)
+        color.range %<>% as.numeric()
       }
 
-      if (max.shift > 0) {
-        shifts %<>% pmin(max.shift)
-      }
+      shifts %<>% pmax(color.range[1]) %>% pmin(color.range[2])
 
       gg <- self$plotEmbedding(colors=shifts, plot.na=plot.na, alpha=alpha, ...)
       gg$scales$scales %<>% .[sapply(., function(s) s$aesthetics != "colour")]
@@ -1814,12 +1829,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       }
 
       colors <- palette(11)
-      # Ensure that 1.0 is in the middle (e.g. yellow)
-      col.vals <- c(seq(0, 1, length.out=6)[1:5], seq(1, max.shift, length.out=6)) %>%
-        scales::rescale()
+      if (rescale && (color.range[1] < 1) && (color.range[2] > 1)) { # Ensure that 1.0 is in the middle (e.g. yellow)
+        col.vals <- c(seq(0, 1, length.out=6)[1:5], seq(1, color.range[2], length.out=6)) %>%
+          scales::rescale()
+      } else {
+        col.vals <- seq(color.range[1], color.range[2], length.out=11) %>% scales::rescale()
+      }
+
       gg <- gg +
         scale_size_continuous(range=font.size, trans='identity', guide='none') +
-        scale_color_gradientn(colors=colors, values=col.vals, name="Ratio", limits=c(0, max.shift)) +
+        scale_color_gradientn(colors=colors, values=col.vals, name="Ratio", limits=color.range) +
         theme(legend.background = element_blank())
       return(gg)
     },

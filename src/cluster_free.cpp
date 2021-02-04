@@ -123,34 +123,82 @@ SEXP clusterFreeZScoreMat(const SEXP adj_mat, const SEXP count_mat, const std::v
 
 ////// Expression shifts
 
-double estimateCosineDistance(const Eigen::VectorXd &v1, const Eigen::VectorXd &v2) {
+double estimateCorrelationDistance(const Eigen::VectorXd &v1, const Eigen::VectorXd &v2, bool centered) {
   if (v1.size() != v2.size())
     stop("Vectors must have the same length");
+
+  double m1 = 0, m2 = 0;
+  if (centered) {
+    m1 = v1.mean();
+    m2 = v2.mean();
+  }
 
   double vp = 0, v1s = 0, v2s = 0;
   for (size_t i = 0; i < v1.size(); ++i) {
     if (std::isnan(v1[i]) || std::isnan(v2[i]))
       return NAN;
 
-    vp += v1[i] * v2[i];
-    v1s += v1[i] * v1[i];
-    v2s += v2[i] * v2[i];
+    double e1 = (v1[i] - m1), e2 = (v2[i] - m2);
+    vp += e1 * e2;
+    v1s += e1 * e1;
+    v2s += e2 * e2;
   }
 
   return 1 - vp / std::max(std::sqrt(v1s) * std::sqrt(v2s), 1e-10);
 }
 
+inline double average(double val1, double val2) {
+  return (val1 + val2) / 2;
+}
+
+double estimateKLDivergence(const Eigen::VectorXd &v1, const Eigen::VectorXd &v2) {
+  double res = 0;
+  if (v1.size() != v2.size())
+    stop("Vectors must have the same length");
+
+  for (size_t i = 0; i < v1.size(); ++i) {
+    double d1 = v1[i], d2 = v2[i];
+    if (std::isnan(d1) || std::isnan(d2))
+      return NAN;
+
+    if (d1 > 1e-10 && d2 > 1e-10) {
+      res += std::log(d1 / d2) * d1;
+    }
+  }
+
+  return res;
+}
+
+double estimateJSDivergence(const Eigen::VectorXd &v1, const Eigen::VectorXd &v2) {
+  if (v1.size() != v2.size())
+    stop("Vectors must have the same length");
+
+  VectorXd avg = VectorXd::Zero(v1.size());
+  std::transform(v1.data(), v1.data() + v1.size(), v2.data(), avg.data(), average);
+
+  double d1 = estimateKLDivergence(v1, avg);
+  double d2 = estimateKLDivergence(v2, avg);
+
+  return std::sqrt(0.5 * (d1 + d2));
+}
+
 MatrixXd collapseMatrixNorm(const SparseMatrix<double> &mtx, const std::vector<int> &factor,
-                            const std::vector<int> &nn_ids, const std::vector<int> &n_obs_per_samp) {
+                            const std::vector<int> &nn_ids, const std::vector<int> &n_obs_per_samp, bool col_norm=true) {
   MatrixXd res = MatrixXd::Zero(mtx.rows(), n_obs_per_samp.size());
   for (int id : nn_ids) {
-      int fac = factor[id];
-      if (fac >= n_obs_per_samp.size() || fac < 0)
-          stop("Wrong factor: " + std::to_string(fac) + ", id: " + std::to_string(id));
+    int fac = factor[id];
+    if (fac >= n_obs_per_samp.size() || fac < 0)
+        stop("Wrong factor: " + std::to_string(fac) + ", id: " + std::to_string(id));
 
-      for (SparseMatrix<double, ColMajor>::InnerIterator gene_it(mtx, id); gene_it; ++gene_it) {
-          res(gene_it.row(), fac) += gene_it.value() / n_obs_per_samp.at(fac);
-      }
+    for (SparseMatrix<double, ColMajor>::InnerIterator gene_it(mtx, id); gene_it; ++gene_it) {
+        res(gene_it.row(), fac) += gene_it.value() / n_obs_per_samp.at(fac);
+    }
+  }
+
+  if (col_norm) {
+    for (int j = 0; j < res.cols(); j++){
+      res.col(j) /= std::max(res.col(j).sum(), 1e-5);
+    }
   }
 
   return res;
@@ -160,14 +208,19 @@ MatrixXd collapseMatrixNorm(const SparseMatrix<double> &mtx, const std::vector<i
 //' @param n_samples must be equal to maximum(sample_per_cell) + 1
 double estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::vector<int> &sample_per_cell,
                                    const std::vector<int> &nn_ids, const std::vector<bool> &is_ref, const int n_samples,
-                                   const int min_n_between, const int min_n_within, const int min_n_obs_per_samp, bool norm_all, bool robust) {
+                                   const int min_n_between, const int min_n_within, const int min_n_obs_per_samp, bool norm_all,
+                                   bool robust, const std::string &dist = "cosine", bool log_vecs=false) {
   std::vector<int> n_ids_per_samp(n_samples, 0);
   for (int id : nn_ids) {
     n_ids_per_samp[sample_per_cell[id]]++;
   }
 
-  const auto mat_collapsed = collapseMatrixNorm(cm, sample_per_cell, nn_ids, n_ids_per_samp);
-
+  auto mat_collapsed = collapseMatrixNorm(cm, sample_per_cell, nn_ids, n_ids_per_samp);
+  if (log_vecs) {
+    for (int i = 0; i < mat_collapsed.size(); ++i) {
+      mat_collapsed(i) = std::log10(1e3 * mat_collapsed(i) + 1);
+    }
+  }
 
   std::vector<double> within_dists, between_dists;
   for (int s1 = 0; s1 < n_samples; ++s1) {
@@ -180,12 +233,22 @@ double estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::ve
         continue;
 
       auto v2 = mat_collapsed.col(s2);
-      double dist = estimateCosineDistance(v1, v2);
+      double d;
+      if (dist == "cosine") {
+        d = estimateCorrelationDistance(v1, v2, false);
+      } else if (dist == "js") {
+        d = estimateJSDivergence(v1, v2);
+      } else if (dist == "cor") {
+        d = estimateCorrelationDistance(v1, v2, true);
+      } else {
+        stop("Unknown dist: ", dist);
+      }
+
       bool is_within = norm_all ? (is_ref.at(s1) == is_ref.at(s2)) : (is_ref.at(s1) && is_ref.at(s2));
       if (is_within) {
-        within_dists.push_back(dist);
+        within_dists.push_back(d);
       } else if (is_ref.at(s1) != is_ref.at(s2)) {
-        between_dists.push_back(dist);
+        between_dists.push_back(d);
       }
     }
   }
@@ -208,7 +271,7 @@ double estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::ve
 // [[Rcpp::export]]
 NumericVector estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double> &cm, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool> &is_ref,
                                                    const int min_n_between=1, const int min_n_within=1, const int min_n_obs_per_samp=1, bool norm_all=false, bool robust=true,
-                                                   bool verbose=true, int n_cores=1) {
+                                                   bool verbose=true, int n_cores=1, const std::string &dist="cosine", bool log_vecs=false) {
   const auto samp_per_cell_c = as<std::vector<int>>(IntegerVector(sample_per_cell - 1));
   int n_samples = 0;
   for (int f : samp_per_cell_c) {
@@ -228,9 +291,11 @@ NumericVector estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<dou
 
   std::vector<double> res_scores(nn_ids_c.size(), 0);
 
-  auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &is_ref, &n_samples, &res_scores, &min_n_between, &min_n_within, &min_n_obs_per_samp, &norm_all, robust](int i) {
+  auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &is_ref, &n_samples, &res_scores, &min_n_between, &min_n_within, &min_n_obs_per_samp, &norm_all,
+               robust, dist, log_vecs](int i) {
     res_scores[i] = estimateCellExpressionShift(cm, samp_per_cell_c, nn_ids_c[i], is_ref, n_samples,
-                                                min_n_between, min_n_within, min_n_obs_per_samp, norm_all, robust);
+                                                min_n_between, min_n_within, min_n_obs_per_samp, norm_all,
+                                                robust, dist, log_vecs);
   };
   sccore::runTaskParallelFor(0, nn_ids_c.size(), task, n_cores, verbose);
 

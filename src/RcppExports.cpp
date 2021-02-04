@@ -25,8 +25,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // estimateClusterFreeExpressionShiftsC
-NumericVector estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double>& cm, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool>& is_ref, const int min_n_between, const int min_n_within, const int min_n_obs_per_samp, bool norm_all, bool robust, bool verbose, int n_cores, const std::string& dist, bool log_vecs);
-RcppExport SEXP _cacoa_estimateClusterFreeExpressionShiftsC(SEXP cmSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP is_refSEXP, SEXP min_n_betweenSEXP, SEXP min_n_withinSEXP, SEXP min_n_obs_per_sampSEXP, SEXP norm_allSEXP, SEXP robustSEXP, SEXP verboseSEXP, SEXP n_coresSEXP, SEXP distSEXP, SEXP log_vecsSEXP) {
+NumericVector estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double>& cm, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool>& is_ref, const int min_n_between, const int min_n_within, const int min_n_obs_per_samp, bool norm_all, bool verbose, int n_cores, const std::string& dist, bool log_vecs);
+RcppExport SEXP _cacoa_estimateClusterFreeExpressionShiftsC(SEXP cmSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP is_refSEXP, SEXP min_n_betweenSEXP, SEXP min_n_withinSEXP, SEXP min_n_obs_per_sampSEXP, SEXP norm_allSEXP, SEXP verboseSEXP, SEXP n_coresSEXP, SEXP distSEXP, SEXP log_vecsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -38,12 +38,11 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const int >::type min_n_within(min_n_withinSEXP);
     Rcpp::traits::input_parameter< const int >::type min_n_obs_per_samp(min_n_obs_per_sampSEXP);
     Rcpp::traits::input_parameter< bool >::type norm_all(norm_allSEXP);
-    Rcpp::traits::input_parameter< bool >::type robust(robustSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
     Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
     Rcpp::traits::input_parameter< const std::string& >::type dist(distSEXP);
     Rcpp::traits::input_parameter< bool >::type log_vecs(log_vecsSEXP);
-    rcpp_result_gen = Rcpp::wrap(estimateClusterFreeExpressionShiftsC(cm, sample_per_cell, nn_ids, is_ref, min_n_between, min_n_within, min_n_obs_per_samp, norm_all, robust, verbose, n_cores, dist, log_vecs));
+    rcpp_result_gen = Rcpp::wrap(estimateClusterFreeExpressionShiftsC(cm, sample_per_cell, nn_ids, is_ref, min_n_between, min_n_within, min_n_obs_per_samp, norm_all, verbose, n_cores, dist, log_vecs));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -63,7 +62,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_clusterFreeZScoreMat", (DL_FUNC) &_cacoa_clusterFreeZScoreMat, 7},
-    {"_cacoa_estimateClusterFreeExpressionShiftsC", (DL_FUNC) &_cacoa_estimateClusterFreeExpressionShiftsC, 13},
+    {"_cacoa_estimateClusterFreeExpressionShiftsC", (DL_FUNC) &_cacoa_estimateClusterFreeExpressionShiftsC, 12},
     {"_cacoa_projdiff", (DL_FUNC) &_cacoa_projdiff, 3},
     {NULL, NULL, 0}
 };

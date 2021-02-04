@@ -1666,7 +1666,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param n.top.genes number of top genes for the distance estimation (default: 3000)
     #' @param gene.selection the criterion for selecting top genes.
     #' Options: "change" (most changed), "expression" (most expressed), "od" (over-dispersed). (default: "changed")
-    #' @param excluded.genes genes, excluded from the analysis, e.g. mitochondrial genes (default: NULL)
     #' @param min.n.between minimal number of pairs between condition for distance estimation (default: 2)
     #' @param min.n.within minimal number of pairs within one condition for distance estimation (default: `min.n.between`)
     #' @param min.n.obs.per.samp minimal number of cells per sample for using it in distance estimation (default: 3)
@@ -1676,11 +1675,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' In most cases, must be TRUE for "cosine" and "cor" distances and always must be FALSE for "js". (default: `dist != 'js'`)
     #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
     #' Results are also stored in the `cluster.free.expr.shifts` field.
-    estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection="change", excluded.genes=NULL,
-                                                   min.n.between=2, min.n.within=max(min.n.between, 1), min.n.obs.per.samp=3, norm.all=FALSE, robust=TRUE,
-                                                   verbose=self$verbose, n.cores=self$n.cores, dist="cor", log.vectors=(dist != "js")) {
+    estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection="change", min.n.between=2, min.n.within=max(min.n.between, 1),
+                                                   min.n.obs.per.samp=3, norm.all=FALSE, dist="cor", log.vectors=(dist != "js"),
+                                                   verbose=self$verbose, n.cores=self$n.cores) {
       cm <- self$getJointCountMatrix()
-      genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, excluded.genes=excluded.genes)
+      genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm)
       cm <- Matrix::t(cm[, genes])
 
       is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
@@ -1691,7 +1690,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       shifts <- estimateClusterFreeExpressionShiftsC(cm, self$sample.per.cell[names(nns.per.cell)], nns.per.cell,
                                                      is.ref, min_n_between=min.n.between, min_n_within=min.n.within, min_n_obs_per_samp=min.n.obs.per.samp,
-                                                     norm_all=norm.all, robust=robust, verbose=verbose, n_cores=n.cores,
+                                                     norm_all=norm.all, verbose=verbose, n_cores=n.cores,
                                                      dist=dist, log_vecs=log.vectors)
       self$test.results[["cluster.free.expr.shifts"]] <- shifts
 

@@ -326,13 +326,10 @@ estimatePerCellTypeDEmethods=function (raw.mats,
 
   # Adjust s.groups
   passed.samples <- strpart(colnames(aggr2), cluster.sep.chr, 1, fixed = TRUE) %>% unique()
-  if(verbose) {
-    if(length(passed.samples) != length(unlist(s.groups))) {
-      warning("Excluded ",length(unlist(s.groups)) - length(passed.samples)," sample(s) due to 'min.cell.count'.")
-    }
-  }
-  s.groups %<>% lapply(function(n) n[n %in% passed.samples])
+  if(verbose && (length(passed.samples) != length(unlist(s.groups))))
+    warning("Excluded ",length(unlist(s.groups)) - length(passed.samples)," sample(s) due to 'min.cell.count'.")
 
+  s.groups %<>% lapply(function(n) n[n %in% passed.samples])
 
   ## For every cell type get differential expression results
   de.res <- sccore::plapply( sccore::sn( levels(cell.groups) ), function(l) {
@@ -351,8 +348,6 @@ estimatePerCellTypeDEmethods=function (raw.mats,
       meta$group <- relevel(meta$group, ref = ref.level)
       if (length(unique(as.character(meta$group))) < 2)  stop("The cluster is not present in both conditions")
 
-
-
       ## External covariates
       if(is.null(meta.info)) {
         design.formula = as.formula('~ group')
@@ -361,8 +356,6 @@ estimatePerCellTypeDEmethods=function (raw.mats,
                                           paste(c(colnames(meta.info), 'group'),
                                                 collapse=' + ')))
       }
-
-
 
       if(grepl('deseq2', tolower(test))) {
         # ----- DESeq2 -----
@@ -459,13 +452,11 @@ estimatePerCellTypeDEmethods=function (raw.mats,
 
         res1$log2FoldChange <- apply(log(cnts.norm+1, base=2), 1, function(x) {
           mean(x[meta$group == target.level]) - mean(x[meta$group == ref.level])})
-
       }
 
       # add Z scores
       if(!is.na(res1[[1]][1])) {
-        res1 <- addZScores(res1) %>%
-          .[order(.$pvalue,decreasing=F),]
+        res1 <- addZScores(res1) %>% .[order(.$pvalue,decreasing=FALSE),]
       }
 
       if (return.matrix) {
@@ -487,4 +478,48 @@ estimatePerCellTypeDEmethods=function (raw.mats,
   }
 
   return(de.res)
+}
+
+#' Summarize DE Resampling Results
+#' @param var.to.sort Variable to calculate ranks
+summarizeDEResamplingResults <- function(de.list, var.to.sort='pvalue') {
+  de.res <- de.list[[1]]
+  for(cell.type in names(de.res)) {
+    genes.init <- genes.common <- rownames(de.res[[cell.type]]$res)
+    mx.stat <- matrix(nrow = length(genes.common), ncol = 0, dimnames = list(genes.common,c()))
+    for(i in 2:length(de.list)){
+      if(!(cell.type %in% names(de.list[[i]]))) next
+      genes.common <- intersect(genes.common, rownames(de.list[[i]][[cell.type]]))
+      mx.stat <- cbind(mx.stat[genes.common,], de.list[[i]][[cell.type]][genes.common, var.to.sort])
+    }
+
+    mx.stat <- apply(mx.stat, 2, rank)
+    stab.mean.rank <- rowMeans(mx.stat) # stab - for stability
+    stab.median.rank <- apply(mx.stat, 1, median)
+    stab.var.rank <- apply(mx.stat, 1, var)
+
+    de.res[[cell.type]]$res$stab.median.rank <- stab.median.rank[genes.init]
+    de.res[[cell.type]]$res$stab.mean.rank <- stab.mean.rank[genes.init]
+    de.res[[cell.type]]$res$stab.var.rank <- stab.var.rank[genes.init]
+
+    # Save subsamples
+    de.res[[cell.type]]$subsamples <- lapply(de.list[2:length(de.list)], `[[`, cell.type)
+  }
+
+  return(de.res)
+}
+
+appendStatisticsToDE <- function(de.list, expr.frac.per.type, min.cell.frac=0.05, min.sample.frac=0.1, adj.method='BH') {
+  for (n in names(de.list)) {
+    de <- de.list[[n]]$res %>%
+      mutate(Gene=rownames(.), CellFrac=expr.frac.per.type[Gene, n],
+             SampleFrac=Matrix::rowMeans(de.list[[n]]$cm > 0)[Gene]) %>%
+      as.data.frame(stringsAsFactors=FALSE) %>% set_rownames(.$Gene)
+    de$padj.filt <- NA
+    mask <- de %$% {(CellFrac >= min.cell.frac) & (SampleFrac >= min.sample.frac) & !(is.na(pvalue))}
+    de$padj.filt[mask] <- p.adjust(de$pvalue[mask], method=adj.method)
+    de.list[[n]]$res <- de
+  }
+
+  return(de.list)
 }

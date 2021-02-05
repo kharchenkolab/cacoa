@@ -1661,23 +1661,38 @@ Estimate Cluster-free Expression Shift
   norm.all = FALSE,
   robust = TRUE,
   verbose = self$verbose,
-  n.cores = self$n.cores
+  n.cores = self$n.cores,
+  dist = "cor",
+  log.vectors = (dist != "js")
 )}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{number of top genes for estimation}
+\item{\code{n.top.genes}}{number of top genes for the distance estimation (default: 3000)}
 
-\item{\code{gene.selection}}{a method to select top genes, "change" selects genes by cluster-free Z-score change,
-"expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "change".}
+\item{\code{gene.selection}}{the criterion for selecting top genes.
+Options: "change" (most changed), "expression" (most expressed), "od" (over-dispersed). (default: "changed")}
 
-\item{\code{excluded.genes}}{list of genes to exclude during estimation. For example, a list of mitochondrial genes.}
+\item{\code{excluded.genes}}{genes, excluded from the analysis, e.g. mitochondrial genes (default: NULL)}
+
+\item{\code{min.n.between}}{minimal number of pairs between condition for distance estimation (default: 2)}
+
+\item{\code{min.n.within}}{minimal number of pairs within one condition for distance estimation (default: \code{min.n.between})}
+
+\item{\code{min.n.obs.per.samp}}{minimal number of cells per sample for using it in distance estimation (default: 3)}
+
+\item{\code{norm.all}}{whether to normalize results relative to distances within both conditions (TRUE) or only to the control (FALSE)}
 
 \item{\code{verbose}}{show progress (default: stored value)}
 
 \item{\code{n.cores}}{number of cores for parallelisation}
+
+\item{\code{dist}}{distance measure. Options: "cor" (correlation), "cosine" or "js" (Jensen–Shannon)}
+
+\item{\code{log.vectors}}{whether to use log10 on the normalized expression before estimating the distance.
+In most cases, must be TRUE for "cosine" and "cor" distances and always must be FALSE for "js". (default: \code{dist != 'js'})}
 }
 \if{html}{\out{</div>}}
 }
@@ -1835,10 +1850,11 @@ Plot cluster-free expression shift z-scores
   cell.groups = self$cell.groups,
   plot.both.conditions = FALSE,
   plot.na = FALSE,
-  max.shift = NULL,
+  color.range = c("0", "97.5\%"),
   alpha = 0.2,
   font.size = c(3, 5),
   palette = brewerPalette("RdYlBu"),
+  rescale = TRUE,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1851,11 +1867,11 @@ Plot cluster-free expression shift z-scores
 \item{\code{plot.both.conditions}}{show both case and control cells. Normally, showing control cells doesn't
 make sense, as control cells always have small distance from control.}
 
-\item{\code{max.shift}}{all shift values above \code{max.shift} are set to this value when plotting. Default: 95\% of the shifts.}
-
 \item{\code{font.size}}{size range for cell type labels}
 
 \item{\code{...}}{parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}}
+
+\item{\code{max.shift}}{all shift values above \code{max.shift} are set to this value when plotting. Default: 95\% of the shifts.}
 }
 \if{html}{\out{</div>}}
 }

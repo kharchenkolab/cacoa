@@ -206,7 +206,8 @@ getOntologyPlotTitle <- function(genes, cell.subgroup, type) {
 #' @param notch - whether to show notches in the boxplot version (default=TRUE)
 #' @param palette - cell type palette
 #' @return A ggplot2 object
-plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch=TRUE, jitter.alpha=0.05, palette=NULL, ylab='expression distance', yline=1, plot.theme=theme_get()) {
+plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch=TRUE, jitter.alpha=0.05, palette=NULL,
+                                         ylab='expression distance', yline=1, plot.theme=theme_get(), jitter.size=1) {
 
   # calculate mean, se and median
   odf <- na.omit(df); # full df is now in odf
@@ -234,7 +235,11 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
     theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12), axis.text.y=element_text(angle=90, hjust=0.5, size=12))+ guides(fill=FALSE)+
     theme(legend.position = "none")+
     labs(x="", y=ylab)
-  if(show.jitter) p <- p + geom_jitter(data=odf, aes(x=cell,y=val),color=1, position=position_jitter(0.1), show.legend=FALSE, alpha=jitter.alpha);
+  if(show.jitter) {
+    p <- p +
+      geom_jitter(data=odf, aes(x=cell,y=val), color=1, position=position_jitter(0.1), show.legend=FALSE,
+                  alpha=jitter.alpha, size=jitter.size)
+  };
   if(!is.null(palette)) {
     p <- p + scale_fill_manual(values=palette)
   }

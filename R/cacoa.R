@@ -269,16 +269,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param show.regression whether to show a whiskers in the size dependency plot
     #' @return A ggplot2 object
     plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch = TRUE, show.jitter=TRUE, jitter.alpha=0.05, show.size.dependency=FALSE,
-                                           show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
+                                           show.whiskers=TRUE, show.regression=TRUE, font.size=5, ...) {
       df <- private$getResults(name, "estimateExpressionShiftMagnitudes()")$dist.df %$%
         data.frame(cell=Type, val=value)
 
       if(show.size.dependency) {
         plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette, ylab='normalized expression distance', yline=NA,
-                            show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme)
+                            show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme, ...)
       } else {
         plotMeanMedValuesPerCellType(df, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
-                                     palette=self$cell.groups.palette, ylab='normalized expression distance', plot.theme=self$plot.theme)
+                                     palette=self$cell.groups.palette, ylab='normalized expression distance',
+                                     plot.theme=self$plot.theme, ...)
       }
     },
 
@@ -1820,7 +1821,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       shifts %<>% pmax(color.range[1]) %>% pmin(color.range[2])
 
       gg <- self$plotEmbedding(colors=shifts, plot.na=plot.na, alpha=alpha, ...)
-      gg$scales$scales %<>% .[sapply(., function(s) s$aesthetics != "colour")]
+      gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
 
       if (!is.null(cell.groups)) {
         ann.ls <- self$plotEmbedding(groups=cell.groups)$layers
@@ -1869,7 +1870,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         if (!smoothed) {
           z.scores <- self$test.results$cluster.free.z
           if ((is.null(z.scores) || !all(genes %in% colnames(z.scores)))) {
-            missed.genes <- setdiff(colnames(z.scores), genes)
+            missed.genes <- setdiff(genes, colnames(z.scores))
             warning("Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See estimateClusterFreeZScores().")
             plot.z <- FALSE
           }

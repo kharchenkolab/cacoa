@@ -436,3 +436,29 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, st
 
   return(p)
 }
+
+plotVolcano <- function(de.df, p.name='padj.filt', legend.pos="none", palette=brewerPalette("RdYlBu"), lf.cutoff=1.5, p.cutoff=0.05,
+                        cell.frac.cutoff=0.25, size=c(0.1, 1.0), lab.size=2, draw.connectors=TRUE, sel.labels=NULL, plot.theme=theme_get(), ...) {
+  checkPackageInstalled("EnhancedVolcano", bioc=TRUE)
+  if (is.null(sel.labels)) {
+    sel.labels <- de.df %$% Gene[(.[[p.name]] <= p.cutoff) & (abs(log2FoldChange) >= lf.cutoff) & (CellFrac >= cell.frac.cutoff)]
+  }
+  gg <- EnhancedVolcano::EnhancedVolcano(
+    de.df, lab=de.df$Gene, x='log2FoldChange', y=p.name, arrowheads=FALSE,
+    pCutoff=p.cutoff, FCcutoff=lf.cutoff, title=NULL, subtitle=NULL, caption=NULL,
+    selectLab=sel.labels, drawConnectors=draw.connectors, labSize=lab.size, ...
+  )
+
+  point.id <- sapply(gg$layers, function(l) "GeomPoint" %in% class(l$geom)) %>%
+    which() %>% .[1]
+  gg$layers[[point.id]] <- geom_point(aes(x=log2FoldChange, y=-log10(.data[[p.name]]), color=CellFrac, size=CellFrac))
+  gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
+
+  gg <- gg +
+    val2ggcol(de.df$CellFrac, palette=palette, color.range=c(0, 1)) +
+    scale_size_continuous(range=size, name="Expr. frac", limits=c(0, 1)) +
+    guides(color=guide_colorbar(title="Expr. frac")) +
+    plot.theme +
+    theme_legend_position(legend.pos)
+  return(gg)
+}

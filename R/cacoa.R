@@ -839,6 +839,37 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(p)
     },
 
+    plotVolcano=function(name='de', cell.types=NULL, palette=NULL, build.panel=TRUE, n.col=3, ...) {
+      de <- private$getResults(name, 'estimatePerCellTypeDE()') %>% lapply(`[[`, 'res')
+      if (is.null(palette)) {
+        palette <- c("#5e4fa2", "#3288bd", "#abdda4", "#fdae61", "#f46d43", "#9e0142") %>%
+          colorRampPalette()
+      }
+
+      if (is.null(cell.types)) cell.types <- names(de)
+      de <- de[intersect(cell.types, names(de))]
+
+      if (length(de) == 0)
+        stop("No cell types left after the filtering")
+
+      if (length(cell.types) == 1)
+        return(plotVolcano(de[[cell.types]], palette=palette, plot.theme=self$plot.theme, ...))
+
+      if (!build.panel)
+        return(lapply(de, plotVolcano, palette=palette, plot.theme=self$plot.theme, ...))
+
+      gg <- lapply(de, plotVolcano, palette=palette, xlab=NULL, ylab=NULL, plot.theme=self$plot.theme, ...) %>%
+        cowplot::plot_grid(plotlist=., ncol=n.col, labels=paste0(names(.)), label_x=0.14,
+                           label_y=0.99, label_size=10, align="hv", axis="lrtb", hjust=0)
+
+      gg <- gg +
+        theme(plot.margin=margin(b=12, l=12)) +
+        draw_label("Log2(Fold Change)", size=12, y=-0.01, angle = 0) +
+        draw_label("-Log10(P)", size=12, x=-0.01, angle = 90)
+
+      return(gg)
+    },
+
     #' @description Save DE results as JSON files
     #' @param saveprefix Prefix for created files (default=NULL)
     #' @param dir.name Name for directory with results (default="JSON")

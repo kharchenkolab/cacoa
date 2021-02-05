@@ -47,6 +47,7 @@ Suggests:
     clusterProfiler (>= 3.0.0),
     DESeq2,
     DOSE,
+    EnhancedVolcano,
     enrichplot,
     fabia,
     ggrastr (>= 0.1.7),

@@ -913,41 +913,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
       return(gg)
     },
 
-    ### Onthology analysis
-
-    #' @description  Filter and prepare DE genes for ontology calculations
-    #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
-    #' @param n.top.genes Number of most different genes to take as input. If less are left after filtering for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)
-    #' @param p.adj Cutoff for filtering highly-expressed DE genes (default=0.05)
-    #' @param expr.cutoff Cutoff for cells per group expressing a DE gene, i.e., cutoff for highly-expressed genes (default=0.05)
-    #' @param de.raw Differentially expressed genes per cell group, results from estimatePerCellTypeDE (default: stored list)
-    #' @param universe Only set this if a common background gene set is desired for all cell groups (default: NULL)
-    #' @param transposed Whether count matrices should be transposed (default=T)
-    #' @return A list containing DE gene IDs, filtered DE genes, and input DE genes
-    prepareOntologyData=function(org.db, p.adj=1, expr.cutoff=0.05, de.raw=NULL,
-                                 cell.groups=self$cell.groups,
-                                 universe=NULL, transposed=TRUE,
-                                 verbose=self$verbose, n.cores=self$n.cores,
-                                 de.name = 'de',
-                                 name = 'gene.ids') {
-      if (is.null(de.raw)) {
-        de.raw <- private$getResults(de.name, "estimatePerCellTypeDE()")
-      }
-
-      # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before calculating
-      if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, 1)
-
-      if(p.adj < 1) warning("You are filtering based on adj. P value through the 'p.adj' parameter. We do not recommend this. Proceed with caution.")
-
-      if(is.null(cell.groups))
-        stop("'cell.groups' must be provided either to Cacoa constructor or to this method.")
-
-      self$test.results[[name]] <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
-        prepareOntologyData(org.db = org.db, p.adj = p.adj, expr.cutoff = expr.cutoff,
-                            de.raw = de.raw, cell.groups = cell.groups, universe = universe,
-                            transposed = transposed, verbose = verbose, n.cores = n.cores)
-      return(invisible(self$test.results[[name]]))
-    },
+    ### Ontology analysis
 
     #' @description  Plot embedding
     #' @param embedding A cell embedding to use (two-column data frame with rownames corresponding to cells) (default: stored embedding object)
@@ -963,36 +929,39 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")
     #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
     #' @param de.gene.ids List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOntologyData)
-    #' @param go.environment Extracted GO environment. If set to NULL, the environment will be re-extracted (default: stored environment)
     #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
-    #' @param readable Mapping gene ID to gene name (default=T)
+    #' @param readable Mapping gene ID to gene name (default=TRUE)
     #' @param min.genes Minimum number of input genes overlapping with ontologies (default=0)
     #' @param qvalue.cutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
     #' @param min.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5)
     #' @param max.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
-    estimateOntology=function(type = "GO", org.db, n.top.genes = 500,
-                              de.gene.ids=NULL,
-                              go.environment=self$test.results$GO$go.environment,
+    estimateOntology=function(type = "GO", org.db, n.top.genes=500, p.adj=1, expr.cutoff=0.05,
                               p.adjust.method="BH",
                               readable=TRUE, verbose=TRUE,
                               qvalue.cutoff=0.2, min.gs.size=10,
-                              max.gs.size=5e2, keep.gene.sets = F,
-                              name = 'gene.ids',...) {
+                              max.gs.size=5e2, keep.gene.sets = FALSE,
+                              de.name='de', ignore.cache=NULL, de.raw=NULL, ...) {
       if(!is.null(type) & !type %in% c("GO", "DO", "GSEA"))
         stop("'type' must be 'GO', 'DO', or 'GSEA'.")
 
-      if(is.null(de.gene.ids)) {
-        de.gene.ids <- private$getResults(name, "prepareOntologyData()")
+      if (is.null(de.raw)) {
+        de.raw <- private$getResults(de.name, "estimatePerCellTypeDE()")
       }
 
-      self$test.results[[type]] <- estimateOntology(type=type, org.db=org.db,
-                                                    n.top.genes=n.top.genes, de.gene.ids=de.gene.ids,
-                                                    go.environment=go.environment,
-                                                    verbose=verbose, qvalue.cutoff=qvalue.cutoff,
-                                                    pAdjustMethod=p.adjust.method, readable=readable,
-                                                    minGSSize=min.gs.size, maxGSSize=max.gs.size,
-                                                    keep.gene.sets = keep.gene.sets, ...)
+      # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before calculating
+      if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, "res")
+
+      de.gene.ids <- getDEEntrezIds(de.raw, org.db=org.db, p.adj=p.adj, expr.cutoff=expr.cutoff)
+
+      go.environment <- private$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
+      res <- estimateOntologyFromIds(
+        de.gene.ids, type=type, org.db=org.db, n.top.genes=n.top.genes, go.environment=go.environment,
+        verbose=verbose, qvalue.cutoff=qvalue.cutoff, pAdjustMethod=p.adjust.method, readable=readable,
+        minGSSize=min.gs.size, maxGSSize=max.gs.size, keep.gene.sets=keep.gene.sets, ...
+      )
+
+      self$test.results[[type]] <- list(res=res)
       return(invisible(self$test.results[[type]]))
     },
 
@@ -2316,6 +2285,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       self$cache$expr.frac.per.type <- sapply(cm.per.type, function(cm) Matrix::colMeans(cm > 0))
       return(self$cache$expr.frac.per.type)
+    },
+
+    getGOEnvironment = function(org.db, verbose=FALSE, ignore.cache=NULL) {
+      checkPackageInstalled("clusterProfiler", bioc=TRUE)
+      if (!is.null(self$cache$go.environment)) {
+        if (is.null(ignore.cache)) {
+          message("Using stored GO environment. Use `ignore.cache=TRUE` if you want to re-estimate it. Set `ignore.cache=FALSE` to suppress this message.")
+          return(self$cache$go.environment)
+        }
+
+        if (!ignore.cache) return(self$cache$go.environment)
+      }
+
+      if(class(org.db) != "OrgDb")
+        stop("'org.db' must be of class 'OrgDb'. Please input an organism database.")
+
+      self$cache$go.environment <- c("BP", "CC", "MF") %>% sn() %>%
+        plapply(function(n) clusterProfiler:::get_GO_data(org.db, n, "ENTREZID") %>%
+                  as.list() %>% as.environment(), n.cores=1, progress=verbose)
+      return(self$cache$go.environment)
     }
   )
 )

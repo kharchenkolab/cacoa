@@ -896,16 +896,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     },
 
     #' @description Plot number of highly-expressed DE genes as a function of number of cells
-    #' @param de.filter Filtered DE genes, results from prepareOntologyData (default: stored list)
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
-    #' @param label Show labels on plot (default=T)
+    #' @param label Show labels on plot (default=TRUE)
     #' @return A ggplot2 object
-    plotFilteredDEGenes=function(de.filter=self$test.results$ontology$de.filter, cell.groups = self$cell.groups, legend.position = "none", label = T) {
-      if(is.null(de.filter)) stop("Please run 'estimatePerCellTypeDE' first.")
+    plotFilteredDEGenes=function(de.name="de", cell.groups=self$cell.groups, expr.fraction=0.05, sample.frac=0.1, padj.cutoff=1.0,
+                                 legend.position="none", label=TRUE) {
+      de <- private$getResults(de.name, "estimatePerCellTypeDE")
+      if (is.list(de[[1]])) de %<>% lapply(`[[`, "res")
 
-      cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
+      cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de)]
 
-      gg <- sapply(de.filter, length) %>%
+      n.genes <- de[names(cell.groups)] %>%
+        sapply(function(df) sum((df$CellFrac >= expr.fraction) & (df$padj <= padj.cutoff) & (df$SampleFrac >= sample.frac)))
+      gg <- n.genes %>%
         plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Highly-expressed DE genes",
                             plot.theme=self$plot.theme, legend.position=legend.position, label=label) +
         geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
@@ -928,7 +931,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Estimate ontology terms based on DEs
     #' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")
     #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
-    #' @param de.gene.ids List containing DE gene IDs, and filtered DE genes (default: stored list, results from prepareOntologyData)
     #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
     #' @param readable Mapping gene ID to gene name (default=TRUE)
     #' @param min.genes Minimum number of input genes overlapping with ontologies (default=0)

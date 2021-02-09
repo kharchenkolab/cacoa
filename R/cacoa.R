@@ -961,7 +961,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         minGSSize=min.gs.size, maxGSSize=max.gs.size, keep.gene.sets=keep.gene.sets, ...
       )
 
-      self$test.results[[type]] <- list(res=res)
+      self$test.results[[type]] <- list(res=res, de.gene.ids=de.gene.ids)
       return(invisible(self$test.results[[type]]))
     },
 
@@ -1110,21 +1110,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @description Plot ontology terms as a function of both number of DE genes, and number of cells.
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default='all')
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
-    #' @param de.filter Filtered DE genes, results from prepareOntologyData (default: stored list)
     #' @param label.x.pos Plot label position on x axis (default=0.01)
     #' @param label.y.pos Plot label position on y axis (default=1)
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See \link[cowplot:plot_grid]{cowplot::plot_grid} for more info (default=1.0)
     #' @param ... parameters forwarded to \link{plotNCellRegression}
     #' @return A ggplot2 object
-    plotOntologyTerms=function(genes='all', type="GO", p.adj=0.05, min.genes=1, de.filter=self$test.results$gene.ids,
-                               cell.groups=self$cell.groups, label.x.pos=0.01, label.y.pos=1, scale=1.0, ...) {
+    plotOntologyTerms=function(genes='all', type="GO", p.adj=0.05, min.genes=1, cell.groups=self$cell.groups,
+                               label.x.pos=0.01, label.y.pos=1, scale=1.0, ...) {
       ont.res <- private$getOntologyPvalueResults(genes=genes, type=type, p.adj=p.adj, min.genes=min.genes)
 
+      de.gene.ids <- self$test.results[[type]]$de.gene.ids
       if(length(unique(ont.res$Group))==1) stop("The input only contains one cell type.")
-      cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.filter)]
+      cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.gene.ids)]
 
       n.go.per.type <- table(ont.res$Group) %>% c()
-      n.de.per.type <- sapply(de.filter, function(x) length(x$all))
+      n.de.per.type <- sapply(de.gene.ids, function(x) length(x[[genes]]))
 
       y.lab <- paste("Number of", type, "terms")
       pg <- cowplot::plot_grid(
@@ -1226,7 +1226,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
             stop("Can't find the results for ", cluster.name) # stop if user specified a wrong cluster.name
 
           warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
-          ont.sum <- self$estimateOntologyClusters(type=type, genes=genes, name=name, p.adj=p.adj, min.genes=min.genes)$df
+          ont.sum <- self$estimateOntologyClusters(type=type, subtype=subtype, genes=genes, name=name, p.adj=p.adj, min.genes=min.genes)$df
         } else {
           ont.sum <- self$test.results[[name]]$df
         }

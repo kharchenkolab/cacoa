@@ -27,7 +27,7 @@ getDEEntrezIds <- function(de.raw, org.db, p.adj=1, expr.cutoff=0.05) {
 
   all.genes <- unlist(gene.ids.tmp) %>% unique()
   suppressWarnings(suppressMessages(tryCatch({
-    gene.id.map <- clusterProfiler::bitr(all.genes, 'SYMBOL', 'ENTREZID', org.Hs.eg.db) %$%
+    gene.id.map <- clusterProfiler::bitr(all.genes, 'SYMBOL', 'ENTREZID', org.db) %$%
       setNames(ENTREZID, SYMBOL)
   }, error=function(e) {
     stop("Can't find ENTREZIDs for the specified genes. Did you pass the right org.db?")

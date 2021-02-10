@@ -484,7 +484,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param show.pairs transparency value for the data points (default: 0.05)
     #' @param notch - whether to show notches in the boxplot version (default=TRUE)
     #' @return A ggplot2 object
-    estimateDEStability=function(de.name='de',
+    estimateDEStabilityPerCellType=function(de.name='de',
                                  name='de.jaccards',
                                  top.n.genes = NULL,
                                  padj.threshold = NULL){
@@ -549,8 +549,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             common.resamplings = intersect(names(self$test.results[[de.names[i]]][[cell.type]]$subsamples),
                                            names(self$test.results[[de.names[j]]][[cell.type]]$subsamples))
             if (length(common.resamplings) == 0){
-              message(paste('There is no corresponding resamplings for',
-                            de.names[i], 'and', de.names[j], 'in', cell.type))
+              # message(paste('There is no corresponding resamplings for',
+              #               de.names[i], 'and', de.names[j], 'in', cell.type))
               next
             }
             for(sample.name in common.resamplings) {
@@ -1533,7 +1533,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param palette palette specification for cell types (default: stored $cell.groups.palette)
     #' @return A ggplot2 object
     plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, font.size=NULL,
-                                ordering='by.pvalue', signif.threshold=0.05, show.pvals=F) {
+                                ordering='by.pvalue', signif.threshold=0.05, show.pvals=F,
+                                ref.cell.type = NULL) {
       possible.ordering = c('by.pvalue', 'by.mean', 'by.median')
       if(!(ordering %in% possible.ordering)){
         warning('Defaulf ordiring \'by.pvalue\' is applied ' )
@@ -1542,7 +1543,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       cda <- private$getResults('cda', 'estimateCellLoadings()')
       p <- plotCellLoadings(cda, ordering, signif.threshold, alpha, palette, show.pvals,
-                            ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme)
+                            ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme,
+                            ref.cell.type = NULL)
 
       return(p)
     },

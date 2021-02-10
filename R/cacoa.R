@@ -12,7 +12,7 @@
 #' @param gene.selection a method to select top genes, "change" selects genes by cluster-free Z-score change,
 #' "expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "change".
 #' @param excluded.genes list of genes to exclude during estimation. For example, a list of mitochondrial genes.
-Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
+Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
   public = list(
     n.cores = 1,
 
@@ -1893,8 +1893,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
     #' @description Estimate Cluster-free Expression Shift
     #' @param n.top.genes number of top genes for the distance estimation (default: 3000)
-    #' @param gene.selection the criterion for selecting top genes.
-    #' Options: "change" (most changed), "expression" (most expressed), "od" (over-dispersed). (default: "changed")
     #' @param min.n.between minimal number of pairs between condition for distance estimation (default: 2)
     #' @param min.n.within minimal number of pairs within one condition for distance estimation (default: `min.n.between`)
     #' @param min.n.obs.per.samp minimal number of cells per sample for using it in distance estimation (default: 3)
@@ -1905,10 +1903,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
     #' Results are also stored in the `cluster.free.expr.shifts` field.
     estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection="change", min.n.between=2, min.n.within=max(min.n.between, 1),
-                                                   min.n.obs.per.samp=3, norm.all=FALSE, dist="cor", log.vectors=(dist != "js"),
+                                                   min.expr.frac=0.02, min.n.obs.per.samp=3, norm.all=FALSE, dist="cor", log.vectors=(dist != "js"),
                                                    verbose=self$verbose, n.cores=self$n.cores) {
       cm <- self$getJointCountMatrix()
-      genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm)
+      genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, min.expr.frac=min.expr.frac)
       cm <- Matrix::t(cm[, genes])
 
       is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
@@ -2028,15 +2026,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
     #' @param max.shift all shift values above `max.shift` are set to this value when plotting. Default: 95% of the shifts.
     #' @param font.size size range for cell type labels
     #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
-    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, plot.both.conditions=FALSE, plot.na=FALSE, color.range=c("0", "97.5%"),
+    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=FALSE, beta=10, plot.na=FALSE, color.range=c("0", "97.5%"),
                                                alpha=0.2, font.size=c(3,5), palette=brewerPalette("RdYlBu"), rescale=TRUE, ...) {
-      shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts") %>% na.omit()
+      shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts")
       private$checkCellEmbedding()
 
-      if (!plot.both.conditions) {
-        shifts %<>%  .[self$sample.groups[self$sample.per.cell[names(.)]] != self$ref.level]
+      if (smooth) {
+        mask <- is.na(shifts)
+        shifts[mask] <- 1
+        shifts %<>% smoothSignalOnGraph(extractCellGraph(self$data.object), filter=function(...) heatFilter(..., beta=beta))
+        shifts[mask] <- NA
       }
 
+      shifts %<>% na.omit()
       if (is.null(color.range)) {
         color.range <- range(shifts)
       } else if (is.character(color.range)) {
@@ -2058,7 +2060,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
 
       colors <- palette(11)
       if (rescale && (color.range[1] < 1) && (color.range[2] > 1)) { # Ensure that 1.0 is in the middle (e.g. yellow)
-        col.vals <- c(seq(0, 1, length.out=6)[1:5], seq(1, color.range[2], length.out=6)) %>%
+        col.vals <- c(seq(color.range[1], 1, length.out=6)[1:5], seq(1, color.range[2], length.out=6)) %>%
           scales::rescale()
       } else {
         col.vals <- seq(color.range[1], color.range[2], length.out=11) %>% scales::rescale()
@@ -2167,26 +2169,35 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=F,
         gene.selection <- "expression"
       }
 
-      if (gene.selection == "change") {
-        genes <- names(self$getMostChangedGenes(Inf, ...))
-      } else if (gene.selection == "od") {
-        genes <- extractOdGenes(self$data.object, n + length(excluded.genes))
-      } else {
+      if (min.expr.frac > 0) {
         if (is.null(cm.joint)) {
           cm.joint <- self$getJointCountMatrix()
         }
 
-        cm.joint@x <- 1 * (cm.joint@x > 0)
-        col.means <- colMeans(cm.joint, na.rm=TRUE)
-        gene.mask <- (col.means >= min.expr.frac)
-        genes <- col.means %>% order(decreasing=TRUE) %>%
-          .[gene.mask[.]] %>% colnames(cm.joint)[.]
+        cm.bool <- cm.joint
+        cm.bool@x <- 1 * (cm.bool@x > 0)
+        excluded.genes %<>% union(colnames(cm.bool)[colMeans(cm.bool, na.rm=TRUE) < min.expr.frac])
+      }
+
+      if (gene.selection == "change") {
+        genes <- names(self$getMostChangedGenes(Inf, ...))
+      } else if (gene.selection == "od") {
+        genes <- extractOdGenes(self$data.object)
+      } else { # expression
+        if (is.null(cm.joint)) {
+          cm.joint <- self$getJointCountMatrix()
+        }
+
+        genes <- colMeans(cm.joint, na.rm=TRUE) %>% sort(decreasing=TRUE) %>% names()
       }
 
       if (is.null(included.genes)) {
         included.genes <- genes
       }
       genes %<>% setdiff(excluded.genes) %>% intersect(included.genes) %>% .[1:min(length(.), n)]
+      if (length(genes) < n)
+        warning("Not enough genes pass the criteria. Returning ", length(genes), " genes.")
+
       return(genes)
     },
 

@@ -12,13 +12,13 @@ extractCellGraph.Conos <- function(con) {
   return(con$graph)
 }
 
-extractRawCountMatrices <- function(obj, transposed=T) UseMethod("extractRawCountMatrices", obj)
-extractRawCountMatrices.Conos <- function(con, transposed=T) {
+extractRawCountMatrices <- function(obj, transposed=TRUE) UseMethod("extractRawCountMatrices", obj)
+extractRawCountMatrices.Conos <- function(con, transposed=TRUE) {
   return(lapply(con$samples, conos:::getRawCountMatrix, transposed=transposed))
 }
 
-extractJointCountMatrix <- function(obj, raw=T) UseMethod("extractJointCountMatrix", obj)
-extractJointCountMatrix.Conos <- function(con, raw=T) {
+extractJointCountMatrix <- function(obj, raw=TRUE) UseMethod("extractJointCountMatrix", obj)
+extractJointCountMatrix.Conos <- function(con, raw=TRUE) {
   return(con$getJointCountMatrix(raw=raw))
 }
 

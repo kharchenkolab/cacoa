@@ -1852,7 +1852,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateClusterFreeZScores = function(n.top.genes=NULL, max.z=20, min.expr.frac=0.001, normalize=c("ref", "both"),
                                           verbose=self$verbose, n.cores=self$n.cores) {
       normalize <- match.arg(normalize)
-      cm <- self$getJointCountMatrix()
+      cm <- self$getJointCountMatrix() # TODO: raw?
       genes <- private$getTopGenes(n.top.genes, gene.selection="expression", cm.joint=cm, min.expr.frac=min.expr.frac)
 
       if (verbose)
@@ -1905,7 +1905,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection="change", min.n.between=2, min.n.within=max(min.n.between, 1),
                                                    min.expr.frac=0.02, min.n.obs.per.samp=3, norm.all=FALSE, dist="cor", log.vectors=(dist != "js"),
                                                    verbose=self$verbose, n.cores=self$n.cores) {
-      cm <- self$getJointCountMatrix()
+      cm <- self$getJointCountMatrix(raw=FALSE)
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, min.expr.frac=min.expr.frac)
       cm <- Matrix::t(cm[, genes])
 
@@ -1917,8 +1917,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       shifts <- estimateClusterFreeExpressionShiftsC(cm, self$sample.per.cell[names(nns.per.cell)], nns.per.cell,
                                                      is.ref, min_n_between=min.n.between, min_n_within=min.n.within, min_n_obs_per_samp=min.n.obs.per.samp,
-                                                     norm_all=norm.all, verbose=verbose, n_cores=n.cores,
-                                                     dist=dist, log_vecs=log.vectors)
+                                                     norm_all=norm.all, verbose=verbose, n_cores=n.cores, dist=dist, log_vecs=log.vectors)
       self$test.results[["cluster.free.expr.shifts"]] <- shifts
 
       return(invisible(shifts))
@@ -2140,12 +2139,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         as.factor()
     },
 
-    getJointCountMatrix = function(force=FALSE) {
-      if (force || is.null(self$cache$joint.count.matrix)) {
-        self$cache$joint.count.matrix <- extractJointCountMatrix(self$data.object)
+    getJointCountMatrix = function(force=FALSE, raw=TRUE) {
+      cache.name <- if (raw) "joint.count.matrix" else "joint.count.matrix.norm"
+      if (force || is.null(self$cache[[cache.name]])) {
+        self$cache[[cache.name]] <- extractJointCountMatrix(self$data.object, raw=raw)
       }
 
-      return(self$cache$joint.count.matrix)
+      return(self$cache[[cache.name]])
     }
   ),
 
@@ -2174,9 +2174,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           cm.joint <- self$getJointCountMatrix()
         }
 
-        cm.bool <- cm.joint
-        cm.bool@x <- 1 * (cm.bool@x > 0)
-        excluded.genes %<>% union(colnames(cm.bool)[colMeans(cm.bool, na.rm=TRUE) < min.expr.frac])
+        cm.joint@x <- 1 * (cm.joint@x > 0)
+        excluded.genes %<>% union(colnames(cm.joint)[colMeans(cm.joint, na.rm=TRUE) < min.expr.frac])
       }
 
       if (gene.selection == "change") {
@@ -2188,6 +2187,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           cm.joint <- self$getJointCountMatrix()
         }
 
+        cm.joint@x <- 1 * (cm.joint@x > 0)
         genes <- colMeans(cm.joint, na.rm=TRUE) %>% sort(decreasing=TRUE) %>% names()
       }
 
@@ -2293,10 +2293,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         return(self$cache$expr.frac.per.type)
 
       cm <- self$getJointCountMatrix()
-      cm.per.type <- match(names(self$cell.groups), rownames(cm)) %>% split(self$cell.groups) %>%
-        lapply(function(ids) cm[ids,])
+      cm@x <- 1 * (cm@x > 0)
+      self$cache$expr.frac.per.type <- match(names(self$cell.groups), rownames(cm)) %>%
+        split(self$cell.groups) %>% sapply(function(ids) Matrix::colMeans(cm[ids,]))
 
-      self$cache$expr.frac.per.type <- sapply(cm.per.type, function(cm) Matrix::colMeans(cm > 0))
       return(self$cache$expr.frac.per.type)
     },
 

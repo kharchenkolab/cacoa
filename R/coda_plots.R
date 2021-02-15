@@ -182,13 +182,22 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
 }
 
 
-plotCellLoadings <- function(cda, ordering, signif.threshold, alpha, palette, show.pvals, ref.level, target.level, plot.theme) {
+plotCellLoadings <- function(cda, ordering, signif.threshold, alpha, palette, show.pvals, ref.level, target.level, plot.theme,
+                             ref.cell.type = NULL) {
   balances = cda$balances
+  
+  if(is.null(ref.cell.type)) {
+    yintercept = 0
+  } else {
+    yintercept = median(balances[ref.cell.type,])
+  }
+  
+  
   if(ordering == 'by.pvalue'){
     # ordering by median
     balances <- balances[order(abs(apply(balances, 1, median))), ]
     # additional ordering by p-value
-    frac <- getCellSignificance(balances)
+    frac <- getCellSignificance(balances, yintercept)
     balances <- balances[order(-frac),]
 
     # Get significant cells
@@ -201,14 +210,16 @@ plotCellLoadings <- function(cda, ordering, signif.threshold, alpha, palette, sh
     balances <- balances[order(abs(apply(balances, 1, median))), ]
     n.significant.cells = 0
   }
+  
 
-  frac <- getCellSignificance(balances)
+
+  frac <- getCellSignificance(balances, yintercept)
   res.ordered <- t(balances) %>% as.data.frame()
   ymax = max(balances)
 
   p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
     geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = alpha, size=1) +
-    geom_hline(yintercept = 0, color = "gray37") +
+    geom_hline(yintercept = yintercept, color = "gray37") +
     coord_flip() + xlab('') + ylab('loadings') + plot.theme + theme(legend.position = "none") +
     scale_x_discrete(position = "top") + ylim(-ymax, ymax)
 

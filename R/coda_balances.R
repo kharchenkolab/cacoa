@@ -16,7 +16,8 @@ resampleContrast <- function(d.counts, d.groups, n.cell.counts = 500, n.seed = 2
   for(iter in 1:n.iter){
     d.resampled <- resampleCounts(d.counts, d.groups = d.groups, n.tot.count = n.cell.counts, n.seed = rnd.seeds[iter])
     d.all <- rbind(d.all, d.resampled)
-
+  
+    # print(d.resampled)
     cda.loadings = NULL
     tryCatch(expr = {
         cda.loadings <- getCdaLoadings(d.resampled, d.groups[rownames(d.resampled)], n.seed = rnd.seeds[iter])
@@ -191,24 +192,26 @@ resampleCounts<- function(d.counts, n.tot.count=500, d.groups = NULL, n.seed = 2
   # ---------
 
   set.seed(n.seed)
+  
+  if (f.bootstrap) {
+    if (is.null(d.groups)) {
+      sample.names.resampling = sample(1:nrow(d.counts), replace = T)
+    } else {
+      sample.names.resampling = sample(1:nrow(d.counts), replace = T)
+      while(length(unique(d.groups[sample.names.resampling])) == 1) 
+        sample.names.resampling = sample(1:nrow(d.counts), replace = T)
+    }
+  } else {
+    sample.names.resampling = 1:nrow(d.counts)
+  }
+  
   d.resampled <- c()
-  for(i in 1:nrow(d.counts)){
+  for(i in sample.names.resampling){
     tmp <- rmultinom(1:ncol(d.counts), n.tot.count, d.counts[i,]+1)
     d.resampled <- rbind(d.resampled, t(tmp))
   }
-  rownames(d.resampled) <- rownames(d.counts)
+  rownames(d.resampled) <- rownames(d.counts)[sample.names.resampling]
 
-  if(f.bootstrap){
-    if(is.null(d.groups)){
-      d.resampled <- d.resampled[sample(nrow(d.counts), replace =T),]
-    }else{
-      tmp.idx <- sample(nrow(d.counts), replace =T)
-
-      while(length(unique(d.groups[tmp.idx])) == 1) tmp.idx <- sample(nrow(d.counts), replace =T)
-
-      d.resampled <- d.resampled[tmp.idx,]
-    }
-  }
   return(d.resampled)
 }
 
@@ -316,10 +319,10 @@ calcWilcoxonTest <- function(d.counts, d.groups){
   return(p.vals.res)
 }
 
-getCellSignificance <- function(balances){
+getCellSignificance <- function(balances, bal.threshold = 0){
   n.bal <- ncol(balances)
-  n.plus <- rowSums(balances[,2:n.bal] > 0)
-  n.minus <- rowSums(balances[,2:n.bal] < 0)
+  n.plus <- rowSums(balances[,2:n.bal] > bal.threshold)
+  n.minus <- rowSums(balances[,2:n.bal] < bal.threshold)
   perm.frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) /
     mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
 

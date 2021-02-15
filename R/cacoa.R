@@ -1845,31 +1845,39 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Estimate differential expression Z-scores between two conditions per individual cell
     #' @param max.z z-score value to winsorize the estimates for reducing impact of outliers. Default: 20.
     #' @param min.expr.frac minimal fraction of cell expressing a gene for estimating z-scores for it. Default: 0.001.
-    #' @param normalize whether to normalize z-scores over std for reference ("ref") or both ("both"). Default: "ref".
+    #' @param min.n.samp.per.cond minimul number of samples per condition for estimating z-scores (default: 2)
+    #' @param min.n.obs.per.samp minimul number of cells per samples for estimating z-scores (default: 2)
+    #' @param robust whether to use median estimates instead of mean (default: TRUE)
     #' @return Sparse matrix of z-scores with genes as columns and cells as rows.
     #' Cells that have only one condition in their expression neighborhood have NA Z-scores for all genes.
     #' Results are also stored in the `cluster.free.z` field.
-    estimateClusterFreeZScores = function(n.top.genes=NULL, max.z=20, min.expr.frac=0.001, normalize=c("ref", "both"),
+    estimateClusterFreeZScores = function(n.top.genes=Inf, max.z=20, min.expr.frac=0.001,
+                                          min.n.samp.per.cond=2, min.n.obs.per.samp=2, robust=TRUE,
                                           verbose=self$verbose, n.cores=self$n.cores) {
-      normalize <- match.arg(normalize)
-      cm <- self$getJointCountMatrix() # TODO: raw?
+      cm <- self$getJointCountMatrix(raw=FALSE)
       genes <- private$getTopGenes(n.top.genes, gene.selection="expression", cm.joint=cm, min.expr.frac=min.expr.frac)
 
       if (verbose)
-        message("Estimating cluster-free Z-scores for ", length(genes), " top genes")
+        message("Estimating cluster-free Z-scores for ", length(genes), " most expressed genes")
 
-      is.ref <- self$sample.per.cell %>%
-        {setNames(self$sample.groups[as.character(.)] == self$ref.level, names(.))}
+      is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
 
       adj.mat <- extractCellGraph(self$data.object) %>% igraph::as_adj()
-      cell.names <- intersect(rownames(cm), rownames(adj.mat)) %>%
-        intersect(names(is.ref))
+      cell.names <- intersect(rownames(cm), rownames(adj.mat))
 
-      z.mat <- clusterFreeZScoreMat(adj.mat[cell.names, cell.names], cm[cell.names, genes, drop=FALSE],
-                                    is.ref[cell.names], normalize_both=(normalize == "both"), verbose=verbose, n_cores=n.cores)
+      adj.mat %<>% .[cell.names, cell.names, drop=FALSE] %>% as("dgTMatrix")
+      nns.per.cell <- split(adj.mat@j, adj.mat@i) %>% setNames(cell.names)
+      cm %<>% .[cell.names, genes, drop=FALSE] %>% Matrix::t()
+
+      z.mat <- clusterFreeZScoreMat(
+        cm, sample_per_cell=self$sample.per.cell[cell.names], nn_ids=nns.per.cell, is_ref=is.ref,
+        min_n_samp_per_cond=min.n.samp.per.cond, min_n_obs_per_samp=min.n.obs.per.samp, robust=robust,
+        verbose=verbose, n_cores=n.cores
+      )
+
       z.mat@x %<>% pmin(max.z) %>% pmax(-max.z)
 
-      self$test.results[["cluster.free.z"]] <- z.mat
+      self$test.results[["cluster.free.z"]] <- Matrix::t(z.mat)
       return(invisible(self$test.results[["cluster.free.z"]]))
     },
 
@@ -1965,7 +1973,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `gene.scores`: list of vectors of gene scores per programme. Contains only genes, selected for
     #'     the programme usin fabia biclustering.
     #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
-    estimateGeneProgrammes = function(n.top.genes=NULL, n.programmes=15, gene.selection="change", name="gene.programmes", ...) {
+    estimateGeneProgrammes = function(n.top.genes=Inf, n.programmes=15, gene.selection="change", name="gene.programmes", ...) {
       checkPackageInstalled('Rtsne', bioc=TRUE)
 
       z.scores <- private$getResults("cluster.free.z.smoothed", "smoothClusterFreeZScores")
@@ -2195,7 +2203,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         included.genes <- genes
       }
       genes %<>% setdiff(excluded.genes) %>% intersect(included.genes) %>% .[1:min(length(.), n)]
-      if (length(genes) < n)
+      if (is.finite(n) && (length(genes) < n))
         warning("Not enough genes pass the criteria. Returning ", length(genes), " genes.")
 
       return(genes)

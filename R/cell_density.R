@@ -53,7 +53,7 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
   score.mat <- sccore:::smoothSignalOnGraph(
     sig.mat, graph, function(...) sccore:::heatFilter(..., beta=beta),
     m=m, n.cores=n.cores, progress.chunk=(verbose + 1), progress=verbose,
-  )
+  ) %>% as.matrix()
 
   score.mat %<>% {t(.) / colSums(.)} %>% t() %>% # Normalize by columns to adjust on the number of cells per sample
     {. / rowSums(.)} # Then, by row to put make them sum into 1 (perhaps, only for visualization)

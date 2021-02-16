@@ -2055,15 +2055,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       shifts %<>% na.omit()
-      if (is.null(color.range)) {
-        color.range <- range(shifts)
-      } else if (is.character(color.range)) {
-        color.range[grep("%", color.range)] %<>%
-          sapply(function(q) {as.numeric(strsplit(q, "%")[[1]]) / 100}) %>%
-          quantile(shifts, .)
-        color.range %<>% as.numeric()
-      }
-
+      color.range %<>% parseLimitRange(color.range, shifts)
       shifts %<>% pmax(color.range[1]) %>% pmin(color.range[2])
 
       gg <- self$plotEmbedding(colors=shifts, plot.na=plot.na, alpha=alpha, ...)
@@ -2095,7 +2087,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$plotGeneExpressionComparison(scores=scores, max.z=max.z.plot, ...)
     },
 
-    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr=NULL, plot.z=TRUE, plot.expression=TRUE, max.z=5, smoothed=FALSE, plot.na=-1, ...) {
+    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plot.z=TRUE, plot.expression=TRUE, max.z=5, smoothed=FALSE, plot.na=-1, ...) {
       if (is.null(genes)) {
         if (is.null(scores)) stop("Either 'genes' or 'scores' must be provided")
         genes <- names(scores)
@@ -2129,7 +2121,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         lst <- list()
         if (plot.expression) {
           expr <- extractGeneExpression(self$data.object, g)
-          m.expr <- if (is.null(max.expr)) max(expr) else max.expr
+          m.expr <- parseLimitRange(c(0, max.expr), expr)[2]
           lst <- lapply(unique(condition.per.cell), function(sg) {
             self$plotEmbedding(colors=expr, title=paste(sg, " ",g), groups=condition.per.cell, subgroups=sg,
                                color.range=c(0, m.expr), legend.title="Expression", plot.na=FALSE, ...)

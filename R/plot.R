@@ -462,3 +462,12 @@ plotVolcano <- function(de.df, p.name='padj.filt', legend.pos="none", palette=br
     theme_legend_position(legend.pos)
   return(gg)
 }
+
+parseLimitRange <- function(lims, vals) {
+  if (is.null(lims)) return(range(vals))
+  if (!is.character(lims)) return(lims)
+  lims[grep("%", lims)] %<>%
+    sapply(function(q) {as.numeric(strsplit(q, "%")[[1]]) / 100}) %>%
+    quantile(vals, .)
+  return(as.numeric(lims))
+}

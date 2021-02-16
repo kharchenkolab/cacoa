@@ -162,7 +162,7 @@ estimateOntologyFromIds <- function(de.gene.ids, go.environment, type="GO", org.
   # Estimate ontologies
   if(type=="DO") {
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
-    res <- names(de.gene.ids) %>% sn() %>% plapply(function(id) suppressWarnings(
+    ont.list <- names(de.gene.ids) %>% sn() %>% plapply(function(id) suppressWarnings(
       lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])], DOSE::enrichDO,
              universe=de.gene.ids[[id]][["universe"]], qvalueCutoff=qvalue.cutoff, ...)
       ), n.cores=1, progress=verbose)

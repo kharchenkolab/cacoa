@@ -1641,8 +1641,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(ps)
     },
 
-    plotCellDensityVariation = function(type='mad', plot.type='embedding', name='cell.density', cutoff=NULL, ...) {
+    plotCellDensityVariation = function(type='mad', plot.type='embedding', name='cell.density', cutoff=NULL,
+                                        condition=c('both', 'ref', 'target'), ...) {
       dens.res <- private$getResults(name, 'estimateCellDensity()')
+      condition <- match.arg(condition)
       if (type == 'mad') {
         name <- 'MAD'
         scores <- dens.res$density.mad
@@ -1653,6 +1655,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         name <- 'Missed sample frac.'
         scores <- dens.res$missed.sample.frac
       } else stop("Unknown type: ", type)
+
+      if ((dens.res$method == 'graph') && (condition != 'both')) {
+        subgr <- if (condition == 'ref') self$ref.level else self$target.level
+        scores %<>% .[self$getConditionPerCell()[names(.)] == subgr]
+      }
 
       if (plot.type == 'hist') {
         gg <- ggplot(data.frame(var=scores), aes(x=scores)) + geom_histogram() +
@@ -1874,7 +1881,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       z.mat <- clusterFreeZScoreMat(
         cm, sample_per_cell=self$sample.per.cell[cell.names], nn_ids=nns.per.cell, is_ref=is.ref,
         min_n_samp_per_cond=min.n.samp.per.cond, min_n_obs_per_samp=min.n.obs.per.samp, robust=robust,
-        norm.both=norm.both, verbose=verbose, n_cores=n.cores
+        norm_both=norm.both, verbose=verbose, n_cores=n.cores
       )
 
       z.mat@x %<>% pmin(max.z) %>% pmax(-max.z)

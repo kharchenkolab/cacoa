@@ -27,6 +27,22 @@ double median(std::vector<double> &vec) {
     return (*median_it1 + *median_it2) / 2;
 }
 
+double mad(const std::vector<double> &vals, double med) {
+    std::vector<double> diffs;
+    for (double v : vals) {
+        diffs.emplace_back(std::abs(v - med));
+    }
+    return median(diffs) * 1.4826;
+}
+
+double var(const std::vector<double> &vals, double mean) {
+    double res = 0;
+    for (double v : vals) {
+        res += (v - mean) * (v - mean);
+    }
+    return res / (vals.size() - 1);
+}
+
 Eigen::MatrixXd collapseMatrixNorm(const Eigen::SparseMatrix<double> &mtx, const std::vector<int> &factor,
                                    const std::vector<int> &nn_ids, const std::vector<unsigned> &n_obs_per_samp) {
     assert(mtx.rows() == factor.size());
@@ -64,7 +80,8 @@ std::vector<unsigned> count_values(const std::vector<int> &values, const std::ve
 
 std::vector<double> estimateCellZScore(const SparseMatrix<double> &cm, const std::vector<int> &sample_per_cell,
                                        const std::vector<int> &nn_ids, const std::vector<bool> &is_ref,
-                                       const int min_n_samp_per_cond, const int min_n_obs_per_samp, bool robust) {
+                                       int min_n_samp_per_cond, const int min_n_obs_per_samp, bool robust, bool norm_both) {
+    min_n_samp_per_cond = std::max(min_n_samp_per_cond, 2);
     assert(cm.rows() == is_ref.size());
     auto n_ids_per_samp = count_values(sample_per_cell, nn_ids);
     auto mat_collapsed = collapseMatrixNorm(cm, sample_per_cell, nn_ids, n_ids_per_samp);
@@ -84,29 +101,29 @@ std::vector<double> estimateCellZScore(const SparseMatrix<double> &cm, const std
             }
         }
 
-        if (std::min(target_vals.size(), ref_vals.size()) < min_n_samp_per_cond || ref_vals.size() < 2) {
+        size_t n_targ = target_vals.size(), n_ref = ref_vals.size();
+        if (std::min(n_targ, n_ref) < min_n_samp_per_cond) {
             res.emplace_back(NAN);
             continue;
         }
 
-        double m_ref, m_targ, sd_ref = 0;
+        double m_ref, m_targ, var_ref, var_targ;
         if (robust) {
             m_ref = median(ref_vals);
             m_targ = median(target_vals);
-            std::vector<double> diffs;
-            for (double v : ref_vals) {
-                diffs.emplace_back(std::abs(v - m_ref));
-            }
-            sd_ref = median(diffs) * 1.4826;
+            var_ref = std::pow(mad(ref_vals, m_ref), 2);
+            var_targ = std::pow(mad(target_vals, m_targ), 2);
         } else {
-            m_ref = std::accumulate(ref_vals.begin(), ref_vals.end(), 0.0) / ref_vals.size();
-            m_targ = std::accumulate(target_vals.begin(), target_vals.end(), 0.0) / target_vals.size();
-            for (double v : ref_vals) {
-                sd_ref += (v - m_ref) * (v - m_ref);
-            }
-            sd_ref = sqrt(sd_ref / (ref_vals.size() - 1));
+            m_ref = std::accumulate(ref_vals.begin(), ref_vals.end(), 0.0) / n_ref;
+            m_targ = std::accumulate(target_vals.begin(), target_vals.end(), 0.0) / n_targ;
+            var_ref = var(ref_vals, m_ref);
+            var_targ = var(target_vals, m_targ);
         }
-        double z = (sd_ref < 1e-20) ? NAN : ((m_targ - m_ref) / sd_ref);
+
+        double sd_tot = norm_both ?
+                std::sqrt((n_ref * var_ref + n_targ * var_targ) / (n_ref + n_targ)) :
+                std::sqrt(var_ref);
+        double z = (sd_tot < 1e-20) ? NAN : ((m_targ - m_ref) / (sd_tot));
         res.emplace_back(z);
     }
 
@@ -115,8 +132,8 @@ std::vector<double> estimateCellZScore(const SparseMatrix<double> &cm, const std
 
 // [[Rcpp::export]]
 SEXP clusterFreeZScoreMat(const SEXP count_mat, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool> &is_ref,
-                          const int min_n_samp_per_cond=2, const int min_n_obs_per_samp=1, bool robust=true,
-                          const double min_z=0.01, bool verbose=true, int n_cores=1) {
+                          int min_n_samp_per_cond=2, int min_n_obs_per_samp=1, bool robust=true, bool norm_both=false,
+                          double min_z=0.01, bool verbose=true, int n_cores=1) {
     const auto samp_per_cell_c = as<std::vector<int>>(IntegerVector(sample_per_cell - 1));
     if (sample_per_cell.size() == 0 || (*std::max_element(samp_per_cell_c.begin(), samp_per_cell_c.end()) <= 0))
         stop("sample_per_cell must be a factor vector with non-empty levels");
@@ -131,8 +148,9 @@ SEXP clusterFreeZScoreMat(const SEXP count_mat, IntegerVector sample_per_cell, L
     auto cm = as<SparseMatrix<double>>(count_mat);
     std::vector<Triplet<double>> z_triplets;
     std::mutex mut;
-    auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &is_ref, &min_n_samp_per_cond, &min_n_obs_per_samp, &min_z, &robust, &z_triplets, &mut](int ci) {
-        auto cell_zs = estimateCellZScore(cm, samp_per_cell_c, nn_ids_c[ci], is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust);
+    auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &is_ref, &min_n_samp_per_cond, &min_n_obs_per_samp, &min_z, &robust,
+                 &norm_both, &z_triplets, &mut](int ci) {
+        auto cell_zs = estimateCellZScore(cm, samp_per_cell_c, nn_ids_c[ci], is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust, norm_both);
         VectorXd expr = cm.col(ci);
         for (int gi = 0; gi < cell_zs.size(); ++gi) { // TODO: optimize for sparse matrix operators
             if (expr(gi) < 1e-20)

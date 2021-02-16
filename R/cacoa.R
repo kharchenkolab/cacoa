@@ -1854,7 +1854,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' Cells that have only one condition in their expression neighborhood have NA Z-scores for all genes.
     #' Results are also stored in the `cluster.free.z` field.
     estimateClusterFreeZScores = function(n.top.genes=Inf, max.z=20, min.expr.frac=0.001,
-                                          min.n.samp.per.cond=2, min.n.obs.per.samp=2, robust=TRUE,
+                                          min.n.samp.per.cond=2, min.n.obs.per.samp=2, robust=TRUE, norm.both=FALSE,
                                           verbose=self$verbose, n.cores=self$n.cores) {
       cm <- self$getJointCountMatrix(raw=FALSE)
       genes <- private$getTopGenes(n.top.genes, gene.selection="expression", cm.joint=cm, min.expr.frac=min.expr.frac)
@@ -1874,7 +1874,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       z.mat <- clusterFreeZScoreMat(
         cm, sample_per_cell=self$sample.per.cell[cell.names], nn_ids=nns.per.cell, is_ref=is.ref,
         min_n_samp_per_cond=min.n.samp.per.cond, min_n_obs_per_samp=min.n.obs.per.samp, robust=robust,
-        verbose=verbose, n_cores=n.cores
+        norm.both=norm.both, verbose=verbose, n_cores=n.cores
       )
 
       z.mat@x %<>% pmin(max.z) %>% pmax(-max.z)

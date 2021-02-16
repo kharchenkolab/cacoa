@@ -2055,7 +2055,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       shifts %<>% na.omit()
-      color.range %<>% parseLimitRange(color.range, shifts)
+      color.range %<>% parseLimitRange(shifts)
       shifts %<>% pmax(color.range[1]) %>% pmin(color.range[2])
 
       gg <- self$plotEmbedding(colors=shifts, plot.na=plot.na, alpha=alpha, ...)

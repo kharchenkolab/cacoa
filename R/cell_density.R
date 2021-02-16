@@ -47,28 +47,21 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ex
 ##' @param n.cores number of cores
 ##' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
 estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.cores=1, beta=30, m=50, verbose = TRUE) {
-  tmp <-  setNames(as.numeric(sample.per.cell), names(sample.per.cell))
-  scores.smoothed <- sccore:::plapply(sccore::sn(unique(tmp)), function(x) {
-    tryCatch({
-      x1 <-  tmp
-      x1[x1 != x] <-  0
-      x1[x1 == x] <-  1
-      sccore:::smoothSignalOnGraph(x1, graph, function(...) sccore:::heatFilter(..., beta=beta), m = m)
-    }, error = function(err) {
-      return(NA)
-    })
-  }, n.cores = n.cores, mc.preschedule=TRUE, progress=verbose)
-  score.mat <- do.call(cbind, scores.smoothed)
-  colnames(score.mat) <-  unique(sample.per.cell)
+  sig.mat <- unique(sample.per.cell) %>% sapply(function(s) as.numeric(sample.per.cell == s)) %>%
+    set_rownames(names(sample.per.cell)) %>% set_colnames(unique(sample.per.cell))
 
+  score.mat <- sccore:::smoothSignalOnGraph(
+    sig.mat, graph, function(...) sccore:::heatFilter(..., beta=beta),
+    m=m, n.cores=n.cores, progress.chunk=(verbose + 1), progress=verbose,
+  )
 
   score.mat %<>% {t(.) / colSums(.)} %>% t() %>% # Normalize by columns to adjust on the number of cells per sample
     {. / rowSums(.)} # Then, by row to put make them sum into 1 (perhaps, only for visualization)
 
   density.fraction <- split(names(sample.groups), sample.groups) %>%
-    sapply(function(samps) apply(score.mat[,samps], 1, mean, trim=0.2)) %>% # Robust estimator of sum
+    sapply(function(samps) apply(score.mat[,samps,drop=FALSE], 1, mean, trim=0.2)) %>% # Robust estimator of sum
     {. / rowSums(.)}
-  density.fraction %<>% {list(.[,1], .[,2])} %>% setNames(colnames(density.fraction))
+  density.fraction %<>% {lapply(1:ncol(.), function(i) .[,i])} %>% setNames(colnames(density.fraction))
 
   return(list(density.mat=score.mat, density.fraction=density.fraction, method='graph'))
 }

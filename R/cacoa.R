@@ -1515,7 +1515,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$test.results[['cda']] <- tmp %$%
         resampleContrast(d.counts, d.groups, n.cell.counts=n.cell.counts, n.seed=n.seed, n.iter=n.iter)
 
-      self$test.results$cda$pvals <- getCellSignificance(self$test.results$cda$balances)
+      # self$test.results$cda$pvals <- getCellSignificance(self$test.results$cda$balances)
 
       return(invisible(self$test.results[['cda']]))
     },
@@ -1534,7 +1534,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, font.size=NULL,
                                 ordering='by.pvalue', signif.threshold=0.05, show.pvals=F,
-                                ref.cell.type = NULL) {
+                                ref.cell.type = NULL, define.ref.cell.type=T) {
+      if( (!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))) ) 
+        stop('Incorrect reference cell type')
+      if( (define.ref.cell.type == T) & (!is.null(ref.cell.type)) ) define.ref.cell.type = F
       possible.ordering = c('by.pvalue', 'by.mean', 'by.median')
       if(!(ordering %in% possible.ordering)){
         warning('Defaulf ordiring \'by.pvalue\' is applied ' )
@@ -1544,7 +1547,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       cda <- private$getResults('cda', 'estimateCellLoadings()')
       p <- plotCellLoadings(cda, ordering, signif.threshold, alpha, palette, show.pvals,
                             ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme,
-                            ref.cell.type = NULL)
+                            ref.cell.type = ref.cell.type, define.ref.cell.type=define.ref.cell.type)
 
       return(p)
     },

@@ -24,6 +24,21 @@ jaccard.pw.pval <- function(subsamples, pval.thresh){
   return(jac.all)
 }
 
+indexes.of.pairs <- function(subsamples, samples){
+  idxs = c()
+  id = 1
+  for(i in 1:length(samples)) {
+    for(j in 1:length(samples)) {
+      if (j <= i) next
+      id <- id + 1
+      if (! (samples[i] %in% subsamples)) next
+      if (! (samples[j] %in% subsamples)) next
+      idxs <- c(idxs, id)
+    }
+  }
+  return(idxs)
+}
+
 estimateStabilityPerCellType <- function(de.res,
                                          top.n.genes,
                                          padj.threshold) {
@@ -52,9 +67,10 @@ estimateStabilityPerCellType <- function(de.res,
       jacc.tmp <- jaccard.pw.pval(subsamples, padj.threshold)  
     }
     
+    
     data.tmp <- data.frame(group = cell.type,
                            value = jacc.tmp,
-                           cmp = 1:length(jacc.tmp))
+                           cmp = indexes.of.pairs(names(subsamples), names(de.res[[cell.type]]$subsamples)))
     data.all <- rbind(data.all, data.tmp)
   }
   

@@ -4,27 +4,33 @@
 ##' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
 ##' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 ##' @param bins number of bins for density estimation, default 400
-estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, expansion.mult=0.05){
+estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, bandwidth=0.05, expansion.mult=0.05){
   checkPackageInstalled('preprocessCore', bioc=TRUE, details="for KDE estimation")
 
-  lims <- as.numeric(apply(emb,2,function(x) ggplot2:::expand_limits_continuous(range(x),expansion(mult=expansion.mult))))
+  if (is.null(bandwidth)) {
+    bandwidth <- apply(emb, 2, MASS::bandwidth.nrd)
+  } else {
+    bandwidth <- apply(emb, 2, quantile, c(0.1, 0.9)) %>% diff() %>% {. * bandwidth} %>% .[1,]
+  }
+
+  lims <- as.numeric(apply(emb,2,function(x) ggplot2:::expand_limits_continuous(range(x), expansion(mult=expansion.mult))))
 
   cname <- intersect(names(sample.per.cell), rownames(emb))
   sample.per.cell <- sample.per.cell[cname]
   emb <- emb[cname, ]
   cells.per.samp <- split(names(sample.per.cell), sample.per.cell)
   density.mat <-lapply(cells.per.samp, function(nn) {
-      MASS::kde2d(emb[nn, 1], emb[nn, 2], n = bins, lims = lims)$z %>% as.numeric()
+      MASS::kde2d(emb[nn, 1], emb[nn, 2], h=bandwidth, n=bins, lims=lims)$z %>% as.numeric()
     }) %>% do.call("cbind", .) %>%
     preprocessCore::normalize.quantiles() %>%
     set_colnames(names(cells.per.samp)) %>%
     set_rownames(1:nrow(.)) # needed for indexing in diffCellDensity
 
-  density.fraction <- split(names(sample.groups), sample.groups) %>%
+  cond.densities <- split(names(sample.groups), sample.groups) %>%
     lapply(function(ns) rowMeans(density.mat[,ns]))
 
   # coordinate embedding space
-  mat <- matrix(density.fraction[[1]], ncol = bins, byrow = FALSE)
+  mat <- matrix(cond.densities[[1]], ncol = bins, byrow = FALSE)
   x1 <- seq(lims[1], lims[2], length.out=bins) %>% setNames(seq(bins))
   y1 <- seq(lims[3], lims[4], length.out=bins) %>% setNames(seq(bins))
   d1 <- setNames(melt(mat), c('x', 'y', 'z'))
@@ -36,7 +42,7 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ex
   dcounts <- table(cut(emb[,1], breaks = s1), cut(emb[,2], breaks = s2)) #%>% as.matrix.data.frame
   emb2$counts <- as.numeric(dcounts)
 
-  return(list(density.mat=density.mat, density.fraction=density.fraction, density.emb=emb2, bins=bins,
+  return(list(density.mat=density.mat, cond.densities=cond.densities, density.emb=emb2, bins=bins,
               method='kde', cell.emb=emb))
 }
 
@@ -55,15 +61,12 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
     m=m, n.cores=n.cores, progress.chunk=(verbose + 1), progress=verbose,
   ) %>% as.matrix()
 
-  score.mat %<>% {t(.) / colSums(.)} %>% t() %>% # Normalize by columns to adjust on the number of cells per sample
-    {. / rowSums(.)} # Then, by row to put make them sum into 1 (perhaps, only for visualization)
 
-  density.fraction <- split(names(sample.groups), sample.groups) %>%
-    sapply(function(samps) apply(score.mat[,samps,drop=FALSE], 1, mean, trim=0.2)) %>% # Robust estimator of sum
-    {. / rowSums(.)}
-  density.fraction %<>% {lapply(1:ncol(.), function(i) .[,i])} %>% setNames(colnames(density.fraction))
+  cond.densities <- split(names(sample.groups), sample.groups) %>%
+    sapply(function(samps) apply(score.mat[,samps,drop=FALSE], 1, mean, trim=0.2)) # Robust estimator ofsum
+  cond.densities %<>% {lapply(1:ncol(.), function(i) .[,i])} %>% setNames(colnames(cond.densities))
 
-  return(list(density.mat=score.mat, density.fraction=density.fraction, method='graph'))
+  return(list(density.mat=score.mat, cond.densities=cond.densities, method='graph'))
 }
 
 

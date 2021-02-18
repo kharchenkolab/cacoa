@@ -1583,19 +1583,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param bins number of bins for density estimation, default 400
     #' @param method density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')
     #' @param beta smoothing strength parameter of the \link[sccore:heatFilter]{heatFilter} for graph based cell density (default: 30)
+    #' @param bandwidth KDE bandwidth multiplier. The full bandwidth is estimated by multiplying this value on the difference between 90% and 10%
+    #' of the corresponding embedding dimension. Set it to NULL to use \link[MASS:bandwidth.nrd]{bandwidth.nrd} estimator. (default: 0.05)
     #' @param name slot in which to save the results (default: 'cell.density')
     estimateCellDensity = function(bins=400, method='kde', name='cell.density', beta=30, estimate.variation=TRUE,
-                                   sample.groups=self$sample.groups, verbose=self$verbose, n.cores=self$n.cores){
+                                   sample.groups=self$sample.groups, verbose=self$verbose, n.cores=self$n.cores, bandwidth=0.05, ...){
       sample.per.cell <- self$sample.per.cell
 
       if (method == 'kde'){
         private$checkCellEmbedding()
         res <- self$embedding %>%
-          estimateCellDensityKde(sample.per.cell=sample.per.cell, sample.groups=sample.groups, bins=bins)
+          estimateCellDensityKde(sample.per.cell=sample.per.cell, sample.groups=sample.groups, bins=bins, bandwidth=bandwidth, ...)
       } else if (method == 'graph'){
         res <-  extractCellGraph(self$data.object) %>%
           estimateCellDensityGraph(sample.per.cell=sample.per.cell, sample.groups=sample.groups,
-                                   n.cores=n.cores, beta=beta, verbose=verbose)
+                                   n.cores=n.cores, beta=beta, verbose=verbose, ...)
       } else stop("Unknown method: ", method)
 
       sg.ids <- sample.groups %>% {split(names(.), .)}
@@ -1623,20 +1625,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotCellDensity = function(show.grid=TRUE, add.points=TRUE, size=0.1, show.legend=FALSE,
                                point.col='#FCFDBFFF', contours=NULL, contour.color='white', contour.conf='10%',
-                               name='cell.density', show.cell.groups=TRUE, cell.groups=self$cell.groups, font.size=c(2,4), ...) {
+                               name='cell.density', show.cell.groups=TRUE, cell.groups=self$cell.groups, font.size=c(2,4),
+                               color.range=c(0, "99%"), ...) {
       dens.res <- private$getResults(name, 'estimateCellDensity()')
       private$checkCellEmbedding()
 
-      ps <- names(dens.res$density.fraction) %>% sn() %>% lapply(function(l) {
+      ps <- names(dens.res$cond.densities) %>% sn() %>% lapply(function(l) {
+        color.range %<>% parseLimitRange(unlist(dens.res$cond.densities))
         if (dens.res$method =='graph') {
-          p <- self$plotEmbedding(colors=dens.res$density.fraction[[l]], size=size, title=l, show.legend=show.legend,
-                                  legend.title='Proportion', ...)
+          p <- self$plotEmbedding(colors=dens.res$cond.densities[[l]], size=size, title=l, show.legend=show.legend,
+                                  legend.title='Density', color.range=color.range, ...)
         } else {# dens.res$method =='kde'
           condition.per.cell <- self$getConditionPerCell()
-          lims <- dens.res$density.fraction %>% unlist() %>% range()
-
-          p <- dens.res %$% data.frame(density.emb, z=density.fraction[[l]]) %>%
-            plotDensityKde(bins=dens.res$bins, lims=lims, title=l, show.legend=show.legend,
+          p <- dens.res %$% data.frame(density.emb, z=cond.densities[[l]]) %>%
+            plotDensityKde(bins=dens.res$bins, lims=color.range, title=l, show.legend=show.legend,
                            show.grid=show.grid, plot.theme=self$plot.theme, ...)
 
           if (add.points){
@@ -1819,8 +1821,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... arguments, forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}.
     #' @return A ggplot2 object
     plotExpressionDistanceEmbedding = function(name='expression.shifts', cell.type=NULL, method='MDS', perplexity=4, max.iter=1e3,
-                                               palette=self$sample.groups.palette, font.size=NULL, show.sample.size=TRUE,
-                                               show.ticks=FALSE, show.labels=FALSE, size=5, ...) {
+                                               palette=NULL, font.size=NULL, show.sample.size=TRUE,
+                                               show.ticks=FALSE, show.labels=FALSE, size=5, sample.colors=NULL, color.title=NULL, ...) {
       # TODO: rename the function to account for heatmap visualization
       clust.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       sample.groups <- clust.info$sample.groups
@@ -1853,8 +1855,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       df <- data.frame(emb) %>% set_rownames(rownames(p.dists)) %>% set_colnames(c("x", "y")) %>%
         mutate(sample=rownames(.), condition=sample.groups[sample], n.cells=as.vector(n.cells.per.samp[sample]))
 
-      gg <- ggplot(df, aes(x, y, color=condition, shape=condition)) +
-        self$plot.theme
+      if (is.null(sample.colors)) {
+        gg <- ggplot(df, aes(x, y, color=condition, shape=condition))
+        if(is.null(palette)) {
+          gg <- gg + scale_color_manual(values=self$sample.groups.palette)
+        }
+      } else {
+        df$color <- sample.colors[as.character(df$sample)]
+        gg <- ggplot(df, aes(x, y, color=color, shape=condition))
+        if (!is.null(color.title)) gg <- gg + labs(color=color.title)
+      }
+
+      if(!is.null(palette)) {
+        gg <- gg + scale_color_manual(values=palette)
+      }
+
+      gg <- gg + self$plot.theme
 
       if (show.sample.size) {
         if (length(size) == 1) {
@@ -1866,16 +1882,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         gg <- gg + geom_point(size=size)
       }
 
-
       gg %<>% sccore:::styleEmbeddingPlot(title=title, show.ticks=show.ticks, show.labels=show.labels, ...)
 
       if (!is.null(font.size)) {
         gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
       }
 
-      if(!is.null(palette)) {
-        gg <- gg + scale_color_manual(values=palette)
-      }
+
       return(gg)
     },
 

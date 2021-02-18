@@ -13,7 +13,8 @@ plotMeanMedValuesPerCellType(
   palette = NULL,
   ylab = "expression distance",
   yline = 1,
-  plot.theme = theme_get()
+  plot.theme = theme_get(),
+  jitter.size = 1
 )
 }
 \arguments{

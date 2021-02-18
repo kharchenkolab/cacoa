@@ -1728,8 +1728,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param z.cutoff absolute z score cutoff (default: NULL)
     #' @param contour.conf confidence interval of contour (default: '10%')
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    plotDiffCellDensity=function(type='subtract', name='cell.density', size=0.2, z.cutoff=NULL, palette=grDevices::colorRampPalette(c('blue','white','red')),
+    plotDiffCellDensity=function(type='subtract', name='cell.density', size=0.2, z.cutoff=NULL, palette=NULL,
                                  contours=NULL, contour.color='black', contour.conf='10%', plot.na=FALSE, ...){
+      if (is.null(palette)) {
+        if (is.null(self$sample.groups.palette)) {
+          palette <- c('blue','white','red')
+        } else {
+          palette <- c(self$sample.groups.palette[self$ref.level], 'white', self$sample.groups.palette[self$target.level])
+        }
+        palette %<>% grDevices::colorRampPalette()
+      }
       private$checkCellEmbedding()
       dens.res <- private$getResults(name, 'estimateCellDensity')
       scores <- dens.res$diff[[type]]

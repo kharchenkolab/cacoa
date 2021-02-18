@@ -182,8 +182,8 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
 }
 
 
-plotCellLoadings <- function(cda, ordering, signif.threshold, alpha, palette, show.pvals, ref.level, target.level, plot.theme,
-                             ref.cell.type = NULL) {
+plotCellLoadings <- function(cda, ordering, signif.threshold, jitter.alpha, palette, show.pvals, ref.level, target.level, plot.theme,
+                             ref.cell.type = NULL, define.ref.cell.type=F) {
   balances = cda$balances
 
   if(is.null(ref.cell.type)) {
@@ -212,13 +212,12 @@ plotCellLoadings <- function(cda, ordering, signif.threshold, alpha, palette, sh
   }
 
 
-
   frac <- getCellSignificance(balances, yintercept)
   res.ordered <- t(balances) %>% as.data.frame()
   ymax = max(balances)
 
   p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
-    geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = alpha, size=1) +
+    geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = jitter.alpha, size=1) +
     geom_hline(yintercept = yintercept, color = "gray37") +
     coord_flip() + xlab('') + ylab('loadings') + plot.theme + theme(legend.position = "none") +
     scale_x_discrete(position = "top") + ylim(-ymax, ymax)

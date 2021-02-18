@@ -921,11 +921,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description  Plot embedding
     #' @param embedding A cell embedding to use (two-column data frame with rownames corresponding to cells) (default: stored embedding object)
     #' @param plot.theme plot theme to use (default: `self$plot.theme`)
+    #' @param color.by color cells by 'cell.groups', 'condition' or 'sample'. Overrides `groups` and `palette`. (default: NULL)
+    #' @param groups cell groups for the plot coloring
     #' @param ... other parameters are passed to \link[sccore:embeddingPlot]{embeddingPlot}
-    plotEmbedding=function(embedding=self$embedding, plot.theme=self$plot.theme, show.legend=TRUE, ...) {
+    plotEmbedding=function(embedding=self$embedding, groups=NULL, color.by=NULL,
+                           plot.theme=self$plot.theme, show.legend=TRUE, palette=NULL, ...) {
       if(is.null(embedding)) stop("embedding must be provided to Cacoa constructor or to this method.")
       private$checkCellEmbedding(embedding)
-      sccore::embeddingPlot(embedding, plot.theme=plot.theme, show.legend=show.legend, ...)
+      if (!is.null(color.by)) {
+        if (color.by == 'cell.groups') {
+          groups <- self$cell.groups
+          palette <- self$cell.groups.palette
+        } else if (color.by == 'condition') {
+          groups <- self$getConditionPerCell()
+          palette <- self$sample.groups.palette
+        } else if (color.by == 'sample') {
+          groups <- self$sample.per.cell
+        } else stop("Unknown color.by option: ", color.by)
+
+      }
+      sccore::embeddingPlot(embedding, plot.theme=plot.theme, show.legend=show.legend, groups=groups, palette=palette, ...)
     },
 
     #' @description Estimate ontology terms based on DEs
@@ -2050,6 +2065,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (smooth) {
         mask <- is.na(shifts)
         shifts[mask] <- 1
+        sr <- parseLimitRange(c("2.5%", "99%"), shifts)
+        shifts %<>% pmax(sr[1]) %>% pmin(sr[2])
+
         shifts %<>% smoothSignalOnGraph(extractCellGraph(self$data.object), filter=function(...) heatFilter(..., beta=beta))
         shifts[mask] <- NA
       }
@@ -2257,7 +2275,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         return(gg.emb)
       }
 
-      return(gg.emb + ls[[1]] + scale_size_continuous(limits=font.size, guide='none'))
+      return(gg.emb + ls[[1]] + scale_size_continuous(range=font.size, trans='identity', guide='none'))
     },
 
     extractCodaData = function(ret.groups=TRUE, cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL, samples.to.remove=NULL) {

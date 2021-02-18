@@ -53,6 +53,7 @@ Suggests:
     ggrastr (>= 0.1.7),
     GOfuncR,
     graph,
+    preprocessCore,
     RColorBrewer,
     Rgraphviz,
     robustbase,

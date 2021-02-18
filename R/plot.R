@@ -332,6 +332,7 @@ reduceEdges <- function(edges, verbose=TRUE, n.cores = 1) {
 ##' @return Rgraphviz object
 plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, string.length=18, legend.label.size = 1,
                                legend.position="topright", verbose=TRUE, n.cores=1, reduce.edges=TRUE) {
+  checkPackageInstalled("Rgraphviz", bioc=TRUE)
   # Define nodes
   parent.ids <- sapply(fam, function(x) data[[x]]$parent_go_id) %>%
     unlist() %>%

@@ -66,7 +66,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
 
   t.cur <- constructCanonicalTree(d.counts, d.groups)
   t.tmp <- compute.brlen(t.cur, method="Grafen")
-  d.cur <- as.dendrogram(t.tmp)
+  d.cur <- as.dendrogram(as.hclust(t.tmp))
   t.tmp <- as.phylo(d.cur)
 
   # ---------------------------------
@@ -185,14 +185,14 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
 plotCellLoadings <- function(cda, ordering, signif.threshold, alpha, palette, show.pvals, ref.level, target.level, plot.theme,
                              ref.cell.type = NULL) {
   balances = cda$balances
-  
+
   if(is.null(ref.cell.type)) {
     yintercept = 0
   } else {
     yintercept = median(balances[ref.cell.type,])
   }
-  
-  
+
+
   if(ordering == 'by.pvalue'){
     # ordering by median
     balances <- balances[order(abs(apply(balances, 1, median))), ]
@@ -210,7 +210,7 @@ plotCellLoadings <- function(cda, ordering, signif.threshold, alpha, palette, sh
     balances <- balances[order(abs(apply(balances, 1, median))), ]
     n.significant.cells = 0
   }
-  
+
 
 
   frac <- getCellSignificance(balances, yintercept)

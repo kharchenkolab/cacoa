@@ -23,7 +23,7 @@ estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2
   return(list(red=df.cda, loadings=df.loadings))
 }
 
-plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, target.level, palette=NULL) {
+plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, target.level, font.size=3, palette=NULL) {
   group.names <- c(ref.level, target.level)
   rda.plot <- ggplot(df.space, aes(x=S1, y=S2)) +
     #   geom_text(aes(label=rownames(df_pca) %in% samplegroups$trgt),size=4) +
@@ -32,14 +32,14 @@ plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, targe
     geom_point(aes(colour = factor(group.names[d.groups + 1] ))) +
     labs(colour="Condition")
 
-  if(!is.null(palette)) rda.plot <- rda.plot + scale_fill_manual(values=palette)
+  if(!is.null(palette)) rda.plot <- rda.plot + scale_color_manual(values=palette)
 
   rda.biplot <- rda.plot +
     geom_segment(data=df.loadings, aes(x=0, xend=S1, y=0, yend=S2),
                  color="grey", arrow=arrow(length=unit(0.01,"npc")))  +
     geom_text(data=df.loadings,
               aes(x=S1, y=S2, label=rownames(df.loadings)),
-              color="black", size=3)
+              color="black", size=font.size)
 
   dx <- max(diff(range(df.space$S1)), diff(range(df.loadings$S1)))
   dy <- max(diff(range(df.space$S2)), diff(range(df.loadings$S2)))
@@ -65,9 +65,9 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
   log.f <- getLogFreq(d.counts)
 
   t.cur <- constructCanonicalTree(d.counts, d.groups)
-  t.tmp <- compute.brlen(t.cur, method="Grafen")
-  d.cur <- as.dendrogram(as.hclust(t.tmp))
-  t.tmp <- as.phylo(d.cur)
+  t.tmp <- compute.brlen(t.cur, method="Grafen") %>% as.hclust()
+  d.cur <- as.dendrogram(t.tmp)
+  t.tmp <- as.phylo(t.tmp)
 
   # ---------------------------------
   # Positions

@@ -802,7 +802,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param show.whiskers whether to show a whiskers in the size dependency plot (default:TRUE)
     #' @return A ggplot2 object
     plotNumberOfDEGenes=function(name='de', p.adjust=TRUE, pvalue.cutoff=0.05, show.resampling.results=TRUE, show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE,
-                                 show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE) {
+                                 show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, ...) {
 
       de.raw <- private$getResults(name, 'estimatePerCellTypeDE()')
 
@@ -830,10 +830,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if(show.size.dependency) {
         p <- plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='number of DE genes', yline=NA, show.whiskers=show.whiskers,
-                                 show.regression=show.regression, plot.theme=self$plot.theme)
+                                 show.regression=show.regression, plot.theme=self$plot.theme, ...)
       } else {
         p <- plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette,
-                                          ylab='number of DE genes',yline=NA, plot.theme=self$plot.theme)
+                                          ylab='number of DE genes',yline=NA, plot.theme=self$plot.theme, ...)
       }
 
       return(p)
@@ -1492,7 +1492,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Plot compositions in CoDA space (PCA or CDA)
     #' @param space either 'PCA' or 'CDA'
     #' @return A ggplot2 object
-    plotCodaSpace=function(space='CDA', cell.groups=self$cell.groups, cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, palette=self$sample.groups.palette) {
+    plotCodaSpace=function(space='CDA', cell.groups=self$cell.groups, font.size=3, cells.to.remain=NULL, cells.to.remove=NULL,
+                           samples.to.remove=NULL, palette=self$sample.groups.palette) {
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove, cell.groups=cell.groups)
 
       if (space == 'PCA') {
@@ -1510,15 +1511,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         gg.labs <- labs(x="Score 1", y="Score 2")
       }
 
-      gg <- plotCodaSpaceInner(dfs$red, dfs$loadings, d.groups=tmp$d.groups, ref.level=self$ref.level, target.level=self$target.level, palette=palette)
+      gg <- plotCodaSpaceInner(dfs$red, dfs$loadings, d.groups=tmp$d.groups, ref.level=self$ref.level, target.level=self$target.level,
+                               font.size=font.size, palette=palette)
       return(gg + gg.labs + self$plot.theme)
     },
 
     #' @description Plot contrast tree
     #' @return A ggplot2 object
-    plotContrastTree=function(cell.groups=self$cell.groups, cells.to.remain = NULL, cells.to.remove = NULL) {
+    plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette, cells.to.remain = NULL, cells.to.remove = NULL) {
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, plot.theme=self$plot.theme)
+      if (!is.null(palette)) {
+        gg <- gg + scale_color_manual(values=palette)
+      }
       return(gg)
     },
 
@@ -2322,7 +2327,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       cm <- self$getJointCountMatrix()
       cm@x <- 1 * (cm@x > 0)
       self$cache$expr.frac.per.type <- match(names(self$cell.groups), rownames(cm)) %>%
-        split(self$cell.groups) %>% sapply(function(ids) Matrix::colMeans(cm[ids,]))
+        split(self$cell.groups) %>% sapply(function(ids) Matrix::colMeans(cm[na.omit(ids),,drop=FALSE])) %>%
+        as("dgCMatrix")
 
       return(self$cache$expr.frac.per.type)
     },

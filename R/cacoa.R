@@ -1583,12 +1583,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param bins number of bins for density estimation, default 400
     #' @param method density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')
     #' @param beta smoothing strength parameter of the \link[sccore:heatFilter]{heatFilter} for graph based cell density (default: 30)
-    #' @param m numeric Maximum order of Chebyshev coeff to compute for graph based cell density (default: 50)
     #' @param name slot in which to save the results (default: 'cell.density')
-    estimateCellDensity = function(bins=400, method='kde', name='cell.density', beta=30, m=50,
-                                   verbose=self$verbose, n.cores=self$n.cores){
+    estimateCellDensity = function(bins=400, method='kde', name='cell.density', beta=30, estimate.variation=TRUE,
+                                   sample.groups=self$sample.groups, verbose=self$verbose, n.cores=self$n.cores){
       sample.per.cell <- self$sample.per.cell
-      sample.groups <- self$sample.groups
 
       if (method == 'kde'){
         private$checkCellEmbedding()
@@ -1597,15 +1595,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else if (method == 'graph'){
         res <-  extractCellGraph(self$data.object) %>%
           estimateCellDensityGraph(sample.per.cell=sample.per.cell, sample.groups=sample.groups,
-                                   n.cores=n.cores, m=m, beta=beta, verbose=verbose)
+                                   n.cores=n.cores, beta=beta, verbose=verbose)
       } else stop("Unknown method: ", method)
 
-      nt <- self$sample.groups %>% {names(.[. == self$target.level])}
-      nr <- self$sample.groups %>% {names(.[. == self$ref.level])}
+      sg.ids <- sample.groups %>% {split(names(.), .)}
 
-      res$density.mad <- res %$% {(apply(density.mat[,nt], 1, mad) + apply(density.mat[,nr], 1, mad))}
-      res$density.sd <- res %$% {(apply(density.mat[,nt], 1, sd) + apply(density.mat[,nr], 1, sd))}
-      res$missed.sample.frac <- res$density.mat %>% {(. / rowMeans(.)) < 0.05} %>% rowMeans()
+      if (estimate.variation) {
+        res$density.mad <- res %$% lapply(sg.ids, function(ids) apply(density.mat[,ids,drop=FALSE], 1, mad)) %>%
+          Reduce(`+`, .)
+        res$density.sd <-res %$% lapply(sg.ids, function(ids) apply(density.mat[,ids,drop=FALSE], 1, sd)) %>%
+          Reduce(`+`, .)
+        res$missed.sample.frac <- res$density.mat %>% {(. / rowMeans(.)) < 0.05} %>% rowMeans()
+      }
 
       self$test.results[[name]] <- res
 
@@ -1626,8 +1627,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       dens.res <- private$getResults(name, 'estimateCellDensity()')
       private$checkCellEmbedding()
 
-      cond.levels <- c(ref=self$ref.level, target=self$target.level)
-      ps <- lapply(cond.levels, function(l) {
+      ps <- names(dens.res$density.fraction) %>% sn() %>% lapply(function(l) {
         if (dens.res$method =='graph') {
           p <- self$plotEmbedding(colors=dens.res$density.fraction[[l]], size=size, title=l, show.legend=show.legend,
                                   legend.title='Proportion', ...)
@@ -1663,7 +1663,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     plotCellDensityVariation = function(type='mad', plot.type='embedding', name='cell.density', cutoff=NULL,
                                         condition=c('both', 'ref', 'target'), ...) {
-      dens.res <- private$getResults(name, 'estimateCellDensity()')
+      dens.res <- private$getResults(name, 'estimateCellDensity(estimate.variation=TRUE)')
       condition <- match.arg(condition)
       if (type == 'mad') {
         name <- 'MAD'
@@ -1675,6 +1675,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         name <- 'Missed sample frac.'
         scores <- dens.res$missed.sample.frac
       } else stop("Unknown type: ", type)
+
+      if (is.null(scores)) stop("To use this function, please re-run estimateCellDensity() with estimate.variation=TRUE")
 
       if ((dens.res$method == 'graph') && (condition != 'both')) {
         subgr <- if (condition == 'ref') self$ref.level else self$target.level

@@ -1555,7 +1555,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, font.size=NULL,
                                 ordering='by.pvalue', signif.threshold=0.05, show.pvals=F,
                                 ref.cell.type = NULL, define.ref.cell.type=T) {
-      if( (!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))) ) 
+      if( (!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))) )
         stop('Incorrect reference cell type')
       if( (define.ref.cell.type == T) & (!is.null(ref.cell.type)) ) define.ref.cell.type = F
       possible.ordering = c('by.pvalue', 'by.mean', 'by.median')
@@ -1829,6 +1829,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # TODO: rename the function to account for heatmap visualization
       clust.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       sample.groups <- clust.info$sample.groups
+      if (all(sample.groups == self$sample.groups)) palette <- self$sample.groups.palette
       if (!is.null(cell.type)) { # use distances based on the specified cell type
         title <- cell.type
         p.dists.per.subsample <- lapply(clust.info$p.dist.info, `[[`, cell.type)
@@ -1847,7 +1848,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else if (method == 'MDS') {
         emb <- cmdscale(p.dists, eig=TRUE, k=2)$points # k is the number of dim
       } else if (method == 'heatmap') {
-        color.per.group <- setNames(palette[sample.groups], names(sample.groups))
+        color.per.group <- NULL
+        if (!is.null(palette)) {
+          color.per.group <- sample.groups %>% {setNames(palette[as.character(.)], names(.))}
+        }
         gg <- plotHeatmap(p.dists, color.per.group=color.per.group, legend.title="Distance",
                           symmetric=TRUE)
         return(gg)

@@ -117,7 +117,7 @@ subsamplePairwiseExpressionDistances <- function(count.matrices, sample.per.cell
 
     # restrict to top expressed genes
     if(n.top.genes < ncol(tcm)) {
-      tcm <- tcm[, rank(-colSums(tcm)) >= n.top.genes]
+      tcm <- tcm[,rank(-colSums(tcm)) <= n.top.genes]
     }
 
     if(dist=='JS') {

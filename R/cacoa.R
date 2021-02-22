@@ -476,8 +476,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       de.res <- if(length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
       de.res %<>% appendStatisticsToDE(private$getExpressionFractionPerType(), min.cell.frac=min.cell.frac,
                                        min.sample.frac=min.sample.frac)
-      self$test.resultss[[name]] <- de.res
-      
+      self$test.results[[name]] <- de.res
       
       return(invisible(self$test.results[[name]]))
     },

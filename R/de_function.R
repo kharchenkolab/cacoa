@@ -306,7 +306,8 @@ estimatePerCellTypeDEmethods=function (raw.mats,
                                        useT=F,
                                        minmu=0.5,
                                        test='Wald',
-                                       meta.info = NULL) {
+                                       meta.info = NULL,
+                                       gene.filter = NULL) {
 
   validatePerCellTypeParams(raw.mats, cell.groups, s.groups, ref.level, cluster.sep.chr)
 
@@ -336,6 +337,10 @@ estimatePerCellTypeDEmethods=function (raw.mats,
     tryCatch({
       ## Get count matrix
       cm <- aggr2[, strpart(colnames(aggr2), cluster.sep.chr, 2, fixed = TRUE) == l] %>% .[rowSums(.) > 0,] # Remove genes with no counts
+      if(!is.null(gene.filter)) {
+        gene.to.remain = intersect(rownames(gene.filter)[gene.filter[,l]], rownames(cm))
+        cm <- cm[gene.to.remain,]
+      }
       ## Generate metadata
       meta <- data.frame(
         sample.id=colnames(cm),

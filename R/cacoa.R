@@ -447,7 +447,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else stop(paste('Resampling method', resampling.method, 'is not supported'))
 
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=T)
-
+      
+      gene.filter <- private$getExpressionFractionPerType() > min.sample.frac
+      
       de.res = names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
         estimatePerCellTypeDEmethods(raw.mats=raw.mats,
                                      cell.groups = cell.groups,
@@ -466,15 +468,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                      useT = useT,
                                      minmu = minmu,
                                      test = test,
-                                     meta.info = covariates)
+                                     meta.info = covariates,
+                                     gene.filter = gene.filter)
       },n.cores=ifelse(length(s.groups.new)>=n.cores,n.cores,1),progress=length(s.groups.new)>=n.cores) # parallelize the outer loop if subsampling is on
 
       # if resampling: calculate median and variance on ranks after resampling
       de.res <- if(length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
       de.res %<>% appendStatisticsToDE(private$getExpressionFractionPerType(), min.cell.frac=min.cell.frac,
                                        min.sample.frac=min.sample.frac)
-      self$test.results[[name]] <- de.res
-
+      self$test.resultss[[name]] <- de.res
+      
+      
       return(invisible(self$test.results[[name]]))
     },
 

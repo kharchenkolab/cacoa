@@ -212,11 +212,9 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
   # calculate mean, se and median
   odf <- na.omit(df); # full df is now in odf
   # calculate mean and se
-  df$cell <- as.factor(df$cell)
-  df <- data.frame(cell=levels(df$cell), mean=tapply(df$val,df$cell,mean), se=tapply(df$val,df$cell, function(x) sd(x)/sqrt(length(x))), stringsAsFactors=FALSE)
-  df <- df[order(df$mean,decreasing=F),]
-  df$cell <- factor(df$cell,levels=df$cell)
-  df <- df[!is.na(df$mean),]
+  df %<>% group_by(cell) %>%
+    summarise(mean=mean(val), se=sd(val) / sqrt(n()), med=median(val)) %>%
+    arrange(med) %>% mutate(cell=factor(cell, levels=cell)) %>% .[!is.na(.$mean),]
 
   # order cell types according to the mean
   odf$cell <- factor(odf$cell, levels=df$cell)

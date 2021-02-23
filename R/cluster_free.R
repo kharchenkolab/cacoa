@@ -15,7 +15,8 @@ estimateGeneProgrammesFabia <- function(z.scores, n.programmes, n.sampled.cells=
     z.scores <- z.scores[, genes.filt]
   }
 
-  if (n.sampled.cells > 0) {
+  sample.ids <- NULL
+  if ((n.sampled.cells > 0) && (n.sampled.cells < nrow(z.scores))) {
     sample.ids <- unique(round(seq(1, nrow(z.scores), length.out=n.sampled.cells)))
     z.scores <- z.scores[sample.ids,]
   }

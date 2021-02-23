@@ -364,7 +364,7 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, st
     sig.parents <- c(fam, sapply(fam, function(x) data[[x]]$parents_in_IDs) %>% unlist())
     edges %<>%
       .[apply(., 1, function(r) all(unlist(r) %in% sig.parents)),]
-  }
+  } else if (plot.type != "complete") stop("Unknown plot type: ", plot.type)
 
   # Convert IDs to names
   if(show.ids == F) {

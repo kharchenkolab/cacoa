@@ -450,9 +450,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else stop(paste('Resampling method', resampling.method, 'is not supported'))
 
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=T)
-      
+
       gene.filter <- private$getExpressionFractionPerType() > min.sample.frac
-      
+
       de.res = names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
         estimatePerCellTypeDEmethods(raw.mats=raw.mats,
                                      cell.groups = cell.groups,
@@ -480,7 +480,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       de.res %<>% appendStatisticsToDE(private$getExpressionFractionPerType(), min.cell.frac=min.cell.frac,
                                        min.sample.frac=min.sample.frac)
       self$test.results[[name]] <- de.res
-      
+
       return(invisible(self$test.results[[name]]))
     },
 
@@ -2038,13 +2038,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `gene.scores`: list of vectors of gene scores per programme. Contains only genes, selected for
     #'     the programme usin fabia biclustering.
     #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
-    estimateGeneProgrammes = function(n.top.genes=Inf, n.programmes=15, gene.selection="change", name="gene.programmes", ...) {
+    estimateGeneProgrammes = function(n.top.genes=Inf, n.programmes=15, gene.selection="change", name="gene.programmes",
+                                      cell.subset=NULL, ...) {
       checkPackageInstalled('Rtsne', bioc=TRUE)
 
       z.scores <- private$getResults("cluster.free.z.smoothed", "smoothClusterFreeZScores")
-      if (!is.null(n.top.genes)) {
+      if (!is.null(n.top.genes) & !is.infinite(n.top.genes)) {
         genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, included.genes=colnames(z.scores))
         z.scores <- z.scores[,genes]
+      }
+
+      if (!is.null(cell.subset)) {
+        z.scores <- z.scores[cell.subset,]
       }
 
       res <- estimateGeneProgrammesFabia(z.scores, n.programmes, ...)
@@ -2071,8 +2076,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       scores <- if (approximate) fr$scores.approx else fr$scores.exact
 
       ggs <- lapply(1:ncol(scores), function(i) {
+        title <- paste0(colnames(scores)[i], ". Genes: ", length(fr$gene.scores[[i]]), ".")
         self$plotEmbedding(colors=scores[,i], gradient.range.quantile=gradient.range.quantile, plot.na=plot.na,
-                           legend.title=legend.title, title=colnames(scores)[i], ...)
+                           legend.title=legend.title, title=title, ...)
       })
       ggs <- lapply(ggs,function(x) x+theme(legend.background = element_blank()))
       if (build.panel)

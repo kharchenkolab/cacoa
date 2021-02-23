@@ -77,13 +77,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # TODO: would be nice to support a list of count matrices as input
       if ("Seurat" %in% class(data.object)) {
         if (is.null(sample.groups) || is.null(sample.per.cell))
-          stop("Both sample.groups and sample.per.cell must be specified for Seurat objects")
+          stop("Both sample.groups and sample.per.cell must be provided for Seurat objects")
         data.object$sample.per.cell <- sample.per.cell
         if (is.null(graph.name)) warning("No graph.name provided. The algorithm will use the first available graph.")
         data.object@misc$graph.name <- graph.name
       } else if (('Conos' %in% class(data.object))) {
         if (!is.null(graph.name)) warning("graph.name is not supported for Conos objects")
-      } else stop("only Conos and Seurat data objects are currently supported");
+      } else {
+        warning("Many function may be not supported for an object of class ", class(data.object));
+        if (is.null(sample.groups) || is.null(sample.per.cell) || is.null(cell.groups))
+          stop("All sample.groups, sample.per.cell and cell.groups must be provided")
+      }
 
       self$data.object <- data.object
 
@@ -96,13 +100,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if(is.null(cell.groups)) {
         self$cell.groups <- extractCellGroups(data.object)
       } else {
-        self$cell.groups <- as.factor(cell.groups)
+        self$cell.groups <- cell.groups <- as.factor(cell.groups)
       }
 
       if(is.null(sample.per.cell)) {
-        self$sample.per.cell <- extractSamplePerCell(data.object)
+        self$sample.per.cell <- extractSamplePerCell(data.object) %>% as.factor()
       } else {
-        self$sample.per.cell <- sample.per.cell
+        self$sample.per.cell <- as.factor(sample.per.cell)
       }
 
       if(is.null(sample.groups.palette)) {
@@ -113,14 +117,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if(is.null(cell.groups.palette)) {
-        self$cell.groups.palette <- setNames(rainbow(length(levels(cell.groups)),s=0.9,v=0.9), levels(cell.groups))
+        self$cell.groups.palette <- levels(cell.groups) %>% length() %>%
+          rainbow(s=0.9,v=0.9) %>% setNames(levels(cell.groups))
       } else {
         self$cell.groups.palette <- cell.groups.palette
       }
 
       self$plot.theme <- plot.theme
       self$embedding <- embedding;
-      private$checkCellEmbedding()
     },
 
     ### Expression shifts
@@ -1442,7 +1446,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotCellGroupProportions=function(cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL,
                                       palette=self$sample.groups.palette, show.significance=FALSE, ...) {
-      df.melt <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, ret.groups=FALSE)
+      df.melt <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove,
+                                         cells.to.remain=cells.to.remain, ret.groups=FALSE)
 
       df.melt %<>% {100 * . / rowSums(.)} %>% as.data.frame() %>%
         dplyr::mutate(group=self$sample.groups[levels(self$sample.per.cell)]) %>%

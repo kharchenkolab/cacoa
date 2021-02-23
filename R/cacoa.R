@@ -56,8 +56,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plot.theme=NULL,
 
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL,
-                        sample.groups.palette=NULL, cell.groups.palette=NULL, embedding=extractEmbedding(data.object), n.cores=1, verbose=TRUE,
-                        plot.theme=theme_bw()) {
+                        sample.groups.palette=NULL, cell.groups.palette=NULL, embedding=extractEmbedding(data.object), graph.name=NULL,
+                        n.cores=1, verbose=TRUE, plot.theme=theme_bw()) {
       if ('Cacoa' %in% class(data.object)) { # copy constructor
         for (n in ls(data.object)) {
           if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
@@ -66,22 +66,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         return()
       }
 
+      if (is.null(ref.level) || is.null(target.level))
+        stop("Both ref.level and target.level must be provided")
+
       self$n.cores <- n.cores
       self$verbose <- verbose
       self$ref.level <- ref.level
-
-      if (is.null(ref.level))
-        stop("ref.level must be provided")
-
-      if(is.null(target.level)) {
-        self$target.level <- "target"
-      } else {
-        self$target.level <- target.level
-      }
+      self$target.level <- target.level
 
       # TODO: would be nice to support a list of count matrices as input
-      if (!('Conos' %in% class(data.object)))
-        stop("only Conos data objects are currently supported");
+      if ("Seurat" %in% class(data.object)) {
+        if (is.null(sample.groups) || is.null(sample.per.cell))
+          stop("Both sample.groups and sample.per.cell must be specified for Seurat objects")
+        data.object$sample.per.cell <- sample.per.cell
+        if (is.null(graph.name)) warning("No graph.name provided. The algorithm will use the first available graph.")
+        data.object@misc$graph.name <- graph.name
+      } else if (('Conos' %in% class(data.object))) {
+        if (!is.null(graph.name)) warning("graph.name is not supported for Conos objects")
+      } else stop("only Conos and Seurat data objects are currently supported");
 
       self$data.object <- data.object
 
@@ -104,7 +106,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if(is.null(sample.groups.palette)) {
-        self$sample.groups.palette <- setNames(rev(scales::hue_pal()(length(levels(sample.groups)))), levels(sample.groups))
+        self$sample.groups.palette <- c("#d73027", "#4575b4") %>%
+          setNames(c(self$target.level, self$ref.level))
       } else {
         self$sample.groups.palette <- sample.groups.palette
       }
@@ -147,7 +150,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
       self$test.results[[name]] <- count.matrices %>%
-        estimateExpressionShiftMagnitudes(sample.groups, cell.groups, dist=dist, within.group.normalization=within.group.normalization,
+        estimateExpressionShiftMagnitudes(sample.groups, cell.groups, dist=tolower(dist), within.group.normalization=within.group.normalization,
                                           valid.comparisons=valid.comparisons, n.cells=n.cells, n.top.genes=n.top.genes, n.subsamples=n.subsamples,
                                           min.cells=min.cells, n.cores=n.cores, verbose=verbose, transposed.matrices=TRUE, ...)
 

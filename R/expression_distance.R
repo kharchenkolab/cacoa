@@ -13,9 +13,10 @@
 ##' @param verbose (default=F)
 ##' @param transposed.matrices (default=F)
 ##' @export
-estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cell.groups, dist='JS', within.group.normalization=TRUE,
+estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cell.groups, dist=c('js', 'cor'), within.group.normalization=TRUE,
                                               valid.comparisons=NULL, n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
                                               n.cores=1, verbose=FALSE, transposed.matrices=FALSE) {
+  dist <- match.arg(dist)
   sample.groups <- as.factor(sample.groups) %>% na.omit() %>% droplevels()
   if(length(levels(sample.groups))!=2) stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
 
@@ -41,13 +42,21 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
     if(verbose) cat('setting group size of ', n.cells, ' cells for comparisons\n')
   }
 
-  if(verbose) cat('running', n.subsamples, 'subsamples using ', n.cores, 'cores ...\n')
+  if (n.subsamples > 0) {
+    if(verbose) cat('running', n.subsamples, 'subsamples using ', n.cores, 'cores ...\n')
+    n.cells.scaled <- max(min.cells, ceiling(n.cells / length(sample.groups)))
+    progress <- verbose
+  } else {
+    n.subsamples <- 1
+    n.cells.scaled <- Inf
+    n.cores <- 1
+    progress <- FALSE
+  }
 
-  n.cells.scaled <- max(min.cells, ceiling(n.cells / length(sample.groups)))
   p.dist.info <- plapply(1:n.subsamples, function(i) {
     subsamplePairwiseExpressionDistances(count.matrices, sample.per.cell=sample.per.cell, cell.groups=cell.groups, n.top.genes=n.top.genes,
                                          sample.groups=sample.groups, n.cells.scaled=n.cells.scaled, dist=dist)
-  },n.cores=n.cores, mc.preschedule=TRUE, progress=verbose)
+  },n.cores=n.cores, mc.preschedule=TRUE, progress=progress)
 
   if(verbose) cat('calculating distances ... ')
   dist.df <- aggregateExpressionShiftMagnitudes(p.dist.info, valid.comparisons, sample.groups, min.cells=min.cells,
@@ -116,19 +125,19 @@ subsamplePairwiseExpressionDistances <- function(count.matrices, sample.per.cell
     tcm <- na.omit(do.call(rbind,lapply(caggr,function(x) x[match(ct,rownames(x)),])))
 
     # restrict to top expressed genes
-    if(n.top.genes < ncol(tcm)) {
+    if (n.top.genes < ncol(tcm)) {
       tcm <- tcm[,rank(-colSums(tcm)) <= n.top.genes]
     }
 
-    if(dist=='JS') {
+    if (dist=='js') {
       tcm <- t(tcm/pmax(1,rowSums(tcm)))
       dist.mat <- pagoda2:::jsDist(tcm, ncores = 1) %>%
         set_rownames(colnames(tcm)) %>% set_colnames(colnames(tcm))
-    } else {
+    } else if (dist=='cor') {
       tcm <- log10(t(tcm / pmax(1, rowSums(tcm))) * 1e3 + 1)
       dist.mat <- 1 - cor(tcm)
       dist.mat[is.na(dist.mat)] <- 1;
-    }
+    } else stop("Unknown distance: ", dist)
     # calculate how many cells there are
     attr(dist.mat, 'n.cells') <- cct[ct, colnames(tcm)]
     dist.mat

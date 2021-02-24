@@ -436,7 +436,7 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, st
   return(p)
 }
 
-plotVolcano <- function(de.df, p.name='padj.filt', legend.pos="none", palette=brewerPalette("RdYlBu"), lf.cutoff=1.5, p.cutoff=0.05,
+plotVolcano <- function(de.df, p.name='padj', legend.pos="none", palette=brewerPalette("RdYlBu"), lf.cutoff=1.5, p.cutoff=0.05,
                         cell.frac.cutoff=0.2, size=c(0.1, 1.0), lab.size=2, draw.connectors=TRUE, sel.labels=NULL, plot.theme=theme_get(), ...) {
   checkPackageInstalled("EnhancedVolcano", bioc=TRUE)
   if (is.null(sel.labels)) {

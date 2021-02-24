@@ -290,24 +290,22 @@ saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.meta
 #' @param test DE method: deseq2, edgeR, wilcoxon, ttest
 #' @export
 estimatePerCellTypeDEmethods=function (raw.mats,
-                                       cell.groups = NULL,
-                                       s.groups = NULL,
-                                       ref.level = NULL,
-                                       target.level = NULL,
-                                       common.genes = F,
-                                       cooks.cutoff = FALSE,
-                                       min.cell.count = 10,
-                                       max.cell.count = Inf,
-                                       independent.filtering = T,
-                                       n.cores = 4,
-                                       cluster.sep.chr = "<!!>",
-                                       return.matrix = T,
-                                       verbose = T,
-                                       useT=F,
-                                       minmu=0.5,
+                                       cell.groups=NULL,
+                                       s.groups=NULL,
+                                       ref.level=NULL,
+                                       target.level=NULL,
+                                       common.genes=FALSE,
+                                       cooks.cutoff=FALSE,
+                                       min.cell.count=10,
+                                       max.cell.count=Inf,
+                                       independent.filtering=TRUE,
+                                       n.cores=4,
+                                       cluster.sep.chr="<!!>",
+                                       return.matrix=TRUE,
+                                       verbose=TRUE,
                                        test='Wald',
-                                       meta.info = NULL,
-                                       gene.filter = NULL) {
+                                       meta.info=NULL,
+                                       gene.filter=NULL) {
 
   validatePerCellTypeParams(raw.mats, cell.groups, s.groups, ref.level, cluster.sep.chr)
 

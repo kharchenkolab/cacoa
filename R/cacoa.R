@@ -378,7 +378,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param max.cell.count maximal number of cells per cluster per sample to include in a comparison (useful for comparing the number of DE genes between cell types) (default: Inf)
     #' @param independent.filtering independentFiltering parameter for DESeq2 (default=FALSE)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-    #' @param return.matrix Return merged matrix of results (default=TRUE)
     #' @param resampling.method which resampling method should be used "loo" for leave-one-out or "bootstrap", (default:NULL no resampling)
     #' @param name slot in which to save the results (default: 'de')
     #' @return A list of DE genes
@@ -400,7 +399,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    max.resamplings=30,
                                    seed.resampling=239, # shouldn't this be external?
                                    min.cell.frac=0.05,
-                                   covariates = NULL) {
+                                   covariates = NULL, ...) {
 
       if(!is.list(sample.groups)) {
         s.groups <- list(names(sample.groups[sample.groups == ref.level]),
@@ -481,10 +480,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           cooks.cutoff=cooks.cutoff, min.cell.count=min.cell.count,
           max.cell.count=max.cell.count, independent.filtering=independent.filtering,
           n.cores=ifelse(length(s.groups.new)>=n.cores, 1, n.cores),
-          cluster.sep.chr=cluster.sep.chr,
           return.matrix=ifelse(resampling.name == 'initial', TRUE, FALSE),
           verbose=(length(s.groups.new) < n.cores),
-          useT=useT, minmu=minmu, test=test, meta.info=covariates, gene.filter=gene.filter)
+          test=test, meta.info=covariates, gene.filter=gene.filter, ...)
       },n.cores=ifelse(length(s.groups.new)>=n.cores,n.cores,1),
       progress=length(s.groups.new)>=n.cores) # parallelize the outer loop if subsampling is on
 

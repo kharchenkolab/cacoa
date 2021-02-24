@@ -437,10 +437,10 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, st
 }
 
 plotVolcano <- function(de.df, p.name='padj.filt', legend.pos="none", palette=brewerPalette("RdYlBu"), lf.cutoff=1.5, p.cutoff=0.05,
-                        cell.frac.cutoff=0.25, size=c(0.1, 1.0), lab.size=2, draw.connectors=TRUE, sel.labels=NULL, plot.theme=theme_get(), ...) {
+                        size=c(0.1, 1.0), lab.size=2, draw.connectors=TRUE, sel.labels=NULL, plot.theme=theme_get(), ...) {
   checkPackageInstalled("EnhancedVolcano", bioc=TRUE)
   if (is.null(sel.labels)) {
-    sel.labels <- de.df %$% Gene[(.[[p.name]] <= p.cutoff) & (abs(log2FoldChange) >= lf.cutoff) & (CellFrac >= cell.frac.cutoff)]
+    sel.labels <- de.df %$% Gene[(.[[p.name]] <= p.cutoff) & (abs(log2FoldChange) >= lf.cutoff)]
   }
   gg <- EnhancedVolcano::EnhancedVolcano(
     de.df, lab=de.df$Gene, x='log2FoldChange', y=p.name, arrowheads=FALSE,

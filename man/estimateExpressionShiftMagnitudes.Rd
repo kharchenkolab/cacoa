@@ -8,7 +8,7 @@ estimateExpressionShiftMagnitudes(
   count.matrices,
   sample.groups,
   cell.groups,
-  dist = "JS",
+  dist = c("js", "cor"),
   within.group.normalization = TRUE,
   valid.comparisons = NULL,
   n.cells = NULL,

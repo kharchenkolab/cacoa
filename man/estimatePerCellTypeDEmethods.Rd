@@ -22,7 +22,8 @@ estimatePerCellTypeDEmethods(
   useT = F,
   minmu = 0.5,
   test = "Wald",
-  meta.info = NULL
+  meta.info = NULL,
+  gene.filter = NULL
 )
 }
 \arguments{

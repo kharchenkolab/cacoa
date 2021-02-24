@@ -129,6 +129,7 @@ Plot sample-sample expression distance as a 2D embedding
   sample.groups.palette = NULL,
   cell.groups.palette = NULL,
   embedding = extractEmbedding(data.object),
+  graph.name = NULL,
   n.cores = 1,
   verbose = TRUE,
   plot.theme = theme_bw()
@@ -379,7 +380,6 @@ Estimate differential gene expression per cell type between conditions
   max.resamplings = 30,
   seed.resampling = 239,
   min.cell.frac = 0.05,
-  min.sample.frac = 0.1,
   covariates = NULL
 )}\if{html}{\out{</div>}}
 }
@@ -569,7 +569,6 @@ A ggplot2 object
   de.name = "de",
   name = "go.stability",
   p.adj = 1,
-  expr.cutoff = 0.05,
   de.raw = NULL,
   cell.groups = self$cell.groups,
   universe = NULL,
@@ -852,7 +851,6 @@ Plot number of highly-expressed DE genes as a function of number of cells
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotFilteredDEGenes(
   de.name = "de",
   cell.groups = self$cell.groups,
-  expr.fraction = 0.05,
   sample.frac = 0.1,
   padj.cutoff = 1,
   legend.position = "none",
@@ -919,7 +917,6 @@ Estimate ontology terms based on DEs
   org.db,
   n.top.genes = 500,
   p.adj = 1,
-  expr.cutoff = 0.05,
   p.adjust.method = "BH",
   readable = TRUE,
   verbose = TRUE,
@@ -1518,7 +1515,8 @@ Plot Loadings
   ordering = "by.pvalue",
   signif.threshold = 0.05,
   show.pvals = F,
-  ref.cell.type = NULL
+  ref.cell.type = NULL,
+  define.ref.cell.type = T
 )}\if{html}{\out{</div>}}
 }
 
@@ -1833,7 +1831,7 @@ Estimate differential expression Z-scores between two conditions per individual 
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeZScores(
   n.top.genes = Inf,
   max.z = 20,
-  min.expr.frac = 0.001,
+  min.expr.frac = 0.01,
   min.n.samp.per.cond = 2,
   min.n.obs.per.samp = 2,
   robust = TRUE,
@@ -1904,7 +1902,7 @@ Estimate Cluster-free Expression Shift
   gene.selection = "change",
   min.n.between = 2,
   min.n.within = max(min.n.between, 1),
-  min.expr.frac = 0.02,
+  min.expr.frac = 0,
   min.n.obs.per.samp = 3,
   norm.all = FALSE,
   dist = "cor",
@@ -2002,6 +2000,7 @@ cells using \link[fabia:fabia]{fabia}.
   n.programmes = 15,
   gene.selection = "change",
   name = "gene.programmes",
+  cell.subset = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -2178,4 +2177,28 @@ make sense, as control cells always have small distance from control.}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getJointCountMatrix"></a>}}
-\if{latex}{\out{\hypertarget{method
+\if{latex}{\out{\hypertarget{method-getJointCountMatrix}{}}}
+\subsection{Method \code{getJointCountMatrix()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$getJointCountMatrix(force = FALSE, raw = TRUE)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
+\subsection{Method \code{clone()}}{
+The objects of this class are cloneable with this method.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$clone(deep = FALSE)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{deep}}{Whether to make a deep clone.}
+}
+\if{html}{\out{</div>}}
+}
+}
+}

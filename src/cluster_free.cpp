@@ -14,8 +14,12 @@ using namespace Eigen;
 
 /// Utils
 
+void assert_r(bool condition, const std::string &message) {
+    if (!condition) Rcpp::stop(message);
+}
+
 double median(std::vector<double> &vec) {
-    assert(!vec.empty());
+    assert_r(!vec.empty(), "vector for median is empty");
     const auto median_it1 = vec.begin() + vec.size() / 2;
     std::nth_element(vec.begin(), median_it1 , vec.end());
 
@@ -45,7 +49,9 @@ double var(const std::vector<double> &vals, double mean) {
 
 Eigen::MatrixXd collapseMatrixNorm(const Eigen::SparseMatrix<double> &mtx, const std::vector<int> &factor,
                                    const std::vector<int> &nn_ids, const std::vector<unsigned> &n_obs_per_samp) {
-    assert(mtx.rows() == factor.size());
+    assert_r(mtx.cols() == factor.size(),
+             "Number of columns in matrix (" + std::to_string(mtx.cols()) +
+             ") must match the factor size (" + std::to_string(factor.size()) + ")");
     MatrixXd res = MatrixXd::Zero(mtx.rows(), n_obs_per_samp.size());
     for (int id : nn_ids) {
         int fac = factor[id];
@@ -82,7 +88,6 @@ std::vector<double> estimateCellZScore(const SparseMatrix<double> &cm, const std
                                        const std::vector<int> &nn_ids, const std::vector<bool> &is_ref,
                                        int min_n_samp_per_cond, const int min_n_obs_per_samp, bool robust, bool norm_both) {
     min_n_samp_per_cond = std::max(min_n_samp_per_cond, 2);
-    assert(cm.rows() == is_ref.size());
     auto n_ids_per_samp = count_values(sample_per_cell, nn_ids);
     auto mat_collapsed = collapseMatrixNorm(cm, sample_per_cell, nn_ids, n_ids_per_samp);
 
@@ -146,6 +151,10 @@ SEXP clusterFreeZScoreMat(const SEXP count_mat, IntegerVector sample_per_cell, L
     std::vector<double> res_scores(nn_ids_c.size(), 0);
 
     auto cm = as<SparseMatrix<double>>(count_mat);
+    assert_r(cm.cols() == samp_per_cell_c.size(),
+             "Number of columns in matrix (" + std::to_string(cm.cols()) +
+             ") must match the sample_per_cell size (" + std::to_string(samp_per_cell_c.size()) + ")");
+
     std::vector<Triplet<double>> z_triplets;
     std::mutex mut;
     auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &is_ref, &min_n_samp_per_cond, &min_n_obs_per_samp, &min_z, &robust,
@@ -164,7 +173,13 @@ SEXP clusterFreeZScoreMat(const SEXP count_mat, IntegerVector sample_per_cell, L
         }
 
     };
-    sccore::runTaskParallelFor(0, nn_ids_c.size(), task, n_cores, verbose);
+
+    try {
+        sccore::runTaskParallelFor(0, nn_ids_c.size(), task, n_cores, verbose);
+    } catch (std::runtime_error &x) {
+        Rcpp::stop(x.what());
+    }
+
 
     SparseMatrix<double> z_mat(cm.rows(), cm.cols());
     z_mat.setFromTriplets(z_triplets.begin(), z_triplets.end());

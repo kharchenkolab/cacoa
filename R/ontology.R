@@ -6,7 +6,6 @@ NULL
 #' @param de.raw List with differentially expressed genes per cell group
 #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
 #' @param p.adj.cutoff Adj. P cutoff for filtering DE genes (default=0.05)
-#' @param expr.cutoff Cutoff for cells per group expressing a DE gene, i.e., cutoff for highly-expressed genes (default=0.05)
 #' @return A list containing DE ENSEMBL gene IDs, and filtered DE genes
 #' @export
 getDEEntrezIds <- function(de.raw, org.db, p.adj=1) {

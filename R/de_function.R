@@ -158,7 +158,7 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
       else {
         res1
       }
-    }, error = function(err) NA)
+    }, error = function(err) {if (verbose) {warning(err)}; NA})
   }, n.cores = n.cores, progress=verbose) %>%  .[!sapply(., is.logical)]
 
 
@@ -338,7 +338,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
       ## Get count matrix
       cm <- aggr2[, strpart(colnames(aggr2), cluster.sep.chr, 2, fixed = TRUE) == l] %>% .[rowSums(.) > 0,] # Remove genes with no counts
       if(!is.null(gene.filter)) {
-        gene.to.remain = intersect(rownames(gene.filter)[gene.filter[,l]], rownames(cm))
+        gene.to.remain <- gene.filter %>% {rownames(.)[.[,l]]} %>% intersect(rownames(cm))
         cm <- cm[gene.to.remain,]
       }
       ## Generate metadata
@@ -514,17 +514,19 @@ summarizeDEResamplingResults <- function(de.list, var.to.sort='pvalue') {
   return(de.res)
 }
 
-appendStatisticsToDE <- function(de.list, expr.frac.per.type, min.cell.frac=0.05, min.sample.frac=0.1, adj.method='BH') {
+appendStatisticsToDE <- function(de.list, expr.frac.per.type) {
   for (n in names(de.list)) {
-    de <- de.list[[n]]$res %>%
-      mutate(Gene=rownames(.), CellFrac=expr.frac.per.type[Gene, n],
-             SampleFrac=Matrix::rowMeans(de.list[[n]]$cm > 0)[Gene]) %>%
+    de.list[[n]]$res %<>% mutate(Gene=rownames(.), CellFrac=expr.frac.per.type[Gene, n],
+                                 SampleFrac=Matrix::rowMeans(de.list[[n]]$cm > 0)[Gene]) %>%
       as.data.frame(stringsAsFactors=FALSE) %>% set_rownames(.$Gene)
-    de$padj.filt <- NA
-    mask <- de %$% {(CellFrac >= min.cell.frac) & (SampleFrac >= min.sample.frac) & !(is.na(pvalue))}
-    de$padj.filt[mask] <- p.adjust(de$pvalue[mask], method=adj.method)
-    de.list[[n]]$res <- de
   }
 
   return(de.list)
+}
+
+getExpressionFractionPerGroup <- function(cm, cell.groups) {
+  cm@x <- as.numeric(cm@x > 1e-10)
+  fracs <- conos:::collapseCellsByType(cm, cell.groups, min.cell.count=0) %>%
+    {. / as.vector(table(cell.groups)[rownames(.)])} %>% Matrix::t()
+  return(fracs)
 }

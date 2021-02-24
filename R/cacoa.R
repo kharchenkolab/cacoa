@@ -400,7 +400,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    max.resamplings=30,
                                    seed.resampling=239, # shouldn't this be external?
                                    min.cell.frac=0.05,
-                                   min.sample.frac=0.1,
                                    covariates = NULL) {
 
       if(!is.list(sample.groups)) {
@@ -408,7 +407,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                          names(sample.groups[sample.groups != ref.level])) %>%
           setNames(c(ref.level, target.level))
       } else {
-        s.groups = sample.groups
+        s.groups <- sample.groups
       }
 
       possible.tests <- c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR',
@@ -430,7 +429,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # s.groups.new contains list of case/control groups of samples to run DE on.
       # First element in s.groups.new corresponds to the initial grouping.
 
-      s.groups.new = list(initial = s.groups)
+      s.groups.new <- list(initial = s.groups)
       # If resampling is defined, new contrasts will append to s.groups.new
       if (is.null(resampling.method)){
       } else if (resampling.method == 'loo') {
@@ -468,36 +467,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       } else stop(paste('Resampling method', resampling.method, 'is not supported'))
 
-      raw.mats <- extractRawCountMatrices(self$data.object, transposed=T)
+      raw.mats <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
-      gene.filter <- private$getExpressionFractionPerType() > min.sample.frac
+      expr.fracs <- self$getJointCountMatrix() %>%
+        getExpressionFractionPerGroup(cell.groups)
+      gene.filter <- (expr.fracs > min.cell.frac)
 
       de.res <- names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
-        estimatePerCellTypeDEmethods(raw.mats=raw.mats,
-                                     cell.groups = cell.groups,
-                                     s.groups = s.groups.new[[resampling.name]],
-                                     ref.level = ref.level,
-                                     target.level = target.level,
-                                     common.genes = common.genes,
-                                     cooks.cutoff = cooks.cutoff,
-                                     min.cell.count = min.cell.count,
-                                     max.cell.count = max.cell.count,
-                                     independent.filtering = independent.filtering,
-                                     n.cores = ifelse(length(s.groups.new)>=n.cores, 1, n.cores),
-                                     cluster.sep.chr = cluster.sep.chr,
-                                     return.matrix = ifelse(resampling.name == 'initial', TRUE, FALSE),
-                                     verbose = length(s.groups.new)<n.cores,
-                                     useT = useT,
-                                     minmu = minmu,
-                                     test = test,
-                                     meta.info = covariates,
-                                     gene.filter = gene.filter)
-      },n.cores=ifelse(length(s.groups.new)>=n.cores,n.cores,1),progress=length(s.groups.new)>=n.cores) # parallelize the outer loop if subsampling is on
+        estimatePerCellTypeDEmethods(
+          raw.mats=raw.mats, cell.groups=cell.groups,
+          s.groups=s.groups.new[[resampling.name]],
+          ref.level=ref.level, target.level=target.level, common.genes=common.genes,
+          cooks.cutoff=cooks.cutoff, min.cell.count=min.cell.count,
+          max.cell.count=max.cell.count, independent.filtering=independent.filtering,
+          n.cores=ifelse(length(s.groups.new)>=n.cores, 1, n.cores),
+          cluster.sep.chr=cluster.sep.chr,
+          return.matrix=ifelse(resampling.name == 'initial', TRUE, FALSE),
+          verbose=(length(s.groups.new) < n.cores),
+          useT=useT, minmu=minmu, test=test, meta.info=covariates, gene.filter=gene.filter)
+      },n.cores=ifelse(length(s.groups.new)>=n.cores,n.cores,1),
+      progress=length(s.groups.new)>=n.cores) # parallelize the outer loop if subsampling is on
 
       # if resampling: calculate median and variance on ranks after resampling
       de.res <- if(length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
-      de.res %<>% appendStatisticsToDE(private$getExpressionFractionPerType(), min.cell.frac=min.cell.frac,
-                                       min.sample.frac=min.sample.frac)
+      de.res %<>% appendStatisticsToDE(expr.fracs)
       self$test.results[[name]] <- de.res
 
       return(invisible(self$test.results[[name]]))
@@ -679,7 +672,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                  de.name='de',
                                  name='go.stability',
                                  p.adj=1,
-                                 expr.cutoff=0.05,
                                  de.raw=NULL,
                                  cell.groups=self$cell.groups,
                                  universe=NULL,
@@ -693,10 +685,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       de.res.cell.type = de.res$Id2_Lamp5$subsamples
 
+      # TODO: this function is not working now. There is no prepareOntologyData.
       res <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
         prepareOntologyData(org.db = org.db,
                             p.adj = p.adj,
-                            expr.cutoff = expr.cutoff,
                             de.raw = de.res.cell.type, cell.groups = cell.groups, universe = universe,
                             transposed = transposed, verbose = verbose, n.cores = n.cores)
 
@@ -978,7 +970,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5)
     #' @param max.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
-    estimateOntology=function(type = "GO", org.db, n.top.genes=500, p.adj=1, expr.cutoff=0.05,
+    estimateOntology=function(type = "GO", org.db, n.top.genes=500, p.adj=1,
                               p.adjust.method="BH",
                               readable=TRUE, verbose=TRUE,
                               qvalue.cutoff=0.2, min.gs.size=10,
@@ -994,7 +986,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before calculating
       if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, "res")
 
-      de.gene.ids <- getDEEntrezIds(de.raw, org.db=org.db, p.adj=p.adj, expr.cutoff=expr.cutoff)
+      de.gene.ids <- getDEEntrezIds(de.raw, org.db=org.db, p.adj=p.adj)
 
       go.environment <- private$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
       res <- estimateOntologyFromIds(
@@ -2380,19 +2372,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if(is.null(rownames(embedding)))
         stop("self$embedding must have rownames, equal to cell ids")
-    },
-
-    getExpressionFractionPerType = function() {
-      if (!is.null(self$cache$expr.frac.per.type))
-        return(self$cache$expr.frac.per.type)
-
-      cm <- self$getJointCountMatrix()
-      cm@x <- 1 * (cm@x > 0)
-      self$cache$expr.frac.per.type <- match(names(self$cell.groups), rownames(cm)) %>%
-        split(self$cell.groups) %>% sapply(function(ids) Matrix::colMeans(cm[na.omit(ids),,drop=FALSE])) %>%
-        as("dgCMatrix")
-
-      return(self$cache$expr.frac.per.type)
     },
 
     getGOEnvironment = function(org.db, verbose=FALSE, ignore.cache=NULL) {

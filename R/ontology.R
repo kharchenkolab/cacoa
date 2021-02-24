@@ -7,8 +7,7 @@ NULL
 #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
 #' @param p.adj.cutoff Adj. P cutoff for filtering DE genes (default=0.05)
 #' @return A list containing DE ENSEMBL gene IDs, and filtered DE genes
-#' @export
-getDEEntrezIds <- function(de.raw, org.db, p.adj=1) {
+getDEEntrezIdsSplitted <- function(de.raw, org.db, p.adj=1) {
   checkPackageInstalled("clusterProfiler", bioc=TRUE)
   if(!(class(org.db) %in% "OrgDb")) stop("'org.db' must be of class 'OrgDb'. Please input an organism database, e.g., org.Hs.eg.db for human data.")
   if(p.adj < 1) warning("You are filtering based on adj. P-value through the 'p.adj' parameter. We do not recommend this. Proceed with caution.")

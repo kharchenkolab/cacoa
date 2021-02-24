@@ -986,7 +986,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before calculating
       if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, "res")
 
-      de.gene.ids <- getDEEntrezIds(de.raw, org.db=org.db, p.adj=p.adj)
+      de.gene.ids <- getDEEntrezIdsSplitted(de.raw, org.db=org.db, p.adj=p.adj)
 
       go.environment <- private$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
       res <- estimateOntologyFromIds(

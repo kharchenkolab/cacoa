@@ -89,6 +89,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           stop("All sample.groups, sample.per.cell and cell.groups must be provided")
       }
 
+      if (any(c("dgCMatrix", "dgTMatrix", "dgEMatrix", "matrix") %in% class(data.object))) {
+        data.object %<>% as("dgCMatrix") %>% Matrix::t()
+        if (max(abs(round(data.object@x) - data.object@x)) < 1e-10) {
+          message("Interpreting data.object as a raw count matrix")
+          attr(data.object, "raw") <- TRUE
+        } else {
+          message("Interpreting data.object as a normalized count matrix")
+          attr(data.object, "raw") <- FALSE
+        }
+
+        if (length(setdiff(names(sample.per.cell), rownames(data.object))) > 0)
+          stop("All cells in the count matrix columns must be present in sample.per.cell")
+        attr(data.object, 'sample.per.cell') <- as.factor(sample.per.cell)
+      }
+
       self$data.object <- data.object
 
       if(is.null(sample.groups)) {
@@ -457,7 +472,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       gene.filter <- private$getExpressionFractionPerType() > min.sample.frac
 
-      de.res = names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
+      de.res <- names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
         estimatePerCellTypeDEmethods(raw.mats=raw.mats,
                                      cell.groups = cell.groups,
                                      s.groups = s.groups.new[[resampling.name]],

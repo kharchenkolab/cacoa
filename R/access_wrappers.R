@@ -47,6 +47,16 @@ extractRawCountMatrices.Seurat <- function(so, transposed=TRUE) {
   return(cms)
 }
 
+extractRawCountMatrices.dgCMatrix <- function(cm, transposed=TRUE) {
+  sample.per.cell <- attr(cm, 'sample.per.cell')
+  cms <- sample.per.cell %>% {split(names(.), .)} %>%
+    lapply(function(cids) cm[cids,])
+  if (!transposed) {
+    cms %<>% lapply(Matrix::t)
+  }
+  return(cms)
+}
+
 extractJointCountMatrix <- function(obj, raw=TRUE, ...) UseMethod("extractJointCountMatrix", obj)
 extractJointCountMatrix.Conos <- function(con, raw=TRUE) {
   return(con$getJointCountMatrix(raw=raw))
@@ -69,6 +79,16 @@ extractJointCountMatrix.Seurat <- function(so, raw=TRUE, transposed=TRUE, sparse
   if (transposed) dat %<>% Matrix::t()
   if (is.matrix(dat) && sparse) dat %<>% as("dgCMatrix")
   return(dat)
+}
+
+extractJointCountMatrix.dgCMatrix <- function(cm, raw=TRUE) {
+  if (attr(cm, 'raw') == raw)
+    return(cm)
+
+  if (!attr(cm, 'raw') && raw)
+    stop("Can't extract raw matrix from a normalized dgCMatrix")
+
+  return(t(t(cm) / pmax(colSums(cm), 0.1)))
 }
 
 extractOdGenes <- function(obj, n.genes=NULL) UseMethod("extractOdGenes", obj)
@@ -124,3 +144,8 @@ extractGeneExpression.Conos <- function(obj, gene) {
 extractGeneExpression.Seurat <- function(so, gene) {
   return(extractJointCountMatrix(so, raw=FALSE, transposed=FALSE, sparse=FALSE)[gene,])
 }
+
+extractGeneExpression.dgCMatrix <- function(cm, gene) {
+  return(cm[,gene])
+}
+

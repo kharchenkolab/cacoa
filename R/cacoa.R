@@ -831,7 +831,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         } else {
           ndiff <- sum(na.omit(rl[[i]]$pvalue<=pvalue.cutoff))
         }
-        data.frame(cell=names(rl)[i],val=ndiff,stringsAsFactors=FALSE)
+        data.frame(cell=names(rl)[i], val=ndiff, stringsAsFactors=FALSE)
       }))
 
       if(show.size.dependency) {
@@ -905,7 +905,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
     #' @param label Show labels on plot (default=TRUE)
     #' @return A ggplot2 object
-    plotFilteredDEGenes=function(de.name="de", cell.groups=self$cell.groups, expr.fraction=0.05, sample.frac=0.1, padj.cutoff=1.0,
+    plotFilteredDEGenes=function(de.name="de", cell.groups=self$cell.groups, sample.frac=0.1, padj.cutoff=1.0,
                                  legend.position="none", label=TRUE) {
       de <- private$getResults(de.name, "estimatePerCellTypeDE")
       if (is.list(de[[1]])) de %<>% lapply(`[[`, "res")
@@ -913,7 +913,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de)]
 
       n.genes <- de[names(cell.groups)] %>%
-        sapply(function(df) sum((df$CellFrac >= expr.fraction) & (df$padj <= padj.cutoff) & (df$SampleFrac >= sample.frac)))
+        sapply(function(df) sum((df$padj <= padj.cutoff) & (df$SampleFrac >= sample.frac)))
       gg <- n.genes %>%
         plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Highly-expressed DE genes",
                             plot.theme=self$plot.theme, legend.position=legend.position, label=label) +

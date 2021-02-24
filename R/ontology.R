@@ -9,13 +9,13 @@ NULL
 #' @param expr.cutoff Cutoff for cells per group expressing a DE gene, i.e., cutoff for highly-expressed genes (default=0.05)
 #' @return A list containing DE ENSEMBL gene IDs, and filtered DE genes
 #' @export
-getDEEntrezIds <- function(de.raw, org.db, p.adj=1, expr.cutoff=0.05) {
+getDEEntrezIds <- function(de.raw, org.db, p.adj=1) {
   checkPackageInstalled("clusterProfiler", bioc=TRUE)
   if(!(class(org.db) %in% "OrgDb")) stop("'org.db' must be of class 'OrgDb'. Please input an organism database, e.g., org.Hs.eg.db for human data.")
   if(p.adj < 1) warning("You are filtering based on adj. P-value through the 'p.adj' parameter. We do not recommend this. Proceed with caution.")
 
   de.genes.filtered <- lapply(de.raw, function(df) {
-    df %$% Gene[!is.na(padj) & (padj <= p.adj) & (CellFrac >= expr.cutoff)]
+    df %$% Gene[!is.na(padj) & (padj <= p.adj)]
   })
 
   # Split genes by direction

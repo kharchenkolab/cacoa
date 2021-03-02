@@ -128,13 +128,13 @@ adjustPvalueScores <- function(scores) {
 ##' @param target.level target/disease level for sample.group vector
 ##' @param type method to calculate differential cell density of each bin; subtract: target density minus ref density; entropy: estimated kl divergence entropy between sample groups ; t.test: zscore of t-test,
 ##' global variance is setting for t.test;
-diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level, type = 'subtract',
+diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level, type='subtract',
                             adjust.pvalues=TRUE, verbose=TRUE, n.permutations=200){
   nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
   nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
 
   if (type == 'subtract') {
-    score <- rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])
+    score <- (rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])) / max(density.mat)
   #} else if (type == 'subtract.norm'){
   #  score <- (rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])) / rowMeans(density.mat[, nr])
   } else if (type=='t.test'){
@@ -145,17 +145,22 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
     zstat <- abs(qnorm(pvalue / 2))
     fc <- rowMeans(density.mat[,nt]) - rowMeans(density.mat[,nr])
     score <- zstat * sign(fc)
-  } else if (type == 'permutation') {
-    checkPackageInstalled("robustbase", "install.packages('robustbase')", details="for `type='permutation'`")
+  } else if (type %in% c('permutation', 'permutation.mean')) {
+    if (type == 'permutation') {
+      checkPackageInstalled("robustbase", "install.packages('robustbase')", details="for `type='permutation'`")
+      colRed <- robustbase::colMedians
+    } else {
+      colRed <- Matrix::colMeans
+    }
 
     density.mat <- t(density.mat)
     dm.shuffled <- density.mat
     permut.diffs <- plapply(1:n.permutations, function(i) { # Null distribution looks normal, so we don't need a lot of samples
       rownames(dm.shuffled) %<>% sample()
-      robustbase::colMedians(dm.shuffled[nt,]) - robustbase::colMedians(dm.shuffled[nr,])
+      colRed(dm.shuffled[nt,]) - colRed(dm.shuffled[nr,])
     }, progress=verbose, n.cores=1) %>% Reduce(cbind, .)
 
-    score <- (robustbase::colMedians(density.mat[nt,]) - robustbase::colMedians(density.mat[nr,])) / apply(permut.diffs, 1, sd)
+    score <- (colRed(density.mat[nt,]) - colRed(density.mat[nr,])) / apply(permut.diffs, 1, sd)
   } else stop("Unknown method: ", type)
 
   if((type != 'subtract') && adjust.pvalues) score %<>% adjustPvalueScores()

@@ -1450,13 +1450,28 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
     plotCellGroupProportions=function(cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL,
-                                      palette=self$sample.groups.palette, show.significance=FALSE, ...) {
+                                      palette=self$sample.groups.palette, show.significance=FALSE,
+                                      filter.empty.cell.types=TRUE, ...) {
       df.melt <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove,
                                          cells.to.remain=cells.to.remain, ret.groups=FALSE)
-
+      
       df.melt %<>% {100 * . / rowSums(.)} %>% as.data.frame() %>%
         dplyr::mutate(group=self$sample.groups[levels(self$sample.per.cell)]) %>%
         reshape2::melt(id.vars="group")
+      
+      # Filtration
+      if(filter.empty.cell.types) {
+        cell.types.counts <- table(df.melt$variable[df.melt$value>0], df.melt$group[df.melt$value>0])
+        cell.types.to.remain <- rownames(cell.types.counts)[rowSums(cell.types.counts == 0) == 0]
+        df.melt <- df.melt[df.melt$variable %in% cell.types.to.remain,]
+        
+        for(tmp.level in colnames(cell.types.counts)) {
+          cell.types.tmp <- rownames(cell.types.counts)[(rowSums(cell.types.counts == 0) != 0) &
+                                                         (cell.types.counts[,tmp.level] > 0)] 
+          if(length(cell.types.tmp) > 0)
+            message(paste0(c('Cell types {', cell.types.tmp, '} are presented only in ', tmp.level, 'samples'), sep = ' ' ))
+        }
+      }
 
       gg <- plotCountBoxplotsPerType(df.melt, y.lab="% cells per sample", y.expand=c(0, max(df.melt$value) * 0.1),
                                      show.significance=show.significance, palette=palette, plot.theme=self$plot.theme, ...)
@@ -1534,8 +1549,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Plot contrast tree
     #' @return A ggplot2 object
-    plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette, cells.to.remain = NULL, cells.to.remove = NULL) {
+    plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette, 
+                              cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE) {
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
+      if(filter.empty.cell.types) {
+        cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) & 
+          (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
+        tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
+      }
+      
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, plot.theme=self$plot.theme)
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)
@@ -1546,8 +1568,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Plot Loadings
     #' @return A ggplot2 object
     estimateCellLoadings=function(n.cell.counts = 1000, n.seed = 239, cells.to.remove = NULL,
-                                  cells.to.remain = NULL, samples.to.remove = NULL, n.iter=1000){
+                                  cells.to.remain = NULL, samples.to.remove = NULL, n.iter=1000,
+                                  filter.empty.cell.types=TRUE){
+      
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
+      
+      if(filter.empty.cell.types) {
+        cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) & 
+          (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
+        tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
+      }
+
       self$test.results[['cda']] <- tmp %$%
         resampleContrast(d.counts, d.groups, n.cell.counts=n.cell.counts, n.seed=n.seed, n.iter=n.iter)
 
@@ -1801,7 +1832,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param show.significance whether to show statistical significance between sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
     #' @param ... other plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    plotExpressionDistance = function(name='expression.shifts', joint=FALSE, min.cells=10, palette=self$sample.groups.palette, show.significance=FALSE, ...) {
+    plotExpressionDistance = function(name='expression.shifts', joint=FALSE, min.cells=10, 
+                                      palette=self$sample.groups.palette, show.significance=FALSE,
+                                      filter.empty.cell.types=TRUE, ...) {
       cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       if (!joint) {
         df <- cluster.shifts %$%
@@ -1819,6 +1852,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                 axis.ticks.x=element_blank(), panel.grid.major.x=element_blank())
       }
 
+      # Filtration
+      if(filter.empty.cell.types) {
+        cell.types.counts <- table(df$variable, df$group)
+        cell.types.to.remain <- rownames(cell.types.counts)[rowSums(cell.types.counts == 0) == 0]
+        df <- df[df$variable %in% cell.types.to.remain,]
+        
+        for(tmp.level in colnames(cell.types.counts)) {
+          cell.types.tmp <- rownames(cell.types.counts)[(rowSums(cell.types.counts == 0) != 0) &
+                                                         (cell.types.counts[,tmp.level] > 0)] 
+          if(length(cell.types.tmp) > 0)
+            message(paste0(c('Cell types {', cell.types.tmp, '} are "presented" only in ', tmp.level, 'samples'), sep = ' ' ))
+        }
+      }
       gg <- plotCountBoxplotsPerType(df, y.lab="expression distance", y.expand=c(0, max(df$value) * 0.1),
                                      show.significance=show.significance, plot.theme=plot.theme, palette=palette, ...)
 

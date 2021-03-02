@@ -198,12 +198,13 @@ aggregateExpressionShiftMagnitudes <- function(p.dist.info, valid.comparisons, s
 prepareJointExpressionDistance <- function(p.dist.info, valid.comparisons=NULL, sample.groups=NULL) {
   df <- lapply(p.dist.info, function(ctdm) {
     # bring to a common set of cell types
-    commoncell <- unique( unlist( lapply(ctdm, function(x) colnames(x)) ))
+    common.types <- lapply(ctdm, colnames) %>% unlist() %>% unique()
 
     ctdm <-  lapply(ctdm, function(x) {
-      y <- matrix(0,nrow=length(commoncell),ncol=length(commoncell)); rownames(y) <- colnames(y) <- commoncell; # can set the missing entries to zero, as they will carry zero weights
+      y <- matrix(0,nrow=length(common.types),ncol=length(common.types));  # can set the missing entries to zero, as they will carry zero weights
+      rownames(y) <- colnames(y) <- common.types;
       y[rownames(x),colnames(x)] <- x;
-      ycct <- setNames(rep(0,length(commoncell)), commoncell);
+      ycct <- setNames(rep(0,length(common.types)), common.types);
       ycct[colnames(x)] <- attr(x, 'n.cells')
       attr(y, 'n.cells') <- ycct
       y
@@ -238,8 +239,8 @@ prepareJointExpressionDistance <- function(p.dist.info, valid.comparisons=NULL, 
       return(NULL)
     xmd2 <- na.omit(reshape2::melt(xd))
     xmd2 <- na.omit(xmd2)
-    xmd2$type1 <- sample.groups[xmd2$Var1]
-    xmd2$type2 <- sample.groups[xmd2$Var2]
+    xmd2$type1 <- sample.groups[as.character(xmd2$Var1)]
+    xmd2$type2 <- sample.groups[as.character(xmd2$Var2)]
     xmd2
   })
 

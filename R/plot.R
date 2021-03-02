@@ -197,6 +197,11 @@ getOntologyPlotTitle <- function(genes, cell.subgroup, type) {
   return(ggtitle(paste0(cell.subgroup, " ", type, " terms, ", genes,"-regulated DE genes")))
 }
 
+estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
+  s.means <- sapply(1:n.samples, function(i) mean(sample(arr, replace=TRUE), ...))
+  return(quantile(s.means, c(quant, 1 - quant)))
+}
+
 #' @title Plot bar, point or boxplots showing mean/median values per cell type
 #' @description  Generic function for plotting mean or median values per cell type (used for expression shift distances and others)
 #' @param df - data frame containing the results, including $val and $cell slots which will be summarized
@@ -207,30 +212,44 @@ getOntologyPlotTitle <- function(genes, cell.subgroup, type) {
 #' @param palette - cell type palette
 #' @return A ggplot2 object
 plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch=TRUE, jitter.alpha=0.05, palette=NULL,
-                                         ylab='expression distance', yline=1, plot.theme=theme_get(), jitter.size=1) {
+                                         ylab='expression distance', yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0) {
 
   # calculate mean, se and median
-  odf <- na.omit(df); # full df is now in odf
-  # calculate mean and se
+  odf <- df <- na.omit(df); # full df is now in odf
+  conf.ints <- odf %$% split(val, cell) %>% lapply(estimateMeanCI, trim=trim)
+  # calculate mean and CI
   df %<>% group_by(cell) %>%
-    summarise(mean=mean(val), se=sd(val) / sqrt(n()), med=median(val)) %>%
-    arrange(med) %>% mutate(cell=factor(cell, levels=cell)) %>% .[!is.na(.$mean),]
+    summarise(mean=mean(val, trim=trim), med=median(val)) %>%
+    mutate(cell=as.character(cell)) %>%
+    mutate(LI=sapply(cell, function(ct) conf.ints[[ct]][1]),
+           UI=sapply(cell, function(ct) conf.ints[[ct]][2])) %>%
+    .[!is.na(.$mean),]
+
+  if (type == 'box') {
+    df %<>% arrange(med)
+  } else {
+    df %<>% arrange(mean)
+  }
 
   # order cell types according to the mean
-  odf$cell <- factor(odf$cell, levels=df$cell)
+  odf$cell %<>% factor(levels=df$cell)
+  df$cell %<>% factor(., levels=.)
 
   if(type=='box') { # boxplot
     p <- ggplot(odf,aes(x=cell,y=val,fill=cell)) + geom_boxplot(notch=notch, outlier.shape=NA)
   } else if(type=='point') { # point + se
-    p <- ggplot(df,aes(x=cell,y=mean,color=cell)) + geom_point(size=3) + geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)
+    p <- ggplot(df,aes(x=cell,y=mean,color=cell)) + geom_point(size=3) +
+      geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, size=line.size)
     if(!is.null(palette)) {p <- p + scale_color_manual(values=palette)}
-  } else { # default to barplot
-    p <- ggplot(df,aes(x=cell,y=mean,fill=cell)) + geom_bar(stat='identity')+ geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)
+  } else { # barplot
+    p <- ggplot(df,aes(x=cell,y=mean,fill=cell)) + geom_bar(stat='identity') +
+      geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, size=line.size)
   }
   if(!is.na(yline)) { p <- p + geom_hline(yintercept = 1,linetype=2,color='gray50') }
   p <- p +
     plot.theme +
-    theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12), axis.text.y=element_text(angle=90, hjust=0.5, size=12))+ guides(fill=FALSE)+
+    theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12),
+          axis.text.y=element_text(angle=90, hjust=0.5, size=12)) + guides(fill=FALSE)+
     theme(legend.position = "none")+
     labs(x="", y=ylab)
   if(show.jitter) {

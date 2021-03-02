@@ -134,7 +134,9 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
   nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
 
   if (type == 'subtract') {
-    score <- (rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])) / max(density.mat)
+    rmt <- rowMeans(density.mat[, nt])
+    rmr <- rowMeans(density.mat[, nr])
+    score <- (rmt - rmr) / max(max(rmt), max(rmr))
   #} else if (type == 'subtract.norm'){
   #  score <- (rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])) / rowMeans(density.mat[, nr])
   } else if (type=='t.test'){

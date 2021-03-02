@@ -318,22 +318,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     ##' @param show.regression whether to show a whiskers in the size dependency plot
     ##' @return A ggplot2 object
     plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.subsampling.variability=FALSE, show.jitter=FALSE, jitter.alpha=0.05, type='box',
-                                                 notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5) {
-      res <- private$getResults(name)
+                                                 notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5, ...) {
+      res <- private$getResults(name, 'estimateCommonExpressionShiftMagnitudes')
       cn <- setNames(names(res[[1]]),names(res[[1]]))
       if(show.subsampling.variability) { # average across patient pairs
-        if(length(res)<2) stop('the result has only one subsample; please set show.sampling.variability=FALSE')
-        df <- do.call(rbind,lapply(res,function(d) data.frame(val=unlist(lapply(d,mean)),cell=names(d))))
+        if(length(res) < 2) stop('the result has only one subsample; please set show.sampling.variability=FALSE')
+        df <- lapply(res,function(d) data.frame(val=unlist(lapply(d, mean)), cell=names(d)))
       } else { # average across subsampling rounds
-        df <- do.call(rbind,lapply(cn,function(n) data.frame(val=colMeans(do.call(rbind,lapply(res,function(x) x[[n]]))),cell=n)))
+        df <- lapply(cn,function(n) data.frame(val=colMeans(do.call(rbind,lapply(res,function(x) x[[n]]))),cell=n))
       }
+
+      df %<>% do.call(rbind, .)
 
       if(show.size.dependency) {
         plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='common expression distance', yline=NA,
-                            show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme)
+                            show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme, ...)
       } else {
-        plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette,
-                                     ylab='common expression distance', plot.theme=self$plot.theme)
+        plotMeanMedValuesPerCellType(df, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette,
+                                     ylab='common expression distance', plot.theme=self$plot.theme, ...)
       }
     },
 
@@ -1454,20 +1456,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                       filter.empty.cell.types=TRUE, ...) {
       df.melt <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove,
                                          cells.to.remain=cells.to.remain, ret.groups=FALSE)
-      
+
       df.melt %<>% {100 * . / rowSums(.)} %>% as.data.frame() %>%
         dplyr::mutate(group=self$sample.groups[levels(self$sample.per.cell)]) %>%
         reshape2::melt(id.vars="group")
-      
+
       # Filtration
       if(filter.empty.cell.types) {
         cell.types.counts <- table(df.melt$variable[df.melt$value>0], df.melt$group[df.melt$value>0])
         cell.types.to.remain <- rownames(cell.types.counts)[rowSums(cell.types.counts == 0) == 0]
         df.melt <- df.melt[df.melt$variable %in% cell.types.to.remain,]
-        
+
         for(tmp.level in colnames(cell.types.counts)) {
           cell.types.tmp <- rownames(cell.types.counts)[(rowSums(cell.types.counts == 0) != 0) &
-                                                         (cell.types.counts[,tmp.level] > 0)] 
+                                                         (cell.types.counts[,tmp.level] > 0)]
           if(length(cell.types.tmp) > 0)
             message(paste0(c('Cell types {', cell.types.tmp, '} are presented only in ', tmp.level, 'samples'), sep = ' ' ))
         }
@@ -1549,15 +1551,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Plot contrast tree
     #' @return A ggplot2 object
-    plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette, 
+    plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
                               cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE) {
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
       if(filter.empty.cell.types) {
-        cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) & 
+        cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
           (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
-      
+
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, plot.theme=self$plot.theme)
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)
@@ -1570,11 +1572,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateCellLoadings=function(n.cell.counts = 1000, n.seed = 239, cells.to.remove = NULL,
                                   cells.to.remain = NULL, samples.to.remove = NULL, n.iter=1000,
                                   filter.empty.cell.types=TRUE){
-      
+
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
-      
+
       if(filter.empty.cell.types) {
-        cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) & 
+        cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
           (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
@@ -1832,7 +1834,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param show.significance whether to show statistical significance between sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
     #' @param ... other plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    plotExpressionDistance = function(name='expression.shifts', joint=FALSE, min.cells=10, 
+    plotExpressionDistance = function(name='expression.shifts', joint=FALSE, min.cells=10,
                                       palette=self$sample.groups.palette, show.significance=FALSE,
                                       filter.empty.cell.types=TRUE, ...) {
       cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
@@ -1857,10 +1859,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         cell.types.counts <- table(df$variable, df$group)
         cell.types.to.remain <- rownames(cell.types.counts)[rowSums(cell.types.counts == 0) == 0]
         df <- df[df$variable %in% cell.types.to.remain,]
-        
+
         for(tmp.level in colnames(cell.types.counts)) {
           cell.types.tmp <- rownames(cell.types.counts)[(rowSums(cell.types.counts == 0) != 0) &
-                                                         (cell.types.counts[,tmp.level] > 0)] 
+                                                         (cell.types.counts[,tmp.level] > 0)]
           if(length(cell.types.tmp) > 0)
             message(paste0(c('Cell types {', cell.types.tmp, '} are "presented" only in ', tmp.level, 'samples'), sep = ' ' ))
         }
@@ -1891,7 +1893,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # TODO: rename the function to account for heatmap visualization
       clust.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       sample.groups <- clust.info$sample.groups
-      if (all(sample.groups == self$sample.groups)) palette <- self$sample.groups.palette
+      if (is.null(palette) && is.null(sample.colors) && all(sample.groups == self$sample.groups)) {
+        palette <- self$sample.groups.palette
+      }
       if (!is.null(cell.type)) { # use distances based on the specified cell type
         title <- cell.type
         p.dists.per.subsample <- lapply(clust.info$p.dist.info, `[[`, cell.type)

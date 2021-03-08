@@ -14,7 +14,9 @@ plotMeanMedValuesPerCellType(
   ylab = "expression distance",
   yline = 1,
   plot.theme = theme_get(),
-  jitter.size = 1
+  jitter.size = 1,
+  line.size = 0.75,
+  trim = 0
 )
 }
 \arguments{

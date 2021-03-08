@@ -316,7 +316,8 @@ Plot common expression shift estimates across cell types
   show.size.dependency = FALSE,
   show.whiskers = TRUE,
   show.regression = TRUE,
-  font.size = 5
+  font.size = 5,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
@@ -380,7 +381,8 @@ Estimate differential gene expression per cell type between conditions
   max.resamplings = 30,
   seed.resampling = 239,
   min.cell.frac = 0.05,
-  covariates = NULL
+  covariates = NULL,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
@@ -416,8 +418,6 @@ Estimate differential gene expression per cell type between conditions
 \item{\code{test}}{which DESeq2 test to use (options: "LRT" (default), "Wald")}
 
 \item{\code{resampling.method}}{which resampling method should be used "loo" for leave-one-out or "bootstrap", (default:NULL no resampling)}
-
-\item{\code{return.matrix}}{Return merged matrix of results (default=TRUE)}
 }
 \if{html}{\out{</div>}}
 }
@@ -914,6 +914,8 @@ Estimate ontology terms based on DEs
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntology(
   type = "GO",
+  name = NULL,
+  de.name = "de",
   org.db,
   n.top.genes = 500,
   p.adj = 1,
@@ -924,7 +926,6 @@ Estimate ontology terms based on DEs
   min.gs.size = 10,
   max.gs.size = 500,
   keep.gene.sets = FALSE,
-  de.name = "de",
   ignore.cache = NULL,
   de.raw = NULL,
   ...
@@ -935,6 +936,8 @@ Estimate ontology terms based on DEs
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{type}}{Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")}
+
+\item{\code{name}}{field name where the test results are stored}
 
 \item{\code{org.db}}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'}
 
@@ -1339,6 +1342,7 @@ Plot the cell group proportions per sample
   cells.to.remain = NULL,
   palette = self$sample.groups.palette,
   show.significance = FALSE,
+  filter.empty.cell.types = TRUE,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1453,7 +1457,8 @@ Plot contrast tree
   cell.groups = self$cell.groups,
   palette = self$sample.groups.palette,
   cells.to.remain = NULL,
-  cells.to.remove = NULL
+  cells.to.remove = NULL,
+  filter.empty.cell.types = TRUE
 )}\if{html}{\out{</div>}}
 }
 
@@ -1480,7 +1485,8 @@ Plot Loadings
   cells.to.remove = NULL,
   cells.to.remain = NULL,
   samples.to.remove = NULL,
-  n.iter = 1000
+  n.iter = 1000,
+  filter.empty.cell.types = TRUE
 )}\if{html}{\out{</div>}}
 }
 
@@ -1744,6 +1750,7 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
   min.cells = 10,
   palette = self$sample.groups.palette,
   show.significance = FALSE,
+  filter.empty.cell.types = TRUE,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -2160,6 +2167,8 @@ make sense, as control cells always have small distance from control.}
   plot.expression = TRUE,
   max.z = 5,
   smoothed = FALSE,
+  gene.palette = NULL,
+  z.palette = NULL,
   plot.na = -1,
   ...
 )}\if{html}{\out{</div>}}

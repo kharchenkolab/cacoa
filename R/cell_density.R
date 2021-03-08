@@ -61,9 +61,11 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
     m=m, n.cores=n.cores, progress.chunk=(verbose + 1), progress=verbose,
   ) %>% as.matrix()
 
+  score.mat %<>% {t(.) / colSums(.)} %>% t() # Normalize by columns to adjust on the number of cells per sample
+
 
   cond.densities <- split(names(sample.groups), sample.groups) %>%
-    sapply(function(samps) apply(score.mat[,samps,drop=FALSE], 1, mean, trim=0.2)) # Robust estimator ofsum
+    sapply(function(samps) apply(score.mat[,samps,drop=FALSE], 1, mean, trim=0.2)) # Robust estimator of sum
   cond.densities %<>% {lapply(1:ncol(.), function(i) .[,i])} %>% setNames(colnames(cond.densities))
 
   return(list(density.mat=score.mat, cond.densities=cond.densities, method='graph'))

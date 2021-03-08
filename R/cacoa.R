@@ -531,6 +531,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       jaccards.all <- data.frame()
       for(de.name in de.names){
+        print(de.name)
         de.res <- private$getResults(de.name)
         if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
         jaccards <- estimateStabilityPerCellType(de.res = de.res,
@@ -970,15 +971,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5)
     #' @param max.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
-    estimateOntology=function(type = "GO", org.db, n.top.genes=500, p.adj=1,
+    estimateOntology=function(type = "GO", name = NULL, de.name='de', org.db, n.top.genes=500, p.adj=1,
                               p.adjust.method="BH",
                               readable=TRUE, verbose=TRUE,
                               qvalue.cutoff=0.2, min.gs.size=10,
                               max.gs.size=5e2, keep.gene.sets = FALSE,
-                              de.name='de', ignore.cache=NULL, de.raw=NULL, ...) {
+                              ignore.cache=NULL, de.raw=NULL, ...) {
       if(!is.null(type) & !type %in% c("GO", "DO", "GSEA"))
         stop("'type' must be 'GO', 'DO', or 'GSEA'.")
 
+      if(is.null(name)) {
+        name <- type
+      }
       if (is.null(de.raw)) {
         de.raw <- private$getResults(de.name, "estimatePerCellTypeDE()")
       }
@@ -995,7 +999,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         minGSSize=min.gs.size, maxGSSize=max.gs.size, keep.gene.sets=keep.gene.sets, ...
       )
 
-      self$test.results[[type]] <- list(res=res, de.gene.ids=de.gene.ids)
+      self$test.results[[name]] <- list(res=res, de.gene.ids=de.gene.ids) # redundancy needed
       return(invisible(self$test.results[[type]]))
     },
 

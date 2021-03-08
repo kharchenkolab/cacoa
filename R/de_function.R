@@ -360,67 +360,10 @@ estimatePerCellTypeDEmethods=function (raw.mats,
                                                 collapse=' + ')))
       }
 
-      if(grepl('deseq2', tolower(test))) {
-        # ----- DESeq2 -----
-
-        test.name = 'Wald'
-        if(grepl('lrt', tolower(strsplit(test, split = '\\.')[[1]][2]))) test.name = 'LRT'
-
-        if(test.name == 'Wald') {
-          res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
-            DESeq2::DESeq(quiet=T, test=test.name) %>%
-            DESeq2::results(contrast=c('group', target.level, ref.level),
-                            cooksCutoff = cooks.cutoff,
-                            independentFiltering = independent.filtering) %>%
-            as.data.frame
-        } else {
-          res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
-            DESeq2::DESeq(quiet=T, test=test.name, reduced = ~ 1) %>%
-            DESeq2::results(contrast=c('group', target.level, ref.level),
-                            cooksCutoff = cooks.cutoff,
-                            independentFiltering = independent.filtering) %>%
-            as.data.frame
-        }
-
-        # Avoid NA padj values
-        res1$padj[is.na(res1$padj)] <- 1
-
-      } else if(tolower(test) == tolower('edgeR')) {
-
-        # ----- EdgeR -----
-        design <- model.matrix(design.formula, meta)
-
-        qlf <- DGEList(cm, group = meta$group) %>%
-          calcNormFactors() %>%
-          estimateDisp(design = design) %>%
-          glmQLFit(design = design) %>%
-          glmQLFTest(coef=ncol(design))
-
-        res1 <- qlf$table %>% .[order(.$PValue),]
-        colnames(res1) <- c("log2FoldChange","logCPM","stat","pvalue")
-        res1$padj <- p.adjust(res1$pvalue, method = "BH")
-
-      } else if(tolower(test) == tolower('limma-voom')) {
-
-        mm <- model.matrix(design.formula, meta)
-
-        # cnts.norm <- DGEList(counts = cm) %>%
-        #   edgeR::calcNormFactors() %>% cpm
-        cnts.norm = cm
-
-        y <- voom(cnts.norm, mm, plot = F)
-        fit <- lmFit(y, mm)
-
-        contr <- makeContrasts(paste(c('group', target.level), collapse = ''),
-                               levels = colnames(coef(fit)))
-
-        tmp <- contrasts.fit(fit, contr)
-        tmp <- eBayes(tmp)
-
-        res1 <- topTable(tmp, sort.by = "P", n = Inf)
-        colnames(res1) <- c('log2FoldChange', 'AveExpr', 'stat', 'pvalue', 'padj', 'B')
-
-      } else if(grepl('wilcoxon', tolower(test)) || grepl('t-test', tolower(test))) {
+      if(grepl('wilcoxon', tolower(test)) || grepl('t-test', tolower(test))) {
+        
+        # ----- Wilcoxon and t-test -----
+        
         # Normalization
         tmp = strsplit(test, split = '\\.')
         test = tolower(tmp[[1]][1])
@@ -440,7 +383,9 @@ estimatePerCellTypeDEmethods=function (raw.mats,
           # the default should be normalization by the number of molecules!
           cnts.norm <- prop.table(cm, 2) # Should it be multiplied by median(colSums(cm)) ?
         }
-
+        
+        cm = cnts.norm #remove
+        
         if(test == 'wilcoxon') {
           # Wilcoxon test
           res1 <- scran::pairwiseWilcox(cnts.norm, groups = meta$group)$statistics[[1]] %>%
@@ -455,6 +400,68 @@ estimatePerCellTypeDEmethods=function (raw.mats,
 
         res1$log2FoldChange <- apply(log(cnts.norm+1, base=2), 1, function(x) {
           mean(x[meta$group == target.level]) - mean(x[meta$group == ref.level])})
+      } else if(grepl('deseq2', tolower(test))) {
+        # ----- DESeq2 -----
+        
+        test.name = 'Wald'
+        if(grepl('lrt', tolower(strsplit(test, split = '\\.')[[1]][2]))) test.name = 'LRT'
+        
+        if(test.name == 'Wald') {
+          res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
+            DESeq2::DESeq(quiet=T, test=test.name) %>%
+            DESeq2::results(contrast=c('group', target.level, ref.level),
+                            cooksCutoff = cooks.cutoff,
+                            independentFiltering = independent.filtering) %>%
+            as.data.frame
+        } else {
+          res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
+            DESeq2::DESeq(quiet=T, test=test.name, reduced = ~ 1) %>%
+            DESeq2::results(contrast=c('group', target.level, ref.level),
+                            cooksCutoff = cooks.cutoff,
+                            independentFiltering = independent.filtering) %>%
+            as.data.frame
+        }
+        
+        # Avoid NA padj values
+        res1$padj[is.na(res1$padj)] <- 1
+        
+      } else if(tolower(test) == tolower('edgeR')) {
+        
+        # ----- EdgeR -----
+        design <- model.matrix(design.formula, meta)
+        
+        qlf <- DGEList(cm, group = meta$group) %>%
+          calcNormFactors() %>%
+          estimateDisp(design = design) %>%
+          glmQLFit(design = design) %>%
+          glmQLFTest(coef=ncol(design))
+        
+        res1 <- qlf$table %>% .[order(.$PValue),]
+        colnames(res1) <- c("log2FoldChange","logCPM","stat","pvalue")
+        res1$padj <- p.adjust(res1$pvalue, method = "BH")
+        
+      } else if(tolower(test) == tolower('limma-voom')) {
+        
+        # ----- limma-voom -----
+        
+        mm <- model.matrix(design.formula, meta)
+        
+        # cnts.norm <- DGEList(counts = cm) %>%
+        #   edgeR::calcNormFactors() %>% cpm
+        cnts.norm = cm
+        
+        y <- voom(cnts.norm, mm, plot = F)
+        fit <- lmFit(y, mm)
+        
+        contr <- makeContrasts(paste(c('group', target.level), collapse = ''),
+                               levels = colnames(coef(fit)))
+        
+        tmp <- contrasts.fit(fit, contr)
+        tmp <- eBayes(tmp)
+        
+        res1 <- topTable(tmp, sort.by = "P", n = Inf)
+        colnames(res1) <- c('log2FoldChange', 'AveExpr', 'stat', 'pvalue', 'padj', 'B')
+        
       }
 
       # add Z scores

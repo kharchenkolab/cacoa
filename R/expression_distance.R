@@ -131,8 +131,7 @@ subsamplePairwiseExpressionDistances <- function(count.matrices, sample.per.cell
 
     if (dist=='js') {
       tcm <- t(tcm/pmax(1,rowSums(tcm)))
-      dist.mat <- pagoda2:::jsDist(tcm, ncores = 1) %>%
-        set_rownames(colnames(tcm)) %>% set_colnames(colnames(tcm))
+      dist.mat <- jsDist(tcm) %>% set_rownames(colnames(tcm)) %>% set_colnames(colnames(tcm))
     } else if (dist=='cor') {
       tcm <- log10(t(tcm / pmax(1, rowSums(tcm))) * 1e3 + 1)
       dist.mat <- 1 - cor(tcm)

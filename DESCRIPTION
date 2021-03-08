@@ -34,7 +34,7 @@ Imports:
     RcppProgress,
     reshape2,
     roxygen2,
-    sccore,
+    sccore (> 0.1.2),
     tibble,
     tidyr,
     tidytree,

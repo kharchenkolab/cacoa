@@ -74,7 +74,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$ref.level <- ref.level
       self$target.level <- target.level
 
-      # TODO: would be nice to support a list of count matrices as input
       if ("Seurat" %in% class(data.object)) {
         if (is.null(sample.groups) || is.null(sample.per.cell))
           stop("Both sample.groups and sample.per.cell must be provided for Seurat objects")
@@ -229,7 +228,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
         # table of sample types and cells
         cct <- table(cf,cl[names(cf)])
-        caggr <- lapply(count.matrices, conos:::collapseCellsByType, groups=as.factor(cf), min.cell.count=1)[names(sample.groups)]
+        caggr <- lapply(count.matrices, collapseCellsByType, groups=as.factor(cf), min.cell.count=1)[names(sample.groups)]
 
         ctdl <- sccore::plapply(sccore:::sn(levels(cf)),function(ct) { # for each cell type
           tcm <- na.omit(do.call(rbind,lapply(caggr,function(x) x[match(ct,rownames(x)),])))

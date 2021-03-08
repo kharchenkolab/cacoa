@@ -54,15 +54,6 @@ rbindDEMatrices <- function(mats, cluster.sep.chr) {
   return(t(do.call(rbind, mats)))
 }
 
-collapseCellsByType <- function(cm, groups, min.cell.count=10) {
-  groups <- as.factor(groups);
-  cl <- factor(groups[match(rownames(cm),names(groups))],levels=levels(groups));
-  # TODO remove dependency on Conos
-  tc <- conos:::colSumByFactor(cm,cl);
-  tc <- tc[-1,,drop=FALSE]  # omit NA cells
-  tc[table(cl)>=min.cell.count,,drop=FALSE]
-}
-
 #' Add Z scores to DE results
 #' @param df Data frame with the columns "pval", "padj" and "log2FoldChange"
 #' @return Updated data frame with Z scores
@@ -108,7 +99,7 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
 
   aggr2 <- raw.mats %>%
     .[sample.groups %>% unlist] %>% # Only consider samples in sample.groups
-    lapply(conos:::collapseCellsByType, groups=cell.groups, min.cell.count=min.cell.count, max.cell.count=max.cell.count) %>%
+    lapply(collapseCellsByType, groups=cell.groups, min.cell.count=min.cell.count, max.cell.count=max.cell.count) %>%
     .[sapply(., nrow) > 0] %>% # Remove empty samples due to min.cell.count
     rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
 
@@ -318,7 +309,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
 
   aggr2 <- raw.mats %>%
     .[s.groups %>% unlist] %>% # Only consider samples in s.groups
-    lapply(conos:::collapseCellsByType, groups=cell.groups, min.cell.count=min.cell.count, max.cell.count=max.cell.count) %>%
+    lapply(collapseCellsByType, groups=cell.groups, min.cell.count=min.cell.count, max.cell.count=max.cell.count) %>%
     .[sapply(., nrow) > 0] %>% # Remove empty samples due to min.cell.count
     rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
   mode(aggr2) <- 'integer'
@@ -361,9 +352,9 @@ estimatePerCellTypeDEmethods=function (raw.mats,
       }
 
       if(grepl('wilcoxon', tolower(test)) || grepl('t-test', tolower(test))) {
-        
+
         # ----- Wilcoxon and t-test -----
-        
+
         # Normalization
         tmp = strsplit(test, split = '\\.')
         test = tolower(tmp[[1]][1])
@@ -383,9 +374,9 @@ estimatePerCellTypeDEmethods=function (raw.mats,
           # the default should be normalization by the number of molecules!
           cnts.norm <- prop.table(cm, 2) # Should it be multiplied by median(colSums(cm)) ?
         }
-        
+
         cm = cnts.norm #remove
-        
+
         if(test == 'wilcoxon') {
           # Wilcoxon test
           res1 <- scran::pairwiseWilcox(cnts.norm, groups = meta$group)$statistics[[1]] %>%
@@ -402,10 +393,10 @@ estimatePerCellTypeDEmethods=function (raw.mats,
           mean(x[meta$group == target.level]) - mean(x[meta$group == ref.level])})
       } else if(grepl('deseq2', tolower(test))) {
         # ----- DESeq2 -----
-        
+
         test.name = 'Wald'
         if(grepl('lrt', tolower(strsplit(test, split = '\\.')[[1]][2]))) test.name = 'LRT'
-        
+
         if(test.name == 'Wald') {
           res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
             DESeq2::DESeq(quiet=T, test=test.name) %>%
@@ -421,47 +412,47 @@ estimatePerCellTypeDEmethods=function (raw.mats,
                             independentFiltering = independent.filtering) %>%
             as.data.frame
         }
-        
+
         # Avoid NA padj values
         res1$padj[is.na(res1$padj)] <- 1
-        
+
       } else if(tolower(test) == tolower('edgeR')) {
-        
+
         # ----- EdgeR -----
         design <- model.matrix(design.formula, meta)
-        
+
         qlf <- DGEList(cm, group = meta$group) %>%
           calcNormFactors() %>%
           estimateDisp(design = design) %>%
           glmQLFit(design = design) %>%
           glmQLFTest(coef=ncol(design))
-        
+
         res1 <- qlf$table %>% .[order(.$PValue),]
         colnames(res1) <- c("log2FoldChange","logCPM","stat","pvalue")
         res1$padj <- p.adjust(res1$pvalue, method = "BH")
-        
+
       } else if(tolower(test) == tolower('limma-voom')) {
-        
+
         # ----- limma-voom -----
-        
+
         mm <- model.matrix(design.formula, meta)
-        
+
         # cnts.norm <- DGEList(counts = cm) %>%
         #   edgeR::calcNormFactors() %>% cpm
         cnts.norm = cm
-        
+
         y <- voom(cnts.norm, mm, plot = F)
         fit <- lmFit(y, mm)
-        
+
         contr <- makeContrasts(paste(c('group', target.level), collapse = ''),
                                levels = colnames(coef(fit)))
-        
+
         tmp <- contrasts.fit(fit, contr)
         tmp <- eBayes(tmp)
-        
+
         res1 <- topTable(tmp, sort.by = "P", n = Inf)
         colnames(res1) <- c('log2FoldChange', 'AveExpr', 'stat', 'pvalue', 'padj', 'B')
-        
+
       }
 
       # add Z scores
@@ -531,7 +522,7 @@ appendStatisticsToDE <- function(de.list, expr.frac.per.type) {
 
 getExpressionFractionPerGroup <- function(cm, cell.groups) {
   cm@x <- as.numeric(cm@x > 1e-10)
-  fracs <- conos:::collapseCellsByType(cm, cell.groups, min.cell.count=0) %>%
+  fracs <- collapseCellsByType(cm, cell.groups, min.cell.count=0) %>%
     {. / as.vector(table(cell.groups)[rownames(.)])} %>% Matrix::t()
   return(fracs)
 }

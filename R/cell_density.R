@@ -5,8 +5,6 @@
 ##' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 ##' @param bins number of bins for density estimation, default 400
 estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, bandwidth=0.05, expansion.mult=0.05){
-  checkPackageInstalled('preprocessCore', bioc=TRUE, details="for KDE estimation")
-
   if (is.null(bandwidth)) {
     bandwidth <- apply(emb, 2, MASS::bandwidth.nrd)
   } else {
@@ -20,9 +18,9 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ba
   emb <- emb[cname, ]
   cells.per.samp <- split(names(sample.per.cell), sample.per.cell)
   density.mat <-lapply(cells.per.samp, function(nn) {
-      MASS::kde2d(emb[nn, 1], emb[nn, 2], h=bandwidth, n=bins, lims=lims)$z %>% as.numeric()
+      MASS::kde2d(emb[nn, 1], emb[nn, 2], h=bandwidth, n=bins, lims=lims)$z %>%
+      as.numeric() %>% {. / sum(.)}
     }) %>% do.call("cbind", .) %>%
-    preprocessCore::normalize.quantiles() %>%
     set_colnames(names(cells.per.samp)) %>%
     set_rownames(1:nrow(.)) # needed for indexing in diffCellDensity
 

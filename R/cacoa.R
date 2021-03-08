@@ -2216,13 +2216,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$plotGeneExpressionComparison(scores=scores, max.z=max.z.plot, ...)
     },
 
-    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plot.z=TRUE, plot.expression=TRUE, max.z=5, smoothed=FALSE, plot.na=-1, ...) {
+    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plot.z=TRUE, plot.expression=TRUE, max.z=5, smoothed=FALSE,
+                                            gene.palette=NULL, z.palette=NULL, plot.na=-1, ...) {
       if (is.null(genes)) {
         if (is.null(scores)) stop("Either 'genes' or 'scores' must be provided")
         genes <- names(scores)
       }
 
       if (!plot.z && !plot.expression) return()
+
+      if (is.null(gene.palette)) gene.palette <- colorRampPalette(c("gray90", "red", "#5A0000"), space = "Lab")
 
       if (plot.z) {
         if (smoothed) {
@@ -2253,14 +2256,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           m.expr <- parseLimitRange(c(0, max.expr), expr)[2]
           lst <- lapply(unique(condition.per.cell), function(sg) {
             self$plotEmbedding(colors=expr, title=paste(sg, " ",g), groups=condition.per.cell, subgroups=sg,
-                               color.range=c(0, m.expr), legend.title="Expression", plot.na=FALSE, ...)
+                               color.range=c(0, m.expr), legend.title="Expression", plot.na=FALSE, palette=gene.palette, ...)
           }) %>% c(lst)
         }
 
         if (plot.z) {
           title <- if (is.null(scores)) g else paste0(g, ": ", signif(scores[g], 3))
           lst <- self$plotEmbedding(colors=z.scores[,g], title=title, color.range=c(-max.z, max.z),
-                                    plot.na=plot.na, legend.title='Z-score', ...) %>%
+                                    plot.na=plot.na, legend.title='Z-score', z.palette=z.palette, ...) %>%
             list() %>% c(lst)
         }
         lst <- lapply(lst,function(x) x+theme(legend.background = element_blank()))

@@ -2078,7 +2078,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       z.scores@x[is.na(z.scores@x)] <- 0
       z.smoothed <- z.scores %>%
-        smoothSignalOnGraph(extractCellGraph(self$data.object), filter, n.cores=n.cores,
+        smoothSignalOnGraph(filter=filter, graph=extractCellGraph(self$data.object), n.cores=n.cores,
                             progress=verbose, ...)
 
       z.smoothed[is.na(z.scores)] <- NA
@@ -2178,7 +2178,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         sr <- parseLimitRange(c("2.5%", "99%"), shifts)
         shifts %<>% pmax(sr[1]) %>% pmin(sr[2])
 
-        shifts %<>% smoothSignalOnGraph(extractCellGraph(self$data.object), filter=function(...) heatFilter(..., beta=beta))
+        shifts %<>% smoothSignalOnGraph(filter=function(...) heatFilter(..., beta=beta),
+                                        graph=extractCellGraph(self$data.object))
         shifts[mask] <- NA
       }
 

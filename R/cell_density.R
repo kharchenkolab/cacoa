@@ -55,7 +55,7 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
     set_rownames(names(sample.per.cell)) %>% set_colnames(unique(sample.per.cell))
 
   score.mat <- sccore:::smoothSignalOnGraph(
-    sig.mat, graph, function(...) sccore:::heatFilter(..., beta=beta),
+    sig.mat, filter=function(...) sccore:::heatFilter(..., beta=beta), graph=graph,
     m=m, n.cores=n.cores, progress.chunk=(verbose + 1), progress=verbose,
   ) %>% as.matrix()
 

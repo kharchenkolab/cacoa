@@ -1043,7 +1043,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `df`: data.frame with information about individual gene ontolodies and columns `Cluster` and `ClusterName` for the clustering info
     #'   - `hclust`: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all subtypes
     estimateOntologyClusters=function(type="GO", subtype=NULL, genes="all", ind.h=0.66, total.h=0.5, verbose=self$verbose,
-                                      p.adj=p.adj, min.genes=min.genes, name=getOntClustField(type, subtype, genes)) {
+                                      p.adj=0.05, min.genes=1, name=getOntClustField(type, subtype, genes)) {
       ont.df <- private$getOntologyPvalueResults(genes=genes, type=type, p.adj=p.adj, min.genes=min.genes)
       clust.mat <- ont.df %>% split(.$Group) %>% clusterIndividualGOs(cut.h=ind.h) %>%
         as.matrix() %>% t()
@@ -1272,17 +1272,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if(selection=="unique") {
-        ont.sum %<>% .[rowSums(abs(.) > 0) == 1,]
+        ont.sum %<>% .[rowSums(abs(.) > 0) == 1,,drop=FALSE]
       } else if(selection=="common") {
-        ont.sum %<>% .[rowSums(abs(.) > 0) > 1,]
+        ont.sum %<>% .[rowSums(abs(.) > 0) > 1,,drop=FALSE]
       }
       if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 
       # Plot
       if (is.null(palette)) palette <- getGenePalette(genes, high="white")
       gg <- ont.sum %>%
-        .[, colSums(abs(.)) > 0] %>%
-        .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),] %>%
+        .[, colSums(abs(.)) > 0, drop=FALSE] %>%
+        .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),, drop=FALSE] %>%
         tail(n) %>%
         plotHeatmap(legend.position=legend.position, row.order=TRUE, col.order=FALSE, color.range=color.range,
                     plot.theme=self$plot.theme, palette=palette, ...)
@@ -1356,7 +1356,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotOntologyFamilyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, selection="all", n=10,
                                        legend.position="left", cell.subgroups=NULL, clusters=TRUE, cluster.name=NULL, color.range=NULL,
-                                       palette=NULL, ...) {
+                                       palette=NULL, p.adj=0.05, ...) {
       # Checks
       if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
         stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
@@ -2250,7 +2250,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plot.z=TRUE, plot.expression=TRUE, max.z=5, smoothed=FALSE,
-                                            gene.palette=NULL, z.palette=NULL, plot.na=-1, ...) {
+                                            gene.palette=NULL, z.palette=NULL, plot.na=-1, adj.list=NULL, ...) {
       if (is.null(genes)) {
         if (is.null(scores)) stop("Either 'genes' or 'scores' must be provided")
         genes <- names(scores)
@@ -2299,7 +2299,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                     plot.na=plot.na, legend.title='Z-score', z.palette=z.palette, ...) %>%
             list() %>% c(lst)
         }
-        lst <- lapply(lst,function(x) x+theme(legend.background = element_blank()))
+        lst <- lapply(lst, function(x) x + theme(legend.background = element_blank()) + adj.list)
         if (length(lst) > 1) cowplot::plot_grid(plotlist=lst, ncol=3) else lst[[1]]
       })
 

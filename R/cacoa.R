@@ -1570,7 +1570,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' @description Plot Loadings
+    #' @description Estimate Loadings
     #' @return A ggplot2 object
     estimateCellLoadings=function(n.cell.counts = 1000, n.seed = 239, cells.to.remove = NULL,
                                   cells.to.remain = NULL, samples.to.remove = NULL, n.iter=1000,
@@ -1591,6 +1591,39 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       return(invisible(self$test.results[['cda']]))
     },
+    
+    #' @description Estimate Loadings
+    #' @return A ggplot2 object
+    estimateCellLoadingsNew=function(n.iter=1000, equal.tot.count = NULL, replace.samples = TRUE, 
+                                     ref.cell.type = NULL, criteria = 'lda',
+                                     n.seed = 239, cells.to.remove = NULL, cells.to.remain = NULL, 
+                                     samples.to.remove = NULL, filter.empty.cell.types=TRUE){
+      
+      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
+      
+      if(filter.empty.cell.types) {
+        cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
+          (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
+        tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
+      }
+      
+      perm.data <- produceResampling(cnts = tmp$d.counts, groups = tmp$d.groups, n.perm = n.iter, 
+                                     replace.samples = replace.samples,
+                                     remain.groups = TRUE, equal.tot.count = equal.tot.count, seed = n.seed)
+      perm.null <- produceResampling(cnts = tmp$d.counts, groups = tmp$d.groups, n.perm = n.iter, 
+                                     replace.samples = replace.samples,
+                                     remain.groups = FALSE, equal.tot.count = equal.tot.count, seed = n.seed * 11)
+      
+      loadings.data <- sapply(1:length(perm.data$cnts), function(i) 
+        getLoadings(perm.data$cnts[[i]], perm.data$groups[[i]], criteria = criteria, ref.cell.type = ref.cell.type) )
+      
+      loadings.null <- sapply(1:length(perm.null$cnts), function(i) 
+        getLoadings(perm.null$cnts[[i]], perm.null$groups[[i]], criteria = criteria, ref.cell.type = ref.cell.type) )
+      
+      self$test.results[['loadings']] <- list(data = loadings.data, null = loadings.null)
+      
+      return(invisible(self$test.results[['loadings']]))
+    },
 
     estimateGaPartition=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, ...){
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
@@ -1605,7 +1638,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param palette palette specification for cell types (default: stored $cell.groups.palette)
     #' @return A ggplot2 object
     plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, font.size=NULL,
-                                ordering='by.pvalue', signif.threshold=0.05, show.pvals=F,
+                                ordering='by.pvalue', signif.threshold=0.05, show.pvals=TRUE,
                                 ref.cell.type = NULL, define.ref.cell.type=T) {
       if( (!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))) )
         stop('Incorrect reference cell type')
@@ -1617,7 +1650,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       cda <- private$getResults('cda', 'estimateCellLoadings()')
-      p <- plotCellLoadings(cda, ordering, signif.threshold, alpha, palette, show.pvals,
+      p <- plotCellLoadings(cda$balances, ordering, signif.threshold, alpha, palette, show.pvals,
                             ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme,
                             ref.cell.type = ref.cell.type, define.ref.cell.type=define.ref.cell.type)
 

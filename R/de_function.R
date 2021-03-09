@@ -368,7 +368,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         } else if(normalization == 'edger') {
           # EdgeR normalisation
           print('edgeR normalization')
-          cnts.norm <- DGEList(counts = cm) %>%
+          cnts.norm <- edgeR::DGEList(counts = cm) %>%
             edgeR::calcNormFactors() %>% cpm
         } else if((normalization == 'totcount') || (is.null(normalization))) {
           # the default should be normalization by the number of molecules!
@@ -387,7 +387,6 @@ estimatePerCellTypeDEmethods=function (raw.mats,
             data.frame() %>%
             setNames(c("AUC","pvalue","padj"))
         }
-
 
         res1$log2FoldChange <- apply(log(cnts.norm+1, base=2), 1, function(x) {
           mean(x[meta$group == target.level]) - mean(x[meta$group == ref.level])})
@@ -421,11 +420,11 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         # ----- EdgeR -----
         design <- model.matrix(design.formula, meta)
 
-        qlf <- DGEList(cm, group = meta$group) %>%
-          calcNormFactors() %>%
-          estimateDisp(design = design) %>%
-          glmQLFit(design = design) %>%
-          glmQLFTest(coef=ncol(design))
+        qlf <- edgeR::DGEList(cm, group = meta$group) %>%
+          edgeR::calcNormFactors() %>%
+          edgeR::estimateDisp(design = design) %>%
+          edgeR::glmQLFit(design = design) %>%
+          edgeR::glmQLFTest(coef=ncol(design))
 
         res1 <- qlf$table %>% .[order(.$PValue),]
         colnames(res1) <- c("log2FoldChange","logCPM","stat","pvalue")
@@ -441,8 +440,8 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         #   edgeR::calcNormFactors() %>% cpm
         cnts.norm = cm
 
-        y <- voom(cnts.norm, mm, plot = F)
-        fit <- lmFit(y, mm)
+        y <- limma::voom(cnts.norm, mm, plot = F)
+        fit <- limma:lmFit(y, mm)
 
         contr <- makeContrasts(paste(c('group', target.level), collapse = ''),
                                levels = colnames(coef(fit)))

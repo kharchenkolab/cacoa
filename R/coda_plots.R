@@ -182,9 +182,9 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
 }
 
 
-plotCellLoadings <- function(cda, ordering, signif.threshold, jitter.alpha, palette, show.pvals, ref.level, target.level, plot.theme,
+plotCellLoadings <- function(balances, ordering, signif.threshold, jitter.alpha, palette, show.pvals, ref.level, target.level, plot.theme,
                              ref.cell.type = NULL, define.ref.cell.type=F) {
-  balances = cda$balances
+  
 
   if(is.null(ref.cell.type)) {
     yintercept = 0

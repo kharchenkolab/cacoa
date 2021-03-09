@@ -320,7 +320,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
     warning("Excluded ",length(unlist(s.groups)) - length(passed.samples)," sample(s) due to 'min.cell.count'.")
 
   s.groups %<>% lapply(function(n) n[n %in% passed.samples])
-
+  
   ## For every cell type get differential expression results
   de.res <- sccore::plapply( sccore::sn( levels(cell.groups) ), function(l) {
     tryCatch({
@@ -350,6 +350,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
                                           paste(c(colnames(meta.info), 'group'),
                                                 collapse=' + ')))
       }
+      
 
       if(grepl('wilcoxon', tolower(test)) || grepl('t-test', tolower(test))) {
 

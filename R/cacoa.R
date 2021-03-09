@@ -1595,7 +1595,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Estimate Loadings
     #' @return A ggplot2 object
     estimateCellLoadings=function(n.iter=1000, equal.tot.count = NULL, replace.samples = TRUE, 
-                                     ref.cell.type = NULL, criteria = 'lda',
+                                     ref.cell.type = NULL, criteria = 'cda.std',
                                      n.seed = 239, cells.to.remove = NULL, cells.to.remain = NULL, 
                                      samples.to.remove = NULL, filter.empty.cell.types=TRUE,
                                      define.ref.cell.type =  FALSE){

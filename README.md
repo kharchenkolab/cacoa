@@ -3,22 +3,34 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of cacoa is to ...
+Case-Control Analysis of scRNA-seq experiments
 
 ## Installation
 
-You can install the released version of cacoa from [CRAN](https://CRAN.R-project.org) with:
+Prior to installing the package, dependencies have to be installed:
+
+```r
+BiocManager::install(c("clusterProfiler", "DESeq2", "DOSE", "EnhancedVolcano", "enrichplot", "fabia", "GOfuncR", "Rgraphviz"))
+```
+
+Also make sure to install the latest version of sccore (not the one from CRAN):
 
 ``` r
-install.packages("cacoa")
+devtools::install_github("kharchenkolab/sccore", ref="dev")
+```
+
+And if you're going to use Conos as a data object, the latest version is also recommended:
+
+``` r
+devtools::install_github("kharchenkolab/conos", ref="dev")
+```
+
+To install the package use:
+
+``` r
+devtools::install_github("kharchenkolab/cacoa")
 ```
 
 ## Example
 
-This is a basic example which shows you how to solve a common problem:
-
-``` r
-library(cacoa)
-## basic example code
-```
-
+See [the vignette](https://pklab.med.harvard.edu/viktor/cacoa/ep.html) for an example.

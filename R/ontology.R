@@ -97,8 +97,8 @@ groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName") {
     tidyr::spread(Group, p.adjust) %>%
     as.data.frame() %>%
     set_rownames(.$CN) %>%
-    .[, 2:ncol(.)] %>%
-    .[, order.anno[order.anno %in% colnames(.)]]
+    .[, 2:ncol(.), drop=FALSE] %>%
+    .[, order.anno[order.anno %in% colnames(.)], drop=FALSE]
 
   df[is.na(df)] <- 0
   return(df)
@@ -173,7 +173,7 @@ estimateOntologyFromIds <- function(de.gene.ids, go.environment, type="GO", org.
   } else if(type == "GSEA") {
     if(verbose) cat("Estimating enriched ontologies ... \n")
     ont.list <- names(de.gene.ids) %>% sn() %>% plapply(function(id) {suppressWarnings(suppressMessages(
-      estimateEnrichedGSEGO(gene.ids=twist(de.gene.ids[[id]]$universe), org.db=org.db,
+      estimateEnrichedGSEGO(gene.ids=twist(de.gene.ids[[id]]$universe), org.db=org.db, # TODO: it is broken now because de.gene.ids are not named
                             go.environment=go.environment, organism=clusterProfiler:::get_organism(org.db), ...)
     ))}, progress=verbose, n.cores=1)
   } else {

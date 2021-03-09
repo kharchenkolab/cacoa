@@ -1572,9 +1572,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Estimate Loadings
     #' @return A ggplot2 object
-    estimateCellLoadings=function(n.cell.counts = 1000, n.seed = 239, cells.to.remove = NULL,
+    estimateCellLoadingsOld=function(n.cell.counts = 1000, n.seed = 239, cells.to.remove = NULL,
                                   cells.to.remain = NULL, samples.to.remove = NULL, n.iter=1000,
-                                  filter.empty.cell.types=TRUE){
+                                  filter.empty.cell.types=TRUE, ref.cell.type = NULL){
 
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
 
@@ -1584,20 +1584,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
 
-      self$test.results[['cda']] <- tmp %$%
+      self$test.results[['loadings']] <- tmp %$%
         resampleContrast(d.counts, d.groups, n.cell.counts=n.cell.counts, n.seed=n.seed, n.iter=n.iter)
 
-      # self$test.results$cda$pvals <- getCellSignificance(self$test.results$cda$balances)
+      self$test.results$loadings$pvals <- NULL
 
-      return(invisible(self$test.results[['cda']]))
+      return(invisible(self$test.results[['loadings']]))
     },
     
     #' @description Estimate Loadings
     #' @return A ggplot2 object
-    estimateCellLoadingsNew=function(n.iter=1000, equal.tot.count = NULL, replace.samples = TRUE, 
+    estimateCellLoadings=function(n.iter=1000, equal.tot.count = NULL, replace.samples = TRUE, 
                                      ref.cell.type = NULL, criteria = 'lda',
                                      n.seed = 239, cells.to.remove = NULL, cells.to.remain = NULL, 
-                                     samples.to.remove = NULL, filter.empty.cell.types=TRUE){
+                                     samples.to.remove = NULL, filter.empty.cell.types=TRUE,
+                                     define.ref.cell.type =  FALSE){
+      
+      if( (!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))) )
+        stop('Incorrect reference cell type')
+      if( (define.ref.cell.type == T) & (!is.null(ref.cell.type)) ) define.ref.cell.type = F
       
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
       
@@ -1620,7 +1625,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       loadings.null <- sapply(1:length(perm.null$cnts), function(i) 
         getLoadings(perm.null$cnts[[i]], perm.null$groups[[i]], criteria = criteria, ref.cell.type = ref.cell.type) )
       
-      self$test.results[['loadings']] <- list(data = loadings.data, null = loadings.null)
+      # Calculate p-values by permutation test
+      loadings.data.mean = rowMeans(loadings.data)
+      tmp <- sapply(1:nrow(loadings.null), function(i) sum(loadings.null[i,] > loadings.data.mean[i])) / ncol(loadings.null)
+      pval <- apply((cbind(tmp, 1-tmp)), 1, min) * 2
+      names(pval) <- rownames(loadings.null)
+      
+      self$test.results[['loadings']] = list(loadings = loadings.data, 
+                                             loadings.data = loadings.data, 
+                                             loadings.null = loadings.null,
+                                             perm.data = perm.data, 
+                                             perm.null = perm.null, 
+                                             pval = pval)
       
       return(invisible(self$test.results[['loadings']]))
     },
@@ -1638,21 +1654,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param palette palette specification for cell types (default: stored $cell.groups.palette)
     #' @return A ggplot2 object
     plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, font.size=NULL,
-                                ordering='by.pvalue', signif.threshold=0.05, show.pvals=TRUE,
-                                ref.cell.type = NULL, define.ref.cell.type=T) {
-      if( (!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))) )
-        stop('Incorrect reference cell type')
-      if( (define.ref.cell.type == T) & (!is.null(ref.cell.type)) ) define.ref.cell.type = F
-      possible.ordering = c('by.pvalue', 'by.mean', 'by.median')
-      if(!(ordering %in% possible.ordering)){
-        warning('Defaulf ordiring \'by.pvalue\' is applied ' )
-        ordering = 'by.pvalue'
-      }
-
-      cda <- private$getResults('cda', 'estimateCellLoadings()')
-      p <- plotCellLoadings(cda$balances, ordering, signif.threshold, alpha, palette, show.pvals,
-                            ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme,
-                            ref.cell.type = ref.cell.type, define.ref.cell.type=define.ref.cell.type)
+                                ordering='by.pvalue', signif.threshold=0.05, show.pvals=TRUE) {
+      
+      loadings <- private$getResults('loadings', 'estimateCellLoadings()')
+      p <- plotCellLoadings(loadings$loadings, loadings$pval, signif.threshold, alpha, palette, show.pvals,
+                            ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme)
 
       return(p)
     },

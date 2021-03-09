@@ -5,17 +5,18 @@
 #' @param ref.cell.type Reference cell type
 #' @return Updated data frame with Z scores
 getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
-  discriminant.methods <- c('lda', 'svm')
+  discriminant.methods <- c('lda', 'svm', 'cda', 'cda.std')
   if(!(criteria %in% discriminant.methods)) stop(paste('The discriminant method', criteria, 'is not supported'))
   if(!is.null(ref.cell.type) && !(ref.cell.type %in% colnames(cnts))) 
      stop(paste('Reference cell type', ref.cell.type, 'is not correct. Correct cell types are:', 
                 paste0(colnames(cnts), collapse = ', ') ))
   #Get freqs
-  cnts[cnts == 0] <- 0.1
+  # cnts[cnts == 0] <- 0.1
+  cnts[cnts == 0] <- 1
   freqs <- cnts/rowSums(cnts)
   
   # Get ilr
-  psi <- ilr_basis(ncol(freqs), type = "default")
+  psi <- coda.base::ilr_basis(ncol(freqs), type = "default")
   rownames(psi) <- colnames(cnts)
   b <- log(freqs) %*% psi
   
@@ -41,7 +42,7 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
       dvec <- t(Y) %*% X2
       Amat <- t(psi[ref.cell.type,,drop=F])
       Amat <- rbind(Amat, 0)
-      res.qp <- solve.QP(Dmat = Rinv, factorized = TRUE, dvec = dvec, Amat = Amat, bvec = 0, meq = 1)  
+      res.qp <- quadprog::solve.QP(Dmat = Rinv, factorized = TRUE, dvec = dvec, Amat = Amat, bvec = 0, meq = 1)  
       
       n.qp <- ncol(X2)
       w <- res.qp$solution[-n.qp]
@@ -52,14 +53,34 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
     }   
   } else if(criteria == 'svm') {
     # ---- SVM
-    b.model <- svm(groups~., data = b.df, kernel = "linear", scale = FALSE)
+    b.model <- e1071::svm(groups~., data = b.df, kernel = "linear", scale = FALSE)
     # Get hyperplane parameters
     w <- t(b.model$SV) %*% b.model$coefs  # slope
     # b.svm <- -b.model$rho # intercept
     # # create new score
     # v <- b %*% w + b.svm
+  } else if(criteria == 'cda') {  # Canonical discriminant analysis
+    model <- lm(b ~ groups)
+    cda <- candisc::candisc(model, ndim=1)
+    # w <- cda$structure
+    w <- cda$coeffs.raw
+  } else if(criteria == 'cda.std') {
+    b.norm <-  apply(b, 2, function(y) y - mean(y))
+
+    # PCA
+    pca.res <- prcomp(b.norm)
+    pca.loadings <- psi %*% pca.res$rotation
+
+    # CDA
+    df.pca <- as.data.frame(pca.res$x)
+
+    model <- lm(pca.res$x ~ groups)
+    cda <- candisc::candisc(model, ndim=1)
+
+    w <- pca.res$rotation  %*% as.matrix(cda$structure)
+    # w <- pca.res$rotation  %*% as.matrix(cda$coeffs.raw)
   }
-  
+
   w <- w / sqrt(sum(w ^ 2))
   
   scores <- b %*% w

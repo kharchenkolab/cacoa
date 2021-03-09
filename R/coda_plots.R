@@ -182,39 +182,25 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
 }
 
 
-plotCellLoadings <- function(balances, ordering, signif.threshold, jitter.alpha, palette, show.pvals, ref.level, target.level, plot.theme,
-                             ref.cell.type = NULL, define.ref.cell.type=F) {
+plotCellLoadings <- function(loadings, pval, signif.threshold, jitter.alpha, palette, 
+                             show.pvals, ref.level, target.level, plot.theme) {
   
+  yintercept = 0
 
-  if(is.null(ref.cell.type)) {
-    yintercept = 0
-  } else {
-    yintercept = median(balances[ref.cell.type,])
-  }
-
-
-  if(ordering == 'by.pvalue'){
-    # ordering by median
-    balances <- balances[order(abs(apply(balances, 1, median))), ]
+  if(!is.null(pval)){
     # additional ordering by p-value
-    frac <- getCellSignificance(balances, yintercept)
-    balances <- balances[order(-frac),]
-
+    loadings <- loadings[order(-pval), ]
     # Get significant cells
-    n.significant.cells = sum(frac <= signif.threshold)
-
-  } else if(ordering == 'by.mean') {
-    balances <- balances[order(abs(rowMeans(balances))),]
-    n.significant.cells = 0
-  } else if(ordering == 'by.median') {
-    balances <- balances[order(abs(apply(balances, 1, median))), ]
-    n.significant.cells = 0
+    n.significant.cells <- sum(pval <= signif.threshold)
+  } else {
+    # ordering by mean
+    loadings <- loadings[order(abs(rowMeans(loadings))), ]
+    n.significant.cells <- 0
   }
 
-
-  frac <- getCellSignificance(balances, yintercept)
-  res.ordered <- t(balances) %>% as.data.frame()
-  ymax = max(balances)
+  frac <- pval
+  res.ordered <- t(loadings) %>% as.data.frame()
+  ymax = max(loadings)
 
   p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
     geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = jitter.alpha, size=1) +
@@ -228,22 +214,22 @@ plotCellLoadings <- function(balances, ordering, signif.threshold, jitter.alpha,
     annotate('text', x = 1, y = ymax, label = paste(target.level, '\u2192'), hjust = 'right')
 
   if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
-  if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(balances) - n.significant.cells + 0.5, color='red')
+  if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(loadings) - n.significant.cells + 0.5, color='red')
 
-
-  if(show.pvals){
-    d <- names(frac) %>% factor(., levels=.) %>% data.frame(x=., y=frac)
-    p.pval <- ggplot(d, aes(x=x, y=-log(y,base = 10), fill=factor(x))) +
-      geom_bar(stat="identity") +
-      geom_hline(yintercept=-log(signif.threshold,base = 10)) +
-      coord_flip() + labs(x='', y='-log(p-value)') +
-      plot.theme + theme(legend.position = "none") + theme(axis.text.y = element_blank())
-
-    if(!is.null(palette)) p.pval <- p.pval + scale_fill_manual(values=palette)
-
-    p.combo <- cowplot::plot_grid(p, p.pval, nrow=1, rel_widths=c(2,1))
-    return(p.combo)
-  }
+# 
+#   if(show.pvals){
+#     d <- names(frac) %>% factor(., levels=.) %>% data.frame(x=., y=frac)
+#     p.pval <- ggplot(d, aes(x=x, y=-log(y,base = 10), fill=factor(x))) +
+#       geom_bar(stat="identity") +
+#       geom_hline(yintercept=-log(signif.threshold,base = 10)) +
+#       coord_flip() + labs(x='', y='-log(p-value)') +
+#       plot.theme + theme(legend.position = "none") + theme(axis.text.y = element_blank())
+# 
+#     if(!is.null(palette)) p.pval <- p.pval + scale_fill_manual(values=palette)
+# 
+#     p.combo <- cowplot::plot_grid(p, p.pval, nrow=1, rel_widths=c(2,1))
+#     return(p.combo)
+#   }
 
   return(p)
 

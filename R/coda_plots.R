@@ -206,7 +206,7 @@ plotCellLoadings <- function(loadings, pval, signif.threshold, jitter.alpha, pal
     geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = jitter.alpha, size=1) +
     geom_hline(yintercept = yintercept, color = "gray37") +
     coord_flip() + xlab('') + ylab('loadings') + plot.theme + theme(legend.position = "none") +
-    scale_x_discrete(position = "top") + ylim(-ymax, ymax)
+    scale_x_discrete(position = "top") + ylim(-1, 1)
 
   # Add text
   p <- p +

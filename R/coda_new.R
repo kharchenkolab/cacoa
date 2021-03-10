@@ -11,14 +11,24 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
      stop(paste('Reference cell type', ref.cell.type, 'is not correct. Correct cell types are:', 
                 paste0(colnames(cnts), collapse = ', ') ))
   #Get freqs
-  # cnts[cnts == 0] <- 0.1
-  cnts[cnts == 0] <- 1
+  cnts[cnts == 0] <- 0.1
+  # cnts[cnts == 0] <- 1
   freqs <- cnts/rowSums(cnts)
   
   # Get ilr
   psi <- coda.base::ilr_basis(ncol(freqs), type = "default")
   rownames(psi) <- colnames(cnts)
   b <- log(freqs) %*% psi
+  
+  # PCA
+  b.norm <-  apply(b, 2, function(y) y - mean(y))
+  pca.res <- prcomp(b.norm)
+  pca.loadings <- psi %*% pca.res$rotation
+  
+  psi <- psi %*% pca.res$rotation
+  b <- log(freqs) %*% psi
+  b <- apply(b, 2, scale)
+  
   
   # Create dataframe
   b.df <- data.frame(b)
@@ -27,8 +37,9 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
   # Optimization
   if(criteria == 'lda') {
     if(is.null(ref.cell.type)) {  # pure linear regression which is proportional LDA when number of classes = 2
+      
       res.lm <- lm(groups ~ ., data = b.df)
-      w <- res.lm$coefficients[-1]
+      w <- res.lm$coefficients[-1] 
       
       # # Compare with lda - proportional!
       # res.lda <- lda(groups ~ ., data = b.df)
@@ -71,15 +82,38 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
     pca.res <- prcomp(b.norm)
     pca.loadings <- psi %*% pca.res$rotation
 
-    # CDA
-    df.pca <- as.data.frame(pca.res$x)
-
-    model <- lm(pca.res$x ~ groups)
-    cda <- candisc::candisc(model, ndim=1)
-
-    w <- pca.res$rotation  %*% as.matrix(cda$structure)
-    # w <- pca.res$rotation  %*% as.matrix(cda$coeffs.raw)
-  }
+    # ANNA: please remain the following commented code, 
+    # in case someone wants to understand what is going on, and what was attempted
+    # # CDA
+    # df.pca <- as.data.frame(pca.res$x)
+    # 
+    # model <- lm(pca.res$x ~ groups)
+    # cda <- candisc::candisc(model, ndim=1)
+    # 
+    # w <- pca.res$rotation  %*% as.matrix(cda$structure)  # standardized regression coefficients - just correlations
+    # # w <- pca.res$rotation  %*% as.matrix(cda$coeffs.raw)  # pure regression coefficients
+    
+    # # Properties
+    # # 1
+    # b.pca = pca.res$x
+    # scores <- cda$scores$Can1
+    # cor(groups, b.pca) / cor(scores, b.pca)  # the same number
+    # # 1
+    # t(cda$structure) / cor(groups, b.pca)  # the same number
+    # # What we can do: 
+    # w.tmp <- pca.res$rotation %*% t(cor(groups, b.pca))
+    # w.tmp / w  # the same number
+    
+    # New version without CDA
+    # To makes things comparable between bootstrap iterations,
+    # we need standardized regression coefficients, 
+    # which are just correlations, when regressors are independent, as after PCA.
+    # Standardization is needed,
+    # because a regression coefficient reflects the variance of the corresponding regressor, 
+    # and it significantly depends on bootstrap subsample.
+    w <- pca.res$rotation %*% t(cor(groups, pca.res$x))
+    
+  } 
 
   w <- w / sqrt(sum(w ^ 2))
   

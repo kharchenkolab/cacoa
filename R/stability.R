@@ -1,76 +1,76 @@
-jaccard.pw.top <- function(subsamples, top.thresh){
+jaccardPwTop <- function(subsamples, top.thresh){
   jac.all = c()
+  idxs = c()
   for(i in 1:length(subsamples)) {
     for(j in 1:length(subsamples)) {
       if (j <= i) next
       set1 <- rownames(subsamples[[i]])[rank(subsamples[[i]]$pvalue) <= top.thresh]
       set2 <- rownames(subsamples[[j]])[rank(subsamples[[j]]$pvalue) <= top.thresh]
-      jac.all <- c(jac.all, length(intersect(set1, set2)) / length(unique(c(set1, set2))))
+      if((length(set1) != 0) && (length(set2) != 0)) {
+        jac.all <- c(jac.all, length(intersect(set1, set2)) / length(unique(c(set1, set2))))
+      } else {
+        jac.all <- c(jac.all, 0)
+      }
+      idxs <- c(idxs, paste(names(subsamples)[i], names(subsamples)[j]))
     }
   }
-  return(jac.all)
+  return(list(jac = jac.all, id = idxs))
 }
 
-jaccard.pw.pval <- function(subsamples, pval.thresh){
+jaccardPwPval <- function(subsamples, p.val.cutoff){
   jac.all = c()
+  idxs = c()
   for(i in 1:length(subsamples)) {
     for(j in 1:length(subsamples)) {
       if (j <= i) next
-      set1 <- rownames(subsamples[[i]])[subsamples[[i]]$padj <= pval.thresh]
-      set2 <- rownames(subsamples[[j]])[subsamples[[j]]$padj <= pval.thresh]
-      jac.all <- c(jac.all, length(intersect(set1, set2)) / length(unique(c(set1, set2))))
+      set1 <- rownames(subsamples[[i]])[subsamples[[i]]$padj <= p.val.cutoff]
+      set2 <- rownames(subsamples[[j]])[subsamples[[j]]$padj <= p.val.cutoff]
+      if((length(set1) != 0) && (length(set2) != 0)) {
+        jac.all <- c(jac.all, length(intersect(set1, set2)) / length(unique(c(set1, set2))))
+      } else {
+        jac.all <- c(jac.all, 0)
+      }
+      idxs <- c(idxs, paste(names(subsamples)[i], names(subsamples)[j]))
     }
   }
-  return(jac.all)
+  return(list(jac = jac.all, id = idxs))
 }
 
-indexes.of.pairs <- function(subsamples, samples){
-  idxs = c()
-  id = 1
-  for(i in 1:length(samples)) {
-    for(j in 1:length(samples)) {
-      if (j <= i) next
-      id <- id + 1
-      if (! (samples[i] %in% subsamples)) next
-      if (! (samples[j] %in% subsamples)) next
-      idxs <- c(idxs, id)
-    }
-  }
-  return(idxs)
-}
 
 estimateStabilityPerCellType <- function(de.res,
                                          top.n.genes,
-                                         padj.threshold) {
+                                         p.val.cutoff) {
 
-  data.all = data.frame()
+  data.all <- data.frame()
   for(cell.type in names(de.res)){
     # print(cell.type)
     subsamples <- de.res[[cell.type]]$subsamples
     
     # Remove some subsamples due to the min.cell.counts
     # coomare resampling results with "initial"
-    jacc.init = c()
+    jacc.init <- c()
     for(subs.name in names(subsamples)){
       subsamples.tmp = list(de.res[[cell.type]]$subsamples[[subs.name]],
                             de.res[[cell.type]]$res)
-      jacc.init = c(jacc.init, jaccard.pw.top(subsamples.tmp, 200))
+      jacc.pw.tmp <- jaccardPwTop(subsamples.tmp, 200)
+      jacc.init <- c(jacc.init, jacc.pw.tmp$jac)  # please remain 200 here - it is only a technical thing
     }
     subsamples <- subsamples[(jacc.init != 0) & (jacc.init != 1)]
     
     if(length(subsamples) <= 2) next
     
     # Calculate jaccard
-    if (is.null(padj.threshold)) {
-      jacc.tmp <- jaccard.pw.top(subsamples, top.n.genes)  
+    if (is.null(p.val.cutoff)) {
+      jacc.tmp <- jaccardPwTop(subsamples, top.n.genes)  
     } else {
-      jacc.tmp <- jaccard.pw.pval(subsamples, padj.threshold)  
+      jacc.tmp <- jaccardPwPval(subsamples, p.val.cutoff)  
     }
     
-    
+    if(is.null(jacc.tmp$jac)) next
+    # print(jacc.tmp)
     data.tmp <- data.frame(group = cell.type,
-                           value = jacc.tmp,
-                           cmp = indexes.of.pairs(names(subsamples), names(de.res[[cell.type]]$subsamples)))
+                           value = jacc.tmp$jac,
+                           cmp = jacc.tmp$id)
     data.all <- rbind(data.all, data.tmp)
   }
   
@@ -88,6 +88,7 @@ plotStability <- function(jaccards,
                          ylabel = '',
                          log.y.axis = F,
                          palette = NULL) {
+  jaccards$group <- as.factor(jaccards$group)
   if(! show.pairs) {
     if(sort.order) {
       p <- ggplot(jaccards, aes(x=reorder(group,value,na.rm = TRUE), y=value, fill=group,
@@ -123,18 +124,18 @@ plotStability <- function(jaccards,
 estimateNumberOfTermsStability <- function(de.res,
                                            p.adjust,
                                            pvalue.cutoff){
-  data.all = data.frame()
+  data.all <- data.frame()
   for(cell.type in names(de.res)){
     # print(cell.type)
     subsamples <- de.res[[cell.type]]$subsamples
     
     # Remove some subsamples due to the min.cell.counts
     # coomare resampling results with "initial"
-    jacc.init = c()
+    jacc.init <- c()
     for(subs.name in names(subsamples)){
       subsamples.tmp = list(de.res[[cell.type]]$subsamples[[subs.name]],
                             de.res[[cell.type]]$res)
-      jacc.init = c(jacc.init, jaccard.pw.top(subsamples.tmp, 200))
+      jacc.init <- c(jacc.init, jaccardPwTop(subsamples.tmp, 200))
     }
     subsamples <- subsamples[(jacc.init != 0) & (jacc.init != 1)]
     
@@ -159,20 +160,20 @@ estimateNumberOfTermsStability <- function(de.res,
 extractGOtables = function(go.res, 
                            ont.types = NULL,
                            dir.type = 'all'){
-  cell.types = names(go.res)
+  cell.types <- names(go.res)
   if(is.null(ont.types))
-    ont.types = c('BP', 'CC', 'MF')
+    ont.types <- c('BP', 'CC', 'MF')
   if( !(dir.type %in% c('all', 'up', 'dows')) ) 
     stop('Provided direction of gene changing in not correct')
   
-  go.cell.types.list = list()
+  go.cell.types.list <- list()
   for(cell.type in cell.types){
-    go.cell.type.table = data.frame()
+    go.cell.type.table <- data.frame()
     for(ont.type in ont.types){
-      table.tmp = go.res[[cell.type]][[ont.type]][[dir.type]]@result[,c('ID', 'pvalue', 'p.adjust')]
+      table.tmp <- go.res[[cell.type]][[ont.type]][[dir.type]]@result[,c('ID', 'pvalue', 'p.adjust')]
       colnames(table.tmp) <- c('ID', 'pvalue', 'padj')
-      table.tmp$ont.type = ont.type
-      go.cell.type.table = rbind(go.cell.type.table, table.tmp)
+      table.tmp$ont.type <- ont.type
+      go.cell.type.table <- rbind(go.cell.type.table, table.tmp)
     }
     go.cell.types.list[[cell.type]] <- go.cell.type.table
   }

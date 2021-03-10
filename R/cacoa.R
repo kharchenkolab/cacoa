@@ -504,18 +504,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateDEStabilityPerCellType=function(de.name='de',
                                  name='de.jaccards',
                                  top.n.genes = NULL,
-                                 padj.threshold = NULL){
+                                 p.val.cutoff = NULL){
 
 
-      if( (!is.null(padj.threshold)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or padj.threshold) should be provided')
-      if(is.null(padj.threshold) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or padj.threshold) should be provided')
+      if( (!is.null(p.val.cutoff)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or p.val.cutoff) should be provided')
+      if(is.null(p.val.cutoff) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
 
       de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
 
       if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
       jaccards <- estimateStabilityPerCellType(de.res,
                                           top.n.genes,
-                                          padj.threshold)
+                                          p.val.cutoff)
       self$test.results[[name]] <- jaccards
     },
 
@@ -523,10 +523,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateDeStabilityPerTest=function(de.names,
                                         name='jacc.per.test',
                                         top.n.genes = NULL,
-                                        padj.threshold = NULL) {
+                                        p.val.cutoff = NULL) {
 
-      if( (!is.null(padj.threshold)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or padj.threshold) should be provided')
-      if(is.null(padj.threshold) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or padj.threshold) should be provided')
+      if( (!is.null(p.val.cutoff)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or p.val.cutoff) should be provided')
+      if(is.null(p.val.cutoff) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
 
       jaccards.all <- data.frame()
       for(de.name in de.names){
@@ -535,7 +535,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
         jaccards <- estimateStabilityPerCellType(de.res = de.res,
                                                  top.n.genes = top.n.genes,
-                                                 padj.threshold = padj.threshold)
+                                                 p.val.cutoff = p.val.cutoff)
         jacc.medians <- sapply(unique(jaccards$group), function(x) median(jaccards$value[jaccards$group == x]))
 
         jaccards.tmp <- data.frame(group = de.name, value = jacc.medians,
@@ -551,10 +551,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateDEStabilityBetweenTests=function(de.names,
                                              name='jacc.bw.tests',
                                              top.n.genes = NULL,
-                                             padj.threshold = NULL){
+                                             p.val.cutoff = NULL){
 
-      if( (!is.null(padj.threshold)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or padj.threshold) should be provided')
-      if(is.null(padj.threshold) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or padj.threshold) should be provided')
+      if( (!is.null(p.val.cutoff)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or p.val.cutoff) should be provided')
+      if(is.null(p.val.cutoff) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
 
       data.all = data_frame()
       cell.types = levels(self$cell.groups)
@@ -575,15 +575,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
               s1 = self$test.results[[de.names[i]]][[cell.type]]$subsamples[[sample.name]]
               s2 = self$test.results[[de.names[j]]][[cell.type]]$subsamples[[sample.name]]
-              if(is.null(padj.threshold)) {
-                val = jaccard.pw.top(list(s1, s2), top.n.genes)
+              if(is.null(p.val.cutoff)) {
+                jac = jaccardPwTop(list(s1, s2), top.n.genes)
               } else {
-                val = jaccard.pw.pval(list(s1, s2), padj.threshold)
+                jac = jaccardPwPval(list(s1, s2), p.val.cutoff)
               }
 
-              data.tmp = data_frame(s1 = de.names[i], s2 = de.names[j], val = val, cell.type = cell.type)
+              data.tmp = data_frame(s1 = de.names[i], s2 = de.names[j], val = jac$jac, cell.type = cell.type)
               data.cell.type = rbind(data.cell.type, data.tmp)
-              data.tmp = data_frame(s1 = de.names[j], s2 = de.names[i], val = val, cell.type = cell.type)
+              data.tmp = data_frame(s1 = de.names[j], s2 = de.names[i], val = jac$jac, cell.type = cell.type)
               data.cell.type = rbind(data.cell.type, data.tmp)
 
             }
@@ -600,17 +600,35 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     estimateDEStabilityTrend=function(de.name='de',
                                       name='de.trend',
-                                      top.n.genes = c(100,200,300,400,500)) {
-      top.n.genes = sort(top.n.genes)
+                                      top.n.genes = c(100,200,300),
+                                      p.val.cutoffs = NULL) {
+      
       de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
 
       data.all = data.frame()
-      for(i in 1:length(top.n.genes)) {
-        jaccards <- estimateStabilityPerCellType(de.res = de.res, top.n.genes = top.n.genes[i],
-                                                 padj.threshold = NULL)
+      
+      if(!is.null(p.val.cutoffs)) { 
+        cutoffs = p.val.cutoffs 
+      } else {
+        cutoffs = top.n.genes 
+      }
+      cutoffs = sort(cutoffs)
+      
+      for(i in 1:length(cutoffs)) {
+        
+        if(!is.null(p.val.cutoffs)) {
+          jaccards <- estimateStabilityPerCellType(de.res = de.res, top.n.genes = NULL,
+                                                   p.val.cutoff = cutoffs[i])
+        } else {
+          jaccards <- estimateStabilityPerCellType(de.res = de.res, top.n.genes = cutoffs[i],
+                                                   p.val.cutoff = NULL)
+        }
+          
         jacc.medians <- sapply(unique(jaccards$group), function(x) median(jaccards$value[jaccards$group == x]))
 
-        data.tmp <- data.frame(group = top.n.genes[i],
+        if(length(jacc.medians) == 0) next
+        
+        data.tmp <- data.frame(group = cutoffs[i],
                               value = jacc.medians,
                               cmp = names(jacc.medians))
 
@@ -636,7 +654,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                          jitter.alpha = jitter.alpha,
                          show.pairs = show.pairs,
                          sort.order = sort.order,
-                         xlabel = 'Top n genes',
+                         xlabel = 'Cutoffs',
                          ylabel = 'Jaccard Index',
                          palette=self$cell.groups.palette,
       )

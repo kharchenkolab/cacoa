@@ -661,21 +661,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(p)
     },
     
-    plotDEStabilityFDR(de.name='de', p.adj.cutoffs = c(0.001, 0.005, 0.01, 0.05, 0.1, 0.2 ),
-                       type = c('common'), cell.types = NULL){
+    plotDEStabilityFDR=function(de.name='de', 
+                                p.adj.cutoffs = c(0.001, 0.005, 0.01, 0.05, 0.1, 0.2 ),
+                                type = c('common'), cell.types = NULL){
       de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
       
       df.n.genes <- estimateDEStabilityFDR(de.res, p.adj.cutoffs)
+      print(df.n.genes)
       
       df.n.genes <- df.n.genes[df.n.genes$type %in% type,]
-      if(!is.null(cell.type)) df.n.genes <- df.n.genes[df.n.genes$Var2 %in% cell.types,]
+      if(!is.null(cell.types)) df.n.genes <- df.n.genes[df.n.genes$Var2 %in% cell.types,]
       
       ggplot(df.n.genes, aes(Var1, value, colour = Var2, 
                              group = interaction(type, Var2), linetype = type)) + 
         geom_line() + scale_y_continuous(trans='log10')
       
     },
-
 
     plotDEStabilityBetweenTests=function(name='jacc.bw.tests',
                                          cell.types = NULL) {

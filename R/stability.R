@@ -183,7 +183,7 @@ extractGOtables = function(go.res,
 }
 
 
-estimateDEStabilityFDR(de.res, p.adj.cutoffs) {
+estimateDEStabilityFDR = function(de.res, p.adj.cutoffs) {
     
   df.n.common.genes <- matrix(ncol=length(de.res),
                               nrow=length(p.adj.cutoffs), 
@@ -225,10 +225,8 @@ estimateDEStabilityFDR(de.res, p.adj.cutoffs) {
   df.n.common.genes <- melt(df.n.common.genes)
   df.n.common.genes$type <- 'common'
   
-  
   df.n.genes <- rbind(df.n.common.genes, df.n.all.genes, df.n.init.genes)
   df.n.genes$Var1 <- as.factor(p.adj.cutoffs[df.n.genes$Var1 ])
-  
   
   return(df.n.genes)
 }

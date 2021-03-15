@@ -347,8 +347,8 @@ reduceEdges <- function(edges, verbose=TRUE, n.cores = 1) {
 ##' @param verbose Print messages (default: T)
 ##' @param n.cores Number of cores to use (default: 1)
 ##' @return Rgraphviz object
-plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, string.length=18, legend.label.size = 1,
-                               legend.position="topright", verbose=TRUE, n.cores=1, reduce.edges=TRUE) {
+plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=FALSE, string.length=18, legend.label.size = 1,
+                               legend.position="topright", verbose=TRUE, n.cores=1, reduce.edges=TRUE, font.size=24) {
   checkPackageInstalled("Rgraphviz", bioc=TRUE)
   # Define nodes
   parent.ids <- sapply(fam, function(x) data[[x]]$parent_go_id) %>%
@@ -386,7 +386,7 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, st
   } else if (plot.type != "complete") stop("Unknown plot type: ", plot.type)
 
   # Convert IDs to names
-  if(show.ids == F) {
+  if(!show.ids) {
     for(id in 1:nrow(nodes)) {
       edges[edges == nodes$label[id]] <- nodes$name[id]
     }
@@ -444,6 +444,7 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, st
     setNames(names(p@renderInfo@nodes$fill))
   p@renderInfo@nodes$shape <- rep("box", length(p@renderInfo@nodes$shape)) %>%
     setNames(names(p@renderInfo@nodes$shape))
+  p@renderInfo@nodes$fontsize <- font.size
 
   # Plot
   Rgraphviz::renderGraph(p)

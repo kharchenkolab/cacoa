@@ -183,7 +183,53 @@ extractGOtables = function(go.res,
 }
 
 
-
+estimateDEStabilityFDR = function(de.res, p.adj.cutoffs) {
+    
+  df.n.common.genes <- matrix(ncol=length(de.res),
+                              nrow=length(p.adj.cutoffs), 
+                              dimnames=list(NULL, names(de.res)))
+  
+  df.n.all.genes <- matrix(ncol=length(de.res),
+                            nrow=length(p.adj.cutoffs), 
+                            dimnames=list(NULL, names(de.res)))
+  
+  df.n.init.genes <- matrix(ncol=length(de.res),
+                            nrow=length(p.adj.cutoffs), 
+                            dimnames=list(NULL, names(de.res)))
+  
+  for(i in 1:length(p.adj.cutoffs)) {
+    p <- p.adj.cutoffs[i]
+    for(cell.type in names(de.res)){
+      genes <- rownames(de.res[[cell.type]]$res)
+      genes.all <- c()
+      if(is.null(genes)) stop(cell.type)
+      for(ires in names(de.res[[cell.type]]$subsamples)) {
+        res.tmp <- de.res[[cell.type]]$subsamples[[ires]]
+        genes.tmp <- rownames(res.tmp)[res.tmp[,'padj'] < p]
+        genes <- intersect(genes, genes.tmp)
+        genes.all <- unique(c(genes, genes.tmp))
+  
+      }
+      df.n.common.genes[i, cell.type] <- length(genes)
+      df.n.all.genes[i, cell.type] <- length(genes.all)
+      
+      res.tmp <- de.res[[cell.type]]$res
+      df.n.init.genes[i, cell.type] <- length(rownames(res.tmp)[res.tmp[,'padj'] < p])
+    }
+  }
+  
+  df.n.init.genes <- melt(df.n.init.genes)
+  df.n.init.genes$type <- 'init'
+  df.n.all.genes <- melt(df.n.all.genes)
+  df.n.all.genes$type <- 'all'
+  df.n.common.genes <- melt(df.n.common.genes)
+  df.n.common.genes$type <- 'common'
+  
+  df.n.genes <- rbind(df.n.common.genes, df.n.all.genes, df.n.init.genes)
+  df.n.genes$Var1 <- as.factor(p.adj.cutoffs[df.n.genes$Var1 ])
+  
+  return(df.n.genes)
+}
   
   
   

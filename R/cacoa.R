@@ -660,7 +660,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       )
       return(p)
     },
-
+    
+    plotDEStabilityFDR=function(de.name='de', 
+                                p.adj.cutoffs = c(0.001, 0.005, 0.01, 0.05, 0.1, 0.2 ),
+                                type = c('common'), cell.types = NULL){
+      de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
+      
+      df.n.genes <- estimateDEStabilityFDR(de.res, p.adj.cutoffs)
+      print(df.n.genes)
+      
+      df.n.genes <- df.n.genes[df.n.genes$type %in% type,]
+      if(!is.null(cell.types)) df.n.genes <- df.n.genes[df.n.genes$Var2 %in% cell.types,]
+      
+      ggplot(df.n.genes, aes(Var1, value, colour = Var2, 
+                             group = interaction(type, Var2), linetype = type)) + 
+        geom_line() + scale_y_continuous(trans='log10')
+      
+    },
 
     plotDEStabilityBetweenTests=function(name='jacc.bw.tests',
                                          cell.types = NULL) {
@@ -1017,7 +1033,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       )
 
       self$test.results[[name]] <- list(res=res, de.gene.ids=de.gene.ids) # redundancy needed
-      return(invisible(self$test.results[[type]]))
+      return(invisible(self$test.results[[name]]))
     },
 
     #' @title Estimate ontology families
@@ -1025,10 +1041,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
     #' @param p.adj Cut-off for adj. P values (default: 0.05)
     #' @return List of families and ontology data per cell type
-    estimateOntologyFamilies=function(type = "GO", p.adj = 0.05) {
+    estimateOntologyFamilies=function(type = "GO", p.adj = 0.05, name = NULL) {
       checkPackageInstalled("GOfuncR", bioc=TRUE)
       if(!type %in% c("GO","DO","GSEA")) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
 
+      if(is.null(name)) {
+        name <- type
+      }
+      
       # TODO: Test DO
       if(type == "GO") {
         ont.list <- self$test.results[[type]]$res %>%
@@ -1046,7 +1066,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           }) %>%
           lapply(plyr::compact)
       }
-      self$test.results[[type]]$families <- estimateOntologyFamilies(ont.list = ont.list, type = type)
+      self$test.results[[name]]$families <- estimateOntologyFamilies(ont.list = ont.list, type = type)
+      return(invisible(self$test.results[[name]]))
     },
 
     #' @description Estimate Gene Ontology clusters
@@ -1089,7 +1110,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="all")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @return A ggplot2 object
-    plotOntologyDistribution=function(genes="all", type="GO", p.adj=0.05, min.genes=1, cell.groups=self$cell.groups) {
+    plotOntologyDistribution=function(genes="all", type="GO", p.adj=0.05, min.genes=1, 
+                                      cell.groups=self$cell.groups, name = NULL) {
       if (length(genes) > 0) {
         ont.res <- genes %>% setNames(., .) %>% lapply(private$getOntologyPvalueResults, type=type, p.adj=p.adj, min.genes=min.genes)
 
@@ -2389,6 +2411,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       return(self$cache[[cache.name]])
+    },
+    
+    getGOEnvironmentOpen = function(org.db, verbose=FALSE, ignore.cache=NULL) {
+      go.environment <- private$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
     }
   ),
 
@@ -2444,17 +2470,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(genes)
     },
 
-    getOntologyPvalueResults=function(genes, type, p.adj=0.05, min.genes=1, subtype=NULL, cell.subgroups=NULL) {
+    getOntologyPvalueResults=function(genes, type, p.adj=0.05, min.genes=1, 
+                                      subtype=NULL, cell.subgroups=NULL, name = NULL) {
       if(!type %in% c("GO", "DO", "GSEA"))
         stop("'type' must be 'GO', 'DO', or 'GSEA'.")
-
+      if(is.null(name)) {
+        name <- type
+      }
+      
       if(!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
         stop("'subtype' must be 'BP', 'CC', or 'MF'.")
 
       if((length(genes) != 1) || (!genes %in% c("down","up","all")))
         stop("'genes' must be 'down', 'up', or 'all'.")
 
-      ont.res <- self$test.results[[type]]$res
+      ont.res <- self$test.results[[name]]$res
       if(is.null(ont.res)) stop(paste0("No results found for '", type, "'. Please run 'estimateOntology' first."))
 
       ont.res %<>% preparePlotData(type, p.adj, min.genes)

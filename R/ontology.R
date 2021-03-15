@@ -87,6 +87,8 @@ estimateEnrichedGSEGO <- function(go.environment, ...) {
 }
 
 groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName") {
+  if (nrow(ont.clust.df) == 0)
+    return(ont.clust.df)
   order.anno <- ont.clust.df$Group %>% unique %>% .[order(.)]
 
   df <- ont.clust.df %>%
@@ -570,13 +572,13 @@ clusterIndividualGOs <- function(gos, cut.h) {
     mutate(Cluster=factor(Cluster, levels=c(0, unique(Cluster)))) %>%
     select(Group, Cluster, Description) %>%
     tidyr::spread(Group, Cluster) %>% as.data.frame() %>%
-    set_rownames(.$Description) %>% .[, 2:ncol(.)]
+    set_rownames(.$Description) %>% .[, 2:ncol(.), drop=FALSE]
 
   return(clust.df)
 }
 
-getOntClustField <- function(type, subtype, genes) {
-  return(paste(type, genes, paste(subtype, collapse="."), "clusters", sep="."))
+getOntClustField <- function(subtype, genes) {
+  return(paste("clusters", paste(subtype, collapse="."), genes, sep="."))
 }
 
 getHeatmapData <- function(ont.sum, fams, type, subtype, genes) {

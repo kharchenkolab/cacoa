@@ -660,22 +660,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       )
       return(p)
     },
-    
-    plotDEStabilityFDR=function(de.name='de', 
+
+    plotDEStabilityFDR=function(de.name='de',
                                 p.adj.cutoffs = c(0.001, 0.005, 0.01, 0.05, 0.1, 0.2 ),
                                 type = c('common'), cell.types = NULL){
       de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
-      
+
       df.n.genes <- estimateDEStabilityFDR(de.res, p.adj.cutoffs)
       print(df.n.genes)
-      
+
       df.n.genes <- df.n.genes[df.n.genes$type %in% type,]
       if(!is.null(cell.types)) df.n.genes <- df.n.genes[df.n.genes$Var2 %in% cell.types,]
-      
-      ggplot(df.n.genes, aes(Var1, value, colour = Var2, 
-                             group = interaction(type, Var2), linetype = type)) + 
+
+      ggplot(df.n.genes, aes(Var1, value, colour = Var2,
+                             group = interaction(type, Var2), linetype = type)) +
         geom_line() + scale_y_continuous(trans='log10')
-      
+
     },
 
     plotDEStabilityBetweenTests=function(name='jacc.bw.tests',
@@ -1048,7 +1048,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if(is.null(name)) {
         name <- type
       }
-      
+
       # TODO: Test DO
       if(type == "GO") {
         ont.list <- self$test.results[[type]]$res %>%
@@ -1073,7 +1073,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Estimate Gene Ontology clusters
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all'. Default: "up".
     #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO". Default: "GO".
-    #' @param name Name of the field to store the results. Default: `cacoa:::getOntClustField(type, subtype, genes)`.
+    #' @param name Name of the field to store the results. Default: `cacoa:::getOntClustField(subtype, genes)`.
     #' @param ind.h Cut height for hierarchical clustering of terms per cell type.
     #' Approximately equal to the fraction of genes, shared between the GOs. Default: 0.66.
     #' @param total.h Cut height for hierarchical clustering of GOs across all subtypes.
@@ -1082,8 +1082,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `df`: data.frame with information about individual gene ontolodies and columns `Cluster` and `ClusterName` for the clustering info
     #'   - `hclust`: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all subtypes
     estimateOntologyClusters=function(type="GO", subtype=NULL, genes="all", ind.h=0.66, total.h=0.5, verbose=self$verbose,
-                                      p.adj=0.05, min.genes=1, name=getOntClustField(type, subtype, genes)) {
-      ont.df <- private$getOntologyPvalueResults(genes=genes, type=type, p.adj=p.adj, min.genes=min.genes)
+                                      p.adj=0.05, min.genes=1, name=getOntClustField(subtype, genes)) {
+      ont.df <- private$getOntologyPvalueResults(genes=genes, type=type, subtype=subtype, p.adj=p.adj, min.genes=min.genes)
+      if (nrow(ont.df) == 0) {
+        res <- list(df=ont.df)
+        self$test.results[[type]][[name]] <- res
+        return(invisible(res))
+      }
+
       clust.mat <- ont.df %>% split(.$Group) %>% clusterIndividualGOs(cut.h=ind.h) %>%
         as.matrix() %>% t()
 
@@ -1101,16 +1107,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         split(.$Cluster) %>% sapply(function(df) df$Description[which.min(df$pvalue)])
 
       ont.df$ClusterName <- name.per.clust[ont.df$Cluster]
-      self$test.results[[name]] <- list(df=ont.df, hclust=cl.clusts)
+      res <- list(df=ont.df, hclust=cl.clusts)
+      self$test.results[[type]][[name]] <- res
 
-      return(invisible(self$test.results[[name]]))
+      return(invisible(res))
     },
 
     #' @description Bar plot of ontology terms per cell type
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="all")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @return A ggplot2 object
-    plotOntologyDistribution=function(genes="all", type="GO", p.adj=0.05, min.genes=1, 
+    plotOntologyDistribution=function(genes="all", type="GO", p.adj=0.05, min.genes=1,
                                       cell.groups=self$cell.groups, name = NULL) {
       if (length(genes) > 0) {
         ont.res <- genes %>% setNames(., .) %>% lapply(private$getOntologyPvalueResults, type=type, p.adj=p.adj, min.genes=min.genes)
@@ -1297,18 +1304,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                     p.adj=p.adj, min.genes=min.genes) %>%
           groupOntologiesByCluster(field="Description")
       } else {
-        name <- if (is.null(cluster.name)) getOntClustField(type, subtype, genes) else cluster.name
-        if (is.null(self$test.results[[name]])) {
+        name <- if (is.null(cluster.name)) getOntClustField(subtype, genes) else cluster.name
+        if (is.null(self$test.results[[type]][[name]])) {
           if (!is.null(cluster.name))
             stop("Can't find the results for ", cluster.name) # stop if user specified a wrong cluster.name
 
           warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
-          ont.sum <- self$estimateOntologyClusters(type=type, subtype=subtype, genes=genes, name=name, p.adj=p.adj, min.genes=min.genes)$df
-        } else {
-          ont.sum <- self$test.results[[name]]$df
+          self$estimateOntologyClusters(type=type, subtype=subtype, genes=genes, name=name, p.adj=p.adj, min.genes=min.genes)
         }
 
-        ont.sum %<>% groupOntologiesByCluster(field="ClusterName")
+        ont.sum <- self$test.results[[type]][[name]]$df %>%
+          groupOntologiesByCluster(field="ClusterName")
+      }
+
+      if (nrow(ont.sum) == 0) {
+        warning(paste0("No ontologies pass the filtration for type=", type, ", subtype=", subtype, " and genes=", genes))
+        return(ggplot())
       }
 
       if(selection=="unique") {
@@ -1414,18 +1425,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                     p.adj=p.adj, min.genes=min.genes)
         ont.sum %<>% getHeatmapData(fams = fams, type = type, subtype = subtype, genes = genes)
       } else {
-        name <- if (is.null(cluster.name)) getOntClustField(type, subtype, genes) else cluster.name
-        if (is.null(self$test.results[[name]])) {
+        name <- if (is.null(cluster.name)) getOntClustField(subtype, genes) else cluster.name
+        if (is.null(self$test.results[[type]][[name]])) {
           if (!is.null(cluster.name))
             stop("Can't find the results for ", cluster.name) # stop if user specified a wrong cluster.name
 
           warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
-          ont.sum <- self$estimateOntologyClusters(type=type, genes=genes, name=name, p.adj=p.adj, min.genes=min.genes)$df
-        } else {
-          ont.sum <- self$test.results[[name]]$df
+          self$estimateOntologyClusters(type=type, genes=genes, name=name, p.adj=p.adj, min.genes=min.genes)
         }
 
-        ont.sum %<>% getHeatmapData(fams = fams, type = type, subtype = subtype, genes = genes)
+        ont.sum <- self$test.results[[type]][[name]]$df %>%
+          getHeatmapData(fams=fams, type=type, subtype=subtype, genes=genes)
       }
 
       if(selection=="unique") {
@@ -2412,7 +2422,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       return(self$cache[[cache.name]])
     },
-    
+
     getGOEnvironmentOpen = function(org.db, verbose=FALSE, ignore.cache=NULL) {
       go.environment <- private$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
     }
@@ -2470,14 +2480,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(genes)
     },
 
-    getOntologyPvalueResults=function(genes, type, p.adj=0.05, min.genes=1, 
+    getOntologyPvalueResults=function(genes, type, p.adj=0.05, min.genes=1,
                                       subtype=NULL, cell.subgroups=NULL, name = NULL) {
       if(!type %in% c("GO", "DO", "GSEA"))
         stop("'type' must be 'GO', 'DO', or 'GSEA'.")
       if(is.null(name)) {
         name <- type
       }
-      
+
       if(!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
         stop("'subtype' must be 'BP', 'CC', or 'MF'.")
 

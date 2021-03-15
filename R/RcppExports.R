@@ -13,6 +13,10 @@ estimateClusterFreeExpressionShiftsC <- function(cm, sample_per_cell, nn_ids, is
     .Call('_cacoa_estimateClusterFreeExpressionShiftsC', PACKAGE = 'cacoa', cm, sample_per_cell, nn_ids, is_ref, min_n_between, min_n_within, min_n_obs_per_samp, norm_all, verbose, n_cores, dist, log_vecs)
 }
 
+mapIds <- function(ids_vec, id_map) {
+    .Call('_cacoa_mapIds', PACKAGE = 'cacoa', ids_vec, id_map)
+}
+
 projdiff <- function(mat, g1, g2) {
     .Call('_cacoa_projdiff', PACKAGE = 'cacoa', mat, g1, g2)
 }

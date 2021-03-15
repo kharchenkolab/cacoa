@@ -330,3 +330,28 @@ NumericVector estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<dou
 
     return res;
 }
+
+/* P-value processing */
+
+// [[Rcpp::export]]
+std::vector<std::vector<int>> mapIds(std::vector<std::vector<int>> ids_vec, std::vector<int> id_map) {
+    std::map<int, int> id_map_c;
+    for (int i = 0; i < id_map.size(); ++i) {
+        id_map_c.emplace(id_map[i], i + 1);
+    }
+
+    std::vector<std::vector<int>> res_ids;
+    for (auto const &ids : ids_vec) {
+        std::vector<int> mapped;
+        for (int id : ids) {
+            auto iter = id_map_c.find(id);
+            if (iter != id_map_c.end()) {
+                mapped.emplace_back(iter->second);
+            }
+        }
+
+        res_ids.emplace_back(mapped);
+    }
+
+    return res_ids;
+}

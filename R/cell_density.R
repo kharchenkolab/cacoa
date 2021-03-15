@@ -143,7 +143,7 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
   return(score)
 }
 
-diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, target.level, type='subtract',
+diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, target.level, type='permutation',
                                         verbose=TRUE, n.permutations=200, n.cores=1) {
   nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
   nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
@@ -179,13 +179,14 @@ diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, t
   return(list(score=score, permut.scores=permut.diffs))
 }
 
-adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smooth=FALSE, graph=NULL, beta=30, n.cores=1) {
+adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smooth=FALSE, graph=NULL, beta=30, n.cores=1, verbose=TRUE) {
   if (smooth) {
     if (is.null(graph)) stop("graph has to be provided if smooth is TRUE")
 
     g.filt <- function(...) heatFilter(..., beta=beta)
     score %<>% smoothSignalOnGraph(filter=g.filt, graph=graph)
-    scores.shuffled %<>% smoothSignalOnGraph(filter=g.filt, graph=graph, n.cores=n.cores) %>%
+    scores.shuffled %<>% smoothSignalOnGraph(filter=g.filt, graph=graph, n.cores=n.cores,
+                                             progress.chunks=if (verbose) 5 else 1) %>%
       as.matrix()
   }
 

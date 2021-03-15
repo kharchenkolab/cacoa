@@ -50,6 +50,18 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// mapIds
+std::vector<std::vector<int>> mapIds(std::vector<std::vector<int>> ids_vec, std::vector<int> id_map);
+RcppExport SEXP _cacoa_mapIds(SEXP ids_vecSEXP, SEXP id_mapSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::vector<std::vector<int>> >::type ids_vec(ids_vecSEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type id_map(id_mapSEXP);
+    rcpp_result_gen = Rcpp::wrap(mapIds(ids_vec, id_map));
+    return rcpp_result_gen;
+END_RCPP
+}
 // projdiff
 arma::rowvec projdiff(const arma::mat& mat, const arma::ivec& g1, const arma::ivec& g2);
 RcppExport SEXP _cacoa_projdiff(SEXP matSEXP, SEXP g1SEXP, SEXP g2SEXP) {
@@ -67,6 +79,7 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_clusterFreeZScoreMat", (DL_FUNC) &_cacoa_clusterFreeZScoreMat, 11},
     {"_cacoa_estimateClusterFreeExpressionShiftsC", (DL_FUNC) &_cacoa_estimateClusterFreeExpressionShiftsC, 12},
+    {"_cacoa_mapIds", (DL_FUNC) &_cacoa_mapIds, 2},
     {"_cacoa_projdiff", (DL_FUNC) &_cacoa_projdiff, 3},
     {NULL, NULL, 0}
 };

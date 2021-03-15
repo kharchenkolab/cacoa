@@ -602,20 +602,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                       name='de.trend',
                                       top.n.genes = c(100,200,300),
                                       p.val.cutoffs = NULL) {
-      
+
       de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
 
       data.all = data.frame()
-      
-      if(!is.null(p.val.cutoffs)) { 
-        cutoffs = p.val.cutoffs 
+
+      if(!is.null(p.val.cutoffs)) {
+        cutoffs = p.val.cutoffs
       } else {
-        cutoffs = top.n.genes 
+        cutoffs = top.n.genes
       }
       cutoffs = sort(cutoffs)
-      
+
       for(i in 1:length(cutoffs)) {
-        
+
         if(!is.null(p.val.cutoffs)) {
           jaccards <- estimateStabilityPerCellType(de.res = de.res, top.n.genes = NULL,
                                                    p.val.cutoff = cutoffs[i])
@@ -623,11 +623,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           jaccards <- estimateStabilityPerCellType(de.res = de.res, top.n.genes = cutoffs[i],
                                                    p.val.cutoff = NULL)
         }
-          
+
         jacc.medians <- sapply(unique(jaccards$group), function(x) median(jaccards$value[jaccards$group == x]))
 
         if(length(jacc.medians) == 0) next
-        
+
         data.tmp <- data.frame(group = cutoffs[i],
                               value = jacc.medians,
                               cmp = names(jacc.medians))
@@ -1609,53 +1609,53 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       return(invisible(self$test.results[['loadings']]))
     },
-    
+
     #' @description Estimate Loadings
     #' @return A ggplot2 object
-    estimateCellLoadings=function(n.iter=1000, equal.tot.count = NULL, replace.samples = TRUE, 
+    estimateCellLoadings=function(n.iter=1000, equal.tot.count = NULL, replace.samples = TRUE,
                                      ref.cell.type = NULL, criteria = 'cda.std',
-                                     n.seed = 239, cells.to.remove = NULL, cells.to.remain = NULL, 
+                                     n.seed = 239, cells.to.remove = NULL, cells.to.remain = NULL,
                                      samples.to.remove = NULL, filter.empty.cell.types=TRUE,
                                      define.ref.cell.type =  FALSE){
-      
+
       if( (!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))) )
         stop('Incorrect reference cell type')
       if( (define.ref.cell.type == T) & (!is.null(ref.cell.type)) ) define.ref.cell.type = F
-      
+
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
-      
+
       if(filter.empty.cell.types) {
         cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
           (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
-      
-      perm.data <- produceResampling(cnts = tmp$d.counts, groups = tmp$d.groups, n.perm = n.iter, 
+
+      perm.data <- produceResampling(cnts = tmp$d.counts, groups = tmp$d.groups, n.perm = n.iter,
                                      replace.samples = replace.samples,
                                      remain.groups = TRUE, equal.tot.count = equal.tot.count, seed = n.seed)
-      perm.null <- produceResampling(cnts = tmp$d.counts, groups = tmp$d.groups, n.perm = n.iter, 
+      perm.null <- produceResampling(cnts = tmp$d.counts, groups = tmp$d.groups, n.perm = n.iter,
                                      replace.samples = replace.samples,
                                      remain.groups = FALSE, equal.tot.count = equal.tot.count, seed = n.seed * 11)
-      
-      loadings.data <- sapply(1:length(perm.data$cnts), function(i) 
+
+      loadings.data <- sapply(1:length(perm.data$cnts), function(i)
         getLoadings(perm.data$cnts[[i]], perm.data$groups[[i]], criteria = criteria, ref.cell.type = ref.cell.type) )
-      
-      loadings.null <- sapply(1:length(perm.null$cnts), function(i) 
+
+      loadings.null <- sapply(1:length(perm.null$cnts), function(i)
         getLoadings(perm.null$cnts[[i]], perm.null$groups[[i]], criteria = criteria, ref.cell.type = ref.cell.type) )
-      
+
       # Calculate p-values by permutation test
       loadings.data.mean = rowMeans(loadings.data)
       tmp <- sapply(1:nrow(loadings.null), function(i) sum(loadings.null[i,] > loadings.data.mean[i])) / ncol(loadings.null)
       pval <- apply((cbind(tmp, 1-tmp)), 1, min) * 2
       names(pval) <- rownames(loadings.null)
-      
-      self$test.results[['loadings']] = list(loadings = loadings.data, 
-                                             loadings.data = loadings.data, 
+
+      self$test.results[['loadings']] = list(loadings = loadings.data,
+                                             loadings.data = loadings.data,
                                              loadings.null = loadings.null,
-                                             perm.data = perm.data, 
-                                             perm.null = perm.null, 
+                                             perm.data = perm.data,
+                                             perm.null = perm.null,
                                              pval = pval)
-      
+
       return(invisible(self$test.results[['loadings']]))
     },
 
@@ -1673,7 +1673,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, font.size=NULL,
                                 ordering='by.pvalue', signif.threshold=0.05, show.pvals=TRUE) {
-      
+
       loadings <- private$getResults('loadings', 'estimateCellLoadings()')
       p <- plotCellLoadings(loadings$loadings, loadings$pval, signif.threshold, alpha, palette, show.pvals,
                             ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme)
@@ -1821,17 +1821,47 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param type method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);
     #' @param adjust.pvalues whether to adjust Z-scores for multiple comparison using BH method (default: TRUE)
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    estimateDiffCellDensity=function(type='subtract', adjust.pvalues=TRUE, name='cell.density', verbose=self$verbose){
+    estimateDiffCellDensity=function(type='permutation', adjust.pvalues=TRUE, name='cell.density', n.permutations=200, smooth=TRUE,
+                                     verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
       density.mat <- dens.res$density.mat
       if (dens.res$method == 'kde'){
         density.mat <- density.mat[dens.res$density.emb$counts > 0,]
+        bins <- dens.res$bins
+
+        sig.ids <- rownames(density.mat) %>% as.integer()
+        graph <- lapply(sig.ids, function (i) c(i+1, i-1, i+bins, i-bins)) %>%
+          mapIds(sig.ids) %>% graph_from_adj_list()
+        V(graph)$name <- sig.ids
+      } else if (adjust.pvalues && smooth) {
+        graph <- extractCellGraph(self$data.object)
       }
 
-      scores <- diffCellDensity(density.mat, self$sample.groups, ref.level=self$ref.level, target.level=self$target.level,
-                                type=type, adjust.pvalues=adjust.pvalues, verbose=verbose)
+      if (!adjust.pvalues) {
+        if (type %in% c('permutation', 'permutation.mean')) {
+          score <- density.mat %>%
+            diffCellDensityPermutations(sample.groups=self$sample.groups, ref.level=self$ref.level,
+                                        target.level=self$target.level, type=type, verbose=verbose,
+                                        n.permutations=n.permutations) %>% .$score
+        } else {
+          score <- density.mat %>%
+            diffCellDensity(self$sample.groups, ref.level=self$ref.level, target.level=self$target.level, type=type)
+        }
+        res <- list(raw=score)
+      } else {
+        perm.res <- density.mat %>%
+          diffCellDensityPermutations(sample.groups=self$sample.groups, ref.level=self$ref.level,
+                                      target.level=self$target.level, type=type, verbose=verbose,
+                                      n.permutations=n.permutations)
 
-      self$test.results[[name]]$diff[[type]] <- scores
+        res <- list(
+          raw=perm.res$score,
+          adj=perm.res %$% adjustZScoresByPermutations(score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores,
+                                                       verbose=verbose, ...)
+        )
+      }
+
+      self$test.results[[name]]$diff[[type]] <- res
 
       return(invisible(self$test.results[[name]]))
     },
@@ -1844,22 +1874,35 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param z.cutoff absolute z score cutoff (default: NULL)
     #' @param contour.conf confidence interval of contour (default: '10%')
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    plotDiffCellDensity=function(type='subtract', name='cell.density', size=0.2, z.cutoff=NULL, palette=NULL,
-                                 contours=NULL, contour.color='black', contour.conf='10%', plot.na=FALSE, ...){
+    plotDiffCellDensity=function(type='permutation', name='cell.density', size=0.2, z.cutoff=NULL, palette=NULL, adjust.pvalues=NULL,
+                                 contours=NULL, contour.color='black', contour.conf='10%', plot.na=FALSE, color.range=NULL, mid.color='gray95', ...){
       if (is.null(palette)) {
         if (is.null(self$sample.groups.palette)) {
-          palette <- c('blue','white','red')
+          palette <- c('blue', mid.color,'red')
         } else {
-          palette <- c(self$sample.groups.palette[self$ref.level], 'white', self$sample.groups.palette[self$target.level])
+          palette <- c(self$sample.groups.palette[self$ref.level], mid.color, self$sample.groups.palette[self$target.level])
         }
         palette %<>% grDevices::colorRampPalette()
       }
       private$checkCellEmbedding()
       dens.res <- private$getResults(name, 'estimateCellDensity')
       scores <- dens.res$diff[[type]]
+      if (is.null(adjust.pvalues)) {
+        scores <- if (!is.null(scores$adj)) scores$adj else scores$raw
+      } else if (adjust.pvalues) {
+        if (is.null(scores$adj)) {
+          warning("Adjusted scores are not estimated. Using raw scores. Please, run estimateCellDensity with adjust.pvalues=TRUE")
+          scores <- scores$raw
+        } else {
+          scores <- scores$adj
+        }
+      } else {
+        scores <- scores$raw
+      }
+
       if (is.null(scores)) {
         warning("Can't find results for name, '", name, "' and type '", type, "'. Running estimateDiffCellDensity with default parameters.")
-        self$estimateDiffCellDensity(type=type, name=name)
+        self$estimateDiffCellDensity(type=type, name=name, adjust.pvalues=adjust.pvalues)
         dens.res <- self$test.results[[name]]
         scores <- dens.res$diff[[type]]
       }
@@ -1878,8 +1921,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         scores %<>% .[abs(.) >= z.cutoff]
       }
 
+      if (is.null(color.range)) color.range <- c(-1, 1) * max(abs(scores))
+
       leg.title <- if (type == 'subtract') 'Prop. change' else 'Z-score'
-      gg <- self$plotEmbedding(density.emb, colors=scores, size=size, legend.title=leg.title, palette=palette, midpoint=0, plot.na=plot.na, ...)
+      gg <- self$plotEmbedding(density.emb, colors=scores, size=size, legend.title=leg.title, palette=palette, midpoint=0, plot.na=plot.na, color.range=color.range, ...)
 
       if(!is.null(contours)){
         gg <- gg + private$getDensityContours(groups=contours, conf=contour.conf, color=contour.color)

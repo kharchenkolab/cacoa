@@ -348,15 +348,13 @@ reduceEdges <- function(edges, verbose=TRUE, n.cores = 1) {
 ##' @param n.cores Number of cores to use (default: 1)
 ##' @return Rgraphviz object
 plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=FALSE, string.length=18, legend.label.size = 1,
-                               legend.position="topright", verbose=TRUE, n.cores=1, reduce.edges=TRUE, font.size=24) {
+                               legend.position="topright", verbose=TRUE, n.cores=1, reduce.edges=FALSE, font.size=24) {
   checkPackageInstalled("Rgraphviz", bioc=TRUE)
   # Define nodes
   parent.ids <- sapply(fam, function(x) data[[x]]$parent_go_id) %>%
-    unlist() %>%
-    unique()
+    unlist() %>% unique()
   parent.names <- sapply(fam, function(x) data[[x]]$parent_name) %>%
-    unlist() %>%
-    unique()
+    unlist() %>% unique()
   nodes <- data.frame(label = c(fam, parent.ids)) %>%
     mutate(., name = c(sapply(fam, function(x) data[[x]]$Description) %>% unlist(), parent.names))
 
@@ -367,9 +365,7 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=FALSE
     if (length(to.nodes) == 0) return(data.frame())
     data.frame(from=y, to=to.nodes)
   }) %>%
-    bind_rows() %>%
-    as.data.frame() %>%
-    .[apply(., 1, function(x) x[1] != x[2]),] # Remove selves
+    bind_rows() %>% as.data.frame() %$% .[from != to,]
 
   # Remove redundant inheritance
   if (reduce.edges) edges %<>% reduceEdges(verbose=verbose, n.cores=n.cores)

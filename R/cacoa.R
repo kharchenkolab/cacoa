@@ -1008,7 +1008,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                               p.adjust.method="BH",
                               readable=TRUE, verbose=TRUE,
                               qvalue.cutoff=0.2, min.gs.size=10,
-                              max.gs.size=5e2, keep.gene.sets = FALSE,
+                              max.gs.size=5e2, keep.gene.sets=FALSE,
                               ignore.cache=NULL, de.raw=NULL, ...) {
       if(!is.null(type) & !type %in% c("GO", "DO", "GSEA"))
         stop("'type' must be 'GO', 'DO', or 'GSEA'.")
@@ -1199,8 +1199,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See \link[cowplot:plot_grid]{cowplot::plot_grid} for more info (default=1.0)
     #' @param ... parameters forwarded to \link{plotNCellRegression}
     #' @return A ggplot2 object
-    plotOntologyTerms=function(genes='all', type="GO", p.adj=0.05, min.genes=1, cell.groups=self$cell.groups,
+    plotOntologyTerms=function(genes='all', type=c("GO", "DO"), p.adj=0.05, min.genes=1, cell.groups=self$cell.groups,
                                label.x.pos=0.01, label.y.pos=1, scale=1.0, ...) {
+      # TODO: ideally, this function should be removed from the package, and then we don't need to store de.gene.ids
+      type <- match.arg(type)
       ont.res <- private$getOntologyPvalueResults(genes=genes, type=type, p.adj=p.adj, min.genes=min.genes)
 
       de.gene.ids <- self$test.results[[type]]$de.gene.ids
@@ -1224,7 +1226,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")
-    #' @param cell.subgroup Cell group to plot (default=NULL)
+    #' @param cell.subgroup Cell group to plot
     #' @param n Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @param log.colors Use log10 p-values for coloring (default=FALSE)
@@ -2502,6 +2504,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # Extract genes and subgroups
       if(type == "GSEA") {
         ont.res %<>% addGseaGroup() %>% rename(geneID=core_enrichment)
+        if (genes == "up") {
+          ont.res %<>% filter(enrichmentScore > 0)
+        } else if (genes == "down") {
+          ont.res %<>% filter(enrichmentScore < 0)
+        }
       } else {
         ont.res %<>% .[[genes]]
       }

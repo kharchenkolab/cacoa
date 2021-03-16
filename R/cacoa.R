@@ -1491,8 +1491,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # TODO: Test for GSEA/GO. Update description!
       ont.fam.res %<>% .[[subtype]]
       if(is.null(ont.fam.res)) stop(paste0("No results found for subtype '",subtype,"'."))
-      ont.fam.res %<>% .[[genes]]
-      if(is.null(ont.fam.res)) stop(paste0("No results found for genes '",genes,"'."))
+
+      if (type != "GSEA") {
+        ont.fam.res %<>% .[[genes]]
+        if(is.null(ont.fam.res)) stop(paste0("No results found for genes '",genes,"'."))
+      }
+
       if(!fam.name %in% names(ont.fam.res$families)) stop("'family' not in 'ont.fam.res'.")
 
       plotOntologyFamily(fam = ont.fam.res$families[[fam.name]], data = ont.fam.res$data, plot.type = plot.type, show.ids = show.ids,

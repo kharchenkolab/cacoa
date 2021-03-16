@@ -1936,6 +1936,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       scores <- dens.res$diff[[type]]
       if (is.null(adjust.pvalues)) {
         scores <- if (!is.null(scores$adj)) scores$adj else scores$raw
+        adjust.pvalues <- TRUE
       } else if (adjust.pvalues) {
         if (is.null(scores$adj)) {
           warning("Adjusted scores are not estimated. Using raw scores. Please, run estimateCellDensity with adjust.pvalues=TRUE")

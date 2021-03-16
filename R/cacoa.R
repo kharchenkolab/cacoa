@@ -1485,7 +1485,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       fam.name <- paste0("Family",family)
       ont.fam.res <- self$test.results[[type]]$families
-      if(is.null(ont.fam.res)) stop(paste0("No results found for type '",type,"'."))
+      if(is.null(ont.fam.res)) stop(paste0("No results found for type '",type,"'. Please run 'estimateOntologyFamilies' first."))
       ont.fam.res %<>% .[[cell.subgroups]]
       if(is.null(ont.fam.res)) stop(paste0("No results found for cell.subgroups '",cell.subgroups,"'."))
       # TODO: Test for GSEA/GO. Update description!

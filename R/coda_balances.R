@@ -39,7 +39,7 @@ resampleContrast <- function(d.counts, d.groups, n.cell.counts = 500, n.seed = 2
   }
 
   if(n.skip.resampl > 0) warning(paste('Numer of skipped resamplings:', as.character(n.skip.resampl)))
-  return(list(balances = cda.resamples, data = d.all))
+  return(list(loadings = cda.resamples, data = d.all))
 }
 
 

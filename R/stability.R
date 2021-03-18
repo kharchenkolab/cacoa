@@ -157,30 +157,30 @@ estimateNumberOfTermsStability <- function(de.res,
 }
 
 
-extractGOtables = function(go.res, 
-                           ont.types = NULL,
-                           dir.type = 'all'){
-  cell.types <- names(go.res)
-  if(is.null(ont.types))
-    ont.types <- c('BP', 'CC', 'MF')
-  if( !(dir.type %in% c('all', 'up', 'dows')) ) 
-    stop('Provided direction of gene changing in not correct')
-  
-  go.cell.types.list <- list()
-  for(cell.type in cell.types){
-    go.cell.type.table <- data.frame()
-    for(ont.type in ont.types){
-      table.tmp <- go.res[[cell.type]][[ont.type]][[dir.type]]@result[,c('ID', 'pvalue', 'p.adjust')]
-      colnames(table.tmp) <- c('ID', 'pvalue', 'padj')
-      table.tmp$ont.type <- ont.type
-      go.cell.type.table <- rbind(go.cell.type.table, table.tmp)
-    }
-    go.cell.types.list[[cell.type]] <- go.cell.type.table
-  }
-  
-  return(go.cell.types.list)
-  
-}
+# extractGOtables = function(go.res, 
+#                            ont.types = NULL,
+#                            dir.type = 'all'){
+#   cell.types <- names(go.res)
+#   if(is.null(ont.types))
+#     ont.types <- c('BP', 'CC', 'MF')
+#   if( !(dir.type %in% c('all', 'up', 'dows')) ) 
+#     stop('Provided direction of gene changing in not correct')
+#   
+#   go.cell.types.list <- list()
+#   for(cell.type in cell.types){
+#     go.cell.type.table <- data.frame()
+#     for(ont.type in ont.types){
+#       table.tmp <- go.res[[cell.type]][[ont.type]][[dir.type]]@result[,c('ID', 'pvalue', 'p.adjust')]
+#       colnames(table.tmp) <- c('ID', 'pvalue', 'padj')
+#       table.tmp$ont.type <- ont.type
+#       go.cell.type.table <- rbind(go.cell.type.table, table.tmp)
+#     }
+#     go.cell.types.list[[cell.type]] <- go.cell.type.table
+#   }
+#   
+#   return(go.cell.types.list)
+#   
+# }
 
 
 estimateDEStabilityFDR = function(de.res, p.adj.cutoffs) {
@@ -232,6 +232,49 @@ estimateDEStabilityFDR = function(de.res, p.adj.cutoffs) {
 }
   
   
+
+estimateStabilityPerCellType <- function(de.res,
+                                         top.n.genes,
+                                         p.val.cutoff) {
+  
+  data.all <- data.frame()
+  for(cell.type in names(de.res)){
+    # print(cell.type)
+    subsamples <- de.res[[cell.type]]$subsamples
+    
+    # Remove some subsamples due to the min.cell.counts
+    # coomare resampling results with "initial"
+    jacc.init <- c()
+    for(subs.name in names(subsamples)){
+      subsamples.tmp = list(de.res[[cell.type]]$subsamples[[subs.name]],
+                            de.res[[cell.type]]$res)
+      jacc.pw.tmp <- jaccardPwTop(subsamples.tmp, 200)
+      jacc.init <- c(jacc.init, jacc.pw.tmp$jac)  # please remain 200 here - it is only a technical thing
+    }
+    subsamples <- subsamples[(jacc.init != 0) & (jacc.init != 1)]
+    
+    if(length(subsamples) <= 2) next
+    
+    # Calculate jaccard
+    if (is.null(p.val.cutoff)) {
+      jacc.tmp <- jaccardPwTop(subsamples, top.n.genes)  
+    } else {
+      jacc.tmp <- jaccardPwPval(subsamples, p.val.cutoff)  
+    }
+    
+    if(is.null(jacc.tmp$jac)) next
+    # print(jacc.tmp)
+    data.tmp <- data.frame(group = cell.type,
+                           value = jacc.tmp$jac,
+                           cmp = jacc.tmp$id)
+    data.all <- rbind(data.all, data.tmp)
+  }
+  
+  return(data.all)
+}
+
+
+
   
   
   

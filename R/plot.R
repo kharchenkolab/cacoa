@@ -456,12 +456,17 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=FALSE
   return(p)
 }
 
-plotVolcano <- function(de.df, p.name='padj', legend.pos="none", palette=brewerPalette("RdYlBu"), lf.cutoff=1.5, p.cutoff=0.05,
+
+plotVolcano <- function(de.df, p.name='padj', color.var = 'CellFrac', legend.pos="none", palette=brewerPalette("RdYlBu"), lf.cutoff=1.5, p.cutoff=0.05,
                         cell.frac.cutoff=0.2, size=c(0.1, 1.0), lab.size=2, draw.connectors=TRUE, sel.labels=NULL, plot.theme=theme_get(), ...) {
+
   checkPackageInstalled("EnhancedVolcano", bioc=TRUE)
-  if (is.null(sel.labels)) {
+  if (is.null(sel.labels) && (color.var == 'CellFrac')) {
     sel.labels <- de.df %$%
       Gene[(.[[p.name]] <= p.cutoff) & (abs(log2FoldChange) >= lf.cutoff) & (CellFrac >= cell.frac.cutoff)]
+  } else if (is.null(sel.labels) && (color.var == 'Stability')) {
+    sel.labels <- de.df %$%
+      Gene[(.[[p.name]] <= p.cutoff) & (abs(log2FoldChange) >= lf.cutoff) & (Stability >= 0.5)]
   }
   gg <- EnhancedVolcano::EnhancedVolcano(
     de.df, lab=de.df$Gene, x='log2FoldChange', y=p.name, arrowheads=FALSE,
@@ -471,11 +476,17 @@ plotVolcano <- function(de.df, p.name='padj', legend.pos="none", palette=brewerP
 
   point.id <- sapply(gg$layers, function(l) "GeomPoint" %in% class(l$geom)) %>%
     which() %>% .[1]
-  gg$layers[[point.id]] <- geom_point(aes(x=log2FoldChange, y=-log10(.data[[p.name]]), color=CellFrac, size=CellFrac))
-  gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
-
+  if(color.var == 'CellFrac') {
+    gg$layers[[point.id]] <- geom_point(aes(x=log2FoldChange, y=-log10(.data[[p.name]]), color=CellFrac, size=CellFrac))
+    gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
+    gg <- gg + val2ggcol(de.df$CellFrac, palette=palette, color.range=c(0, 1)) 
+  } else if (color.var == 'Stability') {
+    gg$layers[[point.id]] <- geom_point(aes(x=log2FoldChange, y=-log10(.data[[p.name]]), color=Stability, size=Stability))
+    gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
+    gg <- gg + val2ggcol(de.df$Stability, palette=palette, color.range=c(0, 1)) 
+  }
+  
   gg <- gg +
-    val2ggcol(de.df$CellFrac, palette=palette, color.range=c(0, 1)) +
     scale_size_continuous(range=size, name="Expr. frac", limits=c(0, 1)) +
     guides(color=guide_colorbar(title="Expr. frac")) +
     plot.theme +

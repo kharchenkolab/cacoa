@@ -186,7 +186,7 @@ adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smoot
     g.filt <- function(...) heatFilter(..., beta=beta)
     score %<>% smoothSignalOnGraph(filter=g.filt, graph=graph)
     scores.shuffled %<>% smoothSignalOnGraph(filter=g.filt, graph=graph, n.cores=n.cores,
-                                             progress.chunks=if (verbose) 5 else 1) %>%
+                                             progress=verbose) %>%
       as.matrix()
   }
 

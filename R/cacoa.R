@@ -1182,7 +1182,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                               p.adjust.method="BH",
                               readable=TRUE, verbose=TRUE,
                               qvalue.cutoff=0.2, min.gs.size=10,
-                              max.gs.size=5e2, keep.gene.sets = FALSE,
+                              max.gs.size=5e2, keep.gene.sets=FALSE,
                               ignore.cache=NULL, de.raw=NULL, ...) {
       if(!is.null(type) & !type %in% c("GO", "DO", "GSEA"))
         stop("'type' must be 'GO', 'DO', or 'GSEA'.")
@@ -1373,8 +1373,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See \link[cowplot:plot_grid]{cowplot::plot_grid} for more info (default=1.0)
     #' @param ... parameters forwarded to \link{plotNCellRegression}
     #' @return A ggplot2 object
-    plotOntologyTerms=function(genes='all', type="GO", p.adj=0.05, min.genes=1, cell.groups=self$cell.groups,
+    plotOntologyTerms=function(genes='all', type=c("GO", "DO"), p.adj=0.05, min.genes=1, cell.groups=self$cell.groups,
                                label.x.pos=0.01, label.y.pos=1, scale=1.0, ...) {
+      # TODO: ideally, this function should be removed from the package, and then we don't need to store de.gene.ids
+      type <- match.arg(type)
       ont.res <- private$getOntologyPvalueResults(genes=genes, type=type, p.adj=p.adj, min.genes=min.genes)
 
       de.gene.ids <- self$test.results[[type]]$de.gene.ids
@@ -1398,7 +1400,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")
-    #' @param cell.subgroup Cell group to plot (default=NULL)
+    #' @param cell.subgroup Cell group to plot
     #' @param n Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @param log.colors Use log10 p-values for coloring (default=FALSE)
@@ -1640,35 +1642,48 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param genes Only for GO results: Direction of genes, must be "up", "down", or "all" (default: up)
     #' @param subtype Only for GO results: Type of result, must be "BP", "MF", or "CC" (default: BP)
     #' @param plot.type How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) (default: complete)
-    #' @param show.ids Whether to show ontology IDs instead of names (default: F)
-    #' @param string.length Length of strings for wrapping in order to fit text within boxes (default: 18)
+    #' @param show.ids Whether to show ontology IDs instead of names (default: FALSE)
+    #' @param string.length Length of strings for wrapping in order to fit text within boxes (default: 14)
     #' @param legend.label.size Size og legend labels (default: 1)
     #' @param legend.position Position of legend (default: topright)
     #' @param verbose Print messages (default: stored value)
     #' @param n.cores Number of cores to use (default: stored value)
     #' @return Rgraphviz object
-    plotOntologyFamily=function(type = "GO", cell.subgroups, family, genes = "up", subtype = "BP", plot.type = "complete", show.ids = FALSE,
-                                string.length=18, legend.label.size = 1, legend.position = "topright", verbose = self$verbose, n.cores = self$n.cores) {
+    plotOntologyFamily=function(type = "GO", cell.subgroups, family=NULL, genes="up", subtype="BP", plot.type="complete", show.ids=FALSE,
+                                string.length=14, legend.label.size=1, legend.position="topright", verbose=self$verbose, n.cores=self$n.cores, ...) {
       #Checks
       checkPackageInstalled(c("GOfuncR", "graph", "Rgraphviz"), bioc=TRUE)
 
-      if(!is.numeric(family)) stop("'family' must be numeric.")
-      if(!is.null(plot.type) && !plot.type %in% c("complete","dense","minimal")) stop("'plot.type' must be 'complete', 'dense', or 'minimal'.")
-
-      fam.name <- paste0("Family",family)
       ont.fam.res <- self$test.results[[type]]$families
-      if(is.null(ont.fam.res)) stop(paste0("No results found for type '",type,"'."))
+      if(is.null(ont.fam.res)) stop(paste0("No results found for type '",type,"'. Please run 'estimateOntologyFamilies' first."))
+
       ont.fam.res %<>% .[[cell.subgroups]]
       if(is.null(ont.fam.res)) stop(paste0("No results found for cell.subgroups '",cell.subgroups,"'."))
       # TODO: Test for GSEA/GO. Update description!
       ont.fam.res %<>% .[[subtype]]
       if(is.null(ont.fam.res)) stop(paste0("No results found for subtype '",subtype,"'."))
-      ont.fam.res %<>% .[[genes]]
-      if(is.null(ont.fam.res)) stop(paste0("No results found for genes '",genes,"'."))
-      if(!fam.name %in% names(ont.fam.res$families)) stop("'family' not in 'ont.fam.res'.")
 
-      plotOntologyFamily(fam = ont.fam.res$families[[fam.name]], data = ont.fam.res$data, plot.type = plot.type, show.ids = show.ids,
-                         string.length = string.length, legend.label.size = legend.label.size, legend.position = legend.position, verbose = verbose, n.cores = n.cores)
+      if (type != "GSEA") {
+        ont.fam.res %<>% .[[genes]]
+        if(is.null(ont.fam.res)) stop(paste0("No results found for genes '",genes,"'."))
+      }
+
+      if (is.null(family)) {
+        fam.names <- names(ont.fam.res)
+      } else {
+        if(!is.numeric(family)) {
+          fam.names <- family
+        } else {
+          fam.names <- paste0("Family",family)
+        }
+      }
+
+      if(!all(fam.names %in% names(ont.fam.res$families))) stop("Not all families are found in 'ont.fam.res'.")
+      families <- lapply(fam.names, function(n) ont.fam.res$families[[n]]) %>% unlist() %>% unique()
+
+      plotOntologyFamily(fam=families, data=ont.fam.res$data, plot.type=plot.type, show.ids=show.ids,
+                         string.length=string.length, legend.label.size=legend.label.size, legend.position=legend.position,
+                         verbose=verbose, n.cores=n.cores, ...)
     },
 
     #' @description Plot the cell group proportions per sample
@@ -2195,6 +2210,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       scores <- dens.res$diff[[type]]
       if (is.null(adjust.pvalues)) {
         scores <- if (!is.null(scores$adj)) scores$adj else scores$raw
+        adjust.pvalues <- TRUE
       } else if (adjust.pvalues) {
         if (is.null(scores$adj)) {
           warning("Adjusted scores are not estimated. Using raw scores. Please, run estimateCellDensity with adjust.pvalues=TRUE")
@@ -2776,6 +2792,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # Extract genes and subgroups
       if(type == "GSEA") {
         ont.res %<>% addGseaGroup() %>% rename(geneID=core_enrichment)
+        if (genes == "up") {
+          ont.res %<>% filter(enrichmentScore > 0)
+        } else if (genes == "down") {
+          ont.res %<>% filter(enrichmentScore < 0)
+        }
       } else {
         ont.res %<>% .[[genes]]
       }

@@ -102,7 +102,7 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 #' @export
 plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=NULL, legend.position="right",
                         legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
-                        color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL) {
+                        color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL, font.size=8) {
   if (is.null(color.range)) {
     color.range <- c(min(0, min(df)), max(df))
   }
@@ -140,7 +140,7 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=NULL
   gg <- ggplot(df) + geom_tile(aes(x=G2, y=G1, fill=value), color="gray50") +
     plot.theme +
     theme(axis.text.x=element_text(angle=90, hjust=0, vjust=0.5, color=color.per.group),
-          axis.text=element_text(size=8), axis.ticks=element_blank(), axis.title=element_blank()) +
+          axis.text=element_text(size=font.size), axis.ticks=element_blank(), axis.title=element_blank()) +
     guides(fill=guide_colorbar(title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5))) +
     scale_y_discrete(position="right", expand=c(0, 0)) +
     scale_x_discrete(expand=c(0, 0), position=x.axis.position) +
@@ -348,15 +348,13 @@ reduceEdges <- function(edges, verbose=TRUE, n.cores = 1) {
 ##' @param n.cores Number of cores to use (default: 1)
 ##' @return Rgraphviz object
 plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=FALSE, string.length=18, legend.label.size = 1,
-                               legend.position="topright", verbose=TRUE, n.cores=1, reduce.edges=TRUE, font.size=24) {
+                               legend.position="topright", verbose=TRUE, n.cores=1, reduce.edges=FALSE, font.size=24) {
   checkPackageInstalled("Rgraphviz", bioc=TRUE)
   # Define nodes
   parent.ids <- sapply(fam, function(x) data[[x]]$parent_go_id) %>%
-    unlist() %>%
-    unique()
+    unlist() %>% unique()
   parent.names <- sapply(fam, function(x) data[[x]]$parent_name) %>%
-    unlist() %>%
-    unique()
+    unlist() %>% unique()
   nodes <- data.frame(label = c(fam, parent.ids)) %>%
     mutate(., name = c(sapply(fam, function(x) data[[x]]$Description) %>% unlist(), parent.names))
 
@@ -367,9 +365,7 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=FALSE
     if (length(to.nodes) == 0) return(data.frame())
     data.frame(from=y, to=to.nodes)
   }) %>%
-    bind_rows() %>%
-    as.data.frame() %>%
-    .[apply(., 1, function(x) x[1] != x[2]),] # Remove selves
+    bind_rows() %>% as.data.frame() %$% .[from != to,]
 
   # Remove redundant inheritance
   if (reduce.edges) edges %<>% reduceEdges(verbose=verbose, n.cores=n.cores)

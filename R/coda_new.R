@@ -30,6 +30,10 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
   b <- apply(b, 2, scale)
   
   
+  idx.na = which(colSums(is.nan(b)) == 0)
+  b <- b[,idx.na]
+  psi <- psi[,idx.na]
+  
   # Create dataframe
   b.df <- data.frame(b)
   b.df$groups <- 1*groups
@@ -37,9 +41,9 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
   # Optimization
   if(criteria == 'lda') {
     if(is.null(ref.cell.type)) {  # pure linear regression which is proportional LDA when number of classes = 2
-      
       res.lm <- lm(groups ~ ., data = b.df)
       w <- res.lm$coefficients[-1] 
+      w[is.na(w)] <- 0
       
       # # Compare with lda - proportional!
       # res.lda <- lda(groups ~ ., data = b.df)

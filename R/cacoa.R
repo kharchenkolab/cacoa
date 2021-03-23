@@ -55,9 +55,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field plot.theme ggplot2 theme for all plots
     plot.theme=NULL,
 
+    #' @field plot.params parameters, forwarded to all `plotEmbedding` calls
+    plot.params=NULL,
+
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL,
                         sample.groups.palette=NULL, cell.groups.palette=NULL, embedding=extractEmbedding(data.object), graph.name=NULL,
-                        n.cores=1, verbose=TRUE, plot.theme=theme_bw()) {
+                        n.cores=1, verbose=TRUE, plot.theme=theme_bw(), plot.params=NULL) {
       if ('Cacoa' %in% class(data.object)) { # copy constructor
         for (n in ls(data.object)) {
           if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
@@ -139,6 +142,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       self$plot.theme <- plot.theme
       self$embedding <- embedding;
+      self$plot.params <- plot.params
     },
 
     ### Expression shifts
@@ -1147,25 +1151,33 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param embedding A cell embedding to use (two-column data frame with rownames corresponding to cells) (default: stored embedding object)
     #' @param plot.theme plot theme to use (default: `self$plot.theme`)
     #' @param color.by color cells by 'cell.groups', 'condition' or 'sample'. Overrides `groups` and `palette`. (default: NULL)
-    #' @param groups cell groups for the plot coloring
-    #' @param ... other parameters are passed to \link[sccore:embeddingPlot]{embeddingPlot}
-    plotEmbedding=function(embedding=self$embedding, groups=NULL, color.by=NULL,
-                           plot.theme=self$plot.theme, show.legend=TRUE, palette=NULL, ...) {
+    #' @param ... other parameters passed to \link[sccore:embeddingPlot]{embeddingPlot}
+    plotEmbedding=function(embedding=self$embedding, color.by=NULL, plot.theme=self$plot.theme, ...) {
+      new.params <- list(...)
+      params <- if (is.null(self$plot.params)) list() else self$plot.params
+      params[names(new.params)] <- new.params
+
       if(is.null(embedding)) stop("embedding must be provided to Cacoa constructor or to this method.")
       private$checkCellEmbedding(embedding)
       if (!is.null(color.by)) {
         if (color.by == 'cell.groups') {
-          groups <- self$cell.groups
-          palette <- self$cell.groups.palette
+          params$groups <- self$cell.groups
+          params$palette <- self$cell.groups.palette
         } else if (color.by == 'condition') {
-          groups <- self$getConditionPerCell()
-          palette <- self$sample.groups.palette
+          params$groups <- self$getConditionPerCell()
+          params$palette <- self$sample.groups.palette
         } else if (color.by == 'sample') {
-          groups <- self$sample.per.cell
+          params$groups <- self$sample.per.cell
         } else stop("Unknown color.by option: ", color.by)
-
       }
-      sccore::embeddingPlot(embedding, plot.theme=plot.theme, show.legend=show.legend, groups=groups, palette=palette, ...)
+
+      params$embedding <- embedding
+      params$plot.theme <- plot.theme
+      if (is.null(params$show.legend)) {
+        params$show.legend <- !is.null(params$colors)
+      }
+
+      invoke(sccore::embeddingPlot, params)
     },
 
     #' @description Estimate ontology terms based on DEs
@@ -2750,7 +2762,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plot.z=TRUE, plot.expression=TRUE, max.z=5, smoothed=FALSE,
-                                            gene.palette=NULL, z.palette=NULL, plot.na=-1, adj.list=NULL, ...) {
+                                            gene.palette=NULL, z.palette=NULL, plot.na=-1, adj.list=NULL, build.panel=TRUE, ...) {
       if (is.null(genes)) {
         if (is.null(scores)) stop("Either 'genes' or 'scores' must be provided")
         genes <- names(scores)
@@ -2800,7 +2812,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             list() %>% c(lst)
         }
         lst <- lapply(lst, function(x) x + theme(legend.background = element_blank()) + adj.list)
-        if (length(lst) > 1) cowplot::plot_grid(plotlist=lst, ncol=3) else lst[[1]]
+        if (build.panel) {
+          lst <- if ((length(lst) > 1)) cowplot::plot_grid(plotlist=lst, ncol=3) else lst[[1]]
+        }
+
+        lst
       })
 
       if (length(genes) == 1) return(ggs[[1]])

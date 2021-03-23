@@ -368,7 +368,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #   return(invisible(self$test.results[[name]]))
     # },
 
-    
+
     #' @description Estimate differential gene expression per cell type between conditions
     #' @param cell.groups factor specifying cell types (default=NULL)
     #' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
@@ -544,20 +544,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       self$test.results[[name]] <- jaccards.all
     },
-    
-    
+
+
     estimateDeStabilityPerGene=function(de.name,
                                         top.n.genes = 500,
-                                        p.adj.cutoff = NULL, 
+                                        p.adj.cutoff = NULL,
                                         visualize=F) {
       de.res <- self$test.results[[de.name]]
       for(cell.type in names(de.res)) {
         if(!is.null(p.adj.cutoff)) {
           top.n.genes <- sum(de.res[[cell.type]]$res$padj <= p.adj.cutoff)
-        }  
+        }
         genes.tmp <- de.res[[cell.type]]$res$Gene
         tmp <- rep(0, length(genes.tmp))
-        n.tmp <- 0 
+        n.tmp <- 0
         for(i in 1:length(de.res[[cell.type]]$subsamples)){
           if(is.null(de.res[[cell.type]]$subsamples[[i]])) next
           tmp <- tmp + 1*(rank(de.res[[cell.type]]$subsamples[[i]][genes.tmp,'padj']) < top.n.genes)
@@ -570,14 +570,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stability.all <- c()
         for(cell.type in names(de.res)) {
           tmp <- de.res[[cell.type]]$res
-          stability.all <- rbind(stability.all, 
-                                 data.frame(rank = 1:nrow(tmp), 
+          stability.all <- rbind(stability.all,
+                                 data.frame(rank = 1:nrow(tmp),
                                             stability = tmp$Stability, cell.type = cell.type))
         }
-        p <- ggplot(stability.all, aes(rank, stability, colour = cell.type)) + 
+        p <- ggplot(stability.all, aes(rank, stability, colour = cell.type)) +
           xlim(0, top.n.genes) + geom_smooth(method = "loess")
         return(p)
-        
+
       } else {
         return(self$test.results[[de.name]])
       }
@@ -674,24 +674,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$test.results[[name]] <- data.all
 
     },
-    
-    estimateGOStabilityPerCellTypePerm = function(de.test = 'de', top.n.de = 500, padj.go = 0.05, 
+
+    estimateGOStabilityPerCellTypePerm = function(de.test = 'de', top.n.de = 500, padj.go = 0.05,
                                               name = 'go.jaccards') {
-      
+
       test.name = de.test
       pref = paste('go', test.name, top.n.de, sep = '.')
-      
+
       pref.init <- paste(pref, 'init', sep = '.')
       pref.resampling <- paste(pref.init, 'res', sep = '.')
       cell.types <- names(self$test.results[[pref.init]]$res)
-      
+
       names.test.results <- names(self$test.results)
-      
+
       jc.all <- c()
       for(go.type in c('BP', 'MF', 'CC')) {
         for(de.type in c('up', 'down', 'all')) {
           go.stability = list()
-          
+
           for(cell.type in cell.types) {
           # for(cell.type in c('mg')) {
             if(!('res' %in% names(self$test.results[[pref.init]]))) next
@@ -700,7 +700,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             colnames(result) <- c('ID', 'pvalue', 'padj')  # rename to be compatible with DE analysis
             go.stability[[cell.type]]$res <- result
             go.names.res <- unique(names.test.results[grepl(pref.resampling, names.test.results, fixed = TRUE)])
-            
+
             for(go.name in go.names.res) {
               if(!('res' %in% names(self$test.results[[go.name]]))) next
               id.res <- gsub(paste(pref.init, '.', sep = ''), "", go.name)
@@ -720,25 +720,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       self$test.results[[name]] <- jc.all
     },
-    
+
     estimateGOStabilityTrend=function(de.name='go',
                                       name='go.trend',
                                       top.n.genes = c(100,200,300),
                                       p.val.cutoffs = NULL) {
-      
+
       de.res <- private$getResults(de.name, 'estimateOntology()')
-      
+
       data.all = data.frame()
-      
-      if(!is.null(p.val.cutoffs)) { 
-        cutoffs = p.val.cutoffs 
+
+      if(!is.null(p.val.cutoffs)) {
+        cutoffs = p.val.cutoffs
       } else {
-        cutoffs = top.n.genes 
+        cutoffs = top.n.genes
       }
       cutoffs = sort(cutoffs)
-      
+
       for(i in 1:length(cutoffs)) {
-        
+
         if(!is.null(p.val.cutoffs)) {
           jaccards <- estimateStabilityPerCellType(de.res = de.res, top.n.genes = NULL,
                                                    p.val.cutoff = cutoffs[i])
@@ -746,31 +746,31 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           jaccards <- estimateStabilityPerCellType(de.res = de.res, top.n.genes = cutoffs[i],
                                                    p.val.cutoff = NULL)
         }
-        
+
         jacc.medians <- sapply(unique(jaccards$group), function(x) median(jaccards$value[jaccards$group == x]))
-        
+
         if(length(jacc.medians) == 0) next
-        
+
         data.tmp <- data.frame(group = cutoffs[i],
                                value = jacc.medians,
                                cmp = names(jacc.medians))
-        
+
         data.all <- rbind(data.all, data.tmp)
-        
+
       }
       self$test.results[[name]] <- data.all
-      
+
     },
-    
+
     plotGOStabilityPerCellType=function(name='go.jaccards',
                                         notch = T,
                                         show.jitter = T,
                                         jitter.alpha = 0.05,
                                         show.pairs = F,
                                         sort.order = F) {
-      
+
       jaccards <- private$getResults(name, 'estimateGOStabilityPerCellType()')
-      
+
       p <- plotStability(jaccards = jaccards,
                          notch = notch,
                          show.jitter = show.jitter,
@@ -812,13 +812,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       df.n.genes <- estimateDEStabilityFDR(de.res, p.adj.cutoffs)
 
       if(!is.null(cell.types)) df.n.genes <- df.n.genes[df.n.genes$Var2 %in% cell.types,]
-      
+
       # df.n.genes <- df.n.genes[df.n.genes$type %in% c('common'),]
-      
+
       df.n.common.genes <- df.n.genes[df.n.genes$type %in% c('common'),]
       df.n.all.genes <- df.n.genes[df.n.genes$type %in% c('all'),]
       df.n.init.genes <- df.n.genes[df.n.genes$type %in% c('init'),]
-      
+
       if(type == 'relative') {
         de.plot <- df.n.common.genes
         de.plot$value <- de.plot$value / df.n.all.genes$value
@@ -830,16 +830,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else if (type == 'all') {
         de.plot <- df.n.all.genes
       } else if (type == 'init') {
-        de.plot <- df.n.init.genes 
+        de.plot <- df.n.init.genes
       } else {
         stop('Incorrect')
       }
-      
-      ggplot(de.plot, aes(Var1, value, colour = Var2, 
-                             group = interaction(type, Var2))) + 
-        geom_line() + scale_y_continuous(trans='log10') + 
+
+      ggplot(de.plot, aes(Var1, value, colour = Var2,
+                             group = interaction(type, Var2))) +
+        geom_line() + scale_y_continuous(trans='log10') +
         ggtitle(type)
-      
+
 
     },
 
@@ -1057,8 +1057,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
 
-    
-    plotVolcano=function(name='de', cell.types=NULL, palette=NULL, build.panel=TRUE, n.col=3, 
+
+    plotVolcano=function(name='de', cell.types=NULL, palette=NULL, build.panel=TRUE, n.col=3,
                          color.var = 'CellFrac', ...) {
       de <- private$getResults(name, 'estimatePerCellTypeDE()') %>% lapply(`[[`, 'res')
       if (is.null(palette)) {
@@ -1069,7 +1069,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if(!(color.var %in% names(de[[1]])))
         stop(paste(color.var, 'is not calculated'))
 
-      if (is.null(cell.types)) 
+      if (is.null(cell.types))
         cell.types <- names(de)
       de <- de[intersect(cell.types, names(de))]
 
@@ -1082,7 +1082,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!build.panel)
         return(lapply(de, plotVolcano, color.var=color.var, palette=palette, plot.theme=self$plot.theme, ...))
 
-      gg <- lapply(de, plotVolcano, color.var=color.var, palette=palette, 
+      gg <- lapply(de, plotVolcano, color.var=color.var, palette=palette,
                    xlab=NULL, ylab=NULL, plot.theme=self$plot.theme, ...) %>%
         cowplot::plot_grid(plotlist=., ncol=n.col, labels=paste0(names(.)), label_x=0.14,
                            label_y=0.99, label_size=10, align="hv", axis="lrtb", hjust=0)
@@ -1599,7 +1599,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!clusters) {
         ont.sum <- private$getOntologyPvalueResults(genes=genes, type=type, subtype=subtype, cell.subgroups=cell.subgroups,
                                                     p.adj=p.adj, min.genes=min.genes)
-        ont.sum %<>% getHeatmapData(fams = fams, type = type, subtype = subtype, genes = genes)
+        ont.sum %<>% getHeatmapData(fams = fams, type = type, subtype = subtype, genes = genes, field = "Description")
       } else {
         name <- if (is.null(cluster.name)) getOntClustField(subtype, genes) else cluster.name
         if (is.null(self$test.results[[type]][[name]])) {
@@ -1611,7 +1611,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
 
         ont.sum <- self$test.results[[type]][[name]]$df %>%
-          getHeatmapData(fams=fams, type=type, subtype=subtype, genes=genes)
+          getHeatmapData(fams=fams, type=type, subtype=subtype, genes=genes, field = "ClusterName")
       }
 
       if(selection=="unique") {
@@ -1669,7 +1669,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (is.null(family)) {
-        fam.names <- names(ont.fam.res)
+        fam.names <- names(ont.fam.res$families)
       } else {
         if(!is.numeric(family)) {
           fam.names <- family
@@ -1684,6 +1684,115 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       plotOntologyFamily(fam=families, data=ont.fam.res$data, plot.type=plot.type, show.ids=show.ids,
                          string.length=string.length, legend.label.size=legend.label.size, legend.position=legend.position,
                          verbose=verbose, n.cores=n.cores, ...)
+    },
+
+    #' @title Save ontology results
+    #' @description Save ontology results as a table
+    #' @param file File name (default: Ontology_results.tsv)
+    #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
+    #' @param subtype Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)
+    #' @param genes Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)
+    #' @param p.adj Adjusted P to filter by (default: 0.05)
+    #' @param sep Separator (default: tab)
+    #' @param dec Decimal separator (default: dot)
+    #' @return Table for import into text editor
+    saveOntologyAsTable=function(file = "Ontology_results.tsv", type = "GO", subtype = NULL, genes = NULL, p.adj = 0.05, sep = "\t", dec = ".") {
+      # Extract results
+      tmp <- self$test.results[[type]]$res %>%
+        lapply(lapply, lapply, function(x) x@result)
+
+      # Convert to data frame
+      res <- tmp %>%
+        names() %>%
+        lapply(function(ct) {
+          tmp[[ct]] %>%
+            names() %>%
+            lapply(function(type) {
+              tmp[[ct]][[type]] %>%
+                names() %>%
+                lapply(function(dir) {
+                  tmp[[ct]][[type]][[dir]] %>%
+                    mutate(genes = dir, subtype = type, celltype = ct) %>%
+                    .[c(12,11,10,1:9)]
+                }) %>%
+                bind_rows()
+            }) %>%
+            bind_rows()
+        }) %>%
+        bind_rows() %>%
+        filter(p.adjust <= p.adj)
+
+      # Filtering
+      if(!is.null(subtype)) res %<>% filter(subtype %in% subtype)
+      if(!is.null(genes)) res %<>% filter(genes %in% genes)
+
+      # Write table
+      write.table(res, file = file, sep = sep, dec = dec, row.names = F)
+    },
+
+    #' @title Save family results
+    #' @description Save family results as a table
+    #' @param file File name (default: Family_results.tsv)
+    #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
+    #' @param subtype Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)
+    #' @param genes Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)
+    #' @param p.adj Adjusted P to filter by (default: 0.05)
+    #' @param sep Separator (default: tab)
+    #' @param dec Decimal separator (default: dot)
+    #' @return Table for import into text editor
+    saveFamiliesAsTable=function(file = "Family_results.tsv", type = "GO", subtype = NULL, genes = NULL, p.adj = 0.05, sep = "\t", dec = ".") {
+      # Extract results
+      tmp <- self$test.results[[type]]$families %>%
+        lapply(lapply, lapply, function(x) {
+          lapply(x$families, function(y) {
+            if(length(y) > 1) { # What about == 1?
+              tmp.data <- x$data[y] %>%
+                lapply(lapply, function(z) if(length(z) > 1) paste0(z, collapse="/") else z) %>%
+                lapply(function(z) z[c("Description","Significance","parents_in_IDs","parent_go_id")]) %>%
+                bind_rows() %>%
+                data.frame() %>%
+                mutate(., No_parents = .$parents_in_IDs %>% sapply(function(z) strsplit(z, split = "/", fixed = T)[[1]] %>% length()),
+                       Child_terms = nrow(.))
+
+              tmp.df <- data.frame(y, tmp.data) %>%
+                setNames(c("Lonely_child_IDs", "Description", "P.adj", "Significant_parents", "All_parents", "#_sig_parents", "#_child_terms"))
+
+              return(tmp.df)
+            }
+          }) %>% .[!sapply(., is.null)]
+        })
+
+      # Convert to data frame
+      res <- tmp %>%
+        names() %>%
+        lapply(function(ct) {
+          tmp[[ct]] %>%
+            names() %>%
+            lapply(function(type) {
+              tmp[[ct]][[type]] %>%
+                names() %>%
+                lapply(function(dir) {
+                  tmp[[ct]][[type]][[dir]] %>%
+                    names() %>%
+                    lapply(function(fam) {
+                      tmp[[ct]][[type]][[dir]][[fam]] %>%
+                        mutate(Genes = dir, Subtype = type, Celltype = ct, Family = fam) %>%
+                        .[c(10,11,7,9,8,1:3,6,4,5)]
+                    }) %>%
+                    bind_rows()
+                }) %>%
+                bind_rows()
+            }) %>%
+            bind_rows()
+        }) %>%
+        bind_rows()
+
+      # Filtering
+      if(!is.null(subtype)) res %<>% filter(subtype %in% subtype)
+      if(!is.null(genes)) res %<>% filter(genes %in% genes)
+
+      # Write table
+      write.table(res, file = file, sep = sep, dec = dec, row.names = F)
     },
 
     #' @description Plot the cell group proportions per sample
@@ -1869,18 +1978,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       tmp <- sapply(1:nrow(loadings.null), function(i) sum(loadings.null[i,] > loadings.data.mean[i])) / ncol(loadings.null)
       pval <- apply((cbind(tmp, 1-tmp)), 1, min) * 2
       names(pval) <- rownames(loadings.null)
-      
+
       # Calculate p-values by Wicoxon test
       # pval <- c()
       # for(cell.type in rownames(loadings.data)) {
       #   x <- loadings.data[cell.type,]
       #   y <- loadings.null[cell.type,]
       #   w <- wilcox.test(x, y)
-      #   
+      #
       #   pval <- c(pval,w$p.value)
-      #   
+      #
       # }
-      
+
 
       self$test.results[['loadings']] = list(loadings = loadings.data,
                                              loadings.data = loadings.data,
@@ -1891,20 +2000,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       return(invisible(self$test.results[['loadings']]))
     },
-    
-    
+
+
     estimateCellLoadingsNew=function(n.perm=1000, n.boot = 50, equal.tot.count = NULL,
                                   ref.cell.type = NULL, criteria = 'cda.std',
                                   n.seed = 239, cells.to.remove = NULL, cells.to.remain = NULL,
                                   samples.to.remove = NULL, filter.empty.cell.types=TRUE,
                                   define.ref.cell.type =  FALSE){
-      
+
       if( (!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))) )
         stop('Incorrect reference cell type')
       if( (define.ref.cell.type == T) & (!is.null(ref.cell.type)) ) define.ref.cell.type = F
-      
+
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
-      
+
       if(filter.empty.cell.types) {
         cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
           (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
@@ -1912,7 +2021,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       cnts <- tmp$d.counts
       groups <- tmp$d.groups
-      
+
       # loadings <- list()
       # for(ib in 1:n.boot){
       loadings <- plapply(1:n.boot, function(ib){
@@ -1921,23 +2030,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           # Check that both groups are presented
           if((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) next
           cnts.tmp = cnts[samples.tmp,]
-          
+
           init.tmp <- produceResampling(cnts = cnts.tmp, groups = groups.tmp, n.perm = 1,
                                     replace.samples = F,
                                     remain.groups = TRUE, equal.tot.count = equal.tot.count, seed = n.seed)
-          
+
           null.tmp <- produceResampling(cnts = cnts.tmp, groups = groups.tmp, n.perm = n.perm,
                                     replace.samples = F,
                                     remain.groups = F, equal.tot.count = equal.tot.count, seed = n.seed)
-          
-          
+
+
           init.l <- getLoadings(init.tmp$cnts[[1]], init.tmp$groups[[1]], criteria = criteria, ref.cell.type = ref.cell.type)
-          
+
           null.l <- sapply(1:length(null.tmp$cnts), function(i)
             getLoadings(null.tmp$cnts[[i]], null.tmp$groups[[i]], criteria = criteria, ref.cell.type = ref.cell.type) )
-          
+
           loadings.tmp <- list(init = init.l, null = null.l)
-          
+
           # loadings[[length(loadings) + 1]] <- loadings.tmp
         # }
       }, n.cores=min(n.boot, 50), progress=T)
@@ -1946,7 +2055,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       for(ib in 1:length(loadings)) {  # index for bootstrap
         loadings.init <- cbind(loadings.init, loadings[[ib]]$init)
       }
-      
+
       loadings.null <- c()
       for(ip in 1:n.perm) {  # index for permutation
         loadings.tmp <- c()
@@ -1956,18 +2065,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             break  # everything is ok, no errors, but do not remove
           }
           loadings.tmp <- cbind(loadings.tmp, loadings[[ib]]$null[,ip])
-        }  
+        }
         if (length(loadings.tmp) == 0) break    # everything is ok, no errors, but do not remove
         loadings.null <- cbind(loadings.null,rowMeans(loadings.tmp))
       }
-      
+
       # Calculate p-values by permutation test
       loadings.init.mean = rowMeans(loadings.init)
       tmp <- sapply(1:nrow(loadings.null), function(i) sum(loadings.null[i,] > loadings.init.mean[i])) / ncol(loadings.null)
       pval <- apply((cbind(tmp, 1-tmp)), 1, min) * 2
       names(pval) <- rownames(loadings.null)
       padj <- p.adjust(pval, method <- 'fdr')
-      
+
       self$test.results[['loadings']] = list(loadings = loadings.init,
                                              loadings.data = loadings.init,
                                              loadings.null = loadings.null,
@@ -1976,7 +2085,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                              padj = padj,
                                              cnts = cnts,
                                              groups = groups)
-      
+
       return(invisible(self$test.results[['loadings']]))
     },
 

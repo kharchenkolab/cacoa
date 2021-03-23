@@ -578,7 +578,7 @@ getOntClustField <- function(subtype, genes) {
   return(paste("clusters", paste(subtype, collapse="."), genes, sep="."))
 }
 
-getHeatmapData <- function(ont.sum, fams, type, subtype, genes) {
+getHeatmapData <- function(ont.sum, fams, type, subtype, genes, field) {
   fams %<>%
     lapply(function(x) {
       x[[subtype]][[genes]]$families %>% unlist() %>% unique()
@@ -593,5 +593,5 @@ getHeatmapData <- function(ont.sum, fams, type, subtype, genes) {
       ont.sum[[x]] %>% filter(ID %in% fams[[x]])
     }) %>%
     bind_rows() %>%
-    groupOntologiesByCluster(field="Description")
+    groupOntologiesByCluster(field=field)
 }

@@ -33,4 +33,4 @@ devtools::install_github("kharchenkolab/cacoa")
 
 ## Example
 
-See [the vignette](https://pklab.med.harvard.edu/viktor/cacoa/ep.html) for an example.
+See [the vignette](http://pklab.med.harvard.edu/viktor/cacoa/ep.html) for an example.

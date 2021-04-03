@@ -116,7 +116,6 @@ plotStability <- function(jaccards,
   }
   
   # if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
-  
   return(p)
   
 }
@@ -229,6 +228,42 @@ estimateDEStabilityFDR = function(de.res, p.adj.cutoffs) {
   df.n.genes$Var1 <- as.factor(p.adj.cutoffs[df.n.genes$Var1 ])
   
   return(df.n.genes)
+}
+
+estimateDEStabilityFDR1loo = function(de.res, p.adj.cutoffs) {
+  
+  df.n.common.genes <- c()
+  
+  for(ires.target in 1:length(de.res[[1]]$subsamples)){
+    for(i in 1:length(p.adj.cutoffs)) {
+      p <- p.adj.cutoffs[i]
+      for(cell.type in names(de.res)){
+        
+        res.tmp <- de.res[[cell.type]]$subsamples[[ires.target]]
+        genes <- rownames(res.tmp)[res.tmp[,'padj'] < p]
+        if(length(genes) == 0) next
+        genes.all <- c()
+        if(is.null(genes)) stop(cell.type)
+        for(ires in names(de.res[[cell.type]]$subsamples)) {
+          res.tmp <- de.res[[cell.type]]$subsamples[[ires]]
+          genes.tmp <- rownames(res.tmp)[res.tmp[,'padj'] < p]
+          genes <- intersect(genes, genes.tmp)
+          genes.all <- unique(c(genes, genes.tmp))
+          
+        }
+        res.tmp <- de.res[[cell.type]]$subsamples[[ires.target]]
+        gene.frac <- length(f) / length(rownames(res.tmp)[res.tmp[,'padj'] < p])
+        df.n.common.genes <- rbind(df.n.common.genes, c(cell.type, p, gene.frac))
+      }
+    }
+  }
+  
+  df.n.common.genes = as.data.frame(df.n.common.genes)
+  colnames(df.n.common.genes) <- c('cell.type', 'fdr', 'frac')
+  df.n.common.genes$frac = as.numeric(df.n.common.genes$frac)
+  df.n.common.genes$fdr = as.numeric(df.n.common.genes$fdr)
+
+  return(df.n.common.genes)
 }
   
   

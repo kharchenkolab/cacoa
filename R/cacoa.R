@@ -531,7 +531,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       jaccards.all <- data.frame()
       for(de.name in de.names){
-        print(de.name)
+        # print(de.name)
         de.res <- private$getResults(de.name)
         if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
         jaccards <- estimateStabilityPerCellType(de.res = de.res,
@@ -574,13 +574,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                  data.frame(rank = 1:nrow(tmp),
                                             stability = tmp$Stability, cell.type = cell.type))
         }
-        p <- ggplot(stability.all, aes(rank, stability, colour = cell.type)) +
-          xlim(0, top.n.genes) + geom_smooth(method = "loess")
-        return(p)
 
-      } else {
-        return(self$test.results[[de.name]])
-      }
+        p <- ggplot(stability.all, aes(rank, stability, colour = cell.type)) + 
+          xlim(0, top.n.genes) + geom_smooth(method = "loess") + self$plot.theme +
+          xlab('gene rank by p-value')
+        return(p)
+      } 
+      
     },
 
 
@@ -800,7 +800,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                          sort.order = sort.order,
                          xlabel = 'Cutoffs',
                          ylabel = 'Jaccard Index',
-                         palette=self$cell.groups.palette)
+                         palette=self$cell.groups.palette) + self$plot.theme +
+        theme(legend.position = "none")
       return(p)
     },
 
@@ -840,6 +841,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         geom_line() + scale_y_continuous(trans='log10') +
         ggtitle(type)
 
+
+    },
+    
+    plotDEStabilityFDR1loo=function(cell.type, de.name='de',
+                                p.adj.cutoffs = c(0.001, 0.005, 0.01, 0.05, 0.1, 0.2 ),
+                                cell.types = NULL, type = 'relative'){
+      de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
+
+      df.n.genes <- estimateDEStabilityFDR1loo(de.res, p.adj.cutoffs)
+      self$test.results[['fdr.stability']] <- df.n.genes
+      df.n.genes <- df.n.genes[df.n.genes$cell.type == cell.type,]
+      
+      ggplot(df.n.genes, aes(x=fdr, y=frac,
+                           group=fdr)) + geom_boxplot() + geom_jitter() 
 
     },
 
@@ -899,7 +914,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param show.pairs transparency value for the data points (default: 0.05)
     #' @param notch - whether to show notches in the boxplot version (default=TRUE)
     #' @return A ggplot2 object
-    plotDeStabilityPerCellType=function(name='de.jaccards',
+    plotDEStabilityPerCellType=function(name='de.jaccards',
                                        notch = T,
                                        show.jitter = T,
                                        jitter.alpha = 0.05,
@@ -916,7 +931,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                          xlabel = 'Cell Type',
                          ylabel = 'Jaccard Index',
                          palette=self$cell.groups.palette,
-                         )
+                         ) + self$plot.theme + theme(legend.position = "none")
+      p <- p + theme(legend.position = "none") +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
       return(p)
     },
 
@@ -1918,100 +1935,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' @description Estimate Loadings
-    #' @return A ggplot2 object
-    estimateCellLoadingsOld=function(n.cell.counts = 1000, n.seed = 239, cells.to.remove = NULL,
-                                  cells.to.remain = NULL, samples.to.remove = NULL, n.iter=1000,
-                                  filter.empty.cell.types=TRUE, ref.cell.type = NULL){
-
-      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
-
-      if(filter.empty.cell.types) {
-        cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
-          (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
-        tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
-      }
-
-      self$test.results[['loadings']] <- tmp %$%
-        resampleContrast(d.counts, d.groups, n.cell.counts=n.cell.counts, n.seed=n.seed, n.iter=n.iter)
-
-      self$test.results$loadings$pvals <- NULL
-
-      return(invisible(self$test.results[['loadings']]))
-    },
-
-    #' @description Estimate Loadings
-    #' @return A ggplot2 object
-    estimateCellLoadings=function(n.iter=1000, equal.tot.count = NULL, replace.samples = TRUE,
-                                     ref.cell.type = NULL, criteria = 'cda.std',
-                                     n.seed = 239, cells.to.remove = NULL, cells.to.remain = NULL,
-                                     samples.to.remove = NULL, filter.empty.cell.types=TRUE,
-                                     define.ref.cell.type =  FALSE){
-
-      if( (!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))) )
-        stop('Incorrect reference cell type')
-      if( (define.ref.cell.type == T) & (!is.null(ref.cell.type)) ) define.ref.cell.type = F
-
-      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
-
-      if(filter.empty.cell.types) {
-        cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
-          (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
-        tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
-      }
-
-      perm.data <- produceResampling(cnts = tmp$d.counts, groups = tmp$d.groups, n.perm = n.iter,
-                                     replace.samples = replace.samples,
-                                     remain.groups = TRUE, equal.tot.count = equal.tot.count, seed = n.seed)
-      perm.null <- produceResampling(cnts = tmp$d.counts, groups = tmp$d.groups, n.perm = n.iter,
-                                     replace.samples = replace.samples,
-                                     remain.groups = FALSE, equal.tot.count = equal.tot.count, seed = n.seed * 11)
-
-      loadings.data <- sapply(1:length(perm.data$cnts), function(i)
-        getLoadings(perm.data$cnts[[i]], perm.data$groups[[i]], criteria = criteria, ref.cell.type = ref.cell.type) )
-
-      loadings.null <- sapply(1:length(perm.null$cnts), function(i)
-        getLoadings(perm.null$cnts[[i]], perm.null$groups[[i]], criteria = criteria, ref.cell.type = ref.cell.type) )
-
-      # Calculate p-values by permutation test
-      loadings.data.mean = rowMeans(loadings.data)
-      tmp <- sapply(1:nrow(loadings.null), function(i) sum(loadings.null[i,] > loadings.data.mean[i])) / ncol(loadings.null)
-      pval <- apply((cbind(tmp, 1-tmp)), 1, min) * 2
-      names(pval) <- rownames(loadings.null)
-
-      # Calculate p-values by Wicoxon test
-      # pval <- c()
-      # for(cell.type in rownames(loadings.data)) {
-      #   x <- loadings.data[cell.type,]
-      #   y <- loadings.null[cell.type,]
-      #   w <- wilcox.test(x, y)
-      #
-      #   pval <- c(pval,w$p.value)
-      #
-      # }
 
 
-      self$test.results[['loadings']] = list(loadings = loadings.data,
-                                             loadings.data = loadings.data,
-                                             loadings.null = loadings.null,
-                                             perm.data = perm.data,
-                                             perm.null = perm.null,
-                                             pval = pval)
-
-      return(invisible(self$test.results[['loadings']]))
-    },
-
-
-    estimateCellLoadingsNew=function(n.perm=1000, n.boot = 50, equal.tot.count = NULL,
+    estimateCellLoadings=function(n.perm=1000, n.boot = 100, coda.test = 'significance',
                                   ref.cell.type = NULL, criteria = 'cda.std',
                                   n.seed = 239, cells.to.remove = NULL, cells.to.remain = NULL,
                                   samples.to.remove = NULL, filter.empty.cell.types=TRUE,
                                   define.ref.cell.type =  FALSE){
 
+      if(!(coda.test %in% c('significance', 'confidence'))) stop('Test is not supported')
+      
       if( (!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))) )
         stop('Incorrect reference cell type')
       if( (define.ref.cell.type == T) & (!is.null(ref.cell.type)) ) define.ref.cell.type = F
 
+      # Get cell counts and groups
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
 
       if(filter.empty.cell.types) {
@@ -2021,62 +1959,87 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       cnts <- tmp$d.counts
       groups <- tmp$d.groups
+      
+      if(coda.test == 'confidence'){
+        n.perm <- 1
+      } 
 
-      # loadings <- list()
-      # for(ib in 1:n.boot){
+      # Apply bootstrap
       loadings <- plapply(1:n.boot, function(ib){
+        
+        # Create samples by bootstrap
+        samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = T)
+        groups.tmp <- groups[samples.tmp]
+
+        
+        # Check that both groups are presented
+        while((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) {
+          # Create samples by bootstrap
           samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = T)
           groups.tmp <- groups[samples.tmp]
-          # Check that both groups are presented
-          if((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) next
-          cnts.tmp = cnts[samples.tmp,]
+        }
+        cnts.tmp <- cnts[samples.tmp,]
+        
 
-          init.tmp <- produceResampling(cnts = cnts.tmp, groups = groups.tmp, n.perm = 1,
-                                    replace.samples = F,
-                                    remain.groups = TRUE, equal.tot.count = equal.tot.count, seed = n.seed)
+        init.tmp <- produceResampling(cnts = cnts.tmp, groups = groups.tmp, n.perm = 1,
+                                  replace.samples = F,
+                                  remain.groups = TRUE, seed = n.seed+ib)
+        init.l <- getLoadings(init.tmp$cnts[[1]], init.tmp$groups[[1]], criteria = criteria, ref.cell.type = ref.cell.type)
 
+        if (coda.test == 'significance') {
           null.tmp <- produceResampling(cnts = cnts.tmp, groups = groups.tmp, n.perm = n.perm,
                                     replace.samples = F,
-                                    remain.groups = F, equal.tot.count = equal.tot.count, seed = n.seed)
-
-
-          init.l <- getLoadings(init.tmp$cnts[[1]], init.tmp$groups[[1]], criteria = criteria, ref.cell.type = ref.cell.type)
-
+                                    remain.groups = FALSE, seed = n.seed+ib)
           null.l <- sapply(1:length(null.tmp$cnts), function(i)
             getLoadings(null.tmp$cnts[[i]], null.tmp$groups[[i]], criteria = criteria, ref.cell.type = ref.cell.type) )
-
-          loadings.tmp <- list(init = init.l, null = null.l)
-
-          # loadings[[length(loadings) + 1]] <- loadings.tmp
-        # }
-      }, n.cores=min(n.boot, 50), progress=T)
-
-      loadings.init <- c()
-      for(ib in 1:length(loadings)) {  # index for bootstrap
-        loadings.init <- cbind(loadings.init, loadings[[ib]]$init)
-      }
-
-      loadings.null <- c()
-      for(ip in 1:n.perm) {  # index for permutation
-        loadings.tmp <- c()
-        for(ib in 1:length(loadings)) {  # index for bootstrap
-          if(ncol(loadings[[ib]]$null) < ip) {
-            loadings.tmp <- c()
-            break  # everything is ok, no errors, but do not remove
-          }
-          loadings.tmp <- cbind(loadings.tmp, loadings[[ib]]$null[,ip])
+        } else {
+          null.l <- NULL
         }
-        if (length(loadings.tmp) == 0) break    # everything is ok, no errors, but do not remove
-        loadings.null <- cbind(loadings.null,rowMeans(loadings.tmp))
+        
+        loadings.tmp <- list(init = init.l, null = null.l)
+
+      }, n.cores=min(n.boot, 100), progress=T)
+
+
+      if(coda.test == 'significance') {
+        # Get mean loadings from bootstrap
+        loadings.init <- c()
+        for(ib in 1:length(loadings)) {  # index for bootstrap
+          loadings.init <- cbind(loadings.init, loadings[[ib]]$init)
+        }
+        loadings.null <- c()
+        for(ip in 1:n.perm) {  # index for permutation
+          loadings.tmp <- c()
+          for(ib in 1:length(loadings)) {  # index for bootstrap
+            if(ncol(loadings[[ib]]$null) < ip) {
+              loadings.tmp <- c()
+              break  # everything is ok, no errors, but do not remove this if-break
+            }
+            loadings.tmp <- cbind(loadings.tmp, loadings[[ib]]$null[,ip])
+          }
+          if (length(loadings.tmp) == 0) break    # everything is ok, no errors, but do not remove
+          loadings.null <- cbind(loadings.null,rowMeans(loadings.tmp))
+        }
+        # Calculate p-values by permutation test
+        loadings.init.mean <- rowMeans(loadings.init)
+        tmp <- sapply(1:nrow(loadings.null), function(i) sum(loadings.null[i,] > loadings.init.mean[i])) / ncol(loadings.null)
+        pval <- apply((cbind(tmp, 1-tmp)), 1, min) * 2
+        names(pval) <- rownames(loadings.null)
+        padj <- p.adjust(pval, method <- 'fdr')
+      } else {
+        loadings.init <- c()
+        for(i in 1:length(loadings)){
+          loadings.init <- cbind(loadings.init, loadings[[i]]$init)
+        }
+        # Calculate p-values of conficence interval by bootstrap
+        tmp <- sapply(1:nrow(loadings.init), function(i) sum(0 > loadings.init[i,])) / ncol(loadings.init)
+        pval <- apply((cbind(tmp, 1-tmp)), 1, min) * 2
+        names(pval) <- rownames(loadings.init)
+        padj <- p.adjust(pval, method <- 'fdr')
+        
+        loadings.null <- NULL
       }
-
-      # Calculate p-values by permutation test
-      loadings.init.mean = rowMeans(loadings.init)
-      tmp <- sapply(1:nrow(loadings.null), function(i) sum(loadings.null[i,] > loadings.init.mean[i])) / ncol(loadings.null)
-      pval <- apply((cbind(tmp, 1-tmp)), 1, min) * 2
-      names(pval) <- rownames(loadings.null)
-      padj <- p.adjust(pval, method <- 'fdr')
-
+     
       self$test.results[['loadings']] = list(loadings = loadings.init,
                                              loadings.data = loadings.init,
                                              loadings.null = loadings.null,
@@ -2105,7 +2068,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                 ordering='by.pvalue', signif.threshold=0.05, show.pvals=TRUE) {
 
       loadings <- private$getResults('loadings', 'estimateCellLoadings()')
-      p <- plotCellLoadings(loadings$loadings, loadings$pval, signif.threshold, alpha, palette, show.pvals,
+      p <- plotCellLoadings(loadings$loadings, loadings$padj, signif.threshold, alpha, palette, show.pvals,
                             ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme)
 
       return(p)

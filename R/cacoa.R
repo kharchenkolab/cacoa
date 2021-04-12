@@ -688,35 +688,45 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       names.test.results <- names(self$test.results)
 
       jc.all <- c()
-      for(go.type in c('BP', 'MF', 'CC')) {
-        for(de.type in c('up', 'down', 'all')) {
-          go.stability = list()
-
-          for(cell.type in cell.types) {
-          # for(cell.type in c('mg')) {
+      # for(de.type in c('up', 'down', 'all')) {
+      for(de.type in c('up', 'down')) {
+        go.stability = list()
+        for(cell.type in cell.types) {
+          for(go.type in c('BP', 'MF', 'CC')) {
             if(!('res' %in% names(self$test.results[[pref.init]]))) next
             result <- self$test.results[[pref.init]]$res[[cell.type]][[go.type]][[de.type]]@result
             result <- result[,c('ID', 'pvalue', 'p.adjust')]
             colnames(result) <- c('ID', 'pvalue', 'padj')  # rename to be compatible with DE analysis
-            go.stability[[cell.type]]$res <- result
+            if(go.type %in% c('MF', 'CC')){
+              go.stability[[cell.type]]$res <- rbind(go.stability[[cell.type]]$res, result)
+            } else {
+              go.stability[[cell.type]]$res <- result  
+            }
+            
             go.names.res <- unique(names.test.results[grepl(pref.resampling, names.test.results, fixed = TRUE)])
-
+  
             for(go.name in go.names.res) {
               if(!('res' %in% names(self$test.results[[go.name]]))) next
               id.res <- gsub(paste(pref.init, '.', sep = ''), "", go.name)
               result <- self$test.results[[go.name]]$res[[cell.type]][[go.type]][[de.type]]@result
               result <- result[,c('ID', 'pvalue', 'p.adjust')]
               colnames(result) <- c('ID', 'pvalue', 'padj')  # rename to be compatible with DE analysis
-              go.stability[[cell.type]]$subsamples[[id.res]] <- result
+              if(go.type %in% c('MF', 'CC')){
+                go.stability[[cell.type]]$subsamples[[id.res]] <- rbind(go.stability[[cell.type]]$subsamples[[id.res]],
+                                                                        result)
+              } else {
+                go.stability[[cell.type]]$subsamples[[id.res]] <- result
+              }
             }
           }
-          self$test.results[['tmp']] <- go.stability
-          jc <- estimateStabilityPerCellType(go.stability, top.n.genes = NULL, p.val.cutoff = padj.go)
-          if(nrow(jc) == 0) next
-          jc$go.type <- go.type
-          jc$de.type <- de.type
-          jc.all <- rbind(jc.all, jc)
         }
+        self$test.results[['tmp']] <- go.stability
+        jc <- estimateStabilityPerCellType(go.stability, top.n.genes = NULL, p.val.cutoff = padj.go)
+        if(nrow(jc) == 0) next
+        jc$de.type <- de.type
+          
+        jc.all <- rbind(jc.all, jc)
+      
       }
       self$test.results[[name]] <- jc.all
     },
@@ -780,7 +790,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                          xlabel = 'Cell Type',
                          ylabel = 'Jaccard Index',
                          palette=self$cell.groups.palette)
-      p <- p + facet_grid(rows = vars(go.type), cols = vars(de.type))
+      # p <- p + facet_grid(rows = vars(go.type), cols = vars(de.type))
+      p <- p + facet_grid(cols = vars(de.type)) + self$plot.theme + ylim(0, 1)
       return(p)
     },
 
@@ -882,32 +893,32 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(p)
     },
 
-    estimateGOStability=function(org.db,
-                                 de.name='de',
-                                 name='go.stability',
-                                 p.adj=1,
-                                 de.raw=NULL,
-                                 cell.groups=self$cell.groups,
-                                 universe=NULL,
-                                 transposed=TRUE,
-                                 verbose=self$verbose,
-                                 n.cores=self$n.cores){
-
-      de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
-      if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
-
-
-      de.res.cell.type = de.res$Id2_Lamp5$subsamples
-
-      # TODO: this function is not working now. There is no prepareOntologyData.
-      res <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
-        prepareOntologyData(org.db = org.db,
-                            p.adj = p.adj,
-                            de.raw = de.res.cell.type, cell.groups = cell.groups, universe = universe,
-                            transposed = transposed, verbose = verbose, n.cores = n.cores)
-
-      self$test.results[[name]] <- res
-    },
+    # estimateGOStability=function(org.db,
+    #                              de.name='de',
+    #                              name='go.stability',
+    #                              p.adj=1,
+    #                              de.raw=NULL,
+    #                              cell.groups=self$cell.groups,
+    #                              universe=NULL,
+    #                              transposed=TRUE,
+    #                              verbose=self$verbose,
+    #                              n.cores=self$n.cores){
+    # 
+    #   de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
+    #   if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
+    # 
+    # 
+    #   de.res.cell.type = de.res$Id2_Lamp5$subsamples
+    # 
+    #   # TODO: this function is not working now. There is no prepareOntologyData.
+    #   res <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
+    #     prepareOntologyData(org.db = org.db,
+    #                         p.adj = p.adj,
+    #                         de.raw = de.res.cell.type, cell.groups = cell.groups, universe = universe,
+    #                         transposed = transposed, verbose = verbose, n.cores = n.cores)
+    # 
+    #   self$test.results[[name]] <- res
+    # },
 
     #' @description  Plot DE stability per cell type
     #' @param name - results slot name (default: 'de')

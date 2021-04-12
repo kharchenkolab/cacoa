@@ -241,9 +241,11 @@ estimateDEStabilityFDR1loo = function(de.res, p.adj.cutoffs) {
         
         res.tmp <- de.res[[cell.type]]$subsamples[[ires.target]]
         genes <- rownames(res.tmp)[res.tmp[,'padj'] < p]
+        
         if(length(genes) == 0) next
-        genes.all <- c()
         if(is.null(genes)) stop(cell.type)
+        
+        genes.all <- c()
         for(ires in names(de.res[[cell.type]]$subsamples)) {
           res.tmp <- de.res[[cell.type]]$subsamples[[ires]]
           genes.tmp <- rownames(res.tmp)[res.tmp[,'padj'] < p]
@@ -252,7 +254,7 @@ estimateDEStabilityFDR1loo = function(de.res, p.adj.cutoffs) {
           
         }
         res.tmp <- de.res[[cell.type]]$subsamples[[ires.target]]
-        gene.frac <- length(f) / length(rownames(res.tmp)[res.tmp[,'padj'] < p])
+        gene.frac <- length(genes) / length(rownames(res.tmp)[res.tmp[,'padj'] < p])
         df.n.common.genes <- rbind(df.n.common.genes, c(cell.type, p, gene.frac))
       }
     }

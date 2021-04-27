@@ -1316,10 +1316,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' @description Bar plot of ontology terms per cell type
-    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="all")
+    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @return A ggplot2 object
-    plotOntologyDistribution=function(genes="all", type="GO", p.adj=0.05, min.genes=1,
+    plotOntologyDistribution=function(genes="up", type="GO", p.adj=0.05, min.genes=1,
                                       cell.groups=self$cell.groups, name = NULL) {
       if (length(genes) > 0) {
         ont.res <- genes %>% setNames(., .) %>% lapply(private$getOntologyPvalueResults, type=type, p.adj=p.adj, min.genes=min.genes)

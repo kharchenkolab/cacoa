@@ -408,6 +408,8 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=FALSE
 
   ## Convert IDs to names
   # TODO: Dependent on show.ids?
+  nodes %<>% .[match(unique(.$label), .$label),] # Must remove doublets
+
   for(id in tmp.dat$id) {
     tmp.dat[tmp.dat == id] <- nodes$name[nodes$label == id]
   }
@@ -475,13 +477,13 @@ plotVolcano <- function(de.df, p.name='padj', color.var = 'CellFrac', legend.pos
   if(color.var == 'CellFrac') {
     gg$layers[[point.id]] <- geom_point(aes(x=log2FoldChange, y=-log10(.data[[p.name]]), color=CellFrac, size=CellFrac))
     gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
-    gg <- gg + val2ggcol(de.df$CellFrac, palette=palette, color.range=c(0, 1)) 
+    gg <- gg + val2ggcol(de.df$CellFrac, palette=palette, color.range=c(0, 1))
   } else if (color.var == 'Stability') {
     gg$layers[[point.id]] <- geom_point(aes(x=log2FoldChange, y=-log10(.data[[p.name]]), color=Stability, size=Stability))
     gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
-    gg <- gg + val2ggcol(de.df$Stability, palette=palette, color.range=c(0, 1)) 
+    gg <- gg + val2ggcol(de.df$Stability, palette=palette, color.range=c(0, 1))
   }
-  
+
   gg <- gg +
     scale_size_continuous(range=size, name="Expr. frac", limits=c(0, 1)) +
     guides(color=guide_colorbar(title="Expr. frac")) +

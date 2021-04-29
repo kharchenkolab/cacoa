@@ -100,35 +100,30 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 #' @param color.range Range for filling colors
 #' @return A ggplot2 object
 #' @export
-plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=NULL, legend.position="right",
+plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE, legend.position="right",
                         legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
                         color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL, font.size=8) {
   if (is.null(color.range)) {
     color.range <- c(min(0, min(df)), max(df))
   }
 
-  if (is.null(row.order)) {
-    row.order <- rownames(df)[dist(df) %>% hclust() %>% .$order]
-  } else if (is.logical(row.order) && row.order) {
+  if (is.logical(row.order) && row.order) {
+    row.order <- rownames(df)[dist(df) %>% hclust() %>% .$order] %>% rev()
+  } else if (is.logical(row.order) && !row.order) {
     row.order <- rownames(df)
   }
 
-  if (is.null(col.order)) {
-    col.order <- colnames(df)[dist(df) %>% hclust() %>% .$order]
-  } else if (is.logical(col.order) && col.order) {
+  if (is.logical(col.order) && col.order) {
+    col.order <- colnames(df)[dist(df %>% t()) %>% hclust() %>% .$order] %>% rev()
+  } else if (is.logical(col.order) && !col.order) {
     col.order <- colnames(df)
   }
 
   df %<>% tibble::as_tibble(rownames="G1") %>%
     reshape2::melt(id.vars="G1", variable.name="G2", value.name="value")
 
-  if (!is.logical(row.order)) {
-    df %<>% dplyr::mutate(G1=factor(G1, levels=row.order))
-  }
-
-  if (!is.logical(col.order)) {
-    df %<>% dplyr::mutate(G2=factor(G2, levels=col.order))
-  }
+  df %<>% dplyr::mutate(G1=factor(G1, levels=row.order))
+  df %<>% dplyr::mutate(G2=factor(G2, levels=col.order))
 
   if (is.null(color.per.group)) {
     color.per.group <- "black"

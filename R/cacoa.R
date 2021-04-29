@@ -575,12 +575,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                             stability = tmp$Stability, cell.type = cell.type))
         }
 
-        p <- ggplot(stability.all, aes(rank, stability, colour = cell.type)) + 
+        p <- ggplot(stability.all, aes(rank, stability, colour = cell.type)) +
           xlim(0, top.n.genes) + geom_smooth(method = "loess") + self$plot.theme +
           xlab('gene rank by p-value')
         return(p)
-      } 
-      
+      }
+
     },
 
 
@@ -700,11 +700,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             if(go.type %in% c('MF', 'CC')){
               go.stability[[cell.type]]$res <- rbind(go.stability[[cell.type]]$res, result)
             } else {
-              go.stability[[cell.type]]$res <- result  
+              go.stability[[cell.type]]$res <- result
             }
-            
+
             go.names.res <- unique(names.test.results[grepl(pref.resampling, names.test.results, fixed = TRUE)])
-  
+
             for(go.name in go.names.res) {
               if(!('res' %in% names(self$test.results[[go.name]]))) next
               id.res <- gsub(paste(pref.init, '.', sep = ''), "", go.name)
@@ -724,9 +724,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         jc <- estimateStabilityPerCellType(go.stability, top.n.genes = NULL, p.val.cutoff = padj.go)
         if(nrow(jc) == 0) next
         jc$de.type <- de.type
-          
+
         jc.all <- rbind(jc.all, jc)
-      
+
       }
       self$test.results[[name]] <- jc.all
     },
@@ -854,7 +854,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
 
     },
-    
+
     plotDEStabilityFDR1loo=function(cell.type, de.name='de',
                                 p.adj.cutoffs = c(0.001, 0.005, 0.01, 0.05, 0.1, 0.2 ),
                                 cell.types = NULL, type = 'relative'){
@@ -863,9 +863,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       df.n.genes <- estimateDEStabilityFDR1loo(de.res, p.adj.cutoffs)
       self$test.results[['fdr.stability']] <- df.n.genes
       df.n.genes <- df.n.genes[df.n.genes$cell.type == cell.type,]
-      
+
       ggplot(df.n.genes, aes(x=fdr, y=frac,
-                           group=fdr)) + geom_boxplot() + geom_jitter() 
+                           group=fdr)) + geom_boxplot() + geom_jitter()
 
     },
 
@@ -903,20 +903,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #                              transposed=TRUE,
     #                              verbose=self$verbose,
     #                              n.cores=self$n.cores){
-    # 
+    #
     #   de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
     #   if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
-    # 
-    # 
+    #
+    #
     #   de.res.cell.type = de.res$Id2_Lamp5$subsamples
-    # 
+    #
     #   # TODO: this function is not working now. There is no prepareOntologyData.
     #   res <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
     #     prepareOntologyData(org.db = org.db,
     #                         p.adj = p.adj,
     #                         de.raw = de.res.cell.type, cell.groups = cell.groups, universe = universe,
     #                         transposed = transposed, verbose = verbose, n.cores = n.cores)
-    # 
+    #
     #   self$test.results[[name]] <- res
     # },
 
@@ -1494,7 +1494,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left", selection="all", n=10,
-                                 clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, palette=NULL, ...) {
+                                 clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, palette=NULL, row.order = TRUE, col.order = TRUE, ...) {
       # Checks
       if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
         stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
@@ -1536,10 +1536,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # Plot
       if (is.null(palette)) palette <- getGenePalette(genes, high="white")
       gg <- ont.sum %>%
+        # The following three lines could be moved
         .[, colSums(abs(.)) > 0, drop=FALSE] %>%
         .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),, drop=FALSE] %>%
         tail(n) %>%
-        plotHeatmap(legend.position=legend.position, row.order=TRUE, col.order=FALSE, color.range=color.range,
+        # End
+        plotHeatmap(legend.position=legend.position, row.order=row.order, col.order=col.order, color.range=color.range,
                     plot.theme=self$plot.theme, palette=palette, ...)
 
       return(gg)
@@ -1955,7 +1957,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                   define.ref.cell.type =  FALSE){
 
       if(!(coda.test %in% c('significance', 'confidence'))) stop('Test is not supported')
-      
+
       if( (!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))) )
         stop('Incorrect reference cell type')
       if( (define.ref.cell.type == T) & (!is.null(ref.cell.type)) ) define.ref.cell.type = F
@@ -1970,19 +1972,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       cnts <- tmp$d.counts
       groups <- tmp$d.groups
-      
+
       if(coda.test == 'confidence'){
         n.perm <- 1
-      } 
+      }
 
       # Apply bootstrap
       loadings <- plapply(1:n.boot, function(ib){
-        
+
         # Create samples by bootstrap
         samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = T)
         groups.tmp <- groups[samples.tmp]
 
-        
+
         # Check that both groups are presented
         while((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) {
           # Create samples by bootstrap
@@ -1990,7 +1992,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           groups.tmp <- groups[samples.tmp]
         }
         cnts.tmp <- cnts[samples.tmp,]
-        
+
 
         init.tmp <- produceResampling(cnts = cnts.tmp, groups = groups.tmp, n.perm = 1,
                                   replace.samples = F,
@@ -2006,7 +2008,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         } else {
           null.l <- NULL
         }
-        
+
         loadings.tmp <- list(init = init.l, null = null.l)
 
       }, n.cores=min(n.boot, 100), progress=T)
@@ -2047,10 +2049,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         pval <- apply((cbind(tmp, 1-tmp)), 1, min) * 2
         names(pval) <- rownames(loadings.init)
         padj <- p.adjust(pval, method <- 'fdr')
-        
+
         loadings.null <- NULL
       }
-     
+
       self$test.results[['loadings']] = list(loadings = loadings.init,
                                              loadings.data = loadings.init,
                                              loadings.null = loadings.null,

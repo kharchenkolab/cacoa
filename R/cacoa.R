@@ -1067,36 +1067,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(p)
     },
 
-<<<<<<< Updated upstream
-    # estimateGOStability=function(org.db,
-    #                              de.name='de',
-    #                              name='go.stability',
-    #                              p.adj=1,
-    #                              de.raw=NULL,
-    #                              cell.groups=self$cell.groups,
-    #                              universe=NULL,
-    #                              transposed=TRUE,
-    #                              verbose=self$verbose,
-    #                              n.cores=self$n.cores){
-    #
-    #   de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
-    #   if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
-    #
-    #
-    #   de.res.cell.type = de.res$Id2_Lamp5$subsamples
-    #
-    #   # TODO: this function is not working now. There is no prepareOntologyData.
-    #   res <- extractRawCountMatrices(self$data.object, transposed = transposed) %>%
-    #     prepareOntologyData(org.db = org.db,
-    #                         p.adj = p.adj,
-    #                         de.raw = de.res.cell.type, cell.groups = cell.groups, universe = universe,
-    #                         transposed = transposed, verbose = verbose, n.cores = n.cores)
-    #
-    #   self$test.results[[name]] <- res
-    # },
-
-=======
->>>>>>> Stashed changes
     #' @description  Plot DE stability per cell type
     #' @param name - results slot name (default: 'de')
     #' @param show.pairs transparency value for the data points (default: 0.05)

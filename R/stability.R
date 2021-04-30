@@ -87,27 +87,28 @@ plotStability <- function(jaccards,
                          xlabel = '',
                          ylabel = '',
                          log.y.axis = F,
-                         palette = NULL) {
+                         palette = NULL,
+                         plot.theme=theme_get()) {
   jaccards$group <- as.factor(jaccards$group)
   if(! show.pairs) {
     if(sort.order) {
-      p <- ggplot(jaccards, aes(x=reorder(group,value,na.rm = TRUE), y=value, fill=group,
-                                group=group)) + geom_boxplot(outlier.shape = NA) + geom_jitter(alpha=jitter.alpha)          
+      p <- ggplot(jaccards, aes(x=reorder(group,value,na.rm = TRUE), y=value,
+                                group=group)) + geom_boxplot(outlier.shape = NA, notch = notch) + geom_jitter(alpha=jitter.alpha)          
     } else {
-      p <- ggplot(jaccards, aes(x=group, y=value, fill=group,
-                                group=group)) + geom_boxplot(outlier.shape = NA) + geom_jitter(alpha=jitter.alpha)          
+      p <- ggplot(jaccards, aes(x=group, y=value,
+                                group=group)) + geom_boxplot(outlier.shape = NA, notch = notch) + geom_jitter(alpha=jitter.alpha)          
     }
   } else {
     if(sort.order) {
-      p <- ggplot(jaccards, aes(x=reorder(group,value,na.rm = TRUE), y=value, fill=group,
+      p <- ggplot(jaccards, aes(x=reorder(group,value,na.rm = TRUE), y=value,
                                 group=cmp, color=cmp)) + geom_line()  
     } else {
-      p <- ggplot(jaccards, aes(x=group, y=value, fill=group,
+      p <- ggplot(jaccards, aes(x=group, y=value,
                                 group=cmp, color=cmp)) + geom_line()  
     }
   }
   
-  p <- p + theme(legend.position = "none") +
+  p <- p + plot.theme + theme(legend.position = "none") +
     theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1)) +
     labs(x=xlabel, y=ylabel)
   
@@ -115,7 +116,9 @@ plotStability <- function(jaccards,
     p <- p + scale_y_continuous(trans='log10')
   }
   
-  # if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
+  if(!is.null(palette)) {
+    p <- p + scale_color_manual(values=palette)
+  }
   return(p)
   
 }

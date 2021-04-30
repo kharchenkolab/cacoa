@@ -201,7 +201,7 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 #' @description  Generic function for plotting mean or median values per cell type (used for expression shift distances and others)
 #' @param df - data frame containing the results, including $val and $cell slots which will be summarized
 #' @param type - type of a plot "bar" (default), "point" (mean + sd), or "box" for boxplot
-#' @param show.jitter whether to show indiivudal data points (default: FALSE)
+#' @param show.jitter whether to show individual data points (default: FALSE)
 #' @param jitter.alpha transparency value for the data points (default: 0.05)
 #' @param notch - whether to show notches in the boxplot version (default=TRUE)
 #' @param palette - cell type palette

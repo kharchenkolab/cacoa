@@ -1709,8 +1709,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param color.range vector with two values for min/max values of p-values
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
-    plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left", selection="all", n=10,
-                                 clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, palette=NULL, row.order = TRUE, col.order = TRUE, ...) {
+    plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left", selection="all", n=20,
+                                 clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, palette=NULL, row.order = TRUE, col.order = TRUE, legend.title = NULL, ...) {
+      checkPackageInstalled(c("ComplexHeatmap"), bioc=TRUE)
+      checkPackageInstalled(c("circlize"), bioc=FALSE)
+
       # Checks
       if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
         stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
@@ -1722,7 +1725,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!clusters) {
         ont.sum <- private$getOntologyPvalueResults(genes=genes, type=type, subtype=subtype, cell.subgroups=cell.subgroups,
                                                     p.adj=p.adj, min.genes=min.genes) %>%
-          groupOntologiesByCluster(field="Description")
+          groupOntologiesByCluster(field="Description") %>%
+          {. * -1}
       } else {
         name <- if (is.null(cluster.name)) getOntClustField(subtype, genes) else cluster.name
         if (is.null(self$test.results[[type]][[name]])) {
@@ -1734,7 +1738,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
 
         ont.sum <- self$test.results[[type]][[name]]$df %>%
-          groupOntologiesByCluster(field="ClusterName")
+          groupOntologiesByCluster(field="ClusterName") %>%
+          {. * -1}
       }
 
       if (nrow(ont.sum) == 0) {
@@ -1749,18 +1754,47 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 
-      # Plot
-      if (is.null(palette)) palette <- getGenePalette(genes, high="white")
-      gg <- ont.sum %>%
-        # The following three lines could be moved
-        .[, colSums(abs(.)) > 0, drop=FALSE] %>%
-        .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),, drop=FALSE] %>%
-        tail(n) %>%
-        # End
-        plotHeatmap(legend.position=legend.position, row.order=row.order, col.order=col.order, color.range=color.range,
-                    plot.theme=self$plot.theme, palette=palette, ...)
+      # Old
+      # if (is.null(palette)) palette <- getGenePalette(genes, high="white")
+      #
+      # gg <- ont.sum %>%
+      #   .[, colSums(abs(.)) > 0, drop=FALSE] %>%
+      #   .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),, drop=FALSE] %>%
+      #   tail(n) %>%
+      #   plotHeatmap(legend.position=legend.position, row.order=row.order, col.order=col.order, color.range=color.range,
+      #               plot.theme=self$plot.theme, palette=palette, ...)
+      # })
 
-      return(gg)
+      # New
+      tmp <- as.matrix(ont.sum %>% .[order(rowSums(.), decreasing = T),] %>% .[1:n,]) %>% {.[,!colSums(.) == 0]}
+
+      if(is.null(color.range)) {
+        color.range <- c(min(0, min(tmp)), max(tmp))
+        tmp %<>% pmax(color.range[1]) %>% pmin(color.range[2])
+        title = '-log10(adj. P)'
+      } else {
+        if(is.null(legend.title)) title = "Bin" else title = legend.title
+      }
+
+      pal <- if(genes == "up") {
+        colorRamp2(c(color.range[1], color.range[2]), c("grey98", "red"))
+      } else if(genes == "down") {
+        colorRamp2(c(color.range[1], color.range[2]), c("grey98", "blue"))
+      } else {
+        colorRamp2(c(color.range[1], color.range[2]), c("grey98", "darkgreen"))
+      }
+
+      # Plot
+      ComplexHeatmap::Heatmap(tmp,
+                              col=pal,
+                              border=T,
+                              show_row_dend=F,
+                              show_column_dend=F,
+                              heatmap_legend_param = list(title = title),
+                              row_names_max_width = unit(8, "cm"),
+                              row_names_gp = grid::gpar(fontsize = 10))
+
+      # return(gg)
     },
 
     #' @description Plot correlation matrix for ontology terms between cell types

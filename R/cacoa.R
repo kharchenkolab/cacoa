@@ -577,7 +577,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
         p <- ggplot(stability.all, aes(rank, stability, colour = cell.type)) +
           xlim(0, top.n.genes) + geom_smooth(method = "loess") + self$plot.theme +
-          xlab('Gene rank by p-value') + ylab('Fraction of LOOs') + 
+          xlab('Gene rank by p-value') + ylab('Fraction of LOOs') +
           scale_color_manual(values=self$cell.groups.palette) +
           guides(color=guide_legend(override.aes=list(fill=NA), ncol=2))
         return(p)
@@ -679,16 +679,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     estimateGOStabilityPerCellTypePermDir = function(de.test = 'de', top.n.de = 500, padj.go = 0.05,
                                                   name = 'go.jaccards') {
-      
+
       test.name = de.test
       pref = paste('go', test.name, top.n.de, sep = '.')
-      
+
       pref.init <- paste(pref, 'init', sep = '.')
       pref.resampling <- paste(pref.init, 'res', sep = '.')
       cell.types <- names(self$test.results[[pref.init]]$res)
-      
+
       names.test.results <- names(self$test.results)
-      
+
       jc.all <- c()
       # for(de.type in c('up', 'down', 'all')) {
       for(de.type in c('up', 'down')) {
@@ -702,11 +702,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             if(go.type %in% c('MF', 'CC')){
               go.stability[[cell.type]]$res <- rbind(go.stability[[cell.type]]$res, result)
             } else {
-              go.stability[[cell.type]]$res <- result  
+              go.stability[[cell.type]]$res <- result
             }
-            
+
             go.names.res <- unique(names.test.results[grepl(pref.resampling, names.test.results, fixed = TRUE)])
-            
+
             for(go.name in go.names.res) {
               if(!('res' %in% names(self$test.results[[go.name]]))) next
               id.res <- gsub(paste(pref.init, '.', sep = ''), "", go.name)
@@ -726,13 +726,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         jc <- estimateStabilityPerCellType(go.stability, top.n.genes = NULL, p.val.cutoff = padj.go)
         if(nrow(jc) == 0) next
         jc$de.type <- de.type
-        
+
         jc.all <- rbind(jc.all, jc)
-        
+
       }
       self$test.results[[name]] <- jc.all
     },
-    
+
     estimateGOStabilityPerCellTypePerm = function(de.test = 'de', top.n.de = 500, padj.go = 0.05,
                                               name = 'go.jaccards') {
 
@@ -747,7 +747,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       jc.all <- c()
       # for(de.type in c('up', 'down', 'all')) {
-      
+
       go.stability = list()
       for(cell.type in cell.types) {
         for(de.type in c('up', 'down')) {
@@ -787,19 +787,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       self$test.results[[name]] <- jc.all
     },
-    
+
     estimateGOStabilityPerCellTypePermGseaDir = function(de.test = 'de',padj.go = 0.05,
                                                   name = 'go.jaccards') {
-      
+
       test.name = de.test
       pref = paste('gsea', test.name, sep = '.')
-      
+
       pref.init <- paste(pref, 'init', sep = '.')
       pref.resampling <- paste(pref.init, 'res', sep = '.')
       cell.types <- names(self$test.results[[pref.init]]$res)
-      
+
       names.test.results <- names(self$test.results)
-      
+
       jc.all <- c()
       # for(de.type in c('up', 'down', 'all')) {
       for(de.type in c('up', 'down')) {
@@ -813,11 +813,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             if(go.type %in% c('MF', 'CC')){
               go.stability[[cell.type]]$res <- rbind(go.stability[[cell.type]]$res, result)
             } else {
-              go.stability[[cell.type]]$res <- result  
+              go.stability[[cell.type]]$res <- result
             }
-            
+
             go.names.res <- unique(names.test.results[grepl(pref.resampling, names.test.results, fixed = TRUE)])
-            
+
             for(go.name in go.names.res) {
               if(!('res' %in% names(self$test.results[[go.name]]))) next
               id.res <- gsub(paste(pref.init, '.', sep = ''), "", go.name)
@@ -837,28 +837,28 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         jc <- estimateStabilityPerCellType(go.stability, top.n.genes = NULL, p.val.cutoff = padj.go)
         if(nrow(jc) == 0) next
         jc$de.type <- de.type
-        
+
         jc.all <- rbind(jc.all, jc)
-        
+
       }
       self$test.results[[name]] <- jc.all
     },
-    
+
     estimateGOStabilityPerCellTypePermGsea = function(de.test = 'de',padj.go = 0.05,
                                                       name = 'go.jaccards') {
-      
+
       test.name = de.test
       pref = paste('gsea', test.name, sep = '.')
-      
+
       pref.init <- paste(pref, 'init', sep = '.')
       pref.resampling <- paste(pref.init, 'res', sep = '.')
       cell.types <- names(self$test.results[[pref.init]]$res)
-      
+
       names.test.results <- names(self$test.results)
-      
+
       jc.all <- c()
 
-      
+
       go.stability = list()
       for(cell.type in cell.types) {
         for(de.type in c('up', 'down')) {
@@ -870,11 +870,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             if(go.type %in% c('MF', 'CC')){
               go.stability[[cell.type]]$res <- rbind(go.stability[[cell.type]]$res, result)
             } else {
-              go.stability[[cell.type]]$res <- result  
+              go.stability[[cell.type]]$res <- result
             }
-            
+
             go.names.res <- unique(names.test.results[grepl(pref.resampling, names.test.results, fixed = TRUE)])
-            
+
             for(go.name in go.names.res) {
               if(!('res' %in% names(self$test.results[[go.name]]))) next
               id.res <- gsub(paste(pref.init, '.', sep = ''), "", go.name)
@@ -894,9 +894,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         jc <- estimateStabilityPerCellType(go.stability, top.n.genes = NULL, p.val.cutoff = padj.go)
         if(nrow(jc) == 0) next
         jc$de.type <- de.type
-        
+
         jc.all <- rbind(jc.all, jc)
-        
+
       }
       self$test.results[[name]] <- jc.all
     },
@@ -1391,28 +1391,28 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$test.results[[name]] <- list(res=res, de.gene.ids=de.gene.ids) # redundancy needed
       return(invisible(self$test.results[[name]]))
     },
-    
+
     estimateOntologyGsea=function(name = NULL, de.name='de', org.db, p.adj=1,
                               p.adjust.method="BH",
                               readable=TRUE, verbose=TRUE,
                               qvalue.cutoff=0.2, min.gs.size=10,
                               max.gs.size=5e2, keep.gene.sets=FALSE,
                               ignore.cache=NULL, de.raw=NULL, ...) {
-      
+
       if(is.null(name)) {
         name <- type
       }
       if (is.null(de.raw)) {
         de.raw <- private$getResults(de.name, "estimatePerCellTypeDE()")
       }
-      
+
       # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before calculating
       if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, "res")
-      
+
       de.gene.ids <- getDEEntrezIdsSplitted(de.raw, org.db=org.db, p.adj=p.adj)
-      
+
       go.environment <- private$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
-      
+
       options(warn=-1)
       res <- list()
       for(cell.type in names(de.gene.ids)){
@@ -1422,23 +1422,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         for(go.type in c('BP', 'MF', 'CC')){
           # print(go.type)
           pathways <- go.environment[[go.type]]$PATHID2EXTID
-          
+
           # All genes together
-          # fgsea.res <- fgsea(pathways = pathways, stats = stats) 
+          # fgsea.res <- fgsea(pathways = pathways, stats = stats)
           suppressMessages(fgsea.res <- fgsea::fgsea(pathways = pathways, stats = stats, nperm = 10000))
           fgsea.res$pathw.name <- go.environment[[go.type]]$PATHID2NAME[fgsea.res$pathway]
-          
+
           res.up <- fgsea.res[fgsea.res$ES > 0,]
           res.up$padj.new <- p.adjust(res.up$pval, method = 'fdr')
           res.down <- fgsea.res[fgsea.res$ES < 0,]
           res.down$padj.new <- p.adjust(res.down$pval, method = 'fdr')
           res[[cell.type]][[go.type]]$up <- res.up[order(res.up$pval),]
           res[[cell.type]][[go.type]]$down <- res.down[order(res.down$pval),]
-          
+
           # # Up and down regulated genes separately
           # suppressMessages(fgsea.res.up <- fgsea::fgsea(pathways = pathways, stats = stats[stats>0], nperm = 10000))
           # suppressMessages(fgsea.res.down <- fgsea::fgsea(pathways = pathways, stats = stats[stats<0], nperm = 10000))
-          # 
+          #
           # res.up <- fgsea.res.up[fgsea.res.up$ES > 0,]
           # res.up$padj.new <- p.adjust(res.up$pval, method = 'fdr')
           # res.down <- fgsea.res.down[fgsea.res.down$ES < 0,]
@@ -1448,7 +1448,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
       }
       options(warn=0)
-      
+
       self$test.results[[name]] <- list(res=res, de.gene.ids=de.gene.ids)
       return(invisible(self$test.results[[name]]))
     },
@@ -1611,13 +1611,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Plot ontology terms as a function of both number of DE genes, and number of cells.
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default='all')
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
-    #' @param label.x.pos Plot label position on x axis (default=0.01)
-    #' @param label.y.pos Plot label position on y axis (default=1)
-    #' @param scale Scaling of plots, adjust if e.g. label is misplaced. See \link[cowplot:plot_grid]{cowplot::plot_grid} for more info (default=1.0)
+    #' @param p.adj (default = 0.05)
+    #' @param min.genes (default = 1)
+    #' @param cell.groups (default: stored factor)
+    #' @param palette (default: stored named vector)
     #' @param ... parameters forwarded to \link{plotNCellRegression}
     #' @return A ggplot2 object
     plotOntologyTerms=function(genes='all', type=c("GO", "DO"), p.adj=0.05, min.genes=1, cell.groups=self$cell.groups,
-                               label.x.pos=0.01, label.y.pos=1, scale=1.0, ...) {
+                               palette=self$cell.groups.palette, ...) {
       # TODO: ideally, this function should be removed from the package, and then we don't need to store de.gene.ids
       type <- match.arg(type)
       ont.res <- private$getOntologyPvalueResults(genes=genes, type=type, p.adj=p.adj, min.genes=min.genes)
@@ -1634,7 +1635,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         plotNCellRegression(n.go.per.type, n.de.per.type, x.lab="Number of highly-expressed DE genes",
                             y.lab=y.lab, legend.position="none", label=TRUE, plot.theme=self$plot.theme, ...),
         plotNCellRegression(n.go.per.type, cell.groups, y.lab=y.lab, legend.position="none", label=TRUE, plot.theme=self$plot.theme, ...),
-        ncol=1, labels=c("a", "b"), label_x=label.x.pos, label_y=label.y.pos, scale=scale
+        ncol=1
       )
 
       return(pg)

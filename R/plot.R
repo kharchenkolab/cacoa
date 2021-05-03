@@ -34,15 +34,15 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
   p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
 
-  gg <- ggplot(p.df, aes(x=NCells, y=N)) +
-    geom_point(aes(color=Type)) +
+  gg <- ggplot(p.df, aes(x=NCells, y=N, color = Type)) +
+    geom_point() +
     scale_x_log10() +
     ylim(0, max(p.df$N)) +
     labs(x=x.lab, y=y.lab)
 
   if(label) {
     gg <- gg +
-      ggrepel::geom_label_repel(aes(label=Type), size=size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4))
+      ggrepel::geom_label_repel(aes(label=Type), size=size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=NA)
   }
 
   gg <- gg +
@@ -57,7 +57,7 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 
   if (plot.line) {
     gg <- gg +
-      geom_smooth(method=MASS::rlm, formula = y~x, se=FALSE, color="black", size=line.width)
+      geom_smooth(method=MASS::rlm, formula = y~x, se=FALSE, color="gray", size=line.width, linetype=2)
   }
 
   return(gg)

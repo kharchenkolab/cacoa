@@ -1495,6 +1495,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return Data frame
     getFamilies=function(go.term = NULL, go.id = NULL, type = "GO", common = FALSE) {
       # Initial check
+      if(type == "GSEA") stop("GSEA is not yet supported.")
       if(is.null(go.term) && is.null(go.id)) stop("Please specify either 'go.term' or 'go.id'.")
       if(!is.null(go.term) && !is.null(go.id)) warning("Both 'go.term' and 'go.id' specified, will only use 'go.term'.")
 
@@ -1509,8 +1510,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           lapply(ont.fam[[ct]] %>% names(), function(ont) {
             lapply(ont.fam[[ct]][[ont]] %>% names(), function(dir) {
               tmp.ct <- lapply(ont.fam[[ct]][[ont]][[dir]]$data %>% names(), function(go) {
-                data.frame(Description = ont.fam[[ct]][[ont]][[dir]]$data[[go]]$Description,
-                           ID = go,
+                data.frame(Description = ont.fam[[ct]][[ont]][[dir]]$data[[go]] %$% c(Description, parent_name[match(parents_in_IDs, parent_go_id)]),
+                           ID = c(go, ont.fam[[ct]][[ont]][[dir]]$data[[go]]$parents_in_IDs %>% unname()),
                            Ontology = ont,
                            Genes = dir,
                            CellType = ct)
@@ -1537,6 +1538,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             }) %>% bind_rows()
           }) %>% bind_rows()
         }) %>% bind_rows()
+
+      j = 0
+      for(i in 1:length(df$Families)) {
+        if(is.na(df$Families[i])) {
+          df$Families[i] <- j
+        } else {
+          j <- df$Families[i]
+        }
+      }
 
       # Check and get result
       if(!is.null(go.term)) {
@@ -1854,6 +1864,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 
+      # TODO Implement plotting using ggplot instead of ComplexHeatmap
       # Old
       # if (is.null(palette)) palette <- getGenePalette(genes, high="white")
       #
@@ -1870,6 +1881,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if(is.null(color.range)) {
         color.range <- c(min(0, min(tmp)), max(tmp))
+        if(color.range[2] > 20) {
+          warning("Shrinking minimum adj. P value to -log10(20) for plotting.")
+          color.range[2] <- 20
+        }
         tmp %<>% pmax(color.range[1]) %>% pmin(color.range[2])
         title = '-log10(adj. P)'
       } else {

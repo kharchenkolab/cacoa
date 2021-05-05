@@ -1491,14 +1491,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param go.term Character vector with term description(s)
     #' @param go.id Character vector with ID(s)
     #' @param type Ontology, must be either "GO", "DO", or GSEA (default="GO")
+    #' @param common Boolean, only identify families with all the supplied terms or IDs (default = FALSE)
     #' @return Data frame
-    getFamilies=function(go.term = NULL, go.id = NULL, type = "GO") {
+    getFamilies=function(go.term = NULL, go.id = NULL, type = "GO", common = FALSE) {
       # Initial check
       if(is.null(go.term) && is.null(go.id)) stop("Please specify either 'go.term' or 'go.id'.")
       if(!is.null(go.term) && !is.null(go.id)) warning("Both 'go.term' and 'go.id' specified, will only use 'go.term'.")
 
       # Extract data
       ont.fam <- self$test.results[[type]]$families
+      if(is.null(ont.fam)) stop("No family data found.")
 
       # Make data.frame
       df <- ont.fam %>%
@@ -1510,7 +1512,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                 data.frame(Description = ont.fam[[ct]][[ont]][[dir]]$data[[go]]$Description,
                            ID = go,
                            Ontology = ont,
-                           Direction = dir,
+                           Genes = dir,
                            CellType = ct)
               }) %>% bind_rows()
               tmp.fam.list <- ont.fam[[ct]][[ont]][[dir]]$families %>%
@@ -1545,6 +1547,43 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         res <- df[df$ID %in% go.id,]
       }
 
+      # Find common families
+      if(common) {
+        term <- res$Description %>% unique()
+        id <- res$ID %>% unique()
+
+        if(length(term) && length(id) == 1) {
+          warning("Only one term or ID applied, ignoring 'common = TRUE'.")
+        } else {
+          tmp.res <- apply(res, 1, function(x) {
+            if(grepl(",", x[6])) {
+              strsplit(x[6], ", ", T)[[1]] %>%
+                sapply(function(f) paste(x[3:5], collapse = " ") %>% paste(f))
+            } else {
+              paste(x[3:6], collapse = " ")
+            }
+          }) %>% unlist()
+
+          common.res <- tmp.res %>%
+            table() %>%
+            .[. == length(go.id)]
+
+          if(length(common.res) > 1) {
+            common.res %<>%
+              names() %>%
+              strsplit(" ", T)
+          } else {
+            stop("No family contains both terms/IDs.")
+          }
+
+          common.df <- lapply(common.res, sapply, function(x) {
+            rep(x, length(term)) %>% matrix(nrow = length(term), byrow = T)
+          }) %>%
+            do.call("rbind",.)
+
+          res <- data.frame(term, id, common.df) %>% `colnames<-`(colnames(res))
+        }
+      }
       return(res)
     },
 

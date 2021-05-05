@@ -1487,6 +1487,67 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
+    #' @description Identify families containing a specific ontology term or ID
+    #' @param go.term Character vector with term description(s)
+    #' @param go.id Character vector with ID(s)
+    #' @param type Ontology, must be either "GO", "DO", or GSEA (default="GO")
+    #' @return Data frame
+    getFamilies=function(go.term = NULL, go.id = NULL, type = "GO") {
+      # Initial check
+      if(is.null(go.term) && is.null(go.id)) stop("Please specify either 'go.term' or 'go.id'.")
+      if(!is.null(go.term) && !is.null(go.id)) warning("Both 'go.term' and 'go.id' specified, will only use 'go.term'.")
+
+      # Extract data
+      ont.fam <- self$test.results[[type]]$families
+
+      # Make data.frame
+      df <- ont.fam %>%
+        names() %>%
+        lapply(function(ct) {
+          lapply(ont.fam[[ct]] %>% names(), function(ont) {
+            lapply(ont.fam[[ct]][[ont]] %>% names(), function(dir) {
+              tmp.ct <- lapply(ont.fam[[ct]][[ont]][[dir]]$data %>% names(), function(go) {
+                data.frame(Description = ont.fam[[ct]][[ont]][[dir]]$data[[go]]$Description,
+                           ID = go,
+                           Ontology = ont,
+                           Direction = dir,
+                           CellType = ct)
+              }) %>% bind_rows()
+              tmp.fam.list <- ont.fam[[ct]][[ont]][[dir]]$families %>%
+                names() %>%
+                lapply(function(fam) {
+                  data.frame(ID = ont.fam[[ct]][[ont]][[dir]]$families[[fam]],
+                             Family = fam %>% strsplit(split = "Family", fixed = T) %>% .[[1]] %>% .[2])
+                }) %>%
+                bind_rows() %>%
+                split(., .$ID)
+
+              tmp.fam.df <- tmp.fam.list %>%
+                names() %>%
+                lapply(function(id) {
+                  data.frame(ID = id,
+                             Families = tmp.fam.list[[id]]$Family %>% paste(collapse = ", "))
+                }) %>% bind_rows()
+
+              tmp.ct$Families <- tmp.fam.df$Families[match(tmp.ct$ID, tmp.fam.df$ID)]
+
+              return(tmp.ct)
+            }) %>% bind_rows()
+          }) %>% bind_rows()
+        }) %>% bind_rows()
+
+      # Check and get result
+      if(!is.null(go.term)) {
+        if(!any(go.term %in% df$Description)) stop("'go.term' not found in any family.")
+        res <- df[df$Description %in% go.term,]
+      } else {
+        if(!any(go.id %in% df$ID)) stop("'go.id' not found in any family.")
+        res <- df[df$ID %in% go.id,]
+      }
+
+      return(res)
+    },
+
     #' @description Estimate Gene Ontology clusters
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all'. Default: "up".
     #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO". Default: "GO".

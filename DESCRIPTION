@@ -46,6 +46,7 @@ NeedsCompilation: yes
 Suggests:
     circlize,
     clusterProfiler (>= 3.0.0),
+    coda.base,
     ComplexHeatmap,
     DESeq2,
     DOSE,

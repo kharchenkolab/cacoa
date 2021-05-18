@@ -2327,17 +2327,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
 
 
-    estimateCellLoadings=function(n.perm=1000, n.boot = 100, coda.test = 'significance',
-                                  ref.cell.type = NULL, criteria = 'cda.std',
-                                  n.seed = 239, cells.to.remove = NULL, cells.to.remain = NULL,
-                                  samples.to.remove = NULL, filter.empty.cell.types=TRUE,
-                                  define.ref.cell.type =  FALSE){
+    estimateCellLoadings=function(n.perm=1000, n.boot=100, coda.test='significance',
+                                  ref.cell.type=NULL, criteria='cda.std',
+                                  n.seed=239, cells.to.remove=NULL, cells.to.remain=NULL,
+                                  samples.to.remove=NULL, filter.empty.cell.types=TRUE,
+                                  define.ref.cell.type=FALSE, n.cores=self$n.cores, verbose=self$verbose){
 
       if(!(coda.test %in% c('significance', 'confidence'))) stop('Test is not supported')
+      checkPackageInstalled("coda.base", cran=TRUE)
 
       if( (!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))) )
         stop('Incorrect reference cell type')
-      if( (define.ref.cell.type == T) & (!is.null(ref.cell.type)) ) define.ref.cell.type = F
+      if (define.ref.cell.type & (!is.null(ref.cell.type))) define.ref.cell.type <- FALSE
 
       # Get cell counts and groups
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
@@ -2359,22 +2360,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       loadings <- plapply(1:n.boot, function(ib){
 
         # Create samples by bootstrap
-        samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = T)
+        samples.tmp <- sample(rownames(cnts), nrow(cnts), replace=TRUE)
         groups.tmp <- groups[samples.tmp]
 
 
         # Check that both groups are presented
         while((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) {
           # Create samples by bootstrap
-          samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = T)
+          samples.tmp <- sample(rownames(cnts), nrow(cnts), replace=TRUE)
           groups.tmp <- groups[samples.tmp]
         }
         cnts.tmp <- cnts[samples.tmp,]
 
 
-        init.tmp <- produceResampling(cnts = cnts.tmp, groups = groups.tmp, n.perm = 1,
-                                  replace.samples = F,
-                                  remain.groups = TRUE, seed = n.seed+ib)
+        init.tmp <- produceResampling(cnts=cnts.tmp, groups=groups.tmp, n.perm=1,
+                                  replace.samples=FALSE, remain.groups=TRUE, seed=n.seed+ib)
         init.l <- getLoadings(init.tmp$cnts[[1]], init.tmp$groups[[1]], criteria = criteria, ref.cell.type = ref.cell.type)
 
         if (coda.test == 'significance') {
@@ -2389,7 +2389,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
         loadings.tmp <- list(init = init.l, null = null.l)
 
-      }, n.cores=min(n.boot, 100), progress=T)
+      }, n.cores=min(n.boot, n.cores), progress=verbose, fail.on.error=TRUE, mc.preschedule=TRUE)
 
 
       if(coda.test == 'significance') {
@@ -2459,7 +2459,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                 ordering='by.pvalue', signif.threshold=0.05, show.pvals=TRUE) {
 
       loadings <- private$getResults('loadings', 'estimateCellLoadings()')
-      p <- plotCellLoadings(loadings$loadings, loadings$padj, signif.threshold, alpha, palette, show.pvals,
+      p <- plotCellLoadings(loadings$loadings, pval=loadings$padj, signif.threshold=signif.threshold,
+                            jitter.alpha=alpha, palette=palette, show.pvals=show.pvals,
                             ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme)
 
       return(p)

@@ -34,15 +34,15 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
   p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
 
-  gg <- ggplot(p.df, aes(x=NCells, y=N)) +
-    geom_point(aes(color=Type)) +
+  gg <- ggplot(p.df, aes(x=NCells, y=N, color = Type)) +
+    geom_point() +
     scale_x_log10() +
     ylim(0, max(p.df$N)) +
     labs(x=x.lab, y=y.lab)
 
   if(label) {
     gg <- gg +
-      ggrepel::geom_label_repel(aes(label=Type), size=size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4))
+      ggrepel::geom_label_repel(aes(label=Type), size=size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=NA)
   }
 
   gg <- gg +
@@ -57,7 +57,7 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 
   if (plot.line) {
     gg <- gg +
-      geom_smooth(method=MASS::rlm, formula = y~x, se=FALSE, color="black", size=line.width)
+      geom_smooth(method=MASS::rlm, formula = y~x, se=FALSE, color="gray", size=line.width, linetype=2)
   }
 
   return(gg)
@@ -100,35 +100,30 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 #' @param color.range Range for filling colors
 #' @return A ggplot2 object
 #' @export
-plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=NULL, legend.position="right",
+plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE, legend.position="right",
                         legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
                         color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL, font.size=8) {
   if (is.null(color.range)) {
     color.range <- c(min(0, min(df)), max(df))
   }
 
-  if (is.null(row.order)) {
-    row.order <- rownames(df)[dist(df) %>% hclust() %>% .$order]
-  } else if (is.logical(row.order) && row.order) {
+  if (is.logical(row.order) && row.order) {
+    row.order <- rownames(df)[dist(df) %>% hclust() %>% .$order] %>% rev()
+  } else if (is.logical(row.order) && !row.order) {
     row.order <- rownames(df)
   }
 
-  if (is.null(col.order)) {
-    col.order <- colnames(df)[dist(df) %>% hclust() %>% .$order]
-  } else if (is.logical(col.order) && col.order) {
+  if (is.logical(col.order) && col.order) {
+    col.order <- colnames(df)[dist(df %>% t()) %>% hclust() %>% .$order] %>% rev()
+  } else if (is.logical(col.order) && !col.order) {
     col.order <- colnames(df)
   }
 
   df %<>% tibble::as_tibble(rownames="G1") %>%
     reshape2::melt(id.vars="G1", variable.name="G2", value.name="value")
 
-  if (!is.logical(row.order)) {
-    df %<>% dplyr::mutate(G1=factor(G1, levels=row.order))
-  }
-
-  if (!is.logical(col.order)) {
-    df %<>% dplyr::mutate(G2=factor(G2, levels=col.order))
-  }
+  df %<>% dplyr::mutate(G1=factor(G1, levels=row.order))
+  df %<>% dplyr::mutate(G2=factor(G2, levels=col.order))
 
   if (is.null(color.per.group)) {
     color.per.group <- "black"
@@ -206,7 +201,7 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 #' @description  Generic function for plotting mean or median values per cell type (used for expression shift distances and others)
 #' @param df - data frame containing the results, including $val and $cell slots which will be summarized
 #' @param type - type of a plot "bar" (default), "point" (mean + sd), or "box" for boxplot
-#' @param show.jitter whether to show indiivudal data points (default: FALSE)
+#' @param show.jitter whether to show individual data points (default: FALSE)
 #' @param jitter.alpha transparency value for the data points (default: 0.05)
 #' @param notch - whether to show notches in the boxplot version (default=TRUE)
 #' @param palette - cell type palette
@@ -408,6 +403,8 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=FALSE
 
   ## Convert IDs to names
   # TODO: Dependent on show.ids?
+  nodes %<>% .[match(unique(.$label), .$label),] # Must remove doublets
+
   for(id in tmp.dat$id) {
     tmp.dat[tmp.dat == id] <- nodes$name[nodes$label == id]
   }
@@ -475,13 +472,13 @@ plotVolcano <- function(de.df, p.name='padj', color.var = 'CellFrac', legend.pos
   if(color.var == 'CellFrac') {
     gg$layers[[point.id]] <- geom_point(aes(x=log2FoldChange, y=-log10(.data[[p.name]]), color=CellFrac, size=CellFrac))
     gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
-    gg <- gg + val2ggcol(de.df$CellFrac, palette=palette, color.range=c(0, 1)) 
+    gg <- gg + val2ggcol(de.df$CellFrac, palette=palette, color.range=c(0, 1))
   } else if (color.var == 'Stability') {
     gg$layers[[point.id]] <- geom_point(aes(x=log2FoldChange, y=-log10(.data[[p.name]]), color=Stability, size=Stability))
     gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
-    gg <- gg + val2ggcol(de.df$Stability, palette=palette, color.range=c(0, 1)) 
+    gg <- gg + val2ggcol(de.df$Stability, palette=palette, color.range=c(0, 1))
   }
-  
+
   gg <- gg +
     scale_size_continuous(range=size, name="Expr. frac", limits=c(0, 1)) +
     guides(color=guide_colorbar(title="Expr. frac")) +

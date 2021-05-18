@@ -87,27 +87,28 @@ plotStability <- function(jaccards,
                          xlabel = '',
                          ylabel = '',
                          log.y.axis = F,
-                         palette = NULL) {
+                         palette = NULL,
+                         plot.theme=theme_get()) {
   jaccards$group <- as.factor(jaccards$group)
   if(! show.pairs) {
     if(sort.order) {
-      p <- ggplot(jaccards, aes(x=reorder(group,value,na.rm = TRUE), y=value, fill=group,
-                                group=group)) + geom_boxplot(outlier.shape = NA) + geom_jitter(alpha=jitter.alpha)          
+      p <- ggplot(jaccards, aes(x=reorder(group,value,na.rm = TRUE), y=value,
+                                group=group)) + geom_boxplot(outlier.shape = NA, notch = notch) + geom_jitter(alpha=jitter.alpha)          
     } else {
-      p <- ggplot(jaccards, aes(x=group, y=value, fill=group,
-                                group=group)) + geom_boxplot(outlier.shape = NA) + geom_jitter(alpha=jitter.alpha)          
+      p <- ggplot(jaccards, aes(x=group, y=value,
+                                group=group)) + geom_boxplot(outlier.shape = NA, notch = notch) + geom_jitter(alpha=jitter.alpha)          
     }
   } else {
     if(sort.order) {
-      p <- ggplot(jaccards, aes(x=reorder(group,value,na.rm = TRUE), y=value, fill=group,
+      p <- ggplot(jaccards, aes(x=reorder(group,value,na.rm = TRUE), y=value,
                                 group=cmp, color=cmp)) + geom_line()  
     } else {
-      p <- ggplot(jaccards, aes(x=group, y=value, fill=group,
+      p <- ggplot(jaccards, aes(x=group, y=value,
                                 group=cmp, color=cmp)) + geom_line()  
     }
   }
   
-  p <- p + theme(legend.position = "none") +
+  p <- p + plot.theme + theme(legend.position = "none") +
     theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1)) +
     labs(x=xlabel, y=ylabel)
   
@@ -115,8 +116,9 @@ plotStability <- function(jaccards,
     p <- p + scale_y_continuous(trans='log10')
   }
   
-  # if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
-  
+  if(!is.null(palette)) {
+    p <- p + scale_color_manual(values=palette)
+  }
   return(p)
   
 }
@@ -229,6 +231,44 @@ estimateDEStabilityFDR = function(de.res, p.adj.cutoffs) {
   df.n.genes$Var1 <- as.factor(p.adj.cutoffs[df.n.genes$Var1 ])
   
   return(df.n.genes)
+}
+
+estimateDEStabilityFDR1loo = function(de.res, p.adj.cutoffs) {
+  
+  df.n.common.genes <- c()
+  
+  for(ires.target in 1:length(de.res[[1]]$subsamples)){
+    for(i in 1:length(p.adj.cutoffs)) {
+      p <- p.adj.cutoffs[i]
+      for(cell.type in names(de.res)){
+        
+        res.tmp <- de.res[[cell.type]]$subsamples[[ires.target]]
+        genes <- rownames(res.tmp)[res.tmp[,'padj'] < p]
+        
+        if(length(genes) == 0) next
+        if(is.null(genes)) stop(cell.type)
+        
+        genes.all <- c()
+        for(ires in names(de.res[[cell.type]]$subsamples)) {
+          res.tmp <- de.res[[cell.type]]$subsamples[[ires]]
+          genes.tmp <- rownames(res.tmp)[res.tmp[,'padj'] < p]
+          genes <- intersect(genes, genes.tmp)
+          genes.all <- unique(c(genes, genes.tmp))
+          
+        }
+        res.tmp <- de.res[[cell.type]]$subsamples[[ires.target]]
+        gene.frac <- length(genes) / length(rownames(res.tmp)[res.tmp[,'padj'] < p])
+        df.n.common.genes <- rbind(df.n.common.genes, c(cell.type, p, gene.frac))
+      }
+    }
+  }
+  
+  df.n.common.genes = as.data.frame(df.n.common.genes)
+  colnames(df.n.common.genes) <- c('cell.type', 'fdr', 'frac')
+  df.n.common.genes$frac = as.numeric(df.n.common.genes$frac)
+  df.n.common.genes$fdr = as.numeric(df.n.common.genes$fdr)
+
+  return(df.n.common.genes)
 }
   
   

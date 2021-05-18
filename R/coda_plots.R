@@ -188,6 +188,10 @@ plotCellLoadings <- function(loadings, pval, signif.threshold, jitter.alpha, pal
   yintercept = 0
 
   if(!is.null(pval)){
+    # if some p-values are the same - then order by mean, therefore a prior sorting is required
+    tmp.order <- order(abs(rowMeans(loadings)))
+    loadings <- loadings[tmp.order, ]
+    pval <- pval[tmp.order]
     # additional ordering by p-value
     loadings <- loadings[order(-pval), ]
     # Get significant cells

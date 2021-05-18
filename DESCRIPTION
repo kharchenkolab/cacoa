@@ -44,7 +44,9 @@ RoxygenNote: 7.1.1
 LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress, sccore
 NeedsCompilation: yes
 Suggests:
+    circlize,
     clusterProfiler (>= 3.0.0),
+    ComplexHeatmap,
     DESeq2,
     DOSE,
     EnhancedVolcano,

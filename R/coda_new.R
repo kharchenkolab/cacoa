@@ -138,10 +138,9 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
 #' @param n.iter Number of permutations
 #' @param remain.groups TRUE - if the labels of groups remain, FALSE - if to produce the null distribution
 #' @param replace.samples TRUE - is bootstrap on samples, FALAE - if to remain samples
-#' @param equal.tot.count NULL - if to bootstrap cell with remaining total count, "an integer value" - if to fix the total count to this value
 #' @param seed random seed
 #' @return Updated data frame with Z scores
-produceResampling <- function(cnts, groups, n.perm = 1000, remain.groups = TRUE, replace.samples = TRUE, equal.tot.count = NULL, seed = 239) {
+produceResampling <- function(cnts, groups, n.perm = 1000, remain.groups = TRUE, replace.samples = TRUE, seed = 239) {
   
   if(!(remain.groups %in% c(NULL, TRUE, FALSE))) stop('Parameter remain.groups should be in {NULL, TRUE, FALSE}')
   
@@ -162,13 +161,8 @@ produceResampling <- function(cnts, groups, n.perm = 1000, remain.groups = TRUE,
     if((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) next
     
     # Bootstrap cell types
-    if(is.null(equal.tot.count)) { # initial number of cells
-      cnts.resampling <- apply(cnts[samples.tmp,], 1, function(v) {
-        table( c(names(v), sample(names(v), size = sum(v), replace = TRUE, prob = v / sum(v))) ) - 1   })
-    } else { # fixed number of cells
-      cnts.resampling <- apply(cnts[samples.tmp,], 1, function(v) {
-        table( c(names(v), sample(names(v), size = equal.tot.count, replace = TRUE, prob = v / sum(v))) ) - 1   })
-    }
+    cnts.resampling <- apply(cnts[samples.tmp,], 1, function(v) {
+      table( c(names(v), sample(names(v), size = sum(v), replace = TRUE, prob = v / sum(v))) ) - 1   })
     
     cnts.tmp <- t(cnts.resampling)
     

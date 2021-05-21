@@ -156,19 +156,6 @@ Plot sample-sample expression distance as a 2D embedding
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
-
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-
-\item{\code{n.cores}}{number of cores for parallelisation}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateExpressionShiftMagnitudes"></a>}}
@@ -200,9 +187,11 @@ Calculate expression shift magnitudes of different clusters between conditions
 
 \item{\code{dist}}{'JS' - Jensen Shannon divergence, or 'cor' - correlation distance (default="JS")}
 
-\item{\code{within.group.normalization}}{Normalize the shift magnitude by the mean magnitude of within-group variation (default=T)}
+\item{\code{within.group.normalization}}{Normalize the shift magnitude by the mean magnitude of within-group variation (default=\code{TRUE})}
 
-\item{\code{valid.comparisons}}{A logical matrix (rows and columns are samples) specifying valid between-sample comparisons. Note that if within.group.normalization=T, the method will automatically include all within-group comparisons of the samples for which at least one valid pair is included in the valid.comparisons (default=NULL)}
+\item{\code{valid.comparisons}}{A logical matrix (rows and columns are samples) specifying valid between-sample comparisons.
+Note that if \code{within.group.normalization=TRUE}, the method will automatically include all within-group comparisons of the samples
+for which at least one valid pair is included in the valid.comparisons (default=\code{NULL})}
 
 \item{\code{n.cells}}{Number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)}
 
@@ -212,11 +201,7 @@ Calculate expression shift magnitudes of different clusters between conditions
 
 \item{\code{min.cells}}{Minimum number of cells per cluster/per sample to be included in the analysis (default=10)}
 
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
-
 \item{\code{n.cores}}{Number of cores (default: stored integer)}
-
-\item{\code{verbose}}{show progress (default: stored value)}
 
 \item{\code{name}}{Test name (default="expression.shifts")}
 }
@@ -230,7 +215,6 @@ a list include
 \item \code{sample.groups}: same as the provided variable
 \item \code{cell.groups}: same as the provided variable
 \item \code{valid.comparisons}: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)
-}
 }
 }
 }
@@ -253,21 +237,6 @@ a list include
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
-
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-
-\item{\code{n.cores}}{number of cores for parallelisation}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotExpressionShiftMagnitudes"></a>}}
@@ -304,7 +273,7 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \item whether to show notches in the boxplot version (default=TRUE)
 }}
 
-\item{\code{show.jitter}}{whether to show indiivudal data points (default: FALSE)}
+\item{\code{show.jitter}}{whether to show indivudal data points (default: FALSE)}
 
 \item{\code{jitter.alpha}}{transparency value for the data points (default: 0.05)}
 
@@ -413,13 +382,9 @@ Estimate differential gene expression per cell type between conditions
 \describe{
 \item{\code{cell.groups}}{factor specifying cell types (default=NULL)}
 
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
-
 \item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
 
 \item{\code{common.genes}}{Only investigate common genes across cell groups (default=F)}
-
-\item{\code{n.cores}}{number of cores for parallelisation}
 
 \item{\code{cooks.cutoff}}{cooksCutoff for DESeq2 (default=F)}
 
@@ -432,8 +397,6 @@ Estimate differential gene expression per cell type between conditions
 \item{\code{independent.filtering}}{independentFiltering parameter for DESeq2 (default=FALSE)}
 
 \item{\code{cluster.sep.chr}}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
-
-\item{\code{verbose}}{show progress (default: stored value)}
 
 \item{\code{name}}{slot in which to save the results (default: 'de')}
 
@@ -493,13 +456,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateDeStabilityPerGene"></a>}}
@@ -528,13 +484,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateDEStabilityTrend"></a>}}
@@ -549,13 +498,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateGOStabilityPerCellTypePermDir"></a>}}
@@ -570,13 +512,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateGOStabilityPerCellTypePerm"></a>}}
@@ -591,13 +526,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateGOStabilityPerCellTypePermGseaDir"></a>}}
@@ -611,13 +539,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateGOStabilityPerCellTypePermGsea"></a>}}
@@ -631,13 +552,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateGOStabilityTrend"></a>}}
@@ -652,13 +566,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotGOStabilityPerCellType"></a>}}
@@ -675,13 +582,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotDEStabilityTrend"></a>}}
@@ -698,13 +598,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotDEStabilityFDR"></a>}}
@@ -743,13 +636,6 @@ A ggplot2 object
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityBetweenTests(name = "jacc.bw.tests", cell.types = NULL)}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotDEStabilityPerCellType"></a>}}
@@ -801,13 +687,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotNumberOfDEGenesStability"></a>}}
@@ -827,13 +706,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotDEStabilityPerGene"></a>}}
@@ -847,13 +719,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotDEGenes"></a>}}
@@ -876,8 +741,6 @@ Plot number of significant DE genes as a function of number of cells
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{name}}{results slot in which the DE results should be stored (default: 'de')}
-
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
 \item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="none")}
 
@@ -954,13 +817,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-saveDEasJSON"></a>}}
@@ -989,15 +845,11 @@ Save DE results as JSON files
 
 \item{\code{de.raw}}{List of DE results}
 
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
-
 \item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
 
 \item{\code{gene.metadata}}{(default=NULL)}
 
 \item{\code{cluster.sep.chr}}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
-
-\item{\code{verbose}}{show progress (default: stored value)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1021,8 +873,6 @@ Plot number of highly-expressed DE genes as a function of number of cells
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-
 \item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="none")}
 
 \item{\code{label}}{Show labels on plot (default=TRUE)}
@@ -1092,17 +942,11 @@ Estimate ontology terms based on DEs
 \describe{
 \item{\code{type}}{Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")}
 
-\item{\code{name}}{field name where the test results are stored}
-
 \item{\code{org.db}}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'}
-
-\item{\code{n.top.genes}}{number of top genes for estimation}
 
 \item{\code{p.adjust.method}}{Method for calculating adj. P. Please see DOSE package for more information (default="BH")}
 
 \item{\code{readable}}{Mapping gene ID to gene name (default=TRUE)}
-
-\item{\code{verbose}}{show progress (default: stored value)}
 
 \item{\code{qvalue.cutoff}}{Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
 
@@ -1141,15 +985,6 @@ A list containing a list of terms per ontology, and a data frame with merged res
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateOntologyFamilies"></a>}}
@@ -1166,8 +1001,6 @@ Estimate ontology families based on ontology results
 \item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
 
 \item{\code{p.adj}}{Cut-off for adj. P values (default: 0.05)}
-
-\item{\code{name}}{field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -1233,8 +1066,6 @@ Approximately equal to the fraction of genes, shared between the GOs. Default: 0
 \item{\code{total.h}}{Cut height for hierarchical clustering of GOs across all subtypes.
 Approximately equal to the fraction of subtypes for which two GOs should belong to the same cluster. Default: 0.5.}
 
-\item{\code{verbose}}{show progress (default: stored value)}
-
 \item{\code{name}}{Name of the field to store the results. Default: \code{cacoa:::getOntClustField(subtype, genes)}.}
 }
 \if{html}{\out{</div>}}
@@ -1269,10 +1100,6 @@ Bar plot of ontology terms per cell type
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
 \item{\code{type}}{Ontology, must be either "GO" or "DO" (default="GO")}
-
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-
-\item{\code{name}}{field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -1652,15 +1479,13 @@ Plot the cell group proportions per sample
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-
 \item{\code{cells.to.remove}}{Vector of cell types to remove from the composition}
 
 \item{\code{cells.to.remain}}{Vector of cell types to remain in the composition}
 
 \item{\code{palette}}{color palette to use for conditions (default: stored $sample.groups.palette)}
 
-\item{\code{show.significance}}{whether to show statistical significance betwwen sample groups. wilcox.test was used; (\* < 0.05; \\emph{\} < 0.01; \\emph{\}\* < 0.001)}
+\item{\code{show.significance}}{whether to show statistical significance betwwen sample groups. wilcox.test was used; (\code{*} < 0.05; \verb{**} < 0.01; \verb{***} < 0.001)}
 
 \item{\code{...}}{additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}}
 }
@@ -1683,13 +1508,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotCellGroupSizes"></a>}}
@@ -1707,8 +1525,6 @@ Plot the cell numbers per sample
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-
 \item{\code{palette}}{color palette to use for conditions (default: stored $sample.groups.palette)}
 
 \item{\code{...}}{additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}}
@@ -1740,8 +1556,6 @@ Plot compositions in CoDA space (PCA or CDA)
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{space}}{either 'PCA' or 'CDA'}
-
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1764,13 +1578,6 @@ Plot contrast tree
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-}
-\if{html}{\out{</div>}}
-}
 \subsection{Returns}{
 A ggplot2 object
 }
@@ -1797,15 +1604,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{n.cores}}{number of cores for parallelisation}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateGaPartition"></a>}}
@@ -1860,13 +1658,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateCellDensity"></a>}}
@@ -1898,12 +1689,6 @@ Estimate cell density in giving embedding
 \item{\code{name}}{slot in which to save the results (default: 'cell.density')}
 
 \item{\code{beta}}{smoothing strength parameter of the \link[sccore:heatFilter]{heatFilter} for graph based cell density (default: 30)}
-
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-
-\item{\code{n.cores}}{number of cores for parallelisation}
 
 \item{\code{bandwidth}}{KDE bandwidth multiplier. The full bandwidth is estimated by multiplying this value on the difference between 90\% and 10\%
 of the corresponding embedding dimension. Set it to NULL to use \link[MASS:bandwidth.nrd]{bandwidth.nrd} estimator. (default: 0.05)}
@@ -1948,8 +1733,6 @@ Plot cell density depending on the method that was used for estimating \code{cao
 
 \item{\code{name}}{slot in which to saved results from estimateCellDensity (default: 'cell.density')}
 
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-
 \item{\code{...}}{plot style parameters forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}.}
 }
 \if{html}{\out{</div>}}
@@ -1973,13 +1756,6 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateDiffCellDensity"></a>}}
@@ -2007,10 +1783,6 @@ estimate differential cell density
 \item{\code{adjust.pvalues}}{whether to adjust Z-scores for multiple comparison using BH method (default: TRUE)}
 
 \item{\code{name}}{slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-
-\item{\code{n.cores}}{number of cores for parallelisation}
 }
 \if{html}{\out{</div>}}
 }
@@ -2082,7 +1854,7 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 
 \item{\code{joint}}{whether to show joint boxplot with the expression distance weighed by the sizes of cell types (default: TRUE), or show distances for each individual cell type}
 
-\item{\code{show.significance}}{whether to show statistical significance between sample groups. wilcox.test was used; (\* < 0.05; \\emph{\} < 0.01; \\emph{\}\* < 0.001)}
+\item{\code{show.significance}}{whether to show statistical significance between sample groups. wilcox.test was used; (\code{*} < 0.05; \verb{**} < 0.01; \verb{***} < 0.001)}
 
 \item{\code{...}}{other plot parameters, forwarded to \link{plotCountBoxplotsPerType}}
 }
@@ -2119,8 +1891,6 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
-
 \item{\code{cell.type}}{If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)}
 
 \item{\code{method}}{dimension reduction methods: MDS, tSNE or heatmap (default: MDS)}
@@ -2171,8 +1941,6 @@ Estimate differential expression Z-scores between two conditions per individual 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{number of top genes for estimation}
-
 \item{\code{max.z}}{z-score value to winsorize the estimates for reducing impact of outliers. Default: 20.}
 
 \item{\code{min.expr.frac}}{minimal fraction of cell expressing a gene for estimating z-scores for it. Default: 0.001.}
@@ -2182,10 +1950,6 @@ Estimate differential expression Z-scores between two conditions per individual 
 \item{\code{min.n.obs.per.samp}}{minimul number of cells per samples for estimating z-scores (default: 2)}
 
 \item{\code{robust}}{whether to use median estimates instead of mean (default: TRUE)}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-
-\item{\code{n.cores}}{number of cores for parallelisation}
 }
 \if{html}{\out{</div>}}
 }
@@ -2210,13 +1974,6 @@ Results are also stored in the \code{cluster.free.z} field.
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{excluded.genes}}{list of genes to exclude during estimation. For example, a list of mitochondrial genes.}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateClusterFreeExpressionShifts"></a>}}
@@ -2244,9 +2001,6 @@ Estimate Cluster-free Expression Shift
 \describe{
 \item{\code{n.top.genes}}{number of top genes for the distance estimation (default: 3000)}
 
-\item{\code{gene.selection}}{a method to select top genes, "change" selects genes by cluster-free Z-score change,
-"expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "change".}
-
 \item{\code{min.n.between}}{minimal number of pairs between condition for distance estimation (default: 2)}
 
 \item{\code{min.n.within}}{minimal number of pairs within one condition for distance estimation (default: \code{min.n.between})}
@@ -2259,10 +2013,6 @@ Estimate Cluster-free Expression Shift
 
 \item{\code{log.vectors}}{whether to use log10 on the normalized expression before estimating the distance.
 In most cases, must be TRUE for "cosine" and "cor" distances and always must be FALSE for "js". (default: \code{dist != 'js'})}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-
-\item{\code{n.cores}}{number of cores for parallelisation}
 }
 \if{html}{\out{</div>}}
 }
@@ -2292,20 +2042,9 @@ Performs graph smoothing of the cluster-free DE Z-scores
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{number of top genes for estimation}
-
 \item{\code{smoothing}}{\code{beta} parameter of the \link[sccore:heatFilter]{heatFilter}. Default: 20.}
 
 \item{\code{filter}}{graph filter function. Default: \link[sccore:heatFilter]{heatFilter}.}
-
-\item{\code{gene.selection}}{a method to select top genes, "change" selects genes by cluster-free Z-score change,
-"expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "change".}
-
-\item{\code{excluded.genes}}{list of genes to exclude during estimation. For example, a list of mitochondrial genes.}
-
-\item{\code{n.cores}}{number of cores for parallelisation}
-
-\item{\code{verbose}}{show progress (default: stored value)}
 
 \item{\code{...}}{parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}}
 }
@@ -2335,14 +2074,7 @@ cells using \link[fabia:fabia]{fabia}.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{number of top genes for estimation}
-
 \item{\code{n.programmes}}{maximal number of gene programmes to find (parameter \code{p} for fabia). Default: 15.}
-
-\item{\code{gene.selection}}{a method to select top genes, "change" selects genes by cluster-free Z-score change,
-"expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "change".}
-
-\item{\code{name}}{field name where the test results are stored}
 
 \item{\code{...}}{keyword arguments forwarded to \link{estimateGeneProgrammes}}
 }
@@ -2381,13 +2113,6 @@ the programme usin fabia biclustering.
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotGeneProgrammeGenes"></a>}}
@@ -2403,13 +2128,6 @@ the programme usin fabia biclustering.
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotClusterFreeExpressionShifts"></a>}}
@@ -2464,15 +2182,6 @@ make sense, as control cells always have small distance from control.}
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{n.top.genes}}{number of top genes for estimation}
-
-\item{\code{excluded.genes}}{list of genes to exclude during estimation. For example, a list of mitochondrial genes.}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotGeneExpressionComparison"></a>}}
@@ -2523,13 +2232,6 @@ make sense, as control cells always have small distance from control.}
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getGOEnvironmentOpen(org.db, verbose = FALSE, ignore.cache = NULL)}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{verbose}}{show progress (default: stored value)}
-}
-\if{html}{\out{</div>}}
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}

@@ -150,8 +150,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description  Calculate expression shift magnitudes of different clusters between conditions
     #' @param cell.groups Named cell group factor with cell names (default: stored vector)
     #' @param dist 'JS' - Jensen Shannon divergence, or 'cor' - correlation distance (default="JS")
-    #' @param within.group.normalization Normalize the shift magnitude by the mean magnitude of within-group variation (default=T)
-    #' @param valid.comparisons A logical matrix (rows and columns are samples) specifying valid between-sample comparisons. Note that if within.group.normalization=T, the method will automatically include all within-group comparisons of the samples for which at least one valid pair is included in the valid.comparisons (default=NULL)
+    #' @param within.group.normalization Normalize the shift magnitude by the mean magnitude of within-group variation (default=`TRUE`)
+    #' @param valid.comparisons A logical matrix (rows and columns are samples) specifying valid between-sample comparisons.
+    #' Note that if `within.group.normalization=TRUE`, the method will automatically include all within-group comparisons of the samples
+    #' for which at least one valid pair is included in the valid.comparisons (default=`NULL`)
     #' @param n.cells Number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)
     #' @param n.top.genes Number of top highest-expressed genes to consider (default: all genes)
     #' @param n.subsamples Number of samples to draw (default=100)
@@ -164,7 +166,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `sample.groups`: same as the provided variable
     #'   - `cell.groups`: same as the provided variable
     #'   - `valid.comparisons`: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)
-    #' }
     estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist='JS', within.group.normalization=TRUE, valid.comparisons=NULL,
                                                n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
                                                sample.groups=self$sample.groups, n.cores=self$n.cores, verbose=self$verbose,
@@ -283,7 +284,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
     #' @param name - results slot name (default: 'expression.shifts')
-    #' @param show.jitter whether to show indiivudal data points (default: FALSE)
+    #' @param show.jitter whether to show indivudal data points (default: FALSE)
     #' @param jitter.alpha transparency value for the data points (default: 0.05)
     #' @param type - type of a plot "bar" (default) or "box"
     #' @param notch - whether to show notches in the boxplot version (default=TRUE)
@@ -2206,7 +2207,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param cells.to.remove Vector of cell types to remove from the composition
     #' @param cells.to.remain Vector of cell types to remain in the composition
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
-    #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
+    #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001)
     #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
     plotCellGroupProportions=function(cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL,
@@ -2722,7 +2723,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
     #' @param name Test results to plot (default=expression.shifts)
     #' @param joint whether to show joint boxplot with the expression distance weighed by the sizes of cell types (default: TRUE), or show distances for each individual cell type
-    #' @param show.significance whether to show statistical significance between sample groups. wilcox.test was used; (\* < 0.05; \*\* < 0.01; \*\*\* < 0.001)
+    #' @param show.significance whether to show statistical significance between sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001)
     #' @param ... other plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
     plotExpressionDistance = function(name='expression.shifts', joint=FALSE, min.cells=10,

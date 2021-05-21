@@ -175,6 +175,8 @@ diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, t
   sds <- apply(permut.diffs, 1, sd)
   score <- (colRed(density.mat[nt,]) - colRed(density.mat[nr,])) / sds
   permut.diffs <- apply(permut.diffs, 2, `/`, sds)
+  score[sds < 1e-10] <- 0
+  permut.diffs[sds < 1e-10,] <- 0
 
   return(list(score=score, permut.scores=permut.diffs))
 }
@@ -193,23 +195,23 @@ adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smoot
   if (wins > 0) {
     uq <- 1 - wins
     lq <- wins
-    score %<>% pmin(quantile(., uq)) %>% pmax(quantile(., lq))
+    score %<>% pmin(quantile(., uq, na.rm=TRUE)) %>% pmax(quantile(., lq, na.rm=TRUE))
     scores.shuffled <- apply(scores.shuffled, 2, function(sig) {
-      sig %>% pmin(quantile(., uq)) %>% pmax(quantile(., lq))
+      sig %>% pmin(quantile(., uq, na.rm=TRUE)) %>% pmax(quantile(., lq, na.rm=TRUE))
     })
   }
 
-  kde.res.pos <- apply(scores.shuffled, 2, max) %>%
+  kde.res.pos <- apply(scores.shuffled, 2, max, na.rm=TRUE) %>%
     ks::kcde(h=diff(range(.)) / 20, eval.points=score) %>% .$estimate
-  kde.res.neg <- apply(scores.shuffled, 2, min) %>%
+  kde.res.neg <- apply(scores.shuffled, 2, min, na.rm=TRUE) %>%
     ks::kcde(h=diff(range(.)) / 20, eval.points=score) %>% .$estimate
 
   z.scores <- pmin(1 - kde.res.pos, 0.5) %>% qnorm(lower.tail=FALSE)
   z.scores[score < 0] <- pmin(kde.res.neg[score < 0], 0.5) %>%
     qnorm(lower.tail=FALSE) %>% {. * -1}
 
-  z.scores[z.scores == Inf] <- max(z.scores[!is.infinite(z.scores)])
-  z.scores[z.scores == -Inf] <- min(z.scores[!is.infinite(z.scores)])
+  z.scores[z.scores == Inf] <- max(z.scores[!is.infinite(z.scores)], na.rm=TRUE)
+  z.scores[z.scores == -Inf] <- min(z.scores[!is.infinite(z.scores)], na.rm=TRUE)
   z.scores %<>% setNames(names(score))
 
   return(z.scores)

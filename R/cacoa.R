@@ -158,12 +158,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.cells Minimum number of cells per cluster/per sample to be included in the analysis (default=10)
     #' @param n.cores Number of cores (default: stored integer)
     #' @param name Test name (default="expression.shifts")
-    #' @return a list include \itemize{
-    #'   \item{dist.df: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells}
-    #'   \item{p.dist.info: raw list of `n.subsamples` sampled distance matrices (cells were subsampled)}
-    #'   \item{sample.groups: same as the provided variable}
-    #'   \item{cell.groups: same as the provided variable}
-    #'   \item{valid.comparisons: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)}
+    #' @return a list include
+    #'   - `dist.df`: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells
+    #'   - `p.dist.info`: raw list of `n.subsamples` sampled distance matrices (cells were subsampled)
+    #'   - `sample.groups`: same as the provided variable
+    #'   - `cell.groups`: same as the provided variable
+    #'   - `valid.comparisons`: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)
     #' }
     estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist='JS', within.group.normalization=TRUE, valid.comparisons=NULL,
                                                n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
@@ -3151,7 +3151,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (plot.z) {
           title <- if (is.null(scores)) g else paste0(g, ": ", signif(scores[g], 3))
           lst <- self$plotEmbedding(colors=z.scores[,g], title=title, color.range=c(-max.z, max.z),
-                                    plot.na=plot.na, legend.title='Z-score', z.palette=z.palette, ...) %>%
+                                    plot.na=plot.na, legend.title='Z-score', palette=z.palette, ...) %>%
             list() %>% c(lst)
         }
         lst <- lapply(lst, function(x) x + theme(legend.background = element_blank()) + adj.list)

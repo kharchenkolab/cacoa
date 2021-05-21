@@ -8,13 +8,14 @@ plotOntologyFamily(
   fam,
   data,
   plot.type = "complete",
-  show.ids = F,
+  show.ids = FALSE,
   string.length = 18,
   legend.label.size = 1,
   legend.position = "topright",
   verbose = TRUE,
   n.cores = 1,
-  reduce.edges = TRUE
+  reduce.edges = FALSE,
+  font.size = 24
 )
 }
 \arguments{

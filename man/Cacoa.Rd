@@ -12,6 +12,10 @@ Estimate ontology families
 
 Plot ontology families
 
+Save ontology results
+
+Save family results
+
 Plot inter-sample expression distance
 
 Plot sample-sample expression distance as a 2D embedding
@@ -44,6 +48,8 @@ Plot sample-sample expression distance as a 2D embedding
 \item{\code{cell.groups.palette}}{a color palette for the cell.groups}
 
 \item{\code{plot.theme}}{ggplot2 theme for all plots}
+
+\item{\code{plot.params}}{parameters, forwarded to all \code{plotEmbedding} calls}
 }
 \if{html}{\out{</div>}}
 }
@@ -58,12 +64,20 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-estimatePerCellTypeDE}{\code{Cacoa$estimatePerCellTypeDE()}}
 \item \href{#method-estimateDEStabilityPerCellType}{\code{Cacoa$estimateDEStabilityPerCellType()}}
 \item \href{#method-estimateDeStabilityPerTest}{\code{Cacoa$estimateDeStabilityPerTest()}}
+\item \href{#method-estimateDeStabilityPerGene}{\code{Cacoa$estimateDeStabilityPerGene()}}
 \item \href{#method-estimateDEStabilityBetweenTests}{\code{Cacoa$estimateDEStabilityBetweenTests()}}
 \item \href{#method-estimateDEStabilityTrend}{\code{Cacoa$estimateDEStabilityTrend()}}
-\item \href{#method-plotDeStabilityTrend}{\code{Cacoa$plotDeStabilityTrend()}}
+\item \href{#method-estimateGOStabilityPerCellTypePermDir}{\code{Cacoa$estimateGOStabilityPerCellTypePermDir()}}
+\item \href{#method-estimateGOStabilityPerCellTypePerm}{\code{Cacoa$estimateGOStabilityPerCellTypePerm()}}
+\item \href{#method-estimateGOStabilityPerCellTypePermGseaDir}{\code{Cacoa$estimateGOStabilityPerCellTypePermGseaDir()}}
+\item \href{#method-estimateGOStabilityPerCellTypePermGsea}{\code{Cacoa$estimateGOStabilityPerCellTypePermGsea()}}
+\item \href{#method-estimateGOStabilityTrend}{\code{Cacoa$estimateGOStabilityTrend()}}
+\item \href{#method-plotGOStabilityPerCellType}{\code{Cacoa$plotGOStabilityPerCellType()}}
+\item \href{#method-plotDEStabilityTrend}{\code{Cacoa$plotDEStabilityTrend()}}
+\item \href{#method-plotDEStabilityFDR}{\code{Cacoa$plotDEStabilityFDR()}}
+\item \href{#method-plotDEStabilityFDR1loo}{\code{Cacoa$plotDEStabilityFDR1loo()}}
 \item \href{#method-plotDEStabilityBetweenTests}{\code{Cacoa$plotDEStabilityBetweenTests()}}
-\item \href{#method-estimateGOStability}{\code{Cacoa$estimateGOStability()}}
-\item \href{#method-plotDeStabilityPerCellType}{\code{Cacoa$plotDeStabilityPerCellType()}}
+\item \href{#method-plotDEStabilityPerCellType}{\code{Cacoa$plotDEStabilityPerCellType()}}
 \item \href{#method-plotDeStabilityPerTest}{\code{Cacoa$plotDeStabilityPerTest()}}
 \item \href{#method-plotNumberOfDEGenesStability}{\code{Cacoa$plotNumberOfDEGenesStability()}}
 \item \href{#method-plotDEStabilityPerGene}{\code{Cacoa$plotDEStabilityPerGene()}}
@@ -74,7 +88,9 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-plotFilteredDEGenes}{\code{Cacoa$plotFilteredDEGenes()}}
 \item \href{#method-plotEmbedding}{\code{Cacoa$plotEmbedding()}}
 \item \href{#method-estimateOntology}{\code{Cacoa$estimateOntology()}}
+\item \href{#method-estimateOntologyGsea}{\code{Cacoa$estimateOntologyGsea()}}
 \item \href{#method-estimateOntologyFamilies}{\code{Cacoa$estimateOntologyFamilies()}}
+\item \href{#method-getFamilies}{\code{Cacoa$getFamilies()}}
 \item \href{#method-estimateOntologyClusters}{\code{Cacoa$estimateOntologyClusters()}}
 \item \href{#method-plotOntologyDistribution}{\code{Cacoa$plotOntologyDistribution()}}
 \item \href{#method-plotOntologyTerms}{\code{Cacoa$plotOntologyTerms()}}
@@ -83,6 +99,8 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-plotOntologySimilarities}{\code{Cacoa$plotOntologySimilarities()}}
 \item \href{#method-plotOntologyFamilyHeatmap}{\code{Cacoa$plotOntologyFamilyHeatmap()}}
 \item \href{#method-plotOntologyFamily}{\code{Cacoa$plotOntologyFamily()}}
+\item \href{#method-saveOntologyAsTable}{\code{Cacoa$saveOntologyAsTable()}}
+\item \href{#method-saveFamiliesAsTable}{\code{Cacoa$saveFamiliesAsTable()}}
 \item \href{#method-plotCellGroupProportions}{\code{Cacoa$plotCellGroupProportions()}}
 \item \href{#method-plotCellGroupAbundanceVariation}{\code{Cacoa$plotCellGroupAbundanceVariation()}}
 \item \href{#method-plotCellGroupSizes}{\code{Cacoa$plotCellGroupSizes()}}
@@ -111,6 +129,7 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-plotGeneExpressionComparison}{\code{Cacoa$plotGeneExpressionComparison()}}
 \item \href{#method-getConditionPerCell}{\code{Cacoa$getConditionPerCell()}}
 \item \href{#method-getJointCountMatrix}{\code{Cacoa$getJointCountMatrix()}}
+\item \href{#method-getGOEnvironmentOpen}{\code{Cacoa$getGOEnvironmentOpen()}}
 \item \href{#method-clone}{\code{Cacoa$clone()}}
 }
 }
@@ -132,7 +151,8 @@ Plot sample-sample expression distance as a 2D embedding
   graph.name = NULL,
   n.cores = 1,
   verbose = TRUE,
-  plot.theme = theme_bw()
+  plot.theme = theme_bw(),
+  plot.params = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -203,12 +223,14 @@ Calculate expression shift magnitudes of different clusters between conditions
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-a list include \itemize{
-\item{dist.df: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells}
-\item{p.dist.info: raw list of \code{n.subsamples} sampled distance matrices (cells were subsampled)}
-\item{sample.groups: same as the provided variable}
-\item{cell.groups: same as the provided variable}
-\item{valid.comparisons: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)}
+a list include
+\itemize{
+\item \code{dist.df}: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells
+\item \code{p.dist.info}: raw list of \code{n.subsamples} sampled distance matrices (cells were subsampled)
+\item \code{sample.groups}: same as the provided variable
+\item \code{cell.groups}: same as the provided variable
+\item \code{valid.comparisons}: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)
+}
 }
 }
 }
@@ -435,7 +457,7 @@ Plot DE stability per cell type
   de.name = "de",
   name = "de.jaccards",
   top.n.genes = NULL,
-  padj.threshold = NULL
+  p.val.cutoff = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -467,7 +489,7 @@ A ggplot2 object
   de.names,
   name = "jacc.per.test",
   top.n.genes = NULL,
-  padj.threshold = NULL
+  p.val.cutoff = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -480,6 +502,20 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateDeStabilityPerGene"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateDeStabilityPerGene}{}}}
+\subsection{Method \code{estimateDeStabilityPerGene()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDeStabilityPerGene(
+  de.name,
+  top.n.genes = 500,
+  p.adj.cutoff = NULL,
+  visualize = F
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateDEStabilityBetweenTests"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateDEStabilityBetweenTests}{}}}
 \subsection{Method \code{estimateDEStabilityBetweenTests()}}{
@@ -488,7 +524,7 @@ A ggplot2 object
   de.names,
   name = "jacc.bw.tests",
   top.n.genes = NULL,
-  padj.threshold = NULL
+  p.val.cutoff = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -508,7 +544,8 @@ A ggplot2 object
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEStabilityTrend(
   de.name = "de",
   name = "de.trend",
-  top.n.genes = c(100, 200, 300, 400, 500)
+  top.n.genes = c(100, 200, 300),
+  p.val.cutoffs = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -521,13 +558,116 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotDeStabilityTrend"></a>}}
-\if{latex}{\out{\hypertarget{method-plotDeStabilityTrend}{}}}
-\subsection{Method \code{plotDeStabilityTrend()}}{
+\if{html}{\out{<a id="method-estimateGOStabilityPerCellTypePermDir"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateGOStabilityPerCellTypePermDir}{}}}
+\subsection{Method \code{estimateGOStabilityPerCellTypePermDir()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDeStabilityTrend(
-  name = "de.trend",
-  notch = T,
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGOStabilityPerCellTypePermDir(
+  de.test = "de",
+  top.n.de = 500,
+  padj.go = 0.05,
+  name = "go.jaccards"
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{field name where the test results are stored}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateGOStabilityPerCellTypePerm"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateGOStabilityPerCellTypePerm}{}}}
+\subsection{Method \code{estimateGOStabilityPerCellTypePerm()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGOStabilityPerCellTypePerm(
+  de.test = "de",
+  top.n.de = 500,
+  padj.go = 0.05,
+  name = "go.jaccards"
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{field name where the test results are stored}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateGOStabilityPerCellTypePermGseaDir"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateGOStabilityPerCellTypePermGseaDir}{}}}
+\subsection{Method \code{estimateGOStabilityPerCellTypePermGseaDir()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGOStabilityPerCellTypePermGseaDir(
+  de.test = "de",
+  padj.go = 0.05,
+  name = "go.jaccards"
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{field name where the test results are stored}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateGOStabilityPerCellTypePermGsea"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateGOStabilityPerCellTypePermGsea}{}}}
+\subsection{Method \code{estimateGOStabilityPerCellTypePermGsea()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGOStabilityPerCellTypePermGsea(
+  de.test = "de",
+  padj.go = 0.05,
+  name = "go.jaccards"
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{field name where the test results are stored}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateGOStabilityTrend"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateGOStabilityTrend}{}}}
+\subsection{Method \code{estimateGOStabilityTrend()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGOStabilityTrend(
+  de.name = "go",
+  name = "go.trend",
+  top.n.genes = c(100, 200, 300),
+  p.val.cutoffs = NULL
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{field name where the test results are stored}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotGOStabilityPerCellType"></a>}}
+\if{latex}{\out{\hypertarget{method-plotGOStabilityPerCellType}{}}}
+\subsection{Method \code{plotGOStabilityPerCellType()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotGOStabilityPerCellType(
+  name = "go.jaccards",
+  notch = F,
   show.jitter = T,
   jitter.alpha = 0.05,
   show.pairs = F,
@@ -542,6 +682,58 @@ A ggplot2 object
 }
 \if{html}{\out{</div>}}
 }
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotDEStabilityTrend"></a>}}
+\if{latex}{\out{\hypertarget{method-plotDEStabilityTrend}{}}}
+\subsection{Method \code{plotDEStabilityTrend()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityTrend(
+  name = "de.trend",
+  notch = F,
+  show.jitter = T,
+  jitter.alpha = 0.05,
+  show.pairs = F,
+  sort.order = F
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{field name where the test results are stored}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotDEStabilityFDR"></a>}}
+\if{latex}{\out{\hypertarget{method-plotDEStabilityFDR}{}}}
+\subsection{Method \code{plotDEStabilityFDR()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityFDR(
+  de.name = "de",
+  p.adj.cutoffs = c(0.001, 0.005, 0.01, 0.05, 0.1, 0.2),
+  cell.types = NULL,
+  type = "relative"
+)}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotDEStabilityFDR1loo"></a>}}
+\if{latex}{\out{\hypertarget{method-plotDEStabilityFDR1loo}{}}}
+\subsection{Method \code{plotDEStabilityFDR1loo()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityFDR1loo(
+  cell.type,
+  de.name = "de",
+  p.adj.cutoffs = c(0.001, 0.005, 0.01, 0.05, 0.1, 0.2),
+  cell.types = NULL,
+  type = "relative"
+)}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotDEStabilityBetweenTests"></a>}}
@@ -560,51 +752,18 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateGOStability"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateGOStability}{}}}
-\subsection{Method \code{estimateGOStability()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGOStability(
-  org.db,
-  de.name = "de",
-  name = "go.stability",
-  p.adj = 1,
-  de.raw = NULL,
-  cell.groups = self$cell.groups,
-  universe = NULL,
-  transposed = TRUE,
-  verbose = self$verbose,
-  n.cores = self$n.cores
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-
-\item{\code{n.cores}}{number of cores for parallelisation}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotDeStabilityPerCellType"></a>}}
-\if{latex}{\out{\hypertarget{method-plotDeStabilityPerCellType}{}}}
-\subsection{Method \code{plotDeStabilityPerCellType()}}{
+\if{html}{\out{<a id="method-plotDEStabilityPerCellType"></a>}}
+\if{latex}{\out{\hypertarget{method-plotDEStabilityPerCellType}{}}}
+\subsection{Method \code{plotDEStabilityPerCellType()}}{
 Plot DE stability per cell type
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDeStabilityPerCellType(
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityPerCellType(
   name = "de.jaccards",
-  notch = T,
+  notch = F,
   show.jitter = T,
   jitter.alpha = 0.05,
   show.pairs = F,
-  sort.order = F
+  sort.order = T
 )}\if{html}{\out{</div>}}
 }
 
@@ -634,7 +793,7 @@ A ggplot2 object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDeStabilityPerTest(
   name = "jacc.per.test",
-  notch = T,
+  notch = F,
   show.jitter = T,
   jitter.alpha = 0.05,
   show.pairs = F,
@@ -790,6 +949,7 @@ A ggplot2 object
   palette = NULL,
   build.panel = TRUE,
   n.col = 3,
+  color.var = "CellFrac",
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -881,11 +1041,8 @@ Plot embedding
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotEmbedding(
   embedding = self$embedding,
-  groups = NULL,
   color.by = NULL,
   plot.theme = self$plot.theme,
-  show.legend = TRUE,
-  palette = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -895,13 +1052,11 @@ Plot embedding
 \describe{
 \item{\code{embedding}}{A cell embedding to use (two-column data frame with rownames corresponding to cells) (default: stored embedding object)}
 
-\item{\code{groups}}{cell groups for the plot coloring}
-
 \item{\code{color.by}}{color cells by 'cell.groups', 'condition' or 'sample'. Overrides \code{groups} and \code{palette}. (default: NULL)}
 
 \item{\code{plot.theme}}{plot theme to use (default: \code{self$plot.theme})}
 
-\item{\code{...}}{other parameters are passed to \link[sccore:embeddingPlot]{embeddingPlot}}
+\item{\code{...}}{other parameters passed to \link[sccore:embeddingPlot]{embeddingPlot}}
 }
 \if{html}{\out{</div>}}
 }
@@ -964,12 +1119,45 @@ A list containing a list of terms per ontology, and a data frame with merged res
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateOntologyGsea"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateOntologyGsea}{}}}
+\subsection{Method \code{estimateOntologyGsea()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntologyGsea(
+  name = NULL,
+  de.name = "de",
+  org.db,
+  p.adj = 1,
+  p.adjust.method = "BH",
+  readable = TRUE,
+  verbose = TRUE,
+  qvalue.cutoff = 0.2,
+  min.gs.size = 10,
+  max.gs.size = 500,
+  keep.gene.sets = FALSE,
+  ignore.cache = NULL,
+  de.raw = NULL,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{field name where the test results are stored}
+
+\item{\code{verbose}}{show progress (default: stored value)}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateOntologyFamilies"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateOntologyFamilies}{}}}
 \subsection{Method \code{estimateOntologyFamilies()}}{
 Estimate ontology families based on ontology results
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntologyFamilies(type = "GO", p.adj = 0.05)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntologyFamilies(type = "GO", p.adj = 0.05, name = NULL)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -978,11 +1166,39 @@ Estimate ontology families based on ontology results
 \item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
 
 \item{\code{p.adj}}{Cut-off for adj. P values (default: 0.05)}
+
+\item{\code{name}}{field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 List of families and ontology data per cell type
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getFamilies"></a>}}
+\if{latex}{\out{\hypertarget{method-getFamilies}{}}}
+\subsection{Method \code{getFamilies()}}{
+Identify families containing a specific ontology term or ID
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$getFamilies(go.term = NULL, go.id = NULL, type = "GO", common = FALSE)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{go.term}}{Character vector with term description(s)}
+
+\item{\code{go.id}}{Character vector with ID(s)}
+
+\item{\code{type}}{Ontology, must be either "GO", "DO", or GSEA (default="GO")}
+
+\item{\code{common}}{Boolean, only identify families with all the supplied terms or IDs (default = FALSE)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+Data frame
 }
 }
 \if{html}{\out{<hr>}}
@@ -998,9 +1214,9 @@ Estimate Gene Ontology clusters
   ind.h = 0.66,
   total.h = 0.5,
   verbose = self$verbose,
-  p.adj = p.adj,
-  min.genes = min.genes,
-  name = getOntClustField(type, subtype, genes)
+  p.adj = 0.05,
+  min.genes = 1,
+  name = getOntClustField(subtype, genes)
 )}\if{html}{\out{</div>}}
 }
 
@@ -1019,7 +1235,7 @@ Approximately equal to the fraction of subtypes for which two GOs should belong 
 
 \item{\code{verbose}}{show progress (default: stored value)}
 
-\item{\code{name}}{Name of the field to store the results. Default: \code{cacoa:::getOntClustField(type, subtype, genes)}.}
+\item{\code{name}}{Name of the field to store the results. Default: \code{cacoa:::getOntClustField(subtype, genes)}.}
 }
 \if{html}{\out{</div>}}
 }
@@ -1038,22 +1254,25 @@ List containing:
 Bar plot of ontology terms per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyDistribution(
-  genes = "all",
+  genes = "up",
   type = "GO",
   p.adj = 0.05,
   min.genes = 1,
-  cell.groups = self$cell.groups
+  cell.groups = self$cell.groups,
+  name = NULL
 )}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="all")}
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
 \item{\code{type}}{Ontology, must be either "GO" or "DO" (default="GO")}
 
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+
+\item{\code{name}}{field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -1069,13 +1288,11 @@ Plot ontology terms as a function of both number of DE genes, and number of cell
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyTerms(
   genes = "all",
-  type = "GO",
+  type = c("GO", "DO"),
   p.adj = 0.05,
   min.genes = 1,
   cell.groups = self$cell.groups,
-  label.x.pos = 0.01,
-  label.y.pos = 1,
-  scale = 1,
+  palette = self$cell.groups.palette,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1087,13 +1304,13 @@ Plot ontology terms as a function of both number of DE genes, and number of cell
 
 \item{\code{type}}{Ontology, must be either "GO" or "DO" (default="GO")}
 
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+\item{\code{p.adj}}{(default = 0.05)}
 
-\item{\code{label.x.pos}}{Plot label position on x axis (default=0.01)}
+\item{\code{min.genes}}{(default = 1)}
 
-\item{\code{label.y.pos}}{Plot label position on y axis (default=1)}
+\item{\code{cell.groups}}{(default: stored factor)}
 
-\item{\code{scale}}{Scaling of plots, adjust if e.g. label is misplaced. See \link[cowplot:plot_grid]{cowplot::plot_grid} for more info (default=1.0)}
+\item{\code{palette}}{(default: stored named vector)}
 
 \item{\code{...}}{parameters forwarded to \link{plotNCellRegression}}
 }
@@ -1133,7 +1350,7 @@ Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 
 \item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
 
-\item{\code{cell.subgroup}}{Cell group to plot (default=NULL)}
+\item{\code{cell.subgroup}}{Cell group to plot}
 
 \item{\code{log.colors}}{Use log10 p-values for coloring (default=FALSE)}
 }
@@ -1157,12 +1374,15 @@ Plot a heatmap of ontology P values per cell type
   p.adj = 0.05,
   legend.position = "left",
   selection = "all",
-  n = 10,
+  n = 20,
   clusters = TRUE,
   cluster.name = NULL,
   cell.subgroups = NULL,
   color.range = NULL,
   palette = NULL,
+  row.order = TRUE,
+  col.order = TRUE,
+  legend.title = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1242,6 +1462,7 @@ Plot a heatmap of collapsed (family) ontology P values per cell type
   cluster.name = NULL,
   color.range = NULL,
   palette = NULL,
+  p.adj = 0.05,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1284,16 +1505,17 @@ Plot related ontologies in one hierarchical network plot
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyFamily(
   type = "GO",
   cell.subgroups,
-  family,
+  family = NULL,
   genes = "up",
   subtype = "BP",
   plot.type = "complete",
   show.ids = FALSE,
-  string.length = 18,
+  string.length = 14,
   legend.label.size = 1,
   legend.position = "topright",
   verbose = self$verbose,
-  n.cores = self$n.cores
+  n.cores = self$n.cores,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
@@ -1312,9 +1534,9 @@ Plot related ontologies in one hierarchical network plot
 
 \item{\code{plot.type}}{How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) (default: complete)}
 
-\item{\code{show.ids}}{Whether to show ontology IDs instead of names (default: F)}
+\item{\code{show.ids}}{Whether to show ontology IDs instead of names (default: FALSE)}
 
-\item{\code{string.length}}{Length of strings for wrapping in order to fit text within boxes (default: 18)}
+\item{\code{string.length}}{Length of strings for wrapping in order to fit text within boxes (default: 14)}
 
 \item{\code{legend.label.size}}{Size og legend labels (default: 1)}
 
@@ -1328,6 +1550,86 @@ Plot related ontologies in one hierarchical network plot
 }
 \subsection{Returns}{
 Rgraphviz object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-saveOntologyAsTable"></a>}}
+\if{latex}{\out{\hypertarget{method-saveOntologyAsTable}{}}}
+\subsection{Method \code{saveOntologyAsTable()}}{
+Save ontology results as a table
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveOntologyAsTable(
+  file = "Ontology_results.tsv",
+  type = "GO",
+  subtype = NULL,
+  genes = NULL,
+  p.adj = 0.05,
+  sep = "\\t",
+  dec = "."
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{file}}{File name (default: Ontology_results.tsv)}
+
+\item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
+
+\item{\code{subtype}}{Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)}
+
+\item{\code{genes}}{Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)}
+
+\item{\code{p.adj}}{Adjusted P to filter by (default: 0.05)}
+
+\item{\code{sep}}{Separator (default: tab)}
+
+\item{\code{dec}}{Decimal separator (default: dot)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+Table for import into text editor
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-saveFamiliesAsTable"></a>}}
+\if{latex}{\out{\hypertarget{method-saveFamiliesAsTable}{}}}
+\subsection{Method \code{saveFamiliesAsTable()}}{
+Save family results as a table
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveFamiliesAsTable(
+  file = "Family_results.tsv",
+  type = "GO",
+  subtype = NULL,
+  genes = NULL,
+  p.adj = 0.05,
+  sep = "\\t",
+  dec = "."
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{file}}{File name (default: Family_results.tsv)}
+
+\item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
+
+\item{\code{subtype}}{Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)}
+
+\item{\code{genes}}{Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)}
+
+\item{\code{p.adj}}{Adjusted P to filter by (default: 0.05)}
+
+\item{\code{sep}}{Separator (default: tab)}
+
+\item{\code{dec}}{Decimal separator (default: dot)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+Table for import into text editor
 }
 }
 \if{html}{\out{<hr>}}
@@ -1477,21 +1779,32 @@ A ggplot2 object
 \if{html}{\out{<a id="method-estimateCellLoadings"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateCellLoadings}{}}}
 \subsection{Method \code{estimateCellLoadings()}}{
-Plot Loadings
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateCellLoadings(
-  n.cell.counts = 1000,
+  n.perm = 1000,
+  n.boot = 100,
+  coda.test = "significance",
+  ref.cell.type = NULL,
+  criteria = "cda.std",
   n.seed = 239,
   cells.to.remove = NULL,
   cells.to.remain = NULL,
   samples.to.remove = NULL,
-  n.iter = 1000,
-  filter.empty.cell.types = TRUE
+  filter.empty.cell.types = TRUE,
+  define.ref.cell.type = FALSE,
+  n.cores = self$n.cores,
+  verbose = self$verbose
 )}\if{html}{\out{</div>}}
 }
 
-\subsection{Returns}{
-A ggplot2 object
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{n.cores}}{number of cores for parallelisation}
+
+\item{\code{verbose}}{show progress (default: stored value)}
+}
+\if{html}{\out{</div>}}
 }
 }
 \if{html}{\out{<hr>}}
@@ -1520,9 +1833,7 @@ Plot Loadings
   font.size = NULL,
   ordering = "by.pvalue",
   signif.threshold = 0.05,
-  show.pvals = F,
-  ref.cell.type = NULL,
-  define.ref.cell.type = T
+  show.pvals = TRUE
 )}\if{html}{\out{</div>}}
 }
 
@@ -1677,10 +1988,14 @@ A ggplot2 object
 estimate differential cell density
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDiffCellDensity(
-  type = "subtract",
+  type = "permutation",
   adjust.pvalues = TRUE,
   name = "cell.density",
-  verbose = self$verbose
+  n.permutations = 200,
+  smooth = TRUE,
+  verbose = self$verbose,
+  n.cores = self$n.cores,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
@@ -1694,6 +2009,8 @@ estimate differential cell density
 \item{\code{name}}{slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')}
 
 \item{\code{verbose}}{show progress (default: stored value)}
+
+\item{\code{n.cores}}{number of cores for parallelisation}
 }
 \if{html}{\out{</div>}}
 }
@@ -1705,15 +2022,18 @@ estimate differential cell density
 estimate differential cell density
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDiffCellDensity(
-  type = "subtract",
+  type = "permutation",
   name = "cell.density",
   size = 0.2,
   z.cutoff = NULL,
   palette = NULL,
+  adjust.pvalues = NULL,
   contours = NULL,
   contour.color = "black",
   contour.conf = "10\%",
   plot.na = FALSE,
+  color.range = NULL,
+  mid.color = "gray95",
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -2170,6 +2490,8 @@ make sense, as control cells always have small distance from control.}
   gene.palette = NULL,
   z.palette = NULL,
   plot.na = -1,
+  adj.list = NULL,
+  build.panel = TRUE,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -2192,6 +2514,22 @@ make sense, as control cells always have small distance from control.}
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getJointCountMatrix(force = FALSE, raw = TRUE)}\if{html}{\out{</div>}}
 }
 
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-getGOEnvironmentOpen"></a>}}
+\if{latex}{\out{\hypertarget{method-getGOEnvironmentOpen}{}}}
+\subsection{Method \code{getGOEnvironmentOpen()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$getGOEnvironmentOpen(org.db, verbose = FALSE, ignore.cache = NULL)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{verbose}}{show progress (default: stored value)}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}

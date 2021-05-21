@@ -28,7 +28,7 @@ plotMeanMedValuesPerCellType(
 \item type of a plot "bar" (default), "point" (mean + sd), or "box" for boxplot
 }}
 
-\item{show.jitter}{whether to show indiivudal data points (default: FALSE)}
+\item{show.jitter}{whether to show individual data points (default: FALSE)}
 
 \item{notch}{\itemize{
 \item whether to show notches in the boxplot version (default=TRUE)

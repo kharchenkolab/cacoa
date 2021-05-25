@@ -2908,19 +2908,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[["cluster.free.z"]]))
     },
 
-    getMostChangedGenes = function(n, min.z=0.5, max.z=20, cell.subset=NULL, excluded.genes=NULL, included.genes=NULL) {
-      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")$z
+    getMostChangedGenes = function(n, method=c("z", "lfc"), min.z=0.5, min.lfc=1, max.score=20, cell.subset=NULL, excluded.genes=NULL, included.genes=NULL) {
+      method <- match.arg(method)
+      de.info <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
+      score.mat <- de.info[[method]]
+
+      score.mat@x[(abs(de.info$z@x) < min.z) | abs(de.info$lfc@x) < min.lfc] <- 0
+
       if (!is.null(cell.subset)) {
-        z.scores <- z.scores[cell.subset,]
+        score.mat <- score.mat[cell.subset,]
       }
 
       if (is.null(included.genes)) {
-        included.genes <- colnames(z.scores)
+        included.genes <- colnames(score.mat)
       }
 
-      z.scores@x %<>% abs() %>% pmin(max.z)
-      z.scores@x[z.scores@x < min.z] <- 0
-      scores <- colMeans(z.scores, na.rm=TRUE) %>% sort(decreasing=TRUE) %>%
+      score.mat@x %<>% abs() %>% pmin(max.score)
+      scores <- colSums(score.mat, na.rm=TRUE) %>% sort(decreasing=TRUE) %>%
         .[setdiff(names(.), excluded.genes)] %>% .[intersect(names(.), included.genes)] %>%
         .[1:min(n, length(.))]
       return(scores)
@@ -2962,7 +2966,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param smoothing `beta` parameter of the \link[sccore:heatFilter]{heatFilter}. Default: 20.
     #' @param filter graph filter function. Default: \link[sccore:heatFilter]{heatFilter}.
     #' @param ... parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}
-    #' @return Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z.smoothed` field.
+    #' @return Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z$z.smoothed` field.
     smoothClusterFreeZScores = function(n.top.genes=1000, smoothing=20, filter=NULL, gene.selection="change", excluded.genes=NULL,
                                         n.cores=self$n.cores, verbose=self$verbose, ...) {
       z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")$z
@@ -3111,10 +3115,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    plotMostChangedGenes = function(n.top.genes, min.z=0.5, max.z=20, max.z.plot=max.z, cell.subset=NULL, excluded.genes=NULL, ...) {
-      scores <- self$getMostChangedGenes(n.top.genes, min.z=min.z, max.z=max.z,
+    plotMostChangedGenes = function(n.top.genes, method="z", min.z=0.5, min.lfc=1, max.score=20, cell.subset=NULL, excluded.genes=NULL, ...) {
+      scores <- self$getMostChangedGenes(n.top.genes, method=method, min.z=min.z, min.lfc=min.lfc, max.score=max.score,
                                          cell.subset=cell.subset, excluded.genes=excluded.genes)
-      self$plotGeneExpressionComparison(scores=scores, max.z=max.z.plot, ...)
+      self$plotGeneExpressionComparison(scores=scores, ...)
     },
 
     plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plot.z=TRUE, plot.lfc=TRUE, plot.expression=TRUE, max.z=5, max.lfc=4, smoothed=FALSE,

@@ -2872,7 +2872,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `target` mean or median expression in target samples
     #'   - `lfc`: log2(fold-change) of expression
     #' Cells that have only one condition in their expression neighborhood have NA Z-scores for all genes.
-    #' Results are also stored in the `cluster.free.z` field.
+    #' Results are also stored in the `cluster.free.de` field.
     estimateClusterFreeZScores = function(n.top.genes=Inf, max.z=20, min.expr.frac=0.01,
                                           min.n.samp.per.cond=2, min.n.obs.per.samp=2, robust=FALSE, norm.both=FALSE,
                                           lfc.pseudocount=1e-5, verbose=self$verbose, n.cores=self$n.cores) {
@@ -2904,13 +2904,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       lf.mat@x <- log2(mats$target@x + lfc.pseudocount) - log2(lf.mat@x + lfc.pseudocount)
       mats$lfc <- lf.mat
 
-      self$test.results[["cluster.free.z"]] <- mats
-      return(invisible(self$test.results[["cluster.free.z"]]))
+      self$test.results[["cluster.free.de"]] <- mats
+      return(invisible(self$test.results[["cluster.free.de"]]))
     },
 
     getMostChangedGenes = function(n, method=c("z", "lfc"), min.z=0.5, min.lfc=1, max.score=20, cell.subset=NULL, excluded.genes=NULL, included.genes=NULL) {
       method <- match.arg(method)
-      de.info <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
+      de.info <- private$getResults("cluster.free.de", "estimateClusterFreeZScores")
       score.mat <- de.info[[method]]
 
       score.mat@x[(abs(de.info$z@x) < min.z) | abs(de.info$lfc@x) < min.lfc] <- 0
@@ -2966,10 +2966,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param smoothing `beta` parameter of the \link[sccore:heatFilter]{heatFilter}. Default: 20.
     #' @param filter graph filter function. Default: \link[sccore:heatFilter]{heatFilter}.
     #' @param ... parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}
-    #' @return Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z$z.smoothed` field.
+    #' @return Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.de$z.smoothed` field.
     smoothClusterFreeZScores = function(n.top.genes=1000, smoothing=20, filter=NULL, gene.selection="z", excluded.genes=NULL,
                                         n.cores=self$n.cores, verbose=self$verbose, ...) {
-      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")$z
+      z.scores <- private$getResults("cluster.free.de", "estimateClusterFreeZScores")$z
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection,
                                    excluded.genes=excluded.genes, included.genes=colnames(z.scores))
       z.scores <- z.scores[,genes]
@@ -2985,7 +2985,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                             progress=verbose, ...)
 
       z.smoothed[is.na(z.scores)] <- NA
-      self$test.results[["cluster.free.z"]]$z.smoothed <- z.smoothed
+      self$test.results[["cluster.free.de"]]$z.smoothed <- z.smoothed
       return(invisible(z.smoothed))
     },
 
@@ -3008,7 +3008,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                       cell.subset=NULL, ...) {
       checkPackageInstalled('fabia', bioc=TRUE)
 
-      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")$z.smoothed
+      z.scores <- private$getResults("cluster.free.de", "estimateClusterFreeZScores")$z.smoothed
       if (is.null(z.scores)) stop("Smoothed z.scores were not estimated. Please, run smoothClusterFreeZScores first.")
 
       if (!is.null(n.top.genes) & !is.infinite(n.top.genes)) {
@@ -3133,16 +3133,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.null(gene.palette)) gene.palette <- colorRampPalette(c("gray90", "red", "#5A0000"), space = "Lab")
 
       if (plot.z || plot.lfc) {
-        z.info <- self$test.results$cluster.free.z
-        z.scores <- z.info$z
-        if (is.null(z.info)) {
+        de.info <- self$test.results$cluster.free.de
+        z.scores <- de.info$z
+        if (is.null(de.info)) {
           warning("Z-scores were not estimated. See estimateClusterFreeZScores().")
           plot.z <- FALSE
           plot.lfc <- FALSE
         }
 
-        if (!all(genes %in% colnames(z.info$z))) {
-          missed.genes <- setdiff(genes, colnames(z.info$z))
+        if (!all(genes %in% colnames(de.info$z))) {
+          missed.genes <- setdiff(genes, colnames(de.info$z))
           warning("Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See estimateClusterFreeZScores().")
           plot.z <- FALSE
           plot.lfc <- FALSE
@@ -3150,11 +3150,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (plot.z && smoothed) {
-        if ((is.null(z.info$z.smoothed) || !all(genes %in% colnames(z.info$z.smoothed)))){
-          missed.genes <- setdiff(colnames(z.info$z.smoothed), genes)
+        if ((is.null(de.info$z.smoothed) || !all(genes %in% colnames(de.info$z.smoothed)))){
+          missed.genes <- setdiff(colnames(de.info$z.smoothed), genes)
           warning("Smoothed Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See smoothClusterFreeZScores().")
         } else {
-          z.scores <- z.info$z.smoothed
+          z.scores <- de.info$z.smoothed
         }
       }
 
@@ -3172,7 +3172,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
 
         if (plot.lfc) {
-          lst <- self$plotEmbedding(colors=z.info$lfc[,g], title=paste("Log2(fold-change):", g),
+          lst <- self$plotEmbedding(colors=de.info$lfc[,g], title=paste("Log2(fold-change):", g),
                                     color.range=c(-max.lfc, max.lfc), plot.na=plot.na, legend.title='LFC',
                                     palette=lfc.palette, ...) %>%
             list() %>% c(lst)
@@ -3232,7 +3232,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     getTopGenes = function(n, gene.selection=c("z", "lfc", "expression", "od"), cm.joint=NULL,
                            min.expr.frac=0.0, excluded.genes=NULL, included.genes=NULL, ...) {
       gene.selection <- match.arg(gene.selection)
-      if ((gene.selection %in% c("z", "lfc")) && is.null(self$test.results$cluster.free.z)) {
+      if ((gene.selection %in% c("z", "lfc")) && is.null(self$test.results$cluster.free.de)) {
         warning("Please run estimateClusterFreeZScores() first to use gene.selection='z' or 'lfc'. Fall back to gene.selection='expression'.")
         gene.selection <- "expression"
       }

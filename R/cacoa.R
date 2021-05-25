@@ -5,12 +5,12 @@
 #' @exportClass Cacoa
 #' @param sample.groups a two-level factor on the sample names describing the conditions being compared (default: stored vector)
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
-#' @param n.cores number of cores for parallelisation
+#' @param n.cores number of cores for parallelization
 #' @param verbose show progress (default: stored value)
 #' @param name field name where the test results are stored
 #' @param n.top.genes number of top genes for estimation
-#' @param gene.selection a method to select top genes, "change" selects genes by cluster-free Z-score change,
-#' "expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "change".
+#' @param gene.selection a method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
+#' "expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "z".
 #' @param excluded.genes list of genes to exclude during estimation. For example, a list of mitochondrial genes.
 Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
   public = list(
@@ -2941,7 +2941,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' In most cases, must be TRUE for "cosine" and "cor" distances and always must be FALSE for "js". (default: `dist != 'js'`)
     #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
     #' Results are also stored in the `cluster.free.expr.shifts` field.
-    estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection="change", min.n.between=2, min.n.within=max(min.n.between, 1),
+    estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection="z", min.n.between=2, min.n.within=max(min.n.between, 1),
                                                    min.expr.frac=0.0, min.n.obs.per.samp=3, norm.all=FALSE, dist="cor", log.vectors=(dist != "js"),
                                                    verbose=self$verbose, n.cores=self$n.cores) {
       cm <- self$getJointCountMatrix(raw=FALSE)
@@ -2967,7 +2967,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param filter graph filter function. Default: \link[sccore:heatFilter]{heatFilter}.
     #' @param ... parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}
     #' @return Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z$z.smoothed` field.
-    smoothClusterFreeZScores = function(n.top.genes=1000, smoothing=20, filter=NULL, gene.selection="change", excluded.genes=NULL,
+    smoothClusterFreeZScores = function(n.top.genes=1000, smoothing=20, filter=NULL, gene.selection="z", excluded.genes=NULL,
                                         n.cores=self$n.cores, verbose=self$verbose, ...) {
       z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")$z
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection,
@@ -3004,7 +3004,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `gene.scores`: list of vectors of gene scores per programme. Contains only genes, selected for
     #'     the programme usin fabia biclustering.
     #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
-    estimateGeneProgrammes = function(n.top.genes=Inf, n.programmes=15, gene.selection="change", name="gene.programmes",
+    estimateGeneProgrammes = function(n.top.genes=Inf, n.programmes=15, gene.selection="z", name="gene.programmes",
                                       cell.subset=NULL, ...) {
       checkPackageInstalled('fabia', bioc=TRUE)
 
@@ -3229,11 +3229,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       stop(msg)
     },
 
-    getTopGenes = function(n, gene.selection=c("change", "expression", "od"), cm.joint=NULL,
+    getTopGenes = function(n, gene.selection=c("z", "lfc", "expression", "od"), cm.joint=NULL,
                            min.expr.frac=0.0, excluded.genes=NULL, included.genes=NULL, ...) {
       gene.selection <- match.arg(gene.selection)
-      if ((gene.selection == "change") && is.null(self$test.results$cluster.free.z)) {
-        warning("Please run estimateClusterFreeZScores() first to use gene.selection='change'. Fall back to gene.selection='expression'.")
+      if ((gene.selection %in% c("z", "lfc")) && is.null(self$test.results$cluster.free.z)) {
+        warning("Please run estimateClusterFreeZScores() first to use gene.selection='z' or 'lfc'. Fall back to gene.selection='expression'.")
         gene.selection <- "expression"
       }
 
@@ -3246,8 +3246,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         excluded.genes %<>% union(colnames(cm.joint)[colMeans(cm.joint, na.rm=TRUE) < min.expr.frac])
       }
 
-      if (gene.selection == "change") {
-        genes <- names(self$getMostChangedGenes(Inf, ...))
+      if (gene.selection %in% c("z", "lfc")) {
+        genes <- names(self$getMostChangedGenes(Inf, method=gene.selection, ...))
       } else if (gene.selection == "od") {
         genes <- extractOdGenes(self$data.object)
       } else { # expression

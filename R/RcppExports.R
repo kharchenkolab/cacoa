@@ -5,7 +5,7 @@
 #' @param n_samples must be equal to maximum(sample_per_cell) + 1
 NULL
 
-clusterFreeZScoreMat <- function(count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond = 2L, min_n_obs_per_samp = 1L, robust = TRUE, norm_both = FALSE, min_z = 0.01, verbose = TRUE, n_cores = 1L) {
+clusterFreeZScoreMat <- function(count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond = 2L, min_n_obs_per_samp = 1L, robust = FALSE, norm_both = FALSE, min_z = 0.001, verbose = TRUE, n_cores = 1L) {
     .Call('_cacoa_clusterFreeZScoreMat', PACKAGE = 'cacoa', count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust, norm_both, min_z, verbose, n_cores)
 }
 

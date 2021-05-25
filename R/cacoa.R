@@ -2853,7 +2853,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
       }
 
-
       return(gg)
     },
 
@@ -2864,13 +2863,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.expr.frac minimal fraction of cell expressing a gene for estimating z-scores for it. Default: 0.001.
     #' @param min.n.samp.per.cond minimul number of samples per condition for estimating z-scores (default: 2)
     #' @param min.n.obs.per.samp minimul number of cells per samples for estimating z-scores (default: 2)
-    #' @param robust whether to use median estimates instead of mean (default: TRUE)
-    #' @return Sparse matrix of z-scores with genes as columns and cells as rows.
+    #' @param robust whether to use median estimates instead of mean. Using median is more robust,
+    #' but greatly increase the number of zeros in the data, leading to bias towards highly-express genes. (Default: FALSE)
+    #' @param lfc.pseudocount pseudocount value for estimation of log2(fold-change)
+    #' @return list with sparce matrices containing various DE metrics with genes as columns and cells as rows:
+    #'   - `z`: DE Z-scores
+    #'   - `reference` mean or median expression in reference samples
+    #'   - `target` mean or median expression in target samples
+    #'   - `lfc`: log2(fold-change) of expression
     #' Cells that have only one condition in their expression neighborhood have NA Z-scores for all genes.
     #' Results are also stored in the `cluster.free.z` field.
     estimateClusterFreeZScores = function(n.top.genes=Inf, max.z=20, min.expr.frac=0.01,
-                                          min.n.samp.per.cond=2, min.n.obs.per.samp=2, robust=TRUE, norm.both=FALSE,
-                                          verbose=self$verbose, n.cores=self$n.cores) {
+                                          min.n.samp.per.cond=2, min.n.obs.per.samp=2, robust=FALSE, norm.both=FALSE,
+                                          lfc.pseudocount=1e-5, verbose=self$verbose, n.cores=self$n.cores) {
       cm <- self$getJointCountMatrix(raw=FALSE)
       genes <- private$getTopGenes(n.top.genes, gene.selection="expression", cm.joint=cm, min.expr.frac=min.expr.frac)
 
@@ -2880,26 +2885,31 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
 
       adj.mat <- extractCellGraph(self$data.object) %>% igraph::as_adj()
+      diag(adj.mat) <- 1
       cell.names <- intersect(rownames(cm), rownames(adj.mat))
 
       adj.mat %<>% .[cell.names, cell.names, drop=FALSE] %>% as("dgTMatrix")
       nns.per.cell <- split(adj.mat@j, adj.mat@i) %>% setNames(cell.names)
       cm %<>% .[cell.names, genes, drop=FALSE] %>% Matrix::t()
 
-      z.mat <- clusterFreeZScoreMat(
+      mats <- clusterFreeZScoreMat(
         cm, sample_per_cell=self$sample.per.cell[cell.names], nn_ids=nns.per.cell, is_ref=is.ref,
         min_n_samp_per_cond=min.n.samp.per.cond, min_n_obs_per_samp=min.n.obs.per.samp, robust=robust,
         norm_both=norm.both, verbose=verbose, n_cores=n.cores
       )
 
-      z.mat@x %<>% pmin(max.z) %>% pmax(-max.z)
+      mats$z@x %<>% pmin(max.z) %>% pmax(-max.z)
 
-      self$test.results[["cluster.free.z"]] <- Matrix::t(z.mat)
+      lf.mat <- mats$reference
+      lf.mat@x <- log2(mats$target@x + lfc.pseudocount) - log2(lf.mat@x + lfc.pseudocount)
+      mats$lfc <- lf.mat
+
+      self$test.results[["cluster.free.z"]] <- mats
       return(invisible(self$test.results[["cluster.free.z"]]))
     },
 
     getMostChangedGenes = function(n, min.z=0.5, max.z=20, cell.subset=NULL, excluded.genes=NULL, included.genes=NULL) {
-      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
+      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")$z
       if (!is.null(cell.subset)) {
         z.scores <- z.scores[cell.subset,]
       }
@@ -2955,7 +2965,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.z.smoothed` field.
     smoothClusterFreeZScores = function(n.top.genes=1000, smoothing=20, filter=NULL, gene.selection="change", excluded.genes=NULL,
                                         n.cores=self$n.cores, verbose=self$verbose, ...) {
-      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")
+      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")$z
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection,
                                    excluded.genes=excluded.genes, included.genes=colnames(z.scores))
       z.scores <- z.scores[,genes]
@@ -2971,7 +2981,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                             progress=verbose, ...)
 
       z.smoothed[is.na(z.scores)] <- NA
-      self$test.results[["cluster.free.z.smoothed"]] <- z.smoothed
+      self$test.results[["cluster.free.z"]]$z.smoothed <- z.smoothed
       return(invisible(z.smoothed))
     },
 
@@ -2992,9 +3002,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
     estimateGeneProgrammes = function(n.top.genes=Inf, n.programmes=15, gene.selection="change", name="gene.programmes",
                                       cell.subset=NULL, ...) {
-      checkPackageInstalled('Rtsne', bioc=TRUE)
+      checkPackageInstalled('fabia', bioc=TRUE)
 
-      z.scores <- private$getResults("cluster.free.z.smoothed", "smoothClusterFreeZScores")
+      z.scores <- private$getResults("cluster.free.z", "estimateClusterFreeZScores")$z.smoothed
+      if (is.null(z.scores)) stop("Smoothed z.scores were not estimated. Please, run smoothClusterFreeZScores first.")
+
       if (!is.null(n.top.genes) & !is.infinite(n.top.genes)) {
         genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, included.genes=colnames(z.scores))
         z.scores <- z.scores[,genes]
@@ -3105,34 +3117,40 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$plotGeneExpressionComparison(scores=scores, max.z=max.z.plot, ...)
     },
 
-    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plot.z=TRUE, plot.expression=TRUE, max.z=5, smoothed=FALSE,
-                                            gene.palette=NULL, z.palette=NULL, plot.na=-1, adj.list=NULL, build.panel=TRUE, ...) {
+    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plot.z=TRUE, plot.lfc=TRUE, plot.expression=TRUE, max.z=5, max.lfc=4, smoothed=FALSE,
+                                            gene.palette=NULL, z.palette=NULL, lfc.palette=NULL, plot.na=-1, adj.list=NULL, build.panel=TRUE, nrow=1, ...) {
       if (is.null(genes)) {
         if (is.null(scores)) stop("Either 'genes' or 'scores' must be provided")
         genes <- names(scores)
       }
 
-      if (!plot.z && !plot.expression) return()
+      if (!plot.z && !plot.expression) return(NULL)
 
       if (is.null(gene.palette)) gene.palette <- colorRampPalette(c("gray90", "red", "#5A0000"), space = "Lab")
 
-      if (plot.z) {
-        if (smoothed) {
-          z.scores <- self$test.results$cluster.free.z.smoothed
-          if ((is.null(z.scores) || !all(genes %in% colnames(z.scores)))){
-            missed.genes <- setdiff(colnames(z.scores), genes)
-            warning("Smoothed Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See smoothClusterFreeZScores().")
-            smoothed <- FALSE
-          }
+      if (plot.z || plot.lfc) {
+        z.info <- self$test.results$cluster.free.z
+        z.scores <- z.info$z
+        if (is.null(z.info)) {
+          warning("Z-scores were not estimated. See estimateClusterFreeZScores().")
+          plot.z <- FALSE
+          plot.lfc <- FALSE
         }
 
-        if (!smoothed) {
-          z.scores <- self$test.results$cluster.free.z
-          if ((is.null(z.scores) || !all(genes %in% colnames(z.scores)))) {
-            missed.genes <- setdiff(genes, colnames(z.scores))
-            warning("Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See estimateClusterFreeZScores().")
-            plot.z <- FALSE
-          }
+        if (!all(genes %in% colnames(z.info$z))) {
+          missed.genes <- setdiff(genes, colnames(z.info$z))
+          warning("Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See estimateClusterFreeZScores().")
+          plot.z <- FALSE
+          plot.lfc <- FALSE
+        }
+      }
+
+      if (plot.z && smoothed) {
+        if ((is.null(z.info$z.smoothed) || !all(genes %in% colnames(z.info$z.smoothed)))){
+          missed.genes <- setdiff(colnames(z.info$z.smoothed), genes)
+          warning("Smoothed Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See smoothClusterFreeZScores().")
+        } else {
+          z.scores <- z.info$z.smoothed
         }
       }
 
@@ -3149,15 +3167,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           }) %>% c(lst)
         }
 
+        if (plot.lfc) {
+          lst <- self$plotEmbedding(colors=z.info$lfc[,g], title=paste("Log2(fold-change):", g),
+                                    color.range=c(-max.lfc, max.lfc), plot.na=plot.na, legend.title='LFC',
+                                    palette=lfc.palette, ...) %>%
+            list() %>% c(lst)
+        }
+
         if (plot.z) {
           title <- if (is.null(scores)) g else paste0(g, ": ", signif(scores[g], 3))
           lst <- self$plotEmbedding(colors=z.scores[,g], title=title, color.range=c(-max.z, max.z),
                                     plot.na=plot.na, legend.title='Z-score', palette=z.palette, ...) %>%
             list() %>% c(lst)
         }
+
         lst <- lapply(lst, function(x) x + theme(legend.background = element_blank()) + adj.list)
         if (build.panel) {
-          lst <- if ((length(lst) > 1)) cowplot::plot_grid(plotlist=lst, ncol=3) else lst[[1]]
+          lst <- if ((length(lst) > 1)) cowplot::plot_grid(plotlist=lst, nrow=nrow) else lst[[1]]
         }
 
         lst

@@ -202,18 +202,18 @@ adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smoot
     scores.shuffled.ranges <- matrixStats::colRanges(scores.shuffled, na.rm=TRUE)
   }
 
-  kde.res.pos <- scores.shuffled.ranges[,2] %>%
-    ks::kcde(h=diff(range(.)) / 20, eval.points=score) %>% .$estimate
-  kde.res.neg <- scores.shuffled.ranges[,1] %>%
-    ks::kcde(h=diff(range(.)) / 20, eval.points=score) %>% .$estimate
+  p.vals <- c()
+  sign_mask <- (score >= 0)
+  if (any(sign_mask)) {
+    p.vals %<>% c((sapply(score[sign_mask], function(x) sum(x < scores.shuffled.ranges[,2])) + 1) / (ncol(scores.shuffled) + 1))
+  }
 
-  z.scores <- pmin(1 - kde.res.pos, 0.5) %>% qnorm(lower.tail=FALSE)
-  z.scores[score < 0] <- pmin(kde.res.neg[score < 0], 0.5) %>%
-    qnorm(lower.tail=FALSE) %>% {. * -1}
+  if (any(!sign_mask)) {
+    p.vals %<>% c((sapply(score[!sign_mask], function(x) sum(x > scores.shuffled.ranges[,1])) + 1) / (ncol(scores.shuffled) + 1))
+  }
 
-  z.scores[z.scores == Inf] <- max(z.scores[!is.infinite(z.scores)], na.rm=TRUE)
-  z.scores[z.scores == -Inf] <- min(z.scores[!is.infinite(z.scores)], na.rm=TRUE)
-  z.scores %<>% setNames(names(score))
+  z.scores <- pmax(1 - p.vals[names(score)], 0.5) %>% qnorm(lower.tail=TRUE)
+  z.scores[!sign_mask] %<>% {. * -1}
 
   return(z.scores)
 }

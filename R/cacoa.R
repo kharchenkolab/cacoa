@@ -2607,7 +2607,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param type method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);
     #' @param adjust.pvalues whether to adjust Z-scores for multiple comparison using BH method (default: TRUE)
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    estimateDiffCellDensity=function(type='permutation', adjust.pvalues=TRUE, name='cell.density', n.permutations=200, smooth=TRUE,
+    estimateDiffCellDensity=function(type='permutation', adjust.pvalues=TRUE, name='cell.density', n.permutations=400, smooth=TRUE,
                                      verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
       density.mat <- dens.res$density.mat

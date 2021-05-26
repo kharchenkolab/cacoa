@@ -159,8 +159,8 @@ diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, t
   }
 
   if (type == 'permutation') {
-    checkPackageInstalled("robustbase", details="for `type='permutation'`", cran=TRUE)
-    colRed <- robustbase::colMedians
+    checkPackageInstalled("matrixStats", details="for `type='permutation'`", cran=TRUE)
+    colRed <- matrixStats::colMedians
   } else if (type == 'permutation.mean') {
     colRed <- Matrix::colMeans
   } else stop("Unknown method: ", type)
@@ -182,6 +182,7 @@ diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, t
 }
 
 adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smooth=FALSE, graph=NULL, beta=30, n.cores=1, verbose=TRUE) {
+  checkPackageInstalled("matrixStats", details="for adjusting p-values", cran=TRUE)
   if (smooth) {
     if (is.null(graph)) stop("graph has to be provided if smooth is TRUE")
 
@@ -196,14 +197,14 @@ adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smoot
     uq <- 1 - wins
     lq <- wins
     score %<>% pmin(quantile(., uq, na.rm=TRUE)) %>% pmax(quantile(., lq, na.rm=TRUE))
-    scores.shuffled <- apply(scores.shuffled, 2, function(sig) {
-      sig %>% pmin(quantile(., uq, na.rm=TRUE)) %>% pmax(quantile(., lq, na.rm=TRUE))
-    })
+    scores.shuffled.ranges <- matrixStats::colQuantiles(scores.shuffled, probs=c(lq, uq), na.rm=TRUE)
+  } else {
+    scores.shuffled.ranges <- matrixStats::colRanges(scores.shuffled, na.rm=TRUE)
   }
 
-  kde.res.pos <- apply(scores.shuffled, 2, max, na.rm=TRUE) %>%
+  kde.res.pos <- scores.shuffled.ranges[,2] %>%
     ks::kcde(h=diff(range(.)) / 20, eval.points=score) %>% .$estimate
-  kde.res.neg <- apply(scores.shuffled, 2, min, na.rm=TRUE) %>%
+  kde.res.neg <- scores.shuffled.ranges[,1] %>%
     ks::kcde(h=diff(range(.)) / 20, eval.points=score) %>% .$estimate
 
   z.scores <- pmin(1 - kde.res.pos, 0.5) %>% qnorm(lower.tail=FALSE)

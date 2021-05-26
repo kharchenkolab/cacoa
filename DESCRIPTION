@@ -56,9 +56,9 @@ Suggests:
     ggrastr (>= 0.1.7),
     GOfuncR,
     graph,
+    matrixStats,
     RColorBrewer,
     Rgraphviz,
-    robustbase,
     Rtsne
 Remotes:
     kharchenkolab/sccore

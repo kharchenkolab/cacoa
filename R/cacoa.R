@@ -2901,8 +2901,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     estimateClusterFreeDEAdjusted = function(genes, n.permutations=500, smooth=TRUE, min.n.samp.per.cond=2, min.n.obs.per.samp=2,
                                              robust=FALSE, norm.both=TRUE, verbose=self$verbose, n.cores=self$n.cores) {
-      if (smooth) checkPackageInstalled("robustbase", details="for `smooth=TRUE`", cran=TRUE)
-
       cm.full <- self$getJointCountMatrix(raw=FALSE)
       genes %<>% sn()
 
@@ -2933,17 +2931,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (smooth) {
         if (verbose) message("Smoothing scores...")
-        z.current <- plapply(genes, function(g) {
-          r <- sapply(de.inp$nns.per.cell, function(ids) median(z.current[[g]][ids + 1], na.rm=TRUE))
-          r[is.na(z.current[[g]])] <- NA
-          r
-        }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE)
-
-        z.permut <- plapply(genes, function(g) {
-          r <- sapply(de.inp$nns.per.cell, function(ids) robustbase::colMedians(t(z.permut[[g]][,ids + 1]), na.rm=TRUE))
-          r[is.na(z.permut[[g]])] <- NA
-          r
-        }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE)
+        z.current <- plapply(z.current, applyMedianFilter, de.inp$nns.per.cell, progress=verbose,
+                             n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE)
+        z.permut <- z.permut %>% lapply(Matrix::t) %>%
+          applyMedianFilterLM(nn_ids=de.inp$nns.per.cell, n_cores=n.cores, verbose=verbose) %>%
+          lapply(Matrix::t)
         message("Done")
       }
 

@@ -68,6 +68,95 @@ Eigen::MatrixXd collapseMatrixNorm(const Eigen::SparseMatrix<double> &mtx, const
     return res;
 }
 
+// [[Rcpp::export]]
+NumericVector applyMedianFilter(NumericVector signal, std::vector<std::vector<int>> nn_ids) {
+  assert_r(signal.size() == nn_ids.size(), "Input vectors must have the same length");
+
+  std::vector<double> signal_c = as<std::vector<double>>(signal);
+  std::vector<double> signal_smoothed(signal_c.size());
+  for (size_t si = 0; si < signal_c.size(); ++si) {
+    if (std::isnan(signal_c.at(si))) {
+      signal_smoothed[si] = NAN;
+      continue;
+    }
+
+    std::vector<double> sig_cur;
+    for (int nni : nn_ids.at(si)) {
+      double val = signal_c.at(nni);
+      if (!std::isnan(val)) {
+        sig_cur.emplace_back(val);
+      }
+    }
+
+    signal_smoothed[si] = median(sig_cur);
+  }
+
+  NumericVector signal_smoothed_r = wrap(signal_smoothed);
+  signal_smoothed_r.names() = signal.names();
+  return signal_smoothed_r;
+}
+
+MatrixXd applyMedianFilterMat(const MatrixXd &signal, const std::vector<std::vector<int>> &nn_ids) {
+  assert_r(signal.rows() == nn_ids.size(), "Number of rows in signal must match to the length of nn_ids");
+  MatrixXd res = MatrixXd::Zero(signal.rows(), signal.cols());
+  for (size_t ci = 0; ci < signal.cols(); ++ci) {
+    auto sig_col = signal.col(ci);
+    auto res_col = res.col(ci);
+    for (size_t ri = 0; ri < signal.rows(); ++ri) {
+      if (std::isnan(sig_col(ri))) {
+        res_col(ri) = NAN;
+        continue;
+      }
+
+      std::vector<double> sig_cur;
+      for (int nni : nn_ids.at(ri)) {
+        double val = sig_col(nni);
+        if (!std::isnan(val)) {
+          sig_cur.emplace_back(val);
+        }
+      }
+
+      res_col(ri) = median(sig_cur);
+    }
+  }
+
+  return res;
+}
+
+// [[Rcpp::export]]
+SEXP applyMedianFilterMat(SEXP signal, std::vector<std::vector<int>> nn_ids) {
+  return wrap(applyMedianFilterMat(as<MatrixXd>(signal), nn_ids));
+}
+
+// [[Rcpp::export]]
+List applyMedianFilterLM(List signal_lst, std::vector<std::vector<int>> nn_ids, int n_cores=1, bool verbose=true) {
+    std::mutex mut;
+    std::vector<MatrixXd> signal_mats, res_mats(signal_lst.size());
+    for (const auto &exp : signal_lst) {
+        MatrixXd sm = as<MatrixXd>(exp);
+        assert_r(sm.rows() == nn_ids.size(), "Number of rows in signal must match to the length of nn_ids");
+        signal_mats.emplace_back(sm);
+    }
+
+    auto task = [&signal_mats, &res_mats, &nn_ids, &mut](int mi) {
+        MatrixXd res = applyMedianFilterMat(signal_mats[mi], nn_ids);
+        {
+            std::lock_guard<std::mutex> l(mut);
+            res_mats[mi] = res;
+        }
+    };
+
+    try {
+      sccore::runTaskParallelFor(0, signal_mats.size(), task, n_cores, verbose);
+    } catch (std::runtime_error &x) {
+      Rcpp::stop(x.what());
+    }
+
+    List res_lst = wrap(res_mats);
+    res_lst.names() = signal_lst.names();
+    return res_lst;
+}
+
 /// Z-scores
 
 std::vector<unsigned> count_values(const std::vector<int> &values, const std::vector<int> &sub_ids) {

@@ -45,6 +45,28 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// clusterFreeZScoreMat2
+List clusterFreeZScoreMat2(const SEXP count_mat, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool>& is_ref, int min_n_samp_per_cond, int min_n_obs_per_samp, bool robust, bool norm_both, double min_z, bool verbose, int n_cores, bool return_demo);
+RcppExport SEXP _cacoa_clusterFreeZScoreMat2(SEXP count_matSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP is_refSEXP, SEXP min_n_samp_per_condSEXP, SEXP min_n_obs_per_sampSEXP, SEXP robustSEXP, SEXP norm_bothSEXP, SEXP min_zSEXP, SEXP verboseSEXP, SEXP n_coresSEXP, SEXP return_demoSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const SEXP >::type count_mat(count_matSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type sample_per_cell(sample_per_cellSEXP);
+    Rcpp::traits::input_parameter< List >::type nn_ids(nn_idsSEXP);
+    Rcpp::traits::input_parameter< const std::vector<bool>& >::type is_ref(is_refSEXP);
+    Rcpp::traits::input_parameter< int >::type min_n_samp_per_cond(min_n_samp_per_condSEXP);
+    Rcpp::traits::input_parameter< int >::type min_n_obs_per_samp(min_n_obs_per_sampSEXP);
+    Rcpp::traits::input_parameter< bool >::type robust(robustSEXP);
+    Rcpp::traits::input_parameter< bool >::type norm_both(norm_bothSEXP);
+    Rcpp::traits::input_parameter< double >::type min_z(min_zSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
+    Rcpp::traits::input_parameter< bool >::type return_demo(return_demoSEXP);
+    rcpp_result_gen = Rcpp::wrap(clusterFreeZScoreMat2(count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust, norm_both, min_z, verbose, n_cores, return_demo));
+    return rcpp_result_gen;
+END_RCPP
+}
 // clusterFreeZScoreMat
 List clusterFreeZScoreMat(const SEXP count_mat, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool>& is_ref, int min_n_samp_per_cond, int min_n_obs_per_samp, bool robust, bool norm_both, double min_z, bool verbose, int n_cores);
 RcppExport SEXP _cacoa_clusterFreeZScoreMat(SEXP count_matSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP is_refSEXP, SEXP min_n_samp_per_condSEXP, SEXP min_n_obs_per_sampSEXP, SEXP robustSEXP, SEXP norm_bothSEXP, SEXP min_zSEXP, SEXP verboseSEXP, SEXP n_coresSEXP) {
@@ -118,6 +140,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_applyMedianFilter", (DL_FUNC) &_cacoa_applyMedianFilter, 2},
     {"_cacoa_applyMedianFilterMat", (DL_FUNC) &_cacoa_applyMedianFilterMat, 2},
     {"_cacoa_applyMedianFilterLM", (DL_FUNC) &_cacoa_applyMedianFilterLM, 4},
+    {"_cacoa_clusterFreeZScoreMat2", (DL_FUNC) &_cacoa_clusterFreeZScoreMat2, 12},
     {"_cacoa_clusterFreeZScoreMat", (DL_FUNC) &_cacoa_clusterFreeZScoreMat, 11},
     {"_cacoa_estimateClusterFreeExpressionShiftsC", (DL_FUNC) &_cacoa_estimateClusterFreeExpressionShiftsC, 12},
     {"_cacoa_mapIds", (DL_FUNC) &_cacoa_mapIds, 2},

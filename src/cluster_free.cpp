@@ -3,6 +3,7 @@
 #include <vector>
 #include <cmath>
 #include <mutex>
+#include <random>
 #include <functional>
 #include <sccore_par.hpp>
 
@@ -11,6 +12,8 @@
 
 using namespace Rcpp;
 using namespace Eigen;
+
+const double EPS = std::numeric_limits<double>::epsilon();
 
 /// Utils
 
@@ -85,8 +88,8 @@ Eigen::MatrixXd collapseMatrixNorm(const Eigen::SparseMatrix<double> &mtx, const
     return res;
 }
 
-Eigen::MatrixXd buildCellXSampleMatrix(const VectorXd &gene_vec, const std::vector<int> &sample_factor,
-                                       const std::vector<std::vector<int>> &nn_ids, const std::vector<std::vector<unsigned>> &n_obs_per_samp) {
+MatrixXd buildCellXSampleMatrix(const VectorXd &gene_vec, const std::vector<int> &sample_factor,
+                                const std::vector<std::vector<int>> &nn_ids, const std::vector<std::vector<unsigned>> &n_obs_per_samp) {
     assert_r(gene_vec.size() > 0, "gene_vec is empty");
     assert_r(gene_vec.size() == sample_factor.size(),
              "gene_vec size (" + std::to_string(gene_vec.size()) +
@@ -108,30 +111,37 @@ Eigen::MatrixXd buildCellXSampleMatrix(const VectorXd &gene_vec, const std::vect
     return sample_x_cell_cm;
 }
 
+std::vector<double> applyMedianFilter(const std::vector<double> &signal, const std::vector<std::vector<int>> &nn_ids) {
+    std::vector<double> signal_smoothed(signal.size());
+    for (size_t si = 0; si < signal.size(); ++si) {
+        if (std::isnan(signal.at(si))) {
+            signal_smoothed[si] = NAN;
+            continue;
+        }
+
+        std::vector<double> sig_cur;
+        for (int nni : nn_ids.at(si)) {
+            double val = signal.at(nni);
+            if (!std::isnan(val)) {
+                sig_cur.emplace_back(val);
+            }
+        }
+
+        if (sig_cur.empty()) {
+            signal_smoothed[si] = NAN;
+            continue;
+        }
+
+        signal_smoothed[si] = median(sig_cur);
+    }
+    return signal_smoothed;
+}
+
 // [[Rcpp::export]]
 NumericVector applyMedianFilter(NumericVector signal, std::vector<std::vector<int>> nn_ids) {
   assert_r(signal.size() == nn_ids.size(), "Input vectors must have the same length");
 
-  std::vector<double> signal_c = as<std::vector<double>>(signal);
-  std::vector<double> signal_smoothed(signal_c.size());
-  for (size_t si = 0; si < signal_c.size(); ++si) {
-    if (std::isnan(signal_c.at(si))) {
-      signal_smoothed[si] = NAN;
-      continue;
-    }
-
-    std::vector<double> sig_cur;
-    for (int nni : nn_ids.at(si)) {
-      double val = signal_c.at(nni);
-      if (!std::isnan(val)) {
-        sig_cur.emplace_back(val);
-      }
-    }
-
-    signal_smoothed[si] = median(sig_cur);
-  }
-
-  NumericVector signal_smoothed_r = wrap(signal_smoothed);
+  NumericVector signal_smoothed_r = wrap(applyMedianFilter(as<std::vector<double>>(signal), nn_ids));
   signal_smoothed_r.names() = signal.names();
   return signal_smoothed_r;
 }
@@ -197,6 +207,59 @@ List applyMedianFilterLM(List signal_lst, std::vector<std::vector<int>> nn_ids, 
     return res_lst;
 }
 
+std::pair<double, double> range(const std::vector<double> &vec) {
+    double min_val = std::numeric_limits<double>::max(), max_val = std::numeric_limits<double>::lowest();
+    bool all_nans = true;
+    for (double v : vec) {
+        if (std::isnan(v))
+            continue;
+
+        all_nans = false;
+        min_val = std::min(min_val, v);
+        max_val = std::max(max_val, v);
+    }
+
+    if (all_nans)
+        return std::make_pair(NAN, NAN);
+
+    return std::make_pair(min_val, max_val);
+}
+
+std::pair<double, double> range(const std::vector<double> &vec, double wins) {
+    assert_r(!vec.empty(), "vector for range is empty");
+
+    if (wins < (2.0 / vec.size()))
+        return range(vec);
+
+    std::vector<double> vec_filt;
+    for (double v : vec) {
+        if (!std::isnan(v)) {
+            vec_filt.emplace_back(v);
+        }
+    }
+
+    if (vec_filt.empty())
+        return std::make_pair(NAN, NAN);
+
+    const auto lq_it = vec_filt.begin() + size_t(std::floor(vec_filt.size() * wins));
+    const auto uq_it = vec_filt.begin() + size_t(std::ceil(vec_filt.size() * (1 - wins)));
+    std::nth_element(vec_filt.begin(), lq_it, vec_filt.end());
+    std::nth_element(vec_filt.begin(), uq_it, vec_filt.end());
+    return std::make_pair(*lq_it, *uq_it);
+}
+
+void winsorize(std::vector<double> &vec, double wins) {
+    if (wins < (2.0 / vec.size()))
+        return;
+
+    auto rng = range(vec, wins);
+    for (double &v : vec) {
+        if (!std::isnan(v)) {
+            v = std::max(std::min(v, rng.second), rng.first);
+        }
+    }
+}
+
 /// Z-scores
 
 class ZScoreRes {
@@ -245,21 +308,35 @@ std::tuple<double, double, double> estimateCellGeneZScore(std::vector<double> &r
     double sd_tot = norm_both ?
                     std::sqrt((n_ref * var_ref + n_targ * var_targ) / (n_ref + n_targ)) :
                     std::sqrt(var_ref);
-    double z = (sd_tot < 1e-20) ? NAN : ((m_targ - m_ref) / (sd_tot));
+    double z = (sd_tot < EPS) ? NAN : ((m_targ - m_ref) / (sd_tot));
     return std::make_tuple(z, m_ref, m_targ);
 }
 
-ZScoreRes estimateGeneZScore(const VectorXd &gene_vec, const std::vector<int> &sample_per_cell,
-                             const std::vector<std::vector<int>> &nn_ids, const std::vector<std::vector<unsigned>> &n_obs_per_samp,
-                             const std::vector<bool> &is_ref, int min_n_samp_per_cond, int min_n_obs_per_samp, bool robust, bool norm_both) {
-    min_n_samp_per_cond = std::max(min_n_samp_per_cond, 2);
-    auto sample_x_cell_cm = buildCellXSampleMatrix(gene_vec, sample_per_cell, nn_ids, n_obs_per_samp);
+class ClusterFreeDEParams {
+public:
+    int min_n_samp_per_cond;
+    int min_n_obs_per_samp;
+    bool robust;
+    bool norm_both;
+    double min_z;
+    bool verbose;
+    int n_cores;
+    bool adjust_pvalues;
+    int n_permutations;
+    bool smooth;
+    double wins;
+};
 
+ZScoreRes estimateGeneZScore(const VectorXd &gene_vec, const MatrixXd &sample_x_cell_cm, const std::vector<std::vector<unsigned>> &n_obs_per_samp,
+                             const std::vector<bool> &is_ref, const ClusterFreeDEParams &pars) {
     std::vector<double> res_z, res_ms_ref, res_ms_target;
     for (int ci = 0; ci < sample_x_cell_cm.cols(); ++ci) {
-        auto c_vec = sample_x_cell_cm.col(ci);
-        auto split_res = splitValuesByCondition(c_vec, is_ref, n_obs_per_samp.at(ci), min_n_obs_per_samp);
-        auto z_res = estimateCellGeneZScore(split_res.first, split_res.second, min_n_samp_per_cond, robust, norm_both);
+        auto z_res = std::make_tuple(0.0, 0.0, 0.0);
+        if (gene_vec(ci) > EPS) {
+            auto c_vec = sample_x_cell_cm.col(ci);
+            auto split_res = splitValuesByCondition(c_vec, is_ref, n_obs_per_samp.at(ci), pars.min_n_obs_per_samp);
+            z_res = estimateCellGeneZScore(split_res.first, split_res.second, pars.min_n_samp_per_cond, pars.robust, pars.norm_both);
+        }
 
         res_z.emplace_back(std::get<0>(z_res));
         res_ms_ref.emplace_back(std::get<1>(z_res));
@@ -269,10 +346,126 @@ ZScoreRes estimateGeneZScore(const VectorXd &gene_vec, const std::vector<int> &s
     return ZScoreRes{res_z, res_ms_ref, res_ms_target};
 }
 
+std::pair<std::vector<double>, std::vector<double>>
+estimateNullZScoreRanges(const VectorXd &gene_vec, const MatrixXd &sample_x_cell_cm, const std::vector<std::vector<int>> &nn_ids, const std::vector<bool> &is_ref,
+                         const std::vector<std::vector<unsigned>> &n_obs_per_samp, const ClusterFreeDEParams &pars, unsigned seed=0) {
+    std::vector<bool> is_ref_shuffled(is_ref.begin(), is_ref.end());
+    std::mt19937 g(seed);
+
+    std::vector<double> min_vals, max_vals;
+    for (int rep = 0; rep < pars.n_permutations; ++rep) {
+        std::shuffle(is_ref_shuffled.begin(), is_ref_shuffled.end(), g);
+        auto perm_zs = estimateGeneZScore(gene_vec, sample_x_cell_cm, n_obs_per_samp, is_ref_shuffled, pars).zs;
+        if (pars.smooth) {
+            perm_zs = applyMedianFilter(perm_zs, nn_ids);
+        }
+
+        auto z_range = range(perm_zs, pars.wins);
+        if (!std::isnan(z_range.first)) {
+            min_vals.emplace_back(z_range.first);
+            max_vals.emplace_back(z_range.second);
+        }
+    }
+
+    std::sort(min_vals.begin(), min_vals.end());
+    std::sort(max_vals.begin(), max_vals.end());
+    return std::make_pair(min_vals, max_vals);
+}
+
+std::vector<double> adjustZScoresWithPermutations(const std::vector<double> &z_scores, const std::vector<std::vector<int>> &nn_ids,
+                                                  double wins, bool smooth, const std::vector<double> &min_vals,
+                                                  const std::vector<double> &max_vals, std::mutex &r_mut) {
+    std::vector<double> z_adj(z_scores.begin(), z_scores.end());
+    if (smooth) {
+        z_adj = applyMedianFilter(z_adj, nn_ids);
+    }
+
+    auto rng = range(z_adj, wins);
+    for (double &z : z_adj) {
+        if (std::isnan(z))
+            continue;
+
+        z = std::max(std::min(z, rng.second), rng.first);
+        size_t n = (z < 0) ?
+                   (std::upper_bound(min_vals.begin(), min_vals.end(), z + EPS) - min_vals.begin()) : // Number of elements that are <=z
+                   (max_vals.end() - std::lower_bound(max_vals.begin(), max_vals.end(), z - EPS)); // Number of elements that are >=z
+        z = std::max(1.0 - (n + 1.0) / (max_vals.size() + 1.0), 0.5);
+    }
+
+    {
+        std::lock_guard<std::mutex> l(r_mut);
+        z_adj = as<std::vector<double>>(NumericVector(qnorm(NumericVector(wrap(z_adj)))));
+    }
+
+    for (size_t i = 0; i < z_adj.size(); ++i) {
+        z_adj[i] = std::copysign(z_adj[i], z_scores[i]);
+    }
+
+    return z_adj;
+}
+
+std::tuple<SparseMatrix<double>, SparseMatrix<double>, SparseMatrix<double>, SparseMatrix<double>>
+clusterFreeZScoreMat2(const SparseMatrix<double> &cm, const std::vector<int> &sample_per_cell,
+                      const std::vector<std::vector<int>> &nn_ids, const std::vector<bool> &is_ref,
+                      const std::vector<std::vector<unsigned>> &n_obs_per_samp, const ClusterFreeDEParams &pars) {
+    std::vector<Triplet<double>> z_triplets, z_adj_triplets, m_ref_triplets, m_targ_triplets;
+    std::mutex save_mut, r_mut;
+    auto task = [&cm, &sample_per_cell, &nn_ids, &n_obs_per_samp, &is_ref, &pars,
+                 &z_triplets, &z_adj_triplets, &m_ref_triplets, &m_targ_triplets, &save_mut, &r_mut](int gi) {
+        VectorXd gene_vec = cm.col(gi);
+        auto sample_x_cell_cm = buildCellXSampleMatrix(gene_vec, sample_per_cell, nn_ids, n_obs_per_samp);
+        auto gene_res = estimateGeneZScore(gene_vec, sample_x_cell_cm, n_obs_per_samp, is_ref, pars);
+
+        std::vector<double> z_adj;
+        if (pars.adjust_pvalues) {
+            auto min_max_vals = estimateNullZScoreRanges(gene_vec, sample_x_cell_cm, nn_ids, is_ref, n_obs_per_samp, pars);
+            z_adj = adjustZScoresWithPermutations(gene_res.zs, nn_ids, pars.wins, pars.smooth,
+                                                  min_max_vals.first, min_max_vals.second, r_mut);
+        }
+
+        std::vector<Triplet<double>> z_trip_c, z_adj_trip_c, m_ref_trip_c, m_targ_trip_c;
+        for (int ci = 0; ci < gene_res.zs.size(); ++ci) {
+            double z_raw = gene_res.zs[ci];
+            if (std::isnan(z_raw) || std::abs(z_raw) >= pars.min_z) {
+                z_trip_c.emplace_back(ci, gi, gene_res.zs[ci]);
+                m_ref_trip_c.emplace_back(ci, gi, gene_res.means_ref[ci]);
+                m_targ_trip_c.emplace_back(ci, gi, gene_res.means_target[ci]);
+
+                if (pars.adjust_pvalues) {
+                    z_adj_trip_c.emplace_back(ci, gi, z_adj[ci]);
+                }
+            }
+        }
+
+        {
+            std::lock_guard<std::mutex> l(save_mut);
+            z_triplets.insert(z_triplets.end(), std::make_move_iterator(z_trip_c.begin()), std::make_move_iterator(z_trip_c.end()));
+            z_adj_triplets.insert(z_adj_triplets.end(), std::make_move_iterator(z_adj_trip_c.begin()), std::make_move_iterator(z_adj_trip_c.end()));
+            m_ref_triplets.insert(m_ref_triplets.end(), std::make_move_iterator(m_ref_trip_c.begin()), std::make_move_iterator(m_ref_trip_c.end()));
+            m_targ_triplets.insert(m_targ_triplets.end(), std::make_move_iterator(m_targ_trip_c.begin()), std::make_move_iterator(m_targ_trip_c.end()));
+        }
+    };
+
+    try {
+        sccore::runTaskParallelFor(0, cm.cols(), task, pars.n_cores, pars.verbose);
+    } catch (std::runtime_error &x) {
+        Rcpp::stop(x.what());
+    }
+
+    SparseMatrix<double> z_mat(cm.rows(), cm.cols()), z_adj_mat(cm.rows(), cm.cols()),
+        m_ref_mat(cm.rows(), cm.cols()), m_targ_mat(cm.rows(), cm.cols());
+    z_mat.setFromTriplets(z_triplets.begin(), z_triplets.end());
+    m_ref_mat.setFromTriplets(m_ref_triplets.begin(), m_ref_triplets.end());
+    m_targ_mat.setFromTriplets(m_targ_triplets.begin(), m_targ_triplets.end());
+    z_adj_mat.setFromTriplets(z_adj_triplets.begin(), z_adj_triplets.end());
+
+    return std::make_tuple(z_mat, m_ref_mat, m_targ_mat, z_adj_mat);
+}
 // [[Rcpp::export]]
 List clusterFreeZScoreMat2(const SEXP count_mat, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool> &is_ref,
                            int min_n_samp_per_cond=2, int min_n_obs_per_samp=1, bool robust=false, bool norm_both=false,
-                           double min_z=0.001, bool verbose=true, int n_cores=1, bool return_demo=false) {
+                           double min_z=0.001, bool verbose=true, int n_cores=1, bool adjust_pvalues=false, int n_permutations=500,
+                           bool return_demo=false, bool smooth=true, double wins=0.01) {
     const auto samp_per_cell_c = as<std::vector<int>>(IntegerVector(sample_per_cell - 1));
     if (sample_per_cell.size() == 0 || (*std::max_element(samp_per_cell_c.begin(), samp_per_cell_c.end()) <= 0))
         stop("sample_per_cell must be a factor vector with non-empty levels");
@@ -296,48 +489,17 @@ List clusterFreeZScoreMat2(const SEXP count_mat, IntegerVector sample_per_cell, 
         return List::create(wrap(SparseMatrix<double>(tr_mat.sparseView())));
     }
 
-    std::vector<Triplet<double>> z_triplets, m_ref_triplets, m_targ_triplets;
-    std::mutex mut;
-    auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &n_obs_per_samp, &is_ref, &min_n_samp_per_cond, &min_n_obs_per_samp,
-                 &min_z, &robust, &norm_both, &z_triplets, &m_ref_triplets, &m_targ_triplets, &mut](int gi) {
-        VectorXd gene_vec = cm.col(gi);
-        auto cell_res = estimateGeneZScore(gene_vec, samp_per_cell_c, nn_ids_c, n_obs_per_samp, is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust, norm_both);
-        std::vector<Triplet<double>> z_trip_c, m_ref_trip_c, m_targ_trip_c;
-        for (int ci = 0; ci < cell_res.zs.size(); ++ci) {
-            if (gene_vec(ci) < 1e-20)  // TODO: try to remove it or move to buildCellXSampleMatrix
-                continue;
+    ClusterFreeDEParams pars{std::max(min_n_samp_per_cond, 2), min_n_obs_per_samp, robust, norm_both, min_z, verbose, n_cores,
+                             adjust_pvalues, n_permutations, smooth, wins};
+    auto mats = clusterFreeZScoreMat2(cm, samp_per_cell_c, nn_ids_c, is_ref, n_obs_per_samp, pars);
 
-            double z_cur = cell_res.zs[ci];
-            if (std::isnan(z_cur) || std::abs(z_cur) >= min_z) {
-                z_trip_c.emplace_back(ci, gi, z_cur);
-                m_ref_trip_c.emplace_back(ci, gi, cell_res.means_ref[ci]);
-                m_targ_trip_c.emplace_back(ci, gi, cell_res.means_target[ci]);
-            }
-        }
+    S4 z_mat_r(wrap(std::get<0>(mats))), m_ref_mat_r(wrap(std::get<1>(mats))),
+        m_targ_mat_r(wrap(std::get<2>(mats))), z_adj_mat_r(wrap(std::get<3>(mats)));
+    m_targ_mat_r.slot("Dimnames") = m_ref_mat_r.slot("Dimnames") = z_mat_r.slot("Dimnames") =
+        z_adj_mat_r.slot("Dimnames") = S4(count_mat).slot("Dimnames");
 
-        {
-            std::lock_guard<std::mutex> l(mut);
-            z_triplets.insert(z_triplets.end(), std::make_move_iterator(z_trip_c.begin()), std::make_move_iterator(z_trip_c.end()));
-            m_ref_triplets.insert(m_ref_triplets.end(), std::make_move_iterator(m_ref_trip_c.begin()), std::make_move_iterator(m_ref_trip_c.end()));
-            m_targ_triplets.insert(m_targ_triplets.end(), std::make_move_iterator(m_targ_trip_c.begin()), std::make_move_iterator(m_targ_trip_c.end()));
-        }
-    };
-
-    try {
-        sccore::runTaskParallelFor(0, cm.cols(), task, n_cores, verbose);
-    } catch (std::runtime_error &x) {
-        Rcpp::stop(x.what());
-    }
-
-    SparseMatrix<double> z_mat(cm.rows(), cm.cols()), m_ref_mat(cm.rows(), cm.cols()), m_targ_mat(cm.rows(), cm.cols());
-    z_mat.setFromTriplets(z_triplets.begin(), z_triplets.end());
-    m_ref_mat.setFromTriplets(m_ref_triplets.begin(), m_ref_triplets.end());
-    m_targ_mat.setFromTriplets(m_targ_triplets.begin(), m_targ_triplets.end());
-
-    S4 z_mat_r(wrap(z_mat)), m_ref_mat_r(wrap(m_ref_mat)), m_targ_mat_r(wrap(m_targ_mat));
-    m_targ_mat_r.slot("Dimnames") = m_ref_mat_r.slot("Dimnames") = z_mat_r.slot("Dimnames") =S4(count_mat).slot("Dimnames");
-
-    return List::create(_["z"] = z_mat_r, _["reference"] = m_ref_mat_r, _["target"] = m_targ_mat_r);
+    return List::create(_["z"] = z_mat_r, _["reference"] = m_ref_mat_r,
+                        _["target"] = m_targ_mat_r, _["z_adj"] = z_adj_mat_r);
 }
 
 ZScoreRes estimateCellZScore(const SparseMatrix<double> &cm, const std::vector<int> &sample_per_cell,
@@ -386,7 +548,7 @@ List clusterFreeZScoreMat(const SEXP count_mat, IntegerVector sample_per_cell, L
         auto cell_res = estimateCellZScore(cm, samp_per_cell_c, nn_ids_c[ci], is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust, norm_both);
         VectorXd expr = cm.col(ci);
         for (int gi = 0; gi < cell_res.zs.size(); ++gi) {
-            if (expr(gi) < 1e-20)
+            if (expr(gi) < EPS)
                 continue;
 
             double z_cur = cell_res.zs[gi];

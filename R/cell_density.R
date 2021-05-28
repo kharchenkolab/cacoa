@@ -205,11 +205,11 @@ adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smoot
   p.vals <- c()
   sign_mask <- (score >= 0)
   if (any(sign_mask)) {
-    p.vals %<>% c((sapply(score[sign_mask], function(x) sum(x < scores.shuffled.ranges[,2])) + 1) / (ncol(scores.shuffled) + 1))
+    p.vals %<>% c((sapply(score[sign_mask], function(x) sum((x - 1e-10) < scores.shuffled.ranges[,2])) + 1) / (ncol(scores.shuffled) + 1))
   }
 
   if (any(!sign_mask)) {
-    p.vals %<>% c((sapply(score[!sign_mask], function(x) sum(x > scores.shuffled.ranges[,1])) + 1) / (ncol(scores.shuffled) + 1))
+    p.vals %<>% c((sapply(score[!sign_mask], function(x) sum((x + 1e-10) > scores.shuffled.ranges[,1])) + 1) / (ncol(scores.shuffled) + 1))
   }
 
   z.scores <- pmax(1 - p.vals[names(score)], 0.5) %>% qnorm(lower.tail=TRUE)

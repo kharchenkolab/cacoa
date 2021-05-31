@@ -1360,7 +1360,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         params$show.legend <- !is.null(params$colors)
       }
 
-      invoke(sccore::embeddingPlot, params)
+      rlang::invoke(sccore::embeddingPlot, params)
     },
 
     #' @description Estimate ontology terms based on DEs
@@ -3068,14 +3068,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(ggs)
     },
 
-    plotGeneProgrammeGenes = function(programme.id, name="gene.programmes", max.genes=9, plot.expression=FALSE, ...) {
+    plotGeneProgrammeGenes = function(programme.id, name="gene.programmes", max.genes=9, plots="z.adj", min.z=0.1, ...) {
       fr <- private$getResults(name, "estimateGeneProgrammes")
       scores <- fr$gene.scores[[programme.id]]
       if (is.null(scores))
         stop("Can't find programme", programme.id)
 
       scores %<>% .[1:min(length(.), max.genes)]
-      return(self$plotGeneExpressionComparison(scores=scores, plot.expression=plot.expression, ...))
+      return(self$plotGeneExpressionComparison(scores=scores, plots=plots, min.z=min.z, ...))
     },
 
     #' @description Plot cluster-free expression shift z-scores

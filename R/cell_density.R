@@ -170,7 +170,8 @@ diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, t
   permut.diffs <- plapply(1:n.permutations, function(i) { # Null distribution looks normal, so we don't need a lot of samples
     rownames(dm.shuffled) %<>% sample()
     colRed(dm.shuffled[nt,]) - colRed(dm.shuffled[nr,])
-  }, progress=verbose, n.cores=n.cores, fail.on.error=TRUE) %>% do.call(cbind, .) # according to tests, n.cores>1 here does not speed up calculations
+  }, progress=verbose, n.cores=n.cores, fail.on.error=TRUE) %>%  # according to tests, n.cores>1 here does not speed up calculations
+    do.call(cbind, .) %>% set_rownames(colnames(density.mat))
 
   sds <- apply(permut.diffs, 1, sd)
   score <- (colRed(density.mat[nt,]) - colRed(density.mat[nr,])) / sds

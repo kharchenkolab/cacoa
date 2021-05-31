@@ -2905,12 +2905,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[["cluster.free.de"]]))
     },
 
-    getMostChangedGenes = function(n, method=c("z", "lfc"), min.z=0.5, min.lfc=1, max.score=20, cell.subset=NULL, excluded.genes=NULL, included.genes=NULL) {
+    getMostChangedGenes = function(n, method=c("z", "z.adj", "lfc"), min.z=0.5, min.lfc=1, max.score=20, cell.subset=NULL, excluded.genes=NULL, included.genes=NULL) {
       method <- match.arg(method)
       de.info <- private$getResults("cluster.free.de", "estimateClusterFreeDE")
       score.mat <- de.info[[method]]
+      z.scores <- if (method == "lfc") de.info$z else de.info[[method]]
 
-      score.mat@x[(abs(de.info$z@x) < min.z) | abs(de.info$lfc@x) < min.lfc] <- 0
+      score.mat@x[(abs(z.scores@x) < min.z) | abs(de.info$lfc@x) < min.lfc] <- 0
 
       if (!is.null(cell.subset)) {
         score.mat <- score.mat[cell.subset,]
@@ -3118,8 +3119,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$plotGeneExpressionComparison(scores=scores, ...)
     },
 
-    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plot.z=TRUE, plot.lfc=TRUE, plot.expression=TRUE, max.z=5, max.lfc=4, smoothed=FALSE,
-                                            gene.palette=NULL, z.palette=NULL, lfc.palette=NULL, plot.na=-1, adj.list=NULL, build.panel=TRUE, nrow=1, ...) {
+    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plot.z.adj=FALSE, plot.z=(!plot.z.adj), plot.lfc=TRUE, plot.expression=TRUE,
+                                            max.z=5, max.lfc=4, smoothed=FALSE, gene.palette=NULL, z.palette=NULL, lfc.palette=NULL, plot.na=-1,
+                                            adj.list=NULL, build.panel=TRUE, nrow=1, ...) {
       if (is.null(genes)) {
         if (is.null(scores)) stop("Either 'genes' or 'scores' must be provided")
         genes <- names(scores)
@@ -3129,7 +3131,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (is.null(gene.palette)) gene.palette <- colorRampPalette(c("gray90", "red", "#5A0000"), space = "Lab")
 
-      if (plot.z || plot.lfc) {
+      if (plot.z || plot.z.adj || plot.lfc) {
         de.info <- self$test.results$cluster.free.de
         z.scores <- de.info$z
         if (is.null(de.info)) {
@@ -3159,27 +3161,29 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       ggs <- lapply(genes, function(g) {
         lst <- list()
+
+        title <- if (is.null(scores)) paste0(g, ". ") else paste0(g, ": ", signif(scores[g], 3), ". ")
+        plot.info <- list(
+          list("Z, adjusted", "Z,adj", max.z, de.info$z.adj),
+          list("Z-score", "Z", max.z, de.info$z),
+          list("Log2(fold-change)", "LFC", max.lfc, de.info$lfc)
+        )[c(plot.z.adj, plot.z, plot.lfc)]
+        for (di in plot.info) {
+          lst <- self$plotEmbedding(colors=di[[4]][,g], title=paste0(title, di[[1]]),
+                                    color.range=c(-di[[3]], di[[3]]), plot.na=plot.na, legend.title=di[[2]],
+                                    palette=lfc.palette, ...) %>%
+            list() %>% {c(lst, .)}
+          title <- ""
+        }
+
         if (plot.expression) {
           expr <- extractGeneExpression(self$data.object, g)
           m.expr <- parseLimitRange(c(0, max.expr), expr)[2]
           lst <- lapply(unique(condition.per.cell), function(sg) {
-            self$plotEmbedding(colors=expr, title=paste(sg, " ",g), groups=condition.per.cell, subgroups=sg,
+            self$plotEmbedding(colors=expr, title=paste(title, sg), groups=condition.per.cell, subgroups=sg,
                                color.range=c(0, m.expr), legend.title="Expression", plot.na=FALSE, palette=gene.palette, ...)
-          }) %>% c(lst)
-        }
-
-        if (plot.lfc) {
-          lst <- self$plotEmbedding(colors=de.info$lfc[,g], title=paste("Log2(fold-change):", g),
-                                    color.range=c(-max.lfc, max.lfc), plot.na=plot.na, legend.title='LFC',
-                                    palette=lfc.palette, ...) %>%
-            list() %>% c(lst)
-        }
-
-        if (plot.z) {
-          title <- if (is.null(scores)) g else paste0(g, ": ", signif(scores[g], 3))
-          lst <- self$plotEmbedding(colors=z.scores[,g], title=title, color.range=c(-max.z, max.z),
-                                    plot.na=plot.na, legend.title='Z-score', palette=z.palette, ...) %>%
-            list() %>% c(lst)
+          }) %>% {c(lst, .)}
+          title <- ""
         }
 
         lst <- lapply(lst, function(x) x + theme(legend.background = element_blank()) + adj.list)
@@ -3226,7 +3230,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       stop(msg)
     },
 
-    getTopGenes = function(n, gene.selection=c("z", "lfc", "expression", "od"), cm.joint=NULL,
+    getTopGenes = function(n, gene.selection=c("z", "z.adj", "lfc", "expression", "od"), cm.joint=NULL,
                            min.expr.frac=0.0, excluded.genes=NULL, included.genes=NULL, ...) {
       gene.selection <- match.arg(gene.selection)
       if ((gene.selection %in% c("z", "lfc")) && is.null(self$test.results$cluster.free.de)) {
@@ -3243,7 +3247,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         excluded.genes %<>% union(colnames(cm.joint)[colMeans(cm.joint, na.rm=TRUE) < min.expr.frac])
       }
 
-      if (gene.selection %in% c("z", "lfc")) {
+      if (gene.selection %in% c("z", "z.adj", "lfc")) {
         genes <- names(self$getMostChangedGenes(Inf, method=gene.selection, ...))
       } else if (gene.selection == "od") {
         genes <- extractOdGenes(self$data.object)

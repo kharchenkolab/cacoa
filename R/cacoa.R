@@ -2965,9 +2965,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param filter graph filter function. Default: \link[sccore:heatFilter]{heatFilter}.
     #' @param ... parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}
     #' @return Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.de$z.smoothed` field.
-    smoothClusterFreeZScores = function(n.top.genes=1000, smoothing=20, filter=NULL, gene.selection="z", excluded.genes=NULL,
-                                        n.cores=self$n.cores, verbose=self$verbose, ...) {
-      z.scores <- private$getResults("cluster.free.de", "estimateClusterFreeDE")$z
+    smoothClusterFreeZScores = function(n.top.genes=1000, smoothing=20, filter=NULL, z.adj=FALSE, gene.selection=ifelse(z.adj, "z.adj", "z"),
+                                        excluded.genes=NULL, n.cores=self$n.cores, verbose=self$verbose, ...) {
+      z.scores <- private$getResults("cluster.free.de", "estimateClusterFreeDE")
+      z.scores <- if (z.adj) z.scores$z.adj else z.scores$z
+
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection,
                                    excluded.genes=excluded.genes, included.genes=colnames(z.scores))
       z.scores <- z.scores[,genes]
@@ -2983,7 +2985,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                             progress=verbose, ...)
 
       z.smoothed[is.na(z.scores)] <- NA
-      self$test.results[["cluster.free.de"]]$z.smoothed <- z.smoothed
+      if (z.adj) {
+        self$test.results[["cluster.free.de"]]$z.adj.smoothed <- z.smoothed
+      } else {
+        self$test.results[["cluster.free.de"]]$z.smoothed <- z.smoothed
+      }
+
       return(invisible(z.smoothed))
     },
 
@@ -3002,14 +3009,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `gene.scores`: list of vectors of gene scores per programme. Contains only genes, selected for
     #'     the programme usin fabia biclustering.
     #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
-    estimateGeneProgrammes = function(n.top.genes=Inf, n.programmes=15, gene.selection="z", name="gene.programmes",
-                                      cell.subset=NULL, ...) {
+    estimateGeneProgrammes = function(n.top.genes=Inf, genes=NULL, n.programmes=15, z.adj=FALSE, gene.selection=ifelse(z.adj, "z.adj", "z"),
+                                      smooth=TRUE, name="gene.programmes", cell.subset=NULL, ...) {
       checkPackageInstalled('fabia', bioc=TRUE)
 
-      z.scores <- private$getResults("cluster.free.de", "estimateClusterFreeDE")$z.smoothed
-      if (is.null(z.scores)) stop("Smoothed z.scores were not estimated. Please, run smoothClusterFreeZScores first.")
+      z.scores <- private$getResults("cluster.free.de", "estimateClusterFreeDE")
+      if (smooth) {
+        z.scores <- if (z.adj) z.scores$z.adj.smoothed else z.scores$z.smoothed
+        if (is.null(z.scores)) stop("Smoothed z.scores were not estimated. Please, run smoothClusterFreeZScores first.")
+      } else {
+        warning("Gene programmes without smoothing often produce intractable results, especially with z.adj=FALSE\n")
+        z.scores <- if (z.adj) z.scores$z.adj else z.scores$z
+      }
 
-      if (!is.null(n.top.genes) & !is.infinite(n.top.genes)) {
+      if (!is.null(genes)) {
+        z.scores <- z.scores[,genes]
+      } else if (!is.infinite(n.top.genes)) {
         genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, included.genes=colnames(z.scores))
         z.scores <- z.scores[,genes]
       }

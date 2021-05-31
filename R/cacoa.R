@@ -2873,23 +2873,29 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `lfc`: log2(fold-change) of expression
     #' Cells that have only one condition in their expression neighborhood have NA Z-scores for all genes.
     #' Results are also stored in the `cluster.free.de` field.
-    estimateClusterFreeDE = function(n.top.genes=Inf, max.z=20, min.expr.frac=0.01,
-                                     min.n.samp.per.cond=2, min.n.obs.per.samp=2, robust=FALSE, norm.both=FALSE,
+    estimateClusterFreeDE = function(n.top.genes=Inf, genes=NULL, max.z=20, min.expr.frac=0.01,
+                                     min.n.samp.per.cond=2, min.n.obs.per.samp=2, robust=FALSE, norm.both=TRUE,
+                                     adjust.pvalues=FALSE, smooth=TRUE, wins=0.01, n.permutations=200,
                                      lfc.pseudocount=1e-5, verbose=self$verbose, n.cores=self$n.cores) {
-      genes <- private$getTopGenes(n.top.genes, gene.selection="expression", min.expr.frac=min.expr.frac)
+      if (is.null(genes)) {
+        genes <- private$getTopGenes(n.top.genes, gene.selection="expression", min.expr.frac=min.expr.frac)
+      }
 
       if (verbose)
         message("Estimating cluster-free Z-scores for ", length(genes), " most expressed genes")
 
-      de.inp <- private$getClusterFreeDEInput(genes)
-
+      de.inp <- private$getClusterFreeDEInput(genes, cm.transpose=FALSE)
       mats <- de.inp %$% clusterFreeZScoreMat(
-        cm, sample_per_cell=self$sample.per.cell[colnames(cm)], nn_ids=nns.per.cell, is_ref=is.ref,
+        cm, sample_per_cell=self$sample.per.cell[rownames(cm)], nn_ids=nns.per.cell, is_ref=is.ref,
         min_n_samp_per_cond=min.n.samp.per.cond, min_n_obs_per_samp=min.n.obs.per.samp, robust=robust,
-        norm_both=norm.both, verbose=verbose, n_cores=n.cores
+        norm_both=norm.both, adjust_pvalues=adjust.pvalues, smooth=smooth, wins=wins, n_permutations=n.permutations,
+        verbose=verbose, n_cores=n.cores
       )
 
       mats$z@x %<>% pmin(max.z) %>% pmax(-max.z)
+      if (length(mats$z.adj@x) > 0) {
+        mats$z.adj@x %<>% pmin(max.z) %>% pmax(-max.z)
+      }
 
       lf.mat <- mats$reference
       lf.mat@x <- log2(mats$target@x + lfc.pseudocount) - log2(lf.mat@x + lfc.pseudocount)
@@ -2897,66 +2903,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       self$test.results[["cluster.free.de"]] <- mats
       return(invisible(self$test.results[["cluster.free.de"]]))
-    },
-
-    estimateClusterFreeDEAdjusted = function(genes, n.permutations=500, smooth=TRUE, min.n.samp.per.cond=2, min.n.obs.per.samp=2,
-                                             robust=FALSE, norm.both=TRUE, verbose=self$verbose, n.cores=self$n.cores) {
-      cm.full <- self$getJointCountMatrix(raw=FALSE)
-      genes %<>% sn()
-
-      if (verbose)
-        message("Estimating adjusted cluster-free Z-scores for ", length(genes), " genes")
-
-      de.inp <- private$getClusterFreeDEInput(genes)
-
-      if (verbose) message("Estimating z-scores with permutations...")
-
-      z.current <- de.inp %$% clusterFreeZScoreMat(
-        cm, sample_per_cell=self$sample.per.cell[colnames(cm)], nn_ids=nns.per.cell, is_ref=is.ref,
-        min_n_samp_per_cond=min.n.samp.per.cond, min_n_obs_per_samp=min.n.obs.per.samp, robust=robust,
-        norm_both=norm.both, verbose=FALSE, n_cores=n.cores
-      )$z
-
-      z.current <- lapply(genes, function(g) z.current[,g])
-
-      z.permut <- plapply(1:n.permutations, function(i) {
-        de.inp %$% clusterFreeZScoreMat(
-          cm, sample_per_cell=self$sample.per.cell[colnames(cm)], nn_ids=nns.per.cell, is_ref=sample(is.ref),
-          min_n_samp_per_cond=min.n.samp.per.cond, min_n_obs_per_samp=min.n.obs.per.samp, robust=robust,
-          norm_both=norm.both, verbose=FALSE, n_cores=1
-        )$z
-      }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE)
-
-      z.permut <- lapply(genes, function(g) do.call(rbind, lapply(z.permut, `[`, ,g)))
-
-      if (smooth) {
-        if (verbose) message("Smoothing scores...")
-        z.current <- plapply(z.current, applyMedianFilter, de.inp$nns.per.cell, progress=verbose,
-                             n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE)
-        z.permut <- z.permut %>% lapply(Matrix::t) %>%
-          applyMedianFilterLM(nn_ids=de.inp$nns.per.cell, n_cores=n.cores, verbose=verbose) %>%
-          lapply(Matrix::t)
-        message("Done")
-      }
-
-      if (verbose) message("Adjusting z-scores...")
-      mask <- !is.na(z.current)
-
-      scores.adj <- plapply(genes, function(g) {
-        mask <- !is.na(z.current[[g]])
-        adjustZScoresByPermutations(z.current[[g]][mask], z.permut[[g]][,mask], smooth=FALSE)
-      }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE)
-
-      scores.adj.mat <- sparseMatrix(c(), c(), dims=c(nrow(cm.full), length(scores.adj))) %>%
-        as("dgCMatrix") %>% set_rownames(rownames(cm.full)) %>%
-        set_colnames(names(scores.adj))
-
-      for (n in names(scores.adj)) {
-        scores.adj.mat[,n] <- as(scores.adj[[n]][rownames(scores.adj.mat)], "dsparseVector")
-      }
-
-      self$test.results[["cluster.free.de.adj"]] <- scores.adj.mat
-      return(invisible(self$test.results[["cluster.free.de.adj"]]))
     },
 
     getMostChangedGenes = function(n, method=c("z", "lfc"), min.z=0.5, min.lfc=1, max.score=20, cell.subset=NULL, excluded.genes=NULL, included.genes=NULL) {
@@ -3436,7 +3382,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(self$cache$go.environment)
     },
 
-    getClusterFreeDEInput = function(genes) {
+    getClusterFreeDEInput = function(genes, cm.transpose=TRUE) {
       cm <- self$getJointCountMatrix(raw=FALSE)
       is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
 
@@ -3446,7 +3392,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       adj.mat %<>% .[cell.names, cell.names, drop=FALSE] %>% as("dgTMatrix")
       nns.per.cell <- split(adj.mat@j, adj.mat@i) %>% setNames(cell.names)
-      cm %<>% .[cell.names, genes, drop=FALSE] %>% Matrix::t()
+      cm %<>% .[cell.names, genes, drop=FALSE]
+      if (cm.transpose) cm %<>% Matrix::t()
 
       return(list(cm=cm, adj.mat=adj.mat, is.ref=is.ref, nns.per.cell=nns.per.cell))
     }

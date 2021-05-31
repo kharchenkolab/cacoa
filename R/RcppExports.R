@@ -5,24 +5,8 @@
 #' @param n_samples must be equal to maximum(sample_per_cell) + 1
 NULL
 
-applyMedianFilter <- function(signal, nn_ids) {
-    .Call('_cacoa_applyMedianFilter', PACKAGE = 'cacoa', signal, nn_ids)
-}
-
-applyMedianFilterMat <- function(signal, nn_ids) {
-    .Call('_cacoa_applyMedianFilterMat', PACKAGE = 'cacoa', signal, nn_ids)
-}
-
-applyMedianFilterLM <- function(signal_lst, nn_ids, n_cores = 1L, verbose = TRUE) {
-    .Call('_cacoa_applyMedianFilterLM', PACKAGE = 'cacoa', signal_lst, nn_ids, n_cores, verbose)
-}
-
-clusterFreeZScoreMat2 <- function(count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond = 2L, min_n_obs_per_samp = 1L, robust = FALSE, norm_both = FALSE, min_z = 0.001, verbose = TRUE, n_cores = 1L, adjust_pvalues = FALSE, n_permutations = 500L, return_demo = FALSE, smooth = TRUE, wins = 0.01) {
-    .Call('_cacoa_clusterFreeZScoreMat2', PACKAGE = 'cacoa', count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust, norm_both, min_z, verbose, n_cores, adjust_pvalues, n_permutations, return_demo, smooth, wins)
-}
-
-clusterFreeZScoreMat <- function(count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond = 2L, min_n_obs_per_samp = 1L, robust = FALSE, norm_both = FALSE, min_z = 0.001, verbose = TRUE, n_cores = 1L) {
-    .Call('_cacoa_clusterFreeZScoreMat', PACKAGE = 'cacoa', count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust, norm_both, min_z, verbose, n_cores)
+clusterFreeZScoreMat <- function(count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond = 2L, min_n_obs_per_samp = 1L, robust = FALSE, norm_both = TRUE, min_z = 0.001, verbose = TRUE, n_cores = 1L, adjust_pvalues = FALSE, n_permutations = 500L, smooth = TRUE, wins = 0.01) {
+    .Call('_cacoa_clusterFreeZScoreMat', PACKAGE = 'cacoa', count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust, norm_both, min_z, verbose, n_cores, adjust_pvalues, n_permutations, smooth, wins)
 }
 
 estimateClusterFreeExpressionShiftsC <- function(cm, sample_per_cell, nn_ids, is_ref, min_n_between = 1L, min_n_within = 1L, min_n_obs_per_samp = 1L, norm_all = FALSE, verbose = TRUE, n_cores = 1L, dist = "cosine", log_vecs = FALSE) {

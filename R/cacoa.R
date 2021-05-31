@@ -2668,7 +2668,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         } else {
           palette <- c(self$sample.groups.palette[self$ref.level], mid.color, self$sample.groups.palette[self$target.level])
         }
-        palette %<>% grDevices::colorRampPalette()
+        palette %<>% grDevices::colorRampPalette(space="Lab")
       }
       private$checkCellEmbedding()
       dens.res <- private$getResults(name, 'estimateCellDensity')
@@ -3134,43 +3134,35 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$plotGeneExpressionComparison(scores=scores, ...)
     },
 
-    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plot.z.adj=FALSE, plot.z=(!plot.z.adj), plot.lfc=TRUE, plot.expression=TRUE,
-                                            max.z=5, max.lfc=4, smoothed=FALSE, gene.palette=NULL, z.palette=NULL, lfc.palette=NULL, plot.na=-1,
+    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plots=c("z.adj", "z", "expression"), min.z=qnorm(0.9),
+                                            max.z=4, max.z.adj=NULL, max.lfc=3, smoothed=FALSE, gene.palette=NULL, z.palette=NULL, z.adj.palette=z.palette, lfc.palette=NULL, plot.na=-1,
                                             adj.list=NULL, build.panel=TRUE, nrow=1, ...) {
+      unexpected.plots <- setdiff(plots, c("z.adj", "z", "lfc", "expression"))
+      if (length(unexpected.plots) > 0) stop("Unexpected values in `plots`: ", unexpected.plots)
+
       if (is.null(genes)) {
         if (is.null(scores)) stop("Either 'genes' or 'scores' must be provided")
         genes <- names(scores)
       }
 
-      if (!plot.z && !plot.expression) return(NULL)
+      if (length(plots) == 0) return(NULL)
+
+      if (is.null(z.palette)) {
+        if (is.null(self$sample.groups.palette)) {
+          z.palette <- c('blue', 'grey90', 'red')
+        } else {
+          z.palette <- c(self$sample.groups.palette[self$ref.level], 'grey90', self$sample.groups.palette[self$target.level])
+        }
+        z.palette %<>% grDevices::colorRampPalette(space="Lab")
+      }
+
+      if (is.null(z.adj.palette)) z.adj.palette <- z.palette
 
       if (is.null(gene.palette)) gene.palette <- colorRampPalette(c("gray90", "red", "#5A0000"), space = "Lab")
 
-      if (plot.z || plot.z.adj || plot.lfc) {
-        de.info <- self$test.results$cluster.free.de
-        z.scores <- de.info$z
-        if (is.null(de.info)) {
-          warning("Z-scores were not estimated. See estimateClusterFreeDE().")
-          plot.z <- FALSE
-          plot.lfc <- FALSE
-        }
-
-        if (!all(genes %in% colnames(de.info$z))) {
-          missed.genes <- setdiff(genes, colnames(de.info$z))
-          warning("Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See estimateClusterFreeDE().")
-          plot.z <- FALSE
-          plot.lfc <- FALSE
-        }
-      }
-
-      if (plot.z && smoothed) {
-        if ((is.null(de.info$z.smoothed) || !all(genes %in% colnames(de.info$z.smoothed)))){
-          missed.genes <- setdiff(colnames(de.info$z.smoothed), genes)
-          warning("Smoothed Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See smoothClusterFreeZScores().")
-        } else {
-          z.scores <- de.info$z.smoothed
-        }
-      }
+      plot.parts <- self$test.results$cluster.free.de %>%
+        prepareGeneExpressionComparisonPlotInfo(genes=genes, plots=plots, smoothed=smoothed, max.z=max.z, max.z.adj=max.z.adj, max.lfc=max.lfc,
+                                                z.palette=z.palette, z.adj.palette=z.adj.palette, lfc.palette=lfc.palette)
 
       condition.per.cell <- self$getConditionPerCell()
 
@@ -3178,20 +3170,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         lst <- list()
 
         title <- if (is.null(scores)) paste0(g, ". ") else paste0(g, ": ", signif(scores[g], 3), ". ")
-        plot.info <- list(
-          list("Z, adjusted", "Z,adj", max.z, de.info$z.adj),
-          list("Z-score", "Z", max.z, de.info$z),
-          list("Log2(fold-change)", "LFC", max.lfc, de.info$lfc)
-        )[c(plot.z.adj, plot.z, plot.lfc)]
-        for (di in plot.info) {
-          lst <- self$plotEmbedding(colors=di[[4]][,g], title=paste0(title, di[[1]]),
-                                    color.range=c(-di[[3]], di[[3]]), plot.na=plot.na, legend.title=di[[2]],
-                                    palette=lfc.palette, ...) %>%
-            list() %>% {c(lst, .)}
+        for (n in names(plot.parts)) {
+          pp <- plot.parts[[n]]
+          gg <- self$plotEmbedding(colors=pp$scores[,g], title=paste0(title, pp$title),
+                                   color.range=c(-pp$max, pp$max), plot.na=plot.na, legend.title=pp$leg.title,
+                                   palette=pp$palette, ...)
+
+          if (n == "z.adj") {
+            gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
+            color.range <- c(-pp$max, pp$max)
+            col.vals <- c(seq(color.range[1], -min.z, length.out=10), 0, seq(min.z, color.range[2], length.out=10)) %>%
+              scales::rescale()
+            gg <- gg + scale_color_gradientn(colors=pp$palette(21), values=col.vals, limits=color.range)
+          }
+
+          lst <- c(lst, list(gg))
           title <- ""
         }
 
-        if (plot.expression) {
+        if ("expression" %in% plots) {
           expr <- extractGeneExpression(self$data.object, g)
           m.expr <- parseLimitRange(c(0, max.expr), expr)[2]
           lst <- lapply(unique(condition.per.cell), function(sg) {

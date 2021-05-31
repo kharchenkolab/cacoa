@@ -495,3 +495,55 @@ parseLimitRange <- function(lims, vals) {
     quantile(vals, .)
   return(as.numeric(lims))
 }
+
+prepareGeneExpressionComparisonPlotInfo <- function(de.info, genes, plots, smoothed, max.z, max.z.adj, max.lfc, z.palette, z.adj.palette, lfc.palette) {
+  z.scores <- NULL
+  z.adj <- NULL
+  if (any(plots != "expression")) {
+    z.scores <- de.info$z
+    z.adj <- de.info$z.adj
+    if (is.null(de.info)) {
+      warning("Z-scores were not estimated. See estimateClusterFreeDE().")
+      plots <- "expression"
+    }
+
+    if (!all(genes %in% colnames(de.info$z))) {
+      missed.genes <- setdiff(genes, colnames(de.info$z))
+      warning("Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See estimateClusterFreeDE().")
+      plots <- "expression"
+    }
+
+    if (is.null(max.z.adj)) {
+      max.z.adj <- z.adj@x %>% c(1e-5) %>% range(z.adj@x, na.rm=TRUE) %>% abs() %>% max() %>% min(5)
+    }
+
+    z.scores@x %<>% pmin(max.z) %>% pmax(-max.z)
+    z.adj@x %<>% pmin(max.z.adj) %>% pmax(-max.z.adj)
+  }
+
+  if (("z" %in% plots) && smoothed) {
+    if ((is.null(de.info$z.smoothed) || !all(genes %in% colnames(de.info$z.smoothed)))){
+      missed.genes <- setdiff(colnames(de.info$z.smoothed), genes)
+      warning("Smoothed Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See smoothClusterFreeZScores().")
+    } else {
+      z.scores <- de.info$z.smoothed
+    }
+  }
+
+  if (("z.adj" %in% plots) && smoothed) {
+    if ((is.null(de.info$z.adj.smoothed) || !all(genes %in% colnames(de.info$z.adj.smoothed)))){
+      missed.genes <- setdiff(colnames(de.info$z.smoothed), genes)
+      warning("Smoothed Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See smoothClusterFreeZScores().")
+    } else {
+      z.adj <- de.info$z.adj.smoothed
+    }
+  }
+
+  plot.parts <- list(
+    z.adj=list(title="Z, adjusted", leg.title="Z,adj", max=max.z.adj, scores=z.adj, palette=z.adj.palette),
+    z=list(title="Z-score", leg.title="Z", max=max.z, scores=z.scores, palette=z.palette),
+    lfc=list(title="Log2(fold-change)", leg.title="LFC", max=max.lfc, scores=de.info$lfc, palette=lfc.palette)
+  )[plots[plots != "expression"]]
+
+  return(plot.parts)
+}

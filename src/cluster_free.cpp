@@ -433,12 +433,13 @@ List clusterFreeZScoreMat(const SEXP count_mat, IntegerVector sample_per_cell, L
 
 ////// Expression shifts
 
-double estimateCorrelationDistance(const Eigen::VectorXd &v1, const Eigen::VectorXd &v2, bool centered) {
+// [[Rcpp::export]]
+double estimateCorrelationDistance(const Eigen::VectorXd &v1, const Eigen::VectorXd &v2, bool centered=true) {
     if (v1.size() != v2.size())
         stop("Vectors must have the same length");
 
     double m1 = 0, m2 = 0;
-    if (centered) {
+    if (centered) { // correlation instead of cosine distance
         m1 = v1.mean();
         m2 = v2.mean();
     }

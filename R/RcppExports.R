@@ -9,6 +9,10 @@ clusterFreeZScoreMat <- function(count_mat, sample_per_cell, nn_ids, is_ref, min
     .Call('_cacoa_clusterFreeZScoreMat', PACKAGE = 'cacoa', count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust, norm_both, min_z, verbose, n_cores, adjust_pvalues, n_permutations, smooth, wins)
 }
 
+estimateCorrelationDistance <- function(v1, v2, centered = TRUE) {
+    .Call('_cacoa_estimateCorrelationDistance', PACKAGE = 'cacoa', v1, v2, centered)
+}
+
 estimateClusterFreeExpressionShiftsC <- function(cm, sample_per_cell, nn_ids, is_ref, min_n_between = 1L, min_n_within = 1L, min_n_obs_per_samp = 1L, norm_all = FALSE, verbose = TRUE, n_cores = 1L, dist = "cosine", log_vecs = FALSE) {
     .Call('_cacoa_estimateClusterFreeExpressionShiftsC', PACKAGE = 'cacoa', cm, sample_per_cell, nn_ids, is_ref, min_n_between, min_n_within, min_n_obs_per_samp, norm_all, verbose, n_cores, dist, log_vecs)
 }

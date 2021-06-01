@@ -46,6 +46,7 @@ LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress, sccore
 NeedsCompilation: yes
 Suggests:
     circlize,
+    cluster,
     clusterProfiler (>= 3.0.0),
     coda.base,
     ComplexHeatmap,
@@ -57,7 +58,9 @@ Suggests:
     ggrastr (>= 0.1.7),
     GOfuncR,
     graph,
+    irlba,
     matrixStats,
+    N2R,
     RColorBrewer,
     Rgraphviz,
     Rtsne

@@ -2994,31 +2994,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(z.smoothed))
     },
 
-    #' @description Estimate Gene Programmes based on cluster-free Z-scores on a subsample of
+    #' @description Estimate Gene Programs based on cluster-free Z-scores on a subsample of
     #' cells using \link[fabia:fabia]{fabia}.
-    #' @param n.programmes maximal number of gene programmes to find (parameter `p` for fabia). Default: 15.
-    #' @param ... keyword arguments forwarded to \link{estimateGeneProgrammes}
-    #' @return a list includes:
+    #' @param n.programs maximal number of gene programs to find (parameter `p` for fabia). Default: 15.
+    #' @param ... keyword arguments forwarded to \link{estimateGenePrograms}
+    #' @return a list includes: # TODO: update it
     #'   - `fabia`: \link[fabia:Factorization]{fabia::Factorization} object, result of the
     #'       \link[fabia:fabia]{fabia::fabia} call
     #'   - `sample.ids`: ids of the subsampled cells used for fabia estimates
-    #'   - `scores.exact`: vector of fabia estimates of gene programme scores per cell. Estimated only for the
+    #'   - `scores.exact`: vector of fabia estimates of gene program scores per cell. Estimated only for the
     #'     subsampled cells.
-    #'   - `scores.approx`: vector of approximate gene programme scores, estimated for all cells in the dataset
-    #'   - `loadings`: matrix with fabia gene loadings per programme
-    #'   - `gene.scores`: list of vectors of gene scores per programme. Contains only genes, selected for
-    #'     the programme usin fabia biclustering.
+    #'   - `scores.approx`: vector of approximate gene program scores, estimated for all cells in the dataset
+    #'   - `loadings`: matrix with fabia gene loadings per program
+    #'   - `gene.scores`: list of vectors of gene scores per program. Contains only genes, selected for
+    #'     the program usin fabia biclustering.
     #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
-    estimateGeneProgrammes = function(n.top.genes=Inf, genes=NULL, n.programmes=15, z.adj=FALSE, gene.selection=ifelse(z.adj, "z.adj", "z"),
-                                      smooth=TRUE, name="gene.programmes", cell.subset=NULL, ...) {
-      checkPackageInstalled('fabia', bioc=TRUE)
-
+    estimateGenePrograms = function(method=c("pam", "leiden", "fabia"), n.top.genes=Inf, genes=NULL, n.programs=15, z.adj=FALSE, gene.selection=ifelse(z.adj, "z.adj", "z"),
+                                    smooth=TRUE, name="gene.programs", cell.subset=NULL, n.cores=self$n.cores, verbose=self$verbose, ...) {
       z.scores <- private$getResults("cluster.free.de", "estimateClusterFreeDE")
+      method <- match.arg(method)
       if (smooth) {
         z.scores <- if (z.adj) z.scores$z.adj.smoothed else z.scores$z.smoothed
         if (is.null(z.scores)) stop("Smoothed z.scores were not estimated. Please, run smoothClusterFreeZScores first.")
       } else {
-        warning("Gene programmes without smoothing often produce intractable results, especially with z.adj=FALSE\n")
+        warning("Gene programs without smoothing often produce intractable results, especially with z.adj=FALSE\n")
         z.scores <- if (z.adj) z.scores$z.adj else z.scores$z
       }
 
@@ -3033,27 +3032,44 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         z.scores <- z.scores[cell.subset,]
       }
 
-      res <- estimateGeneProgrammesFabia(z.scores, n.programmes, ...)
-      fr <- res$fabia
+      z.scores@x[is.na(z.scores@x)] <- 0
+      z.scores %<>% Matrix::drop0()
 
-      bi.clusts <- fabia::extractBic(fr)
-      mask <- bi.clusts$bic[,"bixv"] %>% {sapply(., length) > 0}
-      res$scores.exact <- t(fr@Z[mask,, drop=FALSE])
-      res$scores.approx <- t(t(fr@L[,mask, drop=FALSE]) %*% (Matrix::t((z.scores[,rownames(fr@L)]) - fr@center) / fr@scaleData))
-      res$loadings <- fr@L[,mask, drop=FALSE]
-      res$gene.scores <- apply(bi.clusts$bic, 1, `[[`, "bixv")[mask, drop=FALSE]
-      res$bi.clusts <- bi.clusts
+      if (method == "fabia") {
+        warning("fabia method is deprecated")
+        checkPackageInstalled('fabia', bioc=TRUE)
+        res <- estimateGeneProgramsFabia(z.scores, n.programs, ...)
+        fr <- res$fabia
 
-      colnames(res$scores.exact) <- colnames(res$scores.approx) <-
-        colnames(res$loadings) <- names(res$gene.scores) <- paste0("P", 1:ncol(res$scores.exact))
+        bi.clusts <- fabia::extractBic(fr)
+        mask <- bi.clusts$bic[,"bixv"] %>% {sapply(., length) > 0}
+        res$scores.exact <- t(fr@Z[mask,, drop=FALSE])
+        res$scores.approx <- t(t(fr@L[,mask, drop=FALSE]) %*% (Matrix::t((z.scores[,rownames(fr@L)]) - fr@center) / fr@scaleData))
+        res$loadings <- fr@L[,mask, drop=FALSE]
+        res$gene.scores <- apply(bi.clusts$bic, 1, `[[`, "bixv")[mask, drop=FALSE]
+        res$bi.clusts <- bi.clusts
+
+        colnames(res$scores.exact) <- colnames(res$scores.approx) <-
+          colnames(res$loadings) <- names(res$gene.scores) <- paste0("P", 1:ncol(res$scores.exact))
+      } else {
+        if (method == "pam") {
+          clusters <- estimateGeneClustersPam(z.scores, n.programs=n.programs)
+        } else { # method == "leiden"
+          clusters <- estimateGeneClustersLeiden(z.scores, n.cores=n.cores, verbose=verbose, ...)
+        }
+
+        res <- geneProgramInfoByCluster(clusters, z.scores)
+      }
+
+      res$method <- method
       self$test.results[[name]] <- res
 
       return(invisible(self$test.results[[name]]))
     },
 
-    plotGeneProgrammeScores = function(name="gene.programmes", approximate=FALSE, build.panel=TRUE, nrow=NULL,
-                                       gradient.range.quantile=0.975, plot.na=approximate, legend.title="Score", ...) {
-      fr <- private$getResults(name, "estimateGeneProgrammes")
+    plotGeneProgramScores = function(name="gene.programs", approximate=FALSE, build.panel=TRUE, nrow=NULL,
+                                     gradient.range.quantile=0.975, plot.na=approximate, legend.title="Score", ...) {
+      fr <- private$getResults(name, "estimateGenePrograms")
       scores <- if (approximate) fr$scores.approx else fr$scores.exact
 
       ggs <- lapply(1:ncol(scores), function(i) {
@@ -3068,11 +3084,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(ggs)
     },
 
-    plotGeneProgrammeGenes = function(programme.id, name="gene.programmes", max.genes=9, plots="z.adj", min.z=0.1, ...) {
-      fr <- private$getResults(name, "estimateGeneProgrammes")
-      scores <- fr$gene.scores[[programme.id]]
+    plotGeneProgramGenes = function(program.id, name="gene.programs", max.genes=9, plots="z.adj", min.z=0.1, ...) {
+      fr <- private$getResults(name, "estimateGenePrograms")
+      scores <- fr$gene.scores[[program.id]]
       if (is.null(scores))
-        stop("Can't find programme", programme.id)
+        stop("Can't find program", program.id)
 
       scores %<>% .[1:min(length(.), max.genes)]
       return(self$plotGeneExpressionComparison(scores=scores, plots=plots, min.z=min.z, ...))

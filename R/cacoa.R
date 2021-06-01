@@ -3024,7 +3024,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(genes)) {
         z.scores <- z.scores[,genes]
       } else if (!is.infinite(n.top.genes)) {
-        genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, included.genes=colnames(z.scores))
+        genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, included.genes=colnames(z.scores), cell.subset=cell.subset)
         z.scores <- z.scores[,genes]
       }
 

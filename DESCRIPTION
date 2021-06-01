@@ -33,6 +33,7 @@ Imports:
     R6,
     RcppProgress,
     reshape2,
+    rlang,
     roxygen2,
     sccore (> 0.1.2),
     tibble,

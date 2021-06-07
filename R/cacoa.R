@@ -3010,7 +3010,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'     the program usin fabia biclustering.
     #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
     estimateGenePrograms = function(method=c("pam", "leiden", "fabia"), n.top.genes=Inf, genes=NULL, n.programs=15, z.adj=FALSE, gene.selection=ifelse(z.adj, "z.adj", "z"),
-                                    smooth=TRUE, name="gene.programs", cell.subset=NULL, n.cores=self$n.cores, verbose=self$verbose, ...) {
+                                    smooth=TRUE, abs.scores=FALSE, name="gene.programs", cell.subset=NULL, n.cores=self$n.cores, verbose=self$verbose, ...) {
       z.scores <- private$getResults("cluster.free.de", "estimateClusterFreeDE")
       method <- match.arg(method)
       if (smooth) {
@@ -3032,8 +3032,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         z.scores <- z.scores[cell.subset,]
       }
 
-      z.scores@x[is.na(z.scores@x)] <- 0
-      z.scores %<>% Matrix::drop0()
+      if (abs.scores) z.scores@x %<>% abs()
+
+      z.scores %<>% as.matrix() %>% na.omit()
 
       if (method == "fabia") {
         warning("fabia method is deprecated")

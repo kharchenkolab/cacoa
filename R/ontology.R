@@ -1,6 +1,16 @@
 #' @import dplyr
 NULL
 
+mapGeneIds <- function(genes, org.db) {
+  suppressWarnings(suppressMessages(tryCatch({
+    gene.id.map <- clusterProfiler::bitr(genes, 'SYMBOL', 'ENTREZID', org.db) %$%
+      setNames(ENTREZID, SYMBOL)
+  }, error=function(e) {
+    stop("Can't find ENTREZIDs for the specified genes. Did you pass the right org.db?")
+  })))
+  return(gene.id.map)
+}
+
 #' @title Get DE ENTREZ IDs
 #' @description  Filter and prepare DE genes for ontology calculations
 #' @param de.raw List with differentially expressed genes per cell group
@@ -24,13 +34,7 @@ getDEEntrezIdsSplitted <- function(de.raw, org.db, p.adj=1) {
   }) %>% lapply(plyr::compact)
 
   all.genes <- lapply(gene.scores.tmp, lapply, names) %>% unlist() %>% unique()
-  suppressWarnings(suppressMessages(tryCatch({
-    gene.id.map <- clusterProfiler::bitr(all.genes, 'SYMBOL', 'ENTREZID', org.db) %$%
-      setNames(ENTREZID, SYMBOL)
-  }, error=function(e) {
-    stop("Can't find ENTREZIDs for the specified genes. Did you pass the right org.db?")
-  })))
-
+  gene.id.map <- mapGeneIds(all.genes, org.db)
   de.gene.scores <- gene.scores.tmp %>%
     lapply(lapply, function(gs) gs[names(gs) %in% names(gene.id.map)] %>% setNames(gene.id.map[names(.)]))
 

@@ -48,27 +48,29 @@ estimateGeneClustersLeiden <- function(z.scores, resolution=1, n.pcs=100, k=30, 
 estimateGeneClustersPam <- function(z.scores, n.programs) {
   checkPackageInstalled(c("cluster"), cran=TRUE)
   p.dists <- 1 - cor(as.matrix(z.scores))
+  p.dists[is.na(p.dists)] <- 1
   pam.res <- cluster::pam(p.dists, k=n.programs, diss=TRUE)
   return(pam.res$clustering)
 }
 
 geneProgramInfoByCluster <- function(clusters, z.scores, min.score=0.05) {
-  program.scores <- clusters %>% {split(names(.), .)} %>%
+  genes.per.clust <- clusters %>% {split(names(.), .)}
+  program.scores <- genes.per.clust %>%
     lapply(function(ns) matrixStats::colMedians(as.matrix(t(z.scores[,ns,drop=FALSE])))) %>%
     do.call(rbind, .) %>% set_colnames(rownames(z.scores))
 
   sim.scores <- lapply(1:nrow(program.scores), function(pid) {
-    gene.subs <- names(clusters)[clusters == pid]
+    gene.subs <- genes.per.clust[[pid]]
     apply(z.scores[,gene.subs,drop=FALSE], 2, estimateCorrelationDistance, program.scores[pid,], centered=FALSE) %>%
-      sort(decreasing=TRUE)
+      {1 - .} %>% sort(decreasing=TRUE)
   })
 
   loading.scores <- lapply(1:nrow(program.scores), function(pid) {
-    gene.subs <- names(clusters)[clusters == pid]
+    gene.subs <- genes.per.clust[[pid]]
     cell.subs <- which(abs(program.scores[pid,]) > min.score) %>% names()
     z.scores[cell.subs, gene.subs,drop=FALSE] %>% abs() %>% colSums() %>% sort(decreasing=TRUE)
   })
 
-  return(list(program.scores=program.scores, sim.scores=sim.scores,
-              loading.scores=loading.scores, n.progs=nrow(program.scores)))
+  return(list(program.scores=program.scores, genes.per.clust=genes.per.clust, clusters=clusters,
+              sim.scores=sim.scores, loading.scores=loading.scores, n.progs=nrow(program.scores)))
 }

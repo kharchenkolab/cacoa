@@ -2995,10 +2995,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' @description Estimate Gene Programs based on cluster-free Z-scores on a subsample of
-    #' cells using \link[fabia:fabia]{fabia}.
+    #' cells using \link[fabia:fabia]{fabia}. # TODO: update it
     #' @param n.programs maximal number of gene programs to find (parameter `p` for fabia). Default: 15.
     #' @param ... keyword arguments forwarded to \link{estimateGenePrograms}
-    #' @return a list includes: # TODO: update it
+    #' @return a list includes:
     #'   - `fabia`: \link[fabia:Factorization]{fabia::Factorization} object, result of the
     #'       \link[fabia:fabia]{fabia::fabia} call
     #'   - `sample.ids`: ids of the subsampled cells used for fabia estimates
@@ -3068,31 +3068,36 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    plotGeneProgramScores = function(name="gene.programs", approximate=FALSE, build.panel=TRUE, nrow=NULL,
-                                     gradient.range.quantile=0.975, plot.na=approximate, legend.title="Score", ...) {
-      fr <- private$getResults(name, "estimateGenePrograms")
-      scores <- if (approximate) fr$scores.approx else fr$scores.exact
+    plotGeneProgramScores = function(name="gene.programs", build.panel=TRUE, nrow=NULL, legend.title="Score", ...) {
+      gene.progs <- private$getResults(name, "estimateGenePrograms")
+      if (gene.progs$method == "fabia")
+        stop("fabia is deprecated and plotting is not supported anymore")
 
-      ggs <- lapply(1:ncol(scores), function(i) {
-        title <- paste0(colnames(scores)[i], ". Genes: ", length(fr$gene.scores[[i]]), ".")
-        self$plotEmbedding(colors=scores[,i], gradient.range.quantile=gradient.range.quantile, plot.na=plot.na,
-                           legend.title=legend.title, title=title, ...)
+      ggs <- lapply(1:gene.progs$n.progs, function(i) {
+        title <- paste0("Program ", i, ". ", length(gene.progs$genes.per.clust[[i]]), " genes.")
+        self$plotEmbedding(colors=gene.progs$program.scores[i,], title=title, legend.title=legend.title, ...) +
+          theme(legend.background = element_blank())
       })
-      ggs <- lapply(ggs,function(x) x+theme(legend.background = element_blank()))
+
       if (build.panel)
         return(cowplot::plot_grid(plotlist=ggs, nrow=nrow))
 
       return(ggs)
     },
 
-    plotGeneProgramGenes = function(program.id, name="gene.programs", max.genes=9, plots="z.adj", min.z=0.1, ...) {
-      fr <- private$getResults(name, "estimateGenePrograms")
-      scores <- fr$gene.scores[[program.id]]
+    plotGeneProgramGenes = function(program.id, name="gene.programs", ordering=c("similarity", "loading"), max.genes=9, plots="z.adj", ...) {
+      ordering <- match.arg(ordering)
+      gene.progs <- private$getResults(name, "estimateGenePrograms")
+      if (gene.progs$method == "fabia")
+        stop("fabia is deprecated and plotting is not supported anymore")
+
+      scores <- if (ordering == "similarity") gene.progs$sim.scores else gene.progs$loading.scores
+      scores %<>% .[[program.id]]
       if (is.null(scores))
         stop("Can't find program", program.id)
 
-      scores %<>% .[1:min(length(.), max.genes)]
-      return(self$plotGeneExpressionComparison(scores=scores, plots=plots, min.z=min.z, ...))
+      scores %<>% head(max.genes)
+      return(self$plotGeneExpressionComparison(scores=scores, plots=plots, ...))
     },
 
     #' @description Plot cluster-free expression shift z-scores

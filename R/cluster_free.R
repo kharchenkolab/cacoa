@@ -3,25 +3,14 @@
 #' @param n.sampled.cells number of sub-sampled cells for estimating the gene programs. If 0, all cells are used.
 #' it is interpreted as a vector of cell
 #' @inheritDotParams fabia::fabia -p -X -cyc -alpha -random
-estimateGeneProgramsFabia <- function(z.scores, n.programs, n.sampled.cells=15000, min.z=0.5, max.z=3,
-                                        cyc=1500, alpha=0.2, random=-1, ...) {
+estimateGeneProgramsFabia <- function(z.scores, n.programs, n.sampled.cells=15000, cyc=1500, alpha=0.2, random=-1, ...) {
   checkPackageInstalled("fabia", bioc=TRUE)
-
-  z.scores@x[is.na(z.scores@x)] <- 0
-  if (min.z > 1e-10) {
-    z.scores.bin <- z.scores
-    z.scores.bin@x %<>% {as.numeric(abs(.) >= min.z)}
-    genes.filt <- which(colMeans(z.scores.bin) > 0.01)
-    z.scores <- z.scores[, genes.filt]
-  }
 
   sample.ids <- NULL
   if ((n.sampled.cells > 0) && (n.sampled.cells < nrow(z.scores))) {
     sample.ids <- unique(round(seq(1, nrow(z.scores), length.out=n.sampled.cells)))
     z.scores <- z.scores[sample.ids,]
   }
-
-  z.scores@x %<>% pmax(-max.z) %<>% pmin(max.z)
 
   fabia.res <- z.scores %>% t() %>%
     fabia::fabia(p=n.programs, alpha=alpha, cyc=cyc, random=random, ...)

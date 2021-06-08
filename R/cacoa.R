@@ -2876,7 +2876,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateClusterFreeDE = function(n.top.genes=Inf, genes=NULL, max.z=20, min.expr.frac=0.01,
                                      min.n.samp.per.cond=2, min.n.obs.per.samp=2, robust=FALSE, norm.both=TRUE,
                                      adjust.pvalues=FALSE, smooth=TRUE, wins=0.01, n.permutations=200,
-                                     lfc.pseudocount=1e-5, verbose=self$verbose, n.cores=self$n.cores) {
+                                     lfc.pseudocount=1e-5, min.edge.weight=0.6, verbose=self$verbose, n.cores=self$n.cores) {
       if (is.null(genes)) {
         genes <- private$getTopGenes(n.top.genes, gene.selection="expression", min.expr.frac=min.expr.frac)
       }
@@ -2884,7 +2884,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (verbose)
         message("Estimating cluster-free Z-scores for ", length(genes), " most expressed genes")
 
-      de.inp <- private$getClusterFreeDEInput(genes, cm.transpose=FALSE)
+      de.inp <- private$getClusterFreeDEInput(genes, min.edge.weight=min.edge.weight)
       mats <- de.inp %$% clusterFreeZScoreMat(
         cm, sample_per_cell=self$sample.per.cell[rownames(cm)], nn_ids=nns.per.cell, is_ref=is.ref,
         min_n_samp_per_cond=min.n.samp.per.cond, min_n_obs_per_samp=min.n.obs.per.samp, robust=robust,
@@ -3010,7 +3010,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'     the program usin fabia biclustering.
     #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
     estimateGenePrograms = function(method=c("pam", "leiden", "fabia"), n.top.genes=Inf, genes=NULL, n.programs=15, z.adj=FALSE, gene.selection=ifelse(z.adj, "z.adj", "z"),
-                                    smooth=TRUE, abs.scores=FALSE, name="gene.programs", cell.subset=NULL, n.cores=self$n.cores, verbose=self$verbose, ...) {
+                                    smooth=TRUE, abs.scores=FALSE, name="gene.programs", cell.subset=NULL, n.cores=self$n.cores, verbose=self$verbose, max.z=5, min.z=0.5, min.change.frac=0.01, ...) {
       z.scores <- private$getResults("cluster.free.de", "estimateClusterFreeDE")
       method <- match.arg(method)
       if (smooth) {
@@ -3030,6 +3030,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (!is.null(cell.subset)) {
         z.scores <- z.scores[cell.subset,]
+      }
+
+      z.scores@x %<>% pmax(-max.z) %<>% pmin(max.z)
+      z.scores@x[abs(z.scores@x) < min.z] <- 0
+
+      if (min.change.frac > 0) {
+        z.scores.bin <- drop0(z.scores)
+        z.scores.bin@x[] <- 1
+        z.scores %<>% .[, colMeans(z.scores.bin, na.rm=TRUE) >= min.change.frac]
       }
 
       if (abs.scores) z.scores@x %<>% abs()
@@ -3420,7 +3429,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(self$cache$go.environment)
     },
 
-    getClusterFreeDEInput = function(genes, cm.transpose=TRUE) {
+    getClusterFreeDEInput = function(genes, min.edge.weight=0.0) {
       cm <- self$getJointCountMatrix(raw=FALSE)
       is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
 
@@ -3429,9 +3438,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       cell.names <- intersect(rownames(cm), rownames(adj.mat))
 
       adj.mat %<>% .[cell.names, cell.names, drop=FALSE] %>% as("dgTMatrix")
+
+      if (min.edge.weight > 1e-10) {
+        samp.per.cell <- self$sample.per.cell[cell.names]
+        adj.mat@x[(samp.per.cell[adj.mat@i + 1] != samp.per.cell[adj.mat@j + 1]) & (adj.mat@x < min.edge.weight)] <- 0.0
+        adj.mat %<>% drop0() %>% as("dgTMatrix")
+      }
+
       nns.per.cell <- split(adj.mat@j, adj.mat@i) %>% setNames(cell.names)
       cm %<>% .[cell.names, genes, drop=FALSE]
-      if (cm.transpose) cm %<>% Matrix::t()
 
       return(list(cm=cm, adj.mat=adj.mat, is.ref=is.ref, nns.per.cell=nns.per.cell))
     }

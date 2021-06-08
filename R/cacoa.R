@@ -2360,10 +2360,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # Apply bootstrap
       loadings <- plapply(1:n.boot, function(ib){
 
-        # Create samples by bootstrap
+        # Create samples for bootstrap
         samples.tmp <- sample(rownames(cnts), nrow(cnts), replace=TRUE)
         groups.tmp <- groups[samples.tmp]
-
 
         # Check that both groups are presented
         while((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) {
@@ -2373,11 +2372,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
         cnts.tmp <- cnts[samples.tmp,]
 
-
+        # Produce resamplings of cell types within samples with remaining groups. Only one(!) resampling: n.perm=1
         init.tmp <- produceResampling(cnts=cnts.tmp, groups=groups.tmp, n.perm=1,
                                   replace.samples=FALSE, remain.groups=TRUE, seed=n.seed+ib)
         init.l <- getLoadings(init.tmp$cnts[[1]], init.tmp$groups[[1]], criteria = criteria, ref.cell.type = ref.cell.type)
 
+        # if you test significance, then you need to generate the null distribution
         if (coda.test == 'significance') {
           null.tmp <- produceResampling(cnts = cnts.tmp, groups = groups.tmp, n.perm = n.perm,
                                     replace.samples = F,
@@ -2425,8 +2425,31 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
         # Calculate p-values of confidence interval by bootstrap
         tmp <- sapply(1:nrow(loadings.init), function(i) sum(0 > loadings.init[i,])) / ncol(loadings.init)
-        pval <- apply((cbind(tmp, 1-tmp)), 1, min) * 2
+        pval <- apply((cbind(tmp, 1-tmp)), 1, min) # multiply by * 2 ?
         names(pval) <- rownames(loadings.init)
+        
+        # ----------------------------
+        # Additional correction of p-values
+        ld <- loadings.init
+        ld.means <- rowMeans(ld)
+
+        idx <- order(abs(ld.means))
+        ld <- ld[idx,]
+        ld.means <- ld.means[idx]
+        pvals_tmp <- rep(0,length(ld.means))
+        pvals_tmp[1] <- 1
+        for(i in 2:length(ld.means)){
+          tmp <- sum(ld[i,] > ld.means[i-1]) / ncol(ld)
+          tmp <- min(tmp, 1-tmp)
+          pvals_tmp[i] <- min(tmp, pvals_tmp[i-1])
+        }
+        names(pvals_tmp) <- rownames(ld)
+        # print(pvals_tmp)
+        # Combining p-values
+        pval <- rowMax(cbind(pval, pvals_tmp[names(pval)]))
+        names(pval) <- rownames(loadings.init)
+        # ----------------------------
+        
         padj <- p.adjust(pval, method <- 'fdr')
 
         loadings.null <- NULL

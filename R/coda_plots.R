@@ -194,6 +194,7 @@ plotCellLoadings <- function(loadings, pval, signif.threshold, jitter.alpha, pal
     pval <- pval[tmp.order]
     # additional ordering by p-value
     loadings <- loadings[order(-pval), ]
+    pval <- pval[order(-pval)]
     # Get significant cells
     n.significant.cells <- sum(pval <= signif.threshold)
   } else {
@@ -202,7 +203,6 @@ plotCellLoadings <- function(loadings, pval, signif.threshold, jitter.alpha, pal
     n.significant.cells <- 0
   }
 
-  frac <- pval
   res.ordered <- t(loadings) %>% as.data.frame()
   ymax = max(loadings)
 
@@ -220,20 +220,21 @@ plotCellLoadings <- function(loadings, pval, signif.threshold, jitter.alpha, pal
   if(!is.null(palette)) p <- p + scale_fill_manual(values=palette)
   if(n.significant.cells > 0) p <- p + geom_vline(xintercept=nrow(loadings) - n.significant.cells + 0.5, color='red')
 
-# 
-#   if(show.pvals){
-#     d <- names(frac) %>% factor(., levels=.) %>% data.frame(x=., y=frac)
-#     p.pval <- ggplot(d, aes(x=x, y=-log(y,base = 10), fill=factor(x))) +
-#       geom_bar(stat="identity") +
-#       geom_hline(yintercept=-log(signif.threshold,base = 10)) +
-#       coord_flip() + labs(x='', y='-log(p-value)') +
-#       plot.theme + theme(legend.position = "none") + theme(axis.text.y = element_blank())
-# 
-#     if(!is.null(palette)) p.pval <- p.pval + scale_fill_manual(values=palette)
-# 
-#     p.combo <- cowplot::plot_grid(p, p.pval, nrow=1, rel_widths=c(2,1))
-#     return(p.combo)
-#   }
+
+  if(show.pvals){
+    d <- data.frame(y=pval, x=names(pval), row = 1:length(pval))
+    print(d)
+    p.pval <- ggplot(d, aes(x=reorder(x,row), y=-log(y,base = 10), fill=factor(x))) +
+      geom_bar(stat="identity") +
+      geom_hline(yintercept=-log(signif.threshold,base = 10)) +
+      coord_flip() + labs(x='', y='-log(p-value)') +
+      plot.theme + theme(legend.position = "none") + theme(axis.text.y = element_blank())
+
+    if(!is.null(palette)) p.pval <- p.pval + scale_fill_manual(values=palette)
+
+    p.combo <- cowplot::plot_grid(p, p.pval, nrow=1, rel_widths=c(2,1))
+    return(p.combo)
+  }
 
   return(p)
 

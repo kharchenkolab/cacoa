@@ -42,10 +42,10 @@ estimateGeneClustersPam <- function(z.scores, n.programs) {
   return(pam.res$clustering)
 }
 
-geneProgramInfoByCluster <- function(clusters, z.scores, min.score=0.05) {
+geneProgramInfoByCluster <- function(clusters, z.scores, min.score=0.05, verbose=FALSE) {
   genes.per.clust <- clusters %>% {split(names(.), .)}
   program.scores <- genes.per.clust %>%
-    lapply(function(ns) matrixStats::colMedians(as.matrix(t(z.scores[,ns,drop=FALSE])))) %>%
+    plapply(function(ns) apply(as.matrix(z.scores[,ns,drop=FALSE]), 1, mean, trim=0.1), progress=verbose) %>%
     do.call(rbind, .) %>% set_colnames(rownames(z.scores))
 
   sim.scores <- lapply(1:nrow(program.scores), function(pid) {

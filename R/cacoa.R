@@ -3091,7 +3091,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           clusters <- estimateGeneClustersLeiden(z.scores, n.cores=n.cores, verbose=verbose, ...)
         }
 
-        res <- geneProgramInfoByCluster(clusters, z.scores)
+        res <- geneProgramInfoByCluster(clusters, z.scores, verbose=verbose)
       }
 
       res$method <- method

@@ -18,6 +18,8 @@ brewerPalette <- function(name, n=NULL, rev=TRUE) {
   return(grDevices::colorRampPalette(pal))
 }
 
+dark.red.palette <- colorRampPalette(c("gray95", "red", "#5A0000"), space="Lab")
+
 #' @title Plot Number of Cells Regression
 #' @param n the regressed variable
 #' @param n.total number of cells

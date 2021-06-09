@@ -2427,7 +2427,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         tmp <- sapply(1:nrow(loadings.init), function(i) sum(0 > loadings.init[i,])) / ncol(loadings.init)
         pval <- apply((cbind(tmp, 1-tmp)), 1, min) # multiply by * 2 ?
         names(pval) <- rownames(loadings.init)
-        
+
         # ----------------------------
         # Additional correction of p-values
         ld <- loadings.init
@@ -2449,7 +2449,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         pval <- rowMax(cbind(pval, pvals_tmp[names(pval)]))
         names(pval) <- rownames(loadings.init)
         # ----------------------------
-        
+
         padj <- p.adjust(pval, method <- 'fdr')
 
         loadings.null <- NULL
@@ -3100,16 +3100,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    plotGeneProgramScores = function(name="gene.programs", build.panel=TRUE, nrow=NULL, legend.title="Score", ...) {
+    plotGeneProgramScores = function(name="gene.programs", prog.ids=NULL, build.panel=TRUE, nrow=NULL, legend.title="Score", adj.list=NULL,
+                                     palette=NULL, ...) {
       gene.progs <- private$getResults(name, "estimateGenePrograms")
       if (gene.progs$method == "fabia")
         stop("fabia is deprecated and plotting is not supported anymore")
 
-      ggs <- lapply(1:gene.progs$n.progs, function(i) {
+      if (is.null(prog.ids)) prog.ids <- 1:gene.progs$n.progs
+      if (all(gene.progs$program.scores >= 0)) palette <- dark.red.palette
+
+      ggs <- lapply(prog.ids, function(i) {
         title <- paste0("Program ", i, ". ", length(gene.progs$genes.per.clust[[i]]), " genes.")
-        self$plotEmbedding(colors=gene.progs$program.scores[i,], title=title, legend.title=legend.title, ...) +
+        gg <- self$plotEmbedding(colors=gene.progs$program.scores[i,], title=title, legend.title=legend.title, palette=palette, ...) +
           theme(legend.background = element_blank())
+        if (!is.null(adj.list)) gg <- gg + adj.list
+        gg
       })
+
+      if (length(ggs) == 1)
+        return(ggs[[1]])
 
       if (build.panel)
         return(cowplot::plot_grid(plotlist=ggs, nrow=nrow))
@@ -3189,7 +3198,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plots=c("z.adj", "z", "expression"), min.z=qnorm(0.9),
-                                            max.z=4, max.z.adj=NULL, max.lfc=3, smoothed=FALSE, gene.palette=NULL, z.palette=NULL, z.adj.palette=z.palette, lfc.palette=NULL, plot.na=-1,
+                                            max.z=4, max.z.adj=NULL, max.lfc=3, smoothed=FALSE, gene.palette=dark.red.palette, z.palette=NULL, z.adj.palette=z.palette, lfc.palette=NULL, plot.na=-1,
                                             adj.list=NULL, build.panel=TRUE, nrow=1, ...) {
       unexpected.plots <- setdiff(plots, c("z.adj", "z", "lfc", "expression"))
       if (length(unexpected.plots) > 0) stop("Unexpected values in `plots`: ", unexpected.plots)
@@ -3211,8 +3220,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (is.null(z.adj.palette)) z.adj.palette <- z.palette
-
-      if (is.null(gene.palette)) gene.palette <- colorRampPalette(c("gray90", "red", "#5A0000"), space = "Lab")
 
       plot.parts <- self$test.results$cluster.free.de %>%
         prepareGeneExpressionComparisonPlotInfo(genes=genes, plots=plots, smoothed=smoothed, max.z=max.z, max.z.adj=max.z.adj, max.lfc=max.lfc,

@@ -3002,10 +3002,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         filter <- function(...) heatFilter(..., beta=smoothing)
       }
 
-      z.scores@x[is.na(z.scores@x)] <- 0
-      z.smoothed <- z.scores %>%
-        smoothSignalOnGraph(filter=filter, graph=extractCellGraph(self$data.object), n.cores=n.cores,
-                            progress=verbose, ...)
+      z.smoothed <- z.scores
+      z.smoothed@x[is.na(z.smoothed@x)] <- 0
+      z.smoothed %<>% smoothSignalOnGraph(filter=filter, graph=extractCellGraph(self$data.object),
+                                          n.cores=n.cores, progress=verbose, ...)
 
       z.smoothed[is.na(z.scores)] <- NA
       if (z.adj) {

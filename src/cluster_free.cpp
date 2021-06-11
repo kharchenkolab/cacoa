@@ -287,7 +287,7 @@ estimateNullZScoreRanges(const VectorXd &gene_vec, const MatrixXd &sample_x_cell
     for (int rep = 0; rep < pars.n_permutations; ++rep) {
         std::shuffle(is_ref_shuffled.begin(), is_ref_shuffled.end(), g);
         auto perm_zs = estimateGeneZScore(gene_vec, sample_x_cell_cm, n_obs_per_samp, is_ref_shuffled, pars).zs;
-        if (pars.smooth) {
+        if (pars.smooth) { // TODO: estimating z-scores per many permutations at once would allow to run median filter per column, saving a lot of time on random access indexing
             perm_zs = applyMedianFilter(perm_zs, nn_ids, non_zero_ids);
         }
 

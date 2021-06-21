@@ -167,15 +167,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `cell.groups`: same as the provided variable
     #'   - `valid.comparisons`: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)
     estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist='JS', within.group.normalization=TRUE, valid.comparisons=NULL,
-                                               n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells=10,
+                                               n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
                                                sample.groups=self$sample.groups, n.cores=self$n.cores, verbose=self$verbose,
                                                name="expression.shifts", ...) {
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
       self$test.results[[name]] <- count.matrices %>%
-        estimateExpressionShiftMagnitudes(sample.groups, cell.groups, dist=tolower(dist), within.group.normalization=within.group.normalization,
+        filterExpressionDistanceInput(cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
+                                      min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac) %$%
+        estimateExpressionShiftMagnitudes(cms, sample.groups, cell.groups, dist=tolower(dist), within.group.normalization=within.group.normalization,
                                           valid.comparisons=valid.comparisons, n.cells=n.cells, n.top.genes=n.top.genes, n.subsamples=n.subsamples,
-                                          min.cells=min.cells, n.cores=n.cores, verbose=verbose, transposed.matrices=TRUE, ...)
+                                          min.cells=min.cells.per.sample, n.cores=n.cores, verbose=verbose, transposed.matrices=TRUE, ...)
 
       return(invisible(self$test.results[[name]]))
     },
@@ -2815,6 +2817,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         title <- cell.type
         p.dists.per.subsample <- lapply(clust.info$p.dist.info, `[[`, cell.type)
         n.cells.per.samp <- self$sample.per.cell %>% .[clust.info$cell.groups[names(.)] == cell.type] %>% table()
+        if (is.null(p.dists.per.subsample[[1]])) {
+          warning("Distances were not estimated for cell type ", cell.type)
+          return(NULL)
+        }
       } else { # weighted expression distance across all cell types
         title <- ''
         p.dists.per.subsample <- prepareJointExpressionDistance(clust.info$p.dist.info)

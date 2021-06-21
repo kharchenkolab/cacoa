@@ -245,3 +245,31 @@ prepareJointExpressionDistance <- function(p.dist.info, valid.comparisons=NULL, 
 
   return(df)
 }
+
+filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sample.groups,
+                                          min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01) {
+  cell.names <- lapply(cms, rownames) %>% unlist()
+  freq.table <- table(cell.groups[cell.names], sample.per.cell[cell.names]) %>%
+    as.data.frame() %>%
+    mutate(Condition=sample.groups[as.character(Var2)]) %>%
+    filter(Freq >= min.cells.per.sample)
+
+  filt.types <- freq.table %>% split(.$Var1) %>% sapply(function(df) {
+    df %$% split(Var2, Condition) %>% sapply(length) %>% {all(. >= min.samp.per.type)}
+  }) %>% which() %>% names()
+
+  freq.table %<>% filter(Var1 %in% filt.types)
+  filt.types.per.samp <- freq.table %$% split(Var1, Var2)
+
+  cms.filt <- names(filt.types.per.samp) %>% sn() %>% lapply(function(n) {
+    cms[[n]] %>% .[cell.groups[rownames(.)] %in% filt.types.per.samp[[n]],]
+  })
+
+  filt.genes <- lapply(cms.filt, function(cm) names(which(colMeans(cm > 1) > min.gene.frac))) %>%
+    unlist() %>% table() %>% {. / length(cms.filt) > 0.1} %>% which() %>% names()
+
+  cms.filt %<>% lapply(sccore:::extendMatrix, filt.genes) %>% lapply(`[`,,filt.genes)
+  cell.names <- lapply(cms.filt, rownames) %>% unlist()
+
+  return(list(cms=cms.filt, cell.groups=droplevels(cell.groups[cell.names]), sample.groups=sample.groups[names(cms)]))
+}

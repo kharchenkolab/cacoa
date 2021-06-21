@@ -209,7 +209,8 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 #' @param palette - cell type palette
 #' @return A ggplot2 object
 plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch=TRUE, jitter.alpha=0.05, palette=NULL,
-                                         ylab='expression distance', yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0) {
+                                         ylab='expression distance', yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0,
+                                         order.x=TRUE) {
 
   # calculate mean, se and median
   odf <- df <- na.omit(df); # full df is now in odf
@@ -222,15 +223,17 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
            UI=sapply(cell, function(ct) conf.ints[[ct]][2])) %>%
     .[!is.na(.$mean),]
 
-  if (type == 'box') {
-    df %<>% arrange(med)
-  } else {
-    df %<>% arrange(mean)
-  }
+  if (order.x) {
+    if (type == 'box') {
+      df %<>% arrange(med)
+    } else {
+      df %<>% arrange(mean)
+    }
 
-  # order cell types according to the mean
-  odf$cell %<>% factor(levels=df$cell)
-  df$cell %<>% factor(., levels=.)
+    # order cell types according to the mean
+    odf$cell %<>% factor(levels=df$cell)
+    df$cell %<>% factor(., levels=.)
+  }
 
   if(type=='box') { # boxplot
     p <- ggplot(odf,aes(x=cell,y=val,fill=cell)) + geom_boxplot(notch=notch, outlier.shape=NA)
@@ -242,7 +245,7 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
     p <- ggplot(df,aes(x=cell,y=mean,fill=cell)) + geom_bar(stat='identity') +
       geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, size=line.size)
   }
-  if(!is.na(yline)) { p <- p + geom_hline(yintercept = 1,linetype=2,color='gray50') }
+  if(!is.na(yline) && !is.null(yline)) { p <- p + geom_hline(yintercept = yline, linetype=2, color='gray50') }
   p <- p +
     plot.theme +
     theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12),

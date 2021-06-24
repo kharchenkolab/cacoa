@@ -9,7 +9,7 @@
 ##' @param transposed.matrices (default=F)
 ##' @export
 estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cell.groups, dist=c('cor', 'js'), normalize.both=TRUE,
-                                              verbose=FALSE, transposed.matrices=FALSE) {
+                                              verbose=FALSE, transposed.matrices=FALSE, ref.level=NULL) {
   dist <- match.arg(dist)
   sample.groups <- as.factor(sample.groups) %>% na.omit() %>% droplevels()
   if(length(levels(sample.groups))!=2) stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
@@ -32,7 +32,8 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
                                         sample.groups=sample.groups, dist=dist)
 
   if(verbose) cat('calculating distances ... ')
-  dist.df <- estimateExpressionShiftDf(p.dist.info, sample.groups, within.group.normalization=TRUE) %>%
+  norm.type <- ifelse(normalize.both, "both", "ref")
+  dist.df <- estimateExpressionShiftDf(p.dist.info, sample.groups, norm.type=norm.type, ref.level=ref.level) %>%
     mutate(Type=factor(Type, levels=names(sort(tapply(value, Type, median))))) # sort cell types
   if(verbose) cat('done!\n')
 
@@ -67,7 +68,9 @@ estimatePairwiseExpressionDistances <- function(count.matrices, sample.per.cell,
   return(ctdm)
 }
 
-subsetDistanceMatrix <- function(dist.mat, selection.mask) {
+subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor) {
+  comp.selector <- if (cross.factor) "!=" else "=="
+  selection.mask <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], comp.selector);
   diag(dist.mat) <- NA;
   dist.mat[!selection.mask] <- NA;
 
@@ -76,30 +79,39 @@ subsetDistanceMatrix <- function(dist.mat, selection.mask) {
   return(dist.df);
 }
 
-extractWithinGroupDistanceDf <- function(dist.mat, sample.groups) {
-  same.factor <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], "==");
-  return(subsetDistanceMatrix(dist.mat, same.factor));
-}
+estimateCellTypeExpressionShiftDf <- function(dist.mat, sample.groups, norm.type=c("both", "ref", "none"), ref.level=NULL) {
+  norm.type <- match.arg(norm.type)
 
-estimateCellTypeExpressionShiftDf <- function(dist.mat, sample.groups, within.group.normalization=FALSE) {
-  # Select comparisons
-  cross.factor <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], '!=');
+  if ((norm.type == "ref") && is.null(ref.level))
+    stop("ref.level has to be provided for norm.type='ref'")
 
-  if (within.group.normalization) {
-    comp.mask.within <- !cross.factor
-    diag(comp.mask.within) <- NA
-    dist.mat <- dist.mat / median(dist.mat[comp.mask.within], na.rm=TRUE)
+  sample.groups %<>% .[rownames(dist.mat)]
+  if (norm.type == "both") {
+    sg1 <- levels(sample.groups)[1]
+    m1 <- outer(sample.groups, sample.groups, function(a, b) (a == sg1) & (b == sg1))
+    m2 <- outer(sample.groups, sample.groups, function(a, b) (a != sg1) & (b != sg1))
+    diag(m1) <- NA; diag(m2) <- NA
+    norm.const <- (median(dist.mat[m1], na.rm=TRUE) + median(dist.mat[m2], na.rm=TRUE)) / 2
+  } else if (norm.type == "ref") {
+    mr <- outer(sample.groups, sample.groups, function(a, b) (a == ref.level) & (b == ref.level))
+    diag(mr) <- NA
+    norm.const <- median(dist.mat[mr], na.rm=TRUE)
+  } else {
+    norm.const <- 0
   }
 
-  subsetDistanceMatrix(dist.mat, cross.factor)
+  dist.mat <- dist.mat - norm.const
+  dist.df <- subsetDistanceMatrix(dist.mat, sample.groups=sample.groups, cross.factor=TRUE)
+
+  return(dist.df)
 }
 
-estimateExpressionShiftDf <- function(p.dist.per.type, sample.groups, return.dists.within=FALSE, within.group.normalization=FALSE) {
+estimateExpressionShiftDf <- function(p.dist.per.type, sample.groups, return.dists.within=FALSE, norm.type="both", ...) {
   if (return.dists.within) {
-    dists.per.type <- lapply(p.dist.per.type, extractWithinGroupDistanceDf, sample.groups)
+    dists.per.type <- lapply(p.dist.per.type, subsetDistanceMatrix, sample.groups, cross.factor=FALSE)
   } else {
     dists.per.type <- p.dist.per.type %>%
-      lapply(estimateCellTypeExpressionShiftDf, sample.groups, within.group.normalization=within.group.normalization)
+      lapply(estimateCellTypeExpressionShiftDf, sample.groups, norm.type=norm.type, ...)
   }
 
   dists.per.type %<>% .[!sapply(., is.null)]

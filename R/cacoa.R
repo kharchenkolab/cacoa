@@ -164,7 +164,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `cell.groups`: same as the provided variable
     estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist='cor', normalize.both=TRUE,
                                                n.top.genes=Inf, min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
-                                               sample.groups=self$sample.groups, verbose=self$verbose, name="expression.shifts", ...) {
+                                               ref.level=self$ref.level, sample.groups=self$sample.groups, verbose=self$verbose,
+                                               name="expression.shifts", ...) {
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
       if (verbose) cat("Filtering data... ")
@@ -175,7 +176,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       self$test.results[[name]] <- shift.inp %$%
         estimateExpressionShiftMagnitudes(cms, sample.groups, cell.groups, dist=tolower(dist), normalize.both=normalize.both,
-                                          verbose=verbose, transposed.matrices=TRUE, ...)
+                                          verbose=verbose, ref.level=ref.level, transposed.matrices=TRUE, ...)
 
       return(invisible(self$test.results[[name]]))
     },
@@ -304,7 +305,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else {
         plotMeanMedValuesPerCellType(df, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
                                      palette=self$cell.groups.palette, ylab='normalized expression distance',
-                                     plot.theme=self$plot.theme, ...)
+                                     plot.theme=self$plot.theme, yline=0, ...)
       }
     },
 

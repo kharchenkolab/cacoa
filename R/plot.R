@@ -201,7 +201,7 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 
 #' @title Plot bar, point or boxplots showing mean/median values per cell type
 #' @description  Generic function for plotting mean or median values per cell type (used for expression shift distances and others)
-#' @param df - data frame containing the results, including $val and $cell slots which will be summarized
+#' @param df - data frame containing the results, including $value and $Type slots which will be summarized
 #' @param type - type of a plot "bar" (default), "point" (mean + sd), or "box" for boxplot
 #' @param show.jitter whether to show individual data points (default: FALSE)
 #' @param jitter.alpha transparency value for the data points (default: 0.05)
@@ -211,21 +211,21 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type='bar', show.jitter=TRUE, notch=TRUE, jitter.alpha=0.05, palette=NULL,
                                          ylab='expression distance', yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0,
                                          order.x=TRUE, pvalue.y=NULL) {
-
+  df$Type %<>% as.factor()
   # calculate mean, se and median
   odf <- df <- na.omit(df); # full df is now in odf
 
-  if (is.null(pvalue.y)) pvalue.y <- max(odf$val)
+  if (is.null(pvalue.y)) pvalue.y <- max(odf$value)
 
-  conf.ints <- odf %$% split(val, cell) %>% lapply(estimateMeanCI, trim=trim)
+  conf.ints <- odf %$% split(value, Type) %>% lapply(estimateMeanCI, trim=trim)
   # calculate mean and CI
-  df %<>% group_by(cell) %>%
-    summarise(mean=mean(val, trim=trim), med=median(val)) %>%
-    mutate(cell=as.character(cell)) %>%
-    mutate(LI=sapply(cell, function(ct) conf.ints[[ct]][1]),
-           UI=sapply(cell, function(ct) conf.ints[[ct]][2])) %>%
+  df %<>% group_by(Type) %>%
+    summarise(mean=mean(value, trim=trim), med=median(value)) %>%
+    mutate(Type=as.character(Type)) %>%
+    mutate(LI=sapply(Type, function(ct) conf.ints[[ct]][1]),
+           UI=sapply(Type, function(ct) conf.ints[[ct]][2])) %>%
     .[!is.na(.$mean),] %>%
-    mutate(cell=factor(cell, levels=levels(odf$cell)))
+    mutate(Type=factor(Type, levels=levels(odf$Type)))
 
   if (order.x) {
     if (type == 'box') {
@@ -235,18 +235,18 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type='bar', show.jitt
     }
 
     # order cell types according to the mean
-    odf$cell %<>% factor(levels=df$cell)
-    df$cell %<>% factor(., levels=.)
+    odf$Type %<>% factor(levels=df$Type)
+    df$Type %<>% factor(., levels=.)
   }
 
   if(type=='box') { # boxplot
-    p <- ggplot(odf,aes(x=cell,y=val,fill=cell)) + geom_boxplot(notch=notch, outlier.shape=NA)
+    p <- ggplot(odf,aes(x=Type,y=value,fill=Type)) + geom_boxplot(notch=notch, outlier.shape=NA)
   } else if(type=='point') { # point + se
-    p <- ggplot(df,aes(x=cell,y=mean,color=cell)) + geom_point(size=3) +
+    p <- ggplot(df,aes(x=Type,y=mean,color=Type)) + geom_point(size=3) +
       geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, size=line.size)
     if(!is.null(palette)) {p <- p + scale_color_manual(values=palette)}
   } else { # barplot
-    p <- ggplot(df,aes(x=cell,y=mean,fill=cell)) + geom_bar(stat='identity') +
+    p <- ggplot(df,aes(x=Type,y=mean,fill=Type)) + geom_bar(stat='identity') +
       geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, size=line.size)
   }
   if(!is.na(yline) && !is.null(yline)) { p <- p + geom_hline(yintercept = yline, linetype=2, color='gray50') }
@@ -259,15 +259,15 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type='bar', show.jitt
 
   if(show.jitter) {
     p <- p +
-      geom_jitter(data=odf, aes(x=cell,y=val), color=1, position=position_jitter(0.1), show.legend=FALSE,
+      geom_jitter(data=odf, aes(x=Type,y=value), color=1, position=position_jitter(0.1), show.legend=FALSE,
                   alpha=jitter.alpha, size=jitter.size)
   };
 
   if (!is.null(pvalues)) {
     pval.df <- pvalueToCode(pvalues) %>%
-      tibble(cell=factor(names(.), levels=levels(df$cell)), pvalue=.) %>% na.omit()
+      tibble(Type=factor(names(.), levels=levels(df$Type)), pvalue=.) %>% na.omit()
 
-    p <- p + geom_text(data=pval.df, mapping=aes(x=cell, label=pvalue), y=pvalue.y)
+    p <- p + geom_text(data=pval.df, mapping=aes(x=Type, label=pvalue), y=pvalue.y)
   }
 
   if(!is.null(palette)) {
@@ -279,7 +279,7 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type='bar', show.jitt
 
 ##' show a scatter plot of cell-type values vs. number of cells per cell type
 ##'
-##' @param df a data frame with $val and $cell columns, just like plotMeanValuesPerCellType
+##' @param df a data frame with $value and $Type columns, just like plotMeanValuesPerCellType
 ##' @param cell.groups a cell groups vector for calculating number of cells per cell type
 ##' @param show.whiskers whether se values should be plotted
 ##' @param palette cell type palette
@@ -293,17 +293,17 @@ plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab
   # calculate mean, se and median
   odf <- na.omit(df); # full df is now in odf
   # calculate mean and se
-  df$cell <- as.factor(df$cell)
-  df <- data.frame(cell=levels(df$cell), mean=tapply(df$val,df$cell,mean), se=tapply(df$val,df$cell, function(x) sd(x)/sqrt(length(x))), stringsAsFactors=FALSE)
+  df$Type <- as.factor(df$Type)
+  df <- data.frame(Type=levels(df$Type), mean=tapply(df$value,df$Type,mean), se=tapply(df$value, df$Type, function(x) sd(x)/sqrt(length(x))), stringsAsFactors=FALSE)
   df <- df[order(df$mean,decreasing=F),]
-  df$cell <- factor(df$cell,levels=df$cell)
+  df$Type <- factor(df$Type,levels=df$Type)
   df <- df[!is.na(df$mean),]
-  df$size <- cell.groups[as.character(df$cell)]
+  df$size <- cell.groups[as.character(df$Type)]
 
   # order cell types according to the mean
-  odf$cell <- factor(odf$cell,levels=df$cell)
-  p <- ggplot(df,aes(x=size,y=mean,color=cell)) + geom_point(size=3)
-  p <- p + ggrepel::geom_label_repel(aes(label=cell), size=font.size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=NA)
+  odf$Type <- factor(odf$Type,levels=df$Type)
+  p <- ggplot(df,aes(x=size,y=mean,color=Type)) + geom_point(size=3)
+  p <- p + ggrepel::geom_label_repel(aes(label=Type), size=font.size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=NA)
   if(show.whiskers) p <- p+geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)
   if(!is.null(palette)) {p <- p+scale_color_manual(values=palette)}
   if(show.regression) {

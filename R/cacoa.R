@@ -296,8 +296,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch = TRUE, show.jitter=TRUE, jitter.alpha=0.05, show.size.dependency=FALSE,
                                            show.whiskers=TRUE, show.regression=TRUE, font.size=5, ...) {
-      df <- private$getResults(name, "estimateExpressionShiftMagnitudes()")$dist.df %$%
-        data.frame(cell=Type, val=value)
+      df <- private$getResults(name, "estimateExpressionShiftMagnitudes()")$dist.df
 
       if(show.size.dependency) {
         plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette, ylab='normalized expression distance', yline=NA,
@@ -328,9 +327,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       cn <- setNames(names(res[[1]]),names(res[[1]]))
       if(show.subsampling.variability) { # average across patient pairs
         if(length(res) < 2) stop('the result has only one subsample; please set show.sampling.variability=FALSE')
-        df <- lapply(res,function(d) data.frame(val=unlist(lapply(d, mean)), cell=names(d)))
+        df <- lapply(res,function(d) data.frame(value=unlist(lapply(d, mean)), Type=names(d)))
       } else { # average across subsampling rounds
-        df <- lapply(cn,function(n) data.frame(val=colMeans(do.call(rbind,lapply(res,function(x) x[[n]]))),cell=n))
+        df <- lapply(cn, function(n) {
+          lapply(res, `[[`, n) %>% do.call(rbind, .) %>% colMeans(na.rm=TRUE) %>%
+            {data.frame(value=., Type=n)}
+        })
       }
 
       df %<>% do.call(rbind, .)
@@ -1230,7 +1232,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         } else {
           ndiff <- sum(na.omit(rl[[i]]$pvalue<=pvalue.cutoff))
         }
-        data.frame(cell=names(rl)[i], val=ndiff, stringsAsFactors=FALSE)
+        data.frame(Type=names(rl)[i], value=ndiff, stringsAsFactors=FALSE)
       }))
 
       if(show.size.dependency) {

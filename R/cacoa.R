@@ -159,7 +159,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param name Test name (default="expression.shifts")
     #' @return a list include
     #'   - `dist.df`: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells
-    #'   - `p.dist.info`: raw list of `n.subsamples` sampled distance matrices (cells were subsampled)
+    #'   - `p.dist.info`: list of distance matrices per cell type
     #'   - `sample.groups`: same as the provided variable
     #'   - `cell.groups`: same as the provided variable
     estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist='cor', normalize.both=TRUE,
@@ -2760,7 +2760,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else {
         df <- cluster.shifts %$%
           prepareJointExpressionDistance(p.dist.info, sample.groups=sample.groups, return.dists=FALSE) %>%
-          do.call(rbind, .) %>% group_by(Var1, Var2, type1) %>%
+          group_by(Var1, Var2, type1) %>%
           summarize(value=median(value)) %>%
           mutate(group=type1, variable="")
         plot.theme <- self$plot.theme +
@@ -2812,18 +2812,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       if (!is.null(cell.type)) { # use distances based on the specified cell type
         title <- cell.type
-        p.dists.per.subsample <- lapply(clust.info$p.dist.info, `[[`, cell.type)
+        p.dists <- clust.info$p.dist.info[[cell.type]]
         n.cells.per.samp <- self$sample.per.cell %>% .[clust.info$cell.groups[names(.)] == cell.type] %>% table()
-        if (is.null(p.dists.per.subsample[[1]])) {
+        if (is.null(p.dists)) {
           warning("Distances were not estimated for cell type ", cell.type)
           return(NULL)
         }
       } else { # weighted expression distance across all cell types
         title <- ''
-        p.dists.per.subsample <- prepareJointExpressionDistance(clust.info$p.dist.info)
+        p.dists <- prepareJointExpressionDistance(clust.info$p.dist.info)
         n.cells.per.samp <- table(self$sample.per.cell)
       }
-      p.dists <- Reduce(`+`, p.dists.per.subsample) / length(p.dists.per.subsample)
 
       if (method == 'tSNE'){
         checkPackageInstalled('Rtsne', cran=TRUE, details='for `method="tSNE"`')

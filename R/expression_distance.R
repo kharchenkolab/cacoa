@@ -29,8 +29,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
 
   p.dist.info <- count.matrices %>%
     estimatePairwiseExpressionDistances(sample.per.cell=sample.per.cell, cell.groups=cell.groups,
-                                        sample.groups=sample.groups, dist=dist) %>%
-    list()
+                                        sample.groups=sample.groups, dist=dist)
 
   if(verbose) cat('calculating distances ... ')
   dist.df <- aggregateExpressionShiftMagnitudes(p.dist.info, sample.groups, within.group.normalization=TRUE, comp.filter='!=') %>%
@@ -96,72 +95,63 @@ estimateCellTypeExpressionShiftDf <- function(dist.mat, sample.groups,
   return(dist.df);
 }
 
-aggregateExpressionShiftMagnitudes <- function(p.dist.info, sample.groups, within.group.normalization=FALSE, comp.filter='!=') {
-  df <- do.call(rbind, lapply(p.dist.info, function(p.dist.per.type) {
-    x <- lapply(p.dist.per.type, estimateCellTypeExpressionShiftDf, sample.groups,
-                within.group.normalization=within.group.normalization, comp.filter=comp.filter)
+aggregateExpressionShiftMagnitudes <- function(p.dist.per.type, sample.groups, within.group.normalization=FALSE, comp.filter='!=') {
+  x <- lapply(p.dist.per.type, estimateCellTypeExpressionShiftDf, sample.groups,
+              within.group.normalization=within.group.normalization, comp.filter=comp.filter) %>%
+    .[!sapply(., is.null)]
 
-    x <- x[!sapply(x, is.null)]
-    df <- names(x) %>% lapply(function(n) cbind(x[[n]], Type=n)) %>% do.call(rbind, .)
-    df
-  }))
-
-  df %<>% group_by(Var1, Var2, Type) %>%
-    summarize(value=median(value), n=median(n)) %>%
+  df <- names(x) %>% lapply(function(n) cbind(x[[n]], Type=n)) %>% do.call(rbind, .) %>%
     mutate(Condition=sample.groups[as.character(Var1)]) %>%
     na.omit()
 
   return(df)
 }
 
-prepareJointExpressionDistance <- function(p.dist.info, sample.groups=NULL, return.dists=TRUE) {
-  df <- lapply(p.dist.info, function(ctdm) {
-    # bring to a common set of cell types
-    common.types <- lapply(ctdm, colnames) %>% unlist() %>% unique()
+prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, return.dists=TRUE) {
+  # bring to a common set of cell types
+  common.types <- lapply(p.dist.per.type, colnames) %>% unlist() %>% unique()
 
-    ctdm <-  lapply(ctdm, function(x) {
-      y <- matrix(0,nrow=length(common.types),ncol=length(common.types));  # can set the missing entries to zero, as they will carry zero weights
-      rownames(y) <- colnames(y) <- common.types;
-      y[rownames(x),colnames(x)] <- x;
-      ycct <- setNames(rep(0,length(common.types)), common.types);
-      ycct[colnames(x)] <- attr(x, 'n.cells')
-      attr(y, 'n.cells') <- ycct
-      y
-    }) # reform the matrix to make sure all cell type have the same dimensions
+  p.dist.per.type %<>% lapply(function(x) {
+    y <- matrix(0,nrow=length(common.types),ncol=length(common.types));  # can set the missing entries to zero, as they will carry zero weights
+    rownames(y) <- colnames(y) <- common.types;
+    y[rownames(x),colnames(x)] <- x;
+    ycct <- setNames(rep(0,length(common.types)), common.types);
+    ycct[colnames(x)] <- attr(x, 'n.cells')
+    attr(y, 'n.cells') <- ycct
+    y
+  }) # reform the matrix to make sure all cell type have the same dimensions
 
-    x <- abind::abind(lapply(ctdm, function(x) {
-      nc <- attr(x, 'n.cells')
-      #wm <- (outer(nc,nc,FUN='pmin'))
-      wm <- sqrt(outer(nc, nc, FUN = 'pmin'))
-      return(x * wm)
-    }), along = 3)
+  x <- abind::abind(lapply(p.dist.per.type, function(x) {
+    nc <- attr(x, 'n.cells')
+    #wm <- (outer(nc,nc,FUN='pmin'))
+    wm <- sqrt(outer(nc, nc, FUN = 'pmin'))
+    return(x * wm)
+  }), along = 3)
 
-    # just the weights (for total sum of weights normalization)
-    y <- abind::abind(lapply(ctdm, function(x) {
-      nc <- attr(x, 'n.cells')
-      sqrt(outer(nc, nc, FUN = 'pmin'))
-    }), along = 3)
+  # just the weights (for total sum of weights normalization)
+  y <- abind::abind(lapply(p.dist.per.type, function(x) {
+    nc <- attr(x, 'n.cells')
+    sqrt(outer(nc, nc, FUN = 'pmin'))
+  }), along = 3)
 
-    # normalize by total weight sums
-    xd <- apply(x, c(1, 2), sum) / apply(y, c(1, 2), sum)
+  # normalize by total weight sums
+  xd <- apply(x, c(1, 2), sum) / apply(y, c(1, 2), sum)
 
-    if (return.dists)
-      return(xd)
+  if (return.dists)
+    return(xd)
 
-    cross.factor <- outer(sample.groups[rownames(xd)], sample.groups[colnames(xd)], '==')
-    diag(xd) <- NA # remove self pairs
-    # restrict
-    xd[!cross.factor] <- NA
-    if (!any(!is.na(xd)))
-      return(NULL)
-    xmd2 <- na.omit(reshape2::melt(xd))
-    xmd2 <- na.omit(xmd2)
-    xmd2$type1 <- sample.groups[as.character(xmd2$Var1)]
-    xmd2$type2 <- sample.groups[as.character(xmd2$Var2)]
-    xmd2
-  })
+  cross.factor <- outer(sample.groups[rownames(xd)], sample.groups[colnames(xd)], '==')
+  diag(xd) <- NA # remove self pairs
+  # restrict
+  xd[!cross.factor] <- NA
+  if (!any(!is.na(xd)))
+    return(NULL)
+  xmd2 <- na.omit(reshape2::melt(xd))
+  xmd2 <- na.omit(xmd2)
+  xmd2$type1 <- sample.groups[as.character(xmd2$Var1)]
+  xmd2$type2 <- sample.groups[as.character(xmd2$Var2)]
 
-  return(df)
+  return(xmd2)
 }
 
 filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sample.groups,

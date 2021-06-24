@@ -2754,7 +2754,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       if (!joint) {
         df <- cluster.shifts %$%
-          aggregateExpressionShiftMagnitudes(p.dist.info, sample.groups, comp.filter='==') %>%
+          estimateExpressionShiftDf(p.dist.info, sample.groups, return.dists.within=TRUE) %>%
           rename(group=Condition, variable=Type)
         plot.theme <- self$plot.theme
       } else {

@@ -32,7 +32,7 @@ estimateExpressionShiftMagnitudes <- function(count.matrices, sample.groups, cel
                                         sample.groups=sample.groups, dist=dist)
 
   if(verbose) cat('calculating distances ... ')
-  dist.df <- aggregateExpressionShiftMagnitudes(p.dist.info, sample.groups, within.group.normalization=TRUE, comp.filter='!=') %>%
+  dist.df <- estimateExpressionShiftDf(p.dist.info, sample.groups, within.group.normalization=TRUE) %>%
     mutate(Type=factor(Type, levels=names(sort(tapply(value, Type, median))))) # sort cell types
   if(verbose) cat('done!\n')
 
@@ -67,40 +67,43 @@ estimatePairwiseExpressionDistances <- function(count.matrices, sample.per.cell,
   return(ctdm)
 }
 
-estimateCellTypeExpressionShiftDf <- function(dist.mat, sample.groups,
-                                              within.group.normalization=FALSE, comp.filter='!=') {
+subsetDistanceMatrix <- function(dist.mat, selection.mask) {
+  diag(dist.mat) <- NA;
+  dist.mat[!selection.mask] <- NA;
+
+  if(all(is.na(dist.mat))) return(NULL);
+  dist.df <- reshape2::melt(dist.mat) %>% na.omit()
+  return(dist.df);
+}
+
+extractWithinGroupDistanceDf <- function(dist.mat, sample.groups) {
+  same.factor <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], "==");
+  return(subsetDistanceMatrix(dist.mat, same.factor));
+}
+
+estimateCellTypeExpressionShiftDf <- function(dist.mat, sample.groups, within.group.normalization=FALSE) {
   # Select comparisons
-  cross.factor <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], comp.filter);
+  cross.factor <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], '!=');
 
   if (within.group.normalization) {
-    if (comp.filter == '==') stop("within.group.normalization is not allowed for `comp.filter='=='`")
     comp.mask.within <- !cross.factor
     diag(comp.mask.within) <- NA
     dist.mat <- dist.mat / median(dist.mat[comp.mask.within], na.rm=TRUE)
   }
 
-  diag(dist.mat) <- NA;
-  dist.mat[!cross.factor] <- NA;
-
-  # Filter comparisons with low number of cells
-  n.cells <- attr(dist.mat, 'n.cells');
-  n.cell.mat <- outer(n.cells, n.cells, FUN='pmin')
-
-  if(all(is.na(dist.mat))) return(NULL);
-
-  # Convert to data.frame
-  dist.df <- reshape2::melt(dist.mat) %>% na.omit()
-  n.cell.mat[is.na(dist.mat)] <- NA;
-  dist.df$n <- reshape2::melt(n.cell.mat) %>% na.omit() %>% .$value
-  return(dist.df);
+  subsetDistanceMatrix(dist.mat, cross.factor)
 }
 
-aggregateExpressionShiftMagnitudes <- function(p.dist.per.type, sample.groups, within.group.normalization=FALSE, comp.filter='!=') {
-  x <- lapply(p.dist.per.type, estimateCellTypeExpressionShiftDf, sample.groups,
-              within.group.normalization=within.group.normalization, comp.filter=comp.filter) %>%
-    .[!sapply(., is.null)]
+estimateExpressionShiftDf <- function(p.dist.per.type, sample.groups, return.dists.within=FALSE, within.group.normalization=FALSE) {
+  if (return.dists.within) {
+    dists.per.type <- lapply(p.dist.per.type, extractWithinGroupDistanceDf, sample.groups)
+  } else {
+    dists.per.type <- p.dist.per.type %>%
+      lapply(estimateCellTypeExpressionShiftDf, sample.groups, within.group.normalization=within.group.normalization)
+  }
 
-  df <- names(x) %>% lapply(function(n) cbind(x[[n]], Type=n)) %>% do.call(rbind, .) %>%
+  dists.per.type %<>% .[!sapply(., is.null)]
+  df <- names(dists.per.type) %>% lapply(function(n) cbind(dists.per.type[[n]], Type=n)) %>% do.call(rbind, .) %>%
     mutate(Condition=sample.groups[as.character(Var1)]) %>%
     na.omit()
 

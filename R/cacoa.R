@@ -149,11 +149,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description  Calculate expression shift magnitudes of different clusters between conditions
     #' @param cell.groups Named cell group factor with cell names (default: stored vector)
-    #' @param dist 'JS' - Jensen Shannon divergence, or 'cor' - correlation distance (default="JS")
+    #' @param dist 'JS' - Jensen Shannon divergence, or 'cor' - correlation distance (default="cor")
     #' @param within.group.normalization Normalize the shift magnitude by the mean magnitude of within-group variation (default=`TRUE`)
-    #' @param valid.comparisons A logical matrix (rows and columns are samples) specifying valid between-sample comparisons.
-    #' Note that if `within.group.normalization=TRUE`, the method will automatically include all within-group comparisons of the samples
-    #' for which at least one valid pair is included in the valid.comparisons (default=`NULL`)
     #' @param n.cells Number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)
     #' @param n.top.genes Number of top highest-expressed genes to consider (default: all genes)
     #' @param n.subsamples Number of samples to draw (default=100)
@@ -165,19 +162,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `p.dist.info`: raw list of `n.subsamples` sampled distance matrices (cells were subsampled)
     #'   - `sample.groups`: same as the provided variable
     #'   - `cell.groups`: same as the provided variable
-    #'   - `valid.comparisons`: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)
-    estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist='JS', within.group.normalization=TRUE, valid.comparisons=NULL,
-                                               n.cells=NULL, n.top.genes=Inf, n.subsamples=100, min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
-                                               sample.groups=self$sample.groups, n.cores=self$n.cores, verbose=self$verbose,
-                                               name="expression.shifts", ...) {
+    estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist='cor', normalize.both=TRUE,
+                                               n.top.genes=Inf, min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
+                                               sample.groups=self$sample.groups, verbose=self$verbose, name="expression.shifts", ...) {
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
-      self$test.results[[name]] <- count.matrices %>%
+      if (verbose) cat("Filtering data... ")
+      shift.inp <- count.matrices %>%
         filterExpressionDistanceInput(cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
-                                      min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac) %$%
-        estimateExpressionShiftMagnitudes(cms, sample.groups, cell.groups, dist=tolower(dist), within.group.normalization=within.group.normalization,
-                                          valid.comparisons=valid.comparisons, n.cells=n.cells, n.top.genes=n.top.genes, n.subsamples=n.subsamples,
-                                          min.cells=min.cells.per.sample, n.cores=n.cores, verbose=verbose, transposed.matrices=TRUE, ...)
+                                      min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac)
+      if (verbose) cat("Done.\n")
+
+      self$test.results[[name]] <- shift.inp %$%
+        estimateExpressionShiftMagnitudes(cms, sample.groups, cell.groups, dist=tolower(dist), normalize.both=normalize.both,
+                                          verbose=verbose, transposed.matrices=TRUE, ...)
 
       return(invisible(self$test.results[[name]]))
     },
@@ -2751,18 +2749,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param show.significance whether to show statistical significance between sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001)
     #' @param ... other plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    plotExpressionDistance = function(name='expression.shifts', joint=FALSE, min.cells=10,
-                                      palette=self$sample.groups.palette, show.significance=FALSE,
-                                      filter.empty.cell.types=TRUE, ...) {
+    plotExpressionDistance = function(name='expression.shifts', joint=FALSE, palette=self$sample.groups.palette,
+                                      show.significance=FALSE, filter.empty.cell.types=TRUE, ...) {
       cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       if (!joint) {
         df <- cluster.shifts %$%
-          aggregateExpressionShiftMagnitudes(p.dist.info, valid.comparisons, sample.groups, min.cells=min.cells, comp.filter='==') %>%
+          aggregateExpressionShiftMagnitudes(p.dist.info, sample.groups, comp.filter='==') %>%
           rename(group=Condition, variable=Type)
         plot.theme <- self$plot.theme
       } else {
         df <- cluster.shifts %$%
-          prepareJointExpressionDistance(p.dist.info, valid.comparisons=valid.comparisons, sample.groups=sample.groups) %>%
+          prepareJointExpressionDistance(p.dist.info, sample.groups=sample.groups, return.dists=FALSE) %>%
           do.call(rbind, .) %>% group_by(Var1, Var2, type1) %>%
           summarize(value=median(value)) %>%
           mutate(group=type1, variable="")

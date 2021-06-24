@@ -208,12 +208,15 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 #' @param notch - whether to show notches in the boxplot version (default=TRUE)
 #' @param palette - cell type palette
 #' @return A ggplot2 object
-plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch=TRUE, jitter.alpha=0.05, palette=NULL,
+plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type='bar', show.jitter=TRUE, notch=TRUE, jitter.alpha=0.05, palette=NULL,
                                          ylab='expression distance', yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0,
-                                         order.x=TRUE) {
+                                         order.x=TRUE, pvalue.y=NULL) {
 
   # calculate mean, se and median
   odf <- df <- na.omit(df); # full df is now in odf
+
+  if (is.null(pvalue.y)) pvalue.y <- max(odf$val)
+
   conf.ints <- odf %$% split(val, cell) %>% lapply(estimateMeanCI, trim=trim)
   # calculate mean and CI
   df %<>% group_by(cell) %>%
@@ -221,7 +224,8 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
     mutate(cell=as.character(cell)) %>%
     mutate(LI=sapply(cell, function(ct) conf.ints[[ct]][1]),
            UI=sapply(cell, function(ct) conf.ints[[ct]][2])) %>%
-    .[!is.na(.$mean),]
+    .[!is.na(.$mean),] %>%
+    mutate(cell=factor(cell, levels=levels(odf$cell)))
 
   if (order.x) {
     if (type == 'box') {
@@ -252,11 +256,20 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
           axis.text.y=element_text(angle=90, hjust=0.5, size=12)) + guides(fill=FALSE)+
     theme(legend.position = "none")+
     labs(x="", y=ylab)
+
   if(show.jitter) {
     p <- p +
       geom_jitter(data=odf, aes(x=cell,y=val), color=1, position=position_jitter(0.1), show.legend=FALSE,
                   alpha=jitter.alpha, size=jitter.size)
   };
+
+  if (!is.null(pvalues)) {
+    pval.df <- pvalueToCode(pvalues) %>%
+      tibble(cell=factor(names(.), levels=levels(df$cell)), pvalue=.) %>% na.omit()
+
+    p <- p + geom_text(data=pval.df, mapping=aes(x=cell, label=pvalue), y=pvalue.y)
+  }
+
   if(!is.null(palette)) {
     p <- p + scale_fill_manual(values=palette)
   }
@@ -551,4 +564,10 @@ prepareGeneExpressionComparisonPlotInfo <- function(de.info, genes, plots, smoot
   )[plots[plots != "expression"]]
 
   return(plot.parts)
+}
+
+pvalueToCode <- function(pvals) {
+  symnum(pvals, corr=FALSE, na=FALSE, legend=FALSE,
+         cutpoints = c(0, 0.001, 0.01, 0.05, 1),
+         symbols = c("***", "**", "*", "ns"))
 }

@@ -2845,6 +2845,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         n.cells.per.samp <- table(self$sample.per.cell)
       }
 
+      if (any(is.na(p.dists))) { # NA imputation
+        p.dists %<>% ape::additive() %>% `dimnames<-`(dimnames(p.dists))
+      }
+
       if (method == 'tSNE'){
         checkPackageInstalled('Rtsne', cran=TRUE, details='for `method="tSNE"`')
 

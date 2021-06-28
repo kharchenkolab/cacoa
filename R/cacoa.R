@@ -176,13 +176,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (verbose) cat("done!\n")
 
       res <- shift.inp %$%
-        estimateExpressionShiftMagnitudes(cms, sample.groups, cell.groups, dist=tolower(dist), normalize.both=normalize.both,
-                                          verbose=verbose, ref.level=ref.level, transposed.matrices=TRUE, ...)
+        estimateExpressionShiftMagnitudes(cms, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=self$sample.per.cell,
+                                          dist=tolower(dist), normalize.both=normalize.both, verbose=verbose, ref.level=ref.level, ...)
 
       if (verbose) cat("Estimating p-values...\n")
-      res$pvalues <- res$p.dist.info %>%
-        estimateExpressionShiftPValues(sample.groups, n.permutations=n.permutations, n.cores=n.cores, verbose=verbose) %>%
-        .$pvalues
+      res$pvalues <- estimateExpressionShiftPValues(res$p.dist.info, sample.groups, n.permutations=n.permutations,
+                                                    n.cores=n.cores, verbose=verbose)$pvalues
       res$padjust <- p.adjust(res$pvalues, method=p.adjust.method)
       if (verbose) cat("Done!\n")
 
@@ -304,14 +303,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param show.regression whether to show a whiskers in the size dependency plot
     #' @return A ggplot2 object
     plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch = TRUE, show.jitter=TRUE, jitter.alpha=0.05, show.size.dependency=FALSE,
-                                           show.whiskers=TRUE, show.regression=TRUE, font.size=5, ...) {
-      df <- private$getResults(name, "estimateExpressionShiftMagnitudes()")$dist.df
+                                           show.whiskers=TRUE, show.regression=TRUE, font.size=5, show.pvalues=c("adjusted", "raw", "none"), ...) {
+      res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
+      df <- res$dist.df
+      show.pvalues <- match.arg(show.pvalues)
+
+      if (show.pvalues == "adjusted") {
+        pvalues <- res$padjust
+      } else if (show.pvalues == "raw") {
+        pvalues <- res$pvalues
+      } else {
+        pvalues <- NULL
+      }
 
       if(show.size.dependency) {
         plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette, ylab='normalized expression distance', yline=NA,
                             show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme, ...)
       } else {
-        plotMeanMedValuesPerCellType(df, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
+        plotMeanMedValuesPerCellType(df, pvalues=pvalues, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
                                      palette=self$cell.groups.palette, ylab='normalized expression distance',
                                      plot.theme=self$plot.theme, yline=0, ...)
       }

@@ -174,4 +174,97 @@ produceResampling <- function(cnts, groups, n.perm = 1000, remain.groups = TRUE,
   return(list(cnts = cnts.perm, groups = groups.perm))
 }
 
+runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL){
+  
+  # Apply bootstrap
+  loadings <- lapply(1:n.boot, function(ib){
+    # Create samples by bootstrap
+    set.seed( n.seed+ib)
+    samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = T)
+    groups.tmp <- groups[samples.tmp]
+    
+    
+    # Check that both groups are presented
+    while((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) {
+      # Create samples by bootstrap
+      samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = T)
+      groups.tmp <- groups[samples.tmp]
+    }
+    cnts.tmp <- cnts[samples.tmp,]
+    
+    init.tmp <- produceResampling(cnts = cnts.tmp, groups = groups.tmp, n.perm = 1,
+                                  replace.samples = F,
+                                  remain.groups = TRUE, seed = n.seed+ib)
+    loadings.tmp <- getLoadings(init.tmp$cnts[[1]], init.tmp$groups[[1]])
+  })
+  
+  # Calculate p-values
+  loadings.init <- c()
+  for(i in 1:length(loadings)){
+    loadings.init <- cbind(loadings.init, loadings[[i]])
+  }
+  
+  # ld <- loadings.init
+  # threshold <- rowMeans(ld)[abs(rowMeans(ld)) == min(abs(rowMeans(ld)))]
+  threshold <- 0
+  
+  # Calculate p-values of confidence interval by bootstrap
+  if(is.null(ref.cell.type)){
+    tmp <- sapply(1:nrow(loadings.init), function(i) sum(threshold > loadings.init[i,])) / ncol(loadings.init)
+    pval <- apply((cbind(tmp, 1-tmp)), 1, min) * 2  
+  } else {
+    ref.level = abs(mean(loadings.init[ref.cell.type,]))
+    tmp1 <- sapply(1:nrow(loadings.init), function(i) sum(loadings.init[i,] > ref.level)) / ncol(loadings.init)
+    tmp2 <- sapply(1:nrow(loadings.init), function(i) sum(loadings.init[i,] < -ref.level)) / ncol(loadings.init)
+    pval = (1 -apply((cbind(tmp1, tmp2)), 1, max)) * 2  
+  }
+  
+  names(pval) <- rownames(loadings.init)
+  
+  # ----------------------------
+  # Additional correction of p-values
+  ld <- loadings.init
+  # ld.means <- rowMeans(ld)
+  
+  idx <- order(abs(rowMeans(ld)))
+  ld <- ld[idx,]
+  pval <- pval[rownames(ld)]
+  
+  idx <- names(pval)[order(-pval)]
+  ld <- ld[idx,]
+  ld.means <- rowMeans(ld)
+  pvals_tmp <- pval[idx]
+  pvals_tmp[1] <- 1
+  current.mean = ld.means[1]
+  
+  for(i in 2:length(ld.means)){
+    # Fid the index of previous closest
+    d.prev = abs(ld.means[1:(i-1)] - ld.means[i])
+    j = which(d.prev == min(d.prev))
+    
+    tmp <- sum(ld[i,] > ld.means[j]) / ncol(ld)
+    tmp <- min(tmp, 1-tmp)
+    pvals_tmp[i] <- max(min(tmp, pvals_tmp[j]), pvals_tmp[i])
+  }
+  names(pvals_tmp) <- rownames(ld)
+  # print(pvals_tmp)
+  # Combining p-values
+  p.names <- names(pval)
+  pval <- max2(pval, pvals_tmp[p.names])
+  names(pval) <- p.names
+  # ----------------------------
+  
+  padj <- p.adjust(pval, method = "fdr")
+  loadings.init = loadings.init[p.names,]
+  return(list(padj=padj, loadings.init=loadings.init, pval=pval))
+}
+
+
+max2 <- function(x, y){
+  res <- c()
+  for(i in 1:length(x)){
+    res = c(res, max(x[i], y[i]))
+  }
+  return(res)
+}
 

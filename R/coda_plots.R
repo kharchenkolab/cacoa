@@ -223,11 +223,10 @@ plotCellLoadings <- function(loadings, pval, signif.threshold, jitter.alpha, pal
 
   if(show.pvals){
     d <- data.frame(y=pval, x=names(pval), row = 1:length(pval))
-    print(d)
     p.pval <- ggplot(d, aes(x=reorder(x,row), y=-log(y,base = 10), fill=factor(x))) +
       geom_bar(stat="identity") +
       geom_hline(yintercept=-log(signif.threshold,base = 10)) +
-      coord_flip() + labs(x='', y='-log(p-value)') +
+      coord_flip() + labs(x='', y='-log(adj. p-value)') +
       plot.theme + theme(legend.position = "none") + theme(axis.text.y = element_blank())
 
     if(!is.null(palette)) p.pval <- p.pval + scale_fill_manual(values=palette)

@@ -349,6 +349,9 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         design.formula = as.formula(paste('~ ',
                                           paste(c(colnames(meta.info), 'group'),
                                                 collapse=' + ')))
+        meta.info.tmp = meta.info[gsub(paste("<!!>", l, sep=''),"",meta[,1]),, drop=F]
+        
+        meta = cbind(meta, meta.info.tmp)
       }
       
 

@@ -223,7 +223,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         return(abs(obs.dists) / mean(abs(unlist(randomized.dists))))
       }, n.cores=1, progress=verbose)
 
-      self$test.results[[name]] <- list(ctdl)
+      self$test.results[[name]] <- ctdl
       return(invisible(self$test.results[[name]]))
 
     },
@@ -276,21 +276,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     ##' @param show.regression whether to show a slope line in the size dependency plot
     ##' @param show.regression whether to show a whiskers in the size dependency plot
     ##' @return A ggplot2 object
-    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.subsampling.variability=FALSE, show.jitter=FALSE, jitter.alpha=0.05, type='box',
+    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.jitter=FALSE, jitter.alpha=0.05, type='box',
                                                  notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5, ...) {
       res <- private$getResults(name, 'estimateCommonExpressionShiftMagnitudes')
-      cn <- setNames(names(res[[1]]),names(res[[1]]))
-      if(show.subsampling.variability) { # average across patient pairs
-        if(length(res) < 2) stop('the result has only one subsample; please set show.sampling.variability=FALSE')
-        df <- lapply(res,function(d) data.frame(value=unlist(lapply(d, mean)), Type=names(d)))
-      } else { # average across subsampling rounds
-        df <- lapply(cn, function(n) {
-          lapply(res, `[[`, n) %>% do.call(rbind, .) %>% colMeans(na.rm=TRUE) %>%
-            {data.frame(value=., Type=n)}
-        })
-      }
-
-      df %<>% do.call(rbind, .) %>% na.omit()
+      df <- names(res) %>%
+        lapply(function(n) data.frame(value=res[[n]], Type=n)) %>%
+        do.call(rbind, .) %>% na.omit()
 
       if(show.size.dependency) {
         plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='common expression distance', yline=NA,

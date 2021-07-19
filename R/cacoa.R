@@ -353,7 +353,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         })
       }
 
-      df %<>% do.call(rbind, .)
+      df %<>% do.call(rbind, .) %>% na.omit()
 
       if(show.size.dependency) {
         plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='common expression distance', yline=NA,
@@ -495,7 +495,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else stop(paste('Resampling method', resampling.method, 'is not supported'))
 
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=TRUE)
-      
+
       self$test.results[['raw']] <- raw.mats
 
       expr.fracs <- self$getJointCountMatrix() %>%
@@ -2384,7 +2384,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       loadings.init <- res$loadings.init
       padj <- res$padj
       pval <- res$pval
-      
+
       self$test.results[['loadings']] = list(loadings = loadings.init,
                                              # loadings.data = loadings.init,
                                              # loadings.null = loadings.null,

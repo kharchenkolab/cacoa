@@ -220,3 +220,31 @@ estimateExpressionShiftPValues <- function(p.dist.info, sample.groups, n.permuta
 
   return(list(dists=dist.per.type, pvalues=pvalues, obs.diffs=obs.diffs))
 }
+
+## Common shifts
+
+##' @description calculate consensus change direction and distances between samples along this axis
+consensusShiftDistances <- function(tcm, sample.groups, mean.trim=0, use.cpp=TRUE) {
+  if(min(table(sample.groups[colnames(tcm)])) < 1) return(NA); # not enough samples
+  g1 <- which(sample.groups[colnames(tcm)]==levels(sample.groups)[1])
+  g2 <- which(sample.groups[colnames(tcm)]==levels(sample.groups)[2])
+  if (use.cpp)
+    return(as.numeric(projdiff(tcm, g1 - 1, g2 - 1)))
+
+  dm <- do.call(rbind, lapply(g1, function(n1) { # R
+    do.call(rbind, lapply(g2, function(n2) {
+      tcm[,n1] - tcm[,n2]
+    }))
+  }))
+
+  if (mean.trim > 0) {
+    dmm <- apply(dm, 2, mean, trim=mean.trim)
+  } else {
+    dmm <- colMeans(dm)
+  }
+
+  dmm <- dmm / sqrt(sum(dmm^2)) # normalize
+
+  # project samples and calculate distances
+  return(as.numeric(dm %*% dmm))
+}

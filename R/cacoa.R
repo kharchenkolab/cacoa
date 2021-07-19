@@ -189,105 +189,42 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.cells=NULL, n.randomizations=50, n.subsamples=30, min.cells=10,
-                                                     n.cores=self$n.cores, verbose=self$verbose,  mean.trim=0.1, name='common.expression.shifts') {
+    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.randomizations=50, min.cells=10,
+                                                     verbose=self$verbose, name='common.expression.shifts') {
       if(length(levels(sample.groups))!=2) stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
 
-      count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
+      count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
       common.genes <- Reduce(intersect, lapply(count.matrices, colnames))
       count.matrices %<>% lapply(`[`, , common.genes)
-
-      comp.matrix <- outer(sample.groups,sample.groups,'!='); diag(comp.matrix) <- FALSE
-
 
       # get a cell sample factor, restricted to the samples being contrasted
       cl <- lapply(count.matrices[names(sample.groups)], rownames)
       cl <- rep(names(cl), sapply(cl, length)) %>% setNames(unlist(cl)) %>%  as.factor()
 
       # cell factor
-      cf <- cell.groups
-      cf <- cf[names(cf) %in% names(cl)]
+      cell.groups %<>% .[names(.) %in% names(cl)] %>% as.factor()
 
-      # if(is.null(n.cells)) {
-      #   n.cells <- min(table(cf)) # use the size of the smallest group
-      #   if(verbose) cat('setting group size of ',n.cells,' cells for comparisons\n')
-      # }
+      # table of sample types and cells
+      cct <- table(cell.groups, cl[names(cell.groups)])
+      caggr <- lapply(count.matrices, collapseCellsByType, groups=cell.groups, min.cell.count=1)[names(sample.groups)]
 
-      if(!is.null(n.cells) && n.cells>=length(cf)) {
-        if(n.subsamples>1) {
-          warning('turning off subsampling, as n.cells exceeds the total number of cells')
-          n.subsamples <- 1;
-        }
-      }
+      ctdl <- levels(cell.groups) %>% sccore:::sn() %>% sccore::plapply(function(ct) { # for each cell type
+        tcm <- lapply(caggr,function(x) x[match(ct, rownames(x)),]) %>% do.call(rbind, .) %>% na.omit()
+        tcm <- log(tcm/rowSums(tcm)*1e3+1) # log transform
+        tcm <- t(tcm[cct[ct,rownames(tcm)]>=min.cells,,drop=FALSE])
 
-      if(verbose) cat('running',n.subsamples,'subsamples,',n.randomizations,'randomizations each ... \n')
-      ctdll <- sccore:::plapply(1:n.subsamples,function(i) {
-        # subsample cells
-
-        # draw cells without sample stratification - this can drop certain samples, particularly those with lower total cell numbers
-        if(!is.null(n.cells)) {
-          cf <- tapply(names(cf),cf,function(x) {
-            if(length(x)<=n.cells) { return(cf[x]) } else { setNames(rep(cf[x[1]],n.cells), sample(x,n.cells)) }
-          })
-        }
-
-        # calculate expected mean number of cells per sample and aim to sample that
-        n.cells.scaled <- max(min.cells,ceiling(n.cells/length(sample.groups)));
-        cf <- tapply(names(cf),list(cf,cl[names(cf)]),function(x) {
-          if(length(x)<=n.cells.scaled) { return(cf[x]) } else { setNames(rep(cf[x[1]],n.cells.scaled), sample(x,n.cells.scaled)) }
+        obs.dists <- consensusShiftDistances(tcm, sample.groups)
+        randomized.dists <- lapply(1:n.randomizations,function(i) {
+          consensusShiftDistances(tcm,as.factor(setNames(sample(as.character(sample.groups)), names(sample.groups))))
         })
 
-        cf <- as.factor(setNames(unlist(lapply(cf,as.character)),unlist(lapply(cf,names))))
+        # normalize true distances by the mean of the randomized ones
+        return(abs(obs.dists) / mean(abs(unlist(randomized.dists))))
+      }, n.cores=1, progress=verbose)
 
-        # table of sample types and cells
-        cct <- table(cf,cl[names(cf)])
-        caggr <- lapply(count.matrices, collapseCellsByType, groups=as.factor(cf), min.cell.count=1)[names(sample.groups)]
-
-        ctdl <- sccore::plapply(sccore:::sn(levels(cf)),function(ct) { # for each cell type
-          tcm <- na.omit(do.call(rbind,lapply(caggr,function(x) x[match(ct,rownames(x)),])))
-          tcm <- log(tcm/rowSums(tcm)*1e3+1) # log transform
-          tcm <- t(tcm[cct[ct,rownames(tcm)]>=min.cells,,drop=F])
-
-          # an internal function to calculate consensus change direction and distances between samples along this axis
-          t.consensus.shift.distances <- function(tcm,sample.groups, useCpp=TRUE) {
-            if(min(table(sample.groups[colnames(tcm)]))<1) return(NA); # not enough samples
-            if(useCpp) {
-              g1 <- which(sample.groups[colnames(tcm)]==levels(sample.groups)[1])-1
-              g2 <- which(sample.groups[colnames(tcm)]==levels(sample.groups)[2])-1
-              as.numeric(projdiff(tcm,g1,g2))
-            } else {
-              # calculate consensus expression shift
-              s1 <- colnames(tcm)[sample.groups[colnames(tcm)]==levels(sample.groups)[1]]
-              s2 <- colnames(tcm)[sample.groups[colnames(tcm)]==levels(sample.groups)[2]]
-              dm <- do.call(rbind,lapply(s1,function(n1) {
-                do.call(rbind,lapply(s2,function(n2) {
-                  tcm[,n1]-tcm[,n2]
-                }))
-              }))
-              dmm <- apply(dm,2,mean,trim=mean.trim)
-              dmm <- dmm/sqrt(sum(dmm^2)) # normalize
-
-              # project samples and calculate distances
-              as.numeric(dm %*% dmm)
-            }
-          }
-
-          # true distances
-          tdist <- t.consensus.shift.distances(tcm,sample.groups)
-          # randomized distances
-
-          rdist <- lapply(1:n.randomizations,function(i) {
-            t.consensus.shift.distances(tcm,as.factor(setNames(sample(as.character(sample.groups)), names(sample.groups))))
-          })
-
-          # normalize true distances by the mean of the randomized ones
-          return(abs(tdist)/mean(abs(unlist(rdist))))
-        },n.cores = 1,mc.preschedule = FALSE, progress=(n.subsamples<=1))
-
-      },n.cores=ifelse(n.subsamples>1,n.cores,1), mc.preschedule=FALSE, progress=(verbose && n.subsamples>1))
-
-      return(invisible(self$test.results[[name]] <- ctdll))
+      self$test.results[[name]] <- list(ctdl)
+      return(invisible(self$test.results[[name]]))
 
     },
 

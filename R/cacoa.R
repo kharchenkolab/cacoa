@@ -163,7 +163,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `sample.groups`: same as the provided variable
     #'   - `cell.groups`: same as the provided variable
     estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist='cor', normalize.both=TRUE,
-                                               n.top.genes=Inf, min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
+                                               min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
                                                ref.level=self$ref.level, sample.groups=self$sample.groups,
                                                verbose=self$verbose, n.cores=self$n.cores, name="expression.shifts",
                                                n.permutations=1000, p.adjust.method='BH', ...) {
@@ -171,7 +171,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (verbose) cat("Filtering data... ")
       shift.inp <- count.matrices %>%
-        filterExpressionDistanceInput(cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
+        filterExpressionDistanceInput(cell.groups=cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
                                       min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac)
       if (verbose) cat("done!\n")
 
@@ -189,41 +189,39 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    estimateCommonExpressionShiftMagnitudes=function(sample.groups=self$sample.groups, cell.groups=self$cell.groups, n.randomizations=50, min.cells=10,
-                                                     verbose=self$verbose, name='common.expression.shifts') {
-      if(length(levels(sample.groups))!=2) stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
+    estimateCommonExpressionShiftMagnitudes=function(cell.groups=self$cell.groups,
+                                                     min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
+                                                     n.randomizations=50, verbose=self$verbose, name='common.expression.shifts', ...) {
+      shift.inp <- extractRawCountMatrices(self$data.object, transposed=TRUE) %>%
+        filterExpressionDistanceInput(cell.groups=cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
+                                      min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac)
 
-      count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
+      cell.groups <- shift.inp$cell.groups
+      sample.groups <- shift.inp$sample.groups
+      caggr <- shift.inp$cms
 
-      common.genes <- Reduce(intersect, lapply(count.matrices, colnames))
-      count.matrices %<>% lapply(`[`, , common.genes)
-
-      # get a cell sample factor, restricted to the samples being contrasted
-      cl <- lapply(count.matrices[names(sample.groups)], rownames)
-      cl <- rep(names(cl), sapply(cl, length)) %>% setNames(unlist(cl)) %>%  as.factor()
-
-      # cell factor
-      cell.groups %<>% .[names(.) %in% names(cl)] %>% as.factor()
-
-      # table of sample types and cells
-      cct <- table(cell.groups, cl[names(cell.groups)])
-      caggr <- lapply(count.matrices, collapseCellsByType, groups=cell.groups, min.cell.count=1)[names(sample.groups)]
-
-      ctdl <- levels(cell.groups) %>% sccore:::sn() %>% sccore::plapply(function(ct) { # for each cell type
+      dists.norm <- list(); dists.raw <- list(); dists.rand <- list(); dist.norm.sub <- list()
+      for (ct in levels(cell.groups)) { # for each cell type
+        # TODO: need to make this loop parallel
         tcm <- lapply(caggr,function(x) x[match(ct, rownames(x)),]) %>% do.call(rbind, .) %>% na.omit()
-        tcm <- log(tcm/rowSums(tcm)*1e3+1) # log transform
-        tcm <- t(tcm[cct[ct,rownames(tcm)]>=min.cells,,drop=FALSE])
+        tcm <- log(1e3 * tcm / rowSums(tcm) + 1) # log transform
+        tcm <- t(tcm)
 
-        obs.dists <- consensusShiftDistances(tcm, sample.groups)
+        obs.dists <- consensusShiftDistances(tcm, sample.groups, ...)
         randomized.dists <- lapply(1:n.randomizations,function(i) {
-          consensusShiftDistances(tcm,as.factor(setNames(sample(as.character(sample.groups)), names(sample.groups))))
+          sg.shuffled <- sample.groups %>% {setNames(sample(as.character(.)), names(.))} %>% as.factor()
+          consensusShiftDistances(tcm, sg.shuffled, ...)
         })
 
         # normalize true distances by the mean of the randomized ones
-        return(abs(obs.dists) / mean(abs(unlist(randomized.dists))))
-      }, n.cores=1, progress=verbose)
+        dists.norm[[ct]] <- abs(obs.dists) / mean(abs(unlist(randomized.dists)))
+        dist.norm.sub[[ct]] <- abs(obs.dists) - median(abs(unlist(randomized.dists)))
+        dists.raw[[ct]] <- obs.dists
+        dists.rand[[ct]] <- randomized.dists
+      }
 
-      self$test.results[[name]] <- ctdl
+      self$test.results[[name]] <- list(dists.norm=dists.norm, dist.norm.sub=dist.norm.sub,
+                                        dists.raw=dists.raw, dists.rand=dists.rand)
       return(invisible(self$test.results[[name]]))
 
     },
@@ -278,7 +276,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     ##' @return A ggplot2 object
     plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.jitter=FALSE, jitter.alpha=0.05, type='box',
                                                  notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5, ...) {
-      res <- private$getResults(name, 'estimateCommonExpressionShiftMagnitudes')
+      res <- private$getResults(name, 'estimateCommonExpressionShiftMagnitudes')$dist.norm.sub
       df <- names(res) %>%
         lapply(function(n) data.frame(value=res[[n]], Type=n)) %>%
         do.call(rbind, .) %>% na.omit()
@@ -288,7 +286,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                             show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme, ...)
       } else {
         plotMeanMedValuesPerCellType(df, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette,
-                                     ylab='common expression distance', plot.theme=self$plot.theme, ...)
+                                     ylab='common expression distance', plot.theme=self$plot.theme, yline=0.0, ...)
       }
     },
 

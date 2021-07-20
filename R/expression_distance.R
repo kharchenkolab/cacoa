@@ -224,7 +224,7 @@ estimateExpressionShiftPValues <- function(p.dist.info, sample.groups, n.permuta
 ## Common shifts
 
 ##' @description calculate consensus change direction and distances between samples along this axis
-consensusShiftDistances <- function(tcm, sample.groups, mean.trim=0, use.cpp=TRUE) {
+consensusShiftDistances <- function(tcm, sample.groups, use.median=FALSE, mean.trim=0, use.cpp=TRUE) {
   if(min(table(sample.groups[colnames(tcm)])) < 1) return(NA); # not enough samples
   g1 <- which(sample.groups[colnames(tcm)]==levels(sample.groups)[1])
   g2 <- which(sample.groups[colnames(tcm)]==levels(sample.groups)[2])
@@ -237,10 +237,15 @@ consensusShiftDistances <- function(tcm, sample.groups, mean.trim=0, use.cpp=TRU
     }))
   }))
 
-  if (mean.trim > 0) {
-    dmm <- apply(dm, 2, mean, trim=mean.trim)
+  if (use.median) {
+    checkPackageInstalled("matrixStats", details="when `use.median=TRUE`", cran=TRUE)
+    dmm <- matrixStats::colMedians(dm)
   } else {
-    dmm <- colMeans(dm)
+    if (mean.trim > 0) {
+      dmm <- apply(dm, 2, mean, trim=mean.trim)
+    } else {
+      dmm <- colMeans(dm)
+    }
   }
 
   dmm <- dmm / sqrt(sum(dmm^2)) # normalize

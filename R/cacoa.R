@@ -2315,7 +2315,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Plot contrast tree
     #' @return A ggplot2 object
     plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
-                              cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE) {
+                              cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE,
+                              p.val.adjustment = T) {
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
       if(filter.empty.cell.types) {
         cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
@@ -2323,7 +2324,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
 
-      gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, plot.theme=self$plot.theme)
+      gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, 
+                             plot.theme=self$plot.theme, p.val.adjustment = p.val.adjustment)
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)
       }
@@ -2360,11 +2362,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if(coda.test == 'confidence'){
         n.perm <- 1
       }
-
+      
+      self$test.results$cnts = cnts
+      self$test.results$groups = groups
+      
       res <- runCoda(cnts, groups, n.seed=239)
       loadings.init <- res$loadings.init
       padj <- res$padj
       pval <- res$pval
+      ref.load.level <- res$ref.load.level
       
       self$test.results[['loadings']] = list(loadings = loadings.init,
                                              # loadings.data = loadings.init,
@@ -2373,7 +2379,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                              pval = pval,
                                              padj = padj,
                                              cnts = cnts,
-                                             groups = groups)
+                                             groups = groups,
+                                             ref.load.level = ref.load.level)
 
       return(invisible(self$test.results[['loadings']]))
     },
@@ -2396,7 +2403,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       loadings <- private$getResults('loadings', 'estimateCellLoadings()')
       p <- plotCellLoadings(loadings$loadings, pval=loadings$padj, signif.threshold=signif.threshold,
                             jitter.alpha=alpha, palette=palette, show.pvals=show.pvals,
-                            ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme)
+                            ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme,
+                            ref.load.level = loadings$ref.load.level)
 
       return(p)
     },

@@ -62,11 +62,21 @@ ggdend <- function(dend.data, a = 90, plot.theme=theme_get()) {
 }
 
 plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme, 
-                             p.threshold = 0.05, p.val.adjustment = T){
+                             p.threshold = 0.05, p.val.adjustment = T, h.methods='both'){
   log.f <- getLogFreq(d.counts)
 
-  # t.cur <- constructTreeUp(d.counts, d.groups)
-  t.cur <- constructTreeUpDown(d.counts, d.groups)
+  if(h.methods == 'up'){
+    print('up')
+    t.cur <- constructTreeUp(d.counts, d.groups)
+  } else if (h.methods == 'down'){
+    print('down')
+    t.cur <- constructTree(d.counts, d.groups)
+  } else {
+    print('up and down')
+    t.cur <- constructTreeUpDown(d.counts, d.groups)
+  }
+  
+  
   # t.cur <- constructBestPartitionTree(d.counts, d.groups)
   
   tree = t.cur$tree

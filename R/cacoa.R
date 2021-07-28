@@ -2316,7 +2316,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
                               cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE,
-                              p.val.adjustment = T) {
+                              p.val.adjustment = T, h.method='both') {
+      h.method.options = c('up', 'down', 'both')
+      if(!(h.method %in% h.method.options)) stop('Impossible metho of clustering')
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
       if(filter.empty.cell.types) {
         cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
@@ -2325,11 +2327,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, 
-                             plot.theme=self$plot.theme, p.val.adjustment = p.val.adjustment)
+                             plot.theme=self$plot.theme, p.val.adjustment = p.val.adjustment,
+                             h.method=h.method)
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)
       }
       return(gg)
+    },
+    
+    
+    #' @description Plot contrast tree
+    #' @return A ggplot2 object
+    plotCompositionSimilarity=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
+                              cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE) {
+      
+      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
+      res <- referenceSet(tmp$d.counts, tmp$d.groups)
+      heatmap(res$mx.first, scale = 'none')
+      
+      # return(gg)
     },
 
 
@@ -2363,14 +2379,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         n.perm <- 1
       }
       
-      self$test.results$cnts = cnts
-      self$test.results$groups = groups
-      
       res <- runCoda(cnts, groups, n.seed=239)
       loadings.init <- res$loadings.init
       padj <- res$padj
       pval <- res$pval
       ref.load.level <- res$ref.load.level
+      
+      self$test.results[['cell.groups.composition']] <- list(cell.list = res$cell.list,
+                                                             cnts = cnts,
+                                                             groups = groups)
       
       self$test.results[['loadings']] = list(loadings = loadings.init,
                                              # loadings.data = loadings.init,

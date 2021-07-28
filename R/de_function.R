@@ -373,7 +373,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
           # EdgeR normalisation
           print('edgeR normalization')
           cnts.norm <- edgeR::DGEList(counts = cm) %>%
-            edgeR::calcNormFactors() %>% cpm
+            edgeR::calcNormFactors() %>% edgeR::cpm()
         } else if((normalization == 'totcount') || (is.null(normalization))) {
           # the default should be normalization by the number of molecules!
           cnts.norm <- prop.table(cm, 2) # Should it be multiplied by median(colSums(cm)) ?

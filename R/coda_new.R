@@ -236,6 +236,9 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL){
     sdt.list = c(sdt.list, sd(c(loadings.list)))
     mean.list = c(mean.list, mean(c(loadings.list)))
     n.list = c(n.list, length(cell.list[[i.list]]))
+    if(length(cell.list[[i.list]]) == 1){
+      mean.list = 10
+    }
   }
   # print(sdt.list)
   # print(mean.list)
@@ -315,7 +318,8 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL){
   return(list(padj=padj, 
               loadings.init=loadings.init, 
               pval=pval,
-              ref.load.level=ref.load.level))
+              ref.load.level=ref.load.level,
+              cell.list=cell.list))
 }
 
 
@@ -447,4 +451,73 @@ pvalInLoadingsOrder <- function(cell.types.order, cnts, groups){
   p <- c(p, 1)
   names(p) <- cell.types.order
   return(p)
+}
+
+
+estimateCdaSpaceNew <- function(cnts, groups){
+  # ----- Get data -----
+
+  cnts[cnts == 0] = 0.5
+  freqs <- cnts / rowSums(cnts)
+  psi <- coda.base::ilr_basis(ncol(freqs), type = "default")
+  rownames(psi) <- colnames(cnts)
+  b <- log(freqs) %*% psi
+  
+  f1 = apply(exp(b %*% t(psi)),1, function(x) {x/sum(x)})
+  
+  # PCA - to get new ilr basis of principal components 
+  b.norm <-  apply(b, 2, function(y) y - mean(y))
+  pca.res <- prcomp(b.norm)
+  pca.loadings <- psi %*% pca.res$rotation
+  
+  psi <- psi %*% pca.res$rotation  # new Psi matrix
+  
+  b <- log(freqs) %*% psi  # New ilr coordinates
+  b.init <- log(freqs.init) %*% psi
+  
+  
+  
+  # Standardization
+  b.mean <- colMeans(b) 
+  b.sd <- apply(b, 2, sd)
+  b.init <- (b.init - b.mean) / b.sd
+  b <- apply(b, 2, scale)
+  
+  b.plot <- rbind(b, b.init)
+  
+  # ------------------------------
+  # Find the first projection
+  
+  # Create dataframe
+  b.df <- data.frame(b)
+  b.df$groups <- 1*groups
+  
+  # Linear model
+  res.lm <- lm(groups ~ ., data = b.df)
+  w <- res.lm$coefficients[-1]  # coefficients without intercept
+  
+  w <- as.matrix(w / sqrt(sum(w ^ 2)))  # not required
+  
+  
+  # Projections of b.plot on w - is the first coordinate
+  b.proj = as.matrix(apply(b.plot, 1, function(x) sum(x*w)))
+  b.proj.vec = b.proj %*% t(w)
+  b.ort <- b.plot - b.proj.vec
+  
+  b.ort.proj = as.matrix(apply(b.ort, 1, function(x) sum(x*w))) # <- check that all are small
+  if(sum(b.ort.proj > 10^(-10)) != 0) stop('Something is going wrong')
+  
+  # ------------------------------
+  # Find the second projection - from PCA, 
+  # because the all differences between groups are in the first coordinate
+  
+  pca.ort <- prcomp(b.ort)
+  
+  
+  b.plot <- data.frame(cbind(b.proj, pca.ort$x[,1]))
+  colnames(b.plot) <- c('S1', 'S2')
+  # b.plot$group <- c(as.character(uniq.combo$site), 'init')
+  # colnames(b.plot)
+  
+  return(b.plot)
 }

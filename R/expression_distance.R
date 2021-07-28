@@ -197,7 +197,7 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
   # Collapse matrices and extend to the same genes
   cms.filt %<>% lapply(collapseCellsByType, groups=cell.groups, min.cell.count=1)
 
-  cms.filt %<>% lapply(sccore:::extendMatrix, filt.genes) %>% lapply(`[`,,filt.genes)
+  cms.filt %<>% lapply(sccore:::extendMatrix, filt.genes) %>% lapply(`[`,,filt.genes, drop=FALSE)
 
   return(list(cms=cms.filt, cell.groups=droplevels(cell.groups[cell.names]),
               sample.groups=sample.groups[names(cms)]))

@@ -476,7 +476,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else stop(paste('Resampling method', resampling.method, 'is not supported'))
 
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=TRUE)
-      
+
       self$test.results[['raw']] <- raw.mats
 
       expr.fracs <- self$getJointCountMatrix() %>%
@@ -1837,7 +1837,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left", selection="all", n=20,
-                                 clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, palette=NULL, row.order = TRUE, col.order = TRUE, legend.title = NULL, ...) {
+                                 clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, palette=NULL, row.order = TRUE, col.order = TRUE, legend.title = NULL, row.dendrogram = F, col.dendrogram = F, ...) {
       checkPackageInstalled(c("ComplexHeatmap"), bioc=TRUE)
       checkPackageInstalled(c("circlize"), bioc=FALSE)
 
@@ -1894,10 +1894,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # })
 
       # New
-      tmp <- as.matrix(ont.sum %>% .[order(rowSums(.), decreasing = T),] %>% .[1:n,]) %>% {.[,!colSums(.) == 0]}
+      tmp <- as.matrix(ont.sum %>% .[order(rowSums(.), decreasing = T),] %>% .[1:pmin(nrow(.), n),]) %>% {.[,!colSums(.) == 0]}
 
       if(is.null(color.range)) {
-        color.range <- c(min(0, min(tmp)), max(tmp))
+        color.range <- c(min(0, min(tmp, na.rm = T)), max(tmp, na.rm = T))
         if(color.range[2] > 20) {
           warning("Shrinking minimum adj. P value to -log10(20) for plotting.")
           color.range[2] <- 20
@@ -1909,19 +1909,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       pal <- if(genes == "up") {
-        colorRamp2(c(color.range[1], color.range[2]), c("grey98", "red"))
+        circlize::colorRamp2(c(color.range[1], color.range[2]), c("grey98", "red"))
       } else if(genes == "down") {
-        colorRamp2(c(color.range[1], color.range[2]), c("grey98", "blue"))
+        circlize::colorRamp2(c(color.range[1], color.range[2]), c("grey98", "blue"))
       } else {
-        colorRamp2(c(color.range[1], color.range[2]), c("grey98", "darkgreen"))
+        circlize::colorRamp2(c(color.range[1], color.range[2]), c("grey98", "darkgreen"))
       }
 
       # Plot
       ComplexHeatmap::Heatmap(tmp,
                               col=pal,
                               border=T,
-                              show_row_dend=F,
-                              show_column_dend=F,
+                              show_row_dend=row.dendrogram,
+                              show_column_dend=col.dendrogram,
                               heatmap_legend_param = list(title = title),
                               row_names_max_width = unit(8, "cm"),
                               row_names_gp = grid::gpar(fontsize = 10))
@@ -2326,7 +2326,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
 
-      gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, 
+      gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
                              plot.theme=self$plot.theme, p.val.adjustment = p.val.adjustment,
                              h.method=h.method)
       if (!is.null(palette)) {
@@ -2334,17 +2334,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       return(gg)
     },
-    
-    
+
+
     #' @description Plot contrast tree
     #' @return A ggplot2 object
     plotCompositionSimilarity=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
                               cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE) {
-      
+
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
       res <- referenceSet(tmp$d.counts, tmp$d.groups)
       heatmap(res$mx.first, scale = 'none')
-      
+
       # return(gg)
     },
 
@@ -2378,17 +2378,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if(coda.test == 'confidence'){
         n.perm <- 1
       }
-      
+
       res <- runCoda(cnts, groups, n.seed=239)
       loadings.init <- res$loadings.init
       padj <- res$padj
       pval <- res$pval
       ref.load.level <- res$ref.load.level
-      
+
       self$test.results[['cell.groups.composition']] <- list(cell.list = res$cell.list,
                                                              cnts = cnts,
                                                              groups = groups)
-      
+
       self$test.results[['loadings']] = list(loadings = loadings.init,
                                              # loadings.data = loadings.init,
                                              # loadings.null = loadings.null,

@@ -170,15 +170,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
       if (verbose) cat("Filtering data... ")
-      shift.inp <- count.matrices %>%
-        filterExpressionDistanceInput(cell.groups=cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
-                                      min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac,
-                                      genes=genes)
+      shift.inp <- filterExpressionDistanceInput(
+        count.matrices, cell.groups=cell.groups,
+        sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
+        min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type,
+        min.gene.frac=min.gene.frac, genes=genes
+      )
       if (verbose) cat("done!\n")
 
       res <- shift.inp %$%
-        estimateExpressionShiftMagnitudes(cms, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=self$sample.per.cell,
-                                          dist=tolower(dist), normalize.both=normalize.both, verbose=verbose, ref.level=ref.level, ...)
+        estimateExpressionShiftMagnitudes(
+          cm.per.type, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=self$sample.per.cell,
+          dist=tolower(dist), normalize.both=normalize.both, verbose=verbose, ref.level=ref.level, ...
+        )
 
       if (verbose) cat("Estimating p-values...\n")
       res$pvalues <- estimateExpressionShiftPValues(res$p.dist.info, sample.groups, n.permutations=n.permutations,
@@ -194,19 +198,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                      min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
                                                      n.randomizations=50, verbose=self$verbose, name='common.expression.shifts', ...) {
       shift.inp <- extractRawCountMatrices(self$data.object, transposed=TRUE) %>%
-        filterExpressionDistanceInput(cell.groups=cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
-                                      min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac)
+        filterExpressionDistanceInput(
+          cell.groups=cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
+          min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac
+        )
 
       cell.groups <- shift.inp$cell.groups
       sample.groups <- shift.inp$sample.groups
-      caggr <- shift.inp$cms
 
       dists.norm <- list(); dists.raw <- list(); dists.rand <- list(); dist.norm.sub <- list()
       for (ct in levels(cell.groups)) { # for each cell type
         # TODO: need to make this loop parallel
-        tcm <- lapply(caggr,function(x) x[match(ct, rownames(x)),]) %>% do.call(rbind, .) %>% na.omit()
-        tcm <- log(1e3 * tcm / rowSums(tcm) + 1) # log transform
-        tcm <- t(tcm)
+        tcm <- shift.inp$cm.per.type[[ct]] %>% {log(1e3 * . / rowSums(.) + 1)} %>% t()
 
         obs.dists <- consensusShiftDistances(tcm, sample.groups, ...)
         randomized.dists <- lapply(1:n.randomizations,function(i) {

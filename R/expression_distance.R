@@ -1,5 +1,5 @@
 ##' @title Expression shift magnitudes per cluster between conditions
-##' @param count.matrices List of count matrices
+##' @param cm.per.type List of count matrices per cell type
 ##' @param sample.groups Named factor with cell names indicating condition/sample, e.g., ctrl/disease
 ##' @param cell.groups Named clustering/annotation factor with cell names
 ##' @param dist what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values
@@ -8,7 +8,7 @@
 ##' @param verbose (default=F)
 ##' @param transposed.matrices (default=F)
 ##' @export
-estimateExpressionShiftMagnitudes <- function(cms.collapsed, sample.groups, cell.groups, sample.per.cell,
+estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
                                               dist=c('cor', 'js', 'l2'), normalize.both=TRUE, verbose=FALSE,
                                               ref.level=NULL, ...) {
   dist <- match.arg(dist)
@@ -19,7 +19,7 @@ estimateExpressionShiftMagnitudes <- function(cms.collapsed, sample.groups, cell
   cell.groups %<>% .[names(.) %in% names(sample.per.cell)]
 
   if(verbose) cat('Calculating distances ... ')
-  p.dist.info <- cms.collapsed %>%
+  p.dist.info <- cm.per.type %>%
     estimatePairwiseExpressionDistances(sample.per.cell=sample.per.cell, cell.groups=cell.groups,
                                         sample.groups=sample.groups, dist=dist, ...)
 
@@ -31,17 +31,14 @@ estimateExpressionShiftMagnitudes <- function(cms.collapsed, sample.groups, cell
   return(list(dist.df=dist.df, p.dist.info=p.dist.info, sample.groups=sample.groups, cell.groups=cell.groups))
 }
 
-estimatePairwiseExpressionDistances <- function(cms.collapsed, sample.per.cell, cell.groups, sample.groups, dist,
+estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, cell.groups, sample.groups, dist,
                                                 top.n.genes=NULL, n.pcs=NULL, ...) {
   cell.groups %<>% as.factor()
   # table of sample types and cells
   cct <- cell.groups %>% table(sample.per.cell[names(.)])
-  cms.collapsed %<>% .[names(sample.groups)]
 
   ctdm <- levels(cell.groups) %>% sccore:::sn() %>% lapply(function(ct) {
-    tcm <- lapply(cms.collapsed, function(x) x[match(ct, rownames(x)),]) %>%
-      do.call(rbind, .) %>% na.omit()
-
+    tcm <- cm.per.type[[ct]]
     cm.norm <- tcm / pmax(1, rowSums(tcm))
 
     if (!is.null(top.n.genes)) {
@@ -61,7 +58,7 @@ estimatePairwiseExpressionDistances <- function(cms.collapsed, sample.per.cell, 
           n.pcs <- min.dim
         }
         pcs <- irlba::irlba(cm.norm, nv=n.pcs, nu=0, right_only=FALSE, fastpath=TRUE,
-                            maxit=3000, reorth=TRUE, verbose=FALSE, )
+                            maxit=3000, reorth=TRUE, verbose=FALSE)
         cm.norm <- as.matrix(cm.norm %*% pcs$v)
       }
 
@@ -227,8 +224,15 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
 
   cms.filt %<>% lapply(sccore:::extendMatrix, genes) %>% lapply(`[`,,genes, drop=FALSE)
 
-  return(list(cms=cms.filt, cell.groups=droplevels(cell.groups[cell.names]),
-              sample.groups=sample.groups[names(cms)]))
+  # Group matrices by cell type
+  cell.groups <- droplevels(cell.groups[cell.names])
+
+  cm.per.type <- levels(cell.groups) %>% sccore:::sn() %>% lapply(function(ct) {
+    lapply(cms.filt, function(x) x[match(ct, rownames(x)),]) %>%
+      do.call(rbind, .) %>% na.omit()
+  })
+
+  return(list(cm.per.type=cm.per.type, cell.groups=cell.groups, sample.groups=sample.groups[names(cms)]))
 }
 
 estimateExpressionShiftPValues <- function(p.dist.info, sample.groups, n.permutations=1000, verbose=TRUE, n.cores=1, trim=0.1, ...) {

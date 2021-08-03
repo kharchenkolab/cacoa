@@ -9,7 +9,8 @@
 ##' @param transposed.matrices (default=F)
 ##' @export
 estimateExpressionShiftMagnitudes <- function(cms.collapsed, sample.groups, cell.groups, sample.per.cell,
-                                              dist=c('cor', 'js'), normalize.both=TRUE, verbose=FALSE, ref.level=NULL) {
+                                              dist=c('cor', 'js', 'l2'), normalize.both=TRUE, verbose=FALSE,
+                                              ref.level=NULL, ...) {
   dist <- match.arg(dist)
   sample.groups <- as.factor(sample.groups) %>% na.omit() %>% droplevels()
   if(length(levels(sample.groups)) != 2)
@@ -20,7 +21,7 @@ estimateExpressionShiftMagnitudes <- function(cms.collapsed, sample.groups, cell
   if(verbose) cat('Calculating distances ... ')
   p.dist.info <- cms.collapsed %>%
     estimatePairwiseExpressionDistances(sample.per.cell=sample.per.cell, cell.groups=cell.groups,
-                                        sample.groups=sample.groups, dist=dist)
+                                        sample.groups=sample.groups, dist=dist, ...)
 
   norm.type <- ifelse(normalize.both, "both", "ref")
   dist.df <- estimateExpressionShiftDf(p.dist.info, sample.groups, norm.type=norm.type, ref.level=ref.level) %>%
@@ -30,7 +31,8 @@ estimateExpressionShiftMagnitudes <- function(cms.collapsed, sample.groups, cell
   return(list(dist.df=dist.df, p.dist.info=p.dist.info, sample.groups=sample.groups, cell.groups=cell.groups))
 }
 
-estimatePairwiseExpressionDistances <- function(cms.collapsed, sample.per.cell, cell.groups, sample.groups, dist) {
+estimatePairwiseExpressionDistances <- function(cms.collapsed, sample.per.cell, cell.groups, sample.groups, dist,
+                                                top.n.genes=NULL, n.pcs=NULL, ...) {
   cell.groups %<>% as.factor()
   # table of sample types and cells
   cct <- cell.groups %>% table(sample.per.cell[names(.)])
@@ -40,16 +42,39 @@ estimatePairwiseExpressionDistances <- function(cms.collapsed, sample.per.cell, 
     tcm <- lapply(cms.collapsed, function(x) x[match(ct, rownames(x)),]) %>%
       do.call(rbind, .) %>% na.omit()
 
+    cm.norm <- tcm / pmax(1, rowSums(tcm))
+
+    if (!is.null(top.n.genes)) {
+      sel.genes <- filterGenesForCellType(tcm, sample.groups=sample.groups, top.n.genes=top.n.genes, ...)
+      cm.norm <- cm.norm[,sel.genes,drop=FALSE]
+    }
+
     if (dist=='js') {
-      tcm <- t(tcm/pmax(1,rowSums(tcm)))
-      dist.mat <- jsDist(tcm) %>% set_rownames(colnames(tcm)) %>% set_colnames(colnames(tcm))
-    } else if (dist=='cor') {
-      tcm <- log10(t(tcm / pmax(1, rowSums(tcm))) * 1e3 + 1)
-      dist.mat <- 1 - cor(tcm)
+      dist.mat <- t(cm.norm) %>% jsDist() %>%
+        set_rownames(rownames(cm.norm)) %>% set_colnames(rownames(cm.norm))
+    } else if (dist %in% c('cor', 'l2')) {
+      cm.norm <- log10(cm.norm * 1e3 + 1)
+      if (!is.null(n.pcs)) {
+        min.dim <- min(dim(cm.norm)) - 1
+        if (n.pcs > min.dim) {
+          warning("n.pcs is too large for cell type ", ct, ". Setting it to maximal allowed value ", min.dim)
+          n.pcs <- min.dim
+        }
+        pcs <- irlba::irlba(cm.norm, nv=n.pcs, nu=0, right_only=FALSE, fastpath=TRUE,
+                            maxit=3000, reorth=TRUE, verbose=FALSE, )
+        cm.norm <- as.matrix(cm.norm %*% pcs$v)
+      }
+
+      if (dist == 'cor') {
+        dist.mat <- 1 - cor(t(cm.norm))
+      } else {
+        dist.mat <- dist(cm.norm) %>% as.matrix()
+      }
+
       dist.mat[is.na(dist.mat)] <- 1;
     } else stop("Unknown distance: ", dist)
     # calculate how many cells there are
-    attr(dist.mat, 'n.cells') <- cct[ct, colnames(tcm)]
+    attr(dist.mat, 'n.cells') <- cct[ct, rownames(cm.norm)]
     dist.mat
   })
 
@@ -167,7 +192,8 @@ prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, 
 }
 
 filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sample.groups,
-                                          min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01) {
+                                          min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
+                                          genes=NULL) {
   # Filter rare samples per cell type
   cell.names <- lapply(cms, rownames) %>% unlist()
   freq.table <- table(cell.groups[cell.names], sample.per.cell[cell.names]) %>%
@@ -189,15 +215,17 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
   cell.names <- lapply(cms.filt, rownames) %>% unlist()
 
   # Filter low-expressed genes
-  filt.genes <- lapply(cms.filt, function(cm) {
-    cm@x <- 1 * (cm@x > 1)
-    names(which(colMeans(cm) > min.gene.frac))
-  }) %>% unlist() %>% table() %>% {. / length(cms.filt) > 0.1} %>% which() %>% names()
+  if (is.null(genes)) {
+    genes <- lapply(cms.filt, function(cm) {
+      cm@x <- 1 * (cm@x > 1)
+      names(which(colMeans(cm) > min.gene.frac))
+    }) %>% unlist() %>% table() %>% {. / length(cms.filt) > 0.1} %>% which() %>% names()
+  }
 
   # Collapse matrices and extend to the same genes
   cms.filt %<>% lapply(collapseCellsByType, groups=cell.groups, min.cell.count=1)
 
-  cms.filt %<>% lapply(sccore:::extendMatrix, filt.genes) %>% lapply(`[`,,filt.genes, drop=FALSE)
+  cms.filt %<>% lapply(sccore:::extendMatrix, genes) %>% lapply(`[`,,genes, drop=FALSE)
 
   return(list(cms=cms.filt, cell.groups=droplevels(cell.groups[cell.names]),
               sample.groups=sample.groups[names(cms)]))
@@ -252,4 +280,31 @@ consensusShiftDistances <- function(tcm, sample.groups, use.median=FALSE, mean.t
 
   # project samples and calculate distances
   return(as.numeric(dm %*% dmm))
+}
+
+estimateExplainedVariance <- function(cm, sample.groups) {
+  spg <- rownames(cm) %>% split(droplevels(as.factor(sample.groups[.])))
+  if (length(spg) == 1) return(NULL)
+
+  sapply(spg, function(spc) apply(cm[spc,,drop=FALSE], 2, var)) %>%
+    rowMeans(na.rm=TRUE) %>% # TODO: add weights here
+    {1 - . / apply(cm, 2, var)}
+}
+
+filterGenesForCellType <- function(cm, sample.groups, top.n.genes=500, selection=c("wilcox", "var"),
+                                   exclude.genes=NULL) {
+  selection <- match.arg(selection)
+
+  if (selection == "var") {
+    sel.genes <- estimateExplainedVariance(cm, sample.groups=sample.groups) %>%
+      sort(decreasing=TRUE) %>% names()
+  } else {
+    spg <- rownames(cm) %>% split(sample.groups[.])
+    cm <- cm / pmax(1, rowSums(cm))
+    test.res <- matrixTests::col_wilcoxon_twosample(cm[spg[[1]],], cm[spg[[2]],])$pvalue
+    sel.genes <- test.res %>% setNames(colnames(cm)) %>% sort() %>% names()
+  }
+
+  sel.genes %<>% setdiff(exclude.genes) %>% head(top.n.genes)
+  return(sel.genes)
 }

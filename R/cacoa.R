@@ -166,13 +166,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
                                                ref.level=self$ref.level, sample.groups=self$sample.groups,
                                                verbose=self$verbose, n.cores=self$n.cores, name="expression.shifts",
-                                               n.permutations=1000, p.adjust.method='BH', ...) {
+                                               n.permutations=1000, p.adjust.method='BH', genes=NULL, ...) {
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
       if (verbose) cat("Filtering data... ")
       shift.inp <- count.matrices %>%
         filterExpressionDistanceInput(cell.groups=cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
-                                      min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac)
+                                      min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac,
+                                      genes=genes)
       if (verbose) cat("done!\n")
 
       res <- shift.inp %$%

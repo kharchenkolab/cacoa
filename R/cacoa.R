@@ -178,19 +178,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       )
       if (verbose) cat("done!\n")
 
-      res <- shift.inp %$%
+      self$test.results[[name]] <- shift.inp %$%
         estimateExpressionShiftMagnitudes(
           cm.per.type, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=self$sample.per.cell,
-          dist=tolower(dist), normalize.both=normalize.both, verbose=verbose, ref.level=ref.level, ...
+          dist=tolower(dist), normalize.both=normalize.both, verbose=verbose, ref.level=ref.level,
+          n.cores=n.cores, ...
         )
 
-      if (verbose) cat("Estimating p-values...\n")
-      res$pvalues <- estimateExpressionShiftPValues(res$p.dist.info, sample.groups, n.permutations=n.permutations,
-                                                    n.cores=n.cores, verbose=verbose)$pvalues
-      res$padjust <- p.adjust(res$pvalues, method=p.adjust.method)
-      if (verbose) cat("Done!\n")
-
-      self$test.results[[name]] <- res
       return(invisible(self$test.results[[name]]))
     },
 
@@ -218,7 +212,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         })
 
         # normalize true distances by the mean of the randomized ones
-        dists.norm[[ct]] <- abs(obs.dists) / mean(abs(unlist(randomized.dists)))
+        dists.norm[[ct]] <- abs(obs.dists) / mean(abs(unlist(randomized.dists))) # TODO: remove all these, as they're only for development
         dist.norm.sub[[ct]] <- abs(obs.dists) - median(abs(unlist(randomized.dists)))
         dists.raw[[ct]] <- obs.dists
         dists.rand[[ct]] <- randomized.dists
@@ -2614,7 +2608,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       if (!joint) {
         df <- cluster.shifts %$%
-          estimateExpressionShiftDf(p.dist.info, sample.groups, return.dists.within=TRUE) %>%
+          lapply(p.dist.info, subsetDistanceMatrix, sample.groups, cross.factor=FALSE) %>%
+          joinExpressionShiftDfs(sample.groups=cluster.shifts$sample.groups) %>%
           rename(group=Condition, variable=Type)
         plot.theme <- self$plot.theme
       } else {

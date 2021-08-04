@@ -10,25 +10,43 @@
 ##' @export
 estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
                                               dist=c('cor', 'js', 'l2'), normalize.both=TRUE, verbose=FALSE,
-                                              ref.level=NULL, ...) {
+                                              ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
+                                              trim=0.1, n.cores=1, ...) {
   dist <- match.arg(dist)
-  sample.groups <- as.factor(sample.groups) %>% na.omit() %>% droplevels()
-  if(length(levels(sample.groups)) != 2)
-    stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
+  norm.type <- ifelse(normalize.both, "both", "ref")
+  estimateDists <- function(pdists, samp.groups, build.df=FALSE) {
+     lapply(pdists, estimateCellTypeExpressionShifts, samp.groups, norm.type=norm.type,
+            ref.level=ref.level, build.df=build.df)
+  }
 
-  cell.groups %<>% .[names(.) %in% names(sample.per.cell)]
-
-  if(verbose) cat('Calculating distances ... ')
+  if (verbose) cat('Calculating pairwise distances ... ')
   p.dist.info <- cm.per.type %>%
     estimatePairwiseExpressionDistances(sample.per.cell=sample.per.cell, cell.groups=cell.groups,
                                         sample.groups=sample.groups, dist=dist, ...)
+  if (verbose) cat('done!\n')
 
-  norm.type <- ifelse(normalize.both, "both", "ref")
-  dist.df <- estimateExpressionShiftDf(p.dist.info, sample.groups, norm.type=norm.type, ref.level=ref.level) %>%
+  if (verbose) cat("Estimating p-values...\n")
+  obs.diffs <- estimateDists(p.dist.info, sample.groups) %>% sapply(mean, trim=trim)
+
+  comp.res <- plapply(1:n.permutations, function(i) {
+    sg.shuff <- sample.groups %>% {setNames(sample(.), names(.))}
+    dists <- estimateDists(p.dist.info, sg.shuff)
+    dists[sapply(dists, is.null)] <- NA
+
+    sapply(dists, mean, trim=trim) %>% .[names(obs.diffs)] %>% {. >= obs.diffs}
+  }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE) %>%
+    do.call(rbind, .)
+
+  pvalues <- (colSums(comp.res, na.rm=TRUE) + 1) / (colSums(!is.na(comp.res)) + 1)
+  padjust <- p.adjust(pvalues, method=p.adjust.method)
+  if (verbose) cat("Done!\n")
+
+  dist.df <- estimateDists(p.dist.info, sample.groups, build.df=TRUE) %>%
+    joinExpressionShiftDfs(sample.groups=sample.groups) %>%
     mutate(Type=factor(Type, levels=names(sort(tapply(value, Type, median))))) # sort cell types
-  if(verbose) cat('done!\n')
 
-  return(list(dist.df=dist.df, p.dist.info=p.dist.info, sample.groups=sample.groups, cell.groups=cell.groups))
+  return(list(dist.df=dist.df, p.dist.info=p.dist.info, sample.groups=sample.groups, cell.groups=cell.groups,
+              pvalues=pvalues, padjust=padjust))
 }
 
 estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, cell.groups, sample.groups, dist,
@@ -78,11 +96,11 @@ estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, ce
   return(ctdm)
 }
 
-subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, return.raw=FALSE) {
+subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df=TRUE) {
   comp.selector <- if (cross.factor) "!=" else "=="
   selection.mask <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], comp.selector);
   diag(dist.mat) <- NA;
-  if (return.raw)
+  if (!build.df)
     return(na.omit(dist.mat[selection.mask]))
 
   dist.mat[!selection.mask] <- NA;
@@ -92,8 +110,8 @@ subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, return.r
   return(dist.df);
 }
 
-estimateCellTypeExpressionShiftDf <- function(dist.mat, sample.groups, norm.type=c("both", "ref", "none"),
-                                              ref.level=NULL, return.raw=FALSE) {
+estimateCellTypeExpressionShifts <- function(dist.mat, sample.groups, norm.type=c("both", "ref", "none"),
+                                             ref.level=NULL, build.df=TRUE) {
   norm.type <- match.arg(norm.type)
 
   if ((norm.type == "ref") && is.null(ref.level))
@@ -115,26 +133,16 @@ estimateCellTypeExpressionShiftDf <- function(dist.mat, sample.groups, norm.type
   }
 
   dist.mat <- dist.mat - norm.const
-  dist.df <- subsetDistanceMatrix(dist.mat, sample.groups=sample.groups, cross.factor=TRUE, return.raw=return.raw)
+  dist.df <- subsetDistanceMatrix(dist.mat, sample.groups=sample.groups, cross.factor=TRUE, build.df=build.df)
 
   return(dist.df)
 }
 
-estimateExpressionShiftDf <- function(p.dist.per.type, sample.groups, return.dists.within=FALSE, norm.type="both",
-                                      return.raw=FALSE, ...) {
-  if (return.dists.within) {
-    dists.per.type <- lapply(p.dist.per.type, subsetDistanceMatrix, sample.groups,
-                             return.raw=return.raw, cross.factor=FALSE)
-  } else {
-    dists.per.type <- p.dist.per.type %>%
-      lapply(estimateCellTypeExpressionShiftDf, sample.groups, norm.type=norm.type, return.raw=return.raw, ...)
-  }
-
-  if (return.raw)
-    return(dists.per.type)
-
-  dists.per.type %<>% .[!sapply(., is.null)]
-  df <- names(dists.per.type) %>% lapply(function(n) cbind(dists.per.type[[n]], Type=n)) %>% do.call(rbind, .) %>%
+joinExpressionShiftDfs <- function(dist.df.per.type, sample.groups) {
+  dist.df.per.type %<>% .[!sapply(., is.null)]
+  df <- names(dist.df.per.type) %>%
+    lapply(function(n) cbind(dist.df.per.type[[n]], Type=n)) %>%
+    do.call(rbind, .) %>%
     mutate(Condition=sample.groups[as.character(Var1)]) %>%
     na.omit()
 
@@ -198,6 +206,9 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
     mutate(Condition=sample.groups[as.character(Var2)]) %>%
     filter(Freq >= min.cells.per.sample)
 
+  if (length(unique(freq.table$Condition)) != 2)
+    stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
+
   filt.types <- freq.table %>% split(.$Var1) %>% sapply(function(df) {
     df %$% split(Var2, Condition) %>% sapply(length) %>% {all(. >= min.samp.per.type)}
   }) %>% which() %>% names()
@@ -233,24 +244,6 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
   })
 
   return(list(cm.per.type=cm.per.type, cell.groups=cell.groups, sample.groups=sample.groups[names(cms)]))
-}
-
-estimateExpressionShiftPValues <- function(p.dist.info, sample.groups, n.permutations=1000, verbose=TRUE, n.cores=1, trim=0.1, ...) {
-  dist.per.type <- estimateExpressionShiftDf(p.dist.info, sample.groups, return.raw=TRUE, ...)
-  obs.diffs <- sapply(dist.per.type, mean, trim=trim)
-  comp.res <- plapply(1:n.permutations, function(i) {
-    sg.shuff <- sample.groups %>% {setNames(sample(.), names(.))}
-    res <- estimateExpressionShiftDf(p.dist.info, sg.shuff, return.raw=TRUE)
-    res[sapply(res, is.null)] <- NA
-
-    sapply(res, mean, trim=trim) %>% .[names(obs.diffs)] %>%
-      {. >= obs.diffs}
-  }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE) %>%
-    do.call(rbind, .)
-
-  pvalues <- (colSums(comp.res, na.rm=TRUE) + 1) / (colSums(!is.na(comp.res)) + 1)
-
-  return(list(dists=dist.per.type, pvalues=pvalues, obs.diffs=obs.diffs))
 }
 
 ## Common shifts

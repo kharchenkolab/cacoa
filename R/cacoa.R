@@ -203,7 +203,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       dists.norm <- list(); dists.raw <- list(); dists.rand <- list(); dist.norm.sub <- list()
       for (ct in levels(cell.groups)) { # for each cell type
         # TODO: need to make this loop parallel
-        tcm <- shift.inp$cm.per.type[[ct]] %>% {log(1e3 * . / rowSums(.) + 1)} %>% t()
+        tcm <- shift.inp$cm.per.type[[ct]] %>% {log(1e3 * . + 1)} %>% t()
 
         obs.dists <- consensusShiftDistances(tcm, sample.groups, ...)
         randomized.dists <- lapply(1:n.randomizations,function(i) {

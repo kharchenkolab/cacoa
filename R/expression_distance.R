@@ -1,5 +1,5 @@
 ##' @title Expression shift magnitudes per cluster between conditions
-##' @param cm.per.type List of count matrices per cell type
+##' @param cm.per.type List of normalized count matrices per cell type
 ##' @param sample.groups Named factor with cell names indicating condition/sample, e.g., ctrl/disease
 ##' @param cell.groups Named clustering/annotation factor with cell names
 ##' @param dist what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values
@@ -65,11 +65,10 @@ estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, ce
   cct <- cell.groups %>% table(sample.per.cell[names(.)])
 
   ctdm <- levels(cell.groups) %>% sccore:::sn() %>% lapply(function(ct) {
-    tcm <- cm.per.type[[ct]]
-    cm.norm <- tcm / pmax(1, rowSums(tcm))
+    cm.norm <- cm.per.type[[ct]]
 
     if (!is.null(top.n.genes)) {
-      sel.genes <- filterGenesForCellType(tcm, sample.groups=sample.groups, top.n.genes=top.n.genes, ...)
+      sel.genes <- filterGenesForCellType(cm.norm, sample.groups=sample.groups, top.n.genes=top.n.genes, ...)
       cm.norm <- cm.norm[,sel.genes,drop=FALSE]
     }
 
@@ -249,7 +248,7 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
 
   cm.per.type <- levels(cell.groups) %>% sccore:::sn() %>% lapply(function(ct) {
     lapply(cms.filt, function(x) x[match(ct, rownames(x)),]) %>%
-      do.call(rbind, .) %>% na.omit()
+      do.call(rbind, .) %>% na.omit() %>% {. / pmax(1, rowSums(.))}
   })
 
   return(list(cm.per.type=cm.per.type, cell.groups=cell.groups, sample.groups=sample.groups[names(cms)]))
@@ -297,18 +296,17 @@ estimateExplainedVariance <- function(cm, sample.groups) {
     {1 - . / apply(cm, 2, var)}
 }
 
-filterGenesForCellType <- function(cm, sample.groups, top.n.genes=500, selection=c("wilcox", "var"),
+filterGenesForCellType <- function(cm.norm, sample.groups, top.n.genes=500, selection=c("wilcox", "var"),
                                    exclude.genes=NULL) {
   selection <- match.arg(selection)
 
   if (selection == "var") {
-    sel.genes <- estimateExplainedVariance(cm, sample.groups=sample.groups) %>%
+    sel.genes <- estimateExplainedVariance(cm.norm, sample.groups=sample.groups) %>%
       sort(decreasing=TRUE) %>% names()
   } else {
-    spg <- rownames(cm) %>% split(sample.groups[.])
-    cm <- cm / pmax(1, rowSums(cm))
-    test.res <- matrixTests::col_wilcoxon_twosample(cm[spg[[1]],], cm[spg[[2]],], exact=FALSE)$pvalue
-    sel.genes <- test.res %>% setNames(colnames(cm)) %>% sort() %>% names()
+    spg <- rownames(cm.norm) %>% split(sample.groups[.])
+    test.res <- matrixTests::col_wilcoxon_twosample(cm.norm[spg[[1]],,drop=FALSE], cm.norm[spg[[2]],,drop=FALSE], exact=FALSE)$pvalue
+    sel.genes <- test.res %>% setNames(colnames(cm.norm)) %>% sort() %>% names()
   }
 
   sel.genes %<>% setdiff(exclude.genes) %>% head(top.n.genes)

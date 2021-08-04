@@ -11,7 +11,8 @@
 estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
                                               dist='cor', normalize.both=TRUE, verbose=FALSE,
                                               ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
-                                              top.n.genes=NULL, adjust.by.null=c("no", "center", "both"), trim=0.1, n.cores=1, ...) {
+                                              top.n.genes=NULL, adjust.by.null=c("no", "center", "both"),
+                                              gene.selection="wilcox", trim=0.1, n.cores=1, ...) {
   adjust.by.null <- match.arg(adjust.by.null)
   norm.type <- ifelse(normalize.both, "both", "ref")
   estimateDists <- function(pdists, samp.groups) {
@@ -20,8 +21,8 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
 
   if (verbose) cat('Calculating pairwise distances ... ')
   p.dist.info <- estimatePairwiseExpressionDistances(
-    cm.per.type, sample.groups=sample.groups, sample.per.cell=sample.per.cell,
-    cell.groups=cell.groups, dist=dist, top.n.genes=top.n.genes, ...
+    cm.per.type, sample.groups=sample.groups, sample.per.cell=sample.per.cell, cell.groups=cell.groups,
+    dist=dist, top.n.genes=top.n.genes, gene.selection=gene.selection, ...
   )
   if (verbose) cat('done!\n')
 
@@ -32,10 +33,10 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
   rand.diffs <- plapply(1:n.permutations, function(i) {
     sg.shuff <- sample.groups %>% {setNames(sample(.), names(.))}
     pdi <- p.dist.info
-    if (!is.null(top.n.genes)) {
+    if (!is.null(top.n.genes) && (gene.selection != "od")) {
       pdi <- estimatePairwiseExpressionDistances(
-        cm.per.type, sample.groups=sg.shuff, sample.per.cell=sample.per.cell,
-        cell.groups=cell.groups, dist=dist, top.n.genes=top.n.genes, ...
+        cm.per.type, sample.groups=sg.shuff, sample.per.cell=sample.per.cell, cell.groups=cell.groups,
+        dist=dist, top.n.genes=top.n.genes, gene.selection=gene.selection, ...
       )
     }
 
@@ -86,8 +87,11 @@ estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, ce
         warning("n.pcs is too large for cell type ", ct, ". Setting it to maximal allowed value ", min.dim)
         n.pcs <- min.dim
       }
-      pcs <- irlba::irlba(cm.norm, nv=n.pcs, nu=0, right_only=FALSE, fastpath=TRUE,
-                          maxit=3000, reorth=TRUE, verbose=FALSE)
+      suppressWarnings(
+        pcs <- irlba::irlba(cm.norm, nv=n.pcs, nu=0, right_only=FALSE, fastpath=TRUE,
+                            maxit=3000, reorth=TRUE, verbose=FALSE)
+      )
+
       cm.norm <- as.matrix(cm.norm %*% pcs$v)
     }
 
@@ -296,22 +300,30 @@ estimateExplainedVariance <- function(cm, sample.groups) {
   spg <- rownames(cm) %>% split(droplevels(as.factor(sample.groups[.])))
   if (length(spg) == 1) return(NULL)
 
-  sapply(spg, function(spc) apply(cm[spc,,drop=FALSE], 2, var)) %>%
-    rowMeans(na.rm=TRUE) %>% # TODO: add weights here
-    {1 - . / apply(cm, 2, var)}
+  sapply(spg, function(spc) matrixStats::colVars(cm[spc,,drop=FALSE]) * (length(spc) - 1)) %>%
+    rowSums(na.rm=TRUE) %>%
+    {1 - (. / (matrixStats::colVars(cm) * (nrow(cm) - 1)))} %>%
+    setNames(colnames(cm))
 }
 
-filterGenesForCellType <- function(cm.norm, sample.groups, top.n.genes=500, selection=c("wilcox", "var"),
+filterGenesForCellType <- function(cm.norm, sample.groups, top.n.genes=500, gene.selection=c("wilcox", "var", "od"),
                                    exclude.genes=NULL) {
-  selection <- match.arg(selection)
+  gene.selection <- match.arg(gene.selection)
 
-  if (selection == "var") {
+  if (gene.selection == "var") {
     sel.genes <- estimateExplainedVariance(cm.norm, sample.groups=sample.groups) %>%
       sort(decreasing=TRUE) %>% names()
-  } else {
+  } else if (gene.selection == "wilcox") {
     spg <- rownames(cm.norm) %>% split(sample.groups[.])
     test.res <- matrixTests::col_wilcoxon_twosample(cm.norm[spg[[1]],,drop=FALSE], cm.norm[spg[[2]],,drop=FALSE], exact=FALSE)$pvalue
     sel.genes <- test.res %>% setNames(colnames(cm.norm)) %>% sort() %>% names()
+  } else {
+    checkPackageInstalled("pagoda2", details="for gene.selection='od'", cran=TRUE)
+    # TODO: we need to extract the OD function from Pagoda and scITD into sccore
+    # Pagoda2 should not be in DESCRIPTION
+    p2 <- pagoda2::Pagoda2$new(t(cm.norm), modelType="raw", verbose=FALSE, n.cores=1)
+    p2$adjustVariance(verbose=FALSE)
+    sel.genes <- p2$getOdGenes(Inf)
   }
 
   sel.genes %<>% setdiff(exclude.genes) %>% head(top.n.genes)

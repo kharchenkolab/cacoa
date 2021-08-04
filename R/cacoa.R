@@ -1782,7 +1782,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left", selection="all", n=20,
-                                 clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, palette=NULL, row.order = TRUE, col.order = TRUE, legend.title = NULL, ...) {
+                                 clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, palette=NULL, row.order = TRUE, col.order = TRUE, legend.title = NULL, row.dendrogram = F, col.dendrogram = F, ...) {
       checkPackageInstalled(c("ComplexHeatmap"), bioc=TRUE)
       checkPackageInstalled(c("circlize"), bioc=FALSE)
 
@@ -1839,10 +1839,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # })
 
       # New
-      tmp <- as.matrix(ont.sum %>% .[order(rowSums(.), decreasing = T),] %>% .[1:n,]) %>% {.[,!colSums(.) == 0]}
+      tmp <- as.matrix(ont.sum %>% .[order(rowSums(.), decreasing = T),] %>% .[1:pmin(nrow(.), n),]) %>% {.[,!colSums(.) == 0]}
 
       if(is.null(color.range)) {
-        color.range <- c(min(0, min(tmp)), max(tmp))
+        color.range <- c(min(0, min(tmp, na.rm = T)), max(tmp, na.rm = T))
         if(color.range[2] > 20) {
           warning("Shrinking minimum adj. P value to -log10(20) for plotting.")
           color.range[2] <- 20
@@ -1854,19 +1854,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       pal <- if(genes == "up") {
-        colorRamp2(c(color.range[1], color.range[2]), c("grey98", "red"))
+        circlize::colorRamp2(c(color.range[1], color.range[2]), c("grey98", "red"))
       } else if(genes == "down") {
-        colorRamp2(c(color.range[1], color.range[2]), c("grey98", "blue"))
+        circlize::colorRamp2(c(color.range[1], color.range[2]), c("grey98", "blue"))
       } else {
-        colorRamp2(c(color.range[1], color.range[2]), c("grey98", "darkgreen"))
+        circlize::colorRamp2(c(color.range[1], color.range[2]), c("grey98", "darkgreen"))
       }
 
       # Plot
       ComplexHeatmap::Heatmap(tmp,
                               col=pal,
                               border=T,
-                              show_row_dend=F,
-                              show_column_dend=F,
+                              show_row_dend=row.dendrogram,
+                              show_column_dend=col.dendrogram,
                               heatmap_legend_param = list(title = title),
                               row_names_max_width = unit(8, "cm"),
                               row_names_gp = grid::gpar(fontsize = 10))
@@ -2260,7 +2260,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Plot contrast tree
     #' @return A ggplot2 object
     plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
-                              cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE) {
+                              cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE,
+                              p.val.adjustment = T, h.method='both') {
+      h.method.options = c('up', 'down', 'both')
+      if(!(h.method %in% h.method.options)) stop('Impossible metho of clustering')
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
       if(filter.empty.cell.types) {
         cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
@@ -2268,11 +2271,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
 
-      gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, plot.theme=self$plot.theme)
+      gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
+                             plot.theme=self$plot.theme, p.val.adjustment = p.val.adjustment,
+                             h.method=h.method)
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)
       }
       return(gg)
+    },
+
+
+    #' @description Plot contrast tree
+    #' @return A ggplot2 object
+    plotCompositionSimilarity=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
+                              cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE) {
+
+      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
+      res <- referenceSet(tmp$d.counts, tmp$d.groups)
+      heatmap(res$mx.first, scale = 'none')
+
+      # return(gg)
     },
 
 
@@ -2310,6 +2328,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       loadings.init <- res$loadings.init
       padj <- res$padj
       pval <- res$pval
+      ref.load.level <- res$ref.load.level
+
+      self$test.results[['cell.groups.composition']] <- list(cell.list = res$cell.list,
+                                                             cnts = cnts,
+                                                             groups = groups)
 
       self$test.results[['loadings']] = list(loadings = loadings.init,
                                              # loadings.data = loadings.init,
@@ -2318,7 +2341,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                              pval = pval,
                                              padj = padj,
                                              cnts = cnts,
-                                             groups = groups)
+                                             groups = groups,
+                                             ref.load.level = ref.load.level)
 
       return(invisible(self$test.results[['loadings']]))
     },
@@ -2341,7 +2365,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       loadings <- private$getResults('loadings', 'estimateCellLoadings()')
       p <- plotCellLoadings(loadings$loadings, pval=loadings$padj, signif.threshold=signif.threshold,
                             jitter.alpha=alpha, palette=palette, show.pvals=show.pvals,
-                            ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme)
+                            ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme,
+                            ref.load.level = loadings$ref.load.level)
 
       return(p)
     },

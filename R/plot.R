@@ -253,7 +253,7 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type='bar', show.jitt
   p <- p +
     plot.theme +
     theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12),
-          axis.text.y=element_text(angle=90, hjust=0.5, size=12)) + guides(fill=FALSE)+
+          axis.text.y=element_text(angle=90, hjust=0.5, size=12)) + guides(fill="none")+
     theme(legend.position = "none")+
     labs(x="", y=ylab)
 
@@ -313,7 +313,7 @@ plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab
   if(!is.na(yline)) { p <- p+ geom_hline(yintercept = 1,linetype=2,color='gray50') }
   p <- p +
     plot.theme +
-    guides(fill=FALSE)+
+    guides(fill="none")+
     theme(legend.position = "none")+
     labs(x="number of cells", y=ylab)
   if(!is.null(palette)) {

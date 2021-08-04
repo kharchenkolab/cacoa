@@ -61,131 +61,157 @@ ggdend <- function(dend.data, a = 90, plot.theme=theme_get()) {
               hjust = 1, angle = a, size = 3) + ylim(-0.5, NA)
 }
 
-plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme, p.threshold = 0.01){
+plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme, 
+                             p.threshold = 0.05, p.val.adjustment = T, h.methods='both'){
   log.f <- getLogFreq(d.counts)
 
-  t.cur <- constructCanonicalTree(d.counts, d.groups)
-  t.tmp <- compute.brlen(t.cur, method="Grafen") %>% as.hclust()
-  d.cur <- as.dendrogram(t.tmp)
-  t.tmp <- as.phylo(t.tmp)
+  if(h.methods == 'up'){
+    print('up')
+    t.cur <- constructTreeUp(d.counts, d.groups)
+  } else if (h.methods == 'down'){
+    print('down')
+    t.cur <- constructTree(d.counts, d.groups)
+  } else {
+    print('up and down')
+    t.cur <- constructTreeUpDown(d.counts, d.groups)
+  }
+  
+  
+  # t.cur <- constructBestPartitionTree(d.counts, d.groups)
+  
+  tree = t.cur$tree
+  sbp = sbpInNodes(tree)
+  # sbp = t.cur$sbp
 
   # ---------------------------------
-  # Positions
+  # Positions of the dendrogram
+  dend.data <- ggdendro::dendro_data(t.cur$dendro, type = "rectangle")
+  types.order <- dend.data$labels$label
+  # change the sign of sbp corresponding to the dendrodgram
+  for(k in 1:ncol(sbp)){
+    p <- sbp[, k]
+    type.plus = rownames(sbp)[p > 0]
+    type.minus = rownames(sbp)[p < 0]
+    if(which(types.order == type.plus[1]) < which(types.order == type.minus[1])){
+      sbp[, k] = -sbp[, k]
+    }
+  }
 
-  dend.data <- ggdendro::dendro_data(d.cur, type = "rectangle")
-
-  # seg
+  # Get positions of segments (nodes) of the dendrogram
+  # only inner nodes
   node.pos <- dend.data$segments %$% .[(y == yend) & (yend != 0),]
-  node.pos$id <- t.tmp$edge[,1]
-
+  node.pos$id <- tree$edge[,1]  # id of the inner node
+  node.pos$to <- tree$edge[,2]
+  
+  # Positions of inner nodes
   innode.pos <- unique(node.pos[,c('x','y','id')])
-
+  rownames(innode.pos) <- innode.pos$id
+  # Ranges of inner nodes (length of branches)
   innode.pos$range <- -1
   for(i in 1:nrow(innode.pos)){
     tmp <- node.pos$xend[node.pos$id == innode.pos$id[i]]
     innode.pos$range[i] <- max(tmp) - min(tmp)
   }
-  rownames(innode.pos) <- innode.pos$id
+  innode.pos = innode.pos[order(innode.pos$id),]
 
   # ----------------------------------------
 
   # Balances
-  res <- getNodeBalances(t.tmp, log.f)
-  balances <- as.data.frame(res$bal)
+  balances <- getNodeBalances(log.f, sbp)
   colnames(balances) <- rownames(innode.pos)
 
   p.val <- c()
   for(i in 1:ncol(balances)){
-    aov.data <- cbind(balances[,i], d.groups)
-    colnames(aov.data) <- c('balance', 'group')
-
-    res <- aov(balance~group,data=as.data.frame(aov.data))
-    p.val <- c(p.val,summary(res)[[1]][1,5])
+    aov.data <- data.frame(balance = balances[,i], group = d.groups)
+    # anova
+    # res <- aov(balance ~ group, data=aov.data)
+    # res <- aov(group ~ balance, data=aov.data)
+    # p.val <- c(p.val,summary(res)[[1]][1,5])
+    
+    mod <- lm(group ~ balance, data=aov.data)
+    res = summary(mod)
+    p.val <- c(p.val, res$coefficients[2,4])
+    
   }
-  # p.val <- p.adjust(p.val, method = 'fdr')
   p.val[is.na(p.val)] <- 1
+  if(p.val.adjustment){
+    p.adj <- p.adjust(p.val, method = 'fdr')  
+  } else {
+    p.adj = p.val
+  }
+  
+  px_init <- ggdend(dend.data, plot.theme=plot.theme)
 
-  px <- ggdend(dend.data, plot.theme=plot.theme)
+  if(sum(p.adj < p.threshold) == 0)
+    return(px_init)
 
-  if(sum(p.val < p.threshold) == 0)
-    return(px)
-
-  bx <- c()
-  by <- c()
-  bc <- c()
-
-  bx.m <- c()
-  by.m <- c()
-  bc.m <- c()
-
-  pval.x <- c()
-  pval.y <- c()
-
-  n.range <- c()
-  x.range <- c()
-  y.range <- c()
-
-  idx.target <- d.groups
+  df.pval <- data.frame()
+  df.bals <- data.frame()
+  df.bal.range <- data.frame()
+  df.bal.quartile <- data.frame()
+  df.bal.median <- data.frame()
+  df.bal.range <- data.frame()
+  group.levels <- c(ref.level, target.level)
+    
   for(id.node in 1:ncol(balances)){
 
-    if(p.val[id.node] < p.threshold){
-      pval.x <- c(pval.x, innode.pos$x[id.node])
-      pval.y <- c(pval.y, innode.pos$y[id.node])
+    if(p.adj[id.node] < p.threshold){
+      df.pval <- rbind(df.pval, innode.pos[id.node, c('x', 'y')])
     }else
       next
 
-    x.tmp <- -balances[,id.node]
+    # Normalization of values of balances according to the  range between nodes
+    x.tmp <- balances[,id.node]
     x.tmp <- x.tmp - mean(x.tmp)
-    n.range <- c(n.range, max(abs(x.tmp)))  # Ticks
-
+    
+    # DO NOT MOVE THIS LINE DOWN:
+    df.bal.range <- rbind(df.bal.range, data_frame(x = innode.pos$x[id.node] + innode.pos$range[id.node]/2,
+                                                  y = innode.pos$y[id.node],
+                                                  val = max(abs(x.tmp))))
+    
     x.tmp <- x.tmp / max(abs(x.tmp)) / 2 * innode.pos$range[id.node] * 0.9
     x.tmp <- x.tmp + innode.pos$x[id.node]
-    y.tmp <- idx.target * 0.03 + innode.pos$y[id.node] - 0.05
+    y.tmp <- d.groups * 0.03 + innode.pos$y[id.node] - 0.05
+    
+    q.case <- quantile(x.tmp[d.groups], c(0.25, 0.75))
+    q.control <- quantile(x.tmp[!d.groups], c(0.25, 0.75))
+    
+    df.bal.quartile <- rbind(df.bal.quartile, 
+                             data_frame(x = c(q.case, q.control),
+                                        y = c(rep(y.tmp[d.groups][1],2), rep(y.tmp[!d.groups][1],2)),
+                                        group = group.levels[1 + c(T, T, F, F)], node = id.node))
+    
+    df.bal.median <- rbind(df.bal.median, 
+                             data_frame(x = c(median(x.tmp[d.groups]), median(x.tmp[!d.groups])),
+                                        y = c(y.tmp[d.groups][1], y.tmp[!d.groups][1]),
+                                        group = group.levels[1 + c(T, F)], node = id.node))
 
-    x.range <- c(x.range, innode.pos$x[id.node] + innode.pos$range[id.node]/2)  # Ticks
-    y.range <- c(y.range, innode.pos$y[id.node])  # Ticks
+    
 
-    c.tmp <- idx.target
+    df.bals <- rbind(df.bals, data.frame(x=x.tmp, y=y.tmp, group=group.levels[1 + d.groups], node = id.node))
 
-    bx <- c(bx, x.tmp)
-    by <- c(by, y.tmp)
-    bc <- c(bc, c.tmp)
-
-    bx.m <- c(bx.m, mean(x.tmp[c.tmp]), mean(x.tmp[!c.tmp]))
-    by.m <- c(by.m, mean(y.tmp[c.tmp]), mean(y.tmp[!c.tmp]))
-    bc.m <- c(bc.m, TRUE, FALSE)
   }
-
-  group.names <- c(ref.level, target.level)
-  df.balance.points <- data.frame(x = bx, y = by, group = group.names[bc+1])
-  df.balance.mean <- data.frame(x = bx.m, y = by.m, group = group.names[bc.m+1])
-  df.balance.range <- data.frame(x = x.range, y = y.range, s = n.range)
-  df.pval <- data.frame(x = pval.x, y = pval.y)
-
-
-  px <- px + geom_point(data = df.balance.points,
-                       aes(x=x, y=y, col = as.factor(group)), alpha = 0.5, size = 1) +
-    geom_point(data = df.balance.mean,
+  
+  px <- px_init + geom_point(data = df.bals,
+                       aes(x=x, y=y, col = as.factor(group), group=as.factor(node)), alpha = 0.1, size = 1) +
+    geom_point(data = df.bal.median,
                aes(x=x, y=y, col = as.factor(group)),
-               size = 3, shape = 18, stroke = 2) +
-    labs(col=" ") +
-    geom_text(data=df.balance.range, mapping=aes(x=x, y=y, label=sprintf('%2.1f',s)), vjust=0, hjust=0)
-
-  if(length(pval.x) > 0){
-    px <- px + geom_point(data = df.pval, aes(x=x, y=y)) +
-      # labs(size= sprintf('p-value < %1.2f',p.threshold))
-      guides(size = FALSE)
-  }
-
-
+               size = 2.5, shape = 18) +
+    geom_point(data = df.pval, aes(x=x, y=y)) +
+    geom_line(data=df.bal.quartile, aes(x = x, y = y, 
+                                        col = as.factor(group), 
+                                        group=interaction(group, node)), size = 0.75) + 
+    geom_text(data=df.bal.range, mapping=aes(x=x, y=y, label=sprintf('%2.1f',val)), vjust=0, hjust=0, size=3) + 
+    labs(col=" ")
+    
   return(px)
 }
 
 
 plotCellLoadings <- function(loadings, pval, signif.threshold, jitter.alpha, palette, 
-                             show.pvals, ref.level, target.level, plot.theme) {
+                             show.pvals, ref.level, target.level, plot.theme, ref.load.level=0) {
   
-  yintercept = 0
+  yintercept <- ref.load.level
 
   if(!is.null(pval)){
     # if some p-values are the same - then order by mean, therefore a prior sorting is required
@@ -204,11 +230,11 @@ plotCellLoadings <- function(loadings, pval, signif.threshold, jitter.alpha, pal
   }
 
   res.ordered <- t(loadings) %>% as.data.frame()
-  ymax = max(loadings)
+  ymax <- max(loadings)
 
   p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
     geom_boxplot(notch=TRUE, outlier.shape = NA) + geom_jitter(aes(x = ind, y = values), alpha = jitter.alpha, size=1) +
-    geom_hline(yintercept = yintercept, color = "gray37") +
+    geom_hline(yintercept = yintercept, color = "grey37") +
     coord_flip() + xlab('') + ylab('loadings') + plot.theme + theme(legend.position = "none") +
     scale_x_discrete(position = "top") + ylim(-1, 1)
 

@@ -9,10 +9,9 @@
 ##' @param transposed.matrices (default=F)
 ##' @export
 estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
-                                              dist=c('cor', 'js', 'l2'), normalize.both=TRUE, verbose=FALSE,
+                                              dist='cor', normalize.both=TRUE, verbose=FALSE,
                                               ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
                                               top.n.genes=NULL, trim=0.1, n.cores=1, ...) {
-  dist <- match.arg(dist)
   norm.type <- ifelse(normalize.both, "both", "ref")
   estimateDists <- function(pdists, samp.groups, build.df=FALSE) {
      lapply(pdists, estimateCellTypeExpressionShifts, samp.groups, norm.type=norm.type,
@@ -58,8 +57,9 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
               pvalues=pvalues, padjust=padjust))
 }
 
-estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, cell.groups, sample.groups, dist,
-                                                top.n.genes=NULL, n.pcs=NULL, ...) {
+estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, cell.groups, sample.groups,
+                                                dist=c('cor', 'l2'), top.n.genes=NULL, n.pcs=NULL, ...) {
+  dist <- match.arg(dist)
   cell.groups %<>% as.factor()
   # table of sample types and cells
   cct <- cell.groups %>% table(sample.per.cell[names(.)])
@@ -72,30 +72,25 @@ estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, ce
       cm.norm <- cm.norm[,sel.genes,drop=FALSE]
     }
 
-    if (dist=='js') {
-      dist.mat <- t(cm.norm) %>% jsDist() %>%
-        set_rownames(rownames(cm.norm)) %>% set_colnames(rownames(cm.norm))
-    } else if (dist %in% c('cor', 'l2')) {
-      cm.norm <- log10(cm.norm * 1e3 + 1)
-      if (!is.null(n.pcs)) {
-        min.dim <- min(dim(cm.norm)) - 1
-        if (n.pcs > min.dim) {
-          warning("n.pcs is too large for cell type ", ct, ". Setting it to maximal allowed value ", min.dim)
-          n.pcs <- min.dim
-        }
-        pcs <- irlba::irlba(cm.norm, nv=n.pcs, nu=0, right_only=FALSE, fastpath=TRUE,
-                            maxit=3000, reorth=TRUE, verbose=FALSE)
-        cm.norm <- as.matrix(cm.norm %*% pcs$v)
+    if (!is.null(n.pcs)) {
+      min.dim <- min(dim(cm.norm)) - 1
+      if (n.pcs > min.dim) {
+        warning("n.pcs is too large for cell type ", ct, ". Setting it to maximal allowed value ", min.dim)
+        n.pcs <- min.dim
       }
+      pcs <- irlba::irlba(cm.norm, nv=n.pcs, nu=0, right_only=FALSE, fastpath=TRUE,
+                          maxit=3000, reorth=TRUE, verbose=FALSE)
+      cm.norm <- as.matrix(cm.norm %*% pcs$v)
+    }
 
-      if (dist == 'cor') {
-        dist.mat <- 1 - cor(t(cm.norm))
-      } else {
-        dist.mat <- dist(cm.norm) %>% as.matrix()
-      }
+    if (dist == 'cor') {
+      dist.mat <- 1 - cor(t(cm.norm))
+    } else {
+      dist.mat <- dist(cm.norm) %>% as.matrix()
+    }
 
-      dist.mat[is.na(dist.mat)] <- 1;
-    } else stop("Unknown distance: ", dist)
+    dist.mat[is.na(dist.mat)] <- 1;
+
     # calculate how many cells there are
     attr(dist.mat, 'n.cells') <- cct[ct, rownames(cm.norm)]
     dist.mat
@@ -248,7 +243,8 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
 
   cm.per.type <- levels(cell.groups) %>% sccore:::sn() %>% lapply(function(ct) {
     lapply(cms.filt, function(x) x[match(ct, rownames(x)),]) %>%
-      do.call(rbind, .) %>% na.omit() %>% {. / pmax(1, rowSums(.))}
+      do.call(rbind, .) %>% na.omit() %>% {. / pmax(1, rowSums(.))} %>%
+      {log10(. * 1e3 + 1)}
   })
 
   return(list(cm.per.type=cm.per.type, cell.groups=cell.groups, sample.groups=sample.groups[names(cms)]))

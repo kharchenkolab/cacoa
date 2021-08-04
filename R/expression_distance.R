@@ -11,7 +11,8 @@
 estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
                                               dist='cor', normalize.both=TRUE, verbose=FALSE,
                                               ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
-                                              top.n.genes=NULL, trim=0.1, n.cores=1, ...) {
+                                              top.n.genes=NULL, adjust.by.null=c("no", "center", "both"), trim=0.1, n.cores=1, ...) {
+  adjust.by.null <- match.arg(adjust.by.null)
   norm.type <- ifelse(normalize.both, "both", "ref")
   estimateDists <- function(pdists, samp.groups) {
      lapply(pdists, estimateCellTypeExpressionShifts, samp.groups, norm.type=norm.type, ref.level=ref.level)
@@ -47,6 +48,18 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
   pvalues <- (colSums(comp.res, na.rm=TRUE) + 1) / (colSums(!is.na(comp.res)) + 1)
   padjust <- p.adjust(pvalues, method=p.adjust.method)
   if (verbose) cat("Done!\n")
+
+  if (adjust.by.null != "no") {
+    exp.diffs <- apply(rand.diffs, 2, median, na.rm=TRUE)
+    if (adjust.by.null == "both") {
+      exp.scales <- apply(rand.diffs, 2, mad, na.rm=TRUE)
+    }
+
+    for (n in names(dists.per.type)) {
+      scale <- if (adjust.by.null == "both") exp.scales[n] else 1
+      dists.per.type[[n]] <- (dists.per.type[[n]] - exp.diffs[n]) / scale
+    }
+  }
 
   return(list(dists.per.type=dists.per.type, p.dist.info=p.dist.info, sample.groups=sample.groups,
               cell.groups=cell.groups, pvalues=pvalues, padjust=padjust))

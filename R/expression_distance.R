@@ -13,9 +13,8 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
                                               ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
                                               top.n.genes=NULL, trim=0.1, n.cores=1, ...) {
   norm.type <- ifelse(normalize.both, "both", "ref")
-  estimateDists <- function(pdists, samp.groups, build.df=FALSE) {
-     lapply(pdists, estimateCellTypeExpressionShifts, samp.groups, norm.type=norm.type,
-            ref.level=ref.level, build.df=build.df)
+  estimateDists <- function(pdists, samp.groups) {
+     lapply(pdists, estimateCellTypeExpressionShifts, samp.groups, norm.type=norm.type, ref.level=ref.level)
   }
 
   if (verbose) cat('Calculating pairwise distances ... ')
@@ -26,9 +25,10 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
   if (verbose) cat('done!\n')
 
   if (verbose) cat("Estimating p-values...\n")
-  obs.diffs <- estimateDists(p.dist.info, sample.groups) %>% sapply(mean, trim=trim)
+  dists.per.type <- estimateDists(p.dist.info, sample.groups)
+  obs.diffs <- sapply(dists.per.type, mean, trim=trim)
 
-  comp.res <- plapply(1:n.permutations, function(i) {
+  rand.diffs <- plapply(1:n.permutations, function(i) {
     sg.shuff <- sample.groups %>% {setNames(sample(.), names(.))}
     pdi <- p.dist.info
     if (!is.null(top.n.genes)) {
@@ -38,23 +38,18 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
       )
     }
 
-    dists <- estimateDists(pdi, sg.shuff)
-    dists[sapply(dists, is.null)] <- NA
-
-    sapply(dists, mean, trim=trim) %>% .[names(obs.diffs)] %>% {. >= obs.diffs}
+    dists <- estimateDists(pdi, sg.shuff) %>% .[!sapply(., is.null)] %>%
+      sapply(mean, trim=trim) %>% .[names(obs.diffs)]
   }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE) %>%
     do.call(rbind, .)
 
+  comp.res <- t(rand.diffs) %>% {. >= obs.diffs} %>% t()
   pvalues <- (colSums(comp.res, na.rm=TRUE) + 1) / (colSums(!is.na(comp.res)) + 1)
   padjust <- p.adjust(pvalues, method=p.adjust.method)
   if (verbose) cat("Done!\n")
 
-  dist.df <- estimateDists(p.dist.info, sample.groups, build.df=TRUE) %>%
-    joinExpressionShiftDfs(sample.groups=sample.groups) %>%
-    mutate(Type=factor(Type, levels=names(sort(tapply(value, Type, median))))) # sort cell types
-
-  return(list(dist.df=dist.df, p.dist.info=p.dist.info, sample.groups=sample.groups, cell.groups=cell.groups,
-              pvalues=pvalues, padjust=padjust))
+  return(list(dists.per.type=dists.per.type, p.dist.info=p.dist.info, sample.groups=sample.groups,
+              cell.groups=cell.groups, pvalues=pvalues, padjust=padjust))
 }
 
 estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, cell.groups, sample.groups,
@@ -99,7 +94,7 @@ estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, ce
   return(ctdm)
 }
 
-subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df=TRUE) {
+subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df=FALSE) {
   comp.selector <- if (cross.factor) "!=" else "=="
   selection.mask <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], comp.selector);
   diag(dist.mat) <- NA;
@@ -111,10 +106,11 @@ subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df
   if(all(is.na(dist.mat))) return(NULL);
   dist.df <- reshape2::melt(dist.mat) %>% na.omit()
   return(dist.df);
+  return(na.omit(dist.mat[selection.mask]))
 }
 
 estimateCellTypeExpressionShifts <- function(dist.mat, sample.groups, norm.type=c("both", "ref", "none"),
-                                             ref.level=NULL, build.df=TRUE) {
+                                             ref.level=NULL) {
   norm.type <- match.arg(norm.type)
 
   if ((norm.type == "ref") && is.null(ref.level))
@@ -136,9 +132,9 @@ estimateCellTypeExpressionShifts <- function(dist.mat, sample.groups, norm.type=
   }
 
   dist.mat <- dist.mat - norm.const
-  dist.df <- subsetDistanceMatrix(dist.mat, sample.groups=sample.groups, cross.factor=TRUE, build.df=build.df)
+  dists <- subsetDistanceMatrix(dist.mat, sample.groups=sample.groups, cross.factor=TRUE)
 
-  return(dist.df)
+  return(dists)
 }
 
 joinExpressionShiftDfs <- function(dist.df.per.type, sample.groups) {

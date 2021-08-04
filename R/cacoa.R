@@ -158,7 +158,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param n.cores Number of cores (default: stored integer)
     #' @param name Test name (default="expression.shifts")
     #' @return a list include
-    #'   - `dist.df`: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells
+    #'   - `dist.df`: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update
     #'   - `p.dist.info`: list of distance matrices per cell type
     #'   - `sample.groups`: same as the provided variable
     #'   - `cell.groups`: same as the provided variable
@@ -182,7 +182,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         estimateExpressionShiftMagnitudes(
           cm.per.type, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=self$sample.per.cell,
           dist=tolower(dist), normalize.both=normalize.both, verbose=verbose, ref.level=ref.level,
-          n.cores=n.cores, ...
+          n.permutations=n.permutations, n.cores=n.cores, ...
         )
 
       return(invisible(self$test.results[[name]]))
@@ -237,9 +237,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch = TRUE, show.jitter=TRUE, jitter.alpha=0.05, show.size.dependency=FALSE,
                                            show.whiskers=TRUE, show.regression=TRUE, font.size=5, show.pvalues=c("adjusted", "raw", "none"), ...) {
-      res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
-      df <- res$dist.df
       show.pvalues <- match.arg(show.pvalues)
+      res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
+      df <- names(res$dists.per.type) %>%
+        lapply(function(n) data.frame(value=res$dists.per.type[[n]], Type=n)) %>%
+        do.call(rbind, .) %>% na.omit()
 
       if (show.pvalues == "adjusted") {
         pvalues <- res$padjust
@@ -2608,7 +2610,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       if (!joint) {
         df <- cluster.shifts %$%
-          lapply(p.dist.info, subsetDistanceMatrix, sample.groups, cross.factor=FALSE) %>%
+          lapply(p.dist.info, subsetDistanceMatrix, sample.groups, cross.factor=FALSE, build.df=TRUE) %>%
           joinExpressionShiftDfs(sample.groups=cluster.shifts$sample.groups) %>%
           rename(group=Condition, variable=Type)
         plot.theme <- self$plot.theme

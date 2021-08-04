@@ -11,7 +11,7 @@
 estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
                                               dist=c('cor', 'js', 'l2'), normalize.both=TRUE, verbose=FALSE,
                                               ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
-                                              trim=0.1, n.cores=1, ...) {
+                                              top.n.genes=NULL, trim=0.1, n.cores=1, ...) {
   dist <- match.arg(dist)
   norm.type <- ifelse(normalize.both, "both", "ref")
   estimateDists <- function(pdists, samp.groups, build.df=FALSE) {
@@ -20,9 +20,10 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
   }
 
   if (verbose) cat('Calculating pairwise distances ... ')
-  p.dist.info <- cm.per.type %>%
-    estimatePairwiseExpressionDistances(sample.per.cell=sample.per.cell, cell.groups=cell.groups,
-                                        sample.groups=sample.groups, dist=dist, ...)
+  p.dist.info <- estimatePairwiseExpressionDistances(
+    cm.per.type, sample.groups=sample.groups, sample.per.cell=sample.per.cell,
+    cell.groups=cell.groups, dist=dist, top.n.genes=top.n.genes, ...
+  )
   if (verbose) cat('done!\n')
 
   if (verbose) cat("Estimating p-values...\n")
@@ -30,7 +31,15 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
 
   comp.res <- plapply(1:n.permutations, function(i) {
     sg.shuff <- sample.groups %>% {setNames(sample(.), names(.))}
-    dists <- estimateDists(p.dist.info, sg.shuff)
+    pdi <- p.dist.info
+    if (!is.null(top.n.genes)) {
+      pdi <- estimatePairwiseExpressionDistances(
+        cm.per.type, sample.groups=sg.shuff, sample.per.cell=sample.per.cell,
+        cell.groups=cell.groups, dist=dist, top.n.genes=top.n.genes, ...
+      )
+    }
+
+    dists <- estimateDists(pdi, sg.shuff)
     dists[sapply(dists, is.null)] <- NA
 
     sapply(dists, mean, trim=trim) %>% .[names(obs.diffs)] %>% {. >= obs.diffs}
@@ -298,7 +307,7 @@ filterGenesForCellType <- function(cm, sample.groups, top.n.genes=500, selection
   } else {
     spg <- rownames(cm) %>% split(sample.groups[.])
     cm <- cm / pmax(1, rowSums(cm))
-    test.res <- matrixTests::col_wilcoxon_twosample(cm[spg[[1]],], cm[spg[[2]],])$pvalue
+    test.res <- matrixTests::col_wilcoxon_twosample(cm[spg[[1]],], cm[spg[[2]],], exact=FALSE)$pvalue
     sel.genes <- test.res %>% setNames(colnames(cm)) %>% sort() %>% names()
   }
 

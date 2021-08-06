@@ -12,14 +12,17 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
                                               dist=c('cor', 'l2'), normalize.both=TRUE, verbose=FALSE,
                                               ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
                                               top.n.genes=NULL, adjust.by.null=c("no", "center", "both"),
-                                              gene.selection="wilcox", trim=0.1, n.cores=1, ...) {
+                                              gene.selection="wilcox", trim=0.2, n.cores=1, ...) {
   adjust.by.null <- match.arg(adjust.by.null)
   dist <- match.arg(dist)
   norm.type <- ifelse(normalize.both, "both", "ref")
   cell.groups %<>% as.factor() %>% droplevels()
 
   sample.type.table <- cell.groups %>% table(sample.per.cell[names(.)]) # table of sample types and cells
+
   if (verbose) cat('Calculating pairwise distances ... ')
+
+  n.cores.inner <- max(n.cores %/% length(levels(cell.groups)), 1)
   res.per.type <- levels(cell.groups) %>% sccore:::sn() %>% plapply(function(ct) {
     cm.norm <- cm.per.type[[ct]]
     dist.mat <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sample.groups, dist=dist,
@@ -29,7 +32,7 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
     dists <- estimateExpressionShiftsByDistMat(dist.mat, sample.groups, norm.type=norm.type, ref.level=ref.level)
     obs.diff <- mean(dists, trim=trim)
 
-    rand.diffs <- lapply(1:n.permutations, function(i) {
+    rand.diffs <- plapply(1:n.permutations, function(i) {
       sg.shuff <- sample.groups[rownames(cm.norm)] %>% as.factor() %>%
         droplevels() %>% {setNames(sample(.), names(.))}
       dm <- dist.mat
@@ -40,7 +43,7 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
 
       estimateExpressionShiftsByDistMat(dm, sg.shuff, norm.type=norm.type, ref.level=ref.level) %>%
         mean(trim=trim)
-    }) %>% unlist()
+    }, progress=FALSE, n.cores=n.cores.inner, mc.preschedule=TRUE, fail.on.error=TRUE) %>% unlist()
 
     pvalue <- (sum(rand.diffs >= obs.diff) + 1) / (sum(!is.na(rand.diffs)) + 1)
 
@@ -52,9 +55,10 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
     }
 
     list(dists=dists, dist.mat=dist.mat, pvalue=pvalue)
-  }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE)
+  }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, mc.allow.recursive=TRUE, fail.on.error=TRUE)
 
   if (verbose) cat("Done!\n")
+
   pvalues <- sapply(res.per.type, `[[`, "pvalue")
   dists.per.type <- sapply(res.per.type, `[[`, "dists")
   p.dist.info <- sapply(res.per.type, `[[`, "dist.mat")

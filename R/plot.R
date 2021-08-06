@@ -208,9 +208,11 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 #' @param notch - whether to show notches in the boxplot version (default=TRUE)
 #' @param palette - cell type palette
 #' @return A ggplot2 object
-plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type='bar', show.jitter=TRUE, notch=TRUE, jitter.alpha=0.05, palette=NULL,
-                                         ylab='expression distance', yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0,
+plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point', 'bar'), show.jitter=TRUE,
+                                         notch=TRUE, jitter.alpha=0.05, palette=NULL, ylab='expression distance',
+                                         yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0,
                                          order.x=TRUE, pvalue.y=NULL) {
+  type <- match.arg(type)
 
   # calculate mean, se and median
   odf <- df <- na.omit(df); # full df is now in odf

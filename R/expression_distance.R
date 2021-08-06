@@ -9,103 +9,97 @@
 ##' @param transposed.matrices (default=F)
 ##' @export
 estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
-                                              dist='cor', normalize.both=TRUE, verbose=FALSE,
+                                              dist=c('cor', 'l2'), normalize.both=TRUE, verbose=FALSE,
                                               ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
                                               top.n.genes=NULL, adjust.by.null=c("no", "center", "both"),
                                               gene.selection="wilcox", trim=0.1, n.cores=1, ...) {
   adjust.by.null <- match.arg(adjust.by.null)
+  dist <- match.arg(dist)
   norm.type <- ifelse(normalize.both, "both", "ref")
-  estimateDists <- function(pdists, samp.groups) {
-     lapply(pdists, estimateCellTypeExpressionShifts, samp.groups, norm.type=norm.type, ref.level=ref.level)
-  }
+  cell.groups %<>% as.factor() %>% droplevels()
 
+  sample.type.table <- cell.groups %>% table(sample.per.cell[names(.)]) # table of sample types and cells
   if (verbose) cat('Calculating pairwise distances ... ')
-  p.dist.info <- estimatePairwiseExpressionDistances(
-    cm.per.type, sample.groups=sample.groups, sample.per.cell=sample.per.cell, cell.groups=cell.groups,
-    dist=dist, top.n.genes=top.n.genes, gene.selection=gene.selection, ...
-  )
-  if (verbose) cat('done!\n')
+  res.per.type <- levels(cell.groups) %>% sccore:::sn() %>% plapply(function(ct) {
+    cm.norm <- cm.per.type[[ct]]
+    dist.mat <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sample.groups, dist=dist,
+                                                    top.n.genes=top.n.genes, gene.selection=gene.selection, ...)
+    attr(dist.mat, 'n.cells') <- sample.type.table[ct, rownames(cm.norm)] # calculate how many cells there are
 
-  if (verbose) cat("Estimating p-values...\n")
-  dists.per.type <- estimateDists(p.dist.info, sample.groups)
-  obs.diffs <- sapply(dists.per.type, mean, trim=trim)
+    dists <- estimateExpressionShiftsByDistMat(dist.mat, sample.groups, norm.type=norm.type, ref.level=ref.level)
+    obs.diff <- mean(dists, trim=trim)
 
-  rand.diffs <- plapply(1:n.permutations, function(i) {
-    sg.shuff <- sample.groups %>% {setNames(sample(.), names(.))}
-    pdi <- p.dist.info
-    if (!is.null(top.n.genes) && (gene.selection != "od")) {
-      pdi <- estimatePairwiseExpressionDistances(
-        cm.per.type, sample.groups=sg.shuff, sample.per.cell=sample.per.cell, cell.groups=cell.groups,
-        dist=dist, top.n.genes=top.n.genes, gene.selection=gene.selection, ...
-      )
+    rand.diffs <- lapply(1:n.permutations, function(i) {
+      sg.shuff <- sample.groups[rownames(cm.norm)] %>% as.factor() %>%
+        droplevels() %>% {setNames(sample(.), names(.))}
+      dm <- dist.mat
+      if (!is.null(top.n.genes) && (gene.selection != "od")) {
+        dm <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sg.shuff, dist=dist,
+                                                  top.n.genes=top.n.genes, gene.selection=gene.selection, ...)
+      }
+
+      estimateExpressionShiftsByDistMat(dm, sg.shuff, norm.type=norm.type, ref.level=ref.level) %>%
+        mean(trim=trim)
+    }) %>% unlist()
+
+    pvalue <- (sum(rand.diffs >= obs.diff) + 1) / (sum(!is.na(rand.diffs)) + 1)
+
+    if (adjust.by.null != "no") {
+      dists <- dists - median(rand.diffs, na.rm=TRUE)
+      if (adjust.by.null == "both") {
+        dists <- dists / mad(rand.diffs, na.rm=TRUE)
+      }
     }
 
-    dists <- estimateDists(pdi, sg.shuff) %>% .[!sapply(., is.null)] %>%
-      sapply(mean, trim=trim) %>% .[names(obs.diffs)]
-  }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE) %>%
-    do.call(rbind, .)
+    list(dists=dists, dist.mat=dist.mat, pvalue=pvalue)
+  }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE)
 
-  comp.res <- t(rand.diffs) %>% {. >= obs.diffs} %>% t()
-  pvalues <- (colSums(comp.res, na.rm=TRUE) + 1) / (colSums(!is.na(comp.res)) + 1)
-  padjust <- p.adjust(pvalues, method=p.adjust.method)
   if (verbose) cat("Done!\n")
+  pvalues <- sapply(res.per.type, `[[`, "pvalue")
+  dists.per.type <- sapply(res.per.type, `[[`, "dists")
+  p.dist.info <- sapply(res.per.type, `[[`, "dist.mat")
 
-  if (adjust.by.null != "no") {
-    exp.diffs <- apply(rand.diffs, 2, median, na.rm=TRUE)
-    if (adjust.by.null == "both") {
-      exp.scales <- apply(rand.diffs, 2, mad, na.rm=TRUE)
-    }
-
-    for (n in names(dists.per.type)) {
-      scale <- if (adjust.by.null == "both") exp.scales[n] else 1
-      dists.per.type[[n]] <- (dists.per.type[[n]] - exp.diffs[n]) / scale
-    }
-  }
+  padjust <- p.adjust(pvalues, method=p.adjust.method)
 
   return(list(dists.per.type=dists.per.type, p.dist.info=p.dist.info, sample.groups=sample.groups,
               cell.groups=cell.groups, pvalues=pvalues, padjust=padjust))
 }
 
+estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, top.n.genes=NULL, n.pcs=NULL, ...) {
+  if (!is.null(top.n.genes)) {
+    sel.genes <- filterGenesForCellType(cm.norm, sample.groups=sample.groups, top.n.genes=top.n.genes, ...)
+    cm.norm <- cm.norm[,sel.genes,drop=FALSE]
+  }
+
+  if (!is.null(n.pcs)) {
+    min.dim <- min(dim(cm.norm)) - 1
+    if (n.pcs > min.dim) {
+      n.pcs <- min.dim
+      warning("n.pcs is too large. Setting it to maximal allowed value ", min.dim)
+    }
+
+    pcs <- svd(cm.norm, nv=n.pcs, nu=0)
+    cm.norm <- as.matrix(cm.norm %*% pcs$v)
+  }
+
+  if (dist == 'cor') {
+    dist.mat <- 1 - cor(t(cm.norm))
+  } else {
+    dist.mat <- dist(cm.norm) %>% as.matrix()
+  }
+
+  dist.mat[is.na(dist.mat)] <- 1;
+  return(dist.mat)
+}
+
 estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, cell.groups, sample.groups,
-                                                dist=c('cor', 'l2'), top.n.genes=NULL, n.pcs=NULL, ...) {
-  dist <- match.arg(dist)
-  cell.groups %<>% as.factor()
-  # table of sample types and cells
-  cct <- cell.groups %>% table(sample.per.cell[names(.)])
+                                                dist='cor', top.n.genes=NULL, n.pcs=NULL, ...) {
+  sample.type.table <- cell.groups %>% table(sample.per.cell[names(.)]) # table of sample types and cells
 
   ctdm <- levels(cell.groups) %>% sccore:::sn() %>% lapply(function(ct) {
-    cm.norm <- cm.per.type[[ct]]
-
-    if (!is.null(top.n.genes)) {
-      sel.genes <- filterGenesForCellType(cm.norm, sample.groups=sample.groups, top.n.genes=top.n.genes, ...)
-      cm.norm <- cm.norm[,sel.genes,drop=FALSE]
-    }
-
-    if (!is.null(n.pcs)) {
-      min.dim <- min(dim(cm.norm)) - 1
-      if (n.pcs > min.dim) {
-        warning("n.pcs is too large for cell type ", ct, ". Setting it to maximal allowed value ", min.dim)
-        n.pcs <- min.dim
-      }
-      suppressWarnings(
-        pcs <- irlba::irlba(cm.norm, nv=n.pcs, nu=0, right_only=FALSE, fastpath=TRUE,
-                            maxit=3000, reorth=TRUE, verbose=FALSE)
-      )
-
-      cm.norm <- as.matrix(cm.norm %*% pcs$v)
-    }
-
-    if (dist == 'cor') {
-      dist.mat <- 1 - cor(t(cm.norm))
-    } else {
-      dist.mat <- dist(cm.norm) %>% as.matrix()
-    }
-
-    dist.mat[is.na(dist.mat)] <- 1;
-
-    # calculate how many cells there are
-    attr(dist.mat, 'n.cells') <- cct[ct, rownames(cm.norm)]
-    dist.mat
+    estimateExpressionShiftsForCellType(cm.per.type[[ct]], sample.groups=sample.groups, dist=dist,
+                                        top.n.genes=top.n.genes, n.pcs=n.pcs, ...) %>%
+      set_attr('n.cells', sample.type.table[ct, rownames(.)]) # calculate how many cells there are
   })
 
   return(ctdm)
@@ -126,7 +120,7 @@ subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df
   return(na.omit(dist.mat[selection.mask]))
 }
 
-estimateCellTypeExpressionShifts <- function(dist.mat, sample.groups, norm.type=c("both", "ref", "none"),
+estimateExpressionShiftsByDistMat <- function(dist.mat, sample.groups, norm.type=c("both", "ref", "none"),
                                              ref.level=NULL) {
   norm.type <- match.arg(norm.type)
 
@@ -214,7 +208,7 @@ prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, 
 
 filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sample.groups,
                                           min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
-                                          genes=NULL) {
+                                          genes=NULL, verbose=FALSE) {
   # Filter rare samples per cell type
   cell.names <- lapply(cms, rownames) %>% unlist()
   freq.table <- table(cell.groups[cell.names], sample.per.cell[cell.names]) %>%
@@ -225,11 +219,15 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
   if (length(unique(freq.table$Condition)) != 2)
     stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
 
-  filt.types <- freq.table %>% split(.$Var1) %>% sapply(function(df) {
-    df %$% split(Var2, Condition) %>% sapply(length) %>% {all(. >= min.samp.per.type)}
+  removed.types <- freq.table %>% split(.$Var1) %>% sapply(function(df) {
+    df %$% split(Var2, Condition) %>% sapply(length) %>% {any(. < min.samp.per.type)}
   }) %>% which() %>% names()
 
-  freq.table %<>% filter(Var1 %in% filt.types)
+  if (verbose && (length(removed.types) > 0)) {
+    cat("Excluding cell types ", paste(removed.types, collapse=", "), "\n")
+  }
+
+  freq.table %<>% filter(!(Var1 %in% removed.types))
   filt.types.per.samp <- freq.table %$% split(Var1, Var2)
 
   cms.filt <- names(filt.types.per.samp) %>% sn() %>% lapply(function(n) {

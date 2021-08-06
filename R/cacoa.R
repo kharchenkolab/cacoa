@@ -205,40 +205,46 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    estimateCommonExpressionShiftMagnitudes=function(cell.groups=self$cell.groups,
+    estimateCommonExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, name='common.expression.shifts',
                                                      min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
-                                                     n.randomizations=50, verbose=self$verbose, name='common.expression.shifts', ...) {
+                                                     n.permutations=1000, trim=0.2, p.adjust.method="BH",
+                                                     verbose=self$verbose, n.cores=self$n.cores, ...) {
+      if (verbose) cat("Filtering data... ")
       shift.inp <- extractRawCountMatrices(self$data.object, transposed=TRUE) %>%
         filterExpressionDistanceInput(
           cell.groups=cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
           min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac
         )
+      if (verbose) cat("done!\n")
 
-      cell.groups <- shift.inp$cell.groups
       sample.groups <- shift.inp$sample.groups
 
-      dists.norm <- list(); dists.raw <- list(); dists.rand <- list(); dist.norm.sub <- list()
-      for (ct in levels(cell.groups)) { # for each cell type
-        # TODO: need to make this loop parallel
-        tcm <- t(shift.inp$cm.per.type[[ct]])
+      if (verbose) cat('Calculating distances ... ')
 
-        obs.dists <- consensusShiftDistances(tcm, sample.groups, ...)
-        randomized.dists <- lapply(1:n.randomizations,function(i) {
+      dists.norm <- list()
+      res.per.type <- levels(shift.inp$cell.groups) %>% sccore:::sn() %>% plapply(function(ct) {
+        cm.norm <- t(shift.inp$cm.per.type[[ct]])
+
+        dists <- consensusShiftDistances(cm.norm, sample.groups, ...)
+        obs.diff <- mean(dists, trim=trim)
+        randomized.dists <- lapply(1:n.permutations, function(i) {
           sg.shuffled <- sample.groups %>% {setNames(sample(as.character(.)), names(.))} %>% as.factor()
-          consensusShiftDistances(tcm, sg.shuffled, ...)
-        })
+          consensusShiftDistances(cm.norm, sg.shuffled, ...) %>% mean(trim=trim)
+        }) %>% unlist()
 
-        # normalize true distances by the mean of the randomized ones
-        dists.norm[[ct]] <- abs(obs.dists) / mean(abs(unlist(randomized.dists))) # TODO: remove all these, as they're only for development
-        dist.norm.sub[[ct]] <- abs(obs.dists) - median(abs(unlist(randomized.dists)))
-        dists.raw[[ct]] <- obs.dists
-        dists.rand[[ct]] <- randomized.dists
-      }
+        pvalue <- (sum(randomized.dists >= obs.diff) + 1) / (sum(!is.na(randomized.dists)) + 1)
+        dists <- dists - median(randomized.dists)
+        list(dists=dists, pvalue=pvalue)
+      }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE)
 
-      self$test.results[[name]] <- list(dists.norm=dists.norm, dist.norm.sub=dist.norm.sub,
-                                        dists.raw=dists.raw, dists.rand=dists.rand)
+      if (verbose) cat("done!\n")
+
+      pvalues <- sapply(res.per.type, `[[`, "pvalue")
+      dists.per.type <- sapply(res.per.type, `[[`, "dists")
+      padjust <- p.adjust(pvalues, method=p.adjust.method)
+
+      self$test.results[[name]] <- list(dists.per.type=dists.per.type, pvalues=pvalues, padjust=padjust)
       return(invisible(self$test.results[[name]]))
-
     },
 
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
@@ -292,18 +298,28 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     ##' @param show.regression whether to show a whiskers in the size dependency plot
     ##' @return A ggplot2 object
     plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.jitter=FALSE, jitter.alpha=0.05, type='box',
-                                                 notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5, ...) {
-      res <- private$getResults(name, 'estimateCommonExpressionShiftMagnitudes')$dist.norm.sub
-      df <- names(res) %>%
-        lapply(function(n) data.frame(value=res[[n]], Type=n)) %>%
+                                                 notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5,
+                                                 show.pvalues=c("adjusted", "raw", "none"), ...) {
+      show.pvalues <- match.arg(show.pvalues)
+      res <- private$getResults(name, 'estimateCommonExpressionShiftMagnitudes')
+      df <- names(res$dists.per.type) %>%
+        lapply(function(n) data.frame(value=res$dists.per.type[[n]], Type=n)) %>%
         do.call(rbind, .) %>% na.omit()
+
+      if (show.pvalues == "adjusted") {
+        pvalues <- res$padjust
+      } else if (show.pvalues == "raw") {
+        pvalues <- res$pvalues
+      } else {
+        pvalues <- NULL
+      }
 
       if(show.size.dependency) {
         plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='common expression distance', yline=NA,
                             show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme, ...)
       } else {
-        plotMeanMedValuesPerCellType(df, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette,
-                                     ylab='common expression distance', plot.theme=self$plot.theme, yline=0.0, ...)
+        plotMeanMedValuesPerCellType(df, pvalues=pvalues, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
+                                     palette=self$cell.groups.palette, ylab='common expression distance', plot.theme=self$plot.theme, yline=0.0, ...)
       }
     },
 

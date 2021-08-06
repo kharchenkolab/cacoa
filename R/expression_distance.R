@@ -32,7 +32,7 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
     dists <- estimateExpressionShiftsByDistMat(dist.mat, sample.groups, norm.type=norm.type, ref.level=ref.level)
     obs.diff <- mean(dists, trim=trim)
 
-    rand.diffs <- plapply(1:n.permutations, function(i) {
+    randomized.dists <- plapply(1:n.permutations, function(i) {
       sg.shuff <- sample.groups[rownames(cm.norm)] %>% as.factor() %>%
         droplevels() %>% {setNames(sample(.), names(.))}
       dm <- dist.mat
@@ -45,12 +45,12 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
         mean(trim=trim)
     }, progress=FALSE, n.cores=n.cores.inner, mc.preschedule=TRUE, fail.on.error=TRUE) %>% unlist()
 
-    pvalue <- (sum(rand.diffs >= obs.diff) + 1) / (sum(!is.na(rand.diffs)) + 1)
+    pvalue <- (sum(randomized.dists >= obs.diff) + 1) / (sum(!is.na(randomized.dists)) + 1)
 
     if (adjust.by.null != "no") {
-      dists <- dists - median(rand.diffs, na.rm=TRUE)
+      dists <- dists - median(randomized.dists, na.rm=TRUE)
       if (adjust.by.null == "both") {
-        dists <- dists / mad(rand.diffs, na.rm=TRUE)
+        dists <- dists / mad(randomized.dists, na.rm=TRUE)
       }
     }
 
@@ -295,7 +295,7 @@ consensusShiftDistances <- function(tcm, sample.groups, use.median=FALSE, mean.t
   dmm <- dmm / sqrt(sum(dmm^2)) # normalize
 
   # project samples and calculate distances
-  return(as.numeric(dm %*% dmm))
+  return(abs(as.numeric(dm %*% dmm)))
 }
 
 estimateExplainedVariance <- function(cm, sample.groups) {

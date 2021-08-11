@@ -195,6 +195,7 @@ getOntologyPlotTitle <- function(genes, cell.subgroup, type) {
 }
 
 estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
+  if (length(arr) == 1) return(c(NA, NA))
   s.means <- sapply(1:n.samples, function(i) mean(sample(arr, replace=TRUE), ...))
   return(quantile(s.means, c(quant, 1 - quant)))
 }
@@ -225,8 +226,8 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
   df %<>% group_by(Type) %>%
     summarise(mean=mean(value, trim=trim), med=median(value)) %>%
     mutate(Type=as.character(Type)) %>%
-    mutate(LI=sapply(Type, function(ct) conf.ints[[ct]][1]),
-           UI=sapply(Type, function(ct) conf.ints[[ct]][2])) %>%
+    mutate(LI=as.numeric(sapply(Type, function(ct) conf.ints[[ct]][1])),
+           UI=as.numeric(sapply(Type, function(ct) conf.ints[[ct]][2]))) %>%
     .[!is.na(.$mean),] %>%
     mutate(Type=factor(Type, levels=levels(odf$Type)))
 

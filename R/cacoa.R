@@ -240,7 +240,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (verbose) cat("done!\n")
 
       pvalues <- sapply(res.per.type, `[[`, "pvalue")
-      dists.per.type <- sapply(res.per.type, `[[`, "dists")
+      dists.per.type <- lapply(res.per.type, `[[`, "dists")
       padjust <- p.adjust(pvalues, method=p.adjust.method)
 
       self$test.results[[name]] <- list(dists.per.type=dists.per.type, pvalues=pvalues, padjust=padjust)

@@ -60,8 +60,8 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
   if (verbose) cat("Done!\n")
 
   pvalues <- sapply(res.per.type, `[[`, "pvalue")
-  dists.per.type <- sapply(res.per.type, `[[`, "dists")
-  p.dist.info <- sapply(res.per.type, `[[`, "dist.mat")
+  dists.per.type <- lapply(res.per.type, `[[`, "dists")
+  p.dist.info <- lapply(res.per.type, `[[`, "dist.mat")
 
   padjust <- p.adjust(pvalues, method=p.adjust.method)
 

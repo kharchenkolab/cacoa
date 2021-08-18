@@ -60,7 +60,7 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
       X2 <- cbind(X, 1)
       Rinv <- solve(chol(t(X2) %*% X2))
       dvec <- t(Y) %*% X2
-      Amat <- t(psi[ref.cell.type,,drop=F])
+      Amat <- t(psi[ref.cell.type,,drop=FALSE])
       Amat <- rbind(Amat, 0)
       res.qp <- quadprog::solve.QP(Dmat = Rinv, factorized = TRUE, dvec = dvec, Amat = Amat, bvec = 0, meq = 1)  
       
@@ -185,20 +185,20 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL){
   loadings <- lapply(1:n.boot, function(ib){
     # Create samples by bootstrap
     set.seed( n.seed+ib)
-    samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = T)
+    samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = TRUE)
     groups.tmp <- groups[samples.tmp]
     
     
     # Check that both groups are presented
     while((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) {
       # Create samples by bootstrap
-      samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = T)
+      samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = TRUE)
       groups.tmp <- groups[samples.tmp]
     }
     cnts.tmp <- cnts[samples.tmp,]
     
     init.tmp <- produceResampling(cnts = cnts.tmp, groups = groups.tmp, n.perm = 1,
-                                  replace.samples = F,
+                                  replace.samples = FALSE,
                                   remain.groups = TRUE, seed = n.seed+ib)
     loadings.tmp <- getLoadings(init.tmp$cnts[[1]], init.tmp$groups[[1]])
   })
@@ -264,7 +264,7 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL){
   cell.types.order <- c()
   for(i.list in order(-abs(mean.list - mean.list[id.ref.cluster]))){
     cell.types.tmp <- cell.list[[i.list]]
-    cell.types.tmp <- cell.types.tmp[order(-abs(rowMeans(loadings.init[cell.types.tmp,, drop=F]) - mean.list[id.ref.cluster])  ) ]
+    cell.types.tmp <- cell.types.tmp[order(-abs(rowMeans(loadings.init[cell.types.tmp,, drop=FALSE]) - mean.list[id.ref.cluster])  ) ]
     cell.types.order <- c(cell.types.order, cell.types.tmp)
   }
   loadings.init <- loadings.init[cell.types.order,]
@@ -343,8 +343,8 @@ referenceSet <- function(freqs, groups, p.thresh=0.05){
       for(j in 1:length(cell.list)){
         if (j <= i) next
         
-        ratio <- log(apply(freqs[,cell.list[[i]],drop=F], 1, psych::geometric.mean )) - 
-          log(apply(freqs[,cell.list[[j]],drop=F], 1, psych::geometric.mean ))
+        ratio <- log(apply(freqs[,cell.list[[i]],drop=FALSE], 1, psych::geometric.mean )) - 
+          log(apply(freqs[,cell.list[[j]],drop=FALSE], 1, psych::geometric.mean ))
         # print('---')
         # print(freqs)
         # print(ratio)
@@ -401,8 +401,8 @@ sbpDiff <- function(freqs, groups){
       for(j in 1:length(cell.list)){
         if (j <= i) next
         
-        ratio <- log(apply(freqs[,cell.list[[i]],drop=F], 1, psych::geometric.mean )) - 
-          log(apply(freqs[,cell.list[[j]],drop=F], 1, psych::geometric.mean ))
+        ratio <- log(apply(freqs[,cell.list[[i]],drop=FALSE], 1, psych::geometric.mean )) - 
+          log(apply(freqs[,cell.list[[j]],drop=FALSE], 1, psych::geometric.mean ))
 
         mod <- lm(groups ~ ratio)
         res <- summary(mod)

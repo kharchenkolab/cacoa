@@ -85,8 +85,8 @@ addZScores <- function(df) {
 #' @param return.matrix Return merged matrix of results (default=TRUE)
 #' @export
 estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NULL, ref.level = NULL,
-                           common.genes = FALSE, test="LRT", cooks.cutoff = FALSE, min.cell.count = 10,max.cell.count=Inf, independent.filtering = T,
-                           n.cores = 1, cluster.sep.chr = "<!!>", return.matrix = T, verbose = T) {
+                           common.genes = FALSE, test="LRT", cooks.cutoff = FALSE, min.cell.count = 10,max.cell.count=Inf, independent.filtering = TRUE,
+                           n.cores = 1, cluster.sep.chr = "<!!>", return.matrix = TRUE, verbose = TRUE) {
 
   validatePerCellTypeParams(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr)
 
@@ -131,16 +131,16 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
 
       dds1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=~group)
       if(test=="LRT") {
-        dds1 <- DESeq2::DESeq(dds1,test="LRT", reduced = ~ 1,quiet=T)
+        dds1 <- DESeq2::DESeq(dds1,test="LRT", reduced = ~ 1,quiet=TRUE)
       } else { # defaults to Wald
-        dds1 <- DESeq2::DESeq(dds1,quiet=T)
+        dds1 <- DESeq2::DESeq(dds1,quiet=TRUE)
       }
       res1 <- DESeq2::results(dds1, cooksCutoff = cooks.cutoff, independentFiltering = independent.filtering) %>% as.data.frame
 
       # add Z scores
       if(!is.na(res1[[1]][1])) {
         res1 <- addZScores(res1) %>%
-          .[order(.$pvalue,decreasing=F),]
+          .[order(.$pvalue,decreasing=FALSE),]
       }
 
       if (return.matrix) {
@@ -171,8 +171,8 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
 #' @param dir.name Name for directory with results. If it doesn't exist, it will be created. To disable, set as NULL (default="JSON")
 #' @param gene.metadata (default=NULL)
 #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-#' @param verbose Show progress (default=T)
-saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.metadata = NULL, cluster.sep.chr = "<!!>", sample.groups = NULL, verbose=T) {
+#' @param verbose Show progress (default=TRUE)
+saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.metadata = NULL, cluster.sep.chr = "<!!>", sample.groups = NULL, verbose=TRUE) {
   if(!is.null(dir.name)) {
     if(!dir.exists(dir.name)) dir.create(dir.name)
   } else {
@@ -269,13 +269,13 @@ saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.meta
 #' @param cell.groups factor specifying cell types (default=NULL)
 #' @param sample.groups a list of two character vector specifying the app groups to compare (default=NULL)
 #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
-#' @param common.genes Only investigate common genes across cell groups (default=F)
-#' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
+#' @param common.genes Only investigate common genes across cell groups (default=FALSE)
+#' @param cooks.cutoff cooksCutoff for DESeq2 (default=FALSE)
 #' @param min.cell.count (default=10)
-#' @param independent.filtering independentFiltering for DESeq2 (default=F)
+#' @param independent.filtering independentFiltering for DESeq2 (default=FALSE)
 #' @param n.cores Number of cores (default=1)
 #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-#' @param return.matrix Return merged matrix of results (default=T)
+#' @param return.matrix Return merged matrix of results (default=TRUE)
 #' @param covariates list of covariates to include; for example, cdr, sex or age
 #' @param meta.info dataframe with possible covariates; for example, sex or age
 #' @param test DE method: deseq2, edgeR, wilcoxon, ttest
@@ -402,14 +402,14 @@ estimatePerCellTypeDEmethods=function (raw.mats,
 
         if(test.name == 'Wald') {
           res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
-            DESeq2::DESeq(quiet=T, test=test.name) %>%
+            DESeq2::DESeq(quiet=TRUE, test=test.name) %>%
             DESeq2::results(contrast=c('group', target.level, ref.level),
                             cooksCutoff = cooks.cutoff,
                             independentFiltering = independent.filtering) %>%
             as.data.frame
         } else {
           res1 <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula) %>%
-            DESeq2::DESeq(quiet=T, test=test.name, reduced = ~ 1) %>%
+            DESeq2::DESeq(quiet=TRUE, test=test.name, reduced = ~ 1) %>%
             DESeq2::results(contrast=c('group', target.level, ref.level),
                             cooksCutoff = cooks.cutoff,
                             independentFiltering = independent.filtering) %>%
@@ -444,7 +444,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         #   edgeR::calcNormFactors() %>% cpm
         cnts.norm = cm
 
-        y <- limma::voom(cnts.norm, mm, plot = F)
+        y <- limma::voom(cnts.norm, mm, plot = FALSE)
         fit <- limma:lmFit(y, mm)
 
         contr <- makeContrasts(paste(c('group', target.level), collapse = ''),

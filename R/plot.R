@@ -73,7 +73,8 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 #' @param size marker size (default: 0.5)
 #' @param jitter.width width of the point jitter (default: 0.15)
 plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=c(0, 0), show.significance=FALSE, palette=NULL,
-                                     notch=FALSE, legend.position="right", alpha=0.2, plot.theme=theme_get(), size=0.5, jitter.width=0.15) {
+                                     notch=FALSE, legend.position="right", alpha=0.2, plot.theme=theme_get(), size=0.5, jitter.width=0.15,
+                                     adjust.pvalues=T) {
   gg <- ggplot(count.df, aes(x=variable, y=value, by=group, fill=group)) +
     geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
     labs(x=x.lab, y=y.lab) +
@@ -84,7 +85,16 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
     geom_point(position=position_jitterdodge(jitter.width=jitter.width), color="black", size=size, alpha=alpha) +
     scale_y_continuous(expand=y.expand, limits=c(0, max(count.df$value) * 1.05))
 
-  if (show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+  
+  if (show.significance) {
+    if (adjust.pvalues) {
+      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.adj")  # willcox test + adjustment
+      # TODO
+      # p.adjust.method = "fdr" ?
+    } else {
+      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+    }
+  } 
 
   if (!is.null(palette)) gg <- gg + scale_fill_manual(values=palette)
   return(gg)

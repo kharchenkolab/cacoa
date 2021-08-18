@@ -186,7 +186,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                      n.cores=self$n.cores, verbose=self$verbose,  mean.trim=0.1, name='common.expression.shifts') {
       if(length(levels(sample.groups))!=2) stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
 
-      count.matrices <- extractRawCountMatrices(self$data.object, transposed=T)
+      count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
       common.genes <- Reduce(intersect, lapply(count.matrices, colnames))
       count.matrices %<>% lapply(`[`, , common.genes)
@@ -345,42 +345,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
     },
 
-    ### Differential expression
-
-    # #' @description Estimate differential gene expression per cell type between conditions
-    # #' @param cell.groups factor specifying cell types (default=NULL)
-    # #' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
-    # #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
-    # #' @param common.genes Only investigate common genes across cell groups (default=F)
-    # #' @param test which DESeq2 test to use (options: "LRT" (default), "Wald")
-    # #' @param cooks.cutoff cooksCutoff for DESeq2 (default=FALSE)
-    # #' @param min.cell.count minimum number of cells that need to be present in a given cell type in a given sample in order to be taken into account (default=10)
-    # #' @param max.cell.count maximal number of cells per cluster per sample to include in a comparison (useful for comparing the number of DE genes between cell types) (default: Inf)
-    # #' @param independent.filtering independentFiltering parameter for DESeq2 (default=FALSE)
-    # #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-    # #' @param return.matrix Return merged matrix of results (default=TRUE)
-    # #' @param name slot in which to save the results (default: 'de')
-    # #' @return A list of DE genes
-    # estimatePerCellTypeDE=function(cell.groups = self$cell.groups, sample.groups = self$sample.groups, ref.level = self$ref.level, common.genes = FALSE, n.cores = self$n.cores, cooks.cutoff = FALSE, min.cell.count = 10, max.cell.count= Inf, test='Wald', independent.filtering = FALSE, cluster.sep.chr = "<!!>", return.matrix = T, verbose=self$verbose, name ='de') {
-    #   if(!is.list(sample.groups)) {
-    #     sample.groups <- list(names(sample.groups[sample.groups == ref.level]),
-    #                           names(sample.groups[sample.groups != ref.level])) %>%
-    #       setNames(c(ref.level, self$target.level))
-    #   }
-    #
-    #   self$test.results[[name]] <- extractRawCountMatrices(self$data.object, transposed=T) %>%
-    #     estimatePerCellTypeDE(cell.groups = cell.groups, sample.groups = sample.groups, ref.level = ref.level, n.cores = n.cores,
-    #                           cooks.cutoff = cooks.cutoff, min.cell.count = min.cell.count, max.cell.count=max.cell.count, test=test, independent.filtering = independent.filtering,
-    #                           cluster.sep.chr = cluster.sep.chr, return.matrix = return.matrix)
-    #   return(invisible(self$test.results[[name]]))
-    # },
-
 
     #' @description Estimate differential gene expression per cell type between conditions
-    #' @param cell.groups factor specifying cell types (default=NULL)
-    #' @param cooks.cutoff cooksCutoff for DESeq2 (default=F)
-    #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
-    #' @param common.genes Only investigate common genes across cell groups (default=F)
+    #' @param cell.groups factor specifying cell types (default from self)
+    #' @param sample.groups 2-factor vector with annotation of groups/condition per sample (default from self)
+    #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy (default from self)
+    #' @param target.level Reference level in 'sample.groups', e.g., case, diseased (default from self)
+    #' @param common.genes Only investigate common genes across cell groups (default=FALSE)
+    #' @param cooks.cutoff cooksCutoff for DESeq2 (default=FALSE)
+    
+    
     #' @param test which DESeq2 test to use (options: "LRT" (default), "Wald")
     #' @param cooks.cutoff cooksCutoff for DESeq2 (default=FALSE)
     #' @param min.cell.count minimum number of cells that need to be present in a given cell type in a given sample in order to be taken into account (default=10)
@@ -394,6 +368,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    sample.groups = self$sample.groups,
                                    ref.level = self$ref.level,
                                    target.level = self$target.level,
+                                   name ='de',
+                                   test='DESeq2.Wald',
+                                   resampling.method=NULL, # default - without resampling
+                                   max.resamplings=30,
+                                   seed.resampling=239, # shouldn't this be external?
+                                   min.cell.frac=0.05,
+                                   covariates = NULL,
                                    common.genes = FALSE,
                                    n.cores = self$n.cores,
                                    cooks.cutoff = FALSE,
@@ -401,14 +382,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    max.cell.count= Inf,
                                    independent.filtering = FALSE,
                                    cluster.sep.chr = "<!!>",
-                                   verbose=self$verbose,
-                                   name ='de',
-                                   test='DESeq2.Wald',
-                                   resampling.method=NULL, # default - without resampling
-                                   max.resamplings=30,
-                                   seed.resampling=239, # shouldn't this be external?
-                                   min.cell.frac=0.05,
-                                   covariates = NULL, ...) {
+                                   verbose=self$verbose, ...) {
 
       if(!is.list(sample.groups)) {
         s.groups <- list(names(sample.groups[sample.groups == ref.level]),
@@ -501,6 +475,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       de.res <- if(length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
       de.res %<>% appendStatisticsToDE(expr.fracs)
       self$test.results[[name]] <- de.res
+      
+      # TODO: add overall p-adjustment
 
       return(invisible(self$test.results[[name]]))
     },
@@ -530,7 +506,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
 
-    estimateDeStabilityPerTest=function(de.names,
+    estimateDEStabilityPerTest=function(de.names,
                                         name='jacc.per.test',
                                         top.n.genes = NULL,
                                         p.val.cutoff = NULL) {
@@ -555,10 +531,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
 
-    estimateDeStabilityPerGene=function(de.name,
+    estimateDEStabilityPerGene=function(de.name,
                                         top.n.genes = 500,
                                         p.adj.cutoff = NULL,
-                                        visualize=F) {
+                                        visualize=FALSE) {
       de.res <- self$test.results[[de.name]]
       for(cell.type in names(de.res)) {
         if(!is.null(p.adj.cutoff)) {
@@ -952,11 +928,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     plotGOStabilityPerCellType=function(name='go.jaccards',
-                                        notch = F,
-                                        show.jitter = T,
+                                        notch = FALSE,
+                                        show.jitter = TRUE,
                                         jitter.alpha = 0.05,
-                                        show.pairs = F,
-                                        sort.order = F) {
+                                        show.pairs = FALSE,
+                                        sort.order = FALSE) {
 
       jaccards <- private$getResults(name, 'estimateGOStabilityPerCellType()')
 
@@ -976,11 +952,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     plotDEStabilityTrend=function(name='de.trend',
-                                        notch = F,
-                                        show.jitter = T,
+                                        notch = FALSE,
+                                        show.jitter = TRUE,
                                         jitter.alpha = 0.05,
-                                        show.pairs = F,
-                                        sort.order = F) {
+                                        show.pairs = FALSE,
+                                        sort.order = FALSE) {
 
       jaccards <- private$getResults(name, 'estimateDEStabilityTrend()')
       p <- plotStability(jaccards = jaccards,
@@ -1082,11 +1058,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param notch - whether to show notches in the boxplot version (default=TRUE)
     #' @return A ggplot2 object
     plotDEStabilityPerCellType=function(name='de.jaccards',
-                                       notch = F,
-                                       show.jitter = T,
+                                       notch = FALSE,
+                                       show.jitter = TRUE,
                                        jitter.alpha = 0.05,
-                                       show.pairs = F,
-                                       sort.order = T) {
+                                       show.pairs = FALSE,
+                                       sort.order = TRUE) {
 
       jaccards <- private$getResults(name, 'estimateDEStability()')
       p <- plotStability(jaccards = jaccards,
@@ -1107,12 +1083,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
 
 
-    plotDeStabilityPerTest=function(name='jacc.per.test',
-                                        notch = F,
-                                        show.jitter = T,
+    plotDEStabilityPerTest=function(name='jacc.per.test',
+                                        notch = FALSE,
+                                        show.jitter = TRUE,
                                         jitter.alpha = 0.05,
-                                        show.pairs = F,
-                                        sort.order = F) {
+                                        show.pairs = FALSE,
+                                        sort.order = FALSE) {
 
       jaccards <- private$getResults(name, 'estimateDEStability()')
       p <- plotStability(jaccards = jaccards,
@@ -1129,35 +1105,35 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(p)
     },
 
-    plotNumberOfDEGenesStability=function(name = 'de',
-                                          p.adjust = TRUE,
-                                          pvalue.cutoff=0.05,
-                                          notch = T,
-                                          show.jitter = T,
-                                          jitter.alpha = 0.1,
-                                          show.pairs = F,
-                                          sort.order = F,
-                                          log.y.axis = F){
-      de.res <- private$getResults(name, 'estimatePerCellTypeDE()')
-      if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
-
-      de.numbers <- estimateNumberOfTermsStability(de.res,
-                                                   p.adjust = p.adjust,
-                                                   pvalue.cutoff = pvalue.cutoff)
-
-      p <- plotStability(jaccards = de.numbers,
-                         notch = notch,
-                         show.jitter = show.jitter,
-                         jitter.alpha = jitter.alpha,
-                         show.pairs = show.pairs,
-                         sort.order = sort.order,
-                         xlabel = 'Cell Type',
-                         ylabel = 'Number of Significant DE genes',
-                         log.y.axis = log.y.axis,
-                         palette=self$cell.groups.palette,
-                         plot.theme=self$plot.theme)
-      return(p)
-    },
+    # plotNumberOfDEGenesStability=function(name = 'de',
+    #                                       p.adjust = TRUE,
+    #                                       pvalue.cutoff=0.05,
+    #                                       notch = TRUE,
+    #                                       show.jitter = TRUE,
+    #                                       jitter.alpha = 0.1,
+    #                                       show.pairs = FALSE,
+    #                                       sort.order = FALSE,
+    #                                       log.y.axis = FALSE){
+    #   de.res <- private$getResults(name, 'estimatePerCellTypeDE()')
+    #   if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
+    # 
+    #   de.numbers <- estimateNumberOfTermsStability(de.res,
+    #                                                p.adjust = p.adjust,
+    #                                                pvalue.cutoff = pvalue.cutoff)
+    # 
+    #   p <- plotStability(jaccards = de.numbers,
+    #                      notch = notch,
+    #                      show.jitter = show.jitter,
+    #                      jitter.alpha = jitter.alpha,
+    #                      show.pairs = show.pairs,
+    #                      sort.order = sort.order,
+    #                      xlabel = 'Cell Type',
+    #                      ylabel = 'Number of Significant DE genes',
+    #                      log.y.axis = log.y.axis,
+    #                      palette=self$cell.groups.palette,
+    #                      plot.theme=self$plot.theme)
+    #   return(p)
+    # },
 
 
     plotDEStabilityPerGene = function(name = 'de',
@@ -1182,7 +1158,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param name results slot in which the DE results should be stored (default: 'de')
     #' @param palette cell group palette (default: stored $cell.groups.palette)
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
-    #' @param label Show labels on plot (default=T)
+    #' @param label Show labels on plot (default=TRUE)
     #' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
     #' @return A ggplot2 object
     plotDEGenes=function(name='de', cell.groups = self$cell.groups, legend.position = "none", label = TRUE, p.adj = 0.05, size=4, palette=self$cell.groups.palette) {
@@ -1256,7 +1232,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         palette <- c("#5e4fa2", "#3288bd", "#abdda4", "#fdae61", "#f46d43", "#9e0142") %>%
           colorRampPalette()
       }
-
+      
       if(!(color.var %in% names(de[[1]])))
         stop(paste(color.var, 'is not calculated'))
 
@@ -1293,7 +1269,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
     #' @param gene.metadata (default=NULL)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-    saveDEasJSON=function(saveprefix = NULL, dir.name = "JSON", de.raw = NULL, sample.groups = self$sample.groups, ref.level = self$ref.level, gene.metadata = NULL, cluster.sep.chr = "<!!>", verbose = T) {
+    saveDEasJSON=function(saveprefix = NULL, dir.name = "JSON", de.raw = NULL, sample.groups = self$sample.groups, ref.level = self$ref.level, gene.metadata = NULL, cluster.sep.chr = "<!!>", verbose = TRUE) {
       if (is.null(de.raw)) {
         de.raw <- private$getResults("de", "estimatePerCellTypeDE")
       }
@@ -1393,7 +1369,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         de.raw <- private$getResults(de.name, "estimatePerCellTypeDE()")
       }
 
-      # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before calculating
+      # If estimatePerCellTypeDE was run with return.matrix = TRUE, remove matrix before calculating
       if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, "res")
 
       de.gene.ids <- getDEEntrezIdsSplitted(de.raw, org.db=org.db, p.adj=p.adj)
@@ -1423,7 +1399,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         de.raw <- private$getResults(de.name, "estimatePerCellTypeDE()")
       }
 
-      # If estimatePerCellTypeDE was run with return.matrix = T, remove matrix before calculating
+      # If estimatePerCellTypeDE was run with return.matrix = TRUE, remove matrix before calculating
       if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, "res")
 
       de.gene.ids <- getDEEntrezIdsSplitted(de.raw, org.db=org.db, p.adj=p.adj)
@@ -1537,7 +1513,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                 names() %>%
                 lapply(function(fam) {
                   data.frame(ID = ont.fam[[ct]][[ont]][[dir]]$families[[fam]],
-                             Family = fam %>% strsplit(split = "Family", fixed = T) %>% .[[1]] %>% .[2])
+                             Family = fam %>% strsplit(split = "Family", fixed = TRUE) %>% .[[1]] %>% .[2])
                 }) %>%
                 bind_rows() %>%
                 split(., .$ID)
@@ -1584,7 +1560,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         } else {
           tmp.res <- apply(res, 1, function(x) {
             if(grepl(",", x[6])) {
-              strsplit(x[6], ", ", T)[[1]] %>%
+              strsplit(x[6], ", ", TRUE)[[1]] %>%
                 sapply(function(f) paste(x[3:5], collapse = " ") %>% paste(f))
             } else {
               paste(x[3:6], collapse = " ")
@@ -1598,13 +1574,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           if(length(common.res) > 1) {
             common.res %<>%
               names() %>%
-              strsplit(" ", T)
+              strsplit(" ", TRUE)
           } else {
             stop("No family contains both terms/IDs.")
           }
 
           common.df <- lapply(common.res, sapply, function(x) {
-            rep(x, length(term)) %>% matrix(nrow = length(term), byrow = T)
+            rep(x, length(term)) %>% matrix(nrow = length(term), byrow = TRUE)
           }) %>%
             do.call("rbind",.)
 
@@ -1807,7 +1783,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if(min.genes > 1) {
         idx <- df$GeneRatio %>%
-          strsplit("/", fixed=T) %>%
+          strsplit("/", fixed=TRUE) %>%
           sapply(`[[`, 1)
 
         df <- df[idx > min.genes,]
@@ -1837,7 +1813,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left", selection="all", n=20,
-                                 clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, palette=NULL, row.order = TRUE, col.order = TRUE, legend.title = NULL, row.dendrogram = F, col.dendrogram = F, ...) {
+                                 clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, palette=NULL, row.order = TRUE, col.order = TRUE, legend.title = NULL, row.dendrogram = FALSE, col.dendrogram = FALSE, ...) {
       checkPackageInstalled(c("ComplexHeatmap"), bioc=TRUE)
       checkPackageInstalled(c("circlize"), bioc=FALSE)
 
@@ -1894,10 +1870,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # })
 
       # New
-      tmp <- as.matrix(ont.sum %>% .[order(rowSums(.), decreasing = T),] %>% .[1:pmin(nrow(.), n),]) %>% {.[,!colSums(.) == 0]}
+      tmp <- as.matrix(ont.sum %>% .[order(rowSums(.), decreasing = TRUE),] %>% .[1:pmin(nrow(.), n),]) %>% {.[,!colSums(.) == 0]}
 
       if(is.null(color.range)) {
-        color.range <- c(min(0, min(tmp, na.rm = T)), max(tmp, na.rm = T))
+        color.range <- c(min(0, min(tmp, na.rm = TRUE)), max(tmp, na.rm = TRUE))
         if(color.range[2] > 20) {
           warning("Shrinking minimum adj. P value to -log10(20) for plotting.")
           color.range[2] <- 20
@@ -1919,7 +1895,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # Plot
       ComplexHeatmap::Heatmap(tmp,
                               col=pal,
-                              border=T,
+                              border=TRUE,
                               show_row_dend=row.dendrogram,
                               show_column_dend=col.dendrogram,
                               heatmap_legend_param = list(title = title),
@@ -2139,7 +2115,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if(!is.null(genes)) res %<>% filter(genes %in% genes)
 
       # Write table
-      write.table(res, file = file, sep = sep, dec = dec, row.names = F)
+      write.table(res, file = file, sep = sep, dec = dec, row.names = FALSE)
     },
 
     #' @title Save family results
@@ -2163,7 +2139,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                 lapply(function(z) z[c("Description","Significance","parents_in_IDs","parent_go_id")]) %>%
                 bind_rows() %>%
                 data.frame() %>%
-                mutate(., No_parents = .$parents_in_IDs %>% sapply(function(z) strsplit(z, split = "/", fixed = T)[[1]] %>% length()),
+                mutate(., No_parents = .$parents_in_IDs %>% sapply(function(z) strsplit(z, split = "/", fixed = TRUE)[[1]] %>% length()),
                        Child_terms = nrow(.))
 
               tmp.df <- data.frame(y, tmp.data) %>%
@@ -2204,7 +2180,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if(!is.null(genes)) res %<>% filter(genes %in% genes)
 
       # Write table
-      write.table(res, file = file, sep = sep, dec = dec, row.names = F)
+      write.table(res, file = file, sep = sep, dec = dec, row.names = FALSE)
     },
 
     #' @description Plot the cell group proportions per sample
@@ -2316,7 +2292,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
                               cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE,
-                              p.val.adjustment = T, h.method='both') {
+                              adjust.pvalues = TRUE, h.method='both') {
       h.method.options = c('up', 'down', 'both')
       if(!(h.method %in% h.method.options)) stop('Impossible metho of clustering')
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
@@ -2326,9 +2302,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
 
-      gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
-                             plot.theme=self$plot.theme, p.val.adjustment = p.val.adjustment,
+
+      gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level, 
+                             plot.theme=self$plot.theme, adjust.pvalues = adjust.pvalues,
                              h.method=h.method)
+      
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)
       }

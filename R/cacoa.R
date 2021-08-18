@@ -149,7 +149,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description  Calculate expression shift magnitudes of different clusters between conditions
     #' @param cell.groups Named cell group factor with cell names (default: stored vector)
-    #' @param dist 'JS' - Jensen Shannon divergence, or 'cor' - correlation distance (default="cor")
+    #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default depends on dimensionality)
     #' @param within.group.normalization Normalize the shift magnitude by the mean magnitude of within-group variation (default=`TRUE`)
     #' @param n.cells Number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)
     #' @param n.top.genes Number of top highest-expressed genes to consider (default: all genes)
@@ -162,7 +162,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `p.dist.info`: list of distance matrices per cell type
     #'   - `sample.groups`: same as the provided variable
     #'   - `cell.groups`: same as the provided variable
-    estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist='cor', normalize.both=TRUE,
+    estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist=NULL, normalize.both=TRUE,
                                                min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
                                                ref.level=self$ref.level, sample.groups=self$sample.groups,
                                                verbose=self$verbose, n.cores=self$n.cores, name="expression.shifts",
@@ -198,7 +198,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$test.results[[name]] <- shift.inp %$%
         estimateExpressionShiftMagnitudes(
           cm.per.type, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=self$sample.per.cell,
-          dist=tolower(dist), normalize.both=normalize.both, verbose=verbose, ref.level=ref.level,
+          dist=dist, normalize.both=normalize.both, verbose=verbose, ref.level=ref.level,
           n.permutations=n.permutations, top.n.genes=top.n.genes, n.pcs=n.pcs, n.cores=n.cores, ...
         )
 

@@ -9,23 +9,23 @@
 ##' @param transposed.matrices (default=F)
 ##' @export
 estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
-                                              dist=c('cor', 'l1', 'l2'), normalize.both=TRUE, verbose=FALSE,
+                                              dist=NULL, normalize.both=TRUE, verbose=FALSE,
                                               ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
-                                              top.n.genes=NULL, adjust.by.null=c("no", "center", "both"),
-                                              gene.selection="wilcox", trim=0.2, n.cores=1, ...) {
-  adjust.by.null <- match.arg(adjust.by.null)
-  dist <- match.arg(dist)
+                                              top.n.genes=NULL, gene.selection="wilcox", n.pcs=NULL,
+                                              trim=0.2, n.cores=1, ...) {
+  dist <- parseDistance(dist, top.n.genes=top.n.genes, n.pcs=n.pcs)
+
   norm.type <- ifelse(normalize.both, "both", "ref")
   cell.groups %<>% as.factor() %>% droplevels()
 
   sample.type.table <- cell.groups %>% table(sample.per.cell[names(.)]) # table of sample types and cells
 
-  if (verbose) cat('Calculating pairwise distances ... ')
+  if (verbose) cat("Calculating pairwise distances using dist='", dist, "'...\n", sep="")
 
   n.cores.inner <- max(n.cores %/% length(levels(cell.groups)), 1)
   res.per.type <- levels(cell.groups) %>% sccore:::sn() %>% plapply(function(ct) {
     cm.norm <- cm.per.type[[ct]]
-    dist.mat <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sample.groups, dist=dist,
+    dist.mat <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sample.groups, dist=dist, n.pcs=n.pcs,
                                                     top.n.genes=top.n.genes, gene.selection=gene.selection, ...)
     attr(dist.mat, 'n.cells') <- sample.type.table[ct, rownames(cm.norm)] # calculate how many cells there are
 
@@ -37,7 +37,7 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
         droplevels() %>% {setNames(sample(.), names(.))}
       dm <- dist.mat
       if (!is.null(top.n.genes) && (gene.selection != "od")) {
-        dm <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sg.shuff, dist=dist,
+        dm <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sg.shuff, dist=dist, n.pcs=n.pcs,
                                                   top.n.genes=top.n.genes, gene.selection=gene.selection, ...)
       }
 
@@ -46,13 +46,7 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
     }, progress=FALSE, n.cores=n.cores.inner, mc.preschedule=TRUE, fail.on.error=TRUE) %>% unlist()
 
     pvalue <- (sum(randomized.dists >= obs.diff) + 1) / (sum(!is.na(randomized.dists)) + 1)
-
-    if (adjust.by.null != "no") {
-      dists <- dists - median(randomized.dists, na.rm=TRUE)
-      if (adjust.by.null == "both") {
-        dists <- dists / mad(randomized.dists, na.rm=TRUE)
-      }
-    }
+    dists <- dists - median(randomized.dists, na.rm=TRUE)
 
     list(dists=dists, dist.mat=dist.mat, pvalue=pvalue)
   }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, mc.allow.recursive=TRUE, fail.on.error=TRUE)
@@ -334,4 +328,32 @@ filterGenesForCellType <- function(cm.norm, sample.groups, top.n.genes=500, gene
 
   sel.genes %<>% setdiff(exclude.genes) %>% head(top.n.genes)
   return(sel.genes)
+}
+
+parseDistance <- function(dist, top.n.genes, n.pcs, verbose) {
+  n.comps <- min(top.n.genes, n.pcs, Inf)
+  if (is.null(dist)) {
+    dist <- ifelse(n.comps < 20, 'l1', 'cor')
+    return(dist)
+  }
+
+  dist %<>% tolower()
+  if (dist == 'l2') {
+    warning("Using dist='l2' is not recommended, as it may introduce unwanted dependency ",
+            "on the number of cells per cluster. Please, consider using 'l1' instead.")
+  } else if (dist == 'cor') {
+    if (n.comps < 20) {
+      warning("dist='cor' is not recommended for data with dimensionality < 20. ",
+              "Please, consider using 'l1' instead.")
+    }
+  } else if (dist == 'l1') {
+    if (n.comps > 30) {
+      warning("dist='l1' is not recommended for data with dimensionality > 30. ",
+              "Please, consider using 'cor' instead.")
+    }
+  } else {
+    stop("Unknown dist: ", dist)
+  }
+
+  return(dist)
 }

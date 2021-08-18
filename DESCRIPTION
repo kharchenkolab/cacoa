@@ -61,6 +61,7 @@ Suggests:
     irlba,
     matrixStats,
     N2R,
+    pagoda2,
     RColorBrewer,
     Rgraphviz,
     Rtsne

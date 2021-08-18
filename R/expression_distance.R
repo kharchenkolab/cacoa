@@ -9,7 +9,7 @@
 ##' @param transposed.matrices (default=F)
 ##' @export
 estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
-                                              dist=c('cor', 'l2'), normalize.both=TRUE, verbose=FALSE,
+                                              dist=c('cor', 'l1', 'l2'), normalize.both=TRUE, verbose=FALSE,
                                               ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
                                               top.n.genes=NULL, adjust.by.null=c("no", "center", "both"),
                                               gene.selection="wilcox", trim=0.2, n.cores=1, ...) {
@@ -88,8 +88,12 @@ estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, to
 
   if (dist == 'cor') {
     dist.mat <- 1 - cor(t(cm.norm))
+  } else if (dist == 'l2') {
+    dist.mat <- dist(cm.norm, method="euclidean") %>% as.matrix()
+  } else if (dist == 'l1') {
+    dist.mat <- dist(cm.norm, method="manhattan") %>% as.matrix()
   } else {
-    dist.mat <- dist(cm.norm) %>% as.matrix()
+    stop("Unknown distance: ", dist)
   }
 
   dist.mat[is.na(dist.mat)] <- 1;
@@ -125,7 +129,7 @@ subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df
 }
 
 estimateExpressionShiftsByDistMat <- function(dist.mat, sample.groups, norm.type=c("both", "ref", "none"),
-                                             ref.level=NULL) {
+                                              ref.level=NULL) {
   norm.type <- match.arg(norm.type)
 
   if ((norm.type == "ref") && is.null(ref.level))

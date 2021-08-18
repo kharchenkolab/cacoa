@@ -33,6 +33,7 @@ Imports:
     R6,
     RcppProgress,
     reshape2,
+    rlang,
     roxygen2,
     sccore (> 0.1.2),
     tibble,
@@ -44,7 +45,11 @@ RoxygenNote: 7.1.1
 LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress, sccore
 NeedsCompilation: yes
 Suggests:
+    circlize,
+    cluster,
     clusterProfiler (>= 3.0.0),
+    coda.base,
+    ComplexHeatmap,
     DESeq2,
     DOSE,
     EnhancedVolcano,
@@ -53,9 +58,12 @@ Suggests:
     ggrastr (>= 0.1.7),
     GOfuncR,
     graph,
+    irlba,
+    matrixStats,
+    N2R,
+    pagoda2,
     RColorBrewer,
     Rgraphviz,
-    robustbase,
     Rtsne
 Remotes:
     kharchenkolab/sccore

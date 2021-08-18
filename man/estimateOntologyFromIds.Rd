@@ -5,7 +5,7 @@
 \title{Estimate ontology}
 \usage{
 estimateOntologyFromIds(
-  de.gene.ids,
+  de.gene.scores,
   go.environment,
   type = "GO",
   org.db = NULL,

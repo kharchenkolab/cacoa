@@ -115,12 +115,6 @@ plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.
   return(p)
 }
 
-adjustPvalueScores <- function(scores) {
-  scores %<>% abs() %>% pnorm(lower.tail=FALSE) %>% p.adjust(method='BH') %>%
-    qnorm(lower.tail=FALSE) %>% {. * sign(scores)}
-  return(scores)
-}
-
 ##' @description estimate differential cell density
 ##' @param density.mat estimated cell density matrix with estimateCellDensity
 ##' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
@@ -128,8 +122,7 @@ adjustPvalueScores <- function(scores) {
 ##' @param target.level target/disease level for sample.group vector
 ##' @param type method to calculate differential cell density of each bin; subtract: target density minus ref density; entropy: estimated kl divergence entropy between sample groups ; t.test: zscore of t-test,
 ##' global variance is setting for t.test;
-diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level, type='subtract',
-                            adjust.pvalues=TRUE, verbose=TRUE, n.permutations=200){
+diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level, type='subtract'){
   nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
   nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
 
@@ -137,8 +130,6 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
     rmt <- rowMeans(density.mat[, nt])
     rmr <- rowMeans(density.mat[, nr])
     score <- (rmt - rmr) / max(max(rmt), max(rmr))
-  #} else if (type == 'subtract.norm'){
-  #  score <- (rowMeans(density.mat[, nt]) - rowMeans(density.mat[, nr])) / rowMeans(density.mat[, nr])
   } else if (type=='t.test'){
     score <- matrixTests::row_t_welch(density.mat[,nt], density.mat[,nr])$statistic %>%
       setNames(rownames(density.mat))
@@ -147,28 +138,90 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
     zstat <- abs(qnorm(pvalue / 2))
     fc <- rowMeans(density.mat[,nt]) - rowMeans(density.mat[,nr])
     score <- zstat * sign(fc)
-  } else if (type %in% c('permutation', 'permutation.mean')) {
-    if (type == 'permutation') {
-      checkPackageInstalled("robustbase", "install.packages('robustbase')", details="for `type='permutation'`")
-      colRed <- robustbase::colMedians
-    } else {
-      colRed <- Matrix::colMeans
-    }
-
-    density.mat <- t(density.mat)
-    dm.shuffled <- density.mat
-    permut.diffs <- plapply(1:n.permutations, function(i) { # Null distribution looks normal, so we don't need a lot of samples
-      rownames(dm.shuffled) %<>% sample()
-      colRed(dm.shuffled[nt,]) - colRed(dm.shuffled[nr,])
-    }, progress=verbose, n.cores=1) %>% Reduce(cbind, .)
-
-    score <- (colRed(density.mat[nt,]) - colRed(density.mat[nr,])) / apply(permut.diffs, 1, sd)
   } else stop("Unknown method: ", type)
-
-  if((type != 'subtract') && adjust.pvalues) score %<>% adjustPvalueScores()
 
   return(score)
 }
 
+diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, target.level, type='permutation',
+                                        verbose=TRUE, n.permutations=200, n.cores=1) {
+  nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
+  nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
+
+  if (type %in% c('subtract', 't.test', 'wilcox')) {
+    score <- diffCellDensity(density.mat, sample.groups=sample.groups, ref.level=ref.level, target.level=target.level, type=type)
+    permut.scores <- plapply(1:n.permutations, function(i) {
+      sg.shuff <- setNames(sample(sample.groups), names(sample.groups))
+      diffCellDensity(density.mat, sample.groups=sg.shuff, ref.level=ref.level, target.level=target.level, type=type)
+    }, progress=verbose, n.cores=n.cores, fail.on.error=TRUE) %>% do.call(cbind, .)
+
+    return(list(score=score, permut.scores=permut.scores))
+  }
+
+  if (type == 'permutation') {
+    checkPackageInstalled("matrixStats", details="for `type='permutation'`", cran=TRUE)
+    colRed <- matrixStats::colMedians
+  } else if (type == 'permutation.mean') {
+    colRed <- Matrix::colMeans
+  } else stop("Unknown method: ", type)
+
+  density.mat <- t(density.mat)
+  dm.shuffled <- density.mat
+  permut.diffs <- plapply(1:n.permutations, function(i) { # Null distribution looks normal, so we don't need a lot of samples
+    rownames(dm.shuffled) %<>% sample()
+    colRed(dm.shuffled[nt,]) - colRed(dm.shuffled[nr,])
+  }, progress=verbose, n.cores=n.cores, fail.on.error=TRUE) %>%  # according to tests, n.cores>1 here does not speed up calculations
+    do.call(cbind, .) %>% set_rownames(colnames(density.mat))
+
+  sds <- apply(permut.diffs, 1, sd)
+  score <- (colRed(density.mat[nt,]) - colRed(density.mat[nr,])) / sds
+  permut.diffs <- apply(permut.diffs, 2, `/`, sds)
+  score[sds < 1e-10] <- 0
+  permut.diffs[sds < 1e-10,] <- 0
+
+  return(list(score=score, permut.scores=permut.diffs))
+}
+
+adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smooth=FALSE, graph=NULL, beta=30, n.cores=1, verbose=TRUE) {
+  checkPackageInstalled("matrixStats", details="for adjusting p-values", cran=TRUE)
+  if (smooth) {
+    if (is.null(graph)) stop("graph has to be provided if smooth is TRUE")
+
+    g.filt <- function(...) heatFilter(..., beta=beta)
+    score %<>% smoothSignalOnGraph(filter=g.filt, graph=graph)
+    scores.shuffled %<>% smoothSignalOnGraph(filter=g.filt, graph=graph, n.cores=n.cores,
+                                             progress=verbose) %>%
+      as.matrix()
+  }
+
+  if (wins > 0) {
+    uq <- 1 - wins
+    lq <- wins
+    score %<>% pmin(quantile(., uq, na.rm=TRUE)) %>% pmax(quantile(., lq, na.rm=TRUE))
+    scores.shuffled.ranges <- matrixStats::colQuantiles(scores.shuffled, probs=c(lq, uq), na.rm=TRUE)
+  } else {
+    scores.shuffled.ranges <- matrixStats::colRanges(scores.shuffled, na.rm=TRUE)
+  }
+
+  p.vals <- c()
+  sign_mask <- (score >= 0)
+  if (any(sign_mask)) {
+    p.vals %<>% c((sapply(score[sign_mask], function(x) sum((x - 1e-10) < scores.shuffled.ranges[,2])) + 1) / (ncol(scores.shuffled) + 1))
+  }
+
+  if (any(!sign_mask)) {
+    p.vals %<>% c((sapply(score[!sign_mask], function(x) sum((x + 1e-10) > scores.shuffled.ranges[,1])) + 1) / (ncol(scores.shuffled) + 1))
+  }
+
+  z.scores <- pmax(1 - p.vals[names(score)], 0.5) %>% qnorm(lower.tail=TRUE)
+  z.scores[!sign_mask] %<>% {. * -1}
+
+  return(z.scores)
+}
+
+findScoreGroupsGraph <- function(scores, min.score, graph) {
+  graph %>% igraph::induced_subgraph(names(scores)[scores > min.score]) %>%
+    igraph::components() %>% .$membership
+}
 
 

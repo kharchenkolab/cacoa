@@ -8,8 +8,8 @@
 using namespace Rcpp;
 
 // clusterFreeZScoreMat
-SEXP clusterFreeZScoreMat(const SEXP count_mat, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool>& is_ref, int min_n_samp_per_cond, int min_n_obs_per_samp, bool robust, bool norm_both, double min_z, bool verbose, int n_cores);
-RcppExport SEXP _cacoa_clusterFreeZScoreMat(SEXP count_matSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP is_refSEXP, SEXP min_n_samp_per_condSEXP, SEXP min_n_obs_per_sampSEXP, SEXP robustSEXP, SEXP norm_bothSEXP, SEXP min_zSEXP, SEXP verboseSEXP, SEXP n_coresSEXP) {
+List clusterFreeZScoreMat(const SEXP count_mat, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool>& is_ref, int min_n_samp_per_cond, int min_n_obs_per_samp, bool robust, bool norm_both, double min_z, bool verbose, int n_cores, bool adjust_pvalues, int n_permutations, bool smooth, double wins);
+RcppExport SEXP _cacoa_clusterFreeZScoreMat(SEXP count_matSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP is_refSEXP, SEXP min_n_samp_per_condSEXP, SEXP min_n_obs_per_sampSEXP, SEXP robustSEXP, SEXP norm_bothSEXP, SEXP min_zSEXP, SEXP verboseSEXP, SEXP n_coresSEXP, SEXP adjust_pvaluesSEXP, SEXP n_permutationsSEXP, SEXP smoothSEXP, SEXP winsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -24,7 +24,24 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type min_z(min_zSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
     Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
-    rcpp_result_gen = Rcpp::wrap(clusterFreeZScoreMat(count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust, norm_both, min_z, verbose, n_cores));
+    Rcpp::traits::input_parameter< bool >::type adjust_pvalues(adjust_pvaluesSEXP);
+    Rcpp::traits::input_parameter< int >::type n_permutations(n_permutationsSEXP);
+    Rcpp::traits::input_parameter< bool >::type smooth(smoothSEXP);
+    Rcpp::traits::input_parameter< double >::type wins(winsSEXP);
+    rcpp_result_gen = Rcpp::wrap(clusterFreeZScoreMat(count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust, norm_both, min_z, verbose, n_cores, adjust_pvalues, n_permutations, smooth, wins));
+    return rcpp_result_gen;
+END_RCPP
+}
+// estimateCorrelationDistance
+double estimateCorrelationDistance(const Eigen::VectorXd& v1, const Eigen::VectorXd& v2, bool centered);
+RcppExport SEXP _cacoa_estimateCorrelationDistance(SEXP v1SEXP, SEXP v2SEXP, SEXP centeredSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type v1(v1SEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type v2(v2SEXP);
+    Rcpp::traits::input_parameter< bool >::type centered(centeredSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimateCorrelationDistance(v1, v2, centered));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -50,6 +67,18 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// mapIds
+std::vector<std::vector<int>> mapIds(std::vector<std::vector<int>> ids_vec, std::vector<int> id_map);
+RcppExport SEXP _cacoa_mapIds(SEXP ids_vecSEXP, SEXP id_mapSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::vector<std::vector<int>> >::type ids_vec(ids_vecSEXP);
+    Rcpp::traits::input_parameter< std::vector<int> >::type id_map(id_mapSEXP);
+    rcpp_result_gen = Rcpp::wrap(mapIds(ids_vec, id_map));
+    return rcpp_result_gen;
+END_RCPP
+}
 // projdiff
 arma::rowvec projdiff(const arma::mat& mat, const arma::ivec& g1, const arma::ivec& g2);
 RcppExport SEXP _cacoa_projdiff(SEXP matSEXP, SEXP g1SEXP, SEXP g2SEXP) {
@@ -65,8 +94,10 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_cacoa_clusterFreeZScoreMat", (DL_FUNC) &_cacoa_clusterFreeZScoreMat, 11},
+    {"_cacoa_clusterFreeZScoreMat", (DL_FUNC) &_cacoa_clusterFreeZScoreMat, 15},
+    {"_cacoa_estimateCorrelationDistance", (DL_FUNC) &_cacoa_estimateCorrelationDistance, 3},
     {"_cacoa_estimateClusterFreeExpressionShiftsC", (DL_FUNC) &_cacoa_estimateClusterFreeExpressionShiftsC, 12},
+    {"_cacoa_mapIds", (DL_FUNC) &_cacoa_mapIds, 2},
     {"_cacoa_projdiff", (DL_FUNC) &_cacoa_projdiff, 3},
     {NULL, NULL, 0}
 };

@@ -18,6 +18,8 @@ brewerPalette <- function(name, n=NULL, rev=TRUE) {
   return(grDevices::colorRampPalette(pal))
 }
 
+dark.red.palette <- colorRampPalette(c("gray95", "red", "#5A0000"), space="Lab")
+
 #' @title Plot Number of Cells Regression
 #' @param n the regressed variable
 #' @param n.total number of cells
@@ -34,15 +36,15 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
   p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
 
-  gg <- ggplot(p.df, aes(x=NCells, y=N)) +
-    geom_point(aes(color=Type)) +
+  gg <- ggplot(p.df, aes(x=NCells, y=N, color = Type)) +
+    geom_point() +
     scale_x_log10() +
     ylim(0, max(p.df$N)) +
     labs(x=x.lab, y=y.lab)
 
   if(label) {
     gg <- gg +
-      ggrepel::geom_label_repel(aes(label=Type), size=size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=alpha("white", 0.4))
+      ggrepel::geom_label_repel(aes(label=Type), size=size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=NA)
   }
 
   gg <- gg +
@@ -57,7 +59,7 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 
   if (plot.line) {
     gg <- gg +
-      geom_smooth(method=MASS::rlm, formula = y~x, se=FALSE, color="black", size=line.width)
+      geom_smooth(method=MASS::rlm, formula = y~x, se=FALSE, color="gray", size=line.width, linetype=2)
   }
 
   return(gg)
@@ -71,7 +73,8 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 #' @param size marker size (default: 0.5)
 #' @param jitter.width width of the point jitter (default: 0.15)
 plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=c(0, 0), show.significance=FALSE, palette=NULL,
-                                     notch=FALSE, legend.position="right", alpha=0.2, plot.theme=theme_get(), size=0.5, jitter.width=0.15) {
+                                     notch=FALSE, legend.position="right", alpha=0.2, plot.theme=theme_get(), size=0.5, jitter.width=0.15,
+                                     adjust.pvalues=T) {
   gg <- ggplot(count.df, aes(x=variable, y=value, by=group, fill=group)) +
     geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
     labs(x=x.lab, y=y.lab) +
@@ -82,7 +85,16 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
     geom_point(position=position_jitterdodge(jitter.width=jitter.width), color="black", size=size, alpha=alpha) +
     scale_y_continuous(expand=y.expand, limits=c(0, max(count.df$value) * 1.05))
 
-  if (show.significance) gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+  
+  if (show.significance) {
+    if (adjust.pvalues) {
+      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.adj")  # willcox test + adjustment
+      # TODO
+      # p.adjust.method = "fdr" ?
+    } else {
+      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+    }
+  } 
 
   if (!is.null(palette)) gg <- gg + scale_fill_manual(values=palette)
   return(gg)
@@ -100,35 +112,30 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 #' @param color.range Range for filling colors
 #' @return A ggplot2 object
 #' @export
-plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=NULL, legend.position="right",
+plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE, legend.position="right",
                         legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
-                        color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL) {
+                        color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL, font.size=8) {
   if (is.null(color.range)) {
     color.range <- c(min(0, min(df)), max(df))
   }
 
-  if (is.null(row.order)) {
-    row.order <- rownames(df)[dist(df) %>% hclust() %>% .$order]
-  } else if (is.logical(row.order) && row.order) {
+  if (is.logical(row.order) && row.order) {
+    row.order <- rownames(df)[dist(df) %>% hclust() %>% .$order] %>% rev()
+  } else if (is.logical(row.order) && !row.order) {
     row.order <- rownames(df)
   }
 
-  if (is.null(col.order)) {
-    col.order <- colnames(df)[dist(df) %>% hclust() %>% .$order]
-  } else if (is.logical(col.order) && col.order) {
+  if (is.logical(col.order) && col.order) {
+    col.order <- colnames(df)[dist(df %>% t()) %>% hclust() %>% .$order] %>% rev()
+  } else if (is.logical(col.order) && !col.order) {
     col.order <- colnames(df)
   }
 
   df %<>% tibble::as_tibble(rownames="G1") %>%
     reshape2::melt(id.vars="G1", variable.name="G2", value.name="value")
 
-  if (!is.logical(row.order)) {
-    df %<>% dplyr::mutate(G1=factor(G1, levels=row.order))
-  }
-
-  if (!is.logical(col.order)) {
-    df %<>% dplyr::mutate(G2=factor(G2, levels=col.order))
-  }
+  df %<>% dplyr::mutate(G1=factor(G1, levels=row.order))
+  df %<>% dplyr::mutate(G2=factor(G2, levels=col.order))
 
   if (is.null(color.per.group)) {
     color.per.group <- "black"
@@ -140,7 +147,7 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=NULL, col.order=NULL
   gg <- ggplot(df) + geom_tile(aes(x=G2, y=G1, fill=value), color="gray50") +
     plot.theme +
     theme(axis.text.x=element_text(angle=90, hjust=0, vjust=0.5, color=color.per.group),
-          axis.text=element_text(size=8), axis.ticks=element_blank(), axis.title=element_blank()) +
+          axis.text=element_text(size=font.size), axis.ticks=element_blank(), axis.title=element_blank()) +
     guides(fill=guide_colorbar(title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5))) +
     scale_y_discrete(position="right", expand=c(0, 0)) +
     scale_x_discrete(expand=c(0, 0), position=x.axis.position) +
@@ -198,65 +205,85 @@ getOntologyPlotTitle <- function(genes, cell.subgroup, type) {
 }
 
 estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
+  if (length(arr) == 1) return(c(NA, NA))
   s.means <- sapply(1:n.samples, function(i) mean(sample(arr, replace=TRUE), ...))
   return(quantile(s.means, c(quant, 1 - quant)))
 }
 
 #' @title Plot bar, point or boxplots showing mean/median values per cell type
 #' @description  Generic function for plotting mean or median values per cell type (used for expression shift distances and others)
-#' @param df - data frame containing the results, including $val and $cell slots which will be summarized
+#' @param df - data frame containing the results, including $value and $Type slots which will be summarized
 #' @param type - type of a plot "bar" (default), "point" (mean + sd), or "box" for boxplot
-#' @param show.jitter whether to show indiivudal data points (default: FALSE)
+#' @param show.jitter whether to show individual data points (default: FALSE)
 #' @param jitter.alpha transparency value for the data points (default: 0.05)
 #' @param notch - whether to show notches in the boxplot version (default=TRUE)
 #' @param palette - cell type palette
 #' @return A ggplot2 object
-plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch=TRUE, jitter.alpha=0.05, palette=NULL,
-                                         ylab='expression distance', yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0) {
+plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point', 'bar'), show.jitter=TRUE,
+                                         notch=TRUE, jitter.alpha=0.05, palette=NULL, ylab='expression distance',
+                                         yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0,
+                                         order.x=TRUE, pvalue.y=NULL) {
+  type <- match.arg(type)
+  df$Type %<>% as.factor()
 
   # calculate mean, se and median
   odf <- df <- na.omit(df); # full df is now in odf
-  conf.ints <- odf %$% split(val, cell) %>% lapply(estimateMeanCI, trim=trim)
-  # calculate mean and CI
-  df %<>% group_by(cell) %>%
-    summarise(mean=mean(val, trim=trim), med=median(val)) %>%
-    mutate(cell=as.character(cell)) %>%
-    mutate(LI=sapply(cell, function(ct) conf.ints[[ct]][1]),
-           UI=sapply(cell, function(ct) conf.ints[[ct]][2])) %>%
-    .[!is.na(.$mean),]
 
-  if (type == 'box') {
-    df %<>% arrange(med)
-  } else {
-    df %<>% arrange(mean)
+  if (is.null(pvalue.y)) pvalue.y <- max(odf$value)
+
+  conf.ints <- odf %$% split(value, Type) %>% lapply(estimateMeanCI, trim=trim)
+  # calculate mean and CI
+  df %<>% group_by(Type) %>%
+    summarise(mean=mean(value, trim=trim), med=median(value)) %>%
+    mutate(Type=as.character(Type)) %>%
+    mutate(LI=as.numeric(sapply(Type, function(ct) conf.ints[[ct]][1])),
+           UI=as.numeric(sapply(Type, function(ct) conf.ints[[ct]][2]))) %>%
+    .[!is.na(.$mean),] %>%
+    mutate(Type=factor(Type, levels=levels(odf$Type)))
+
+  if (order.x) {
+    if (type == 'box') {
+      df %<>% arrange(med)
+    } else {
+      df %<>% arrange(mean)
+    }
+
+    # order cell types according to the mean
+    odf$Type %<>% factor(levels=df$Type)
+    df$Type %<>% factor(., levels=.)
   }
 
-  # order cell types according to the mean
-  odf$cell %<>% factor(levels=df$cell)
-  df$cell %<>% factor(., levels=.)
-
   if(type=='box') { # boxplot
-    p <- ggplot(odf,aes(x=cell,y=val,fill=cell)) + geom_boxplot(notch=notch, outlier.shape=NA)
+    p <- ggplot(odf,aes(x=Type,y=value,fill=Type)) + geom_boxplot(notch=notch, outlier.shape=NA)
   } else if(type=='point') { # point + se
-    p <- ggplot(df,aes(x=cell,y=mean,color=cell)) + geom_point(size=3) +
+    p <- ggplot(df,aes(x=Type,y=mean,color=Type)) + geom_point(size=3) +
       geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, size=line.size)
     if(!is.null(palette)) {p <- p + scale_color_manual(values=palette)}
   } else { # barplot
-    p <- ggplot(df,aes(x=cell,y=mean,fill=cell)) + geom_bar(stat='identity') +
+    p <- ggplot(df,aes(x=Type,y=mean,fill=Type)) + geom_bar(stat='identity') +
       geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, size=line.size)
   }
-  if(!is.na(yline)) { p <- p + geom_hline(yintercept = 1,linetype=2,color='gray50') }
+  if(!is.na(yline) && !is.null(yline)) { p <- p + geom_hline(yintercept = yline, linetype=2, color='gray50') }
   p <- p +
     plot.theme +
     theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12),
-          axis.text.y=element_text(angle=90, hjust=0.5, size=12)) + guides(fill=FALSE)+
+          axis.text.y=element_text(angle=90, hjust=0.5, size=12)) + guides(fill="none")+
     theme(legend.position = "none")+
     labs(x="", y=ylab)
+
   if(show.jitter) {
     p <- p +
-      geom_jitter(data=odf, aes(x=cell,y=val), color=1, position=position_jitter(0.1), show.legend=FALSE,
+      geom_jitter(data=odf, aes(x=Type,y=value), color=1, position=position_jitter(0.1), show.legend=FALSE,
                   alpha=jitter.alpha, size=jitter.size)
   };
+
+  if (!is.null(pvalues)) {
+    pval.df <- pvalueToCode(pvalues) %>%
+      tibble(Type=factor(names(.), levels=levels(df$Type)), pvalue=.) %>% na.omit()
+
+    p <- p + geom_text(data=pval.df, mapping=aes(x=Type, label=pvalue), y=pvalue.y)
+  }
+
   if(!is.null(palette)) {
     p <- p + scale_fill_manual(values=palette)
   }
@@ -266,7 +293,7 @@ plotMeanMedValuesPerCellType <- function(df, type='bar', show.jitter=TRUE, notch
 
 ##' show a scatter plot of cell-type values vs. number of cells per cell type
 ##'
-##' @param df a data frame with $val and $cell columns, just like plotMeanValuesPerCellType
+##' @param df a data frame with $value and $Type columns, just like plotMeanValuesPerCellType
 ##' @param cell.groups a cell groups vector for calculating number of cells per cell type
 ##' @param show.whiskers whether se values should be plotted
 ##' @param palette cell type palette
@@ -280,17 +307,17 @@ plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab
   # calculate mean, se and median
   odf <- na.omit(df); # full df is now in odf
   # calculate mean and se
-  df$cell <- as.factor(df$cell)
-  df <- data.frame(cell=levels(df$cell), mean=tapply(df$val,df$cell,mean), se=tapply(df$val,df$cell, function(x) sd(x)/sqrt(length(x))), stringsAsFactors=FALSE)
+  df$Type <- as.factor(df$Type)
+  df <- data.frame(Type=levels(df$Type), mean=tapply(df$value,df$Type,mean), se=tapply(df$value, df$Type, function(x) sd(x)/sqrt(length(x))), stringsAsFactors=FALSE)
   df <- df[order(df$mean,decreasing=F),]
-  df$cell <- factor(df$cell,levels=df$cell)
+  df$Type <- factor(df$Type,levels=df$Type)
   df <- df[!is.na(df$mean),]
-  df$size <- cell.groups[as.character(df$cell)]
+  df$size <- cell.groups[as.character(df$Type)]
 
   # order cell types according to the mean
-  odf$cell <- factor(odf$cell,levels=df$cell)
-  p <- ggplot(df,aes(x=size,y=mean,color=cell)) + geom_point(size=3)
-  p <- p + ggrepel::geom_label_repel(aes(label=cell), size=font.size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=NA)
+  odf$Type <- factor(odf$Type,levels=df$Type)
+  p <- ggplot(df,aes(x=size,y=mean,color=Type)) + geom_point(size=3)
+  p <- p + ggrepel::geom_label_repel(aes(label=Type), size=font.size, min.segment.length=0.1, box.padding=0, label.size=0, max.iter=300, fill=NA)
   if(show.whiskers) p <- p+geom_errorbar(aes(ymin=mean-se*1.96, ymax=mean+se*1.96),width=0.2)
   if(!is.null(palette)) {p <- p+scale_color_manual(values=palette)}
   if(show.regression) {
@@ -300,7 +327,7 @@ plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab
   if(!is.na(yline)) { p <- p+ geom_hline(yintercept = 1,linetype=2,color='gray50') }
   p <- p +
     plot.theme +
-    guides(fill=FALSE)+
+    guides(fill="none")+
     theme(legend.position = "none")+
     labs(x="number of cells", y=ylab)
   if(!is.null(palette)) {
@@ -347,16 +374,14 @@ reduceEdges <- function(edges, verbose=TRUE, n.cores = 1) {
 ##' @param verbose Print messages (default: T)
 ##' @param n.cores Number of cores to use (default: 1)
 ##' @return Rgraphviz object
-plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, string.length=18, legend.label.size = 1,
-                               legend.position="topright", verbose=TRUE, n.cores=1, reduce.edges=TRUE) {
+plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=FALSE, string.length=18, legend.label.size = 1,
+                               legend.position="topright", verbose=TRUE, n.cores=1, reduce.edges=FALSE, font.size=24) {
   checkPackageInstalled("Rgraphviz", bioc=TRUE)
   # Define nodes
   parent.ids <- sapply(fam, function(x) data[[x]]$parent_go_id) %>%
-    unlist() %>%
-    unique()
+    unlist() %>% unique()
   parent.names <- sapply(fam, function(x) data[[x]]$parent_name) %>%
-    unlist() %>%
-    unique()
+    unlist() %>% unique()
   nodes <- data.frame(label = c(fam, parent.ids)) %>%
     mutate(., name = c(sapply(fam, function(x) data[[x]]$Description) %>% unlist(), parent.names))
 
@@ -367,9 +392,7 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, st
     if (length(to.nodes) == 0) return(data.frame())
     data.frame(from=y, to=to.nodes)
   }) %>%
-    bind_rows() %>%
-    as.data.frame() %>%
-    .[apply(., 1, function(x) x[1] != x[2]),] # Remove selves
+    bind_rows() %>% as.data.frame() %$% .[from != to,]
 
   # Remove redundant inheritance
   if (reduce.edges) edges %<>% reduceEdges(verbose=verbose, n.cores=n.cores)
@@ -386,7 +409,7 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, st
   } else if (plot.type != "complete") stop("Unknown plot type: ", plot.type)
 
   # Convert IDs to names
-  if(show.ids == F) {
+  if(!show.ids) {
     for(id in 1:nrow(nodes)) {
       edges[edges == nodes$label[id]] <- nodes$name[id]
     }
@@ -412,6 +435,8 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, st
 
   ## Convert IDs to names
   # TODO: Dependent on show.ids?
+  nodes %<>% .[match(unique(.$label), .$label),] # Must remove doublets
+
   for(id in tmp.dat$id) {
     tmp.dat[tmp.dat == id] <- nodes$name[nodes$label == id]
   }
@@ -444,6 +469,7 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, st
     setNames(names(p@renderInfo@nodes$fill))
   p@renderInfo@nodes$shape <- rep("box", length(p@renderInfo@nodes$shape)) %>%
     setNames(names(p@renderInfo@nodes$shape))
+  p@renderInfo@nodes$fontsize <- font.size
 
   # Plot
   Rgraphviz::renderGraph(p)
@@ -455,12 +481,17 @@ plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=F, st
   return(p)
 }
 
-plotVolcano <- function(de.df, p.name='padj', legend.pos="none", palette=brewerPalette("RdYlBu"), lf.cutoff=1.5, p.cutoff=0.05,
+
+plotVolcano <- function(de.df, p.name='padj', color.var = 'CellFrac', legend.pos="none", palette=brewerPalette("RdYlBu"), lf.cutoff=1.5, p.cutoff=0.05,
                         cell.frac.cutoff=0.2, size=c(0.1, 1.0), lab.size=2, draw.connectors=TRUE, sel.labels=NULL, plot.theme=theme_get(), ...) {
+
   checkPackageInstalled("EnhancedVolcano", bioc=TRUE)
-  if (is.null(sel.labels)) {
+  if (is.null(sel.labels) && (color.var == 'CellFrac')) {
     sel.labels <- de.df %$%
       Gene[(.[[p.name]] <= p.cutoff) & (abs(log2FoldChange) >= lf.cutoff) & (CellFrac >= cell.frac.cutoff)]
+  } else if (is.null(sel.labels) && (color.var == 'Stability')) {
+    sel.labels <- de.df %$%
+      Gene[(.[[p.name]] <= p.cutoff) & (abs(log2FoldChange) >= lf.cutoff) & (Stability >= 0.5)]
   }
   gg <- EnhancedVolcano::EnhancedVolcano(
     de.df, lab=de.df$Gene, x='log2FoldChange', y=p.name, arrowheads=FALSE,
@@ -470,11 +501,17 @@ plotVolcano <- function(de.df, p.name='padj', legend.pos="none", palette=brewerP
 
   point.id <- sapply(gg$layers, function(l) "GeomPoint" %in% class(l$geom)) %>%
     which() %>% .[1]
-  gg$layers[[point.id]] <- geom_point(aes(x=log2FoldChange, y=-log10(.data[[p.name]]), color=CellFrac, size=CellFrac))
-  gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
+  if(color.var == 'CellFrac') {
+    gg$layers[[point.id]] <- geom_point(aes(x=log2FoldChange, y=-log10(.data[[p.name]]), color=CellFrac, size=CellFrac))
+    gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
+    gg <- gg + val2ggcol(de.df$CellFrac, palette=palette, color.range=c(0, 1))
+  } else if (color.var == 'Stability') {
+    gg$layers[[point.id]] <- geom_point(aes(x=log2FoldChange, y=-log10(.data[[p.name]]), color=Stability, size=Stability))
+    gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
+    gg <- gg + val2ggcol(de.df$Stability, palette=palette, color.range=c(0, 1))
+  }
 
   gg <- gg +
-    val2ggcol(de.df$CellFrac, palette=palette, color.range=c(0, 1)) +
     scale_size_continuous(range=size, name="Expr. frac", limits=c(0, 1)) +
     guides(color=guide_colorbar(title="Expr. frac")) +
     plot.theme +
@@ -489,4 +526,63 @@ parseLimitRange <- function(lims, vals) {
     sapply(function(q) {as.numeric(strsplit(q, "%")[[1]]) / 100}) %>%
     quantile(vals, .)
   return(as.numeric(lims))
+}
+
+prepareGeneExpressionComparisonPlotInfo <- function(de.info, genes, plots, smoothed, max.z, max.z.adj, max.lfc, z.palette, z.adj.palette, lfc.palette) {
+  z.scores <- NULL
+  z.adj <- NULL
+  if (any(plots != "expression")) {
+    z.scores <- de.info$z
+    z.adj <- de.info$z.adj
+    if (is.null(de.info)) {
+      warning("Z-scores were not estimated. See estimateClusterFreeDE().")
+      plots <- "expression"
+    }
+
+    if (!all(genes %in% colnames(de.info$z))) {
+      missed.genes <- setdiff(genes, colnames(de.info$z))
+      warning("Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See estimateClusterFreeDE().")
+      plots <- "expression"
+    }
+
+    if (is.null(max.z.adj)) {
+      max.z.adj <- z.adj@x %>% c(1e-5) %>% range(z.adj@x, na.rm=TRUE) %>% abs() %>% max() %>% min(5)
+    }
+
+    z.scores@x %<>% pmin(max.z) %>% pmax(-max.z)
+    z.adj@x %<>% pmin(max.z.adj) %>% pmax(-max.z.adj)
+  }
+
+  if (("z" %in% plots) && smoothed) {
+    if ((is.null(de.info$z.smoothed) || !all(genes %in% colnames(de.info$z.smoothed)))){
+      missed.genes <- setdiff(colnames(de.info$z.smoothed), genes)
+      warning("Smoothed Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See smoothClusterFreeZScores().")
+    } else {
+      z.scores <- de.info$z.smoothed
+    }
+  }
+
+  if (("z.adj" %in% plots) && smoothed) {
+    if ((is.null(de.info$z.adj.smoothed) || !all(genes %in% colnames(de.info$z.adj.smoothed)))){
+      missed.genes <- setdiff(colnames(de.info$z.smoothed), genes)
+      warning("Smoothed Z-scores for genes ", paste(missed.genes, collapse=', '), " are not estimated. See smoothClusterFreeZScores().")
+    } else {
+      z.adj <- de.info$z.adj.smoothed
+    }
+  }
+
+  plot.parts <- list(
+    z.adj=list(title="Z, adjusted", leg.title="Z,adj", max=max.z.adj, scores=z.adj, palette=z.adj.palette),
+    z=list(title="Z-score", leg.title="Z", max=max.z, scores=z.scores, palette=z.palette),
+    lfc=list(title="Log2(fold-change)", leg.title="LFC", max=max.lfc, scores=de.info$lfc, palette=lfc.palette)
+  )[plots[plots != "expression"]]
+
+  return(plot.parts)
+}
+
+pvalueToCode <- function(pvals) {
+  symnum(pvals, corr=FALSE, na=FALSE, legend=FALSE,
+         cutpoints = c(0, 0.001, 0.01, 0.05, 1),
+         symbols = c("***", "**", "*", "ns")) %>%
+    as.character() %>% setNames(names(pvals))
 }

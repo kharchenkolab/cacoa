@@ -36,112 +36,67 @@ getNodeOrder <- function(t) {
   return(id.nodes)
 }
 
-#' @description Get balances for all inner nodes of the tree
-#'
-#' @param t A phylo object
-#' @param log.freq Logarithms of frequnencies
-#' @return Balances, contrast matrix and names on cell types
-#' @details We use ellipsis because a previous version of this function
-#'          contains additional and insignificant parameters.
-getNodeBalances <- function(t, log.freq, ...){
-  checkDataTree(log.freq, t)
-  # ---------
+#' #' @description Get balances for all inner nodes of the tree
+#' #'
+#' #' @param t A phylo object
+#' #' @param log.freq Logarithms of frequnencies
+#' #' @return Balances, contrast matrix and names on cell types
+#' #' @details We use ellipsis because a previous version of this function
+#' #'          contains additional and insignificant parameters.
+#' getNodeBalances <- function(t, log.freq, ...){
+#'   checkDataTree(log.freq, t)
+#'   # ---------
+#' 
+#'   sample.names <- rownames(log.freq)
+#'   # Initialisation of balances
+#'   n.cells <- ncol(log.freq)
+#'   n.samples <- nrow(log.freq)
+#'   log.freq.ext <- cbind(log.freq[,t$tip.label], matrix(0, nrow=n.samples, ncol=n.cells-1))  # log-frequencoes extended for inner nodes
+#'   n.in.clade <- c(rep(1,n.cells), rep(0,n.cells-1)) # number of cell-types in a clade
+#' 
+#' 
+#'   balances <- matrix(0, nrow=n.samples, ncol=n.cells-1)
+#'   rownames(balances) <- sample.names
+#'   sbp.my <- rbind(diag(x = 1, n.cells, n.cells), matrix(0, n.cells - 1,n.cells))
+#' 
+#'   edges <- t$edge
+#'   id.edges <- getNodeOrder(t)
+#'   # Calculate balances in traversing the tree
+#'   for(k in id.edges)
+#'   {
+#'     clades <- edges[edges[,1]==k,2]
+#'     id1 <- clades[1]
+#'     id2 <- clades[2]
+#' 
+#'     if (n.in.clade[id1] + n.in.clade[id2] < 2)
+#'       break
+#' 
+#'     n1 <- n.in.clade[id1]
+#'     n2 <- n.in.clade[id2]
+#'     balances[,k-n.cells] <- (log.freq.ext[,id1] / n1 - log.freq.ext[,id2] / n2) * sqrt(n1*n2/(n1+n2))
+#'     log.freq.ext[,k] <- log.freq.ext[,id1] + log.freq.ext[,id2]
+#'     n.in.clade[k] <- n.in.clade[id1] + n.in.clade[id2]
+#' 
+#'     sbp.my[k,] <- abs(sbp.my[id1,]) - abs(sbp.my[id2,])
+#'   }
+#' 
+#'   for(k in id.edges)
+#'   {
+#'     n1 <- sum(sbp.my[k,]>0)
+#'     n2 <- sum(sbp.my[k,]<0)
+#'     sbp.my[k,sbp.my[k,]>0] <- 1/n1
+#'     sbp.my[k,sbp.my[k,]<0] <- -1/n2
+#'     sbp.my[k,] <- sbp.my[k,] * sqrt(n1*n2/(n1+n2))
+#'   }
+#' 
+#'   res <- list(
+#'     bal = balances,
+#'     sbp = sbp.my[(n.cells+1):(2*n.cells-1),],
+#'     cells = t$tip.label)
+#'   return(res)
+#' }
 
-  sample.names <- rownames(log.freq)
-  # Initialisation of balances
-  n.cells <- ncol(log.freq)
-  n.samples <- nrow(log.freq)
-  log.freq.ext <- cbind(log.freq[,t$tip.label], matrix(0, nrow=n.samples, ncol=n.cells-1))  # log-frequencoes extended for inner nodes
-  n.in.clade <- c(rep(1,n.cells), rep(0,n.cells-1)) # number of cell-types in a clade
 
-
-  balances <- matrix(0, nrow=n.samples, ncol=n.cells-1)
-  rownames(balances) <- sample.names
-  sbp.my <- rbind(diag(x = 1, n.cells, n.cells), matrix(0, n.cells - 1,n.cells))
-
-  edges <- t$edge
-  id.edges <- getNodeOrder(t)
-  # Calculate balances in traversing the tree
-  for(k in id.edges)
-  {
-    clades <- edges[edges[,1]==k,2]
-    id1 <- clades[1]
-    id2 <- clades[2]
-
-    if (n.in.clade[id1] + n.in.clade[id2] < 2)
-      break
-
-    n1 <- n.in.clade[id1]
-    n2 <- n.in.clade[id2]
-    balances[,k-n.cells] <- (log.freq.ext[,id1] / n1 - log.freq.ext[,id2] / n2) * sqrt(n1*n2/(n1+n2))
-    log.freq.ext[,k] <- log.freq.ext[,id1] + log.freq.ext[,id2]
-    n.in.clade[k] <- n.in.clade[id1] + n.in.clade[id2]
-
-    sbp.my[k,] <- abs(sbp.my[id1,]) - abs(sbp.my[id2,])
-  }
-
-  for(k in id.edges)
-  {
-    n1 <- sum(sbp.my[k,]>0)
-    n2 <- sum(sbp.my[k,]<0)
-    sbp.my[k,sbp.my[k,]>0] <- 1/n1
-    sbp.my[k,sbp.my[k,]<0] <- -1/n2
-    sbp.my[k,] <- sbp.my[k,] * sqrt(n1*n2/(n1+n2))
-  }
-
-  res <- list(
-    bal = balances,
-    sbp = sbp.my[(n.cells+1):(2*n.cells-1),],
-    cells = t$tip.label)
-  return(res)
-}
-
-
-#' @description Get tree from balances
-#'
-#' @param sbpart A contrast matrix for balances, sequential binary partition
-#' @return phylo tree
-#' @details We use ellipsis because a previous version of this function
-#'          contains additional and insignificant parameters.
-sbp2tree <- function(sbpart, ...){
-  checkSbpWhole(sbpart)
-  # ---------
-
-  n.cells <- nrow(sbpart)
-  edges <- c(n.cells+1, n.cells+1)
-  id <- 2*n.cells - 1
-
-  collapse <- sbpart
-  rownames(collapse) <- 1:n.cells
-
-  for(i in rev(1:(n.cells - 1)) ){
-    ids <- which(collapse[,i] != 0)
-
-    edges <- rbind(edges, as.integer(c(id, rownames(collapse)[ids[1]])))
-    edges <- rbind(edges, as.integer(c(id, rownames(collapse)[ids[2]])))
-    rownames(collapse)[ids[2]] <- id
-    id <- id - 1
-
-    collapse[ids[1],] <- 0
-  }
-
-  mode(edges) <- "integer"
-  cell.names <- rownames(sbpart)
-  t.nj <- rtree(n = length(cell.names), tip.label = cell.names, br = NULL)
-
-  x <- tidytree::as_tibble(t.nj)
-  x <- x[,c('parent', 'node','label' )]
-  # table(x[,1:2])
-  x[,1:2] <- edges
-  x[,3] <- 'NA'
-  for(i in 1:n.cells){
-    x[x[,2] == i,3] <- rownames(sbpart)[i]
-  }
-  #print(x)
-  t.tmp <- as.phylo(x)
-  t.tmp$tip.label <- rownames(sbpart)
-  return(t.tmp)
-}
 
 #' @description Construct the canonical tree
 #'
@@ -170,7 +125,8 @@ constructCanonicalTree <- function(d.counts, d.groups){
 
     # -------
     # Difene the most contrast balance
-    can.loadings <- getCdaLoadings(d.tmp, d.groups)
+    # can.loadings <- getCdaLoadings(d.tmp, d.groups)
+    can.loadings <- getLoadings(d.tmp, d.groups)
 
     cells.tmp <- rownames(can.loadings)
 

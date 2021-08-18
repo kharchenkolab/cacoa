@@ -1,6 +1,16 @@
 #' @import dplyr
 NULL
 
+mapGeneIds <- function(genes, org.db) {
+  suppressWarnings(suppressMessages(tryCatch({
+    gene.id.map <- clusterProfiler::bitr(genes, 'SYMBOL', 'ENTREZID', org.db) %$%
+      setNames(ENTREZID, SYMBOL)
+  }, error=function(e) {
+    stop("Can't find ENTREZIDs for the specified genes. Did you pass the right org.db?")
+  })))
+  return(gene.id.map)
+}
+
 #' @title Get DE ENTREZ IDs
 #' @description  Filter and prepare DE genes for ontology calculations
 #' @param de.raw List with differentially expressed genes per cell group
@@ -17,23 +27,18 @@ getDEEntrezIdsSplitted <- function(de.raw, org.db, p.adj=1) {
   })
 
   # Split genes by direction
-  gene.ids.tmp <- de.genes.filtered %>% .[sapply(., length) > 0] %>% names() %>% sn() %>% lapply(function(x) {
+  gene.scores.tmp <- de.genes.filtered %>% .[sapply(., length) > 0] %>% names() %>% sn() %>% lapply(function(x) {
     de <- de.raw[[x]] %>% .[rownames(.) %in% de.genes.filtered[[x]],]
     list(down=dplyr::filter(de, Z < 0), up=dplyr::filter(de, Z > 0), all=de, universe=de.raw[[x]]) %>%  # Universe contains all input genes
-      lapply(function(df) if (nrow(df)) {df %$% Gene[order(abs(Z), decreasing=TRUE)]} else NULL)
+      lapply(function(df) if (nrow(df)) {df %$% {setNames(Z, Gene)[order(abs(Z), decreasing=TRUE)]}} else NULL)
   }) %>% lapply(plyr::compact)
 
-  all.genes <- unlist(gene.ids.tmp) %>% unique()
-  suppressWarnings(suppressMessages(tryCatch({
-    gene.id.map <- clusterProfiler::bitr(all.genes, 'SYMBOL', 'ENTREZID', org.db) %$%
-      setNames(ENTREZID, SYMBOL)
-  }, error=function(e) {
-    stop("Can't find ENTREZIDs for the specified genes. Did you pass the right org.db?")
-  })))
+  all.genes <- lapply(gene.scores.tmp, lapply, names) %>% unlist() %>% unique()
+  gene.id.map <- mapGeneIds(all.genes, org.db)
+  de.gene.scores <- gene.scores.tmp %>%
+    lapply(lapply, function(gs) gs[names(gs) %in% names(gene.id.map)] %>% setNames(gene.id.map[names(.)]))
 
-  de.gene.ids <- lapply(gene.ids.tmp, lapply, function(gs) as.character(na.omit(gene.id.map[gs])))
-
-  return(de.gene.ids)
+  return(de.gene.scores)
 }
 
 enrichGOOpt <- function(gene, org.db, go.environment, keyType = "ENTREZID", ont = "BP", pvalueCutoff = 0.05,
@@ -87,6 +92,8 @@ estimateEnrichedGSEGO <- function(go.environment, ...) {
 }
 
 groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName") {
+  if (nrow(ont.clust.df) == 0)
+    return(ont.clust.df)
   order.anno <- ont.clust.df$Group %>% unique %>% .[order(.)]
 
   df <- ont.clust.df %>%
@@ -145,15 +152,15 @@ ontologyListToDf <- function(ont.list) {
 #' @param ... Additional parameters for DO/GO/GSEA functions
 #' @return A list containing a list of ontologies per type of ontology, and a data frame with merged results
 #' @export
-estimateOntologyFromIds <- function(de.gene.ids, go.environment, type="GO", org.db=NULL, n.top.genes=5e2, keep.gene.sets=FALSE, verbose=TRUE,
+estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", org.db=NULL, n.top.genes=5e2, keep.gene.sets=FALSE, verbose=TRUE,
                                     qvalue.cutoff=0.2, ...) {
   checkPackageInstalled("DOSE", bioc=TRUE)
 
   if(type %in% c("GO","DO") && (n.top.genes > 0)) {
     # Adjust to n.top.genes
-    de.gene.ids %<>% lapply(function(celltype) {
-        lapply(celltype[-length(celltype)], function(dir) dir[1:min(n.top.genes, length(dir))]) %>%
-          append(celltype[length(celltype)])
+    de.gene.ids <- lapply(de.gene.scores, function(celltype) {
+        lapply(celltype[-length(celltype)], function(dir) head(names(dir), n.top.genes)) %>% # universe is not accounted for
+          append(list(universe=names(celltype$universe)))
     })
   }
 
@@ -162,26 +169,30 @@ estimateOntologyFromIds <- function(de.gene.ids, go.environment, type="GO", org.
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
     ont.list <- names(de.gene.ids) %>% sn() %>% plapply(function(id) suppressWarnings(
       lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])], DOSE::enrichDO,
-             universe=de.gene.ids[[id]][["universe"]], qvalueCutoff=qvalue.cutoff, ...)
+             universe=de.gene.ids[[id]]$universe, qvalueCutoff=qvalue.cutoff, ...)
       ), n.cores=1, progress=verbose)
   } else if(type=="GO") {
     if(verbose) cat("Estimating enriched ontologies ... \n")
     ont.list <- names(de.gene.ids) %>% sn() %>% plapply(function(id) suppressWarnings(
       estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])], go.environment = go.environment,
-                         universe=de.gene.ids[[id]][["universe"]], org.db=org.db, qvalueCutoff=qvalue.cutoff, ...)
+                         universe=de.gene.ids[[id]]$universe, org.db=org.db, qvalueCutoff=qvalue.cutoff, ...)
       ), progress = verbose, n.cores = 1)
+
+    if (!keep.gene.sets) {
+      ont.list %<>% lapply(lapply, lapply, function(x) {x@geneSets <- list(); x})
+    }
   } else if(type == "GSEA") {
     if(verbose) cat("Estimating enriched ontologies ... \n")
-    ont.list <- names(de.gene.ids) %>% sn() %>% plapply(function(id) {suppressWarnings(suppressMessages(
-      estimateEnrichedGSEGO(gene.ids=twist(de.gene.ids[[id]]$universe), org.db=org.db, # TODO: it is broken now because de.gene.ids are not named
+    ont.list <- names(de.gene.scores) %>% sn() %>% plapply(function(id) {suppressWarnings(suppressMessages(
+      estimateEnrichedGSEGO(gene.ids=sort(de.gene.scores[[id]]$universe, decreasing=TRUE), org.db=org.db,
                             go.environment=go.environment, organism=clusterProfiler:::get_organism(org.db), ...)
     ))}, progress=verbose, n.cores=1)
-  } else {
-    stop("'type' must be 'GO', 'DO', or 'GSEA'.")
-  }
 
-  if(type != 'DO' && !keep.gene.sets) {
-    ont.list %<>% lapply(lapply, lapply, function(x) {x@geneSets <- list(); x})
+    if (!keep.gene.sets) {
+      ont.list %<>% lapply(lapply, function(x) {x@geneSets <- list(); x})
+    }
+  } else {
+    stop("'type' must be either 'GO', 'DO', or 'GSEA'.")
   }
 
   return(ont.list)
@@ -304,14 +315,6 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
     }
   }
   return(ont.res)
-}
-
-#' @title Swap character strings for their numeric names
-#' @description Set numeric names as output and set names as input character strings
-#' @param x Character string with numeric names
-#' @return Numeric vector with character names
-twist <- function(x) {
-  x %>% names() %>% as.numeric() %>% setNames(x)
 }
 
 addGseaGroup <- function(ont.res) {
@@ -570,16 +573,16 @@ clusterIndividualGOs <- function(gos, cut.h) {
     mutate(Cluster=factor(Cluster, levels=c(0, unique(Cluster)))) %>%
     select(Group, Cluster, Description) %>%
     tidyr::spread(Group, Cluster) %>% as.data.frame() %>%
-    set_rownames(.$Description) %>% .[, 2:ncol(.)]
+    set_rownames(.$Description) %>% .[, 2:ncol(.), drop=FALSE]
 
   return(clust.df)
 }
 
-getOntClustField <- function(type, subtype, genes) {
-  return(paste(type, genes, paste(subtype, collapse="."), "clusters", sep="."))
+getOntClustField <- function(subtype, genes) {
+  return(paste("clusters", paste(subtype, collapse="."), genes, sep="."))
 }
 
-getHeatmapData <- function(ont.sum, fams, type, subtype, genes) {
+getHeatmapData <- function(ont.sum, fams, type, subtype, genes, field) {
   fams %<>%
     lapply(function(x) {
       x[[subtype]][[genes]]$families %>% unlist() %>% unique()
@@ -594,5 +597,5 @@ getHeatmapData <- function(ont.sum, fams, type, subtype, genes) {
       ont.sum[[x]] %>% filter(ID %in% fams[[x]])
     }) %>%
     bind_rows() %>%
-    groupOntologiesByCluster(field="Description")
+    groupOntologiesByCluster(field=field)
 }

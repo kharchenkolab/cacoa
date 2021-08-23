@@ -258,8 +258,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param show.regression whether to show a slope line in the size dependency plot
     #' @param show.regression whether to show a whiskers in the size dependency plot
     #' @return A ggplot2 object
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch = TRUE, show.jitter=TRUE, jitter.alpha=0.05, show.size.dependency=FALSE,
-                                           show.whiskers=TRUE, show.regression=TRUE, font.size=5, show.pvalues=c("adjusted", "raw", "none"), ...) {
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch = TRUE, show.jitter=TRUE,
+                                           jitter.alpha=0.05, show.size.dependency=FALSE, show.whiskers=TRUE,
+                                           show.regression=TRUE, show.pvalues=c("adjusted", "raw", "none"),
+                                           font.size=5, ylab='normalized expression distance', ...) {
       show.pvalues <- match.arg(show.pvalues)
       res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
       df <- names(res$dists.per.type) %>%
@@ -275,11 +277,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if(show.size.dependency) {
-        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette, ylab='normalized expression distance', yline=NA,
+        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette, ylab=ylab, yline=NA,
                             show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme, ...)
       } else {
-        plotMeanMedValuesPerCellType(df, pvalues=pvalues, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
-                                     palette=self$cell.groups.palette, ylab='normalized expression distance',
+        plotMeanMedValuesPerCellType(df, pvalues=pvalues, show.jitter=show.jitter,jitter.alpha=jitter.alpha,
+                                     notch=notch, type=type, palette=self$cell.groups.palette, ylab=ylab,
                                      plot.theme=self$plot.theme, yline=0, ...)
       }
     },

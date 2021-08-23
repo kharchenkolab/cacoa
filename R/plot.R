@@ -85,7 +85,7 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
     geom_point(position=position_jitterdodge(jitter.width=jitter.width), color="black", size=size, alpha=alpha) +
     scale_y_continuous(expand=y.expand, limits=c(0, max(count.df$value) * 1.05))
 
-  
+
   if (show.significance) {
     if (adjust.pvalues) {
       gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.adj")  # willcox test + adjustment
@@ -94,7 +94,7 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
     } else {
       gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
     }
-  } 
+  }
 
   if (!is.null(palette)) gg <- gg + scale_fill_manual(values=palette)
   return(gg)
@@ -266,9 +266,13 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
   if(!is.na(yline) && !is.null(yline)) { p <- p + geom_hline(yintercept = yline, linetype=2, color='gray50') }
   p <- p +
     plot.theme +
-    theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12),
-          axis.text.y=element_text(angle=90, hjust=0.5, size=12)) + guides(fill="none")+
-    theme(legend.position = "none")+
+    theme(
+      axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12),
+      axis.text.y=element_text(angle=90, hjust=0.5, size=12),
+      panel.grid.major.x=element_blank(), panel.grid.minor=element_blank(),
+      legend.position="none"
+    ) +
+    guides(fill="none") +
     labs(x="", y=ylab)
 
   if(show.jitter) {

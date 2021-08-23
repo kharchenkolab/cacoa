@@ -546,36 +546,53 @@ estimateOntologyFamilies <- function(ont.list, type) {
 
 #' @title Distance between terms
 #' @description Calculate distance matrix between ontology terms
-#' @param ont.res Results from prepareOntologyData (default: stored list)
+#' @param genes.per.go named list of genes per GO
 #' @return Distance matrix
-distanceBetweenTerms <- function(ont.res) {
-  genes.per.go <- sapply(ont.res$geneID, strsplit, "/") %>% setNames(ont.res$Description)
+distanceBetweenTerms <- function(genes.per.go) {
   all.go.genes <- unique(unlist(genes.per.go))
-  all.gos <- unique(ont.res$Description)
+  all.gos <- unique(names(genes.per.go))
 
   genes.per.go.mat <- matrix(0, length(all.go.genes), length(all.gos)) %>%
     `colnames<-`(all.gos) %>% `rownames<-`(all.go.genes)
 
   for (i in 1:length(genes.per.go)) {
-    genes.per.go.mat[genes.per.go[[i]], ont.res$Description[[i]]] <- 1
+    genes.per.go.mat[genes.per.go[[i]], names(genes.per.go)[i]] <- 1
   }
 
   return(dist(t(genes.per.go.mat), method="binary"))
 }
 
-clusterIndividualGOs <- function(gos, cut.h) {
-  clusts.per.go <- lapply(gos, distanceBetweenTerms) %>% lapply(function(ld)
-    if (ncol(as.matrix(ld)) == 1) 1 else {hclust(ld) %>% cutree(h=cut.h)})
+#' @inheritParams distanceBetweenTerms genes.per.go
+estimateClusterPerGO <- function(genes.per.go, cut.h) {
+  distanceBetweenTerms(genes.per.go) %>%
+    {if (ncol(as.matrix(.)) == 1) 1 else {cutree(hclust(.), h=cut.h)}}
+}
 
-  clust.df <- names(gos) %>%
-    lapply(function(n) mutate(gos[[n]], Cluster=clusts.per.go[[n]])) %>%
-    Reduce(rbind, .) %>%
+clusterIndividualGOs <- function(genes.per.go.per.type, cut.h) {
+  go.clusts.per.type <- genes.per.go.per.type %>%
+    lapply(estimateClusterPerGO, cut.h=cut.h)
+
+  clust.df <- names(genes.per.go.per.type) %>% lapply(function(ct) tibble(
+      Type=ct, Cluster=go.clusts.per.type[[ct]], Name=names(genes.per.go.per.type[[ct]])
+    )) %>% Reduce(rbind, .) %>%
     mutate(Cluster=factor(Cluster, levels=c(0, unique(Cluster)))) %>%
-    select(Group, Cluster, Description) %>%
-    tidyr::spread(Group, Cluster) %>% as.data.frame() %>%
-    set_rownames(.$Description) %>% .[, 2:ncol(.), drop=FALSE]
+    tidyr::spread(Type, Cluster) %>% as.data.frame() %>%
+    set_rownames(.$Name) %>% .[, 2:ncol(.), drop=FALSE]
 
-  return(clust.df)
+    return(clust.df)
+}
+
+clusterGOsPerType <- function(clust.df, cut.h, verbose=FALSE) {
+  apply.fun <- if (verbose) pbapply::pbapply else apply
+  clust.mat <- as.matrix(clust.df) %>% t()
+  cl.dists <- apply.fun(clust.mat, 2, function(ct1) apply(clust.mat, 2, function(ct2) {
+    mask <- !is.na(ct1) & !is.na(ct2)
+    if (sum(mask) == 0) 1 else (1 - mean(ct1[mask] == ct2[mask]))
+  }))
+
+  cl.clusts <- as.dist(cl.dists) %>% hclust(method="average")
+  clusts <- cutree(cl.clusts, h=cut.h)
+  return(clusts)
 }
 
 getOntClustField <- function(subtype, genes) {

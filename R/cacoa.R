@@ -1588,17 +1588,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         return(invisible(res))
       }
 
-      clust.mat <- ont.df %>% split(.$Group) %>% clusterIndividualGOs(cut.h=ind.h) %>%
-        as.matrix() %>% t()
+      genes.per.go.per.type <- ont.df$geneID %>% strsplit("/") %>%
+        setNames(ont.df$Description) %>% split(ont.df$Group)
 
-      apply.fun <- if (verbose) pbapply::pbapply else apply
-      cl.dists <- apply.fun(clust.mat, 2, function(ct1) apply(clust.mat, 2, function(ct2) {
-        mask <- !is.na(ct1) & !is.na(ct2)
-        if (sum(mask) == 0) 1 else (1 - mean(ct1[mask] == ct2[mask]))
-      }))
+      clust.df <- clusterIndividualGOs(genes.per.go.per.type, cut.h=ind.h)
+      clusts <- clusterGOsPerType(clust.df, cut.h=total.h, verbose=verbose)
 
-      cl.clusts <- as.dist(cl.dists) %>% hclust(method="average")
-      clusts <- cutree(cl.clusts, h=total.h)
       ont.df$Cluster <- clusts[as.character(ont.df$Description)]
 
       name.per.clust <- ont.df %>% group_by(Cluster, Description) %>% summarise(pvalue=exp(mean(log(pvalue)))) %>%

@@ -1127,11 +1127,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       idx = rank(de.res[[cell.type]]$res$pvalue) < 500
       p <- smoothScatter(x = rank(de.res[[cell.type]]$res$pvalue)[idx],
-                        y = rank(de.res[[cell.type]]$res[[stability.score]])[idx],
+                         y = rank(de.res[[cell.type]]$res[[stability.score]])[idx],
                          xlab = 'rank of DE gene', ylab = 'stability score',
-                        colramp = colorRampPalette(c("white", 'seagreen4')))
-
-
+                         colramp = colorRampPalette(c("white", 'seagreen4')))
     },
 
     #' @description Plot number of significant DE genes as a function of number of cells

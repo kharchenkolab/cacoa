@@ -12,10 +12,13 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
                                               dist=NULL, normalize.both=TRUE, verbose=FALSE,
                                               ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
                                               top.n.genes=NULL, gene.selection="wilcox", n.pcs=NULL,
-                                              trim=0.2, n.cores=1, ...) {
+                                              trim=0.2, n.cores=1, norm.type=NULL, ...) {
   dist <- parseDistance(dist, top.n.genes=top.n.genes, n.pcs=n.pcs)
 
-  norm.type <- ifelse(normalize.both, "both", "ref")
+  if (is.null(norm.type)) {
+    norm.type <- ifelse(normalize.both, "both", "ref")
+  }
+
   cell.groups %<>% as.factor() %>% droplevels()
 
   sample.type.table <- cell.groups %>% table(sample.per.cell[names(.)]) # table of sample types and cells

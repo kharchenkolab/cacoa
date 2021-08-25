@@ -114,19 +114,20 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 #' @export
 plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE, legend.position="right",
                         legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
-                        color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL, font.size=8) {
+                        color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL, font.size=8,
+                        distance="manhattan", clust.method="complete") {
   if (is.null(color.range)) {
     color.range <- c(min(0, min(df)), max(df))
   }
 
   if (is.logical(row.order) && row.order) {
-    row.order <- rownames(df)[dist(df) %>% hclust() %>% .$order] %>% rev()
+    row.order <- rownames(df)[dist(df, method=distance) %>% hclust(method=clust.method) %>% .$order] %>% rev()
   } else if (is.logical(row.order) && !row.order) {
     row.order <- rownames(df)
   }
 
   if (is.logical(col.order) && col.order) {
-    col.order <- colnames(df)[dist(df %>% t()) %>% hclust() %>% .$order] %>% rev()
+    col.order <- colnames(df)[dist(t(df), method=distance) %>% hclust(method=clust.method) %>% .$order] %>% rev()
   } else if (is.logical(col.order) && !col.order) {
     col.order <- colnames(df)
   }
@@ -178,7 +179,7 @@ getGenePalette <- function(genes=c("up", "down", "all"), high="gray80") {
     low <- "green"
   }
 
-  return(colorRampPalette(c(low, high)))
+  return(colorRampPalette(c(high, low)))
 }
 
 prepareOntologyPlotDF <- function(ont.res, p.adj, n, log.colors) {

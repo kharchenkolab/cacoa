@@ -1786,9 +1786,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left",
-                                 selection=c("all", "common", "unique"), n=20, clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL,
-                                 color.range=NULL, palette=NULL, row.order = TRUE, col.order = TRUE, legend.title=NULL,
-                                 row.dendrogram = FALSE, col.dendrogram = FALSE, ...) {
+                                 selection=c("all", "common", "unique"), n=20, clusters=TRUE, cluster.name=NULL,
+                                 cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE, max.log.p=15, ...) {
       # Checks
       checkPackageInstalled(c("ComplexHeatmap"), bioc=TRUE)
       checkPackageInstalled(c("circlize"), bioc=FALSE)
@@ -1830,53 +1829,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       if (nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 
-      # TODO Implement plotting using ggplot instead of ComplexHeatmap
-      # Old
-      # if (is.null(palette)) palette <- getGenePalette(genes, high="white")
-      #
-      # gg <- ont.sum %>%
-      #   .[, colSums(abs(.)) > 0, drop=FALSE] %>%
-      #   .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names, rownames(.)),, drop=FALSE] %>%
-      #   tail(n) %>%
-      #   plotHeatmap(legend.position=legend.position, row.order=row.order, col.order=col.order, color.range=color.range,
-      #               plot.theme=self$plot.theme, palette=palette, ...)
-      # })
+      if (is.null(palette)) palette <- getGenePalette(genes, high="white")
 
-      # New
-      tmp <- ont.sum %>% .[order(rowSums(.), decreasing=TRUE),] %>% head(n) %>%
-        as.matrix() %>% {.[,!colSums(.) == 0, drop=FALSE]}
+      ont.sum[ont.sum > max.log.p] <- max.log.p
+      ont.sum %<>% .[, colSums(abs(.)) > 0, drop=FALSE] %>%
+        .[order(rowSums(.), decreasing=TRUE),,drop=FALSE] %>% head(n)
 
-      if(is.null(color.range)) {
-        color.range <- c(min(0, min(tmp, na.rm = TRUE)), max(tmp, na.rm = TRUE))
-        if(color.range[2] > 20) {
-          warning("Shrinking minimum adj. P value to -log10(20) for plotting.")
-          color.range[2] <- 20
-        }
-        tmp %<>% pmax(color.range[1]) %>% pmin(color.range[2])
-        title <- '-log10(adj. P)'
-      } else {
-        title <- if(is.null(legend.title)) "Bin" else legend.title
-      }
-
-      pal <- if(genes == "up") {
-        circlize::colorRamp2(c(color.range[1], color.range[2]), c("grey98", "red"))
-      } else if(genes == "down") {
-        circlize::colorRamp2(c(color.range[1], color.range[2]), c("grey98", "blue"))
-      } else {
-        circlize::colorRamp2(c(color.range[1], color.range[2]), c("grey98", "darkgreen"))
-      }
-
-      # Plot
-      ComplexHeatmap::Heatmap(tmp,
-                              col=pal,
-                              border=TRUE,
-                              show_row_dend=row.dendrogram,
-                              show_column_dend=col.dendrogram,
-                              heatmap_legend_param = list(title = title),
-                              row_names_max_width = unit(8, "cm"),
-                              row_names_gp = grid::gpar(fontsize = 10))
-
-      # return(gg)
+      plt <- plotHeatmap(ont.sum, legend.position=legend.position, row.order=row.order, col.order=col.order,
+                         plot.theme=self$plot.theme, palette=palette, ...)
+      # plt <- as.matrix(ont.sum) %>%
+      #   ComplexHeatmap::Heatmap(border=TRUE, show_row_dend=FALSE, show_column_dend=FALSE,
+      #                           row_names_max_width=unit(8, "cm"), row_names_gp=grid::gpar(fontsize=10),
+      #                           cluster_rows=row.order, cluster_columns=col.order,
+      #                           col=palette(100), ...)
+      return(plt)
     },
 
     #' @description Plot correlation matrix for ontology terms between cell types
@@ -1954,7 +1920,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop("'selection' must be one of the following: 'unique', 'common', or 'all'.")
 
       fams <- self$test.results[[type]]$families
-      if(is.null(fams))
+      if (is.null(fams))
         stop("No ontology family results found, please run 'estimateOntologyFamilies' first.")
 
       # Extract results
@@ -1976,12 +1942,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           getHeatmapData(fams=fams, type=type, subtype=subtype, genes=genes, field = "ClusterName")
       }
 
-      if(selection=="unique") {
+      if (selection=="unique") {
         ont.sum %<>% .[rowSums(abs(.) > 0) == 1,]
-      } else if(selection=="common") {
+      } else if (selection=="common") {
         ont.sum %<>% .[rowSums(abs(.) > 0) > 1,]
       }
-      if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
+      if (nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 
       if (is.null(palette)) palette <- getGenePalette(genes=genes, high="white")
       # Plot

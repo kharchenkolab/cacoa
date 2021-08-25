@@ -1594,13 +1594,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       clust.df <- clusterIndividualGOs(genes.per.go.per.type, cut.h=ind.h)
       clusts <- clusterGOsPerType(clust.df, cut.h=total.h, verbose=verbose)
 
-      ont.df$Cluster <- clusts[as.character(ont.df$Description)]
+      ont.df$Cluster <- clusts$clusts[as.character(ont.df$Description)]
 
       name.per.clust <- ont.df %>% group_by(Cluster, Description) %>% summarise(pvalue=exp(mean(log(pvalue)))) %>%
         split(.$Cluster) %>% sapply(function(df) df$Description[which.min(df$pvalue)])
 
       ont.df$ClusterName <- name.per.clust[ont.df$Cluster]
-      res <- list(df=ont.df, hclust=cl.clusts)
+      res <- list(df=ont.df, hclust=clusts$hclust)
       self$test.results[[type]][[name]] <- res
 
       return(invisible(res))
@@ -1785,17 +1785,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param color.range vector with two values for min/max values of p-values
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
-    plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left", selection="all", n=20,
-                                 clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL, color.range=NULL, palette=NULL, row.order = TRUE, col.order = TRUE, legend.title = NULL, row.dendrogram = FALSE, col.dendrogram = FALSE, ...) {
+    plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left",
+                                 selection=c("all", "common", "unique"), n=20, clusters=TRUE, cluster.name=NULL, cell.subgroups=NULL,
+                                 color.range=NULL, palette=NULL, row.order = TRUE, col.order = TRUE, legend.title=NULL,
+                                 row.dendrogram = FALSE, col.dendrogram = FALSE, ...) {
+      # Checks
       checkPackageInstalled(c("ComplexHeatmap"), bioc=TRUE)
       checkPackageInstalled(c("circlize"), bioc=FALSE)
+      selection <- match.arg(selection)
 
-      # Checks
-      if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
+      if (!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
         stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
-
-      if(is.null(selection) || (!selection %in% c("unique","common","all")))
-        stop("'selection' must be one of the following: 'unique', 'common', or 'all'.")
 
       # Extract results
       if (!clusters) {
@@ -1823,12 +1823,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         return(ggplot())
       }
 
-      if(selection=="unique") {
+      if (selection=="unique") {
         ont.sum %<>% .[rowSums(abs(.) > 0) == 1,,drop=FALSE]
       } else if(selection=="common") {
         ont.sum %<>% .[rowSums(abs(.) > 0) > 1,,drop=FALSE]
       }
-      if(nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
+      if (nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
 
       # TODO Implement plotting using ggplot instead of ComplexHeatmap
       # Old
@@ -1843,7 +1843,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # })
 
       # New
-      tmp <- as.matrix(ont.sum %>% .[order(rowSums(.), decreasing = TRUE),] %>% .[1:pmin(nrow(.), n),]) %>% {.[,!colSums(.) == 0]}
+      tmp <- ont.sum %>% .[order(rowSums(.), decreasing=TRUE),] %>% head(n) %>%
+        as.matrix() %>% {.[,!colSums(.) == 0, drop=FALSE]}
 
       if(is.null(color.range)) {
         color.range <- c(min(0, min(tmp, na.rm = TRUE)), max(tmp, na.rm = TRUE))
@@ -1852,9 +1853,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           color.range[2] <- 20
         }
         tmp %<>% pmax(color.range[1]) %>% pmin(color.range[2])
-        title = '-log10(adj. P)'
+        title <- '-log10(adj. P)'
       } else {
-        if(is.null(legend.title)) title = "Bin" else title = legend.title
+        title <- if(is.null(legend.title)) "Bin" else legend.title
       }
 
       pal <- if(genes == "up") {

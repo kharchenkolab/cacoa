@@ -592,7 +592,7 @@ clusterGOsPerType <- function(clust.df, cut.h, verbose=FALSE) {
 
   cl.clusts <- as.dist(cl.dists) %>% hclust(method="average")
   clusts <- cutree(cl.clusts, h=cut.h)
-  return(clusts)
+  return(list(clusts=clusts, hclust=cl.clusts))
 }
 
 getOntClustField <- function(subtype, genes) {

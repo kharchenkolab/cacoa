@@ -2538,7 +2538,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           score <- density.mat %>%
             diffCellDensityPermutations(sample.groups=self$sample.groups, ref.level=self$ref.level,
                                         target.level=self$target.level, type=type, verbose=verbose,
-                                        n.permutations=n.permutations) %>% .$score
+                                        n.permutations=n.permutations, n.cores=n.cores) %>% .$score
         } else {
           score <- density.mat %>%
             diffCellDensity(self$sample.groups, ref.level=self$ref.level, target.level=self$target.level, type=type)
@@ -2548,7 +2548,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         perm.res <- density.mat %>%
           diffCellDensityPermutations(sample.groups=self$sample.groups, ref.level=self$ref.level,
                                       target.level=self$target.level, type=type, verbose=verbose,
-                                      n.permutations=n.permutations)
+                                      n.permutations=n.permutations, n.cores=n.cores)
 
         res <- list(
           raw=perm.res$score,

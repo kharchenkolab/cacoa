@@ -153,7 +153,7 @@ diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, t
     permut.scores <- plapply(1:n.permutations, function(i) {
       sg.shuff <- setNames(sample(sample.groups), names(sample.groups))
       diffCellDensity(density.mat, sample.groups=sg.shuff, ref.level=ref.level, target.level=target.level, type=type)
-    }, progress=verbose, n.cores=n.cores, fail.on.error=TRUE) %>% do.call(cbind, .)
+    }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE) %>% do.call(cbind, .)
 
     return(list(score=score, permut.scores=permut.scores))
   }
@@ -170,7 +170,7 @@ diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, t
   permut.diffs <- plapply(1:n.permutations, function(i) { # Null distribution looks normal, so we don't need a lot of samples
     rownames(dm.shuffled) %<>% sample()
     colRed(dm.shuffled[nt,]) - colRed(dm.shuffled[nr,])
-  }, progress=verbose, n.cores=n.cores, fail.on.error=TRUE) %>%  # according to tests, n.cores>1 here does not speed up calculations
+  }, progress=verbose, n.cores=1, fail.on.error=TRUE) %>%  # according to tests, n.cores>1 here does not speed up calculations
     do.call(cbind, .) %>% set_rownames(colnames(density.mat))
 
   sds <- apply(permut.diffs, 1, sd)

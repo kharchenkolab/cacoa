@@ -2366,13 +2366,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param palette palette specification for cell types (default: stored $cell.groups.palette)
     #' @return A ggplot2 object
     plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, font.size=NULL,
-                                ordering='by.pvalue', signif.threshold=0.05, show.pvals=TRUE) {
+                                ordering='pvalue', signif.threshold=0.05, show.pvals=TRUE) {
 
       loadings <- private$getResults('loadings', 'estimateCellLoadings()')
       p <- plotCellLoadings(loadings$loadings, pval=loadings$padj, signif.threshold=signif.threshold,
                             jitter.alpha=alpha, palette=palette, show.pvals=show.pvals,
                             ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme,
-                            ref.load.level = loadings$ref.load.level)
+                            ref.load.level = loadings$ref.load.level, ordering=ordering)
 
       return(p)
     },

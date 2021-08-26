@@ -50,7 +50,7 @@ plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, targe
 }
 
 # helper function for creating dendograms
-ggdend <- function(dend.data, a = 90, plot.theme=theme_get()) {
+ggdend <- function(dend.data, angle=90, plot.theme=theme_get(), font.size=3) {
   ggplot() +
     geom_segment(data = dend.data$segments, aes(x=x, y=y, xend=xend, yend=yend)) +
     labs(x = "", y = "") + plot.theme +
@@ -58,11 +58,11 @@ ggdend <- function(dend.data, a = 90, plot.theme=theme_get()) {
           panel.grid = element_blank(), panel.border=element_blank(),
           axis.line=element_blank()) +
     geom_text(data = dend.data$labels, aes(x, y, label = label),
-              hjust = 1, angle = a, size = 3) + ylim(-0.5, NA)
+              hjust=1, angle=angle, size=font.size) + ylim(-0.5, NA)
 }
 
 plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme,
-                             p.threshold=0.05, adjust.pvalues=TRUE, h.methods='both') {
+                             p.threshold=0.05, adjust.pvalues=TRUE, h.methods='both', font.size=3) {
   log.f <- getLogFreq(d.counts)
 
   if(h.methods == 'up'){
@@ -79,8 +79,8 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
 
   # t.cur <- constructBestPartitionTree(d.counts, d.groups)
 
-  tree = t.cur$tree
-  sbp = sbpInNodes(tree)
+  tree <- t.cur$tree
+  sbp <- sbpInNodes(tree)
   # sbp = t.cur$sbp
 
   # ---------------------------------
@@ -88,12 +88,12 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
   dend.data <- ggdendro::dendro_data(t.cur$dendro, type = "rectangle")
   types.order <- dend.data$labels$label
   # change the sign of sbp corresponding to the dendrodgram
-  for(k in 1:ncol(sbp)){
+  for (k in 1:ncol(sbp)) {
     p <- sbp[, k]
-    type.plus = rownames(sbp)[p > 0]
-    type.minus = rownames(sbp)[p < 0]
+    type.plus <- rownames(sbp)[p > 0]
+    type.minus <- rownames(sbp)[p < 0]
     if(which(types.order == type.plus[1]) < which(types.order == type.minus[1])){
-      sbp[, k] = -sbp[, k]
+      sbp[, k] <- -sbp[, k]
     }
   }
 
@@ -108,7 +108,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
   rownames(innode.pos) <- innode.pos$id
   # Ranges of inner nodes (length of branches)
   innode.pos$range <- -1
-  for(i in 1:nrow(innode.pos)){
+  for (i in 1:nrow(innode.pos)){
     tmp <- node.pos$xend[node.pos$id == innode.pos$id[i]]
     innode.pos$range[i] <- max(tmp) - min(tmp)
   }
@@ -121,7 +121,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
   colnames(balances) <- rownames(innode.pos)
 
   p.val <- c()
-  for(i in 1:ncol(balances)){
+  for (i in 1:ncol(balances)) {
     aov.data <- data.frame(balance = balances[,i], group = d.groups)
     # anova
     # res <- aov(balance ~ group, data=aov.data)
@@ -129,7 +129,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     # p.val <- c(p.val,summary(res)[[1]][1,5])
 
     mod <- lm(group ~ balance, data=aov.data)
-    res = summary(mod)
+    res <- summary(mod)
     p.val <- c(p.val, res$coefficients[2,4])
 
   }
@@ -140,10 +140,10 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     p.adj = p.val
   }
 
-  px_init <- ggdend(dend.data, plot.theme=plot.theme)
+  px.init <- ggdend(dend.data, plot.theme=plot.theme, font.size=font.size)
 
   if(sum(p.adj < p.threshold) == 0)
-    return(px_init)
+    return(px.init)
 
   df.pval <- data.frame()
   df.bals <- data.frame()
@@ -192,7 +192,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
 
   }
 
-  px <- px_init + geom_point(data = df.bals,
+  px <- px.init + geom_point(data = df.bals,
                        aes(x=x, y=y, col = as.factor(group), group=as.factor(node)), alpha = 0.1, size = 1) +
     geom_point(data = df.bal.median,
                aes(x=x, y=y, col = as.factor(group)),
@@ -201,7 +201,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     geom_line(data=df.bal.quartile, aes(x = x, y = y,
                                         col = as.factor(group),
                                         group=interaction(group, node)), size = 0.75) +
-    geom_text(data=df.bal.range, mapping=aes(x=x, y=y, label=sprintf('%2.1f',val)), vjust=0, hjust=0, size=3) +
+    geom_text(data=df.bal.range, mapping=aes(x=x, y=y, label=sprintf('%2.1f', val)), vjust=0, hjust=0, size=font.size) +
     labs(col=" ")
 
   return(px)

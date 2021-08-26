@@ -62,7 +62,7 @@ ggdend <- function(dend.data, a = 90, plot.theme=theme_get()) {
 }
 
 plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme,
-                             p.threshold = 0.05, adjust.pvalues = T, h.methods='both'){
+                             p.threshold=0.05, adjust.pvalues=TRUE, h.methods='both') {
   log.f <- getLogFreq(d.counts)
 
   if(h.methods == 'up'){

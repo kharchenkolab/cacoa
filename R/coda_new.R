@@ -199,7 +199,8 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL) {
     init.tmp <- produceResampling(cnts = cnts.tmp, groups = groups.tmp, n.perm = 1,
                                   replace.samples = FALSE,
                                   remain.groups = TRUE, seed = n.seed+ib)
-    loadings.tmp <- getLoadings(init.tmp$cnts[[1]], init.tmp$groups[[1]])
+
+    getLoadings(init.tmp$cnts[[1]], init.tmp$groups[[1]])
   })
 
   # Calculate p-values

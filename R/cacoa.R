@@ -2232,7 +2232,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
                               cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE,
-                              adjust.pvalues = TRUE, h.method='both') {
+                              adjust.pvalues = TRUE, h.method='both', ...) {
       h.method.options = c('up', 'down', 'both')
       if(!(h.method %in% h.method.options)) stop('Impossible metho of clustering')
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
@@ -2244,8 +2244,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
 
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
-                             plot.theme=self$plot.theme, adjust.pvalues = adjust.pvalues,
-                             h.method=h.method)
+                             plot.theme=self$plot.theme, adjust.pvalues=adjust.pvalues,
+                             h.method=h.method, ...)
 
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)
@@ -2268,16 +2268,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
 
 
-    estimateCellLoadings=function(n.perm=1000, n.boot=100, coda.test='significance',
+    estimateCellLoadings=function(n.perm=1000, n.boot=1000, coda.test='significance', # TODO: n.perm, coda.test, criteria and define.ref.cell.type are never used
                                   ref.cell.type=NULL, criteria='cda.std',
                                   n.seed=239, cells.to.remove=NULL, cells.to.remain=NULL,
                                   samples.to.remove=NULL, filter.empty.cell.types=TRUE,
-                                  define.ref.cell.type=FALSE, n.cores=self$n.cores, verbose=self$verbose){
+                                  define.ref.cell.type=FALSE, n.cores=self$n.cores, verbose=self$verbose) {
 
-      if(!(coda.test %in% c('significance', 'confidence'))) stop('Test is not supported')
+      if (!(coda.test %in% c('significance', 'confidence'))) stop('Test is not supported')
       checkPackageInstalled("coda.base", cran=TRUE)
 
-      if( (!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))) )
+      if ((!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))))
         stop('Incorrect reference cell type')
       if (define.ref.cell.type & (!is.null(ref.cell.type))) define.ref.cell.type <- FALSE
 
@@ -2297,7 +2297,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         n.perm <- 1
       }
 
-      res <- runCoda(cnts, groups, n.seed=239)
+      res <- runCoda(cnts, groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type)
       loadings.init <- res$loadings.init
       padj <- res$padj
       pval <- res$pval
@@ -2962,12 +2962,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     plotGeneProgramScores = function(name="gene.programs", prog.ids=NULL, build.panel=TRUE, nrow=NULL, legend.title="Score", adj.list=NULL,
-                                     palette=NULL, ...) {
+                                     palette=NULL, min.genes.per.prog=10, ...) {
       gene.progs <- private$getResults(name, "estimateGenePrograms")
       if (gene.progs$method == "fabia")
         stop("fabia is deprecated and plotting is not supported anymore")
 
-      if (is.null(prog.ids)) prog.ids <- 1:gene.progs$n.progs
+      if (is.null(prog.ids)) {
+        prog.ids <- (sapply(gene.progs$genes.per.clust, length) > min.genes.per.prog) %>% which()
+      }
+
       if (all(gene.progs$program.scores >= 0)) palette <- dark.red.palette
 
       ggs <- lapply(prog.ids, function(i) {
@@ -3055,12 +3058,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotMostChangedGenes = function(n.top.genes, method="z", min.z=0.5, min.lfc=1, max.score=20, cell.subset=NULL, excluded.genes=NULL, ...) {
       scores <- self$getMostChangedGenes(n.top.genes, method=method, min.z=min.z, min.lfc=min.lfc, max.score=max.score,
                                          cell.subset=cell.subset, excluded.genes=excluded.genes)
-      self$plotGeneExpressionComparison(scores=scores, ...)
+      self$plotGeneExpressionComparison(scores=scores, cell.subset=cell.subset, ...)
     },
 
     plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plots=c("z.adj", "z", "expression"), min.z=qnorm(0.9),
                                             max.z=4, max.z.adj=NULL, max.lfc=3, smoothed=FALSE, gene.palette=dark.red.palette, z.palette=NULL, z.adj.palette=z.palette, lfc.palette=NULL, plot.na=-1,
-                                            adj.list=NULL, build.panel=TRUE, nrow=1, ...) {
+                                            adj.list=NULL, build.panel=TRUE, nrow=1, cell.subset=NULL, groups=NULL, subgroups=NULL, keep.limits=NULL, ...) {
       unexpected.plots <- setdiff(plots, c("z.adj", "z", "lfc", "expression"))
       if (length(unexpected.plots) > 0) stop("Unexpected values in `plots`: ", unexpected.plots)
 
@@ -3088,6 +3091,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       condition.per.cell <- self$getConditionPerCell()
 
+      if (is.null(groups) && !is.null(cell.subset)) {
+        groups <- rownames(self$embedding) %>% {setNames(. %in% cell.subset, .)}
+        subgroups <- TRUE
+        if (is.null(keep.limits)) {keep.limits <- FALSE}
+      }
+
       ggs <- lapply(genes, function(g) {
         lst <- list()
 
@@ -3096,7 +3105,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           pp <- plot.parts[[n]]
           gg <- self$plotEmbedding(colors=pp$scores[,g], title=paste0(title, pp$title),
                                    color.range=c(-pp$max, pp$max), plot.na=plot.na, legend.title=pp$leg.title,
-                                   palette=pp$palette, ...)
+                                   palette=pp$palette, groups=groups, subgroups=subgroups, keep.limits=keep.limits, ...)
 
           if (n == "z.adj") {
             gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
@@ -3115,7 +3124,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           m.expr <- parseLimitRange(c(0, max.expr), expr)[2]
           lst <- lapply(unique(condition.per.cell), function(sg) {
             self$plotEmbedding(colors=expr, title=paste(title, sg), groups=condition.per.cell, subgroups=sg,
-                               color.range=c(0, m.expr), legend.title="Expression", plot.na=FALSE, palette=gene.palette, ...)
+                               color.range=c(0, m.expr), legend.title="Expression", plot.na=FALSE, palette=gene.palette,
+                               groups=groups, subgroups=subgroups, keep.limits=keep.limits, ...)
           }) %>% {c(lst, .)}
           title <- ""
         }

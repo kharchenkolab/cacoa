@@ -3094,8 +3094,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.null(groups) && !is.null(cell.subset)) {
         groups <- rownames(self$embedding) %>% {setNames(. %in% cell.subset, .)}
         subgroups <- TRUE
-        if (is.null(keep.limits)) {keep.limits <- FALSE}
       }
+
+      if (is.null(keep.limits)) {keep.limits <- FALSE}
 
       ggs <- lapply(genes, function(g) {
         lst <- list()
@@ -3123,7 +3124,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           expr <- extractGeneExpression(self$data.object, g)
           m.expr <- parseLimitRange(c(0, max.expr), expr)[2]
           lst <- lapply(unique(condition.per.cell), function(sg) {
-            self$plotEmbedding(colors=expr, title=paste(title, sg), groups=condition.per.cell, subgroups=sg,
+            self$plotEmbedding(colors=expr[condition.per.cell[names(expr)] == sg], title=paste(title, sg),
                                color.range=c(0, m.expr), legend.title="Expression", plot.na=FALSE, palette=gene.palette,
                                groups=groups, subgroups=subgroups, keep.limits=keep.limits, ...)
           }) %>% {c(lst, .)}

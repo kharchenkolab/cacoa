@@ -160,8 +160,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return a list include
     #'   - `dist.df`: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update
     #'   - `p.dist.info`: list of distance matrices per cell type
-    #'   - `sample.groups`: same as the provided variable
-    #'   - `cell.groups`: same as the provided variable
+    #'   - `sample.groups`: filtered sample groups
+    #'   - `cell.groups`: filtered cell groups
     estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist=NULL, normalize.both=TRUE,
                                                min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
                                                ref.level=self$ref.level, sample.groups=self$sample.groups,
@@ -378,12 +378,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                           'limma-voom')
 
       # Default test for DESeq2 is Wald
-      if(tolower(test) == tolower('DESeq2')) test <- paste(test, 'Wald', sep='.')
+      if (tolower(test) == tolower('DESeq2')) test <- paste(test, 'Wald', sep='.')
       # Default normalization for Wilcoxon and t-test is edgeR
-      if(tolower(test) %in% tolower(c('Wilcoxon', 't-test')) )  test <- paste(test, 'edgeR', sep='.')
+      if (tolower(test) %in% tolower(c('Wilcoxon', 't-test')))  test <- paste(test, 'edgeR', sep='.')
 
-      if(!(tolower(test) %in% tolower(possible.tests)))
-        stop(paste('Test', test, 'is not supported. Available tests:',paste(possible.tests,collapse=', ')))
+      if (!(tolower(test) %in% tolower(possible.tests)))
+        stop(paste('Test', test, 'is not supported. Available tests:',paste(possible.tests, collapse=', ')))
 
       test <- possible.tests[tolower(test) == tolower(possible.tests)]
       message(paste0(c('DE method ', test, ' is used'), collapse = ''))
@@ -393,7 +393,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       s.groups.new <- list(initial = s.groups)
       # If resampling is defined, new contrasts will append to s.groups.new
-      if (is.null(resampling.method)){
+      if (is.null(resampling.method)) {
       } else if (resampling.method == 'loo') {
         s.groups.new = c(s.groups.new, lapply(unlist(s.groups), function(name)
           lapply(s.groups, function(group) setdiff(group, name)))  %>%
@@ -410,7 +410,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           s.groups.new <- c(s.groups.new, samples)
         }
       } else if (resampling.method == 'fix.count') {
-        if(max.resamplings < 2) {
+        if (max.resamplings < 2) {
           warning('Resampling was not applied, because the number of resamplings was less than 2')
         } else {
           n.bootstrap <- max.resamplings
@@ -2482,9 +2482,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description estimate differential cell density
     #' @param type method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);
-    #' @param adjust.pvalues whether to adjust Z-scores for multiple comparison using BH method (default: TRUE)
+    #' @param adjust.pvalues whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='sutract', TRUE for everything else)
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    estimateDiffCellDensity=function(type='permutation', adjust.pvalues=TRUE, name='cell.density', n.permutations=400, smooth=TRUE,
+    estimateDiffCellDensity=function(type='permutation', adjust.pvalues=!(type == 'subtract'), name='cell.density', n.permutations=400, smooth=TRUE,
                                      verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
       density.mat <- dens.res$density.mat

@@ -80,7 +80,7 @@ getDensityContour <- function(emb, cell.groups, group,  color='white', linetype 
   kd <- ks::kde(emb, compute.cont=TRUE)
   lcn <- kd %$% contourLines(x=eval.points[[1]], y=eval.points[[2]], z=estimate, levels=cont[conf]) %>%
     .[[1]] %>% data.frame() %>% cbind(z=1)
-  cn <- geom_path(aes(x, y), data=lcn, linetype=linetype , color=color);
+  cn <- geom_path(aes(x, y), data=lcn, linetype=linetype, color=color);
   return(cn)
 }
 

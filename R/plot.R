@@ -231,7 +231,7 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
   odf <- df <- na.omit(df); # full df is now in odf
 
   if (!is.null(y.max)) {
-    odf <- odf[odf$value < y.max,]
+    odf$value %<>% pmin(y.max)
   }
 
   if (is.null(pvalue.y)) pvalue.y <- max(odf$value)

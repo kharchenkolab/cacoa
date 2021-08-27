@@ -3295,10 +3295,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Extract contours from embedding
     #' @param groups specify cell groups for contour, multiple cell groups are also supported
     #' @param conf confidence interval of contour
-    getDensityContours = function(groups, color='white', linetype=2, conf="10%") {
-      cnl <- sn(groups) %>%
-        lapply(function(x) getDensityContour(self$embedding, cell.groups=self$cell.groups, linetype=linetype,
-                                             group=x, conf=conf, color=color)) %>%
+    getDensityContours = function(groups, color='white', linetype=2, conf="10%", n.cores=1, verbose=FALSE) {
+      cnl <- sn(groups) %>% plapply(function(x) {
+        getDensityContour(self$embedding, cell.groups=self$cell.groups, linetype=linetype, group=x, conf=conf, color=color)
+      }, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE) %>%
         do.call(c, .)
       return(cnl)
     },

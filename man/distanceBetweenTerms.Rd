@@ -4,10 +4,10 @@
 \alias{distanceBetweenTerms}
 \title{Distance between terms}
 \usage{
-distanceBetweenTerms(ont.res)
+distanceBetweenTerms(genes.per.go)
 }
 \arguments{
-\item{ont.res}{Results from prepareOntologyData (default: stored list)}
+\item{genes.per.go}{named list of genes per GO}
 }
 \value{
 Distance matrix

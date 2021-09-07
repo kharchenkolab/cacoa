@@ -16,7 +16,8 @@ plotCountBoxplotsPerType(
   alpha = 0.2,
   plot.theme = theme_get(),
   size = 0.5,
-  jitter.width = 0.15
+  jitter.width = 0.15,
+  adjust.pvalues = T
 )
 }
 \arguments{

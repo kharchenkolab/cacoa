@@ -8,8 +8,6 @@ estimateGeneProgramsFabia(
   z.scores,
   n.programs,
   n.sampled.cells = 15000,
-  min.z = 0.5,
-  max.z = 3,
   cyc = 1500,
   alpha = 0.2,
   random = -1,

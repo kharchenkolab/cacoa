@@ -7,6 +7,11 @@
 
 using namespace Rcpp;
 
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
 // clusterFreeZScoreMat
 List clusterFreeZScoreMat(const SEXP count_mat, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool>& is_ref, int min_n_samp_per_cond, int min_n_obs_per_samp, bool robust, bool norm_both, double min_z, bool verbose, int n_cores, bool adjust_pvalues, int n_permutations, bool smooth, double wins);
 RcppExport SEXP _cacoa_clusterFreeZScoreMat(SEXP count_matSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP is_refSEXP, SEXP min_n_samp_per_condSEXP, SEXP min_n_obs_per_sampSEXP, SEXP robustSEXP, SEXP norm_bothSEXP, SEXP min_zSEXP, SEXP verboseSEXP, SEXP n_coresSEXP, SEXP adjust_pvaluesSEXP, SEXP n_permutationsSEXP, SEXP smoothSEXP, SEXP winsSEXP) {

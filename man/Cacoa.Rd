@@ -63,8 +63,8 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-plotCommonExpressionShiftMagnitudes}{\code{Cacoa$plotCommonExpressionShiftMagnitudes()}}
 \item \href{#method-estimatePerCellTypeDE}{\code{Cacoa$estimatePerCellTypeDE()}}
 \item \href{#method-estimateDEStabilityPerCellType}{\code{Cacoa$estimateDEStabilityPerCellType()}}
-\item \href{#method-estimateDeStabilityPerTest}{\code{Cacoa$estimateDeStabilityPerTest()}}
-\item \href{#method-estimateDeStabilityPerGene}{\code{Cacoa$estimateDeStabilityPerGene()}}
+\item \href{#method-estimateDEStabilityPerTest}{\code{Cacoa$estimateDEStabilityPerTest()}}
+\item \href{#method-estimateDEStabilityPerGene}{\code{Cacoa$estimateDEStabilityPerGene()}}
 \item \href{#method-estimateDEStabilityBetweenTests}{\code{Cacoa$estimateDEStabilityBetweenTests()}}
 \item \href{#method-estimateDEStabilityTrend}{\code{Cacoa$estimateDEStabilityTrend()}}
 \item \href{#method-estimateGOStabilityPerCellTypePermDir}{\code{Cacoa$estimateGOStabilityPerCellTypePermDir()}}
@@ -78,8 +78,7 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-plotDEStabilityFDR1loo}{\code{Cacoa$plotDEStabilityFDR1loo()}}
 \item \href{#method-plotDEStabilityBetweenTests}{\code{Cacoa$plotDEStabilityBetweenTests()}}
 \item \href{#method-plotDEStabilityPerCellType}{\code{Cacoa$plotDEStabilityPerCellType()}}
-\item \href{#method-plotDeStabilityPerTest}{\code{Cacoa$plotDeStabilityPerTest()}}
-\item \href{#method-plotNumberOfDEGenesStability}{\code{Cacoa$plotNumberOfDEGenesStability()}}
+\item \href{#method-plotDEStabilityPerTest}{\code{Cacoa$plotDEStabilityPerTest()}}
 \item \href{#method-plotDEStabilityPerGene}{\code{Cacoa$plotDEStabilityPerGene()}}
 \item \href{#method-plotDEGenes}{\code{Cacoa$plotDEGenes()}}
 \item \href{#method-plotNumberOfDEGenes}{\code{Cacoa$plotNumberOfDEGenes()}}
@@ -106,6 +105,7 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-plotCellGroupSizes}{\code{Cacoa$plotCellGroupSizes()}}
 \item \href{#method-plotCodaSpace}{\code{Cacoa$plotCodaSpace()}}
 \item \href{#method-plotContrastTree}{\code{Cacoa$plotContrastTree()}}
+\item \href{#method-plotCompositionSimilarity}{\code{Cacoa$plotCompositionSimilarity()}}
 \item \href{#method-estimateCellLoadings}{\code{Cacoa$estimateCellLoadings()}}
 \item \href{#method-estimateGaPartition}{\code{Cacoa$estimateGaPartition()}}
 \item \href{#method-plotCellLoadings}{\code{Cacoa$plotCellLoadings()}}
@@ -178,17 +178,21 @@ Calculate expression shift magnitudes of different clusters between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateExpressionShiftMagnitudes(
   cell.groups = self$cell.groups,
-  dist = "JS",
-  within.group.normalization = TRUE,
-  valid.comparisons = NULL,
-  n.cells = NULL,
-  n.top.genes = Inf,
-  n.subsamples = 100,
-  min.cells = 10,
+  dist = NULL,
+  normalize.both = TRUE,
+  min.cells.per.sample = 10,
+  min.samp.per.type = 2,
+  min.gene.frac = 0.01,
+  ref.level = self$ref.level,
   sample.groups = self$sample.groups,
-  n.cores = self$n.cores,
   verbose = self$verbose,
+  n.cores = self$n.cores,
   name = "expression.shifts",
+  n.permutations = 1000,
+  p.adjust.method = "BH",
+  genes = NULL,
+  n.pcs = NULL,
+  top.n.genes = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -198,13 +202,17 @@ Calculate expression shift magnitudes of different clusters between conditions
 \describe{
 \item{\code{cell.groups}}{Named cell group factor with cell names (default: stored vector)}
 
-\item{\code{dist}}{'JS' - Jensen Shannon divergence, or 'cor' - correlation distance (default="JS")}
+\item{\code{dist}}{'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default depends on dimensionality)}
+
+\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
+
+\item{\code{verbose}}{show progress (default: stored value)}
+
+\item{\code{n.cores}}{Number of cores (default: stored integer)}
+
+\item{\code{name}}{Test name (default="expression.shifts")}
 
 \item{\code{within.group.normalization}}{Normalize the shift magnitude by the mean magnitude of within-group variation (default=\code{TRUE})}
-
-\item{\code{valid.comparisons}}{A logical matrix (rows and columns are samples) specifying valid between-sample comparisons.
-Note that if \code{within.group.normalization=TRUE}, the method will automatically include all within-group comparisons of the samples
-for which at least one valid pair is included in the valid.comparisons (default=\code{NULL})}
 
 \item{\code{n.cells}}{Number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)}
 
@@ -213,25 +221,16 @@ for which at least one valid pair is included in the valid.comparisons (default=
 \item{\code{n.subsamples}}{Number of samples to draw (default=100)}
 
 \item{\code{min.cells}}{Minimum number of cells per cluster/per sample to be included in the analysis (default=10)}
-
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
-
-\item{\code{n.cores}}{Number of cores (default: stored integer)}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-
-\item{\code{name}}{Test name (default="expression.shifts")}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 a list include
 \itemize{
-\item \code{dist.df}: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells
-\item \code{p.dist.info}: raw list of \code{n.subsamples} sampled distance matrices (cells were subsampled)
-\item \code{sample.groups}: same as the provided variable
-\item \code{cell.groups}: same as the provided variable
-\item \code{valid.comparisons}: a matrix of valid comparisons (in this case all should be valid, since we're not restricting samples that should be compared)
+\item \code{dist.df}: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update
+\item \code{p.dist.info}: list of distance matrices per cell type
+\item \code{sample.groups}: filtered sample groups
+\item \code{cell.groups}: filtered cell groups
 }
 }
 }
@@ -241,31 +240,30 @@ a list include
 \subsection{Method \code{estimateCommonExpressionShiftMagnitudes()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateCommonExpressionShiftMagnitudes(
-  sample.groups = self$sample.groups,
   cell.groups = self$cell.groups,
-  n.cells = NULL,
-  n.randomizations = 50,
-  n.subsamples = 30,
-  min.cells = 10,
-  n.cores = self$n.cores,
+  name = "common.expression.shifts",
+  min.cells.per.sample = 10,
+  min.samp.per.type = 2,
+  min.gene.frac = 0.01,
+  n.permutations = 1000,
+  trim = 0.2,
+  p.adjust.method = "BH",
   verbose = self$verbose,
-  mean.trim = 0.1,
-  name = "common.expression.shifts"
+  n.cores = self$n.cores,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
-
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
-\item{\code{n.cores}}{number of cores for parallelization}
+\item{\code{name}}{field name where the test results are stored}
 
 \item{\code{verbose}}{show progress (default: stored value)}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{n.cores}}{number of cores for parallelization}
 }
 \if{html}{\out{</div>}}
 }
@@ -285,7 +283,9 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
   show.size.dependency = FALSE,
   show.whiskers = TRUE,
   show.regression = TRUE,
+  show.pvalues = c("adjusted", "raw", "none"),
   font.size = 5,
+  ylab = "normalized expression distance",
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -331,7 +331,6 @@ Plot common expression shift estimates across cell types
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCommonExpressionShiftMagnitudes(
   name = "common.expression.shifts",
-  show.subsampling.variability = FALSE,
   show.jitter = FALSE,
   jitter.alpha = 0.05,
   type = "box",
@@ -340,6 +339,7 @@ Plot common expression shift estimates across cell types
   show.whiskers = TRUE,
   show.regression = TRUE,
   font.size = 5,
+  show.pvalues = c("adjusted", "raw", "none"),
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -348,10 +348,6 @@ Plot common expression shift estimates across cell types
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{name}}{result slot name (default: common.expression.shifts}
-
-\item{\code{show.subsampling.variability}}{\itemize{
-\item whether the spread should illustrate subsampling variability instead of the inter-sample variability (default: FALSE)
-}}
 
 \item{\code{show.jitter}}{whether to show indiivudal data points (default: FALSE)}
 
@@ -370,6 +366,10 @@ Plot common expression shift estimates across cell types
 \item{\code{show.regression}}{whether to show a whiskers in the size dependency plot}
 
 \item{\code{font.size}}{font size for the cell type labels in the size dependency plot}
+
+\item{\code{show.subsampling.variability}}{\itemize{
+\item whether the spread should illustrate subsampling variability instead of the inter-sample variability (default: FALSE)
+}}
 
 \item{\code{show.size.depenency}}{whether to show mean vs. number of cells in a cell type instead}
 }
@@ -390,6 +390,13 @@ Estimate differential gene expression per cell type between conditions
   sample.groups = self$sample.groups,
   ref.level = self$ref.level,
   target.level = self$target.level,
+  name = "de",
+  test = "DESeq2.Wald",
+  resampling.method = NULL,
+  max.resamplings = 30,
+  seed.resampling = 239,
+  min.cell.frac = 0.05,
+  covariates = NULL,
   common.genes = FALSE,
   n.cores = self$n.cores,
   cooks.cutoff = FALSE,
@@ -398,13 +405,6 @@ Estimate differential gene expression per cell type between conditions
   independent.filtering = FALSE,
   cluster.sep.chr = "<!!>",
   verbose = self$verbose,
-  name = "de",
-  test = "DESeq2.Wald",
-  resampling.method = NULL,
-  max.resamplings = 30,
-  seed.resampling = 239,
-  min.cell.frac = 0.05,
-  covariates = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -412,17 +412,25 @@ Estimate differential gene expression per cell type between conditions
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{factor specifying cell types (default=NULL)}
+\item{\code{cell.groups}}{factor specifying cell types (default from self)}
 
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
+\item{\code{sample.groups}}{2-factor vector with annotation of groups/condition per sample (default from self)}
 
-\item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
+\item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy (default from self)}
 
-\item{\code{common.genes}}{Only investigate common genes across cell groups (default=F)}
+\item{\code{target.level}}{Reference level in 'sample.groups', e.g., case, diseased (default from self)}
+
+\item{\code{name}}{slot in which to save the results (default: 'de')}
+
+\item{\code{test}}{which DESeq2 test to use (options: "LRT" (default), "Wald")}
+
+\item{\code{resampling.method}}{which resampling method should be used "loo" for leave-one-out or "bootstrap", (default:NULL no resampling)}
+
+\item{\code{common.genes}}{Only investigate common genes across cell groups (default=FALSE)}
 
 \item{\code{n.cores}}{number of cores for parallelization}
 
-\item{\code{cooks.cutoff}}{cooksCutoff for DESeq2 (default=F)}
+\item{\code{cooks.cutoff}}{cooksCutoff for DESeq2 (default=FALSE)}
 
 \item{\code{cooks.cutoff}}{cooksCutoff for DESeq2 (default=FALSE)}
 
@@ -435,12 +443,6 @@ Estimate differential gene expression per cell type between conditions
 \item{\code{cluster.sep.chr}}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
 
 \item{\code{verbose}}{show progress (default: stored value)}
-
-\item{\code{name}}{slot in which to save the results (default: 'de')}
-
-\item{\code{test}}{which DESeq2 test to use (options: "LRT" (default), "Wald")}
-
-\item{\code{resampling.method}}{which resampling method should be used "loo" for leave-one-out or "bootstrap", (default:NULL no resampling)}
 }
 \if{html}{\out{</div>}}
 }
@@ -482,11 +484,11 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateDeStabilityPerTest"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateDeStabilityPerTest}{}}}
-\subsection{Method \code{estimateDeStabilityPerTest()}}{
+\if{html}{\out{<a id="method-estimateDEStabilityPerTest"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateDEStabilityPerTest}{}}}
+\subsection{Method \code{estimateDEStabilityPerTest()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDeStabilityPerTest(
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEStabilityPerTest(
   de.names,
   name = "jacc.per.test",
   top.n.genes = NULL,
@@ -503,15 +505,15 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateDeStabilityPerGene"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateDeStabilityPerGene}{}}}
-\subsection{Method \code{estimateDeStabilityPerGene()}}{
+\if{html}{\out{<a id="method-estimateDEStabilityPerGene"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateDEStabilityPerGene}{}}}
+\subsection{Method \code{estimateDEStabilityPerGene()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDeStabilityPerGene(
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEStabilityPerGene(
   de.name,
   top.n.genes = 500,
   p.adj.cutoff = NULL,
-  visualize = F
+  visualize = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -668,11 +670,11 @@ A ggplot2 object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotGOStabilityPerCellType(
   name = "go.jaccards",
-  notch = F,
-  show.jitter = T,
+  notch = FALSE,
+  show.jitter = TRUE,
   jitter.alpha = 0.05,
-  show.pairs = F,
-  sort.order = F
+  show.pairs = FALSE,
+  sort.order = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -691,11 +693,11 @@ A ggplot2 object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityTrend(
   name = "de.trend",
-  notch = F,
-  show.jitter = T,
+  notch = FALSE,
+  show.jitter = TRUE,
   jitter.alpha = 0.05,
-  show.pairs = F,
-  sort.order = F
+  show.pairs = FALSE,
+  sort.order = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -760,11 +762,11 @@ Plot DE stability per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityPerCellType(
   name = "de.jaccards",
-  notch = F,
-  show.jitter = T,
+  notch = FALSE,
+  show.jitter = TRUE,
   jitter.alpha = 0.05,
-  show.pairs = F,
-  sort.order = T
+  show.pairs = FALSE,
+  sort.order = TRUE
 )}\if{html}{\out{</div>}}
 }
 
@@ -788,43 +790,17 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotDeStabilityPerTest"></a>}}
-\if{latex}{\out{\hypertarget{method-plotDeStabilityPerTest}{}}}
-\subsection{Method \code{plotDeStabilityPerTest()}}{
+\if{html}{\out{<a id="method-plotDEStabilityPerTest"></a>}}
+\if{latex}{\out{\hypertarget{method-plotDEStabilityPerTest}{}}}
+\subsection{Method \code{plotDEStabilityPerTest()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDeStabilityPerTest(
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityPerTest(
   name = "jacc.per.test",
-  notch = F,
-  show.jitter = T,
+  notch = FALSE,
+  show.jitter = TRUE,
   jitter.alpha = 0.05,
-  show.pairs = F,
-  sort.order = F
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotNumberOfDEGenesStability"></a>}}
-\if{latex}{\out{\hypertarget{method-plotNumberOfDEGenesStability}{}}}
-\subsection{Method \code{plotNumberOfDEGenesStability()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotNumberOfDEGenesStability(
-  name = "de",
-  p.adjust = TRUE,
-  pvalue.cutoff = 0.05,
-  notch = T,
-  show.jitter = T,
-  jitter.alpha = 0.1,
-  show.pairs = F,
-  sort.order = F,
-  log.y.axis = F
+  show.pairs = FALSE,
+  sort.order = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -882,7 +858,7 @@ Plot number of significant DE genes as a function of number of cells
 
 \item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="none")}
 
-\item{\code{label}}{Show labels on plot (default=T)}
+\item{\code{label}}{Show labels on plot (default=TRUE)}
 
 \item{\code{palette}}{cell group palette (default: stored $cell.groups.palette)}
 
@@ -977,7 +953,7 @@ Save DE results as JSON files
   ref.level = self$ref.level,
   gene.metadata = NULL,
   cluster.sep.chr = "<!!>",
-  verbose = T
+  verbose = TRUE
 )}\if{html}{\out{</div>}}
 }
 
@@ -1374,16 +1350,15 @@ Plot a heatmap of ontology P values per cell type
   min.genes = 1,
   p.adj = 0.05,
   legend.position = "left",
-  selection = "all",
+  selection = c("all", "common", "unique"),
   n = 20,
   clusters = TRUE,
   cluster.name = NULL,
   cell.subgroups = NULL,
-  color.range = NULL,
   palette = NULL,
   row.order = TRUE,
   col.order = TRUE,
-  legend.title = NULL,
+  max.log.p = 15,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1407,9 +1382,9 @@ Plot a heatmap of ontology P values per cell type
 
 \item{\code{cell.subgroups}}{Cell groups to plot (default=NULL)}
 
-\item{\code{color.range}}{vector with two values for min/max values of p-values}
-
 \item{\code{...}}{parameters forwarded to \link{plotHeatmap}}
+
+\item{\code{color.range}}{vector with two values for min/max values of p-values}
 }
 \if{html}{\out{</div>}}
 }
@@ -1761,6 +1736,35 @@ Plot contrast tree
   palette = self$sample.groups.palette,
   cells.to.remain = NULL,
   cells.to.remove = NULL,
+  filter.empty.cell.types = TRUE,
+  adjust.pvalues = TRUE,
+  h.method = "both",
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotCompositionSimilarity"></a>}}
+\if{latex}{\out{\hypertarget{method-plotCompositionSimilarity}{}}}
+\subsection{Method \code{plotCompositionSimilarity()}}{
+Plot contrast tree
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCompositionSimilarity(
+  cell.groups = self$cell.groups,
+  palette = self$sample.groups.palette,
+  cells.to.remain = NULL,
+  cells.to.remove = NULL,
   filter.empty.cell.types = TRUE
 )}\if{html}{\out{</div>}}
 }
@@ -1783,7 +1787,7 @@ A ggplot2 object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateCellLoadings(
   n.perm = 1000,
-  n.boot = 100,
+  n.boot = 1000,
   coda.test = "significance",
   ref.cell.type = NULL,
   criteria = "cda.std",
@@ -1832,7 +1836,7 @@ Plot Loadings
   alpha = 0.01,
   palette = self$cell.groups.palette,
   font.size = NULL,
-  ordering = "by.pvalue",
+  ordering = "pvalue",
   signif.threshold = 0.05,
   show.pvals = TRUE
 )}\if{html}{\out{</div>}}
@@ -1990,7 +1994,7 @@ estimate differential cell density
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDiffCellDensity(
   type = "permutation",
-  adjust.pvalues = TRUE,
+  adjust.pvalues = !(type == "subtract"),
   name = "cell.density",
   n.permutations = 400,
   smooth = TRUE,
@@ -2005,7 +2009,7 @@ estimate differential cell density
 \describe{
 \item{\code{type}}{method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);}
 
-\item{\code{adjust.pvalues}}{whether to adjust Z-scores for multiple comparison using BH method (default: TRUE)}
+\item{\code{adjust.pvalues}}{whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='sutract', TRUE for everything else)}
 
 \item{\code{name}}{slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')}
 
@@ -2068,7 +2072,6 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionDistance(
   name = "expression.shifts",
   joint = FALSE,
-  min.cells = 10,
   palette = self$sample.groups.palette,
   show.significance = FALSE,
   filter.empty.cell.types = TRUE,
@@ -2170,6 +2173,7 @@ Estimate differential expression Z-scores between two conditions per individual 
   wins = 0.01,
   n.permutations = 200,
   lfc.pseudocount = 1e-05,
+  min.edge.weight = 0.6,
   verbose = self$verbose,
   n.cores = self$n.cores
 )}\if{html}{\out{</div>}}
@@ -2339,7 +2343,7 @@ Sparse matrix of smoothed Z-scores. Results are also stored in the \code{cluster
 \if{latex}{\out{\hypertarget{method-estimateGenePrograms}{}}}
 \subsection{Method \code{estimateGenePrograms()}}{
 Estimate Gene Programs based on cluster-free Z-scores on a subsample of
-cells using \link[fabia:fabia]{fabia}.
+cells using \link[fabia:fabia]{fabia}. # TODO: update it
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGenePrograms(
   method = c("pam", "leiden", "fabia"),
@@ -2349,9 +2353,14 @@ cells using \link[fabia:fabia]{fabia}.
   z.adj = FALSE,
   gene.selection = ifelse(z.adj, "z.adj", "z"),
   smooth = TRUE,
+  abs.scores = FALSE,
   name = "gene.programs",
   cell.subset = NULL,
   n.cores = self$n.cores,
+  verbose = self$verbose,
+  max.z = 5,
+  min.z = 0.5,
+  min.change.frac = 0.01,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -2369,6 +2378,8 @@ cells using \link[fabia:fabia]{fabia}.
 \item{\code{name}}{field name where the test results are stored}
 
 \item{\code{n.cores}}{number of cores for parallelization}
+
+\item{\code{verbose}}{show progress (default: stored value)}
 
 \item{\code{...}}{keyword arguments forwarded to \link{estimateGenePrograms}}
 }
@@ -2397,12 +2408,13 @@ the program usin fabia biclustering.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotGeneProgramScores(
   name = "gene.programs",
-  approximate = FALSE,
+  prog.ids = NULL,
   build.panel = TRUE,
   nrow = NULL,
-  gradient.range.quantile = 0.975,
-  plot.na = approximate,
   legend.title = "Score",
+  adj.list = NULL,
+  palette = NULL,
+  min.genes.per.prog = 10,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -2423,9 +2435,9 @@ the program usin fabia biclustering.
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotGeneProgramGenes(
   program.id,
   name = "gene.programs",
+  ordering = c("similarity", "loading"),
   max.genes = 9,
   plots = "z.adj",
-  min.z = 0.1,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -2517,7 +2529,7 @@ make sense, as control cells always have small distance from control.}
   max.z.adj = NULL,
   max.lfc = 3,
   smoothed = FALSE,
-  gene.palette = NULL,
+  gene.palette = dark.red.palette,
   z.palette = NULL,
   z.adj.palette = z.palette,
   lfc.palette = NULL,
@@ -2525,6 +2537,10 @@ make sense, as control cells always have small distance from control.}
   adj.list = NULL,
   build.panel = TRUE,
   nrow = 1,
+  cell.subset = NULL,
+  groups = NULL,
+  subgroups = NULL,
+  keep.limits = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }

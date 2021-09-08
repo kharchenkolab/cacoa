@@ -415,10 +415,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         } else {
           n.bootstrap <- max.resamplings
           set.seed(seed.resampling)
-          s.groups.new <- c(s.groups.new, lapply(setNames(1:n.bootstrap,paste0('fix.',1:n.bootstrap)),function(i) s.groups))
+          s.groups.new %<>% c(lapply(setNames(1:n.bootstrap, paste0('fix.', 1:n.bootstrap)), function(i) s.groups))
         }
 
-        if(is.infinite(max.cell.count)){
+        if (is.infinite(max.cell.count)) {
           warning('Fixed number of cells were not provided, it was set to 100')
           max.cell.count <- 100
           min.cell.count <- 100
@@ -1252,15 +1252,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         de.raw <- private$getResults("de", "estimatePerCellTypeDE")
       }
 
-      if(!is.list(sample.groups)) {
+      if (!is.list(sample.groups)) {
         sample.groups <- list(names(sample.groups[sample.groups == ref.level]),
                               names(sample.groups[sample.groups != ref.level])) %>%
           setNames(c(ref.level, self$target.level))
       }
 
-      if(class(de.raw[[1]]) != "list") stop("Please rerun 'estimatePerCellTypeDE' with return.matrix=T")
+      if (class(de.raw[[1]]) != "list") stop("Please rerun 'estimatePerCellTypeDE' with return.matrix=T")
 
-      if(is.null(saveprefix)) saveprefix <- ""
+      if (is.null(saveprefix)) saveprefix <- ""
 
       saveDEasJSON(de.raw = de.raw, saveprefix = saveprefix, dir.name = dir.name, gene.metadata = gene.metadata, cluster.sep.chr = cluster.sep.chr, sample.groups = sample.groups, verbose = verbose)
     },
@@ -2825,7 +2825,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' Results are also stored in the `cluster.free.expr.shifts` field.
     estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection="z", min.n.between=2, min.n.within=max(min.n.between, 1),
                                                    min.expr.frac=0.0, min.n.obs.per.samp=3, norm.all=FALSE, dist="cor", log.vectors=(dist != "js"),
-                                                   verbose=self$verbose, n.cores=self$n.cores) {
+                                                   verbose=self$verbose, n.cores=self$n.cores, ...) {
       cm <- self$getJointCountMatrix(raw=FALSE)
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, min.expr.frac=min.expr.frac)
       cm <- Matrix::t(cm[, genes])
@@ -2838,7 +2838,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       shifts <- estimateClusterFreeExpressionShiftsC(cm, self$sample.per.cell[names(nns.per.cell)], nns.per.cell,
                                                      is.ref, min_n_between=min.n.between, min_n_within=min.n.within, min_n_obs_per_samp=min.n.obs.per.samp,
-                                                     norm_all=norm.all, verbose=verbose, n_cores=n.cores, dist=dist, log_vecs=log.vectors)
+                                                     norm_all=norm.all, verbose=verbose, n_cores=n.cores, dist=dist, log_vecs=log.vectors, ...)
       self$test.results[["cluster.free.expr.shifts"]] <- shifts
 
       return(invisible(shifts))
@@ -3012,15 +3012,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param max.shift all shift values above `max.shift` are set to this value when plotting. Default: 95% of the shifts.
     #' @param font.size size range for cell type labels
     #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
-    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=FALSE, beta=10, plot.na=FALSE, color.range=c("0", "97.5%"),
-                                               alpha=0.2, font.size=c(3,5), palette=brewerPalette("RdYlBu"), rescale=TRUE, ...) {
+    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=FALSE, beta=10, plot.na=FALSE,
+                                               color.range=c("0", "97.5%"), alpha=0.2, font.size=c(3,5),
+                                               palette=dark.red.palette, ...) {
       shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts")
       private$checkCellEmbedding()
 
       if (smooth) {
         mask <- is.na(shifts)
-        shifts[mask] <- 1
-        sr <- parseLimitRange(c("2.5%", "99%"), shifts)
+        shifts[mask] <- 0
+        sr <- parseLimitRange(c("1%", "99%"), shifts)
         shifts %<>% pmax(sr[1]) %>% pmin(sr[2])
 
         shifts %<>% smoothSignalOnGraph(filter=function(...) heatFilter(..., beta=beta),
@@ -3032,25 +3033,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       color.range %<>% parseLimitRange(shifts)
       shifts %<>% pmax(color.range[1]) %>% pmin(color.range[2])
 
-      gg <- self$plotEmbedding(colors=shifts, plot.na=plot.na, alpha=alpha, ...)
-      gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
+      gg <- self$plotEmbedding(colors=shifts, plot.na=plot.na, alpha=alpha, palette=palette, ...)
 
       if (!is.null(cell.groups)) {
         ann.ls <- self$plotEmbedding(groups=cell.groups)$layers
         gg <- gg + ann.ls[[which(sapply(ann.ls, function(l) "GeomLabelRepel" %in% class(l$geom)))]]
       }
 
-      colors <- palette(11)
-      if (rescale && (color.range[1] < 1) && (color.range[2] > 1)) { # Ensure that 1.0 is in the middle (e.g. yellow)
-        col.vals <- c(seq(color.range[1], 1, length.out=6)[1:5], seq(1, color.range[2], length.out=6)) %>%
-          scales::rescale()
-      } else {
-        col.vals <- seq(color.range[1], color.range[2], length.out=11) %>% scales::rescale()
-      }
-
       gg <- gg +
         scale_size_continuous(range=font.size, trans='identity', guide='none') +
-        scale_color_gradientn(colors=colors, values=col.vals, name="Ratio", limits=color.range) +
         theme(legend.background = element_blank())
       return(gg)
     },

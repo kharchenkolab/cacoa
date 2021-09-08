@@ -1,10 +1,13 @@
 #include <RcppEigen.h>
-#include <iostream>
-#include <vector>
+
+#include <algorithm>
 #include <cmath>
+#include <functional>
+#include <iostream>
 #include <mutex>
 #include <random>
-#include <functional>
+#include <vector>
+
 #include <sccore_par.hpp>
 
 #include <progress.hpp>
@@ -493,12 +496,45 @@ double estimateJSDivergence(const Eigen::VectorXd &v1, const Eigen::VectorXd &v2
     return std::sqrt(0.5 * (d1 + d2));
 }
 
+double estimateNormalizedExpressionShift(const std::vector<double> &dists, const std::vector<bool> &is_ref,
+                                         const std::vector<size_t> &s1_ids, const std::vector<size_t> &s2_ids,
+                                         bool norm_all, size_t min_n_within, size_t min_n_between) {
+    std::vector<double> within_dists, between_dists;
+    for (size_t i = 0; i < dists.size(); ++i) {
+        double d = dists.at(i);
+        size_t s1 = s1_ids.at(i), s2 = s2_ids.at(i);
+        bool is_within = norm_all ? (is_ref.at(s1) == is_ref.at(s2)) : (is_ref.at(s1) && is_ref.at(s2));
+        if (is_within) {
+            within_dists.push_back(d);
+        } else if (is_ref.at(s1) != is_ref.at(s2)) {
+            between_dists.push_back(d);
+        }
+    }
+
+    if ((within_dists.size() < min_n_within) || (between_dists.size() < min_n_between))
+        return NAN;
+
+    return median(between_dists) - median(within_dists);
+}
+
+double estimateVectorDistance(const VectorXd &v1, const VectorXd &v2, const std::string &dist) {
+    if (dist == "cosine")
+        return estimateCorrelationDistance(v1, v2, false);
+    if (dist == "js")
+        return estimateJSDivergence(v1, v2);
+    if (dist == "cor")
+        return estimateCorrelationDistance(v1, v2, true);
+
+    stop("Unknown dist: ", dist);
+}
+
 //' @param sample_per_cell must contains ids from 0 to n_samples-1
 //' @param n_samples must be equal to maximum(sample_per_cell) + 1
 double estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::vector<int> &sample_per_cell,
                                    const std::vector<int> &nn_ids, const std::vector<bool> &is_ref,
-                                   const int min_n_between, const int min_n_within, const int min_n_obs_per_samp, bool norm_all,
-                                   const std::string &dist = "cosine", bool log_vecs=false) {
+                                   size_t min_n_between, size_t min_n_within, size_t min_n_obs_per_samp, bool norm_all,
+                                   const std::string &dist="cosine", bool log_vecs=false, int n_permutations=0,
+                                   bool return_pvalue=false, size_t seed=42) {
     auto n_ids_per_samp = count_values(sample_per_cell, nn_ids);
     auto mat_collapsed = collapseMatrixNorm(cm, sample_per_cell, nn_ids, n_ids_per_samp);
     if (log_vecs) {
@@ -507,47 +543,61 @@ double estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::ve
         }
     }
 
-    std::vector<double> within_dists, between_dists;
-    for (int s1 = 0; s1 < n_ids_per_samp.size(); ++s1) {
+    std::vector<double> dists;
+    std::vector<size_t> s1_ids, s2_ids;
+    std::vector<bool> is_ref_loc;
+    size_t s1_loc = 0;
+    for (size_t s1 = 0; s1 < n_ids_per_samp.size(); ++s1) {
         if (n_ids_per_samp.at(s1) < min_n_obs_per_samp)
             continue;
 
+        size_t s2_loc = s1_loc + 1;
         auto v1 = mat_collapsed.col(s1);
-        for (int s2 = s1 + 1; s2 < n_ids_per_samp.size(); ++s2) {
+        for (size_t s2 = s1 + 1; s2 < n_ids_per_samp.size(); ++s2) {
             if (n_ids_per_samp.at(s2) < min_n_obs_per_samp)
                 continue;
 
             auto v2 = mat_collapsed.col(s2);
-            double d;
-            if (dist == "cosine") {
-                d = estimateCorrelationDistance(v1, v2, false);
-            } else if (dist == "js") {
-                d = estimateJSDivergence(v1, v2);
-            } else if (dist == "cor") {
-                d = estimateCorrelationDistance(v1, v2, true);
-            } else {
-                stop("Unknown dist: ", dist);
-            }
+            double d = estimateVectorDistance(v1, v2, dist);
 
-            bool is_within = norm_all ? (is_ref.at(s1) == is_ref.at(s2)) : (is_ref.at(s1) && is_ref.at(s2));
-            if (is_within) {
-                within_dists.push_back(d);
-            } else if (is_ref.at(s1) != is_ref.at(s2)) {
-                between_dists.push_back(d);
-            }
+            dists.push_back(d);
+            s1_ids.push_back(s1_loc);
+            s2_ids.push_back(s2_loc);
+            s2_loc++;
         }
+
+        s1_loc++;
+        is_ref_loc.push_back(is_ref.at(s1));
     }
 
-    if ((within_dists.size() < min_n_within) || (between_dists.size() < min_n_between))
-        return NAN;
+    double obs_diff = estimateNormalizedExpressionShift(dists, is_ref_loc, s1_ids, s2_ids, norm_all, min_n_within, min_n_between);
+    if ((n_permutations == 0) || std::isnan(obs_diff))
+        return obs_diff;
 
-    return median(between_dists) / median(within_dists);
+    std::vector<bool> is_ref_shuffled(is_ref_loc.begin(), is_ref_loc.end());
+    std::mt19937 g(seed);
+
+    std::vector<double> perm_diffs;
+    double n_greater = 0;
+    for (int rep = 0; rep < n_permutations; ++rep) {
+        std::shuffle(is_ref_shuffled.begin(), is_ref_shuffled.end(), g);
+        double pd = estimateNormalizedExpressionShift(dists, is_ref_shuffled, s1_ids, s2_ids, norm_all, min_n_within, min_n_between);
+        perm_diffs.push_back(pd);
+        n_greater += (obs_diff >= pd);
+    }
+
+    if (return_pvalue) {
+        return (n_greater + 1) / (n_permutations + 1);
+    }
+
+    return obs_diff - median(perm_diffs);
 }
 
 // [[Rcpp::export]]
 NumericVector estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double> &cm, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool> &is_ref,
                                                    const int min_n_between=1, const int min_n_within=1, const int min_n_obs_per_samp=1, bool norm_all=false,
-                                                   bool verbose=true, int n_cores=1, const std::string &dist="cosine", bool log_vecs=false) {
+                                                   bool verbose=true, int n_cores=1, const std::string &dist="cosine", bool log_vecs=false, int n_permutations=0,
+                                                   bool return_pvalue=false) {
     const auto samp_per_cell_c = as<std::vector<int>>(IntegerVector(sample_per_cell - 1));
     if (sample_per_cell.size() == 0 || (*std::max_element(samp_per_cell_c.begin(), samp_per_cell_c.end()) <= 0))
         stop("sample_per_cell must be a factor vector with non-empty levels");
@@ -560,10 +610,10 @@ NumericVector estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<dou
     std::vector<double> res_scores(nn_ids_c.size(), 0);
 
     auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &is_ref, &res_scores, &min_n_between, &min_n_within, &min_n_obs_per_samp, &norm_all,
-            dist, log_vecs](int i) {
+            &dist, &log_vecs, &n_permutations, &return_pvalue](int i) {
         res_scores[i] = estimateCellExpressionShift(cm, samp_per_cell_c, nn_ids_c[i], is_ref,
                                                     min_n_between, min_n_within, min_n_obs_per_samp, norm_all,
-                                                    dist, log_vecs);
+                                                    dist, log_vecs, n_permutations, return_pvalue);
     };
     sccore::runTaskParallelFor(0, nn_ids_c.size(), task, n_cores, verbose);
 

@@ -13,8 +13,8 @@ estimateCorrelationDistance <- function(v1, v2, centered = TRUE) {
     .Call('_cacoa_estimateCorrelationDistance', PACKAGE = 'cacoa', v1, v2, centered)
 }
 
-estimateClusterFreeExpressionShiftsC <- function(cm, sample_per_cell, nn_ids, is_ref, min_n_between = 1L, min_n_within = 1L, min_n_obs_per_samp = 1L, norm_all = FALSE, verbose = TRUE, n_cores = 1L, dist = "cosine", log_vecs = FALSE) {
-    .Call('_cacoa_estimateClusterFreeExpressionShiftsC', PACKAGE = 'cacoa', cm, sample_per_cell, nn_ids, is_ref, min_n_between, min_n_within, min_n_obs_per_samp, norm_all, verbose, n_cores, dist, log_vecs)
+estimateClusterFreeExpressionShiftsC <- function(cm, sample_per_cell, nn_ids, is_ref, min_n_between = 1L, min_n_within = 1L, min_n_obs_per_samp = 1L, norm_all = FALSE, verbose = TRUE, n_cores = 1L, dist = "cosine", log_vecs = FALSE, n_permutations = 0L, return_pvalue = FALSE) {
+    .Call('_cacoa_estimateClusterFreeExpressionShiftsC', PACKAGE = 'cacoa', cm, sample_per_cell, nn_ids, is_ref, min_n_between, min_n_within, min_n_obs_per_samp, norm_all, verbose, n_cores, dist, log_vecs, n_permutations, return_pvalue)
 }
 
 mapIds <- function(ids_vec, id_map) {

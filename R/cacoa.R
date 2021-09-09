@@ -2275,7 +2275,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                   define.ref.cell.type=FALSE, n.cores=self$n.cores, verbose=self$verbose) {
 
       if (!(coda.test %in% c('significance', 'confidence'))) stop('Test is not supported')
-      checkPackageInstalled("coda.base", cran=TRUE)
+      checkPackageInstalled(c("coda.base", "psych"), cran=TRUE)
 
       if ((!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))))
         stop('Incorrect reference cell type')

@@ -17,7 +17,9 @@ plotHeatmap(
   plot.theme = theme_get(),
   symmetric = FALSE,
   palette = NULL,
-  font.size = 8
+  font.size = 8,
+  distance = "manhattan",
+  clust.method = "complete"
 )
 }
 \arguments{

@@ -5,23 +5,27 @@
 \title{Expression shift magnitudes per cluster between conditions}
 \usage{
 estimateExpressionShiftMagnitudes(
-  count.matrices,
+  cm.per.type,
   sample.groups,
   cell.groups,
-  dist = c("js", "cor"),
-  within.group.normalization = TRUE,
-  valid.comparisons = NULL,
-  n.cells = NULL,
-  n.top.genes = Inf,
-  n.subsamples = 100,
-  min.cells = 10,
-  n.cores = 1,
+  sample.per.cell,
+  dist = NULL,
+  normalize.both = TRUE,
   verbose = FALSE,
-  transposed.matrices = FALSE
+  ref.level = NULL,
+  n.permutations = 1000,
+  p.adjust.method = "BH",
+  top.n.genes = NULL,
+  gene.selection = "wilcox",
+  n.pcs = NULL,
+  trim = 0.2,
+  n.cores = 1,
+  norm.type = NULL,
+  ...
 )
 }
 \arguments{
-\item{count.matrices}{List of count matrices}
+\item{cm.per.type}{List of normalized count matrices per cell type}
 
 \item{sample.groups}{Named factor with cell names indicating condition/sample, e.g., ctrl/disease}
 
@@ -29,21 +33,11 @@ estimateExpressionShiftMagnitudes(
 
 \item{dist}{what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values}
 
-\item{within.group.normalization}{(default=T)}
-
-\item{valid.comparisons}{(default=NULL)}
-
-\item{n.cells}{Number of cells per group (default=NULL)}
-
-\item{n.top.genes}{(default=Inf)}
-
-\item{n.subsamples}{(default=100)}
-
-\item{min.cells}{(default=10)}
-
-\item{n.cores}{number of cores (default=1)}
+\item{normalize.both}{(default=T)}
 
 \item{verbose}{(default=F)}
+
+\item{n.cores}{number of cores (default=1)}
 
 \item{transposed.matrices}{(default=F)}
 }

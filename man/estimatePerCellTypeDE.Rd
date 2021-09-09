@@ -14,11 +14,11 @@ estimatePerCellTypeDE(
   cooks.cutoff = FALSE,
   min.cell.count = 10,
   max.cell.count = Inf,
-  independent.filtering = T,
+  independent.filtering = TRUE,
   n.cores = 1,
   cluster.sep.chr = "<!!>",
-  return.matrix = T,
-  verbose = T
+  return.matrix = TRUE,
+  verbose = TRUE
 )
 }
 \arguments{

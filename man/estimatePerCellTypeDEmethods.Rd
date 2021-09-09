@@ -31,19 +31,19 @@ estimatePerCellTypeDEmethods(
 
 \item{ref.level}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
 
-\item{common.genes}{Only investigate common genes across cell groups (default=F)}
+\item{common.genes}{Only investigate common genes across cell groups (default=FALSE)}
 
-\item{cooks.cutoff}{cooksCutoff for DESeq2 (default=F)}
+\item{cooks.cutoff}{cooksCutoff for DESeq2 (default=FALSE)}
 
 \item{min.cell.count}{(default=10)}
 
-\item{independent.filtering}{independentFiltering for DESeq2 (default=F)}
+\item{independent.filtering}{independentFiltering for DESeq2 (default=FALSE)}
 
 \item{n.cores}{Number of cores (default=1)}
 
 \item{cluster.sep.chr}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
 
-\item{return.matrix}{Return merged matrix of results (default=T)}
+\item{return.matrix}{Return merged matrix of results (default=TRUE)}
 
 \item{test}{DE method: deseq2, edgeR, wilcoxon, ttest}
 

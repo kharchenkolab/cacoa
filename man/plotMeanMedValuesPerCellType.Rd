@@ -6,7 +6,8 @@
 \usage{
 plotMeanMedValuesPerCellType(
   df,
-  type = "bar",
+  pvalues = NULL,
+  type = c("box", "point", "bar"),
   show.jitter = TRUE,
   notch = TRUE,
   jitter.alpha = 0.05,
@@ -16,12 +17,15 @@ plotMeanMedValuesPerCellType(
   plot.theme = theme_get(),
   jitter.size = 1,
   line.size = 0.75,
-  trim = 0
+  trim = 0,
+  order.x = TRUE,
+  pvalue.y = NULL,
+  y.max = NULL
 )
 }
 \arguments{
 \item{df}{\itemize{
-\item data frame containing the results, including $val and $cell slots which will be summarized
+\item data frame containing the results, including $value and $Type slots which will be summarized
 }}
 
 \item{type}{\itemize{

@@ -531,22 +531,31 @@ double estimateJSDivergence(const Eigen::VectorXd &v1, const Eigen::VectorXd &v2
 double estimateNormalizedExpressionShift(const std::vector<double> &dists, const std::vector<bool> &is_ref,
                                          const std::vector<size_t> &s1_ids, const std::vector<size_t> &s2_ids,
                                          bool norm_all, size_t min_n_within, size_t min_n_between) {
-    std::vector<double> within_dists, between_dists;
+    std::vector<double> between_dists, ref_dists, non_ref_dists;
     for (size_t i = 0; i < dists.size(); ++i) {
         double d = dists.at(i);
         size_t s1 = s1_ids.at(i), s2 = s2_ids.at(i);
-        bool is_within = norm_all ? (is_ref.at(s1) == is_ref.at(s2)) : (is_ref.at(s1) && is_ref.at(s2));
-        if (is_within) {
-            within_dists.push_back(d);
-        } else if (is_ref.at(s1) != is_ref.at(s2)) {
+        if (is_ref.at(s1) != is_ref.at(s2)) {
             between_dists.push_back(d);
+        } else if (is_ref.at(s1)) {
+            ref_dists.push_back(d);
+        } else if (norm_all) {
+            non_ref_dists.push_back(d);
         }
     }
 
-    if ((within_dists.size() < min_n_within) || (between_dists.size() < min_n_between))
+    bool is_nan = (
+        (between_dists.size() < min_n_between) ||
+        (ref_dists.size() < min_n_within) ||
+        (norm_all && (non_ref_dists.size() < min_n_within))
+    );
+
+    if (is_nan)
         return NAN;
 
-    return median(between_dists) - median(within_dists);
+    double norm_const = norm_all ? ((median(ref_dists) + median(non_ref_dists)) / 2) : median(ref_dists);
+
+    return median(between_dists) - norm_const;
 }
 
 double estimateVectorDistance(const VectorXd &v1, const VectorXd &v2, const std::string &dist) {

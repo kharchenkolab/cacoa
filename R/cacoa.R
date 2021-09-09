@@ -2824,7 +2824,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
     #' Results are also stored in the `cluster.free.expr.shifts` field.
     estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection="z", min.n.between=2, min.n.within=max(min.n.between, 1),
-                                                   min.expr.frac=0.0, min.n.obs.per.samp=3, norm.all=FALSE, dist="cor", log.vectors=(dist != "js"),
+                                                   min.expr.frac=0.0, min.n.obs.per.samp=3, norm.all=TRUE, dist="cor", log.vectors=(dist != "js"),
                                                    verbose=self$verbose, n.cores=self$n.cores, ...) {
       cm <- self$getJointCountMatrix(raw=FALSE)
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, min.expr.frac=min.expr.frac)

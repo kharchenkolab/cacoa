@@ -595,3 +595,16 @@ pvalueToCode <- function(pvals) {
          symbols = c("***", "**", "*", "ns")) %>%
     as.character() %>% setNames(names(pvals))
 }
+
+transferLabelLayer <- function(gg.target, gg.source, font.size) {
+  ls <- gg.source$layers %>% .[sapply(., function(l) "GeomLabelRepel" %in% class(l$geom))]
+  if (length(ls) != 1) {
+    warning("Can't find annotation layer\n")
+    return(gg.target)
+  }
+
+  gg.target <- gg.target + ls[[1]] +
+    scale_size_continuous(range=font.size, trans='identity', guide='none')
+
+  return(gg.target)
+}

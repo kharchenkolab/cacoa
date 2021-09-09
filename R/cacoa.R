@@ -2424,7 +2424,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
 
         if (show.cell.groups) {
-          p %<>% private$addCellGroupsToEmbedding(cell.groups=cell.groups, font.size=font.size)
+          p %<>% transferLabelLayer(self$plotEmbedding(groups=cell.groups), font.size=font.size)
         }
         p
       })
@@ -2823,9 +2823,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' In most cases, must be TRUE for "cosine" and "cor" distances and always must be FALSE for "js". (default: `dist != 'js'`)
     #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
     #' Results are also stored in the `cluster.free.expr.shifts` field.
-    estimateClusterFreeExpressionShifts = function(n.top.genes=3000, gene.selection="z", min.n.between=2, min.n.within=max(min.n.between, 1),
-                                                   min.expr.frac=0.0, min.n.obs.per.samp=3, norm.all=TRUE, dist="cor", log.vectors=(dist != "js"),
-                                                   verbose=self$verbose, n.cores=self$n.cores, ...) {
+    estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="z", min.n.between=2, min.n.within=max(min.n.between, 1),
+                                                 min.expr.frac=0.0, min.n.obs.per.samp=3, norm.all=TRUE, dist="cor", log.vectors=(dist != "js"),
+                                                 wins=0.025, n.permutations=500, verbose=self$verbose, n.cores=self$n.cores, ...) {
+      if (n.permutations < 10)
+        stop("n.permutations must be at least 10")
+
       cm <- self$getJointCountMatrix(raw=FALSE)
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, min.expr.frac=min.expr.frac)
       cm <- Matrix::t(cm[, genes])
@@ -2836,9 +2839,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         igraph::as_adjacency_matrix() %>% as("dgTMatrix") %>%
         {setNames(split(.@j, .@i + 1), rownames(.))}
 
-      shifts <- estimateClusterFreeExpressionShiftsC(cm, self$sample.per.cell[names(nns.per.cell)], nns.per.cell,
-                                                     is.ref, min_n_between=min.n.between, min_n_within=min.n.within, min_n_obs_per_samp=min.n.obs.per.samp,
-                                                     norm_all=norm.all, verbose=verbose, n_cores=n.cores, dist=dist, log_vecs=log.vectors, ...)
+      shifts <- estimateClusterFreeExpressionShiftsC(
+        cm, self$sample.per.cell[names(nns.per.cell)], nn_ids=nns.per.cell, is_ref=is.ref, min_n_between=min.n.between,
+        min_n_within=min.n.within, min_n_obs_per_samp=min.n.obs.per.samp, norm_all=norm.all, verbose=verbose,
+        n_cores=n.cores, dist=dist, log_vecs=log.vectors, wins=wins, n_permutations=n.permutations
+      )
       self$test.results[["cluster.free.expr.shifts"]] <- shifts
 
       return(invisible(shifts))
@@ -3009,41 +3014,32 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param cell.groups cell type labels. Set to NULL if it shouldn't be shown
     #' @param plot.both.conditions show both case and control cells. Normally, showing control cells doesn't
     #' make sense, as control cells always have small distance from control.
-    #' @param max.shift all shift values above `max.shift` are set to this value when plotting. Default: 95% of the shifts.
     #' @param font.size size range for cell type labels
     #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
-    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=FALSE, beta=10, plot.na=FALSE,
+    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=TRUE, plot.na=FALSE,
                                                color.range=c("0", "97.5%"), alpha=0.2, font.size=c(3,5),
-                                               palette=dark.red.palette, ...) {
+                                               palette=brewerPalette("YlOrRd", rev=FALSE), build.panel=TRUE, ...) {
       shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts")
       private$checkCellEmbedding()
-
-      if (smooth) {
-        mask <- is.na(shifts)
-        shifts[mask] <- 0
-        sr <- parseLimitRange(c("1%", "99%"), shifts)
-        shifts %<>% pmax(sr[1]) %>% pmin(sr[2])
-
-        shifts %<>% smoothSignalOnGraph(filter=function(...) heatFilter(..., beta=beta),
-                                        graph=extractCellGraph(self$data.object))
-        shifts[mask] <- NA
-      }
+      z.scores <- shifts$z_scores
+      shifts <- if (smooth) shifts$shifts_smoothed else shifts$shifts
 
       shifts %<>% na.omit()
       color.range %<>% parseLimitRange(shifts)
       shifts %<>% pmax(color.range[1]) %>% pmin(color.range[2])
 
-      gg <- self$plotEmbedding(colors=shifts, plot.na=plot.na, alpha=alpha, palette=palette, ...)
+      ggs <- mapply(function(cls, lt) {
+        self$plotEmbedding(colors=cls, plot.na=plot.na, alpha=alpha, palette=palette, legend.title=lt, ...) +
+          theme(legend.background = element_blank())
+      }, list(shifts, z.scores), c("Distance", "Z-score"), SIMPLIFY=FALSE)
 
       if (!is.null(cell.groups)) {
-        ann.ls <- self$plotEmbedding(groups=cell.groups)$layers
-        gg <- gg + ann.ls[[which(sapply(ann.ls, function(l) "GeomLabelRepel" %in% class(l$geom)))]]
+        ggs %<>% lapply(transferLabelLayer, self$plotEmbedding(groups=cell.groups), font.size=font.size)
       }
 
-      gg <- gg +
-        scale_size_continuous(range=font.size, trans='identity', guide='none') +
-        theme(legend.background = element_blank())
-      return(gg)
+      if (build.panel) ggs %<>% cowplot::plot_grid(plotlist=., ncol=2, labels=c("Shifts", "Adj. z-scores"))
+
+      return(ggs)
     },
 
     plotMostChangedGenes = function(n.top.genes, method="z", min.z=0.5, min.lfc=1, max.score=20, cell.subset=NULL, excluded.genes=NULL, ...) {
@@ -3252,17 +3248,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       return(ont.res)
-    },
-
-    addCellGroupsToEmbedding = function(gg.emb, cell.groups=self$cell.groups, font.size=c(2,4)) {
-      gg.ann <- self$plotEmbedding(groups=cell.groups)
-      ls <- gg.ann$layers %>% .[sapply(., function(l) "GeomLabelRepel" %in% class(l$geom))]
-      if (length(ls) != 1) {
-        warning("Can't find annotation layer\n")
-        return(gg.emb)
-      }
-
-      return(gg.emb + ls[[1]] + scale_size_continuous(range=font.size, trans='identity', guide='none'))
     },
 
     extractCodaData = function(ret.groups=TRUE, cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL, samples.to.remove=NULL) {

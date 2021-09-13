@@ -312,12 +312,9 @@ estimateNullZScoreRanges(const VectorXd &gene_vec, const MatrixXd &sample_x_cell
     return std::make_pair(min_vals, max_vals);
 }
 
-std::vector<double> adjustZScoresWithPermutations(const std::vector<double> &z_scores, const std::vector<std::vector<int>> &nn_ids,
-                                                  double wins, bool smooth, const std::vector<double> &max_vals) {
+// [[Rcpp::export]]
+std::vector<double> adjustZScoresWithPermutations(const std::vector<double> &z_scores, double wins, const std::vector<double> &max_vals) {
     std::vector<double> z_adj(z_scores.begin(), z_scores.end());
-    if (smooth) {
-        z_adj = applyMedianFilter(z_adj, nn_ids);
-    }
 
     auto max_val = range(z_adj, wins).second;
     for (double &z : z_adj) {
@@ -605,12 +602,50 @@ CFShiftResult estimateCellExpressionShift(const SparseMatrix<double> &cm, const 
     return CFShiftResult{dists, s1_ids, s2_ids};
 }
 
+// This function is only needed for testing cluster-free shifts on simulations.
+// There we need to exclude certain sample pairs, so we return full information.
+// [[Rcpp::export]]
+List estimateClusterFreeExpressionShiftsInfo(const Eigen::SparseMatrix<double> &cm, IntegerVector sample_per_cell, List nn_ids,
+                                             int min_n_obs_per_samp=1, bool verbose=true, int n_cores=1,
+                                             const std::string &dist="cor", bool log_vecs=true) {
+    const auto samp_per_cell_c = as<std::vector<int>>(IntegerVector(sample_per_cell - 1));
+    if (sample_per_cell.size() == 0 || (*std::max_element(samp_per_cell_c.begin(), samp_per_cell_c.end()) <= 0))
+        stop("sample_per_cell must be a factor vector with non-empty levels");
+
+    std::vector<std::vector<int>> nn_ids_c;
+    for (auto &ids : nn_ids) {
+        nn_ids_c.emplace_back(as<std::vector<int>>(ids));
+    }
+
+    std::mutex mut;
+    std::vector<double> dists;
+    std::vector<int> s1s, s2s, cids;
+    auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &dists, &s1s, &s2s, &cids, min_n_obs_per_samp, dist, log_vecs, &mut](int ci) {
+        auto res = estimateCellExpressionShift(cm, samp_per_cell_c, nn_ids_c[ci], min_n_obs_per_samp, dist, log_vecs);
+        for (size_t i = 0; i < res.dists.size(); ++i) {
+            double d = res.dists.at(i);
+            int s1 = res.s1_ids.at(i), s2 = res.s2_ids.at(i);
+
+            {
+                std::lock_guard<std::mutex> l(mut);
+                dists.push_back(d);
+                s1s.push_back(s1 + 1);
+                s2s.push_back(s2 + 1);
+                cids.push_back(ci);
+            }
+        }
+    };
+    sccore::runTaskParallelFor(0, nn_ids_c.size(), task, n_cores, verbose);
+
+    return List::create(_["dists"]=wrap(dists), _["s1s"]=wrap(s1s), _["s2s"]=wrap(s2s), _["cids"]=wrap(cids));
+}
+
 // [[Rcpp::export]]
 List estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double> &cm, IntegerVector sample_per_cell, List nn_ids,
                                           const std::vector<bool> &is_ref, const int min_n_between=1, const int min_n_within=1,
                                           const int min_n_obs_per_samp=1, bool norm_all=true, bool verbose=true, int n_cores=1,
                                           const std::string &dist="cor", bool log_vecs=true, int n_permutations=100,
-                                          double wins=0.01) {
+                                          bool smooth=true, double wins=0.01) {
     const auto samp_per_cell_c = as<std::vector<int>>(IntegerVector(sample_per_cell - 1));
     if (sample_per_cell.size() == 0 || (*std::max_element(samp_per_cell_c.begin(), samp_per_cell_c.end()) <= 0))
         stop("sample_per_cell must be a factor vector with non-empty levels");
@@ -630,7 +665,7 @@ List estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double> &cm,
         auto res = estimateCellExpressionShift(cm, samp_per_cell_c, nn_ids_c[i], min_n_obs_per_samp, dist, log_vecs);
         double d = estimateNormalizedExpressionShift(res.dists, is_ref, res.s1_ids, res.s2_ids,
             norm_all, min_n_within, min_n_between);
-        res_scores[i] = std::max(d, 0.0);
+        res_scores[i] = d;
         res_info[i] = res;
     };
     sccore::runTaskParallelFor(0, nn_ids_c.size(), task, n_cores, verbose);
@@ -646,11 +681,11 @@ List estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double> &cm,
 
     std::vector<double> max_vals(n_permutations, 0);
     std::vector<double> sum_null_dists(nn_ids_c.size(), 0);
-    std::vector<size_t> n_null_dists(nn_ids_c.size(), 0);
+    std::vector<double> n_null_dists(nn_ids_c.size(), 0);
     std::mutex mut;
 
     auto task2 = [&nn_ids_c, &res_info, &max_vals, &is_ref, &mut, &sum_null_dists, &n_null_dists, norm_all,
-            min_n_within, min_n_between, wins](int ri) {
+            min_n_within, min_n_between, wins, smooth](int ri) {
         std::mt19937 g(ri);
         std::vector<bool> is_ref_shuffled(is_ref.begin(), is_ref.end());
         std::shuffle(is_ref_shuffled.begin(), is_ref_shuffled.end(), g);
@@ -673,12 +708,19 @@ List estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double> &cm,
             }
         }
 
-        shuff_scores = applyMedianFilter(shuff_scores, nn_ids_c);
+        if (smooth) {
+            shuff_scores = applyMedianFilter(shuff_scores, nn_ids_c);
+        }
+
         max_vals.at(ri) = range(shuff_scores, wins).second;
     };
     sccore::runTaskParallelFor(0, n_permutations, task2, n_cores, verbose);
 
-    auto z_scores = adjustZScoresWithPermutations(res_scores, nn_ids_c, wins, true, max_vals);
+    std::sort(max_vals.begin(), max_vals.end());
+    auto z_scores = smooth ?
+        adjustZScoresWithPermutations(applyMedianFilter(res_scores, nn_ids_c), wins, max_vals) :
+        adjustZScoresWithPermutations(res_scores, wins, max_vals);
+
     for (size_t ci = 0; ci < res_scores.size(); ++ci) {
         res_scores.at(ci) -= sum_null_dists.at(ci) / n_null_dists.at(ci);
     }

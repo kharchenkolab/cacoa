@@ -2253,11 +2253,14 @@ Estimate Cluster-free Expression Shift
   min.n.within = max(min.n.between, 1),
   min.expr.frac = 0,
   min.n.obs.per.samp = 3,
-  norm.all = FALSE,
+  norm.all = TRUE,
   dist = "cor",
   log.vectors = (dist != "js"),
+  wins = 0.025,
+  n.permutations = 500,
   verbose = self$verbose,
-  n.cores = self$n.cores
+  n.cores = self$n.cores,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
@@ -2458,14 +2461,13 @@ Plot cluster-free expression shift z-scores
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotClusterFreeExpressionShifts(
   cell.groups = self$cell.groups,
-  smooth = FALSE,
-  beta = 10,
+  smooth = TRUE,
   plot.na = FALSE,
   color.range = c("0", "97.5\%"),
   alpha = 0.2,
   font.size = c(3, 5),
-  palette = brewerPalette("RdYlBu"),
-  rescale = TRUE,
+  palette = brewerPalette("YlOrRd", rev = FALSE),
+  build.panel = TRUE,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -2481,8 +2483,6 @@ Plot cluster-free expression shift z-scores
 
 \item{\code{plot.both.conditions}}{show both case and control cells. Normally, showing control cells doesn't
 make sense, as control cells always have small distance from control.}
-
-\item{\code{max.shift}}{all shift values above \code{max.shift} are set to this value when plotting. Default: 95\% of the shifts.}
 }
 \if{html}{\out{</div>}}
 }

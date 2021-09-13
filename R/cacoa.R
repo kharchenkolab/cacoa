@@ -2823,12 +2823,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' In most cases, must be TRUE for "cosine" and "cor" distances and always must be FALSE for "js". (default: `dist != 'js'`)
     #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
     #' Results are also stored in the `cluster.free.expr.shifts` field.
-    estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="z", min.n.between=2, min.n.within=max(min.n.between, 1),
+    estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="z", name="cluster.free.expr.shifts",
+                                                 min.n.between=2, min.n.within=max(min.n.between, 1),
                                                  min.expr.frac=0.0, min.n.obs.per.samp=3, norm.all=TRUE, dist="cor", log.vectors=(dist != "js"),
                                                  wins=0.025, n.permutations=500, verbose=self$verbose, n.cores=self$n.cores, ...) {
-      if (n.permutations < 10)
-        stop("n.permutations must be at least 10")
-
       cm <- self$getJointCountMatrix(raw=FALSE)
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, min.expr.frac=min.expr.frac)
       cm <- Matrix::t(cm[, genes])
@@ -2842,9 +2840,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       shifts <- estimateClusterFreeExpressionShiftsC(
         cm, self$sample.per.cell[names(nns.per.cell)], nn_ids=nns.per.cell, is_ref=is.ref, min_n_between=min.n.between,
         min_n_within=min.n.within, min_n_obs_per_samp=min.n.obs.per.samp, norm_all=norm.all, verbose=verbose,
-        n_cores=n.cores, dist=dist, log_vecs=log.vectors, wins=wins, n_permutations=n.permutations
+        n_cores=n.cores, dist=dist, log_vecs=log.vectors, wins=wins, n_permutations=n.permutations, ...
       )
-      self$test.results[["cluster.free.expr.shifts"]] <- shifts
+      self$test.results[[name]] <- shifts
 
       return(invisible(shifts))
     },

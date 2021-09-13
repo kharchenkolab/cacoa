@@ -325,6 +325,27 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
     },
 
+    estimatePerCellTypeDE=function(cell.groups = self$cell.groups,
+                                   sample.groups = self$sample.groups,
+                                   ref.level = self$ref.level,
+                                   target.level = self$target.level,
+                                   name ='de',
+                                   test='DESeq2.Wald',
+                                   resampling.method=NULL, # default - without resampling
+                                   max.resamplings=30,
+                                   seed.resampling=239, # shouldn't this be external?
+                                   min.cell.frac=0.05,
+                                   covariates = NULL,
+                                   common.genes = FALSE,
+                                   n.cores = self$n.cores,
+                                   cooks.cutoff = FALSE,
+                                   min.cell.count = 10,
+                                   max.cell.count= Inf,
+                                   independent.filtering = FALSE,
+                                   cluster.sep.chr = "<!!>",
+                                   verbose=self$verbose, ...) {
+      return(self$estimateDEPerCellType(...))
+    },
 
     #' @description Estimate differential gene expression per cell type between conditions
     #' @param cell.groups factor specifying cell types (default from self)
@@ -333,8 +354,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param target.level Reference level in 'sample.groups', e.g., case, diseased (default from self)
     #' @param common.genes Only investigate common genes across cell groups (default=FALSE)
     #' @param cooks.cutoff cooksCutoff for DESeq2 (default=FALSE)
-
-
     #' @param test which DESeq2 test to use (options: "LRT" (default), "Wald")
     #' @param cooks.cutoff cooksCutoff for DESeq2 (default=FALSE)
     #' @param min.cell.count minimum number of cells that need to be present in a given cell type in a given sample in order to be taken into account (default=10)
@@ -344,7 +363,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param resampling.method which resampling method should be used "loo" for leave-one-out or "bootstrap", (default:NULL no resampling)
     #' @param name slot in which to save the results (default: 'de')
     #' @return A list of DE genes
-    estimatePerCellTypeDE=function(cell.groups = self$cell.groups,
+    estimateDEPerCellType=function(cell.groups = self$cell.groups,
                                    sample.groups = self$sample.groups,
                                    ref.level = self$ref.level,
                                    target.level = self$target.level,

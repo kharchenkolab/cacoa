@@ -88,7 +88,8 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 
   if (show.significance) {
     if (adjust.pvalues) {
-      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.adj")  # willcox test + adjustment
+      
+      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test + adjustment
       # TODO
       # p.adjust.method = "fdr" ?
     } else {

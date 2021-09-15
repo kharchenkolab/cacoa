@@ -515,12 +515,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       jaccards.all <- data.frame()
       for(de.name in de.names){
-        # print(de.name)
+        print(de.name)
+        if(!(de.name %in% names(self$test.results))) next
         de.res <- private$getResults(de.name)
         if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
         jaccards <- estimateStabilityPerCellType(de.res = de.res,
                                                  top.n.genes = top.n.genes,
                                                  p.val.cutoff = p.val.cutoff)
+        print(jaccards)
         jacc.medians <- sapply(unique(jaccards$group), function(x) median(jaccards$value[jaccards$group == x]))
         jaccards.tmp <- data.frame(group = de.name, value = jacc.medians,
                                    cmp = names(jacc.medians))
@@ -563,7 +565,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           xlim(0, top.n.genes) + geom_smooth(method = "loess") + self$plot.theme +
           xlab('Gene rank by p-value') + ylab('Fraction of LOOs') +
           scale_color_manual(values=self$cell.groups.palette) +
-          guides(color=guide_legend(override.aes=list(fill=NA), ncol=2))
+          guides(color=guide_legend(override.aes=list(fill=NA), ncol=1)) + 
+          theme(legend.text = element_text(size=6),legend.key.height= unit(0.1, 'cm'),
+                legend.key.width = unit(0.2, 'cm')) 
         return(p)
       }
 

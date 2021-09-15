@@ -366,8 +366,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
 
         if(normalization == 'deseq2') {
           print('DESeq2 normalization')
-          cnts.norm <- cm  %>%
-            DESeq2::DESeqDataSetFromMatrix(colData = meta, design= ~ group)  %>%
+          cnts.norm <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula)  %>%
             DESeq2::estimateSizeFactors()  %>% DESeq2::counts(normalized=TRUE)
         } else if(normalization == 'edger') {
           # EdgeR normalisation
@@ -379,7 +378,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
           cnts.norm <- prop.table(cm, 2) # Should it be multiplied by median(colSums(cm)) ?
         }
 
-        cm = cnts.norm #remove
+        cm = cnts.norm  # to save mormalized counts in the result list
 
         if(test == 'wilcoxon') {
           # Wilcoxon test
@@ -445,15 +444,15 @@ estimatePerCellTypeDEmethods=function (raw.mats,
         cnts.norm = cm
 
         y <- limma::voom(cnts.norm, mm, plot = FALSE)
-        fit <- limma:lmFit(y, mm)
+        fit <- limma::lmFit(y, mm)
 
-        contr <- makeContrasts(paste(c('group', target.level), collapse = ''),
+        contr <- limma::makeContrasts(paste(c('group', target.level), collapse = ''),
                                levels = colnames(coef(fit)))
 
-        tmp <- contrasts.fit(fit, contr)
-        tmp <- eBayes(tmp)
+        tmp <- limma::contrasts.fit(fit, contr)
+        tmp <- limma::eBayes(tmp)
 
-        res1 <- topTable(tmp, sort.by = "P", n = Inf)
+        res1 <- limma::topTable(tmp, sort.by = "P", n = Inf)
         colnames(res1) <- c('log2FoldChange', 'AveExpr', 'stat', 'pvalue', 'padj', 'B')
 
       }
@@ -464,7 +463,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
       }
 
       if (return.matrix) {
-        list(res = res1, cm = cm)
+        list(res = res1, cm = cm, meta=meta)
       }
       else {
         res1

@@ -137,8 +137,8 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
   return(loadings)
 }
 
-#' This function producec datasent for resampling
-#' @param cnts Counts of cell typer in samples. Rows - samples, columns - cell types
+#' This function produces the resampling dataset
+#' @param cnts Counts of cell types in samples. Rows - samples, columns - cell types
 #' @param groups Vector with boolean values. TRUE - sample in the case group, FALSE - sample in the control group
 #' @param n.iter Number of permutations
 #' @param remain.groups TRUE - if the labels of groups remain, FALSE - if to produce the null distribution
@@ -200,7 +200,8 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL) {
                                   replace.samples = FALSE,
                                   remain.groups = TRUE, seed = n.seed+ib)
 
-    getLoadings(init.tmp$cnts[[1]], init.tmp$groups[[1]])
+    res <- getLoadings(init.tmp$cnts[[1]], init.tmp$groups[[1]])
+    res[colnames(cnts), , drop=F]
   })
 
   # Calculate p-values
@@ -222,19 +223,27 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL) {
   # }
 
   # Calculate p-values of confidence interval by bootstrap
-
+  
+  
   tmp <- referenceSet(cnts, groups, p.thresh = 0.1)
   cell.list <- tmp$cell.list
-  sdt.list <- c()
-  mean.list <- c()
-  n.list <- c()
+  
+  sdt.list <- c()  # standard deviation in a list
+  mean.list <- c()  # mean value of loadings in a list
+  min.list <- c()  # min values of mean loadings
+  n.list <- c()  # number of cell types in a list
   for (i.list in 1:length(cell.list)) {
     loadings.list <- loadings.init[cell.list[[i.list]],]
     sdt.list <- c(sdt.list, sd(c(loadings.list)))
     mean.list <- c(mean.list, mean(c(loadings.list)))
+    
+
     n.list <- c(n.list, length(cell.list[[i.list]]))
-    if (length(cell.list[[i.list]]) == 1) {
-      mean.list <- 10
+    if (length(cell.list[[i.list]]) == 1) {  # if a list contains only one sample - it cannot be a reference group
+      mean.list[i.list] <- 10
+      min.list <- c(min.list, 10)
+    } else {
+      min.list <- c(min.list, min(abs(apply(loadings.list, 1, mean))) / n.list[i.list] )
     }
   }
   # print(sdt.list)
@@ -244,8 +253,11 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL) {
   # Define a cluster with reference cell type
   if (is.null(ref.cell.type)) {
     # id.ref.cluster <- which(sdt.list == max(sdt.list))
+    
     # id.ref.cluster <- which(n.list == max(n.list))
-    id.ref.cluster <- which(abs(mean.list) == min(abs(mean.list)))
+    # id.ref.cluster <- id.ref.cluster[abs(mean.list[id.ref.cluster]) == min(abs(mean.list[id.ref.cluster]))]
+    # id.ref.cluster <- which(abs(mean.list) == min(abs(mean.list)))  # <- working version
+    id.ref.cluster <- which(min.list == min(min.list))  # <- working version
   } else {
     id.ref.cluster <- -1
     for (i.list in 1:length(cell.list)) {

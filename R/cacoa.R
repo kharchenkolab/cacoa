@@ -3038,9 +3038,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param font.size size range for cell type labels
     #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
     plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=TRUE, plot.na=FALSE,
+                                               name="cluster.free.expr.shifts",
                                                color.range=c("0", "97.5%"), alpha=0.2, font.size=c(3,5),
                                                palette=brewerPalette("YlOrRd", rev=FALSE), build.panel=TRUE, ...) {
-      shifts <- private$getResults("cluster.free.expr.shifts", "estimateClusterFreeExpressionShifts")
+      shifts <- private$getResults(name, "estimateClusterFreeExpressionShifts")
       private$checkCellEmbedding()
       z.scores <- shifts$z_scores
       shifts <- if (smooth) shifts$shifts_smoothed else shifts$shifts

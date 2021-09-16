@@ -253,15 +253,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param jitter.alpha transparency value for the data points (default: 0.05)
     #' @param type - type of a plot "bar" (default) or "box"
     #' @param notch - whether to show notches in the boxplot version (default=TRUE)
-    #' @param show.size.depenency whether to show mean vs. number of cells in a cell type instead
-    #' @param font.size font size for the cell type labels in the size dependency plot
-    #' @param show.regression whether to show a slope line in the size dependency plot
-    #' @param show.regression whether to show a whiskers in the size dependency plot
     #' @return A ggplot2 object
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch = TRUE, show.jitter=TRUE,
-                                           jitter.alpha=0.05, show.size.dependency=FALSE, show.whiskers=TRUE,
-                                           show.regression=TRUE, show.pvalues=c("adjusted", "raw", "none"),
-                                           font.size=5, ylab='normalized expression distance', ...) {
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch=TRUE, show.jitter=TRUE,
+                                           jitter.alpha=0.05, show.pvalues=c("adjusted", "raw", "none"),
+                                           ylab='normalized expression distance', ...) {
       show.pvalues <- match.arg(show.pvalues)
       res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
       df <- names(res$dists.per.type) %>%
@@ -276,31 +271,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         pvalues <- NULL
       }
 
-      if(show.size.dependency) {
-        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette, ylab=ylab, yline=NA,
-                            show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme, ...)
-      } else {
-        plotMeanMedValuesPerCellType(df, pvalues=pvalues, show.jitter=show.jitter,jitter.alpha=jitter.alpha,
-                                     notch=notch, type=type, palette=self$cell.groups.palette, ylab=ylab,
-                                     plot.theme=self$plot.theme, yline=0, ...)
-      }
+      plotMeanMedValuesPerCellType(
+        df, pvalues=pvalues, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch,
+        type=type, palette=self$cell.groups.palette, ylab=ylab, plot.theme=self$plot.theme, yline=0, ...
+      )
     },
 
     ##' Plot common expression shift estimates across cell types
     ##'
     ##' @param name result slot name (default: common.expression.shifts
-    ##' @param show.subsampling.variability  - whether the spread should illustrate subsampling variability instead of the inter-sample variability (default: FALSE)
     ##' @param show.jitter whether to show indiivudal data points (default: FALSE)
     ##' @param jitter.alpha transparency value for the data points (default: 0.05)
     ##' @param type - type of a plot "bar" (default) or "box"
     ##' @param notch - whether to show notches in the boxplot version (default=TRUE)
-    ##' @param show.size.depenency whether to show mean vs. number of cells in a cell type instead
-    ##' @param font.size font size for the cell type labels in the size dependency plot
-    ##' @param show.regression whether to show a slope line in the size dependency plot
-    ##' @param show.regression whether to show a whiskers in the size dependency plot
     ##' @return A ggplot2 object
-    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.jitter=FALSE, jitter.alpha=0.05, type='box',
-                                                 notch=TRUE, show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, font.size=5,
+    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.jitter=FALSE, jitter.alpha=0.05,
+                                                 type='box', notch=TRUE, ylab='common expression distance',
                                                  show.pvalues=c("adjusted", "raw", "none"), ...) {
       show.pvalues <- match.arg(show.pvalues)
       res <- private$getResults(name, 'estimateCommonExpressionShiftMagnitudes')
@@ -316,13 +302,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         pvalues <- NULL
       }
 
-      if(show.size.dependency) {
-        plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='common expression distance', yline=NA,
-                            show.whiskers=show.whiskers, show.regression=show.regression, plot.theme=self$plot.theme, ...)
-      } else {
-        plotMeanMedValuesPerCellType(df, pvalues=pvalues, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
-                                     palette=self$cell.groups.palette, ylab='common expression distance', plot.theme=self$plot.theme, yline=0.0, ...)
-      }
+      plotMeanMedValuesPerCellType(
+        df, pvalues=pvalues, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
+        palette=self$cell.groups.palette, ylab=ylab, plot.theme=self$plot.theme, yline=0.0, ...
+      )
     },
 
     estimatePerCellTypeDE=function(cell.groups = self$cell.groups,
@@ -1182,18 +1165,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param pvalue.cutoff P value cutoff (default=0.05)
     #' @param p.adjust whether the cutoff should be based on the adjusted P value (default: TRUE)
     #' @param show.resampling.results whether to show uncertainty based on resampling results (default: TRUE)
-    #' @param show.size.depenency whether to show mean vs. number of cells in a cell type instead (default: FALSE)
-    #' @param show.regression whether to show a slope line in the size dependency plot (default:TRUE)
-    #' @param show.whiskers whether to show a whiskers in the size dependency plot (default:TRUE)
     #' @return A ggplot2 object
-    plotNumberOfDEGenes=function(name='de', p.adjust=TRUE, pvalue.cutoff=0.05, show.resampling.results=TRUE, show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE,
-                                 show.size.dependency=FALSE, show.whiskers=TRUE, show.regression=TRUE, ...) {
-
+    plotNumberOfDEGenes=function(name='de', p.adjust=TRUE, pvalue.cutoff=0.05, show.resampling.results=TRUE,
+                                 show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE, ...) {
       de.raw <- private$getResults(name, 'estimatePerCellTypeDE()')
 
-      if(show.resampling.results) {
-        if(!all(unlist(lapply(de.raw,function(x) !is.null(x$subsamples))))) {
-          warning("resampling results are missing for at least some cell types, falling back to point estimates. Please rerun estimatePerCellTypeDE() with resampling='bootstrap' or resampling='loo'")
+      if (show.resampling.results) {
+        if (any(unlist(lapply(de.raw, function(x) is.null(x$subsamples))))) {
+          warning("resampling results are missing for at least some cell types, falling back to point estimates.",
+                  "Please rerun estimatePerCellTypeDE() with resampling='bootstrap' or resampling='loo'")
           rl <- lapply(de.raw, `[[`, 'res')
         } else {
           subsamples <- lapply(de.raw, `[[`, 'subsamples')
@@ -1203,8 +1183,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else {
         rl <- lapply(de.raw, `[[`, 'res')
       }
+
       # convert to dataframe for plotting
-      df <- do.call(rbind,lapply(1:length(rl),function(i) {
+      df <- do.call(rbind, lapply(1:length(rl), function(i) {
         if (p.adjust) {
           ndiff <- sum(na.omit(rl[[i]]$padj<=pvalue.cutoff))
         } else {
@@ -1213,18 +1194,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         data.frame(Type=names(rl)[i], value=ndiff, stringsAsFactors=FALSE)
       }))
 
-      if(show.size.dependency) {
-        p <- plotCellTypeSizeDep(df, self$cell.groups, palette=self$cell.groups.palette,ylab='number of DE genes', yline=NA, show.whiskers=show.whiskers,
-                                 show.regression=show.regression, plot.theme=self$plot.theme, ...)
-      } else {
-        p <- plotMeanMedValuesPerCellType(df,show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type, palette=self$cell.groups.palette,
-                                          ylab='number of DE genes',yline=NA, plot.theme=self$plot.theme, ...)
-      }
-
-      return(p)
+      plotMeanMedValuesPerCellType(
+        df, show.jitter=show.jitter, jitter.alpha=jitter.alpha, notch=notch, type=type,
+        palette=self$cell.groups.palette, ylab='number of DE genes', yline=NA, plot.theme=self$plot.theme, ...
+      )
     },
-
-
 
     plotVolcano=function(name='de', cell.types=NULL, palette=NULL, build.panel=TRUE, n.col=3,
                          color.var = 'CellFrac', ...) {

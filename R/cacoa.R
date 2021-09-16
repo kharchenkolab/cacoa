@@ -247,49 +247,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
+    #' @description  Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
+    #'   cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
     #' @param name - results slot name (default: 'expression.shifts')
     #' @param show.jitter whether to show indivudal data points (default: FALSE)
     #' @param jitter.alpha transparency value for the data points (default: 0.05)
     #' @param type - type of a plot "bar" (default) or "box"
     #' @param notch - whether to show notches in the boxplot version (default=TRUE)
     #' @return A ggplot2 object
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch=TRUE, show.jitter=TRUE,
-                                           jitter.alpha=0.05, show.pvalues=c("adjusted", "raw", "none"),
+    plotExpressionShiftMagnitudes=function(name=NULL, type='box', notch=TRUE, show.jitter=TRUE, jitter.alpha=0.05,
+                                           show.pvalues=c("adjusted", "raw", "none"), shift.type=c("normal", "common"),
                                            ylab='normalized expression distance', ...) {
       show.pvalues <- match.arg(show.pvalues)
-      res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
-      df <- names(res$dists.per.type) %>%
-        lapply(function(n) data.frame(value=res$dists.per.type[[n]], Type=n)) %>%
-        do.call(rbind, .) %>% na.omit()
-
-      if (show.pvalues == "adjusted") {
-        pvalues <- res$padjust
-      } else if (show.pvalues == "raw") {
-        pvalues <- res$pvalues
-      } else {
-        pvalues <- NULL
+      shift.type <- match.arg(shift.type)
+      if (is.null(name)) {
+        name <- if (shift.type == "normal") "expression.shifts" else "common.expression.shifts"
       }
 
-      plotMeanMedValuesPerCellType(
-        df, pvalues=pvalues, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch,
-        type=type, palette=self$cell.groups.palette, ylab=ylab, plot.theme=self$plot.theme, yline=0, ...
-      )
-    },
-
-    ##' Plot common expression shift estimates across cell types
-    ##'
-    ##' @param name result slot name (default: common.expression.shifts
-    ##' @param show.jitter whether to show indiivudal data points (default: FALSE)
-    ##' @param jitter.alpha transparency value for the data points (default: 0.05)
-    ##' @param type - type of a plot "bar" (default) or "box"
-    ##' @param notch - whether to show notches in the boxplot version (default=TRUE)
-    ##' @return A ggplot2 object
-    plotCommonExpressionShiftMagnitudes=function(name='common.expression.shifts', show.jitter=FALSE, jitter.alpha=0.05,
-                                                 type='box', notch=TRUE, ylab='common expression distance',
-                                                 show.pvalues=c("adjusted", "raw", "none"), ...) {
-      show.pvalues <- match.arg(show.pvalues)
-      res <- private$getResults(name, 'estimateCommonExpressionShiftMagnitudes')
+      func.name <- if (shift.type == "normal") {"estimateExpressionShiftMagnitudes()"}
+        else {"estimateCommonExpressionShiftMagnitudes()"}
+      res <- private$getResults(name, func.name)
       df <- names(res$dists.per.type) %>%
         lapply(function(n) data.frame(value=res$dists.per.type[[n]], Type=n)) %>%
         do.call(rbind, .) %>% na.omit()

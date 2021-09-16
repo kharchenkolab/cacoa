@@ -1638,41 +1638,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         self$plot.theme +
         theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5),
               legend.position="right") +
-        labs(x="", y=paste0("No. of ",type," terms"))
+        labs(x="", y=paste0("No. of ", type, " terms"))
       return(gg)
-    },
-
-    #' @description Plot ontology terms as a function of both number of DE genes, and number of cells.
-    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default='all')
-    #' @param type Ontology, must be either "GO" or "DO" (default="GO")
-    #' @param p.adj (default = 0.05)
-    #' @param min.genes (default = 1)
-    #' @param cell.groups (default: stored factor)
-    #' @param palette (default: stored named vector)
-    #' @param ... parameters forwarded to \link{plotNCellRegression}
-    #' @return A ggplot2 object
-    plotOntologyTerms=function(genes='all', type=c("GO", "DO"), p.adj=0.05, min.genes=1, cell.groups=self$cell.groups,
-                               palette=self$cell.groups.palette, ...) {
-      # TODO: ideally, this function should be removed from the package, and then we don't need to store de.gene.ids
-      type <- match.arg(type)
-      ont.res <- private$getOntologyPvalueResults(genes=genes, type=type, p.adj=p.adj, min.genes=min.genes)
-
-      de.gene.ids <- self$test.results[[type]]$de.gene.ids
-      if(length(unique(ont.res$Group))==1) stop("The input only contains one cell type.")
-      cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.gene.ids)]
-
-      n.go.per.type <- table(ont.res$Group) %>% c()
-      n.de.per.type <- sapply(de.gene.ids, function(x) length(x[[genes]]))
-
-      y.lab <- paste("Number of", type, "terms")
-      pg <- cowplot::plot_grid(
-        plotNCellRegression(n.go.per.type, n.de.per.type, x.lab="Number of highly-expressed DE genes",
-                            y.lab=y.lab, legend.position="none", label=TRUE, plot.theme=self$plot.theme, ...),
-        plotNCellRegression(n.go.per.type, cell.groups, y.lab=y.lab, legend.position="none", label=TRUE, plot.theme=self$plot.theme, ...),
-        ncol=1
-      )
-
-      return(pg)
     },
 
     #' @description Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
@@ -1683,36 +1650,42 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @param log.colors Use log10 p-values for coloring (default=FALSE)
     #' @return A ggplot2 object
-    plotOntology = function(cell.subgroups, plot = "dot", genes = "up", type = "GO", subtype = "BP", n = 20, p.adj = 0.05, min.genes = 1, ...) {
+    plotOntology = function(cell.subgroups, plot="dot", genes="up", type="GO", subtype="BP", n=20, p.adj=0.05,
+                            min.genes=1, ...) {
       # Checks
       checkPackageInstalled("enrichplot", bioc=TRUE)
-      if(is.null(type) || (!type %in% c("GO","DO","GSEA"))) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
-      if(is.null(subtype) || (!subtype %in% c("BP","CC","MF"))) stop("'subtype' must be 'BP', 'CC', or 'MF'.")
-      if(is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
-      if(is.null(cell.subgroups)) stop("Please define which cells to plot using 'cell.subgroups'.")
-      if(type == "GSEA" & plot == "bar") stop("No 'enrichplot' method exists for making barplots of GSEA results.")
+      if (is.null(type) || (!type %in% c("GO","DO","GSEA"))) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
+      if (is.null(subtype) || (!subtype %in% c("BP","CC","MF"))) stop("'subtype' must be 'BP', 'CC', or 'MF'.")
+      if (is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
+      if (is.null(cell.subgroups)) stop("Please define which cells to plot using 'cell.subgroups'.")
+      if (type == "GSEA" & plot == "bar") stop("No 'enrichplot' method exists for making barplots of GSEA results.")
 
       # Extract results
       ont.res <- self$test.results[[type]]$res
-      if(is.null(ont.res)) stop(paste0("No results found for ",type,"."))
-      if(!cell.subgroups %in% names(ont.res)) stop("'cell.subgroups' not found in results.")
+      if (is.null(ont.res)) stop("No results found for ", type)
+      if (!cell.subgroups %in% names(ont.res)) stop("'cell.subgroups' not found in results.")
       ont.res %<>% .[[cell.subgroups]]
-      if(type != "DO") ont.res %<>% .[[subtype]]
-      if(is.null(ont.res)) stop(paste0("No results found for ",type,", ",subtype," for ",cell.subgroups,"."))
-      if(type %in% c("GO","DO")) ont.res %<>% .[[genes]]
-      if(is.null(ont.res)) stop(paste0("No results found for ",genes," genes for ",type,", ",subtype," for ",cell.subgroups,"."))
+      if (type != "DO") ont.res %<>% .[[subtype]]
+      if (is.null(ont.res))
+        stop("No results found for ", type, ", ", subtype, " for ", cell.subgroups)
+
+      if (type %in% c("GO","DO")) ont.res %<>% .[[genes]]
+      if (is.null(ont.res))
+        stop("No results found for ", genes, " genes for ", type, ", ", subtype, " for ", cell.subgroups)
 
       # Prepare data
       df <- ont.res@result %>% filter(p.adjust <= p.adj)
-      if(nrow(df) == 0) stop(paste0("Nothing to plot. Try relaxing 'p.adj'. The lowest adj. P value is ",min(ont.res@result$p.adjust) %>% formatC(digits = 3),"."))
+      if (nrow(df) == 0)
+        stop("Nothing to plot. Try relaxing 'p.adj'. The lowest adj. P value is ",
+             formatC(min(ont.res@result$p.adjust), digits=3))
 
       # Allow plotting of terms with p.adj > 0.05
-      if(p.adj != 0.05) {
-        ont.res@pvalueCutoff = 1
-        ont.res@qvalueCutoff = 1
+      if (p.adj != 0.05) {
+        ont.res@pvalueCutoff <- 1
+        ont.res@qvalueCutoff <- 1
       }
 
-      if(min.genes > 1) {
+      if (min.genes > 1) {
         idx <- df$GeneRatio %>%
           strsplit("/", fixed=TRUE) %>%
           sapply(`[[`, 1)
@@ -1722,10 +1695,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       ont.res@result <- df
 
       # Plot
-      if(plot == "dot")
+      if (plot == "dot")
         return(dotplot(ont.res, showCategory=n, orderBy="x", ...))
 
-      if(plot == "bar")
+      if (plot == "bar")
         return(barplot(ont.res, showCategory=n, ...))
 
       stop("Unknown plot type: ", plot)

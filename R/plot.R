@@ -111,12 +111,13 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 #' @param legend.title Title on plot (default="-log10(p-value)")
 #' @param x.axis.position Position of x axis (default="top")
 #' @param color.range Range for filling colors
+#' @param grid.color Color of the grid. Set to "transparent" to disable the grid. (default: "gray50")
 #' @return A ggplot2 object
 #' @export
 plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE, legend.position="right",
                         legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
                         color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL, font.size=8,
-                        distance="manhattan", clust.method="complete") {
+                        distance="manhattan", clust.method="complete", grid.color="gray50") {
   if (is.null(color.range)) {
     color.range <- c(min(0, min(df)), max(df))
   }
@@ -146,7 +147,8 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE
   }
 
   df$value %<>% pmax(color.range[1]) %>% pmin(color.range[2])
-  gg <- ggplot(df) + geom_tile(aes(x=G2, y=G1, fill=value), color="gray50") +
+
+  gg <- ggplot(df) + geom_tile(aes(x=G2, y=G1, fill=value), color=grid.color) +
     plot.theme +
     theme(axis.text.x=element_text(angle=90, hjust=0, vjust=0.5, color=color.per.group),
           axis.text=element_text(size=font.size), axis.ticks=element_blank(), axis.title=element_blank()) +

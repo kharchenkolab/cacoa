@@ -45,11 +45,9 @@ RoxygenNote: 7.1.1
 LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress, sccore
 NeedsCompilation: yes
 Suggests:
-    circlize,
     cluster,
     clusterProfiler (>= 3.0.0),
     coda.base,
-    ComplexHeatmap,
     DESeq2,
     DOSE,
     EnhancedVolcano,

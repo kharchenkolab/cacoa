@@ -1745,10 +1745,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left",
                                  selection=c("all", "common", "unique"), n=20, clusters=TRUE, cluster.name=NULL,
-                                 cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE, max.log.p=15, ...) {
+                                 cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE, max.log.p=10, ...) {
       # Checks
-      checkPackageInstalled(c("ComplexHeatmap"), bioc=TRUE)
-      checkPackageInstalled(c("circlize"), bioc=FALSE)
       selection <- match.arg(selection)
 
       if (!is.null(cell.subgroups) && (length(cell.subgroups) == 1))

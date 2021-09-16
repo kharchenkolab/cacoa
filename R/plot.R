@@ -88,7 +88,7 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 
   if (show.significance) {
     if (adjust.pvalues) {
-      
+
       gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test + adjustment
       # TODO
       # p.adjust.method = "fdr" ?
@@ -259,17 +259,17 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
     df$Type %<>% factor(., levels=.)
   }
 
-  if(type=='box') { # boxplot
-    p <- ggplot(odf,aes(x=Type,y=value,fill=Type)) + geom_boxplot(notch=notch, outlier.shape=NA)
-  } else if(type=='point') { # point + se
-    p <- ggplot(df,aes(x=Type,y=mean,color=Type)) + geom_point(size=3) +
+  if (type=='box') { # boxplot
+    p <- ggplot(odf,aes(x=Type, y=value, fill=Type)) + geom_boxplot(notch=notch, outlier.shape=NA)
+  } else if (type=='point') { # point + se
+    p <- ggplot(df, aes(x=Type, y=mean, color=Type)) + geom_point(size=3) +
       geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, size=line.size)
-    if(!is.null(palette)) {p <- p + scale_color_manual(values=palette)}
+    if (!is.null(palette)) {p <- p + scale_color_manual(values=palette)}
   } else { # barplot
     p <- ggplot(df,aes(x=Type,y=mean,fill=Type)) + geom_bar(stat='identity') +
       geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, size=line.size)
   }
-  if(!is.na(yline) && !is.null(yline)) { p <- p + geom_hline(yintercept = yline, linetype=2, color='gray50') }
+  if (!is.na(yline) && !is.null(yline)) {p <- p + geom_hline(yintercept = yline, linetype=2, color='gray50')}
   p <- p +
     plot.theme +
     theme(
@@ -281,7 +281,7 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
     guides(fill="none") +
     labs(x="", y=ylab)
 
-  if(show.jitter) {
+  if (show.jitter) {
     p <- p +
       geom_jitter(data=odf, aes(x=Type,y=value), color=1, position=position_jitter(0.1), show.legend=FALSE,
                   alpha=jitter.alpha, size=jitter.size)
@@ -291,7 +291,7 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
     pval.df <- pvalueToCode(pvalues) %>%
       tibble(Type=factor(names(.), levels=levels(df$Type)), pvalue=.) %>% na.omit()
 
-    p <- p + geom_text(data=pval.df, mapping=aes(x=Type, label=pvalue), y=pvalue.y)
+    p <- p + geom_text(data=pval.df, mapping=aes(x=Type, label=pvalue), y=pvalue.y, color="black")
   }
 
   if(!is.null(palette)) {

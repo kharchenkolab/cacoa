@@ -308,25 +308,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       )
     },
 
-    estimatePerCellTypeDE=function(cell.groups = self$cell.groups,
-                                   sample.groups = self$sample.groups,
-                                   ref.level = self$ref.level,
-                                   target.level = self$target.level,
-                                   name ='de',
-                                   test='DESeq2.Wald',
-                                   resampling.method=NULL, # default - without resampling
-                                   max.resamplings=30,
-                                   seed.resampling=239, # shouldn't this be external?
-                                   min.cell.frac=0.05,
-                                   covariates = NULL,
-                                   common.genes = FALSE,
-                                   n.cores = self$n.cores,
-                                   cooks.cutoff = FALSE,
-                                   min.cell.count = 10,
-                                   max.cell.count= Inf,
-                                   independent.filtering = FALSE,
-                                   cluster.sep.chr = "<!!>",
-                                   verbose=self$verbose, ...) {
+    #' @description Alias for estimateDEPerCellType
+    estimatePerCellTypeDE=function(...) {
+      .Deprecated("cao$estimateDEPerCellType")
       return(self$estimateDEPerCellType(...))
     },
 

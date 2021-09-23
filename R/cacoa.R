@@ -1369,111 +1369,47 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Identify families containing a specific ontology term or ID
     #' @param go.term Character vector with term description(s)
     #' @param go.id Character vector with ID(s)
-    #' @param type Ontology, must be either "GO", "DO", or GSEA (default="GO")
     #' @param common Boolean, only identify families with all the supplied terms or IDs (default = FALSE)
     #' @return Data frame
-    getFamilies=function(go.term = NULL, go.id = NULL, type = "GO", common = FALSE) {
-      # Initial check
-      if(type == "GSEA") stop("GSEA is not yet supported.")
-      if(is.null(go.term) && is.null(go.id)) stop("Please specify either 'go.term' or 'go.id'.")
-      if(!is.null(go.term) && !is.null(go.id)) warning("Both 'go.term' and 'go.id' specified, will only use 'go.term'.")
+    getFamiliesPerGO=function(go.term=NULL, go.id=NULL, common = FALSE) {
+      type <- "GO" # Maybe it would be nice to support other types
+      if (is.null(go.term) && is.null(go.id)) stop("Please specify either 'go.term' or 'go.id'.")
+      if (!is.null(go.term) && !is.null(go.id))
+        warning("Both 'go.term' and 'go.id' specified, will only use 'go.term'.")
 
       # Extract data
-      ont.fam <- self$test.results[[type]]$families
-      if(is.null(ont.fam)) stop("No family data found.")
+      test.res <- self$test.results[[type]]
+      ont.fam <- test.res$families
+      if (is.null(ont.fam)) stop("No family data found.")
+
+      # Get mapping of IDs to Descriptions
+      desc.per.id <- rapply(test.res$res, function(x) x@result %$% setNames(Description, ID), how="list") %>%
+        do.call(c, .) %>% do.call(c, .) %>% unname() %>% do.call(c, .)
 
       # Make data.frame
-      df <- ont.fam %>%
-        names() %>%
-        lapply(function(ct) {
-          lapply(ont.fam[[ct]] %>% names(), function(ont) {
-            lapply(ont.fam[[ct]][[ont]] %>% names(), function(dir) {
-              tmp.ct <- lapply(ont.fam[[ct]][[ont]][[dir]]$data %>% names(), function(go) {
-                data.frame(Description = ont.fam[[ct]][[ont]][[dir]]$data[[go]] %$% c(Description, parent_name[match(parents_in_IDs, parent_go_id)]),
-                           ID = c(go, ont.fam[[ct]][[ont]][[dir]]$data[[go]]$parents_in_IDs %>% unname()),
-                           Ontology = ont,
-                           Genes = dir,
-                           CellType = ct)
-              }) %>% bind_rows()
-              tmp.fam.list <- ont.fam[[ct]][[ont]][[dir]]$families %>%
-                names() %>%
-                lapply(function(fam) {
-                  data.frame(ID = ont.fam[[ct]][[ont]][[dir]]$families[[fam]],
-                             Family = fam %>% strsplit(split = "Family", fixed = TRUE) %>% .[[1]] %>% .[2])
-                }) %>%
-                bind_rows() %>%
-                split(., .$ID)
-
-              tmp.fam.df <- tmp.fam.list %>%
-                names() %>%
-                lapply(function(id) {
-                  data.frame(ID = id,
-                             Families = tmp.fam.list[[id]]$Family %>% paste(collapse = ", "))
-                }) %>% bind_rows()
-
-              tmp.ct$Families <- tmp.fam.df$Families[match(tmp.ct$ID, tmp.fam.df$ID)]
-
-              return(tmp.ct)
-            }) %>% bind_rows()
-          }) %>% bind_rows()
-        }) %>% bind_rows()
-
-      j = 0
-      for(i in 1:length(df$Families)) {
-        if(is.na(df$Families[i])) {
-          df$Families[i] <- j
-        } else {
-          j <- df$Families[i]
-        }
-      }
+      res <- ont.fam %>% rblapply(c("CellType", "Ontology", "Genes"), function (fs)
+          aggregate(f ~ value, rblapply(fs$families, "f", as_tibble), paste, collapse=",")) %>%
+        mutate(f=strsplit(gsub("Family", "", f), ",", TRUE), Description=desc.per.id[value]) %>%
+        rename(ID=value, Families=f) %>% filter((ID %in% go.id) | (Description %in% go.term))
 
       # Check and get result
-      if(!is.null(go.term)) {
-        if(!any(go.term %in% df$Description)) stop("'go.term' not found in any family.")
-        res <- df[df$Description %in% go.term,]
-      } else {
-        if(!any(go.id %in% df$ID)) stop("'go.id' not found in any family.")
-        res <- df[df$ID %in% go.id,]
+      if (nrow(res) == 0) {
+        warning("No families matching the query")
+        return(res)
       }
 
       # Find common families
-      if(common) {
-        term <- res$Description %>% unique()
-        id <- res$ID %>% unique()
+      if (common) {
+        n.terms <- max(length(go.term), length(go.id))
+        filt.fams <- res %$% split(Families, ID) %>%
+          lapply(function(x) unique(unlist(x))) %>%
+          unlist() %>% table() %>% {names(.)[. == n.terms]}
+        res$Families %<>% lapply(intersect, filt.fams)
+        res <- res[sapply(res$Families, length) > 0,]
 
-        if(length(term) && length(id) == 1) {
-          warning("Only one term or ID applied, ignoring 'common = TRUE'.")
-        } else {
-          tmp.res <- apply(res, 1, function(x) {
-            if(grepl(",", x[6])) {
-              strsplit(x[6], ", ", TRUE)[[1]] %>%
-                sapply(function(f) paste(x[3:5], collapse = " ") %>% paste(f))
-            } else {
-              paste(x[3:6], collapse = " ")
-            }
-          }) %>% unlist()
-
-          common.res <- tmp.res %>%
-            table() %>%
-            .[. == length(go.id)]
-
-          if(length(common.res) > 1) {
-            common.res %<>%
-              names() %>%
-              strsplit(" ", TRUE)
-          } else {
-            stop("No family contains both terms/IDs.")
-          }
-
-          common.df <- lapply(common.res, sapply, function(x) {
-            rep(x, length(term)) %>% matrix(nrow = length(term), byrow = TRUE)
-          }) %>%
-            do.call("rbind",.)
-
-          res <- data.frame(term, id, common.df) %>% `colnames<-`(colnames(res))
-        }
+        if (nrow(res) == 0) warning("No families having all terms present")
       }
-      return(res)
+      return(mutate(res, Families=sapply(Families, paste, collapse=", ")))
     },
 
     #' @description Estimate Gene Ontology clusters
@@ -2975,6 +2911,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     getGOEnvironmentOpen = function(org.db, verbose=FALSE, ignore.cache=NULL) {
+      # TODO: remove or replace with getGOEnvironment
       go.environment <- private$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
     }
   ),

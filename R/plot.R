@@ -72,9 +72,9 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
 #' @param size marker size (default: 0.5)
 #' @param jitter.width width of the point jitter (default: 0.15)
-plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=c(0, 0), show.significance=FALSE, palette=NULL,
-                                     notch=FALSE, legend.position="right", alpha=0.2, plot.theme=theme_get(), size=0.5, jitter.width=0.15,
-                                     adjust.pvalues=T) {
+plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=1.05, show.significance=FALSE,
+                                     jitter.width=0.15, notch=FALSE, legend.position="right", alpha=0.2, size=0.5,
+                                     palette=NULL, adjust.pvalues=TRUE, plot.theme=theme_get(), label.y.npc=0.92) {
   gg <- ggplot(count.df, aes(x=variable, y=value, by=group, fill=group)) +
     geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
     labs(x=x.lab, y=y.lab) +
@@ -83,17 +83,17 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
     geom_point(position=position_jitterdodge(jitter.width=jitter.width), color="black", size=size, alpha=alpha) +
-    scale_y_continuous(expand=y.expand, limits=c(0, max(count.df$value) * 1.05))
+    scale_y_continuous(expand=c(0, 0), limits=c(0, max(count.df$value) * y.expand))
 
 
   if (show.significance) {
     if (adjust.pvalues) {
-
-      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test + adjustment
+      # willcox test + adjustment
+      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label="p.signif", label.y.npc=label.y.npc)
       # TODO
       # p.adjust.method = "fdr" ?
-    } else {
-      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+    } else { # willcox test
+      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label="p.signif", label.y.npc=label.y.npc)
     }
   }
 

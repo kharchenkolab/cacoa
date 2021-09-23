@@ -1838,39 +1838,42 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       write.table(res, file=file, sep=sep, row.names=FALSE, ...)
     },
 
-    #' @description Plot the cell group proportions per sample
-    #' @param cells.to.remove Vector of cell types to remove from the composition
-    #' @param cells.to.remain Vector of cell types to remain in the composition
+    #' @description Plot the cell group sizes or proportions per sample
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
     #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001)
+    #' @param proportions whether to plot proportions or absolute numbers (default: TRUE)
     #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    plotCellGroupProportions=function(cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL,
-                                      palette=self$sample.groups.palette, show.significance=FALSE,
-                                      filter.empty.cell.types=TRUE, ...) {
-      df.melt <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove,
-                                         cells.to.remain=cells.to.remain, ret.groups=FALSE)
+    plotCellGroupSizes=function(cell.groups=self$cell.groups, show.significance=FALSE, filter.empty.cell.types=TRUE,
+                                proportions=TRUE, palette=self$sample.groups.palette, ...) {
+      df.melt <- private$extractCodaData(cell.groups=cell.groups, ret.groups=FALSE)
 
-      df.melt %<>% {100 * . / rowSums(.)} %>% as.data.frame() %>%
+      if (proportions) {
+        df.melt %<>% {100 * . / rowSums(.)}
+        y.lab <- "% cells per sample"
+      } else {
+        y.lab <- "Num. cells per sample"
+      }
+
+      df.melt %<>% as.data.frame() %>%
         dplyr::mutate(group=self$sample.groups[levels(self$sample.per.cell)]) %>%
         reshape2::melt(id.vars="group")
 
       # Filtration
-      if(filter.empty.cell.types) {
+      if (filter.empty.cell.types) {
         cell.types.counts <- table(df.melt$variable[df.melt$value>0], df.melt$group[df.melt$value>0])
-        cell.types.to.remain <- rownames(cell.types.counts)[rowSums(cell.types.counts == 0) == 0]
+        cell.types.to.remain <- cell.types.counts %>% {rownames(.)[rowSums(. == 0) == 0]}
         df.melt <- df.melt[df.melt$variable %in% cell.types.to.remain,]
 
-        for(tmp.level in colnames(cell.types.counts)) {
-          cell.types.tmp <- rownames(cell.types.counts)[(rowSums(cell.types.counts == 0) != 0) &
-                                                         (cell.types.counts[,tmp.level] > 0)]
-          if(length(cell.types.tmp) > 0)
-            message(paste0(c('Cell types {', cell.types.tmp, '} are presented only in ', tmp.level, 'samples'), sep = ' ' ))
+        for (tmp.level in colnames(cell.types.counts)) {
+          cell.types.tmp <- cell.types.counts %>% {rownames(.)[(rowSums(. == 0) != 0) & (.[, tmp.level] > 0)]}
+          if (length(cell.types.tmp) > 0)
+            message('Cell types {', paste(cell.types.tmp, collapse=", "), '} are present only in ', tmp.level, ' samples')
         }
       }
 
-      gg <- plotCountBoxplotsPerType(df.melt, y.lab="% cells per sample", y.expand=c(0, max(df.melt$value) * 0.1),
-                                     show.significance=show.significance, palette=palette, plot.theme=self$plot.theme, ...)
+      gg <- plotCountBoxplotsPerType(df.melt, y.lab=y.lab, palette=palette, show.significance=show.significance,
+                                     plot.theme=self$plot.theme, ...)
 
       return(gg)
     },
@@ -1899,20 +1902,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         gg <- gg + theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5))
       }
 
-      return(gg)
-    },
-
-    #' @description Plot the cell numbers per sample
-    #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
-    #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
-    #' @return A ggplot2 object
-    plotCellGroupSizes=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette, ...) {
-      df.melt <- private$extractCodaData(cell.groups=cell.groups, ret.groups=FALSE) %>%
-        as.data.frame() %>%
-        dplyr::mutate(group=self$sample.groups[levels(self$sample.per.cell)]) %>%
-        reshape2::melt(id.vars="group")
-
-      gg <- plotCountBoxplotsPerType(df.melt, y.lab="Num. cells per sample", palette=palette, plot.theme=self$plot.theme, ...)
       return(gg)
     },
 
@@ -2351,8 +2340,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             message(paste0(c('Cell types {', cell.types.tmp, '} are "presented" only in ', tmp.level, 'samples'), sep = ' ' ))
         }
       }
-      gg <- plotCountBoxplotsPerType(df, y.lab="expression distance", y.expand=c(0, max(df$value) * 0.1),
-                                     show.significance=show.significance, plot.theme=plot.theme, palette=palette, ...)
+      gg <- plotCountBoxplotsPerType(df, y.lab="expression distance", show.significance=show.significance,
+                                     plot.theme=plot.theme, palette=palette, ...)
 
       return(gg)
     },

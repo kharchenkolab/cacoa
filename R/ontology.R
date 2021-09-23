@@ -112,8 +112,7 @@ groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName") {
 }
 
 filterOntologies <- function(ont.list, p.adj) {
-  ont.list %>%
-    names() %>%
+  ont.list %>% names() %>% sn() %>%
     lapply(function(dir) {
       lapply(ont.list[[dir]] %>% names(), function(group) {
         dplyr::mutate(ont.list[[dir]][[group]], Group=group) %>%
@@ -122,8 +121,7 @@ filterOntologies <- function(ont.list, p.adj) {
       }) %>%
         setNames(ont.list[[dir]] %>% names()) %>%
         .[sapply(., nrow) > 0] # Remove empty data frames
-    }) %>%
-    setNames(c("down", "up", "all"))
+    })
 }
 
 ontologyListToDf <- function(ont.list) {
@@ -205,14 +203,13 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
 #' @param p.adj Cut-off for adj. P values
 #' @param min.genes Min. number of significant genes per pathway
 #' @return List of ontology data for plotting
-preparePlotData <- function(ont.res, type, p.adj, min.genes) {
+prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
   dir.names <- c("down", "up", "all")
 
   if(type == "DO") {
     # Split into fractions
-    ont.res <- dir.names %>%
+    ont.res <- dir.names %>% sn() %>%
       lapply(function(x) lapply(ont.res, `[[`, x)) %>%
-      setNames(dir.names) %>%
       lapply(plyr::compact) # Remove empty entries
 
     # Extract results
@@ -245,9 +242,8 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
     }
   } else if(type == "GO") {
     # Split into different fractions
-    ont.res <- dir.names %>%
-      lapply(function(x) lapply(ont.res, lapply, `[[`, x)) %>%
-      setNames(dir.names)
+    ont.res <- dir.names %>% sn() %>%
+      lapply(function(x) lapply(ont.res, lapply, `[[`, x))
 
     # Extract results
     ont.res %<>% lapply(lapply, lapply, function(x) if(length(x)) x@result else x)
@@ -258,8 +254,7 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
       lapply(plyr::compact)
 
     # Prep for filter
-    ont.res %<>%
-      names() %>%
+    ont.res %<>% names() %>% sn() %>%
       lapply(function(dir) {
         lapply(ont.res[[dir]] %>% names(), function(group) {
           lapply(ont.res[[dir]][[group]] %>% names, function(go) {
@@ -267,7 +262,7 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
           }) %>% setNames(ont.res[[dir]][[group]] %>% names()) %>%
             dplyr::bind_rows()
         }) %>% setNames(ont.res[[dir]] %>% names())
-      }) %>% setNames(dir.names)
+      })
 
     # Filter by p.adj
     ont.res %<>% filterOntologies(p.adj = p.adj) %>% ontologyListToDf()
@@ -599,20 +594,16 @@ getOntClustField <- function(subtype, genes) {
   return(paste("clusters", paste(subtype, collapse="."), genes, sep="."))
 }
 
-getHeatmapData <- function(ont.sum, fams, type, subtype, genes, field) {
-  fams %<>%
-    lapply(function(x) {
-      x[[subtype]][[genes]]$families %>% unlist() %>% unique()
-    }) %>%
-    setNames(names(fams))
+getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {
+  fams <- lapply(fams, function(x) {
+    x[[subtype]][[genes]]$families %>% unlist() %>% unique() # These are only children IDs
+  })
 
   ont.sum %<>% split(., .$Group)
 
-  ont.sum %<>%
-    names() %>%
-    lapply(function(x) {
-      ont.sum[[x]] %>% filter(ID %in% fams[[x]])
-    }) %>%
-    bind_rows() %>%
-    groupOntologiesByCluster(field=field)
+  ont.sum %<>% names() %>%
+    lapply(function(x) filter(ont.sum[[x]], ID %in% fams[[x]])) %>%
+    bind_rows()
+
+  return(ont.sum)
 }

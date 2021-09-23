@@ -1197,27 +1197,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                    cluster.sep.chr=cluster.sep.chr, sample.groups=sample.groups, verbose=verbose)
     },
 
-    #' @description Plot number of highly-expressed DE genes as a function of number of cells
-    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
-    #' @param label Show labels on plot (default=TRUE)
-    #' @return A ggplot2 object
-    plotFilteredDEGenes=function(de.name="de", cell.groups=self$cell.groups, sample.frac=0.1, padj.cutoff=1.0,
-                                 legend.position="none", label=TRUE) {
-      de <- private$getResults(de.name, "estimateDEPerCellType")
-      if (is.list(de[[1]])) de %<>% lapply(`[[`, "res")
-
-      cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de)]
-
-      n.genes <- de[names(cell.groups)] %>%
-        sapply(function(df) sum((df$padj <= padj.cutoff) & (df$SampleFrac >= sample.frac)))
-      gg <- n.genes %>%
-        plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Highly-expressed DE genes",
-                            plot.theme=self$plot.theme, legend.position=legend.position, label=label) +
-        geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
-
-      return(gg)
-    },
-
     ### Ontology analysis
 
     #' @description  Plot embedding
@@ -1539,8 +1518,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @return A ggplot2 object
-    plotOntologyDistribution=function(genes="up", type="GO", p.adj=0.05, min.genes=1,
-                                      cell.groups=self$cell.groups, name = NULL) {
+    plotNumOntologyTermsPerType=function(genes="up", type="GO", p.adj=0.05, min.genes=1,
+                                         cell.groups=self$cell.groups, name=NULL) {
       if (length(genes) > 0) {
         ont.res <- genes %>% setNames(., .) %>%
           lapply(private$getOntologyPvalueResults, type=type, p.adj=p.adj, min.genes=min.genes)
@@ -1690,19 +1669,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left",
                                  selection=c("all", "common", "unique"), n=20, clusters=TRUE, cluster.name=NULL,
-                                 cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE, max.log.p=10, ...) {
+                                 cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE, max.log.p=10,
+                                 only.family.children=FALSE, ...) {
       # Checks
       selection <- match.arg(selection)
 
       if (!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
         stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
 
+      if (only.family.children) {
+        fams <- self$test.results[[type]]$families
+        if (is.null(fams))
+          stop("No ontology family results found, please run 'estimateOntologyFamilies' first",
+               " or set only.family.children=FALSE")
+      }
+
       # Extract results
       if (!clusters) {
         ont.sum <- private$getOntologyPvalueResults(genes=genes, type=type, subtype=subtype, cell.subgroups=cell.subgroups,
-                                                    p.adj=p.adj, min.genes=min.genes) %>%
-          groupOntologiesByCluster(field="Description") %>%
-          {. * -1}
+                                                    p.adj=p.adj, min.genes=min.genes)
+        group.field <- "Description"
       } else {
         name <- if (is.null(cluster.name)) getOntClustField(subtype, genes) else cluster.name
         if (is.null(self$test.results[[type]][[name]])) {
@@ -1713,13 +1699,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           self$estimateOntologyClusters(type=type, subtype=subtype, genes=genes, name=name, p.adj=p.adj, min.genes=min.genes)
         }
 
-        ont.sum <- self$test.results[[type]][[name]]$df %>%
-          groupOntologiesByCluster(field="ClusterName") %>%
-          {. * -1}
+        ont.sum <- self$test.results[[type]][[name]]$df
+        group.field <- "ClusterName"
       }
 
+      if (only.family.children) {
+        ont.sum %<>% getOntologyFamilyChildren(fams=fams, subtype=subtype, genes=genes)
+      }
+
+      ont.sum <- -groupOntologiesByCluster(ont.sum, field=group.field)
+
       if (nrow(ont.sum) == 0) {
-        warning(paste0("No ontologies pass the filtration for type=", type, ", subtype=", subtype, " and genes=", genes))
+        warning("No ontologies pass the filtration for type=", type, ", subtype=", subtype, " and genes=", genes)
         return(ggplot())
       }
 
@@ -1796,71 +1787,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         scale_fill_distiller(palette="RdYlBu", limits=c(0, 0.5)) +
         geom_vline(aes(xintercept=x), data.frame(x=cumsum(clust.lengths)[clust.lengths > 1] + 0.5)) +
         geom_hline(aes(yintercept=x), data.frame(x=cumsum(clust.lengths)[clust.lengths > 1] + 0.5))
-    },
-
-    #' @description Plot a heatmap of collapsed (family) ontology P values per cell type
-    #' @param genes Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all' (default="up")
-    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")
-    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
-    #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms) (default="all")
-    #' @param n Number of terms to show (default=10)
-    #' @param clusters Whether to show GO clusters or raw GOs (default=TRUE)
-    #' @param cluster.name Field with the results for GO clustering. Ignored if `clusters == FALSE`.
-    #' @param cell.subgroups Cell groups to plot (default=NULL)
-    #' @param color.range vector with two values for min/max values of p-values
-    #' @param ... parameters forwarded to \link{plotHeatmap}
-    #' @return A ggplot2 object
-    plotOntologyFamilyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, selection="all", n=10,
-                                       legend.position="left", cell.subgroups=NULL, clusters=TRUE, cluster.name=NULL, color.range=NULL,
-                                       palette=NULL, p.adj=0.05, ...) {
-      # Checks
-      if(!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
-        stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
-
-      if(is.null(selection) || (!selection %in% c("unique","common","all")))
-        stop("'selection' must be one of the following: 'unique', 'common', or 'all'.")
-
-      fams <- self$test.results[[type]]$families
-      if (is.null(fams))
-        stop("No ontology family results found, please run 'estimateOntologyFamilies' first.")
-
-      # Extract results
-      if (!clusters) {
-        ont.sum <- private$getOntologyPvalueResults(genes=genes, type=type, subtype=subtype, cell.subgroups=cell.subgroups,
-                                                    p.adj=p.adj, min.genes=min.genes)
-        ont.sum %<>% getHeatmapData(fams = fams, type = type, subtype = subtype, genes = genes, field = "Description")
-      } else {
-        name <- if (is.null(cluster.name)) getOntClustField(subtype, genes) else cluster.name
-        if (is.null(self$test.results[[type]][[name]])) {
-          if (!is.null(cluster.name))
-            stop("Can't find the results for ", cluster.name) # stop if user specified a wrong cluster.name
-
-          warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
-          self$estimateOntologyClusters(type=type, genes=genes, name=name, p.adj=p.adj, min.genes=min.genes)
-        }
-
-        ont.sum <- self$test.results[[type]][[name]]$df %>%
-          getHeatmapData(fams=fams, type=type, subtype=subtype, genes=genes, field = "ClusterName")
-      }
-
-      if (selection=="unique") {
-        ont.sum %<>% .[rowSums(abs(.) > 0) == 1,]
-      } else if (selection=="common") {
-        ont.sum %<>% .[rowSums(abs(.) > 0) > 1,]
-      }
-      if (nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
-
-      if (is.null(palette)) palette <- getGenePalette(genes=genes, high="white")
-      # Plot
-      gg <- ont.sum %>%
-        .[, colSums(abs(.)) > 0] %>%
-        .[match(rowSums(.)[rowSums(abs(.)) > 0] %>% .[order(., decreasing=TRUE)] %>% names(), rownames(.)),] %>%
-        tail(n) %>%
-        plotHeatmap(legend.position=legend.position, row.order=TRUE, col.order=FALSE, color.range=color.range,
-                    palette=palette, plot.theme=self$plot.theme, ...)
-
-
-      return(gg)
     },
 
     #' @title Plot ontology families
@@ -3122,7 +3048,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       ont.res <- self$test.results[[name]]$res
       if(is.null(ont.res)) stop(paste0("No results found for '", type, "'. Please run 'estimateOntology' first."))
 
-      ont.res %<>% preparePlotData(type, p.adj, min.genes)
+      ont.res %<>% prepareOntologyPlotData(type, p.adj, min.genes)
 
       # Extract genes and subgroups
       if(type == "GSEA") {

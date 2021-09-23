@@ -1260,7 +1260,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       de.gene.ids <- getDEEntrezIdsSplitted(de.raw, org.db=org.db, p.adj=p.adj)
 
-      go.environment <- private$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
+      go.environment <- self$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
       res <- estimateOntologyFromIds(
         de.gene.ids, type=type, org.db=org.db, n.top.genes=n.top.genes, go.environment=go.environment,
         verbose=verbose, qvalue.cutoff=qvalue.cutoff, pAdjustMethod=p.adjust.method, readable=readable,
@@ -1290,7 +1290,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       de.gene.ids <- getDEEntrezIdsSplitted(de.raw, org.db=org.db, p.adj=p.adj)
 
-      go.environment <- private$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
+      go.environment <- self$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
 
       options(warn=-1)
       res <- list()
@@ -2347,9 +2347,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param size point size. For `show.sample.size==TRUE`, it can be vector of length 2.  (default: 5)
     #' @param ... arguments, forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}.
     #' @return A ggplot2 object
-    plotExpressionDistanceEmbedding = function(name='expression.shifts', cell.type=NULL, method='MDS', perplexity=4, max.iter=1e3,
-                                               palette=NULL, font.size=NULL, show.sample.size=TRUE,
-                                               show.ticks=FALSE, show.labels=FALSE, size=5, sample.colors=NULL, color.title=NULL, ...) {
+    plotExpressionDistanceEmbedding=function(name='expression.shifts', cell.type=NULL, method='MDS', perplexity=4,
+                                             max.iter=1e3, palette=NULL, font.size=NULL, show.sample.size=TRUE,
+                                             show.ticks=FALSE, show.labels=FALSE, size=5, sample.colors=NULL,
+                                             color.title=NULL, ...) {
       # TODO: rename the function to account for heatmap visualization
       clust.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       sample.groups <- clust.info$sample.groups
@@ -2374,7 +2375,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         p.dists %<>% ape::additive() %>% `dimnames<-`(dimnames(p.dists))
       }
 
-      if (method == 'tSNE'){
+      if (method == 'tSNE') {
         checkPackageInstalled('Rtsne', cran=TRUE, details='for `method="tSNE"`')
 
         emb <- Rtsne::Rtsne(p.dists, is_distance=TRUE, perplexity=perplexity, max_iter=max.iter)$Y
@@ -2397,7 +2398,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (is.null(sample.colors)) {
         gg <- ggplot(df, aes(x, y, color=condition, shape=condition))
-        if(is.null(palette)) {
+        if (is.null(palette)) {
           gg <- gg + scale_color_manual(values=self$sample.groups.palette)
         }
       } else {
@@ -2406,7 +2407,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (!is.null(color.title)) gg <- gg + labs(color=color.title)
       }
 
-      if(!is.null(palette)) {
+      if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)
       }
 
@@ -2448,10 +2449,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `lfc`: log2(fold-change) of expression
     #' Cells that have only one condition in their expression neighborhood have NA Z-scores for all genes.
     #' Results are also stored in the `cluster.free.de` field.
-    estimateClusterFreeDE = function(n.top.genes=Inf, genes=NULL, max.z=20, min.expr.frac=0.01,
-                                     min.n.samp.per.cond=2, min.n.obs.per.samp=2, robust=FALSE, norm.both=TRUE,
-                                     adjust.pvalues=FALSE, smooth=TRUE, wins=0.01, n.permutations=200,
-                                     lfc.pseudocount=1e-5, min.edge.weight=0.6, verbose=self$verbose, n.cores=self$n.cores) {
+    estimateClusterFreeDE=function(n.top.genes=Inf, genes=NULL, max.z=20, min.expr.frac=0.01, min.n.samp.per.cond=2,
+                                   min.n.obs.per.samp=2, robust=FALSE, norm.both=TRUE, adjust.pvalues=FALSE,
+                                   smooth=TRUE, wins=0.01, n.permutations=200, lfc.pseudocount=1e-5,
+                                   min.edge.weight=0.6, verbose=self$verbose, n.cores=self$n.cores) {
       if (is.null(genes)) {
         genes <- private$getTopGenes(n.top.genes, gene.selection="expression", min.expr.frac=min.expr.frac)
       }
@@ -2480,7 +2481,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[["cluster.free.de"]]))
     },
 
-    getMostChangedGenes = function(n, method=c("z", "z.adj", "lfc"), min.z=0.5, min.lfc=1, max.score=20, cell.subset=NULL, excluded.genes=NULL, included.genes=NULL) {
+    getMostChangedGenes=function(n, method=c("z", "z.adj", "lfc"), min.z=0.5, min.lfc=1, max.score=20,
+                                 cell.subset=NULL, excluded.genes=NULL, included.genes=NULL) {
       method <- match.arg(method)
       de.info <- private$getResults("cluster.free.de", "estimateClusterFreeDE")
       score.mat <- de.info[[method]]
@@ -2516,8 +2518,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' Results are also stored in the `cluster.free.expr.shifts` field.
     estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="z", name="cluster.free.expr.shifts",
                                                  min.n.between=2, min.n.within=max(min.n.between, 1),
-                                                 min.expr.frac=0.0, min.n.obs.per.samp=3, normalize.both=FALSE, dist="cor", log.vectors=(dist != "js"),
-                                                 wins=0.025, n.permutations=500, verbose=self$verbose, n.cores=self$n.cores, ...) {
+                                                 min.expr.frac=0.0, min.n.obs.per.samp=3, normalize.both=FALSE,
+                                                 dist="cor", log.vectors=(dist != "js"), wins=0.025,
+                                                 n.permutations=500, verbose=self$verbose, n.cores=self$n.cores, ...) {
       cm <- self$getJointCountMatrix(raw=FALSE)
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, min.expr.frac=min.expr.frac)
       cm <- Matrix::t(cm[, genes])
@@ -2587,8 +2590,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `gene.scores`: list of vectors of gene scores per program. Contains only genes, selected for
     #'     the program usin fabia biclustering.
     #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
-    estimateGenePrograms = function(method=c("pam", "leiden", "fabia"), n.top.genes=Inf, genes=NULL, n.programs=15, z.adj=FALSE, gene.selection=ifelse(z.adj, "z.adj", "z"),
-                                    smooth=TRUE, abs.scores=FALSE, name="gene.programs", cell.subset=NULL, n.cores=self$n.cores, verbose=self$verbose, max.z=5, min.z=0.5, min.change.frac=0.01, ...) {
+    estimateGenePrograms = function(method=c("pam", "leiden", "fabia"), n.top.genes=Inf, genes=NULL, n.programs=15,
+                                    z.adj=FALSE, gene.selection=ifelse(z.adj, "z.adj", "z"), smooth=TRUE,
+                                    abs.scores=FALSE, name="gene.programs", cell.subset=NULL, n.cores=self$n.cores,
+                                    verbose=self$verbose, max.z=5, min.z=0.5, min.change.frac=0.01, ...) {
       z.scores <- private$getResults("cluster.free.de", "estimateClusterFreeDE")
       method <- match.arg(method)
       if (smooth) {
@@ -2602,7 +2607,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(genes)) {
         z.scores <- z.scores[,genes]
       } else if (!is.infinite(n.top.genes)) {
-        genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, included.genes=colnames(z.scores), cell.subset=cell.subset)
+        genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, included.genes=colnames(z.scores),
+                                     cell.subset=cell.subset)
         z.scores <- z.scores[,genes]
       }
 
@@ -2823,13 +2829,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(ggs)
     },
 
-    getConditionPerCell = function() {
+    getConditionPerCell=function() {
       self$sample.per.cell %>%
         {setNames(as.character(self$sample.groups[as.character(.)]), names(.))} %>%
         as.factor()
     },
 
-    getJointCountMatrix = function(force=FALSE, raw=TRUE) {
+    getJointCountMatrix=function(force=FALSE, raw=TRUE) {
       cache.name <- if (raw) "joint.count.matrix" else "joint.count.matrix.norm"
       if (force || is.null(self$cache[[cache.name]])) {
         self$cache[[cache.name]] <- extractJointCountMatrix(self$data.object, raw=raw)
@@ -2838,9 +2844,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(self$cache[[cache.name]])
     },
 
-    getGOEnvironmentOpen = function(org.db, verbose=FALSE, ignore.cache=NULL) {
-      # TODO: remove or replace with getGOEnvironment
-      go.environment <- private$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
+    getGOEnvironment=function(org.db, verbose=FALSE, ignore.cache=NULL) {
+      checkPackageInstalled("clusterProfiler", bioc=TRUE)
+      if (!is.null(self$cache$go.environment)) {
+        if (is.null(ignore.cache)) {
+          message("Using stored GO environment. Use `ignore.cache=TRUE` if you want to re-estimate it. ",
+                  "Set `ignore.cache=FALSE` to suppress this message.")
+          return(self$cache$go.environment)
+        }
+
+        if (!ignore.cache) return(self$cache$go.environment)
+      }
+
+      if(class(org.db) != "OrgDb")
+        stop("'org.db' must be of class 'OrgDb'. Please input an organism database.")
+
+      self$cache$go.environment <- c("BP", "CC", "MF") %>% sn() %>%
+        plapply(function(n) clusterProfiler:::get_GO_data(org.db, n, "ENTREZID") %>%
+                  as.list() %>% as.environment(), n.cores=1, progress=verbose)
+      return(self$cache$go.environment)
     }
   ),
 
@@ -2979,26 +3001,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if(is.null(rownames(embedding)))
         stop("self$embedding must have rownames, equal to cell ids")
-    },
-
-    getGOEnvironment = function(org.db, verbose=FALSE, ignore.cache=NULL) {
-      checkPackageInstalled("clusterProfiler", bioc=TRUE)
-      if (!is.null(self$cache$go.environment)) {
-        if (is.null(ignore.cache)) {
-          message("Using stored GO environment. Use `ignore.cache=TRUE` if you want to re-estimate it. Set `ignore.cache=FALSE` to suppress this message.")
-          return(self$cache$go.environment)
-        }
-
-        if (!ignore.cache) return(self$cache$go.environment)
-      }
-
-      if(class(org.db) != "OrgDb")
-        stop("'org.db' must be of class 'OrgDb'. Please input an organism database.")
-
-      self$cache$go.environment <- c("BP", "CC", "MF") %>% sn() %>%
-        plapply(function(n) clusterProfiler:::get_GO_data(org.db, n, "ENTREZID") %>%
-                  as.list() %>% as.environment(), n.cores=1, progress=verbose)
-      return(self$cache$go.environment)
     },
 
     getClusterFreeDEInput = function(genes, min.edge.weight=0.0) {

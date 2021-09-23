@@ -1806,61 +1806,36 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param genes Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)
     #' @param p.adj Adjusted P to filter by (default: 0.05)
     #' @param sep Separator (default: tab)
-    #' @param dec Decimal separator (default: dot)
     #' @return Table for import into text editor
-    saveFamiliesAsTable=function(file = "Family_results.tsv", type = "GO", subtype = NULL, genes = NULL, p.adj = 0.05, sep = "\t", dec = ".") {
+    saveFamiliesAsTable=function(file, type="GO", subtype=NULL, genes=NULL, p.adj=0.05, sep="\t", ...) {
       # Extract results
-      tmp <- self$test.results[[type]]$families %>%
-        lapply(lapply, lapply, function(x) {
-          lapply(x$families, function(y) {
-            if(length(y) > 1) { # What about == 1?
-              tmp.data <- x$data[y] %>%
-                lapply(lapply, function(z) if(length(z) > 1) paste0(z, collapse="/") else z) %>%
-                lapply(function(z) z[c("Description","Significance","parents_in_IDs","parent_go_id")]) %>%
-                bind_rows() %>%
-                data.frame() %>%
-                mutate(., No_parents = .$parents_in_IDs %>% sapply(function(z) strsplit(z, split = "/", fixed = TRUE)[[1]] %>% length()),
-                       Child_terms = nrow(.))
+      tmp <- lapply(self$test.results[[type]]$families, lapply, lapply, function(x) {
+        lapply(x$families, function(y) {
+          if (length(y) <= 1) return(NULL) # What about == 1?
+          tmp.data <- x$data[y] %>%
+            lapply(lapply, function(z) if (length(z) > 1) paste0(z, collapse="/") else z) %>%
+            lapply(function(z) z[c("Description", "Significance", "parents_in_IDs", "parent_go_id")]) %>%
+            bind_rows() %>%
+            data.frame() %>%
+            mutate(No_parents=sapply(.$parents_in_IDs, function(z) length(strsplit(z, split="/", fixed=TRUE)[[1]])),
+                    Child_terms = nrow(.))
 
-              tmp.df <- data.frame(y, tmp.data) %>%
-                setNames(c("Lonely_child_IDs", "Description", "P.adj", "Significant_parents", "All_parents", "#_sig_parents", "#_child_terms"))
-
-              return(tmp.df)
-            }
-          }) %>% .[!sapply(., is.null)]
-        })
+          data.frame(y, tmp.data) %>%
+            setNames(c("Lonely_child_IDs", "Description", "P.adj", "Significant_parents", "All_parents",
+                        "#_sig_parents", "#_child_terms"))
+        }) %>% .[!sapply(., is.null)]
+      })
 
       # Convert to data frame
-      res <- tmp %>%
-        names() %>%
-        lapply(function(ct) {
-          tmp[[ct]] %>%
-            names() %>%
-            lapply(function(type) {
-              tmp[[ct]][[type]] %>%
-                names() %>%
-                lapply(function(dir) {
-                  tmp[[ct]][[type]][[dir]] %>%
-                    names() %>%
-                    lapply(function(fam) {
-                      tmp[[ct]][[type]][[dir]][[fam]] %>%
-                        mutate(Genes = dir, Subtype = type, Celltype = ct, Family = fam) %>%
-                        .[c(10,11,7,9,8,1:3,6,4,5)]
-                    }) %>%
-                    bind_rows()
-                }) %>%
-                bind_rows()
-            }) %>%
-            bind_rows()
-        }) %>%
-        bind_rows()
+      res <- rblapply(tmp, c("CellType", "Subtype", "Genes", "Family"), function (r) r)
 
       # Filtering
-      if(!is.null(subtype)) res %<>% filter(subtype %in% subtype)
-      if(!is.null(genes)) res %<>% filter(genes %in% genes)
+      if (!is.null(subtype)) res %<>% filter(subtype %in% subtype)
+      if (!is.null(genes)) res %<>% filter(genes %in% genes)
 
       # Write table
-      write.table(res, file = file, sep = sep, dec = dec, row.names = FALSE)
+      if (is.null(file)) return(res)
+      write.table(res, file=file, sep=sep, row.names=FALSE, ...)
     },
 
     #' @description Plot the cell group proportions per sample

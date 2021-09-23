@@ -436,7 +436,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if(is.null(p.val.cutoff) & is.null(top.n.genes))
         stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
 
-      de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
+      de.res <- private$getResults(de.name, 'estimateDEPerCellType()')
 
       if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]]))))
         stop('Resampling was not performed')
@@ -567,7 +567,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                       top.n.genes = c(100,200,300),
                                       p.val.cutoffs = NULL) {
 
-      de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
+      de.res <- private$getResults(de.name, 'estimateDEPerCellType()')
 
       data.all = data.frame()
 
@@ -918,7 +918,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotDEStabilityFDR=function(de.name='de',
                                 p.adj.cutoffs = c(0.001, 0.005, 0.01, 0.05, 0.1, 0.2 ),
                                 cell.types = NULL, type = 'relative'){
-      de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
+      de.res <- private$getResults(de.name, 'estimateDEPerCellType()')
 
       df.n.genes <- estimateDEStabilityFDR(de.res, p.adj.cutoffs)
 
@@ -957,7 +957,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotDEStabilityFDR1loo=function(cell.type, de.name='de',
                                 p.adj.cutoffs = c(0.001, 0.005, 0.01, 0.05, 0.1, 0.2 ),
                                 cell.types = NULL, type = 'relative'){
-      de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
+      de.res <- private$getResults(de.name, 'estimateDEPerCellType()')
 
       df.n.genes <- estimateDEStabilityFDR1loo(de.res, p.adj.cutoffs)
       self$test.results[['fdr.stability']] <- df.n.genes
@@ -1055,7 +1055,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #                                       show.pairs = FALSE,
     #                                       sort.order = FALSE,
     #                                       log.y.axis = FALSE){
-    #   de.res <- private$getResults(name, 'estimatePerCellTypeDE()')
+    #   de.res <- private$getResults(name, 'estimateDEPerCellType()')
     #   if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
     #
     #   de.numbers <- estimateNumberOfTermsStability(de.res,
@@ -1080,7 +1080,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotDEStabilityPerGene = function(name = 'de',
                                       cell.type = NULL,
                                       stability.score = 'stab.median.rank'){
-      de.res <- private$getResults(name, 'estimatePerCellTypeDE()')
+      de.res <- private$getResults(name, 'estimateDEPerCellType()')
       possible.scores = c('stab.median.rank', 'stab.mean.rank', 'stab.var.rank')
       if ( !(stability.score %in% possible.scores) ) stop('Please provide correct name of the stability core')
       if ( !(cell.type %in% names(de.res)) ) stop('Please provide correct cell type to visualise')
@@ -1101,12 +1101,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotNumberOfDEGenes=function(name='de', p.adjust=TRUE, pvalue.cutoff=0.05, show.resampling.results=TRUE,
                                  show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE, ...) {
-      de.raw <- private$getResults(name, 'estimatePerCellTypeDE()')
+      de.raw <- private$getResults(name, 'estimateDEPerCellType()')
 
       if (show.resampling.results) {
         if (any(unlist(lapply(de.raw, function(x) is.null(x$subsamples))))) {
           warning("resampling results are missing for at least some cell types, falling back to point estimates.",
-                  "Please rerun estimatePerCellTypeDE() with resampling='bootstrap' or resampling='loo'")
+                  "Please rerun estimateDEPerCellType() with resampling='bootstrap' or resampling='loo'")
           rl <- lapply(de.raw, `[[`, 'res')
         } else {
           subsamples <- lapply(de.raw, `[[`, 'subsamples')
@@ -1135,7 +1135,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     plotVolcano=function(name='de', cell.types=NULL, palette=NULL, build.panel=TRUE, n.col=3,
                          color.var = 'CellFrac', ...) {
-      de <- private$getResults(name, 'estimatePerCellTypeDE()') %>% lapply(`[[`, 'res')
+      de <- private$getResults(name, 'estimateDEPerCellType()') %>% lapply(`[[`, 'res')
       if (is.null(palette)) {
         palette <- c("#5e4fa2", "#3288bd", "#abdda4", "#fdae61", "#f46d43", "#9e0142") %>%
           colorRampPalette()
@@ -1177,9 +1177,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
     #' @param gene.metadata (default=NULL)
     #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-    saveDEasJSON=function(saveprefix = NULL, dir.name = "JSON", de.raw = NULL, sample.groups = self$sample.groups, ref.level = self$ref.level, gene.metadata = NULL, cluster.sep.chr = "<!!>", verbose = TRUE) {
+    saveDEasJSON=function(saveprefix=NULL, dir.name="JSON", de.raw=NULL, sample.groups=self$sample.groups,
+                          ref.level=self$ref.level, gene.metadata=NULL, cluster.sep.chr="<!!>", verbose=TRUE) {
       if (is.null(de.raw)) {
-        de.raw <- private$getResults("de", "estimatePerCellTypeDE")
+        de.raw <- private$getResults("de", "estimateDEPerCellType")
       }
 
       if (!is.list(sample.groups)) {
@@ -1188,7 +1189,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           setNames(c(ref.level, self$target.level))
       }
 
-      if (class(de.raw[[1]]) != "list") stop("Please rerun 'estimatePerCellTypeDE' with return.matrix=T")
+      if (class(de.raw[[1]]) != "list") stop("Please rerun 'estimateDEPerCellType' with return.matrix=T")
 
       if (is.null(saveprefix)) saveprefix <- ""
 
@@ -1201,7 +1202,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotFilteredDEGenes=function(de.name="de", cell.groups=self$cell.groups, sample.frac=0.1, padj.cutoff=1.0,
                                  legend.position="none", label=TRUE) {
-      de <- private$getResults(de.name, "estimatePerCellTypeDE")
+      de <- private$getResults(de.name, "estimateDEPerCellType")
       if (is.list(de[[1]])) de %<>% lapply(`[[`, "res")
 
       cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de)]
@@ -1271,10 +1272,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         name <- type
       }
       if (is.null(de.raw)) {
-        de.raw <- private$getResults(de.name, "estimatePerCellTypeDE()")
+        de.raw <- private$getResults(de.name, "estimateDEPerCellType()")
       }
 
-      # If estimatePerCellTypeDE was run with return.matrix = TRUE, remove matrix before calculating
+      # If estimateDEPerCellType was run with return.matrix = TRUE, remove matrix before calculating
       if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, "res")
 
       de.gene.ids <- getDEEntrezIdsSplitted(de.raw, org.db=org.db, p.adj=p.adj)
@@ -1301,10 +1302,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         name <- type
       }
       if (is.null(de.raw)) {
-        de.raw <- private$getResults(de.name, "estimatePerCellTypeDE()")
+        de.raw <- private$getResults(de.name, "estimateDEPerCellType()")
       }
 
-      # If estimatePerCellTypeDE was run with return.matrix = TRUE, remove matrix before calculating
+      # If estimateDEPerCellType was run with return.matrix = TRUE, remove matrix before calculating
       if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, "res")
 
       de.gene.ids <- getDEEntrezIdsSplitted(de.raw, org.db=org.db, p.adj=p.adj)

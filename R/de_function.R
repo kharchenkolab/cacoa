@@ -172,7 +172,8 @@ estimatePerCellTypeDE=function (raw.mats, cell.groups = NULL, sample.groups = NU
 #' @param gene.metadata (default=NULL)
 #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
 #' @param verbose Show progress (default=TRUE)
-saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.metadata = NULL, cluster.sep.chr = "<!!>", sample.groups = NULL, verbose=TRUE) {
+saveDEasJSON <- function(de.raw, saveprefix=NULL, dir.name="JSON", gene.metadata=NULL, cluster.sep.chr="<!!>",
+                         sample.groups=NULL, verbose=TRUE) {
   if(!is.null(dir.name)) {
     if(!dir.exists(dir.name)) dir.create(dir.name)
   } else {
@@ -238,10 +239,9 @@ saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.meta
     write(y, file)
     NULL
   })
-  invisible(NULL)
 
-  toc.file <- paste0(dir.name,"/toc.html")
-  s <- paste(c(list('<html><head><style>
+  toc.file <- paste0(dir.name, "/toc.html")
+  s <- c(list('<html><head><style>
     table {
     font-family: arial, sans-serif;
     border-collapse: collapse;
@@ -258,9 +258,13 @@ saveDEasJSON <- function(de.raw, saveprefix = NULL, dir.name = "JSON", gene.meta
     background-color: #dddddd;
     }
 
-    </style></head><body><table>'),lapply(names(de.raw),function(n) paste0('<tr><td><a href="deview.2.html?d=',saveprefix, make.names(n),'.json">',n,'</a></td></tr>')),list('</table></body></html>')),collapse='\n')
+    </style></head><body><table>'),
+    lapply(names(de.raw), function(n)
+      paste0('<tr><td><a href="deview.2.html?d=', saveprefix, make.names(n),'.json">', n, '</a></td></tr>')),
+    list('</table></body></html>')
+    ) %>% paste(collapse='\n')
 
-  write(s,file=toc.file)
+  write(s, file=toc.file)
 }
 
 
@@ -320,7 +324,7 @@ estimatePerCellTypeDEmethods=function (raw.mats,
     warning("Excluded ",length(unlist(s.groups)) - length(passed.samples)," sample(s) due to 'min.cell.count'.")
 
   s.groups %<>% lapply(function(n) n[n %in% passed.samples])
-  
+
   ## For every cell type get differential expression results
   de.res <- sccore::plapply( sccore::sn( levels(cell.groups) ), function(l) {
     tryCatch({
@@ -350,10 +354,10 @@ estimatePerCellTypeDEmethods=function (raw.mats,
                                           paste(c(colnames(meta.info), 'group'),
                                                 collapse=' + ')))
         meta.info.tmp = meta.info[gsub(paste("<!!>", l, sep=''),"",meta[,1]),, drop=F]
-        
+
         meta = cbind(meta, meta.info.tmp)
       }
-      
+
 
       if(grepl('wilcoxon', tolower(test)) || grepl('t-test', tolower(test))) {
 

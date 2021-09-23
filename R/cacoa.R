@@ -1193,7 +1193,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (is.null(saveprefix)) saveprefix <- ""
 
-      saveDEasJSON(de.raw = de.raw, saveprefix = saveprefix, dir.name = dir.name, gene.metadata = gene.metadata, cluster.sep.chr = cluster.sep.chr, sample.groups = sample.groups, verbose = verbose)
+      saveDEasJSON(de.raw=de.raw, saveprefix=saveprefix, dir.name=dir.name, gene.metadata=gene.metadata,
+                   cluster.sep.chr=cluster.sep.chr, sample.groups=sample.groups, verbose=verbose)
     },
 
     #' @description Plot number of highly-expressed DE genes as a function of number of cells

@@ -1093,28 +1093,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                          colramp = colorRampPalette(c("white", 'seagreen4')))
     },
 
-    #' @description Plot number of significant DE genes as a function of number of cells
-    #' @param name results slot in which the DE results should be stored (default: 'de')
-    #' @param palette cell group palette (default: stored $cell.groups.palette)
-    #' @param legend.position Position of legend in plot. See ggplot2::theme (default="none")
-    #' @param label Show labels on plot (default=TRUE)
-    #' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
-    #' @return A ggplot2 object
-    plotDEGenes=function(name='de', cell.groups=self$cell.groups, legend.position="none", label=TRUE, p.adj = 0.05, size=4, palette=self$cell.groups.palette) {
-      de.raw <- private$getResults(name, 'estimatePerCellTypeDE()')
-
-      if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, 1) # If estimatePerCellTypeDE was run with return.matrix = T
-      if(is.null(cell.groups)) stop("'cell.groups' must be provided either during the object initialization or during this function call")
-
-      cell.groups <- table(cell.groups) %>% .[names(.) %in% names(de.raw)]
-      gg <- sapply(de.raw, function(d) sum(d$padj <= p.adj)) %>%
-        plotNCellRegression(cell.groups, x.lab="Number of cells", y.lab="Significant DE genes", plot.theme=self$plot.theme,
-                            legend.position=legend.position, label=label, size=size, palette=palette) +
-        geom_smooth(method=MASS::rlm, formula=y~x, se=0, color="black", size=0.5)
-
-      return(gg)
-    },
-
     #' @description Plot number of significant DE genes
     #' @param name results slot in which the DE results should be stored (default: 'de')
     #' @param pvalue.cutoff P value cutoff (default=0.05)

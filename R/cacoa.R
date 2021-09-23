@@ -1779,46 +1779,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @title Save ontology results
     #' @description Save ontology results as a table
-    #' @param file File name (default: Ontology_results.tsv)
+    #' @param file File name. Set to NULL to return the table instead of saving
     #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
     #' @param subtype Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)
     #' @param genes Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)
     #' @param p.adj Adjusted P to filter by (default: 0.05)
     #' @param sep Separator (default: tab)
-    #' @param dec Decimal separator (default: dot)
     #' @return Table for import into text editor
-    saveOntologyAsTable=function(file = "Ontology_results.tsv", type = "GO", subtype = NULL, genes = NULL, p.adj = 0.05, sep = "\t", dec = ".") {
-      # Extract results
-      tmp <- self$test.results[[type]]$res %>%
-        lapply(lapply, lapply, function(x) x@result)
+    saveOntologyAsTable=function(file, type="GO", subtype=NULL, genes=NULL, p.adj=0.05, sep="\t", ...) {
+      res <- self$test.results[[type]]$res %>%
+        rblapply(c("CellType", "Subtype", "Genes"), function (r) r@result) %>%
+        filter(p.adjust <= p.adj) %>% as_tibble()
 
-      # Convert to data frame
-      res <- tmp %>%
-        names() %>%
-        lapply(function(ct) {
-          tmp[[ct]] %>%
-            names() %>%
-            lapply(function(type) {
-              tmp[[ct]][[type]] %>%
-                names() %>%
-                lapply(function(dir) {
-                  tmp[[ct]][[type]][[dir]] %>%
-                    mutate(genes = dir, subtype = type, celltype = ct) %>%
-                    .[c(12,11,10,1:9)]
-                }) %>%
-                bind_rows()
-            }) %>%
-            bind_rows()
-        }) %>%
-        bind_rows() %>%
-        filter(p.adjust <= p.adj)
+      if (!is.null(subtype)) res %<>% filter(Subtype %in% subtype)
+      if (!is.null(genes)) res %<>% filter(Genes %in% genes)
 
-      # Filtering
-      if(!is.null(subtype)) res %<>% filter(subtype %in% subtype)
-      if(!is.null(genes)) res %<>% filter(genes %in% genes)
-
-      # Write table
-      write.table(res, file = file, sep = sep, dec = dec, row.names = FALSE)
+      if (is.null(file)) return(res)
+      write.table(res, file=file, sep=sep, row.names=FALSE, ...)
     },
 
     #' @title Save family results

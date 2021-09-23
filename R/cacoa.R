@@ -1958,16 +1958,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
 
-    #' @description Plot contrast tree
+    #' @description Plot composition similarity
     #' @return A ggplot2 object
-    plotCompositionSimilarity=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
-                              cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE) {
-
+    plotCompositionSimilarity=function(cell.groups=self$cell.groups, cells.to.remain=NULL, cells.to.remove=NULL) {
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
       res <- referenceSet(tmp$d.counts, tmp$d.groups)
       heatmap(res$mx.first, scale = 'none')
-
-      # return(gg)
     },
 
 
@@ -2024,7 +2020,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[['loadings']]))
     },
 
-    estimateGaPartition=function(cells.to.remain = NULL, cells.to.remove = NULL, samples.to.remove = NULL, ...){
+    estimateGaPartition=function(cells.to.remain=NULL, cells.to.remove=NULL, samples.to.remove=NULL, ...){ # TODO: do we ever use this?
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
       ga.res <- gaPartition(tmp$d.counts, tmp$d.groups, ...)
 
@@ -2036,8 +2032,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Plot Loadings
     #' @param palette palette specification for cell types (default: stored $cell.groups.palette)
     #' @return A ggplot2 object
-    plotCellLoadings = function(alpha = 0.01, palette=self$cell.groups.palette, font.size=NULL,
-                                ordering='pvalue', signif.threshold=0.05, show.pvals=TRUE) {
+    plotCellLoadings=function(alpha=0.01, palette=self$cell.groups.palette, font.size=NULL,
+                              ordering='pvalue', signif.threshold=0.05, show.pvals=TRUE) {
 
       loadings <- private$getResults('loadings', 'estimateCellLoadings()')
       p <- plotCellLoadings(loadings$loadings, pval=loadings$padj, signif.threshold=signif.threshold,
@@ -2048,7 +2044,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(p)
     },
 
-    estimateWilcoxonTest = function(cell.groups=self$cell.groups, cells.to.remove = NULL, cells.to.remain = NULL){
+    estimateWilcoxonTest = function(cell.groups=self$cell.groups, cells.to.remove = NULL, cells.to.remain = NULL) { # TODO: do we ever use this?
       tmp <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain)
       p.vals <- calcWilcoxonTest(tmp$d.counts, tmp$d.groups)
       self$test.results[['p.vals.balances']] <- p.vals

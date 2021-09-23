@@ -223,11 +223,11 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL) {
   # }
 
   # Calculate p-values of confidence interval by bootstrap
-  
-  
+
+
   tmp <- referenceSet(cnts, groups, p.thresh = 0.1)
   cell.list <- tmp$cell.list
-  
+
   sdt.list <- c()  # standard deviation in a list
   mean.list <- c()  # mean value of loadings in a list
   min.list <- c()  # min values of mean loadings
@@ -236,7 +236,7 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL) {
     loadings.list <- loadings.init[cell.list[[i.list]],]
     sdt.list <- c(sdt.list, sd(c(loadings.list)))
     mean.list <- c(mean.list, mean(c(loadings.list)))
-    
+
 
     n.list <- c(n.list, length(cell.list[[i.list]]))
     if (length(cell.list[[i.list]]) == 1) {  # if a list contains only one sample - it cannot be a reference group
@@ -253,7 +253,7 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL) {
   # Define a cluster with reference cell type
   if (is.null(ref.cell.type)) {
     # id.ref.cluster <- which(sdt.list == max(sdt.list))
-    
+
     # id.ref.cluster <- which(n.list == max(n.list))
     # id.ref.cluster <- id.ref.cluster[abs(mean.list[id.ref.cluster]) == min(abs(mean.list[id.ref.cluster]))]
     # id.ref.cluster <- which(abs(mean.list) == min(abs(mean.list)))  # <- working version
@@ -329,12 +329,13 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL) {
               cell.list=cell.list))
 }
 
-referenceSet <- function(freqs, groups, p.thresh=0.05){
+referenceSet <- function(freqs, groups, p.thresh=0.05) {
+  checkPackageInstalled("psych", cran=TRUE)
   freqs[freqs == 0] <- min(freqs[freqs != 0])/2
   cell.types <- colnames(freqs)
   cell.list <- lapply(cell.types, function(x) x)
 
-  for(it in 1:(length(cell.list) - 2)){
+  for (it in 1:(length(cell.list) - 2)) {
 
     mx <- matrix(0, nrow=length(cell.list), ncol=length(cell.list))
     for(i in 1:length(cell.list)){

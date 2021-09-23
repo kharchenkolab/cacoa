@@ -58,9 +58,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field plot.params parameters, forwarded to all `plotEmbedding` calls
     plot.params=NULL,
 
-    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL, target.level=NULL,
-                        sample.groups.palette=NULL, cell.groups.palette=NULL, embedding=extractEmbedding(data.object), graph.name=NULL,
-                        n.cores=1, verbose=TRUE, plot.theme=theme_bw(), plot.params=NULL) {
+    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL,
+                        target.level=NULL, sample.groups.palette=NULL, cell.groups.palette=NULL,
+                        embedding=extractEmbedding(data.object), graph.name=NULL, n.cores=1, verbose=TRUE,
+                        plot.theme=theme_bw(), plot.params=NULL) {
       if ('Cacoa' %in% class(data.object)) { # copy constructor
         for (n in ls(data.object)) {
           if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
@@ -424,48 +425,41 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-
     #' @description  Plot DE stability per cell type
     #' @param name - results slot name (default: 'de')
     #' @param show.pairs transparency value for the data points (default: 0.05)
     #' @param notch - whether to show notches in the boxplot version (default=TRUE)
     #' @return A ggplot2 object
-    estimateDEStabilityPerCellType=function(de.name='de',
-                                 name='de.jaccards',
-                                 top.n.genes = NULL,
-                                 p.val.cutoff = NULL){
-
-
-      if( (!is.null(p.val.cutoff)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or p.val.cutoff) should be provided')
-      if(is.null(p.val.cutoff) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
+    estimateDEStabilityPerCellType=function(de.name='de', name='de.jaccards', top.n.genes=NULL, p.val.cutoff=NULL) {
+      if(!is.null(p.val.cutoff) & !is.null(top.n.genes))
+        stop('Only one threshold (top.n.genes or p.val.cutoff) should be provided')
+      if(is.null(p.val.cutoff) & is.null(top.n.genes))
+        stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
 
       de.res <- private$getResults(de.name, 'estimatePerCellTypeDE()')
 
-      if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
-      jaccards <- estimateStabilityPerCellType(de.res,
-                                          top.n.genes,
-                                          p.val.cutoff)
+      if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]]))))
+        stop('Resampling was not performed')
+
+      jaccards <- estimateStabilityPerCellType(de.res, top.n.genes, p.val.cutoff)
       self$test.results[[name]] <- jaccards
     },
 
+    estimateDEStabilityPerTest=function(de.names, name='jacc.per.test', top.n.genes=NULL, p.val.cutoff=NULL) {
+      if(!is.null(p.val.cutoff) & !is.null(top.n.genes))
+        stop('Only one threshold (top.n.genes or p.val.cutoff) should be provided')
 
-    estimateDEStabilityPerTest=function(de.names,
-                                        name='jacc.per.test',
-                                        top.n.genes = NULL,
-                                        p.val.cutoff = NULL) {
-
-      if( (!is.null(p.val.cutoff)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or p.val.cutoff) should be provided')
-      if(is.null(p.val.cutoff) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
+      if(is.null(p.val.cutoff) & is.null(top.n.genes))
+        stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
 
       jaccards.all <- data.frame()
       for(de.name in de.names){
         print(de.name)
         if(!(de.name %in% names(self$test.results))) next
         de.res <- private$getResults(de.name)
-        if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))) stop('Resampling was not performed')
-        jaccards <- estimateStabilityPerCellType(de.res = de.res,
-                                                 top.n.genes = top.n.genes,
-                                                 p.val.cutoff = p.val.cutoff)
+        if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]]))))
+          stop('Resampling was not performed')
+        jaccards <- estimateStabilityPerCellType(de.res=de.res, top.n.genes=top.n.genes, p.val.cutoff=p.val.cutoff)
         print(jaccards)
         jacc.medians <- sapply(unique(jaccards$group), function(x) median(jaccards$value[jaccards$group == x]))
         jaccards.tmp <- data.frame(group = de.name, value = jacc.medians,
@@ -1106,7 +1100,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param label Show labels on plot (default=TRUE)
     #' @param p.adjust.cutoff Adjusted P cutoff (default=0.05)
     #' @return A ggplot2 object
-    plotDEGenes=function(name='de', cell.groups = self$cell.groups, legend.position = "none", label = TRUE, p.adj = 0.05, size=4, palette=self$cell.groups.palette) {
+    plotDEGenes=function(name='de', cell.groups=self$cell.groups, legend.position="none", label=TRUE, p.adj = 0.05, size=4, palette=self$cell.groups.palette) {
       de.raw <- private$getResults(name, 'estimatePerCellTypeDE()')
 
       if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, 1) # If estimatePerCellTypeDE was run with return.matrix = T
@@ -1289,12 +1283,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5)
     #' @param max.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
-    estimateOntology=function(type = "GO", name = NULL, de.name='de', org.db, n.top.genes=500, p.adj=1,
-                              p.adjust.method="BH",
-                              readable=TRUE, verbose=TRUE,
-                              qvalue.cutoff=0.2, min.gs.size=10,
-                              max.gs.size=5e2, keep.gene.sets=FALSE,
-                              ignore.cache=NULL, de.raw=NULL, ...) {
+    estimateOntology=function(type="GO", name=NULL, de.name='de', org.db, n.top.genes=500, p.adj=1,
+                              p.adjust.method="BH", readable=TRUE, verbose=TRUE, qvalue.cutoff=0.2, min.gs.size=10,
+                              max.gs.size=5e2, keep.gene.sets=FALSE, ignore.cache=NULL, de.raw=NULL, ...) {
       if(!is.null(type) & !type %in% c("GO", "DO", "GSEA"))
         stop("'type' must be 'GO', 'DO', or 'GSEA'.")
 
@@ -1389,18 +1380,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return List of families and ontology data per cell type
     estimateOntologyFamilies=function(type = "GO", p.adj = 0.05, name = NULL) {
       checkPackageInstalled("GOfuncR", bioc=TRUE)
-      if(!type %in% c("GO","DO","GSEA")) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
+      if(!type %in% c("GO", "DO", "GSEA")) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
 
       if(is.null(name)) {
         name <- type
       }
 
       # TODO: Test DO
-      if(type == "GO") {
+      if (type == "GO") {
         ont.list <- self$test.results[[type]]$res %>%
           lapply(lapply, lapply, function(x) {
             tmp <- x@result %>% filter(p.adjust <= p.adj)
-            if(nrow(tmp) > 0) return(tmp)
+            if (nrow(tmp) > 0) return(tmp)
           }) %>%
           lapply(lapply, plyr::compact) %>%
           lapply(plyr::compact)
@@ -1408,7 +1399,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         ont.list <- self$test.results[[type]]$res %>%
           lapply(lapply, function(x) {
             tmp <- x@result %>% filter(p.adjust <= p.adj)
-            if(nrow(tmp) > 0) return(tmp)
+            if (nrow(tmp) > 0) return(tmp)
           }) %>%
           lapply(plyr::compact)
       }
@@ -1571,12 +1562,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotOntologyDistribution=function(genes="up", type="GO", p.adj=0.05, min.genes=1,
                                       cell.groups=self$cell.groups, name = NULL) {
       if (length(genes) > 0) {
-        ont.res <- genes %>% setNames(., .) %>% lapply(private$getOntologyPvalueResults, type=type, p.adj=p.adj, min.genes=min.genes)
+        ont.res <- genes %>% setNames(., .) %>%
+          lapply(private$getOntologyPvalueResults, type=type, p.adj=p.adj, min.genes=min.genes)
 
         if (type != "GSEA") {
           classes <- sapply(ont.res[genes], class)
           if(any(classes == "character")) {
-            message(paste0("No significant results found for genes = '",names(classes[classes == "character"]),"'."))
+            message(paste0("No significant results found for genes = '", names(classes[classes == "character"]), "'."))
             genes <- names(classes[classes == "data.frame"])
             if(length(genes) == 0) stop("No results to plot.")
           }
@@ -1596,40 +1588,40 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # Prepare data further
       if(type=="GO") {
-        p_df <- table(ont.res$Group, ont.res$Type, ont.res$direction) %>%
+        p.df <- table(ont.res$Group, ont.res$Type, ont.res$direction) %>%
           as.data.frame() %>%
           setNames(c("Group","Type","direction","N")) %>%
           dplyr::arrange(Group)
 
-        if(length(unique(p_df$direction)) > 1) {
-          gg <- ggplot(p_df, aes(x=Group, y=N, fill=Type, group=Group)) +
+        if(length(unique(p.df$direction)) > 1) {
+          gg <- ggplot(p.df, aes(x=Group, y=N, fill=Type, group=Group)) +
             geom_bar(stat="identity") +
             facet_grid(~direction, switch="x")
         } else {
-          gg <- ggplot(p_df) +
+          gg <- ggplot(p.df) +
             geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
         }
       } else if(type=="DO") {
-        p_df <- table(ont.res$Group, ont.res$direction) %>%
+        p.df <- table(ont.res$Group, ont.res$direction) %>%
           as.data.frame() %>%
           setNames(c("Group","direction","N")) %>%
           dplyr::arrange(Group)
 
-        if(length(unique(p_df$direction)) > 1) {
-          gg <- ggplot(p_df) +
+        if(length(unique(p.df$direction)) > 1) {
+          gg <- ggplot(p.df) +
             geom_bar(aes(x=Group, y=N, fill=direction), stat="identity", position="dodge") +
             labs(fill="Gene set")
         } else {
-          gg <- ggplot(p_df) +
+          gg <- ggplot(p.df) +
             geom_bar(aes(x=Group, y=N), stat="identity")
         }
       } else if(type == "GSEA") {
-        p_df <- table(ont.res$Group, ont.res$Type) %>%
+        p.df <- table(ont.res$Group, ont.res$Type) %>%
           as.data.frame() %>%
           setNames(c("Group","Type","N")) %>%
           dplyr::arrange(Group)
 
-          gg <- ggplot(p_df) +
+          gg <- ggplot(p.df) +
             geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
       }
 

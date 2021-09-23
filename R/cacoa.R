@@ -2976,9 +2976,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$plotGeneExpressionComparison(scores=scores, cell.subset=cell.subset, ...)
     },
 
-    plotGeneExpressionComparison = function(genes=NULL, scores=NULL, max.expr="97.5%", plots=c("z.adj", "z", "expression"), min.z=qnorm(0.9),
-                                            max.z=4, max.z.adj=NULL, max.lfc=3, smoothed=FALSE, gene.palette=dark.red.palette, z.palette=NULL, z.adj.palette=z.palette, lfc.palette=NULL, plot.na=-1,
-                                            adj.list=NULL, build.panel=TRUE, nrow=1, cell.subset=NULL, groups=NULL, subgroups=NULL, keep.limits=NULL, ...) {
+    plotGeneExpressionComparison=function(genes=NULL, scores=NULL, max.expr="97.5%", plots=c("z.adj", "z", "expression"),
+                                          min.z=qnorm(0.9), max.z=4, max.z.adj=NULL, max.lfc=3, smoothed=FALSE,
+                                          gene.palette=dark.red.palette, z.palette=NULL, z.adj.palette=z.palette,
+                                          lfc.palette=NULL, scale.z.palette=TRUE, plot.na=-1, adj.list=NULL,
+                                          build.panel=TRUE, nrow=1, cell.subset=NULL, groups=NULL, subgroups=NULL,
+                                          keep.limits=NULL, ...) {
       unexpected.plots <- setdiff(plots, c("z.adj", "z", "lfc", "expression"))
       if (length(unexpected.plots) > 0) stop("Unexpected values in `plots`: ", unexpected.plots)
 
@@ -3023,7 +3026,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    color.range=c(-pp$max, pp$max), plot.na=plot.na, legend.title=pp$leg.title,
                                    palette=pp$palette, groups=groups, subgroups=subgroups, keep.limits=keep.limits, ...)
 
-          if (n == "z.adj") {
+          if ((n == "z.adj") && scale.z.palette) {
             gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
             color.range <- c(-pp$max, pp$max)
             col.vals <- c(seq(color.range[1], -min.z, length.out=10), 0, seq(min.z, color.range[2], length.out=10)) %>%

@@ -2062,14 +2062,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' of the corresponding embedding dimension. Set it to NULL to use \link[MASS:bandwidth.nrd]{bandwidth.nrd} estimator. (default: 0.05)
     #' @param name slot in which to save the results (default: 'cell.density')
     estimateCellDensity = function(bins=400, method='kde', name='cell.density', beta=30, estimate.variation=TRUE,
-                                   sample.groups=self$sample.groups, verbose=self$verbose, n.cores=self$n.cores, bandwidth=0.05, ...){
+                                   sample.groups=self$sample.groups, verbose=self$verbose, n.cores=self$n.cores,
+                                   bandwidth=0.05, ...){
       sample.per.cell <- self$sample.per.cell
 
-      if (method == 'kde'){
+      if (method == 'kde') {
         private$checkCellEmbedding()
-        res <- self$embedding %>%
-          estimateCellDensityKde(sample.per.cell=sample.per.cell, sample.groups=sample.groups, bins=bins, bandwidth=bandwidth, ...)
-      } else if (method == 'graph'){
+        res <- self$embedding %>% estimateCellDensityKde(
+          sample.per.cell=sample.per.cell, sample.groups=sample.groups, bins=bins, bandwidth=bandwidth, ...
+        )
+      } else if (method == 'graph') {
         res <-  extractCellGraph(self$data.object) %>%
           estimateCellDensityGraph(sample.per.cell=sample.per.cell, sample.groups=sample.groups,
                                    n.cores=n.cores, beta=beta, verbose=verbose, ...)
@@ -2100,8 +2102,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotCellDensity = function(show.grid=TRUE, add.points=TRUE, size=0.1, show.legend=FALSE,
                                point.col='#FCFDBFFF', contours=NULL, contour.color='white', contour.conf='10%',
-                               name='cell.density', show.cell.groups=TRUE, cell.groups=self$cell.groups, font.size=c(2,4),
-                               color.range=c(0, "99%"), ...) {
+                               name='cell.density', show.cell.groups=TRUE, cell.groups=self$cell.groups,
+                               font.size=c(2,4), color.range=c(0, "99%"), ...) {
       dens.res <- private$getResults(name, 'estimateCellDensity()')
       private$checkCellEmbedding()
 
@@ -2116,8 +2118,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             plotDensityKde(bins=dens.res$bins, lims=color.range, title=l, show.legend=show.legend,
                            show.grid=show.grid, plot.theme=self$plot.theme, ...)
 
-          if (add.points){
-            emb <- as.data.frame(self$embedding) %>% set_colnames(c('x','y')) %>% cbind(z=1)
+          if (add.points) {
+            emb <- as.data.frame(self$embedding) %>% set_colnames(c('x', 'y')) %>% cbind(z=1)
             nnames <- condition.per.cell %>% {names(.)[. == l]} %>% sample(min(2000, length(.)))
             p <- p + geom_point(data=emb[nnames, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
           }
@@ -2129,7 +2131,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         p
       })
 
-      if(!is.null(contours)){
+      if(!is.null(contours)) {
         cn.geoms <- private$getDensityContours(groups=contours, conf=contour.conf, color=contour.color)
         ps %<>% lapply(`+`, cn.geoms)
       }
@@ -2153,7 +2155,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         scores <- dens.res$missed.sample.frac
       } else stop("Unknown type: ", type)
 
-      if (is.null(scores)) stop("To use this function, please re-run estimateCellDensity() with estimate.variation=TRUE")
+      if (is.null(scores))
+        stop("To use this function, please re-run estimateCellDensity() with estimate.variation=TRUE")
 
       if ((dens.res$method == 'graph') && (condition != 'both')) {
         subgr <- if (condition == 'ref') self$ref.level else self$target.level
@@ -2184,8 +2187,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param type method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);
     #' @param adjust.pvalues whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='sutract', TRUE for everything else)
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    estimateDiffCellDensity=function(type='permutation', adjust.pvalues=!(type == 'subtract'), name='cell.density', n.permutations=400, smooth=TRUE,
-                                     verbose=self$verbose, n.cores=self$n.cores, ...){
+    estimateDiffCellDensity=function(type='permutation', adjust.pvalues=(type != 'subtract'), name='cell.density',
+                                     n.permutations=400, smooth=TRUE, verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
       density.mat <- dens.res$density.mat
       if (dens.res$method == 'kde'){
@@ -2219,8 +2222,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
         res <- list(
           raw=perm.res$score,
-          adj=perm.res %$% adjustZScoresByPermutations(score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores,
-                                                       verbose=verbose, ...)
+          adj=perm.res %$% adjustZScoresByPermutations(
+            score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores, verbose=verbose, ...
+          )
         )
       }
 
@@ -2304,7 +2308,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... other plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
     plotExpressionDistance = function(name='expression.shifts', joint=FALSE, palette=self$sample.groups.palette,
-                                      show.significance=FALSE, filter.empty.cell.types=TRUE, ...) {
+                                      show.significance=FALSE, ...) {
       cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       if (!joint) {
         df <- cluster.shifts %$%
@@ -2323,19 +2327,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                 axis.ticks.x=element_blank(), panel.grid.major.x=element_blank())
       }
 
-      # Filtration
-      if(filter.empty.cell.types) {
-        cell.types.counts <- table(df$variable, df$group)
-        cell.types.to.remain <- rownames(cell.types.counts)[rowSums(cell.types.counts == 0) == 0]
-        df <- df[df$variable %in% cell.types.to.remain,]
-
-        for(tmp.level in colnames(cell.types.counts)) {
-          cell.types.tmp <- rownames(cell.types.counts)[(rowSums(cell.types.counts == 0) != 0) &
-                                                         (cell.types.counts[,tmp.level] > 0)]
-          if(length(cell.types.tmp) > 0)
-            message(paste0(c('Cell types {', cell.types.tmp, '} are "presented" only in ', tmp.level, 'samples'), sep = ' ' ))
-        }
-      }
       gg <- plotCountBoxplotsPerType(df, y.lab="expression distance", show.significance=show.significance,
                                      plot.theme=plot.theme, palette=palette, ...)
 

@@ -1709,6 +1709,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         as.matrix()
       path.bin[is.na(path.bin)] <- 0
 
+      # TODO: currently we use binary distance. Probably, checking z-scores would give bitter results.
       p.mat <- (1 - (path.bin %>% dist(method="binary") %>% as.matrix)) %>% pmin(0.5)
       cl.tree <- dist(p.mat) %>% hclust()
       clust.order <- cl.tree %$% labels[order]
@@ -2452,7 +2453,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateClusterFreeDE=function(n.top.genes=Inf, genes=NULL, max.z=20, min.expr.frac=0.01, min.n.samp.per.cond=2,
                                    min.n.obs.per.samp=2, robust=FALSE, norm.both=TRUE, adjust.pvalues=FALSE,
                                    smooth=TRUE, wins=0.01, n.permutations=200, lfc.pseudocount=1e-5,
-                                   min.edge.weight=0.6, verbose=self$verbose, n.cores=self$n.cores) {
+                                   min.edge.weight=0.6, verbose=self$verbose, n.cores=self$n.cores,
+                                   name="cluster.free.de") {
       if (is.null(genes)) {
         genes <- private$getTopGenes(n.top.genes, gene.selection="expression", min.expr.frac=min.expr.frac)
       }
@@ -2477,14 +2479,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       lf.mat@x <- log2(mats$target@x + lfc.pseudocount) - log2(lf.mat@x + lfc.pseudocount)
       mats$lfc <- lf.mat
 
-      self$test.results[["cluster.free.de"]] <- mats
-      return(invisible(self$test.results[["cluster.free.de"]]))
+      self$test.results[[name]] <- mats
+      return(invisible(self$test.results[[name]]))
     },
 
     getMostChangedGenes=function(n, method=c("z", "z.adj", "lfc"), min.z=0.5, min.lfc=1, max.score=20,
-                                 cell.subset=NULL, excluded.genes=NULL, included.genes=NULL) {
+                                 cell.subset=NULL, excluded.genes=NULL, included.genes=NULL, name="cluster.free.de") {
       method <- match.arg(method)
-      de.info <- private$getResults("cluster.free.de", "estimateClusterFreeDE")
+      de.info <- private$getResults(name, "estimateClusterFreeDE")
       score.mat <- de.info[[method]]
       z.scores <- if (method == "lfc") de.info$z else de.info[[method]]
 
@@ -2547,8 +2549,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}
     #' @return Sparse matrix of smoothed Z-scores. Results are also stored in the `cluster.free.de$z.smoothed` field.
     smoothClusterFreeZScores = function(n.top.genes=1000, smoothing=20, filter=NULL, z.adj=FALSE, gene.selection=ifelse(z.adj, "z.adj", "z"),
-                                        excluded.genes=NULL, n.cores=self$n.cores, verbose=self$verbose, ...) {
-      z.scores <- private$getResults("cluster.free.de", "estimateClusterFreeDE")
+                                        excluded.genes=NULL, n.cores=self$n.cores, verbose=self$verbose, name="cluster.free.de", ...) {
+      z.scores <- private$getResults(name, "estimateClusterFreeDE")
       z.scores <- if (z.adj) z.scores$z.adj else z.scores$z
 
       genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection,
@@ -2567,9 +2569,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       z.smoothed[is.na(z.scores)] <- NA
       if (z.adj) {
-        self$test.results[["cluster.free.de"]]$z.adj.smoothed <- z.smoothed
+        self$test.results[[name]]$z.adj.smoothed <- z.smoothed
       } else {
-        self$test.results[["cluster.free.de"]]$z.smoothed <- z.smoothed
+        self$test.results[[name]]$z.smoothed <- z.smoothed
       }
 
       return(invisible(z.smoothed))
@@ -2593,8 +2595,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateGenePrograms = function(method=c("pam", "leiden", "fabia"), n.top.genes=Inf, genes=NULL, n.programs=15,
                                     z.adj=FALSE, gene.selection=ifelse(z.adj, "z.adj", "z"), smooth=TRUE,
                                     abs.scores=FALSE, name="gene.programs", cell.subset=NULL, n.cores=self$n.cores,
-                                    verbose=self$verbose, max.z=5, min.z=0.5, min.change.frac=0.01, ...) {
-      z.scores <- private$getResults("cluster.free.de", "estimateClusterFreeDE")
+                                    verbose=self$verbose, max.z=5, min.z=0.5, min.change.frac=0.01, de.name="cluster.free.de", ...) {
+      z.scores <- private$getResults(de.name, "estimateClusterFreeDE")
       method <- match.arg(method)
       if (smooth) {
         z.scores <- if (z.adj) z.scores$z.adj.smoothed else z.scores$z.smoothed
@@ -2713,7 +2715,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
     plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=TRUE, plot.na=FALSE,
                                                name="cluster.free.expr.shifts",
-                                               color.range=c("0", "97.5%"), alpha=0.2, font.size=c(3,5),
+                                               color.range=c("0", "97.5%"), alpha=0.2, font.size=c(3,5), adj.list=NULL,
                                                palette=brewerPalette("YlOrRd", rev=FALSE), build.panel=TRUE, ...) {
       shifts <- private$getResults(name, "estimateClusterFreeExpressionShifts")
       private$checkCellEmbedding()
@@ -2733,6 +2735,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         ggs %<>% lapply(transferLabelLayer, self$plotEmbedding(groups=cell.groups), font.size=font.size)
       }
 
+      if (!is.null(adj.list)) ggs %<>% lapply(`+`, adj.list)
       if (build.panel) ggs %<>% cowplot::plot_grid(plotlist=., ncol=2, labels=c("Shifts", "Adj. z-scores"))
 
       return(ggs)
@@ -2749,7 +2752,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                           gene.palette=dark.red.palette, z.palette=NULL, z.adj.palette=z.palette,
                                           lfc.palette=NULL, scale.z.palette=TRUE, plot.na=-1, adj.list=NULL,
                                           build.panel=TRUE, nrow=1, cell.subset=NULL, groups=NULL, subgroups=NULL,
-                                          keep.limits=NULL, ...) {
+                                          keep.limits=NULL, name="cluster.free.de", ...) {
       unexpected.plots <- setdiff(plots, c("z.adj", "z", "lfc", "expression"))
       if (length(unexpected.plots) > 0) stop("Unexpected values in `plots`: ", unexpected.plots)
 
@@ -2760,20 +2763,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (length(plots) == 0) return(NULL)
 
+      de.info <- private$getResults(name, "estimateClusterFreeDE")
+
       if (is.null(z.palette)) {
         if (is.null(self$sample.groups.palette)) {
           z.palette <- c('blue', 'grey90', 'red')
         } else {
-          z.palette <- c(self$sample.groups.palette[self$ref.level], 'grey90', self$sample.groups.palette[self$target.level])
+          z.palette <- c(self$sample.groups.palette[self$ref.level], 'grey90',
+                         self$sample.groups.palette[self$target.level])
         }
         z.palette %<>% grDevices::colorRampPalette(space="Lab")
       }
 
       if (is.null(z.adj.palette)) z.adj.palette <- z.palette
 
-      plot.parts <- self$test.results$cluster.free.de %>%
-        prepareGeneExpressionComparisonPlotInfo(genes=genes, plots=plots, smoothed=smoothed, max.z=max.z, max.z.adj=max.z.adj, max.lfc=max.lfc,
-                                                z.palette=z.palette, z.adj.palette=z.adj.palette, lfc.palette=lfc.palette)
+      plot.parts <- prepareGeneExpressionComparisonPlotInfo(
+        de.info, genes=genes, plots=plots, smoothed=smoothed, max.z=max.z, max.z.adj=max.z.adj, max.lfc=max.lfc,
+        z.palette=z.palette, z.adj.palette=z.adj.palette, lfc.palette=lfc.palette
+      )
 
       condition.per.cell <- self$getConditionPerCell()
 
@@ -2879,9 +2886,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     getTopGenes = function(n, gene.selection=c("z", "z.adj", "lfc", "expression", "od"), cm.joint=NULL,
-                           min.expr.frac=0.0, excluded.genes=NULL, included.genes=NULL, ...) {
+                           min.expr.frac=0.0, excluded.genes=NULL, included.genes=NULL, name="cluster.free.de", ...) {
       gene.selection <- match.arg(gene.selection)
-      if ((gene.selection %in% c("z", "lfc")) && is.null(self$test.results$cluster.free.de)) {
+      if ((gene.selection %in% c("z", "lfc")) && is.null(self$test.results[[name]])) {
         warning("Please run estimateClusterFreeDE() first to use gene.selection='z' or 'lfc'. Fall back to gene.selection='expression'.")
         gene.selection <- "expression"
       }
@@ -2987,11 +2994,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Extract contours from embedding
     #' @param groups specify cell groups for contour, multiple cell groups are also supported
     #' @param conf confidence interval of contour
-    getDensityContours = function(groups, color='white', linetype=2, conf="10%", n.cores=1, verbose=FALSE) {
-      cnl <- sn(groups) %>% plapply(function(x) {
-        getDensityContour(self$embedding, cell.groups=self$cell.groups, linetype=linetype, group=x, conf=conf, color=color)
-      }, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE) %>%
-        do.call(c, .)
+    getDensityContours = function(groups, color='white', linetype=2, conf="10%", n.cores=1, verbose=FALSE, ...) {
+      cnl <- sn(groups) %>% plapply(function(g) {
+        getDensityContour(
+          self$embedding, cell.groups=self$cell.groups, linetype=linetype, group=g, conf=conf, color=color, ...
+        )
+      }, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE) %>% do.call(c, .)
       return(cnl)
     },
 

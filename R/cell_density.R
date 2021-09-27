@@ -75,9 +75,16 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
 ##' @param cell.groups vector of cell type annotation
 ##' @param group specify cell types for contour, multiple cell types are also supported
 ##' @param conf confidence interval of contour
-getDensityContour <- function(emb, cell.groups, group,  color='white', linetype = 2, conf = "10%"){
+getDensityContour <- function(emb, cell.groups, group,  color='white', linetype=2, conf="10%", bandwidth=NULL, ...) {
   emb %<>% .[rownames(.) %in% names(cell.groups)[cell.groups %in% group], ]
-  kd <- ks::kde(emb, compute.cont=TRUE)
+
+  if (is.null(bandwidth)) {
+    kd <- ks::kde(emb, compute.cont=TRUE, ...)
+  } else {
+    h <- matrix(c(bandwidth, 0, 0, bandwidth), ncol=2)
+    kd <- ks::kde(emb, compute.cont=TRUE, H=h, ...)
+  }
+
   lcn <- kd %$% contourLines(x=eval.points[[1]], y=eval.points[[2]], z=estimate, levels=cont[conf]) %>%
     .[[1]] %>% data.frame() %>% cbind(z=1)
   cn <- geom_path(aes(x, y), data=lcn, linetype=linetype, color=color);

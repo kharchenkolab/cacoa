@@ -454,13 +454,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       jaccards.all <- data.frame()
       for(de.name in de.names){
-        print(de.name)
-        if(!(de.name %in% names(self$test.results))) next
+        if(!(de.name %in% names(self$test.results)) || (length(self$test.results[[de.name]]) == 0) ){
+          message(paste0('DE by ', de.name, ' was not estimated', collapse = ' '))
+          next
+        }
         de.res <- private$getResults(de.name)
+
         if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]]))))
           stop('Resampling was not performed')
         jaccards <- estimateStabilityPerCellType(de.res=de.res, top.n.genes=top.n.genes, p.val.cutoff=p.val.cutoff)
-        print(jaccards)
+        # print(jaccards)
+
         jacc.medians <- sapply(unique(jaccards$group), function(x) median(jaccards$value[jaccards$group == x]))
         jaccards.tmp <- data.frame(group = de.name, value = jacc.medians,
                                    cmp = names(jacc.medians))
@@ -1027,7 +1031,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotDEStabilityPerTest=function(name='jacc.per.test',
                                         notch = FALSE,
                                         show.jitter = TRUE,
-                                        jitter.alpha = 0.05,
+                                        jitter.alpha = 0.5,
                                         show.pairs = FALSE,
                                         sort.order = FALSE) {
 
@@ -1041,8 +1045,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                          xlabel = 'Test name',
                          ylabel = 'Jaccard Index',
                          palette=self$cell.groups.palette,
-                         plot.theme=self$plot.theme) + ylim(0, 1) +
-        geom_jitter(aes(color = cmp)) + labs(color = "Cell types")
+                         plot.theme=self$plot.theme) + ylim(0, 1) + 
+        labs(color = "Cell types")
       return(p)
     },
 

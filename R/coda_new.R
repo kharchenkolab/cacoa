@@ -243,7 +243,8 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL) {
       mean.list[i.list] <- 10
       min.list <- c(min.list, 10)
     } else {
-      min.list <- c(min.list, min(abs(apply(loadings.list, 1, mean))) / n.list[i.list] )
+      min.list <- c(min.list, min(abs(apply(loadings.list, 1, mean)))  )
+      # min.list <- c(min.list, min(abs(apply(loadings.list, 1, mean))) / n.list[i.list] )
     }
   }
   # print(sdt.list)
@@ -256,8 +257,8 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL) {
 
     # id.ref.cluster <- which(n.list == max(n.list))
     # id.ref.cluster <- id.ref.cluster[abs(mean.list[id.ref.cluster]) == min(abs(mean.list[id.ref.cluster]))]
-    # id.ref.cluster <- which(abs(mean.list) == min(abs(mean.list)))  # <- working version
-    id.ref.cluster <- which(min.list == min(min.list))  # <- working version
+    id.ref.cluster <- which(abs(mean.list) == min(abs(mean.list)))  # <- working version
+    # id.ref.cluster <- which(min.list == min(min.list))  # 
   } else {
     id.ref.cluster <- -1
     for (i.list in 1:length(cell.list)) {

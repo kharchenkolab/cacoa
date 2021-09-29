@@ -93,10 +93,10 @@ plotStability <- function(jaccards,
   if(! show.pairs) {
     if(sort.order) {
       p <- ggplot(jaccards, aes(x=reorder(group,value,na.rm = TRUE), y=value,
-                                group=group)) + geom_boxplot(outlier.shape = NA, notch = notch) + geom_jitter(alpha=jitter.alpha)          
+                                group=group)) + geom_boxplot(outlier.shape = NA, notch = notch) + geom_jitter(alpha=jitter.alpha, aes(color=cmp))         
     } else {
       p <- ggplot(jaccards, aes(x=group, y=value,
-                                group=group)) + geom_boxplot(outlier.shape = NA, notch = notch) + geom_jitter(alpha=jitter.alpha)          
+                                group=group)) + geom_boxplot(outlier.shape = NA, notch = notch) + geom_jitter(alpha=jitter.alpha,aes(color=cmp))          
     }
   } else {
     if(sort.order) {

@@ -310,38 +310,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param test which DESeq2 test to use (options: "LRT" (default), "Wald")
     #' @param cooks.cutoff cooksCutoff for DESeq2 (default=FALSE)
     #' @param min.cell.count minimum number of cells that need to be present in a given cell type in a given sample in order to be taken into account (default=10)
-    #' @param max.cell.count maximal number of cells per cluster per sample to include in a comparison (useful for comparing the number of DE genes between cell types) (default: Inf)
     #' @param independent.filtering independentFiltering parameter for DESeq2 (default=FALSE)
-    #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
     #' @param resampling.method which resampling method should be used "loo" for leave-one-out or "bootstrap", (default:NULL no resampling)
     #' @param name slot in which to save the results (default: 'de')
     #' @return A list of DE genes
-    estimateDEPerCellType=function(cell.groups = self$cell.groups,
-                                   sample.groups = self$sample.groups,
-                                   ref.level = self$ref.level,
-                                   target.level = self$target.level,
-                                   name ='de',
-                                   test='DESeq2.Wald',
-                                   resampling.method=NULL, # default - without resampling
-                                   max.resamplings=30,
-                                   seed.resampling=239, # shouldn't this be external?
-                                   min.cell.frac=0.05,
-                                   covariates = NULL,
-                                   common.genes = FALSE,
-                                   n.cores = self$n.cores,
-                                   cooks.cutoff = FALSE,
-                                   min.cell.count = 10,
-                                   n.cells.=Inf,
-                                   independent.filtering = FALSE,
-                                   cluster.sep.chr = "<!!>",
-                                   verbose=self$verbose, ...) {
-
-      if(!is.list(sample.groups)) {
-        s.groups <- list(names(sample.groups[sample.groups == ref.level]),
-                         names(sample.groups[sample.groups != ref.level])) %>%
-          setNames(c(ref.level, target.level))
-      } else {
-        s.groups <- sample.groups
+    estimateDEPerCellType=function(cell.groups=self$cell.groups, sample.groups=self$sample.groups,
+                                   ref.level=self$ref.level, target.level=self$target.level,
+                                   name='de', test='DESeq2.Wald', resampling.method=NULL, max.resamplings=30,
+                                   seed.resampling=239, min.cell.frac=0.05, covariates=NULL, common.genes=FALSE,
+                                   n.cores=self$n.cores, cooks.cutoff=FALSE, independent.filtering=FALSE,
+                                   min.cell.count=10, n.cells.subsample=100, verbose=self$verbose, ...) {
+      set.seed(seed.resampling)
+      if (!is.list(sample.groups)) {
+        sample.groups %<>% {split(names(.), . == ref.level)} %>% setNames(c(target.level, ref.level))
       }
 
       possible.tests <- c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR',
@@ -355,75 +336,60 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (tolower(test) %in% tolower(c('Wilcoxon', 't-test')))  test <- paste(test, 'edgeR', sep='.')
 
       if (!(tolower(test) %in% tolower(possible.tests)))
-        stop(paste('Test', test, 'is not supported. Available tests:',paste(possible.tests, collapse=', ')))
-
-      test <- possible.tests[tolower(test) == tolower(possible.tests)]
-      message(paste0(c('DE method ', test, ' is used'), collapse = ''))
+        stop(paste('Test', test, 'is not supported. Available tests:', paste(possible.tests, collapse=', ')))
 
       # s.groups.new contains list of case/control groups of samples to run DE on.
       # First element in s.groups.new corresponds to the initial grouping.
 
-      s.groups.new <- list(initial = s.groups)
+      s.groups.new <- list(initial=sample.groups)
+      max.cell.count <- Inf
       # If resampling is defined, new contrasts will append to s.groups.new
       if (is.null(resampling.method)) {
       } else if (resampling.method == 'loo') {
-        s.groups.new <- unlist(s.groups) %>% sn() %>%
-          lapply(function(n) lapply(s.groups, function(group) setdiff(group, n))) %>%
-          {c(s.groups.new, .)}
+        samples <- unlist(sample.groups) %>% sn() %>% lapply(function(n) lapply(sample.groups, setdiff, n))
+        s.groups.new %<>% c(samples)
       } else if (resampling.method == 'bootstrap') {
         # TODO: Do we ever use bootstrap? It seems that including the same sample many times
         # reduces variation and skews the analysis
         if (max.resamplings < 2) {
           warning('Bootstrap was not applied, because the number of resamplings was less than 2')
         } else {
-          set.seed(seed.resampling)
-
           samples <- (1:max.resamplings) %>% setNames(paste0('bootstrap.', .)) %>%
-            lapply(function(i) lapply(s.groups, function(x) sample(x, length(x), replace=TRUE)))
-          s.groups.new <- c(s.groups.new, samples)
+            lapply(function(i) lapply(sample.groups, function(x) sample(x, length(x), replace=TRUE)))
+          s.groups.new %<>% c(samples)
         }
       } else if (resampling.method == 'fix.count') {
         if (max.resamplings < 2) {
           warning('Resampling was not applied, because the number of resamplings was less than 2')
         } else {
-          set.seed(seed.resampling)
-          s.groups.new %<>% c(lapply(setNames(1:max.resamplings, paste0('fix.', 1:max.resamplings)), function(i) s.groups))
+          samples <- (1:max.resamplings) %>% setNames(., paste0('fix.', .)) %>% lapply(function(i) sample.groups)
+          s.groups.new %<>% c(samples)
         }
 
-        if (is.infinite(max.cell.count)) {
-          warning('Fixed number of cells were not provided, it was set to 100')
-          max.cell.count <- 100 # TODO: need to merge these two into one
-          min.cell.count <- 100
-        } else {
-          message(paste('Number of cell counts is fixed to', max.cell.count, sep = ' '))
-          min.cell.count <- max.cell.count
-        }
-
-      } else stop(paste('Resampling method', resampling.method, 'is not supported'))
+        if (verbose) message('Number of cell counts is fixed to ', max.cell.count)
+        max.cell.count <- min.cell.count <- n.cells.subsample
+      } else stop('Resampling method ', resampling.method, ' is not supported')
 
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=TRUE)
-
-      self$test.results[['raw']] <- raw.mats
 
       expr.fracs <- self$getJointCountMatrix() %>% getExpressionFractionPerGroup(cell.groups)
       gene.filter <- (expr.fracs > min.cell.frac)
 
+      outer.multicore <- (length(s.groups.new) >= n.cores) # parallelize the outer loop if subsampling is on
       de.res <- names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
         estimateDEPerCellTypeInner(
-          raw.mats=raw.mats, cell.groups=cell.groups,
-          s.groups=s.groups.new[[resampling.name]],
+          raw.mats=raw.mats, cell.groups=cell.groups, s.groups=s.groups.new[[resampling.name]],
           ref.level=ref.level, target.level=target.level, common.genes=common.genes,
-          cooks.cutoff=cooks.cutoff, min.cell.count=min.cell.count,
-          max.cell.count=max.cell.count, independent.filtering=independent.filtering,
-          n.cores=ifelse(length(s.groups.new)>=n.cores, 1, n.cores),
-          return.matrix=ifelse(resampling.name == 'initial', TRUE, FALSE),
-          verbose=(length(s.groups.new) < n.cores),
-          test=test, meta.info=covariates, gene.filter=gene.filter, ...)
-      },n.cores=ifelse(length(s.groups.new)>=n.cores,n.cores,1),
-      progress=length(s.groups.new)>=n.cores) # parallelize the outer loop if subsampling is on
+          cooks.cutoff=cooks.cutoff, min.cell.count=min.cell.count, max.cell.count=max.cell.count,
+          independent.filtering=independent.filtering, test=test, meta.info=covariates, gene.filter=gene.filter,
+          n.cores=ifelse(outer.multicore, 1, n.cores),
+          return.matrix=(resampling.name == 'initial'),
+          verbose=(!outer.multicore & verbose), ...
+        )
+      }, n.cores=ifelse(outer.multicore, n.cores, 1), progress=(outer.multicore & verbose))
 
       # if resampling: calculate median and variance on ranks after resampling
-      de.res <- if(length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
+      de.res <- if (length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
       de.res %<>% appendStatisticsToDE(expr.fracs)
       self$test.results[[name]] <- de.res
 

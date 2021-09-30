@@ -70,6 +70,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         return()
       }
 
+      if (!is.null(sample.groups)) {
+        if (length(unique(sample.groups)) != 2) stop("sample.groups must have exactly two levels")
+        if (is.null(ref.level) && !is.null(target.level)) ref.level <- setdiff(unique(sample.groups), target.level)[1]
+        if (!is.null(ref.level) && is.null(target.level)) target.level <- setdiff(unique(sample.groups), ref.level)[1]
+        if (length(setdiff(sample.groups, c(ref.level, target.level)) > 0))
+          stop("sample.groups must contain only ref.level '", ref.level, "' and target.level '", target.level, "'")
+      }
+
       if (is.null(ref.level) || is.null(target.level))
         stop("Both ref.level and target.level must be provided")
 
@@ -359,10 +367,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # If resampling is defined, new contrasts will append to s.groups.new
       if (is.null(resampling.method)) {
       } else if (resampling.method == 'loo') {
-        s.groups.new = c(s.groups.new, lapply(unlist(s.groups), function(name)
-          lapply(s.groups, function(group) setdiff(group, name)))  %>%
-            setNames(unlist(s.groups)))
+        s.groups.new <- unlist(s.groups) %>% sn() %>%
+          lapply(function(n) lapply(s.groups, function(group) setdiff(group, n))) %>%
+          {c(s.groups.new, .)}
       } else if (resampling.method == 'bootstrap') {
+        # TODO: Do we ever use bootstrap? It seems that including the same sample many times
+        # reduces variation and skews the analysis
         if(max.resamplings < 2) {
           warning('Bootstrap was not applied, because the number of resamplings was less than 2')
         } else {
@@ -384,7 +394,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
         if (is.infinite(max.cell.count)) {
           warning('Fixed number of cells were not provided, it was set to 100')
-          max.cell.count <- 100
+          max.cell.count <- 100 # TODO: need to merge these two into one
           min.cell.count <- 100
         } else {
           message(paste('Number of cell counts is fixed to', max.cell.count, sep = ' '))
@@ -397,12 +407,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       self$test.results[['raw']] <- raw.mats
 
-      expr.fracs <- self$getJointCountMatrix() %>%
-        getExpressionFractionPerGroup(cell.groups)
+      expr.fracs <- self$getJointCountMatrix() %>% getExpressionFractionPerGroup(cell.groups)
       gene.filter <- (expr.fracs > min.cell.frac)
 
       de.res <- names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
-        estimatePerCellTypeDEmethods(
+        estimateDEPerCellTypeInner(
           raw.mats=raw.mats, cell.groups=cell.groups,
           s.groups=s.groups.new[[resampling.name]],
           ref.level=ref.level, target.level=target.level, common.genes=common.genes,
@@ -1045,7 +1054,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                          xlabel = 'Test name',
                          ylabel = 'Jaccard Index',
                          palette=self$cell.groups.palette,
-                         plot.theme=self$plot.theme) + ylim(0, 1) + 
+                         plot.theme=self$plot.theme) + ylim(0, 1) +
         labs(color = "Cell types")
       return(p)
     },

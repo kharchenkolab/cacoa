@@ -10,28 +10,31 @@ NULL
 validatePerCellTypeParams <- function(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr) {
   checkPackageInstalled("DESeq2", bioc=TRUE)
 
-  if ( is.null(cell.groups) ) stop('"cell.groups" must be specified');
-  if ( is.null(sample.groups) ) stop('"sample.groups" must be specified')
-  if ( class(sample.groups) != 'list' ) stop('"sample.groups" must be a list');
-  if ( length(sample.groups) != 2 ) stop('"sample.groups" must be of length 2');
-  if ( ! all(unlist(lapply(sample.groups, function(x) class(x) == 'character'))) )
-    stop('"sample.groups" must be a list of character vectors');
-  if ( ! all(unlist(lapply(sample.groups, function(x) length(x) > 0))) )
+  if (is.null(cell.groups)) stop('"cell.groups" must be specified')
+  if (is.null(sample.groups)) stop('"sample.groups" must be specified')
+  if (class(sample.groups) != "list") stop('"sample.groups" must be a list')
+  if (length(sample.groups) != 2) stop('"sample.groups" must be of length 2')
+  if (!all(unlist(lapply(sample.groups, function(x) class(x) == "character"))))
+    stop('"sample.groups" must be a list of character vectors')
+
+  if (!all(unlist(lapply(sample.groups, function(x) length(x) > 0))))
     stop('"sample.groups" entries must be on length greater or equal to 1')
-  if ( ! all(unlist(lapply(sample.groups, function(x) {all(x %in% names(raw.mats))}))) )
+
+  if (!all(unlist(lapply(sample.groups, function(x) all(x %in% names(raw.mats))))))
     stop('"sample.groups" entries must be names of samples in the raw.mats')
-  if ( is.null(ref.level) ) stop('"ref.level" is not defined')
+
+  if (is.null(ref.level)) stop('"ref.level" is not defined')
   ## todo: check samplegrousp are named
-  if(is.null(names(sample.groups))) stop('"sample.groups" must be named')
-  if(class(cell.groups) != 'factor') stop('"cell.groups" must be a factor')
-  if(any(grepl(cluster.sep.chr, names(raw.mats),fixed=TRUE)))
+  if (is.null(names(sample.groups))) stop('"sample.groups" must be named')
+  if (class(cell.groups) != "factor") stop('"cell.groups" must be a factor')
+  if (any(grepl(cluster.sep.chr, names(raw.mats), fixed=TRUE)))
     stop('"cluster.sep.chr" must not be part of any sample name')
-  if(any(grepl(cluster.sep.chr,levels(cell.groups),fixed=TRUE)))
+
+  if (any(grepl(cluster.sep.chr, levels(cell.groups), fixed=TRUE)))
     stop('"cluster.sep.chr" must not be part of any cluster name')
 }
 
-rawMatricesWithCommonGenes=function(raw.mats, sample.groups = NULL)
-{
+rawMatricesWithCommonGenes=function(raw.mats, sample.groups = NULL) {
   if (!is.null(raw.mats)) {
     raw.mats <- raw.mats[unlist(sample.groups)]
   }
@@ -41,7 +44,7 @@ rawMatricesWithCommonGenes=function(raw.mats, sample.groups = NULL)
   }))
 }
 
-strpart <- function (x, split, n, fixed = FALSE) {
+strpart <- function(x, split, n, fixed = FALSE) {
   sapply(strsplit(as.character(x), split, fixed = fixed), "[",n)
 }
 
@@ -284,35 +287,22 @@ saveDEasJSON <- function(de.raw, saveprefix=NULL, dir.name="JSON", gene.metadata
 #' @param meta.info dataframe with possible covariates; for example, sex or age
 #' @param test DE method: deseq2, edgeR, wilcoxon, ttest
 #' @export
-estimatePerCellTypeDEmethods=function (raw.mats,
-                                       cell.groups=NULL,
-                                       s.groups=NULL,
-                                       ref.level=NULL,
-                                       target.level=NULL,
-                                       common.genes=FALSE,
-                                       cooks.cutoff=FALSE,
-                                       min.cell.count=10,
-                                       max.cell.count=Inf,
-                                       independent.filtering=TRUE,
-                                       n.cores=4,
-                                       cluster.sep.chr="<!!>",
-                                       return.matrix=TRUE,
-                                       verbose=TRUE,
-                                       test='Wald',
-                                       meta.info=NULL,
-                                       gene.filter=NULL) {
+estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, ref.level=NULL, target.level=NULL,
+                                    common.genes=FALSE, cooks.cutoff=FALSE, min.cell.count=10, max.cell.count=Inf,
+                                    independent.filtering=TRUE, n.cores=4, cluster.sep.chr="<!!>", return.matrix=TRUE,
+                                    verbose=TRUE, test='Wald', meta.info=NULL, gene.filter=NULL) {
 
   validatePerCellTypeParams(raw.mats, cell.groups, s.groups, ref.level, cluster.sep.chr)
 
-  if(common.genes) {
+  if (common.genes) {
     raw.mats <- rawMatricesWithCommonGenes(raw.mats, s.groups)
   } else {
-    gene.union <- lapply(raw.mats, colnames) %>% Reduce(union, .)
-    raw.mats <- sccore:::plapply(raw.mats, sccore:::extendMatrix, gene.union, n.cores = n.cores)
+    gene.union <- lapply(raw.mats, colnames) %>% do.call(union, .)
+    raw.mats <- plapply(raw.mats, sccore:::extendMatrix, gene.union, n.cores=n.cores, progress=verbose)
   }
 
   aggr2 <- raw.mats %>%
-    .[s.groups %>% unlist] %>% # Only consider samples in s.groups
+    .[unlist(s.groups)] %>% # Only consider samples in s.groups
     lapply(collapseCellsByType, groups=cell.groups, min.cell.count=min.cell.count, max.cell.count=max.cell.count) %>%
     .[sapply(., nrow) > 0] %>% # Remove empty samples due to min.cell.count
     rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
@@ -320,46 +310,44 @@ estimatePerCellTypeDEmethods=function (raw.mats,
 
   # Adjust s.groups
   passed.samples <- strpart(colnames(aggr2), cluster.sep.chr, 1, fixed = TRUE) %>% unique()
-  if(verbose && (length(passed.samples) != length(unlist(s.groups))))
-    warning("Excluded ",length(unlist(s.groups)) - length(passed.samples)," sample(s) due to 'min.cell.count'.")
+  if (verbose && (length(passed.samples) != length(unlist(s.groups))))
+    warning("Excluded ", length(unlist(s.groups)) - length(passed.samples), " sample(s) due to 'min.cell.count'.")
 
-  s.groups %<>% lapply(function(n) n[n %in% passed.samples])
+  s.groups %<>% lapply(intersect, passed.samples)
 
   ## For every cell type get differential expression results
-  de.res <- sccore::plapply( sccore::sn( levels(cell.groups) ), function(l) {
+  de.res <- levels(cell.groups) %>% sn() %>% plapply(function(l) {
     tryCatch({
       ## Get count matrix
-      cm <- aggr2[, strpart(colnames(aggr2), cluster.sep.chr, 2, fixed = TRUE) == l] %>% .[rowSums(.) > 0,] # Remove genes with no counts
-      if(!is.null(gene.filter)) {
+      cm <- aggr2 %>% .[, strpart(colnames(.), cluster.sep.chr, 2, fixed=TRUE) == l] %>% .[rowSums(.) > 0,,drop=FALSE]
+      if (!is.null(gene.filter)) {
         gene.to.remain <- gene.filter %>% {rownames(.)[.[,l]]} %>% intersect(rownames(cm))
-        cm <- cm[gene.to.remain,]
+        cm <- cm[gene.to.remain,,drop=FALSE]
       }
       ## Generate metadata
-      meta <- data.frame(
-        sample.id=colnames(cm),
-        group=as.factor(unlist(lapply(colnames(cm), function(y) {
-          y <- strpart(y, cluster.sep.chr, 1, fixed = TRUE)
-          names(s.groups)[unlist(lapply(s.groups, function(x) any(x %in% y)))]})))
-      )
 
-      if (!ref.level %in% levels(meta$group))  stop("The reference level is absent in this comparison")
-      meta$group <- relevel(meta$group, ref = ref.level)
+      meta.groups <- colnames(cm) %>% lapply(function(y) {
+        y <- strpart(y, cluster.sep.chr, 1, fixed=TRUE)
+        names(s.groups)[sapply(s.groups, function(x) any(x %in% y))]
+      }) %>% unlist() %>% as.factor()
+      meta <- data.frame(sample.id=colnames(cm), group=meta.groups)
+
+      if (!ref.level %in% levels(meta$group)) stop("The reference level is absent in this comparison")
+      meta$group <- relevel(meta$group, ref=ref.level)
       if (length(unique(as.character(meta$group))) < 2)  stop("The cluster is not present in both conditions")
 
       ## External covariates
-      if(is.null(meta.info)) {
-        design.formula = as.formula('~ group')
+      if (is.null(meta.info)) {
+        design.formula <- as.formula('~ group')
       } else {
-        design.formula = as.formula(paste('~ ',
-                                          paste(c(colnames(meta.info), 'group'),
-                                                collapse=' + ')))
-        meta.info.tmp = meta.info[gsub(paste("<!!>", l, sep=''),"",meta[,1]),, drop=F]
-
-        meta = cbind(meta, meta.info.tmp)
+        design.formula <- c(colnames(meta.info), 'group') %>%
+          paste(collapse=' + ') %>% {paste('~', .)} %>% as.formula()
+        meta.info.tmp <- meta.info[gsub(paste("<!!>", l, sep=''), "", meta[,1]),, drop=FALSE]
+        meta <- cbind(meta, meta.info.tmp)
       }
 
 
-      if(grepl('wilcoxon', tolower(test)) || grepl('t-test', tolower(test))) {
+      if (grepl('wilcoxon', tolower(test)) || grepl('t-test', tolower(test))) {
 
         # ----- Wilcoxon and t-test -----
 

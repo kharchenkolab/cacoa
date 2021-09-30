@@ -331,7 +331,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    n.cores = self$n.cores,
                                    cooks.cutoff = FALSE,
                                    min.cell.count = 10,
-                                   max.cell.count= Inf,
+                                   n.cells.=Inf,
                                    independent.filtering = FALSE,
                                    cluster.sep.chr = "<!!>",
                                    verbose=self$verbose, ...) {
@@ -373,13 +373,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else if (resampling.method == 'bootstrap') {
         # TODO: Do we ever use bootstrap? It seems that including the same sample many times
         # reduces variation and skews the analysis
-        if(max.resamplings < 2) {
+        if (max.resamplings < 2) {
           warning('Bootstrap was not applied, because the number of resamplings was less than 2')
         } else {
-          n.bootstrap <- max.resamplings
           set.seed(seed.resampling)
 
-          samples <- (1:n.bootstrap) %>% setNames(paste0('bootstrap.', .)) %>%
+          samples <- (1:max.resamplings) %>% setNames(paste0('bootstrap.', .)) %>%
             lapply(function(i) lapply(s.groups, function(x) sample(x, length(x), replace=TRUE)))
           s.groups.new <- c(s.groups.new, samples)
         }
@@ -387,9 +386,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (max.resamplings < 2) {
           warning('Resampling was not applied, because the number of resamplings was less than 2')
         } else {
-          n.bootstrap <- max.resamplings
           set.seed(seed.resampling)
-          s.groups.new %<>% c(lapply(setNames(1:n.bootstrap, paste0('fix.', 1:n.bootstrap)), function(i) s.groups))
+          s.groups.new %<>% c(lapply(setNames(1:max.resamplings, paste0('fix.', 1:max.resamplings)), function(i) s.groups))
         }
 
         if (is.infinite(max.cell.count)) {

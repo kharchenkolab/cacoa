@@ -32,3 +32,11 @@ checkPackageInstalled <- function(pkgs, details='to run this function', install.
 
   stop(error.text)
 }
+
+#' @description iterate over tree (list of lists of lists, etc) for `length(ids)` level,
+#' interpret each element as a data.frame and bind them appending all levels as columns with
+#' colnames correspoinding to `ids`
+rblapply <- function(list, ids, func) {
+  if (length(ids) == 1) return(bind_rows(lapply(list, func), .id=ids[1]))
+  return(bind_rows(lapply(list, rblapply, tail(ids, -1), func), .id=ids[1]))
+}

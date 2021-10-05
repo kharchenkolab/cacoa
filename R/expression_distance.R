@@ -211,32 +211,40 @@ prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, 
   return(xmd2)
 }
 
-filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sample.groups,
-                                          min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
-                                          genes=NULL, verbose=FALSE) {
-  # Filter rare samples per cell type
-  cell.names <- lapply(cms, rownames) %>% unlist()
-  freq.table <- table(cell.groups[cell.names], sample.per.cell[cell.names]) %>%
-    as.data.frame() %>%
-    mutate(Condition=sample.groups[as.character(Var2)]) %>%
+filterCellTypesByNSamples <- function(cell.groups, sample.per.cell, sample.groups,
+                                      min.cells.per.sample, min.samp.per.type, verbose=TRUE) {
+  freq.table <- table(Type=cell.groups, Sample=sample.per.cell) %>% as.data.frame() %>%
+    mutate(Condition=sample.groups[as.character(Sample)]) %>%
     filter(Freq >= min.cells.per.sample)
 
   if (length(unique(freq.table$Condition)) != 2)
     stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
 
-  removed.types <- freq.table %>% split(.$Var1) %>% sapply(function(df) {
-    df %$% split(Var2, Condition) %>% sapply(length) %>% {any(. < min.samp.per.type)}
+  removed.types <- freq.table %>% split(.$Type) %>% sapply(function(df) {
+    df %$% split(Sample, Condition) %>% sapply(length) %>% {any(. < min.samp.per.type)}
   }) %>% which() %>% names()
 
   if (verbose && (length(removed.types) > 0)) {
-    cat("Excluding cell types ", paste(removed.types, collapse=", "), "\n")
+    message("Excluding cell types ", paste(removed.types, collapse=", "), " that don't have enough samples\n")
   }
 
-  freq.table %<>% filter(!(Var1 %in% removed.types))
-  filt.types.per.samp <- freq.table %$% split(Var1, Var2)
+  freq.table %<>% filter(!(Type %in% removed.types))
+  return(freq.table)
+}
 
+filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sample.groups,
+                                          min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
+                                          genes=NULL, verbose=FALSE) {
+  # Filter rare samples per cell type
+  cell.names <- lapply(cms, rownames) %>% unlist()
+  freq.table <- filterCellTypesByNSamples(
+    cell.groups[cell.names], sample.per.cell[cell.names], sample.groups=sample.groups,
+    min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, verbose=verbose
+  )
+
+  filt.types.per.samp <- freq.table %$% split(Var1, Var2)
   cms.filt <- names(filt.types.per.samp) %>% sn() %>% lapply(function(n) {
-    cms[[n]] %>% .[cell.groups[rownames(.)] %in% filt.types.per.samp[[n]],]
+    cms[[n]] %>% .[cell.groups[rownames(.)] %in% filt.types.per.samp[[n]],, drop=FALSE]
   })
 
   cell.names <- lapply(cms.filt, rownames) %>% unlist()

@@ -386,7 +386,7 @@ reduceEdges <- function(edges, verbose=TRUE, n.cores = 1) {
 ##' @param verbose Print messages (default: T)
 ##' @param n.cores Number of cores to use (default: 1)
 ##' @return Rgraphviz object
-plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=FALSE, string.length=18, legend.label.size = 1,
+plotOntologyFamily <- function(fam, data, plot.type="complete", show.ids=FALSE, string.length=18, legend.label.size=1,
                                legend.position="topright", verbose=TRUE, n.cores=1, reduce.edges=FALSE, font.size=24) {
   checkPackageInstalled("Rgraphviz", bioc=TRUE)
   # Define nodes

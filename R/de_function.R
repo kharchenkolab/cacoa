@@ -45,7 +45,7 @@ rawMatricesWithCommonGenes <- function(raw.mats, sample.groups = NULL) {
 }
 
 strpart <- function(x, split, n, fixed = FALSE) {
-  sapply(strsplit(as.character(x), split, fixed = fixed), "[",n)
+  as.character(x) %>% strsplit(split, fixed=fixed) %>% sapply("[", n)
 }
 
 rbindDEMatrices <- function(mats, cluster.sep.chr) {
@@ -175,6 +175,23 @@ saveDEasJSON <- function(de.raw, saveprefix=NULL, dir.name="JSON", gene.metadata
   write(s, file=toc.file)
 }
 
+prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'bootstrap', 'fix.cells'),
+                                n.resamplings=30, n.biosamples=NULL) {
+  resampling.method <- match.arg(resampling.method)
+
+  if (resampling.method == 'loo') {
+    samples <- unlist(sample.groups) %>% sn() %>% lapply(function(n) lapply(sample.groups, setdiff, n))
+  } else if (resampling.method == 'bootstrap') {
+    # TODO: Do we ever use bootstrap? It seems that including the same sample many times
+    # reduces variation and skews the analysis
+    samples <- (1:n.resamplings) %>% setNames(paste0('bootstrap.', .)) %>%
+      lapply(function(i) lapply(sample.groups, function(x) sample(x, length(x), replace=TRUE)))
+  } else { # if (resampling.method == 'fix.cells')
+    samples <- (1:n.resamplings) %>% setNames(., paste0('fix.', .)) %>% lapply(function(i) sample.groups)
+  }
+
+  return(samples)
+}
 
 #' Differential expression using different methods (deseq2, edgeR, wilcoxon, ttest) with various covariates
 #' @param raw.mats list of counts matrices; column for gene and row for cell
@@ -214,7 +231,7 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
   mode(aggr2) <- 'integer'
 
   # Adjust s.groups
-  passed.samples <- strpart(colnames(aggr2), cluster.sep.chr, 1, fixed = TRUE) %>% unique()
+  passed.samples <- strpart(colnames(aggr2), cluster.sep.chr, 1, fixed=TRUE) %>% unique()
   if (verbose && (length(passed.samples) != length(unlist(s.groups))))
     warning("Excluded ", length(unlist(s.groups)) - length(passed.samples), " sample(s) due to 'min.cell.count'.")
 
@@ -250,7 +267,6 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
         meta.info.tmp <- meta.info[gsub(paste("<!!>", l, sep=''), "", meta[,1]),, drop=FALSE]
         meta <- cbind(meta, meta.info.tmp)
       }
-
 
       tmp <- tolower(strsplit(test, split='\\.')[[1]])
       test <- tmp[1]
@@ -327,9 +343,9 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
   }, n.cores=n.cores, progress=verbose) %>%  .[!sapply(., is.logical)]
 
 
-  if(verbose) {
+  if (verbose) {
     dif <- setdiff(levels(cell.groups), names(de.res))
-    if(length(dif) > 0) {
+    if (length(dif) > 0) {
       message(paste0("\nDEs not calculated for ",length(dif)," cell group(s):"))
       print(dif)
     }
@@ -342,11 +358,11 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
 #' @param var.to.sort Variable to calculate ranks
 summarizeDEResamplingResults <- function(de.list, var.to.sort='pvalue') {
   de.res <- de.list[[1]]
-  for(cell.type in names(de.res)) {
+  for (cell.type in names(de.res)) {
     genes.init <- genes.common <- rownames(de.res[[cell.type]]$res)
     mx.stat <- matrix(nrow = length(genes.common), ncol = 0, dimnames = list(genes.common,c()))
-    for(i in 2:length(de.list)){
-      if(!(cell.type %in% names(de.list[[i]]))) next
+    for (i in 2:length(de.list)) {
+      if (!(cell.type %in% names(de.list[[i]]))) next
       genes.common <- intersect(genes.common, rownames(de.list[[i]][[cell.type]]))
       mx.stat <- cbind(mx.stat[genes.common,], de.list[[i]][[cell.type]][genes.common, var.to.sort])
     }

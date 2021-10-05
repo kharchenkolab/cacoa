@@ -316,10 +316,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A list of DE genes
     estimateDEPerCellType=function(cell.groups=self$cell.groups, sample.groups=self$sample.groups,
                                    ref.level=self$ref.level, target.level=self$target.level,
-                                   name='de', test='DESeq2.Wald', resampling.method=NULL, max.resamplings=30,
+                                   name='de', test='DESeq2.Wald', resampling.method=NULL, n.resamplings=30,
                                    seed.resampling=239, min.cell.frac=0.05, covariates=NULL, common.genes=FALSE,
                                    n.cores=self$n.cores, cooks.cutoff=FALSE, independent.filtering=FALSE,
-                                   min.cell.count=10, n.cells.subsample=100, verbose=self$verbose, ...) {
+                                   min.cell.count=10, n.cells.subsample=NULL, verbose=self$verbose, ...) {
       set.seed(seed.resampling)
       if (!is.list(sample.groups)) {
         sample.groups %<>% {split(names(.), . == ref.level)} %>% setNames(c(target.level, ref.level))
@@ -336,39 +336,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (tolower(test) %in% tolower(c('Wilcoxon', 't-test')))  test <- paste(test, 'edgeR', sep='.')
 
       if (!(tolower(test) %in% tolower(possible.tests)))
-        stop(paste('Test', test, 'is not supported. Available tests:', paste(possible.tests, collapse=', ')))
+        stop('Test ', test, ' is not supported. Available tests: ', paste(possible.tests, collapse=', '))
 
       # s.groups.new contains list of case/control groups of samples to run DE on.
       # First element in s.groups.new corresponds to the initial grouping.
 
+      if (!is.null(n.cells.subsample) && is.null(resampling.method)) resampling.method <- 'fix.cells'
       s.groups.new <- list(initial=sample.groups)
       max.cell.count <- Inf
       # If resampling is defined, new contrasts will append to s.groups.new
-      if (is.null(resampling.method)) {
-      } else if (resampling.method == 'loo') {
-        samples <- unlist(sample.groups) %>% sn() %>% lapply(function(n) lapply(sample.groups, setdiff, n))
-        s.groups.new %<>% c(samples)
-      } else if (resampling.method == 'bootstrap') {
-        # TODO: Do we ever use bootstrap? It seems that including the same sample many times
-        # reduces variation and skews the analysis
-        if (max.resamplings < 2) {
-          warning('Bootstrap was not applied, because the number of resamplings was less than 2')
-        } else {
-          samples <- (1:max.resamplings) %>% setNames(paste0('bootstrap.', .)) %>%
-            lapply(function(i) lapply(sample.groups, function(x) sample(x, length(x), replace=TRUE)))
-          s.groups.new %<>% c(samples)
-        }
-      } else if (resampling.method == 'fix.count') {
-        if (max.resamplings < 2) {
-          warning('Resampling was not applied, because the number of resamplings was less than 2')
-        } else {
-          samples <- (1:max.resamplings) %>% setNames(., paste0('fix.', .)) %>% lapply(function(i) sample.groups)
-          s.groups.new %<>% c(samples)
-        }
+      if (!is.null(resampling.method) && (n.resamplings != 0)) {
+        s.groups.new %<>% c(
+          prepareSamplesForDE(sample.groups, resampling.method=resampling.method, n.resamplings=n.resamplings)
+        )
+      }
 
+      if (!is.null(n.cells.subsample)) {
         if (verbose) message('Number of cell counts is fixed to ', max.cell.count)
         max.cell.count <- min.cell.count <- n.cells.subsample
-      } else stop('Resampling method ', resampling.method, ' is not supported')
+      }
 
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 

@@ -34,14 +34,11 @@ validateDEPerCellTypeParams <- function(raw.mats, cell.groups, sample.groups, re
     stop('"cluster.sep.chr" must not be part of any cluster name')
 }
 
-rawMatricesWithCommonGenes <- function(raw.mats, sample.groups = NULL) {
-  if (!is.null(raw.mats)) {
-    raw.mats <- raw.mats[unlist(sample.groups)]
-  }
-  common.genes <- Reduce(intersect, lapply(raw.mats, colnames))
-  return(lapply(raw.mats, function(x) {
-    x[, common.genes]
-  }))
+subsetMatricesWithCommonGenes <- function(cms, sample.groups=NULL) {
+  if (!is.null(sample.groups)) cms <- cms[unlist(sample.groups)]
+  common.genes <- do.call(intersect, lapply(cms, colnames))
+  cms %<>% lapply(function(m) m[, common.genes, drop=FALSE])
+  return(cms)
 }
 
 strpart <- function(x, split, n, fixed = FALSE) {
@@ -213,14 +210,19 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
                                     common.genes=FALSE, cooks.cutoff=FALSE, min.cell.count=10, max.cell.count=Inf,
                                     independent.filtering=TRUE, n.cores=4, cluster.sep.chr="<!!>", return.matrix=TRUE,
                                     verbose=TRUE, test='Wald', meta.info=NULL, gene.filter=NULL) {
-  # TODO: implicit dependencies: edgeR, scran
+  # Validate input
   validateDEPerCellTypeParams(raw.mats, cell.groups, s.groups, ref.level, cluster.sep.chr)
+  tmp <- tolower(strsplit(test, split='\\.')[[1]])
+  test <- tmp[1]
+  test.type <- ifelse(is.na(tmp[2]), '', tmp[2])
 
+  # Filter data and convert to the right format
+  if (verbose) message("Preparing matrices for DE")
   if (common.genes) {
-    raw.mats <- rawMatricesWithCommonGenes(raw.mats, s.groups)
+    raw.mats %<>% subsetMatricesWithCommonGenes(s.groups)
   } else {
-    gene.union <- lapply(raw.mats, colnames) %>% do.call(union, .)
-    raw.mats <- plapply(raw.mats, sccore:::extendMatrix, gene.union, n.cores=n.cores, progress=verbose)
+    gene.union <- lapply(raw.mats, colnames) %>% Reduce(union, .)
+    raw.mats %<>% plapply(sccore:::extendMatrix, gene.union, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE)
   }
 
   aggr2 <- raw.mats %>%
@@ -230,18 +232,22 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
     rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
   mode(aggr2) <- 'integer'
 
-  # Adjust s.groups
+  # TODO: we collapse data using cluster.sep.chr and then immediately split it back in the plapply by cell types
+
+  ## Adjust s.groups
   passed.samples <- strpart(colnames(aggr2), cluster.sep.chr, 1, fixed=TRUE) %>% unique()
   if (verbose && (length(passed.samples) != length(unlist(s.groups))))
     warning("Excluded ", length(unlist(s.groups)) - length(passed.samples), " sample(s) due to 'min.cell.count'.")
 
   s.groups %<>% lapply(intersect, passed.samples)
 
-  ## For every cell type get differential expression results
+  # For every cell type get differential expression results
+  if (verbose) message("Estimating DE per cell type")
   de.res <- levels(cell.groups) %>% sn() %>% plapply(function(l) {
     tryCatch({
       ## Get count matrix
-      cm <- aggr2 %>% .[, strpart(colnames(.), cluster.sep.chr, 2, fixed=TRUE) == l] %>% .[rowSums(.) > 0,,drop=FALSE]
+      cm <- aggr2 %>% .[, strpart(colnames(.), cluster.sep.chr, 2, fixed=TRUE) == l, drop=FALSE] %>%
+        .[rowSums(.) > 0,,drop=FALSE]
       if (!is.null(gene.filter)) {
         gene.to.remain <- gene.filter %>% {rownames(.)[.[,l]]} %>% intersect(rownames(cm))
         cm <- cm[gene.to.remain,,drop=FALSE]
@@ -264,73 +270,24 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
       } else {
         design.formula <- c(colnames(meta.info), 'group') %>%
           paste(collapse=' + ') %>% {paste('~', .)} %>% as.formula()
-        meta.info.tmp <- meta.info[gsub(paste("<!!>", l, sep=''), "", meta[,1]),, drop=FALSE]
+        meta.info.tmp <- meta.info[gsub(paste0(cluster.sep.chr, l), "", meta[,1]),, drop=FALSE]
         meta <- cbind(meta, meta.info.tmp)
       }
 
-      tmp <- tolower(strsplit(test, split='\\.')[[1]])
-      test <- tmp[1]
-      test.type <- ifelse(is.na(tmp[2]), '', tmp[2])
-      if (grepl('wilcoxon', tolower(test)) || grepl('t-test', tolower(test))) {
-        if (test.type == 'deseq2') {
-          if (verbose) message('DESeq2 normalization')
-          cnts.norm <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula)  %>%
-            DESeq2::estimateSizeFactors()  %>% DESeq2::counts(normalized=TRUE)
-        } else if (test.type == 'edger') {
-          if (verbose) message('edgeR normalization')
-          cnts.norm <- edgeR::DGEList(counts=cm) %>% edgeR::calcNormFactors() %>% edgeR::cpm()
-        } else if (test.type == 'totcount') {
-          # the default should be normalization by the number of molecules!
-          cnts.norm <- prop.table(cm, 2) # Should it be multiplied by median(colSums(cm)) ?
-        }
-
-        cm <- cnts.norm  # to save normalized counts in the result list
-
-        if (test == 'wilcoxon') {
-          res <- scran::pairwiseWilcox(cnts.norm, groups = meta$group)$statistics[[1]] %>%
-            data.frame() %>% setNames(c("AUC", "pvalue", "padj"))
-        } else if (test == 't-test') {
-          res <- scran::pairwiseTTests(cnts.norm, groups = meta$group)$statistics[[1]] %>%
-            data.frame() %>% setNames(c("AUC", "pvalue", "padj"))
-        }
-
-        res$log2FoldChange <- log2(cnts.norm + 1) %>% apply(1, function(x) {
-          mean(x[meta$group == target.level]) - mean(x[meta$group == ref.level])})
+      if (test %in% c('wilcoxon', 't-test')) {
+        cm <- normalizePseudoBulkMatrix(cm, meta=meta, design.formula=design.formula, type=test.type)
+        res <- estimateDEForTypePairwiseStat(cm, meta=meta, target.level=target.level, test=test)
       } else if (test == 'deseq2') {
-        res <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula)
-        if (test.type == 'wald') {
-           res %<>% DESeq2::DESeq(quiet=TRUE, test='Wald')
-        } else {
-          res %<>% DESeq2::DESeq(quiet=TRUE, test='LRT', reduced = ~ 1)
-        }
-
-        res %<>% DESeq2::results(
-          contrast=c('group', target.level, ref.level), cooksCutoff=cooks.cutoff,
-          independentFiltering=independent.filtering
-        ) %>% as.data.frame()
-
-        res$padj[is.na(res$padj)] <- 1
-      } else if(test == 'edger') {
-        design <- model.matrix(design.formula, meta)
-
-        qlf <- edgeR::DGEList(cm, group = meta$group) %>%
-          edgeR::calcNormFactors() %>%
-          edgeR::estimateDisp(design = design) %>%
-          edgeR::glmQLFit(design = design) %>%
-          edgeR::glmQLFTest(coef=ncol(design))
-
-        res <- qlf$table %>% .[order(.$PValue),] %>% set_colnames(c("log2FoldChange", "logCPM", "stat", "pvalue"))
-        res$padj <- p.adjust(res$pvalue, method="BH")
+        res <- estimateDEForTypeDESeq(
+          cm, meta=meta, design.formula=design.formula, ref.level=ref.level, target.level=target.level,
+          test.type=test.type, cooksCutoff=cooks.cutoff, independentFiltering=independent.filtering
+        )
+      } else if (test == 'edger') {
+        res <- estimateDEForTypeEdgeR(cm, meta=meta, design.formula=design.formula)
       } else if (test == 'limma-voom') {
-        mm <- model.matrix(design.formula, meta)
-        fit <- limma::voom(cm, mm, plot = FALSE) %>% limma::lmFit(mm)
-
-        contr <- paste0('group', target.level) %>% limma::makeContrasts(levels=colnames(coef(fit)))
-        res <- limma::contrasts.fit(fit, contr) %>% limma::eBayes() %>% limma::topTable(sort.by="P", n=Inf) %>%
-          set_colnames(c('log2FoldChange', 'AveExpr', 'stat', 'pvalue', 'padj', 'B'))
+        res <- estimateDEForTypeLimma(cm, meta=meta, design.formula=design.formula, target.level=target.level)
       }
 
-      # add Z scores
       if (!is.na(res[[1]][1])) {
         res <- addZScores(res) %>% .[order(.$pvalue, decreasing=FALSE),]
       }
@@ -346,12 +303,82 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
   if (verbose) {
     dif <- setdiff(levels(cell.groups), names(de.res))
     if (length(dif) > 0) {
-      message(paste0("\nDEs not calculated for ",length(dif)," cell group(s):"))
-      print(dif)
+      message("DEs not calculated for ", length(dif), " cell group(s): ", paste(dif, collapse=', '))
     }
   }
 
   return(de.res)
+}
+
+normalizePseudoBulkMatrix <- function(cm, meta=NULL, design.formula=NULL, type='totcount') {
+  if (type == 'deseq2') {
+    cnts.norm <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula)  %>%
+      DESeq2::estimateSizeFactors()  %>% DESeq2::counts(normalized=TRUE)
+  } else if (type == 'edger') {
+    cnts.norm <- edgeR::DGEList(counts=cm) %>% edgeR::calcNormFactors() %>% edgeR::cpm()
+  } else if (type == 'totcount') {
+    # the default should be normalization by the number of molecules!
+    cnts.norm <- prop.table(cm, 2) # Should it be multiplied by median(colSums(cm)) ?
+  }
+
+  return(cnts.norm)
+}
+
+estimateDEForTypePairwiseStat <- function(cm.norm, meta, target.level, test) {
+  if (test == 'wilcoxon') {
+    res <- scran::pairwiseWilcox(cm.norm, groups = meta$group)$statistics[[1]] %>%
+      data.frame() %>% setNames(c("AUC", "pvalue", "padj"))
+  } else if (test == 't-test') {
+    res <- scran::pairwiseTTests(cm.norm, groups = meta$group)$statistics[[1]] %>%
+      data.frame() %>% setNames(c("AUC", "pvalue", "padj"))
+  }
+
+  # TODO: log2(x + 1) does not work for total-count normalization
+  res$log2FoldChange <- log2(cm.norm + 1) %>% apply(1, function(x) {
+    mean(x[meta$group == target.level]) - mean(x[meta$group != target.level])})
+
+  return(res)
+}
+
+estimateDEForTypeDESeq <- function(cm, meta, design.formula, ref.level, target.level, test.type, ...) {
+  res <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula)
+  if (test.type == 'wald') {
+      res %<>% DESeq2::DESeq(quiet=TRUE, test='Wald')
+  } else {
+    res %<>% DESeq2::DESeq(quiet=TRUE, test='LRT', reduced = ~ 1)
+  }
+
+  res %<>% DESeq2::results(contrast=c('group', target.level, ref.level), ...) %>% as.data.frame()
+
+  res$padj[is.na(res$padj)] <- 1
+
+  return(res)
+}
+
+estimateDEForTypeEdgeR <- function(cm, meta, design.formula) {
+  design <- model.matrix(design.formula, meta)
+
+  qlf <- edgeR::DGEList(cm, group = meta$group) %>%
+    edgeR::calcNormFactors() %>%
+    edgeR::estimateDisp(design = design) %>%
+    edgeR::glmQLFit(design = design) %>%
+    edgeR::glmQLFTest(coef=ncol(design))
+
+  res <- qlf$table %>% .[order(.$PValue),] %>% set_colnames(c("log2FoldChange", "logCPM", "stat", "pvalue"))
+  res$padj <- p.adjust(res$pvalue, method="BH")
+
+  return(res)
+}
+
+estimateDEForTypeLimma <- function(cm, meta, design.formula, target.level) {
+  mm <- model.matrix(design.formula, meta)
+  fit <- limma::voom(cm, mm, plot = FALSE) %>% limma::lmFit(mm)
+
+  contr <- paste0('group', target.level) %>% limma::makeContrasts(levels=colnames(coef(fit)))
+  res <- limma::contrasts.fit(fit, contr) %>% limma::eBayes() %>% limma::topTable(sort.by="P", n=Inf) %>%
+    set_colnames(c('log2FoldChange', 'AveExpr', 'stat', 'pvalue', 'padj', 'B'))
+
+  return(res)
 }
 
 #' Summarize DE Resampling Results

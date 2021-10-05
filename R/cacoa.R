@@ -361,7 +361,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       expr.fracs <- self$getJointCountMatrix() %>% getExpressionFractionPerGroup(cell.groups)
       gene.filter <- (expr.fracs > min.cell.frac)
 
-      outer.multicore <- (length(s.groups.new) >= n.cores) # parallelize the outer loop if subsampling is on
+      # parallelize the outer loop if subsampling is on
+      outer.multicore <- (length(s.groups.new) >= n.cores) && (n.cores > 1)
       de.res <- names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
         estimateDEPerCellTypeInner(
           raw.mats=raw.mats, cell.groups=cell.groups, s.groups=s.groups.new[[resampling.name]],

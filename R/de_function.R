@@ -6,8 +6,7 @@ NULL
 ##' @param cell.groups Named clustering/annotation factor with cell names
 ##' @param sample.groups Named factor with cell names indicating condition/sample, e.g., ctrl/disease
 ##' @param ref.level Reference cluster level in 'sample.groups', e.g., ctrl, healthy, wt
-##' @param cluster.sep.chr Character string of length 1 specifying a delimiter to separate cluster and app names
-validateDEPerCellTypeParams <- function(raw.mats, cell.groups, sample.groups, ref.level, cluster.sep.chr) {
+validateDEPerCellTypeParams <- function(raw.mats, cell.groups, sample.groups, ref.level) {
   checkPackageInstalled("DESeq2", bioc=TRUE)
 
   if (is.null(cell.groups)) stop('"cell.groups" must be specified')
@@ -27,11 +26,6 @@ validateDEPerCellTypeParams <- function(raw.mats, cell.groups, sample.groups, re
   ## todo: check samplegrousp are named
   if (is.null(names(sample.groups))) stop('"sample.groups" must be named')
   if (class(cell.groups) != "factor") stop('"cell.groups" must be a factor')
-  if (any(grepl(cluster.sep.chr, names(raw.mats), fixed=TRUE)))
-    stop('"cluster.sep.chr" must not be part of any sample name')
-
-  if (any(grepl(cluster.sep.chr, levels(cell.groups), fixed=TRUE)))
-    stop('"cluster.sep.chr" must not be part of any cluster name')
 }
 
 subsetMatricesWithCommonGenes <- function(cms, sample.groups=NULL) {
@@ -43,15 +37,6 @@ subsetMatricesWithCommonGenes <- function(cms, sample.groups=NULL) {
 
 strpart <- function(x, split, n, fixed = FALSE) {
   as.character(x) %>% strsplit(split, fixed=fixed) %>% sapply("[", n)
-}
-
-rbindDEMatrices <- function(mats, cluster.sep.chr) {
-  mats <- lapply(names(mats), function(n) {
-    rownames(mats[[n]]) <- paste0(n, cluster.sep.chr, rownames(mats[[n]]));
-    return(mats[[n]])
-  })
-
-  return(t(do.call(rbind, mats)))
 }
 
 #' Add Z scores to DE results
@@ -75,9 +60,8 @@ addZScores <- function(df) {
 #' @param saveprefix Prefix for created files (default=NULL)
 #' @param dir.name Name for directory with results. If it doesn't exist, it will be created. To disable, set as NULL (default="JSON")
 #' @param gene.metadata (default=NULL)
-#' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
 #' @param verbose Show progress (default=TRUE)
-saveDEasJSON <- function(de.raw, saveprefix=NULL, dir.name="JSON", gene.metadata=NULL, cluster.sep.chr="<!!>",
+saveDEasJSON <- function(de.raw, saveprefix=NULL, dir.name="JSON", gene.metadata=NULL,
                          sample.groups=NULL, verbose=TRUE) {
   if(!is.null(dir.name)) {
     if(!dir.exists(dir.name)) dir.create(dir.name)
@@ -85,10 +69,10 @@ saveDEasJSON <- function(de.raw, saveprefix=NULL, dir.name="JSON", gene.metadata
     dir.name = "."
   }
 
-  if(is.null(gene.metadata)) {
+  if (is.null(gene.metadata)) {
     gene.metadata <- data.frame()
     all.genes <- unique(unlist(lapply(de.raw, function(x) {
-      if(!is.null(x)){
+      if (!is.null(x)) {
         rownames(as.data.frame(x$res))
       } else {
         NULL
@@ -110,7 +94,6 @@ saveDEasJSON <- function(de.raw, saveprefix=NULL, dir.name="JSON", gene.metadata
 
     all.genes <- rownames(res.table)
     cm <- res.celltype$cm
-    colnames(cm) <- strpart(colnames(cm),cluster.sep.chr,1,fixed=TRUE)
 
     ilev <- lapply(sample.groups, function(sg) {
       sg <- sg[sg %in% colnames(cm)]
@@ -200,7 +183,6 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 #' @param min.cell.count (default=10)
 #' @param independent.filtering independentFiltering for DESeq2 (default=FALSE)
 #' @param n.cores Number of cores (default=1)
-#' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
 #' @param return.matrix Return merged matrix of results (default=TRUE)
 #' @param covariates list of covariates to include; for example, cdr, sex or age
 #' @param meta.info dataframe with possible covariates; for example, sex or age
@@ -208,10 +190,10 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 #' @export
 estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, ref.level=NULL, target.level=NULL,
                                     common.genes=FALSE, cooks.cutoff=FALSE, min.cell.count=10, max.cell.count=Inf,
-                                    independent.filtering=TRUE, n.cores=4, cluster.sep.chr="<!!>", return.matrix=TRUE,
+                                    independent.filtering=TRUE, n.cores=4, return.matrix=TRUE,
                                     verbose=TRUE, test='Wald', meta.info=NULL, gene.filter=NULL) {
   # Validate input
-  validateDEPerCellTypeParams(raw.mats, cell.groups, s.groups, ref.level, cluster.sep.chr)
+  validateDEPerCellTypeParams(raw.mats, cell.groups, s.groups, ref.level)
   tmp <- tolower(strsplit(test, split='\\.')[[1]])
   test <- tmp[1]
   test.type <- ifelse(is.na(tmp[2]), '', tmp[2])
@@ -225,17 +207,18 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
     raw.mats %<>% plapply(sccore:::extendMatrix, gene.union, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE)
   }
 
-  aggr2 <- raw.mats %>%
-    .[unlist(s.groups)] %>% # Only consider samples in s.groups
+  cm.bulk.per.samp <- raw.mats[unlist(s.groups)] %>% # Only consider samples in s.groups
     lapply(collapseCellsByType, groups=cell.groups, min.cell.count=min.cell.count, max.cell.count=max.cell.count) %>%
-    .[sapply(., nrow) > 0] %>% # Remove empty samples due to min.cell.count
-    rbindDEMatrices(cluster.sep.chr = cluster.sep.chr)
-  mode(aggr2) <- 'integer'
+    .[sapply(., nrow) > 0] # Remove empty samples due to min.cell.count
 
-  # TODO: we collapse data using cluster.sep.chr and then immediately split it back in the plapply by cell types
+  cm.bulk.per.type <- levels(cell.groups) %>% sn() %>% lapply(function(cg) {
+    cm.bulk.per.samp %>% lapply(function(cm) if (cg %in% rownames(cm)) cm[cg, , drop=FALSE] else NULL) %>%
+      .[!sapply(., is.null)] %>% {set_rownames(do.call(rbind, .), names(.))} %>% `mode<-`('integer') %>%
+      .[,colSums(.) > 0,drop=FALSE]
+  }) %>% .[sapply(., length) > 0] %>% lapply(t)
 
   ## Adjust s.groups
-  passed.samples <- strpart(colnames(aggr2), cluster.sep.chr, 1, fixed=TRUE) %>% unique()
+  passed.samples <- names(cm.bulk.per.samp)
   if (verbose && (length(passed.samples) != length(unlist(s.groups))))
     warning("Excluded ", length(unlist(s.groups)) - length(passed.samples), " sample(s) due to 'min.cell.count'.")
 
@@ -243,26 +226,23 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
 
   # For every cell type get differential expression results
   if (verbose) message("Estimating DE per cell type")
-  de.res <- levels(cell.groups) %>% sn() %>% plapply(function(l) {
+  de.res <- names(cm.bulk.per.type) %>% sn()%>% plapply(function(l) {
     tryCatch({
-      ## Get count matrix
-      cm <- aggr2 %>% .[, strpart(colnames(.), cluster.sep.chr, 2, fixed=TRUE) == l, drop=FALSE] %>%
-        .[rowSums(.) > 0,,drop=FALSE]
+      cm <- cm.bulk.per.type[[l]]
       if (!is.null(gene.filter)) {
         gene.to.remain <- gene.filter %>% {rownames(.)[.[,l]]} %>% intersect(rownames(cm))
         cm <- cm[gene.to.remain,,drop=FALSE]
       }
-      ## Generate metadata
 
+      ## Generate metadata
       meta.groups <- colnames(cm) %>% lapply(function(y) {
-        y <- strpart(y, cluster.sep.chr, 1, fixed=TRUE)
         names(s.groups)[sapply(s.groups, function(x) any(x %in% y))]
       }) %>% unlist() %>% as.factor()
-      meta <- data.frame(sample.id=colnames(cm), group=meta.groups)
 
-      if (!ref.level %in% levels(meta$group)) stop("The reference level is absent in this comparison")
-      meta$group <- relevel(meta$group, ref=ref.level)
-      if (length(unique(as.character(meta$group))) < 2)  stop("The cluster is not present in both conditions")
+      if (length(levels(meta.groups)) < 2) stop("The cluster is not present in both conditions")
+      if (!ref.level %in% levels(meta.groups)) stop("The reference level is absent in this comparison")
+
+      meta <- data.frame(sample.id=colnames(cm), group=relevel(meta.groups, ref=ref.level))
 
       ## External covariates
       if (is.null(meta.info)) {
@@ -270,8 +250,7 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
       } else {
         design.formula <- c(colnames(meta.info), 'group') %>%
           paste(collapse=' + ') %>% {paste('~', .)} %>% as.formula()
-        meta.info.tmp <- meta.info[gsub(paste0(cluster.sep.chr, l), "", meta[,1]),, drop=FALSE]
-        meta <- cbind(meta, meta.info.tmp)
+        meta %<>% cbind(meta.info[meta$sample.id, , drop=FALSE])
       }
 
       if (test %in% c('wilcoxon', 't-test')) {

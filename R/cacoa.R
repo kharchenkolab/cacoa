@@ -1140,11 +1140,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param de.raw List of DE results
     #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
     #' @param gene.metadata (default=NULL)
-    #' @param cluster.sep.chr character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")
-    saveDEasJSON=function(saveprefix=NULL, dir.name="JSON", de.raw=NULL, sample.groups=self$sample.groups,
-                          ref.level=self$ref.level, gene.metadata=NULL, cluster.sep.chr="<!!>", verbose=TRUE) {
+    saveDEasJSON=function(saveprefix=NULL, dir.name="JSON", de.raw=NULL, sample.groups=self$sample.groups, de.name='de',
+                          ref.level=self$ref.level, gene.metadata=NULL, verbose=TRUE) {
       if (is.null(de.raw)) {
-        de.raw <- private$getResults("de", "estimateDEPerCellType")
+        de.raw <- private$getResults(de.name, "estimateDEPerCellType")
       }
 
       if (!is.list(sample.groups)) {
@@ -1158,7 +1157,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.null(saveprefix)) saveprefix <- ""
 
       saveDEasJSON(de.raw=de.raw, saveprefix=saveprefix, dir.name=dir.name, gene.metadata=gene.metadata,
-                   cluster.sep.chr=cluster.sep.chr, sample.groups=sample.groups, verbose=verbose)
+                   sample.groups=sample.groups, verbose=verbose)
     },
 
     ### Ontology analysis

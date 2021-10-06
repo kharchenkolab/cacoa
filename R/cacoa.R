@@ -237,8 +237,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         dists <- consensusShiftDistances(cm.norm, sample.groups, ...)
         obs.diff <- mean(dists, trim=trim)
         randomized.dists <- lapply(1:n.permutations, function(i) {
-          sg.shuffled <- sample.groups %>% {setNames(sample(as.character(.)), names(.))} %>% as.factor()
-          consensusShiftDistances(cm.norm, sg.shuffled, ...) %>% mean(trim=trim)
+          sg.shuff <- sample.groups[colnames(cm.norm)] %>% as.factor() %>%
+            droplevels() %>% {setNames(sample(.), names(.))}
+          consensusShiftDistances(cm.norm, sg.shuff, ...) %>% mean(trim=trim)
         }) %>% unlist()
 
         pvalue <- (sum(randomized.dists >= obs.diff, na.rm=TRUE) + 1) / (sum(!is.na(randomized.dists)) + 1)

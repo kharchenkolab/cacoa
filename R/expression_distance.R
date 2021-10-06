@@ -66,9 +66,13 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
               cell.groups=cell.groups, pvalues=pvalues, padjust=padjust))
 }
 
-estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, top.n.genes=NULL, n.pcs=NULL, ...) {
+estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, top.n.genes=NULL, n.pcs=NULL,
+                                                gene.selection="wilcox", exclude.genes=NULL) {
   if (!is.null(top.n.genes)) {
-    sel.genes <- filterGenesForCellType(cm.norm, sample.groups=sample.groups, top.n.genes=top.n.genes, ...)
+    sel.genes <- filterGenesForCellType(
+      cm.norm, sample.groups=sample.groups, top.n.genes=top.n.genes, gene.selection=gene.selection,
+      exclude.genes=exclude.genes
+    )
     cm.norm <- cm.norm[,sel.genes,drop=FALSE]
   }
 
@@ -278,13 +282,14 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
 
 ##' @description calculate consensus change direction and distances between samples along this axis
 consensusShiftDistances <- function(tcm, sample.groups, use.median=FALSE, mean.trim=0, use.cpp=TRUE) {
-  if (min(table(sample.groups[colnames(tcm)])) < 1) return(NA); # not enough samples
-  g1 <- which(sample.groups[colnames(tcm)]==levels(sample.groups)[1])
-  g2 <- which(sample.groups[colnames(tcm)]==levels(sample.groups)[2])
+  sample.groups %<>% .[colnames(tcm)]
+  if (min(table(sample.groups)) < 1) return(NA); # not enough samples
+  g1 <- which(sample.groups == levels(sample.groups)[1])
+  g2 <- which(sample.groups == levels(sample.groups)[2])
   if (use.cpp)
     return(as.numeric(projdiff(tcm, g1 - 1, g2 - 1)))
 
-  dm <- do.call(rbind, lapply(g1, function(n1) { # R
+  dm <- do.call(rbind, lapply(g1, function(n1) {
     do.call(rbind, lapply(g2, function(n2) {
       tcm[,n1] - tcm[,n2]
     }))

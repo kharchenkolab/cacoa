@@ -241,8 +241,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           consensusShiftDistances(cm.norm, sg.shuffled, ...) %>% mean(trim=trim)
         }) %>% unlist()
 
-        pvalue <- (sum(randomized.dists >= obs.diff) + 1) / (sum(!is.na(randomized.dists)) + 1)
-        dists <- dists - median(randomized.dists)
+        pvalue <- (sum(randomized.dists >= obs.diff, na.rm=TRUE) + 1) / (sum(!is.na(randomized.dists)) + 1)
+        dists <- dists - median(randomized.dists, na.rm=TRUE)
         list(dists=dists, pvalue=pvalue)
       }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE)
 

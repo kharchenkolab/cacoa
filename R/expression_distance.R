@@ -242,7 +242,7 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
     min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, verbose=verbose
   )
 
-  filt.types.per.samp <- freq.table %$% split(Var1, Var2)
+  filt.types.per.samp <- freq.table %$% split(Type, Sample)
   cms.filt <- names(filt.types.per.samp) %>% sn() %>% lapply(function(n) {
     cms[[n]] %>% .[cell.groups[rownames(.)] %in% filt.types.per.samp[[n]],, drop=FALSE]
   })
@@ -278,7 +278,7 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
 
 ##' @description calculate consensus change direction and distances between samples along this axis
 consensusShiftDistances <- function(tcm, sample.groups, use.median=FALSE, mean.trim=0, use.cpp=TRUE) {
-  if(min(table(sample.groups[colnames(tcm)])) < 1) return(NA); # not enough samples
+  if (min(table(sample.groups[colnames(tcm)])) < 1) return(NA); # not enough samples
   g1 <- which(sample.groups[colnames(tcm)]==levels(sample.groups)[1])
   g2 <- which(sample.groups[colnames(tcm)]==levels(sample.groups)[2])
   if (use.cpp)

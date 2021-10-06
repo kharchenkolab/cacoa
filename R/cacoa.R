@@ -319,7 +319,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    name='de', test='DESeq2.Wald', resampling.method=NULL, n.resamplings=30,
                                    seed.resampling=239, min.cell.frac=0.05, covariates=NULL, common.genes=FALSE,
                                    n.cores=self$n.cores, cooks.cutoff=FALSE, independent.filtering=FALSE,
-                                   min.cell.count=10, n.cells.subsample=NULL, verbose=self$verbose, ...) {
+                                   min.cell.count=10, n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, ...) {
       set.seed(seed.resampling)
       if (!is.list(sample.groups)) {
         sample.groups %<>% {split(names(.), . == ref.level)} %>% setNames(c(target.level, ref.level))
@@ -330,9 +330,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                           't-test.edgeR', 't-test.DESeq2', 't-test.totcount',
                           'limma-voom')
 
-      # Default test for DESeq2 is Wald
       if (tolower(test) == tolower('DESeq2')) test <- paste(test, 'Wald', sep='.')
-      # Default normalization for Wilcoxon and t-test is edgeR
       if (tolower(test) %in% tolower(c('Wilcoxon', 't-test')))  test <- paste(test, 'edgeR', sep='.')
 
       if (!(tolower(test) %in% tolower(possible.tests)))
@@ -344,15 +342,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(n.cells.subsample) && is.null(resampling.method)) resampling.method <- 'fix.cells'
       s.groups.new <- list(initial=sample.groups)
       max.cell.count <- Inf
+      fix.samples <- NULL
       # If resampling is defined, new contrasts will append to s.groups.new
       if (!is.null(resampling.method) && (n.resamplings != 0)) {
         s.groups.new %<>% c(
           prepareSamplesForDE(sample.groups, resampling.method=resampling.method, n.resamplings=n.resamplings)
         )
+
+        if (resampling.method == 'fix.samples') {
+          if (is.null(fix.n.samples)) stop("fix.n.samples must be provided for resampling.method='fix.samples'")
+          fix.samples <- fix.n.samples
+        }
       }
 
       if (!is.null(n.cells.subsample)) {
-        if (verbose) message('Number of cell counts is fixed to ', max.cell.count)
+        if (verbose) message('Number of cell counts is fixed to ', n.cells.subsample)
         max.cell.count <- min.cell.count <- n.cells.subsample
       }
 
@@ -363,17 +367,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # parallelize the outer loop if subsampling is on
       outer.multicore <- (length(s.groups.new) >= n.cores) && (n.cores > 1)
+      inner.verbose <- (length(s.groups.new) == 1) || (!outer.multicore && verbose > 1)
       de.res <- names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
         estimateDEPerCellTypeInner(
           raw.mats=raw.mats, cell.groups=cell.groups, s.groups=s.groups.new[[resampling.name]],
           ref.level=ref.level, target.level=target.level, common.genes=common.genes,
           cooks.cutoff=cooks.cutoff, min.cell.count=min.cell.count, max.cell.count=max.cell.count,
           independent.filtering=independent.filtering, test=test, meta.info=covariates, gene.filter=gene.filter,
+          fix.n.samples=(if (resampling.name == 'initial') NULL else fix.samples),
           n.cores=ifelse(outer.multicore, 1, n.cores),
           return.matrix=(resampling.name == 'initial'),
-          verbose=(!outer.multicore & verbose), ...
+          verbose=(inner.verbose & verbose), ...
         )
-      }, n.cores=ifelse(outer.multicore, n.cores, 1), progress=(outer.multicore & verbose))
+      }, n.cores=ifelse(outer.multicore, n.cores, 1), progress=(!inner.verbose & verbose))
 
       # if resampling: calculate median and variance on ranks after resampling
       de.res <- if (length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
@@ -1068,12 +1074,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       de.raw <- private$getResults(name, 'estimateDEPerCellType()')
 
       if (show.resampling.results) {
-        if (any(unlist(lapply(de.raw, function(x) is.null(x$subsamples))))) {
-          warning("resampling results are missing for at least some cell types, falling back to point estimates.",
-                  "Please rerun estimateDEPerCellType() with resampling='bootstrap' or resampling='loo'")
+        subsamples <- lapply(de.raw, `[[`, 'subsamples')
+        miss.subsamples <- names(subsamples)[sapply(subsamples, is.null)]
+        if (length(miss.subsamples) == length(subsamples)) {
+          warning("resampling results are missing for all cell types, falling back to point estimates.",
+                  "Please rerun estimateDEPerCellType() with resampling != NULL")
           rl <- lapply(de.raw, `[[`, 'res')
         } else {
-          subsamples <- lapply(de.raw, `[[`, 'subsamples')
+          warning("Subtypes ", paste(miss.subsamples, collapse=","), " are missed form sampling, ignoring those")
           rl <- unlist(subsamples, recursive=FALSE) %>%
             setNames(rep(names(de.raw), sapply(subsamples, length)))
         }

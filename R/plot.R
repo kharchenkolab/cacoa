@@ -85,7 +85,6 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
     geom_point(position=position_jitterdodge(jitter.width=jitter.width), color="black", size=size, alpha=alpha) +
     scale_y_continuous(expand=c(0, 0), limits=c(0, max(count.df$value) * y.expand))
 
-
   if (show.significance) {
     if (adjust.pvalues) {
       # willcox test + adjustment

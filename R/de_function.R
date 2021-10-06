@@ -155,7 +155,7 @@ saveDEasJSON <- function(de.raw, saveprefix=NULL, dir.name="JSON", gene.metadata
   write(s, file=toc.file)
 }
 
-prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'bootstrap', 'fix.cells'),
+prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'bootstrap', 'fix.cells', 'fix.samples'),
                                 n.resamplings=30, n.biosamples=NULL) {
   resampling.method <- match.arg(resampling.method)
 
@@ -166,7 +166,7 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
     # reduces variation and skews the analysis
     samples <- (1:n.resamplings) %>% setNames(paste0('bootstrap.', .)) %>%
       lapply(function(i) lapply(sample.groups, function(x) sample(x, length(x), replace=TRUE)))
-  } else { # if (resampling.method == 'fix.cells')
+  } else { # 'fix.cells' or 'fix.samples'
     samples <- (1:n.resamplings) %>% setNames(., paste0('fix.', .)) %>% lapply(function(i) sample.groups)
   }
 
@@ -190,7 +190,7 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 #' @export
 estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, ref.level=NULL, target.level=NULL,
                                     common.genes=FALSE, cooks.cutoff=FALSE, min.cell.count=10, max.cell.count=Inf,
-                                    independent.filtering=TRUE, n.cores=4, return.matrix=TRUE,
+                                    independent.filtering=TRUE, n.cores=4, return.matrix=TRUE, fix.n.samples=NULL,
                                     verbose=TRUE, test='Wald', meta.info=NULL, gene.filter=NULL) {
   # Validate input
   validateDEPerCellTypeParams(raw.mats, cell.groups, s.groups, ref.level)
@@ -212,8 +212,12 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
     .[sapply(., nrow) > 0] # Remove empty samples due to min.cell.count
 
   cm.bulk.per.type <- levels(cell.groups) %>% sn() %>% lapply(function(cg) {
-    cm.bulk.per.samp %>% lapply(function(cm) if (cg %in% rownames(cm)) cm[cg, , drop=FALSE] else NULL) %>%
-      .[!sapply(., is.null)] %>% {set_rownames(do.call(rbind, .), names(.))} %>% `mode<-`('integer') %>%
+    tcms <- cm.bulk.per.samp %>%
+      lapply(function(cm) if (cg %in% rownames(cm)) cm[cg, , drop=FALSE] else NULL) %>%
+      .[!sapply(., is.null)]
+    if (length(tcms) == 0) return(NULL)
+
+    tcms %>% {set_rownames(do.call(rbind, .), names(.))} %>% `mode<-`('integer') %>%
       .[,colSums(.) > 0,drop=FALSE]
   }) %>% .[sapply(., length) > 0] %>% lapply(t)
 
@@ -234,9 +238,16 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
         cm <- cm[gene.to.remain,,drop=FALSE]
       }
 
+      cur.s.groups <- lapply(s.groups, intersect, colnames(cm))
+      if (!is.null(fix.n.samples)) {
+        if (min(sapply(s.groups, length)) < fix.n.samples) stop("The cluster does not have enough samples")
+        cur.s.groups %<>% lapply(sample, fix.n.samples)
+        cm <- cm[, unlist(cur.s.groups), drop=FALSE]
+      }
+
       ## Generate metadata
       meta.groups <- colnames(cm) %>% lapply(function(y) {
-        names(s.groups)[sapply(s.groups, function(x) any(x %in% y))]
+        names(cur.s.groups)[sapply(cur.s.groups, function(x) any(x %in% y))]
       }) %>% unlist() %>% as.factor()
 
       if (length(levels(meta.groups)) < 2) stop("The cluster is not present in both conditions")
@@ -370,7 +381,13 @@ summarizeDEResamplingResults <- function(de.list, var.to.sort='pvalue') {
     for (i in 2:length(de.list)) {
       if (!(cell.type %in% names(de.list[[i]]))) next
       genes.common <- intersect(genes.common, rownames(de.list[[i]][[cell.type]]))
-      mx.stat <- cbind(mx.stat[genes.common,], de.list[[i]][[cell.type]][genes.common, var.to.sort])
+      mx.stat <- cbind(mx.stat[genes.common,,drop=FALSE],
+                       de.list[[i]][[cell.type]][genes.common, var.to.sort,drop=FALSE])
+    }
+
+    if (ncol(mx.stat) == 0) {
+      warning("Cell type ", cell.type, " was not present in any subsamples")
+      next
     }
 
     mx.stat <- apply(mx.stat, 2, rank)

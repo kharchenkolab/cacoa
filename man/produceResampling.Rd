@@ -2,7 +2,7 @@
 % Please edit documentation in R/coda_new.R
 \name{produceResampling}
 \alias{produceResampling}
-\title{This function producec datasent for resampling}
+\title{This function produces the resampling dataset}
 \usage{
 produceResampling(
   cnts,
@@ -14,7 +14,7 @@ produceResampling(
 )
 }
 \arguments{
-\item{cnts}{Counts of cell typer in samples. Rows - samples, columns - cell types}
+\item{cnts}{Counts of cell types in samples. Rows - samples, columns - cell types}
 
 \item{groups}{Vector with boolean values. TRUE - sample in the case group, FALSE - sample in the control group}
 
@@ -30,5 +30,5 @@ produceResampling(
 Updated data frame with Z scores
 }
 \description{
-This function producec datasent for resampling
+This function produces the resampling dataset
 }

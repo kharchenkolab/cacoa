@@ -19,7 +19,8 @@ plotHeatmap(
   palette = NULL,
   font.size = 8,
   distance = "manhattan",
-  clust.method = "complete"
+  clust.method = "complete",
+  grid.color = "gray50"
 )
 }
 \arguments{
@@ -40,6 +41,8 @@ plotHeatmap(
 \item{x.axis.position}{Position of x axis (default="top")}
 
 \item{color.range}{Range for filling colors}
+
+\item{grid.color}{Color of the grid. Set to "transparent" to disable the grid. (default: "gray50")}
 }
 \value{
 A ggplot2 object

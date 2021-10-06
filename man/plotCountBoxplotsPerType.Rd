@@ -8,20 +8,23 @@ plotCountBoxplotsPerType(
   count.df,
   y.lab = "count",
   x.lab = "",
-  y.expand = c(0, 0),
+  y.expand = 1.05,
   show.significance = FALSE,
-  palette = NULL,
+  jitter.width = 0.15,
   notch = FALSE,
   legend.position = "right",
   alpha = 0.2,
-  plot.theme = theme_get(),
   size = 0.5,
-  jitter.width = 0.15,
-  adjust.pvalues = T
+  palette = NULL,
+  adjust.pvalues = TRUE,
+  plot.theme = theme_get(),
+  label.y.npc = 0.92
 )
 }
 \arguments{
 \item{count.df}{data.frame with columns \code{group}, \code{variable} and \code{value}}
+
+\item{jitter.width}{width of the point jitter (default: 0.15)}
 
 \item{notch}{Whether to show notch in the boxplots}
 
@@ -30,8 +33,6 @@ plotCountBoxplotsPerType(
 \item{alpha}{Transparency level on the data points (default: 0.2)}
 
 \item{size}{marker size (default: 0.5)}
-
-\item{jitter.width}{width of the point jitter (default: 0.15)}
 }
 \description{
 Plot Count Boxplots Per Type

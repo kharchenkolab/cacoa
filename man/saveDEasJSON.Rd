@@ -9,7 +9,6 @@ saveDEasJSON(
   saveprefix = NULL,
   dir.name = "JSON",
   gene.metadata = NULL,
-  cluster.sep.chr = "<!!>",
   sample.groups = NULL,
   verbose = TRUE
 )
@@ -22,8 +21,6 @@ saveDEasJSON(
 \item{dir.name}{Name for directory with results. If it doesn't exist, it will be created. To disable, set as NULL (default="JSON")}
 
 \item{gene.metadata}{(default=NULL)}
-
-\item{cluster.sep.chr}{character string of length 1 specifying a delimiter to separate cluster and app names (default="<!!>")}
 
 \item{sample.groups}{Sample groups as named list, each element containing a vector of samples}
 

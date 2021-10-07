@@ -3,21 +3,20 @@
 ##' @param sample.groups Named factor with cell names indicating condition/sample, e.g., ctrl/disease
 ##' @param cell.groups Named clustering/annotation factor with cell names
 ##' @param dist what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values
-##' @param normalize.both (default=T)
 ##' @param n.cores number of cores (default=1)
 ##' @param verbose (default=F)
 ##' @param transposed.matrices (default=F)
 ##' @export
 estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
-                                              dist=NULL, normalize.both=TRUE, verbose=FALSE,
+                                              dist=NULL, dist.type=c("cross.both", "cross.ref", "var"), verbose=FALSE,
                                               ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
                                               top.n.genes=NULL, gene.selection="wilcox", n.pcs=NULL,
-                                              trim=0.2, n.cores=1, norm.type=NULL, ...) {
+                                              trim=0.2, n.cores=1, ...) {
+  dist.type <- match.arg(dist.type)
   dist <- parseDistance(dist, top.n.genes=top.n.genes, n.pcs=n.pcs)
 
-  if (is.null(norm.type)) {
-    norm.type <- ifelse(normalize.both, "both", "ref")
-  }
+  norm.type <- ifelse(dist.type == "cross.both", "both", "ref")
+  r.type <- ifelse(dist.type == "var", "target", "cross")
 
   cell.groups %<>% as.factor() %>% droplevels()
 
@@ -32,7 +31,8 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
                                                     top.n.genes=top.n.genes, gene.selection=gene.selection, ...)
     attr(dist.mat, 'n.cells') <- sample.type.table[ct, rownames(cm.norm)] # calculate how many cells there are
 
-    dists <- estimateExpressionShiftsByDistMat(dist.mat, sample.groups, norm.type=norm.type, ref.level=ref.level)
+    dists <- estimateExpressionShiftsByDistMat(dist.mat, sample.groups, norm.type=norm.type,
+                                               return.type=r.type, ref.level=ref.level)
     obs.diff <- mean(dists, trim=trim)
 
     randomized.dists <- plapply(1:n.permutations, function(i) {
@@ -44,7 +44,7 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
                                                   top.n.genes=top.n.genes, gene.selection=gene.selection, ...)
       }
 
-      estimateExpressionShiftsByDistMat(dm, sg.shuff, norm.type=norm.type, ref.level=ref.level) %>%
+      estimateExpressionShiftsByDistMat(dm, sg.shuff, norm.type=norm.type, return.type=r.type, ref.level=ref.level) %>%
         mean(trim=trim)
     }, progress=FALSE, n.cores=n.cores.inner, mc.preschedule=TRUE, fail.on.error=TRUE) %>% unlist()
 
@@ -130,11 +130,12 @@ subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df
 }
 
 estimateExpressionShiftsByDistMat <- function(dist.mat, sample.groups, norm.type=c("both", "ref", "none"),
-                                              ref.level=NULL) {
+                                              ref.level=NULL, return.type=c("cross", "target")) {
   norm.type <- match.arg(norm.type)
+  return.type <- match.arg(return.type)
 
-  if ((norm.type == "ref") && is.null(ref.level))
-    stop("ref.level has to be provided for norm.type='ref'")
+  if (((norm.type == "ref") || (return.type == "target")) && is.null(ref.level))
+    stop("ref.level has to be provided for norm.type='ref' or return.type='target'")
 
   sample.groups %<>% .[rownames(dist.mat)]
   if (norm.type == "both") {
@@ -152,7 +153,13 @@ estimateExpressionShiftsByDistMat <- function(dist.mat, sample.groups, norm.type
   }
 
   dist.mat <- dist.mat - norm.const
-  dists <- subsetDistanceMatrix(dist.mat, sample.groups=sample.groups, cross.factor=TRUE)
+  if (return.type == "cross") {
+    dists <- subsetDistanceMatrix(dist.mat, sample.groups=sample.groups, cross.factor=TRUE)
+  } else {
+    dists <- dist.mat %>%
+      .[(sample.groups[rownames(.)] != ref.level), (sample.groups[colnames(.)] != ref.level)] %>%
+      .[upper.tri(.)]
+  }
 
   return(dists)
 }

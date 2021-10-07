@@ -171,7 +171,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `p.dist.info`: list of distance matrices per cell type
     #'   - `sample.groups`: filtered sample groups
     #'   - `cell.groups`: filtered cell groups
-    estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist=NULL, normalize.both=TRUE,
+    estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, dist=NULL, dist.type="cross.both",
                                                min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
                                                ref.level=self$ref.level, sample.groups=self$sample.groups,
                                                verbose=self$verbose, n.cores=self$n.cores, name="expression.shifts",
@@ -207,7 +207,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$test.results[[name]] <- shift.inp %$%
         estimateExpressionShiftMagnitudes(
           cm.per.type, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=self$sample.per.cell,
-          dist=dist, normalize.both=normalize.both, verbose=verbose, ref.level=ref.level,
+          dist=dist, dist.type=dist.type, verbose=verbose, ref.level=ref.level,
           n.permutations=n.permutations, top.n.genes=top.n.genes, n.pcs=n.pcs, n.cores=n.cores, ...
         )
 

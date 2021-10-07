@@ -216,13 +216,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     estimateCommonExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, name='common.expression.shifts',
                                                      min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
-                                                     n.permutations=1000, trim=0.2, p.adjust.method="BH",
+                                                     genes=NULL, n.permutations=1000, trim=0.2, p.adjust.method="BH",
                                                      verbose=self$verbose, n.cores=self$n.cores, ...) {
       if (verbose) cat("Filtering data... ")
       shift.inp <- extractRawCountMatrices(self$data.object, transposed=TRUE) %>%
         filterExpressionDistanceInput(
           cell.groups=cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
-          min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac
+          min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac,
+          genes=genes
         )
       if (verbose) cat("done!\n")
 
@@ -316,11 +317,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param name slot in which to save the results (default: 'de')
     #' @return A list of DE genes
     estimateDEPerCellType=function(cell.groups=self$cell.groups, sample.groups=self$sample.groups,
-                                   ref.level=self$ref.level, target.level=self$target.level,
-                                   name='de', test='DESeq2.Wald', resampling.method=NULL, n.resamplings=30,
-                                   seed.resampling=239, min.cell.frac=0.05, covariates=NULL, common.genes=FALSE,
-                                   n.cores=self$n.cores, cooks.cutoff=FALSE, independent.filtering=FALSE,
-                                   min.cell.count=10, n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, ...) {
+                                   ref.level=self$ref.level, target.level=self$target.level, name='de',
+                                   test='DESeq2.Wald', resampling.method=NULL, n.resamplings=30, seed.resampling=239,
+                                   min.cell.frac=0.05, covariates=NULL, common.genes=FALSE, n.cores=self$n.cores,
+                                   cooks.cutoff=FALSE, independent.filtering=FALSE, min.cell.count=10,
+                                   n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, ...) {
       set.seed(seed.resampling)
       if (!is.list(sample.groups)) {
         sample.groups %<>% {split(names(.), . == ref.level)} %>% setNames(c(target.level, ref.level))
@@ -1091,14 +1092,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       # convert to dataframe for plotting
-      df <- do.call(rbind, lapply(1:length(rl), function(i) {
-        if (p.adjust) {
-          ndiff <- sum(na.omit(rl[[i]]$padj<=pvalue.cutoff))
-        } else {
-          ndiff <- sum(na.omit(rl[[i]]$pvalue<=pvalue.cutoff))
-        }
-        data.frame(Type=names(rl)[i], value=ndiff, stringsAsFactors=FALSE)
-      }))
+      p.col <- if (p.adjust) "padj" else "pvalue"
+      df <- lapply(rl, function(d) data.frame(value=sum(d[[p.col]] <= pvalue.cutoff, na.rm=TRUE))) %>%
+        bind_rows(.id="Type")
 
       plotMeanMedValuesPerCellType(
         df, show.jitter=show.jitter, jitter.alpha=jitter.alpha, notch=notch, type=type,
@@ -2073,23 +2069,27 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param name slot in which to saved results from estimateCellDensity (default: 'cell.density')
     #' @param ... plot style parameters forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}.
     #' @return A ggplot2 object
-    plotCellDensity = function(show.grid=TRUE, add.points=TRUE, size=0.1, show.legend=FALSE,
-                               point.col='#FCFDBFFF', contours=NULL, contour.color='white', contour.conf='10%',
+    plotCellDensity = function(show.grid=TRUE, add.points=TRUE, size=0.1, show.legend=FALSE, palette=NULL,
+                               point.col='#313695', contours=NULL, contour.color='black', contour.conf='10%',
                                name='cell.density', show.cell.groups=TRUE, cell.groups=self$cell.groups,
-                               font.size=c(2,4), color.range=c(0, "99%"), ...) {
+                               font.size=c(2, 4), color.range=c(0, "99%"), ...) {
       dens.res <- private$getResults(name, 'estimateCellDensity()')
       private$checkCellEmbedding()
+
+      if (is.null(palette)) {
+        palette <- c("#FFFFFF", brewerPalette("YlOrRd", rev=FALSE)(9)) %>% colorRampPalette()
+      }
 
       ps <- names(dens.res$cond.densities) %>% sn() %>% lapply(function(l) {
         color.range %<>% parseLimitRange(unlist(dens.res$cond.densities))
         if (dens.res$method =='graph') {
           p <- self$plotEmbedding(colors=dens.res$cond.densities[[l]], size=size, title=l, show.legend=show.legend,
-                                  legend.title='Density', color.range=color.range, ...)
+                                  legend.title='Density', color.range=color.range, palette=palette, ...)
         } else {# dens.res$method =='kde'
           condition.per.cell <- self$getConditionPerCell()
           p <- dens.res %$% data.frame(density.emb, z=cond.densities[[l]]) %>%
             plotDensityKde(bins=dens.res$bins, lims=color.range, title=l, show.legend=show.legend,
-                           show.grid=show.grid, plot.theme=self$plot.theme, ...)
+                           show.grid=show.grid, plot.theme=self$plot.theme, palette=palette, ...)
 
           if (add.points) {
             emb <- as.data.frame(self$embedding) %>% set_colnames(c('x', 'y')) %>% cbind(z=1)
@@ -2966,7 +2966,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Extract contours from embedding
     #' @param groups specify cell groups for contour, multiple cell groups are also supported
     #' @param conf confidence interval of contour
-    getDensityContours = function(groups, color='white', linetype=2, conf="10%", n.cores=1, verbose=FALSE, ...) {
+    getDensityContours = function(groups, color='black', linetype=2, conf="10%", n.cores=1, verbose=FALSE, ...) {
       cnl <- sn(groups) %>% plapply(function(g) {
         getDensityContour(
           self$embedding, cell.groups=self$cell.groups, linetype=linetype, group=g, conf=conf, color=color, ...

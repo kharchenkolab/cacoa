@@ -75,7 +75,7 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
 ##' @param cell.groups vector of cell type annotation
 ##' @param group specify cell types for contour, multiple cell types are also supported
 ##' @param conf confidence interval of contour
-getDensityContour <- function(emb, cell.groups, group,  color='white', linetype=2, conf="10%", bandwidth=NULL, ...) {
+getDensityContour <- function(emb, cell.groups, group,  color='black', linetype=2, conf="10%", bandwidth=NULL, ...) {
   emb %<>% .[rownames(.) %in% names(cell.groups)[cell.groups %in% group], ]
 
   if (is.null(bandwidth)) {
@@ -94,9 +94,10 @@ getDensityContour <- function(emb, cell.groups, group,  color='white', linetype=
 
 ##' @description Plot cell density
 ##' @param bins number of bins for density estimation, should keep consistent with bins in estimateCellDensity
-##' @param palette color palette function. Default: `viridis::viridis_pal(option="B")`
-plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.labels=FALSE, show.ticks=FALSE, palette=viridis::viridis_pal(option="B"), ...){
-  if (is.null(lims)){
+##' @param palette color palette function. Default: `YlOrRd`
+plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.labels=FALSE, show.ticks=FALSE,
+                           palette=NULL, ...) {
+  if (is.null(lims)) {
     lims <- c(min(mat$z), max(mat$z)*1.1)
   }
 
@@ -113,7 +114,7 @@ plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.
 
   p %<>% sccore::styleEmbeddingPlot(show.labels=show.labels, show.ticks=show.ticks, ...)
 
-  if(show.grid){ #  add grid manually
+  if (show.grid) { #  add grid manually
     p <- p +
       geom_vline(xintercept=breaks$x, col='grey', alpha=0.1) +
       geom_hline(yintercept=breaks$y, col='grey', alpha=0.1)

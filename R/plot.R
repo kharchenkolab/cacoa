@@ -225,9 +225,12 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point', 'bar'), show.jitter=TRUE,
                                          notch=TRUE, jitter.alpha=0.05, palette=NULL, ylab='expression distance',
                                          yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0,
-                                         order.x=TRUE, pvalue.y=NULL, y.max=NULL) {
+                                         order.x=TRUE, pvalue.y=NULL, y.max=NULL, y.offset=NULL) {
   type <- match.arg(type)
   df$Type %<>% as.factor()
+  if (!is.null(y.offset)) {
+    df$value <- df$value + y.offset
+  }
 
   # calculate mean, se and median
   odf <- df <- na.omit(df); # full df is now in odf

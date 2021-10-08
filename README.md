@@ -42,10 +42,10 @@ Cacoa currently supports input in several formats (see below). Most of them requ
 - `ref.level`: id of the condition, corresponding to the reference (i.e. control)
 - `target.level`: id of the condition, corresponding to the target (i.e. case)
 
-### List of raw or normalized count matrices `cms`
+### Raw or normalized joint count matrix `cm`
 
 ```r
-cao <- Cacoa$new(cms, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
+cao <- Cacoa$new(cm, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
                  ref.level=ref.level, target.level=target.level, embedding=embedding)
 ```
 
@@ -63,7 +63,7 @@ Parameter `graph.name` is required for cluster-free analysis, and must contain a
 ### Conos object `co`
 
 ```r
-cao <- Cacoa$new(so, sample.groups=sample.groups, cell.groups=cell.groups, 
+cao <- Cacoa$new(co, sample.groups=sample.groups, cell.groups=cell.groups, 
                  ref.level=ref.level, target.level=target.level)
 ```
 

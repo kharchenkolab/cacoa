@@ -2405,6 +2405,118 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
+    #' @title Project samples to 2D space with MDS 
+    #' @description  Plot results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoadings()
+    #' @param space expression.shifts- expression shifts results from cao$estimateExpressionShiftMagnitudes(); CDA- cell composition shifts result from cao$estimateCellLoadings(); sudo.bulk- expression distance of sudo bulk  
+    #' @param cell.type If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)
+    #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default correlation distance)
+    #' @param palette a set of colors to use for conditions (default: stored $sample.groups.palette)
+    #' @param font.size font size of the sample labels. If NULL, the labels are not shown. (default: NULL)
+    #' @param show.sample.size make point size proportional to the log10 of the number of cells per sample (default: FALSE)
+    #' @param show.ticks show tick labels on axes (default: FALSE)
+    #' @param show.labels show axis labels (default: FALSE)
+    #' @param size point size. For `show.sample.size==TRUE`, it can be vector of length 2.  (default: 5)
+    #' @return A ggplot2 object   
+    plotMDS=function(space='expression.shifts', cell.type=NULL, dist = 'cor',
+                     palette=NULL, font.size=NULL, show.sample.size=FALSE,
+                     show.ticks=FALSE, show.labels=FALSE, size=5, sample.colors=NULL,
+                     color.title=NULL, ...) {
+      sample.groups <- self$sample.groups
+      if (space=='expression.shifts'){
+        clust.info <- private$getResults(space, 'estimateExpressionShiftMagnitudes()')
+        if (is.null(palette) && is.null(sample.colors) && all(sample.groups == self$sample.groups)) {
+          palette <- self$sample.groups.palette
+        }
+        if (!is.null(cell.type)) { # use distances based on the specified cell type
+          title <- cell.type
+          p.dists <- clust.info$p.dist.info[[cell.type]]
+          n.cells.per.samp <- self$sample.per.cell %>% .[clust.info$cell.groups[names(.)] == cell.type] %>% table()
+          if (is.null(p.dists)) {
+            warning("Distances were not estimated for cell type ", cell.type)
+            return(NULL)
+          }
+        } else { # weighted expression distance across all cell types
+          title <- ''
+          p.dists <- prepareJointExpressionDistance(clust.info$p.dist.info)
+          n.cells.per.samp <- table(self$sample.per.cell)
+        }
+        if (any(is.na(p.dists))) { # NA imputation
+          p.dists %<>% ape::additive() %>% `dimnames<-`(dimnames(p.dists))
+        }
+      }else if (space=='CDA'){
+        n.cells.per.samp <- table(self$sample.per.cell)
+        tmp <- private$extractCodaData()
+        bal <- getRndBalances(tmp$d.counts)
+        pca.res <- prcomp(bal$norm)
+        cm.norm <- as.data.frame(pca.res$x)
+      }else if (space=='sudo.bulk'){  
+        n.cells.per.samp <- table(self$sample.per.cell)
+        exp <- lapply(self$data.object$samples,function(x) t(x$misc$rawCounts))
+        genelists <- lapply(exp, function(x) rownames(x))
+        commongenes <- Reduce(intersect,genelists)
+        exp <- mapply(function(m, name) {
+          colnames(m) <- paste(name, colnames(m), sep='_');
+          m[commongenes,]
+        },
+        exp,
+        names(exp))
+        mat <- do.call(cbind,lapply(exp,rowSums)) # %>% t()
+        cm.norm <- t(mat/colSums(mat))
+      }else{
+        stop("Unknown space: ", dist)
+      }
+      if (space!='expression.shifts'){
+        if (dist == 'cor') {
+          p.dists <- 1 - cor(t(cm.norm))
+        } else if (dist == 'l2') {
+          p.dists <- dist(cm.norm, method="euclidean") %>% as.matrix()
+        } else if (dist == 'l1') {
+          p.dists <- dist(cm.norm, method="manhattan") %>% as.matrix()
+        } else {
+          stop("Unknown distance: ", dist)
+        }
+      }
+      emb <- cmdscale(p.dists, eig=TRUE, k=2)$points # k is the number of dim
+      df <- data.frame(emb) %>% set_rownames(rownames(p.dists)) %>% set_colnames(c("x", "y")) %>%
+        mutate(sample=rownames(.), condition=sample.groups[sample], n.cells=as.vector(n.cells.per.samp[sample]))
+      if (is.null(sample.colors)) {
+        gg <- ggplot(df, aes(x, y, color=condition, shape=condition))
+        if (is.null(palette)) {
+          gg <- gg + scale_color_manual(values=self$sample.groups.palette)
+        }
+      } else {
+        df$color <- sample.colors[as.character(df$sample)]
+        gg <- ggplot(df, aes(x, y, color=color, shape=condition))
+        if (!is.null(color.title)) gg <- gg + labs(color=color.title)
+      }
+      
+      if (!is.null(palette)) {
+        gg <- gg + scale_color_manual(values=palette)
+      }
+      
+      gg <- gg + self$plot.theme + xlab('') + ylab('')
+      
+      if (!show.ticks) {
+        gg <- gg + ggplot2::theme(axis.ticks = ggplot2::element_blank(), 
+                                  axis.text = ggplot2::element_blank())
+      } 
+      
+      if (show.sample.size) {
+        if (length(size) == 1) {
+          size <- c(size * 0.5, size * 1.5)
+        }
+        gg <- gg + geom_point(aes(size=n.cells)) +
+          scale_size_continuous(trans="log10", range=size, name="Num. cells")
+      } else {
+        gg <- gg + geom_point(size=size)
+      }
+      
+      if (!is.null(font.size)) {
+        gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
+      }      
+      return(gg)
+    },    
+    
     ### Cluster-free differential expression
 
     #' @description Estimate differential expression Z-scores between two conditions per individual cell

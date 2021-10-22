@@ -1330,7 +1330,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           }) %>%
           lapply(plyr::compact)
       }
-      self$test.results[[name]]$families <- estimateOntologyFamilies(ont.list = ont.list, type = type)
+      self$test.results[[name]]$families <- estimateOntologyFamilies(ont.list=ont.list, type=type)
       return(invisible(self$test.results[[name]]))
     },
 
@@ -1355,10 +1355,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         do.call(c, .) %>% do.call(c, .) %>% unname() %>% do.call(c, .)
 
       # Make data.frame
-      res <- ont.fam %>% rblapply(c("CellType", "Ontology", "Genes"), function (fs)
-          aggregate(f ~ value, rblapply(fs$families, "f", as_tibble), paste, collapse=",")) %>%
-        mutate(f=strsplit(gsub("Family", "", f), ",", TRUE), Description=desc.per.id[value]) %>%
-        rename(ID=value, Families=f) %>% filter((ID %in% go.id) | (Description %in% go.term))
+      res <- ont.fam %>% rblapply(c("CellType", "Ontology", "Genes"), function (fs) {
+          fpg <- aggregate(f ~ value, rblapply(fs$families, "f", as_tibble), paste, collapse=",")
+          mapply(function(go, f) {
+              tibble(ID=c(go, fs$data[[go]]$parents_in_IDs), Families=strsplit(gsub("Family", "", f), ",", TRUE))
+            }, fpg$value, fpg$f, SIMPLIFY=FALSE
+          ) %>% bind_rows()
+        }) %>%
+        mutate(Description=desc.per.id[ID]) %>% filter((ID %in% go.id) | (Description %in% go.term))
 
       # Check and get result
       if (nrow(res) == 0) {
@@ -2405,9 +2409,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' @title Project samples to 2D space with MDS 
+    #' @title Project samples to 2D space with MDS
     #' @description  Plot results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoadings()
-    #' @param space expression.shifts- expression shifts results from cao$estimateExpressionShiftMagnitudes(); CDA- cell composition shifts result from cao$estimateCellLoadings(); sudo.bulk- expression distance of sudo bulk  
+    #' @param space expression.shifts- expression shifts results from cao$estimateExpressionShiftMagnitudes(); CDA- cell composition shifts result from cao$estimateCellLoadings(); sudo.bulk- expression distance of sudo bulk
     #' @param cell.type If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)
     #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default correlation distance)
     #' @param palette a set of colors to use for conditions (default: stored $sample.groups.palette)
@@ -2416,7 +2420,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param show.ticks show tick labels on axes (default: FALSE)
     #' @param show.labels show axis labels (default: FALSE)
     #' @param size point size. For `show.sample.size==TRUE`, it can be vector of length 2.  (default: 5)
-    #' @return A ggplot2 object   
+    #' @return A ggplot2 object
     plotMDS=function(space='expression.shifts', cell.type=NULL, dist = 'cor',
                      palette=NULL, font.size=NULL, show.sample.size=FALSE,
                      show.ticks=FALSE, show.labels=FALSE, size=5, sample.colors=NULL,
@@ -2449,7 +2453,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         bal <- getRndBalances(tmp$d.counts)
         pca.res <- prcomp(bal$norm)
         cm.norm <- as.data.frame(pca.res$x)
-      }else if (space=='sudo.bulk'){  
+      }else if (space=='sudo.bulk'){
         n.cells.per.samp <- table(self$sample.per.cell)
         exp <- lapply(self$data.object$samples,function(x) t(x$misc$rawCounts))
         genelists <- lapply(exp, function(x) rownames(x))
@@ -2489,18 +2493,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         gg <- ggplot(df, aes(x, y, color=color, shape=condition))
         if (!is.null(color.title)) gg <- gg + labs(color=color.title)
       }
-      
+
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)
       }
-      
+
       gg <- gg + self$plot.theme + xlab('') + ylab('')
-      
+
       if (!show.ticks) {
-        gg <- gg + ggplot2::theme(axis.ticks = ggplot2::element_blank(), 
+        gg <- gg + ggplot2::theme(axis.ticks = ggplot2::element_blank(),
                                   axis.text = ggplot2::element_blank())
-      } 
-      
+      }
+
       if (show.sample.size) {
         if (length(size) == 1) {
           size <- c(size * 0.5, size * 1.5)
@@ -2510,13 +2514,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else {
         gg <- gg + geom_point(size=size)
       }
-      
+
       if (!is.null(font.size)) {
         gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
-      }      
+      }
       return(gg)
-    },    
-    
+    },
+
     ### Cluster-free differential expression
 
     #' @description Estimate differential expression Z-scores between two conditions per individual cell

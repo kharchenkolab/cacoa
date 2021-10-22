@@ -1564,14 +1564,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' @description Plot a heatmap of ontology P values per cell type
-    #' @param genes Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all' (default="up")
+    #' @param genes Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all'
+    #'   (default="up")
     #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
-    #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms) (default="all")
+    #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type);
+    #'   'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms)
+    #'   (default="all")
     #' @param n Number of terms to show (default=10)
     #' @param clusters Whether to show GO clusters or raw GOs (default=TRUE)
     #' @param cluster.name Field with the results for GO clustering. Ignored if `clusters == FALSE`.
-    #' @param cell.subgroups Cell groups to plot (default=NULL)
+    #' @param cell.subgroups Cell groups to plot (default=NULL). This affects only visualization, but not clustering.
     #' @param color.range vector with two values for min/max values of p-values
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
@@ -1594,8 +1597,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # Extract results
       if (!clusters) {
-        ont.sum <- private$getOntologyPvalueResults(genes=genes, type=type, subtype=subtype, cell.subgroups=cell.subgroups,
-                                                    p.adj=p.adj, min.genes=min.genes)
+        ont.sum <- private$getOntologyPvalueResults(
+          genes=genes, type=type, subtype=subtype, cell.subgroups=cell.subgroups, p.adj=p.adj, min.genes=min.genes
+        )
         group.field <- "Description"
       } else {
         name <- if (is.null(cluster.name)) getOntClustField(subtype, genes) else cluster.name
@@ -1604,10 +1608,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             stop("Can't find the results for ", cluster.name) # stop if user specified a wrong cluster.name
 
           warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
-          self$estimateOntologyClusters(type=type, subtype=subtype, genes=genes, name=name, p.adj=p.adj, min.genes=min.genes)
+          self$estimateOntologyClusters(type=type, subtype=subtype, genes=genes, name=name, p.adj=p.adj,
+                                        min.genes=min.genes)
         }
 
         ont.sum <- self$test.results[[type]][[name]]$df
+
+        if (!is.null(cell.subgroups)) ont.sum %<>% filter(Group %in% cell.subgroups)
         group.field <- "ClusterName"
       }
 
@@ -1713,29 +1720,31 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param verbose Print messages (default: stored value)
     #' @param n.cores Number of cores to use (default: stored value)
     #' @return Rgraphviz object
-    plotOntologyFamily=function(type = "GO", cell.subgroups, family=NULL, genes="up", subtype="BP", plot.type="complete", show.ids=FALSE,
-                                string.length=14, legend.label.size=1, legend.position="topright", verbose=self$verbose, n.cores=self$n.cores, ...) {
+    plotOntologyFamily=function(type = "GO", cell.subgroups, family=NULL, genes="up", subtype="BP",
+                                plot.type="complete", show.ids=FALSE, string.length=14, legend.label.size=1,
+                                legend.position="topright", verbose=self$verbose, n.cores=self$n.cores, ...) {
       #Checks
       checkPackageInstalled(c("GOfuncR", "graph", "Rgraphviz"), bioc=TRUE)
 
       ont.fam.res <- self$test.results[[type]]$families
-      if(is.null(ont.fam.res)) stop(paste0("No results found for type '",type,"'. Please run 'estimateOntologyFamilies' first."))
+      if(is.null(ont.fam.res))
+        stop("No results found for type '", type, "'. Please run 'estimateOntologyFamilies' first.")
 
       ont.fam.res %<>% .[[cell.subgroups]]
-      if(is.null(ont.fam.res)) stop(paste0("No results found for cell.subgroups '",cell.subgroups,"'."))
+      if (is.null(ont.fam.res)) stop("No results found for cell.subgroups '", cell.subgroups, "'.")
       # TODO: Test for GSEA/GO. Update description!
       ont.fam.res %<>% .[[subtype]]
-      if(is.null(ont.fam.res)) stop(paste0("No results found for subtype '",subtype,"'."))
+      if (is.null(ont.fam.res)) stop("No results found for subtype '", subtype, "'.")
 
       if (type != "GSEA") {
         ont.fam.res %<>% .[[genes]]
-        if(is.null(ont.fam.res)) stop(paste0("No results found for genes '",genes,"'."))
+        if (is.null(ont.fam.res)) stop("No results found for genes '", genes, "'.")
       }
 
       if (is.null(family)) {
         fam.names <- names(ont.fam.res$families)
       } else {
-        if(!is.numeric(family)) {
+        if (!is.numeric(family)) {
           fam.names <- family
         } else {
           fam.names <- paste0("Family",family)
@@ -2343,7 +2352,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           return(NULL)
         }
       } else { # weighted expression distance across all cell types
-        title <- ''
+        title <- NULL
         p.dists <- prepareJointExpressionDistance(clust.info$p.dist.info)
         n.cells.per.samp <- table(self$sample.per.cell)
       }
@@ -3028,12 +3037,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop("'genes' must be 'down', 'up', or 'all'.")
 
       ont.res <- self$test.results[[name]]$res
-      if(is.null(ont.res)) stop(paste0("No results found for '", type, "'. Please run 'estimateOntology' first."))
+      if (is.null(ont.res)) stop(paste0("No results found for '", type, "'. Please run 'estimateOntology' first."))
 
       ont.res %<>% prepareOntologyPlotData(type, p.adj, min.genes)
 
       # Extract genes and subgroups
-      if(type == "GSEA") {
+      if (type == "GSEA") {
         ont.res %<>% addGseaGroup() %>% rename(geneID=core_enrichment)
         if (genes == "up") {
           ont.res %<>% filter(enrichmentScore > 0)
@@ -3044,11 +3053,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         ont.res %<>% .[[genes]]
       }
 
-      if(is.null(ont.res))
+      if (is.null(ont.res))
         stop(paste0("No results found for ", genes, " genes for ", type, ".")) # TODO: Include GSEA
 
-      if(!is.null(cell.subgroups)) {
-        if(!cell.subgroups %in% unique(ont.res$Group))
+      if (!is.null(cell.subgroups)) {
+        if (!cell.subgroups %in% unique(ont.res$Group))
           stop("'cell.subgroups' not found in results.")
 
         ont.res %<>% .[cell.subgroups]

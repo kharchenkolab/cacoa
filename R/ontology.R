@@ -401,20 +401,12 @@ identifyFamilies <- function(ids) {
     setNames(names(tmp))
 
   # Sort for lonely children (terms with no children)
-  idx <- tmp %>%
-    sapply(`[[`, "children_enrichment") %>%
-    unlist() %>%
-    .[. == 0]
-  tmp %<>%
-    .[idx %>% names()]
+  idx <- sapply(tmp, `[[`, "children_enrichment") %>% unlist() %>% .[. == 0]
+  tmp %<>% .[names(idx)]
 
   # Rank by enrichment
-  idx <- tmp %>%
-    sapply(function(x) x$Significance) %>%
-    unlist() %>%
-    .[order(., decreasing=F)]
-  tmp %<>%
-    .[names(idx)]
+  idx <- sapply(tmp, `[[`, "Significance") %>% unlist() %>% sort(decreasing=FALSE)
+  tmp %<>% .[names(idx)]
 
   return(tmp)
 }
@@ -432,7 +424,7 @@ collapseFamilies <- function(ont.res) {
       .[order(., decreasing = T)] %>%
       .[. > 1]
 
-    if(length(olaps) > 1) {
+    if (length(olaps) > 1) {
       # Create logical matrix and list of seeds and families
       olap.matrix <- sapply(ont.res, `[[`, "parents_in_IDs") %>%
         sapply(function(x) names(olaps) %in% x)
@@ -524,7 +516,7 @@ collapseFamilies <- function(ont.res) {
 #' @param type Type of ontology result, i.e., GO, GSEA, or DO
 #' @return List of families and ontology data per cell type
 estimateOntologyFamilies <- function(ont.list, type) {
-  if(type == "GO") {
+  if (type == "GO") {
     ont.fam <- lapply(ont.list, lapply, lapply, identifyFamilies) %>%
       setNames(names(ont.list))
     lapply(ont.fam, lapply, lapply, collapseFamilies) %>%

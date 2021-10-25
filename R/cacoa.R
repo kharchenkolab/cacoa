@@ -1391,13 +1391,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ind.h Cut height for hierarchical clustering of terms per cell type.
     #' Approximately equal to the fraction of genes, shared between the GOs. Default: 0.66.
     #' @param total.h Cut height for hierarchical clustering of GOs across all subtypes.
-    #' Approximately equal to the fraction of subtypes for which two GOs should belong to the same cluster. Default: 0.5.
+    #' Approximately equal to the fraction of subtypes for which two GOs should belong to the same cluster.
+    #'   Default: 0.5.
     #' @return List containing:
-    #'   - `df`: data.frame with information about individual gene ontolodies and columns `Cluster` and `ClusterName` for the clustering info
-    #'   - `hclust`: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all subtypes
-    estimateOntologyClusters=function(type="GO", subtype=NULL, genes="all", ind.h=0.66, total.h=0.5, verbose=self$verbose,
-                                      p.adj=0.05, min.genes=1, name=getOntClustField(subtype, genes)) {
-      ont.df <- private$getOntologyPvalueResults(genes=genes, type=type, subtype=subtype, p.adj=p.adj, min.genes=min.genes)
+    #'   - `df`: data.frame with information about individual gene ontolodies and columns `Cluster` and `ClusterName`
+    #'     for the clustering info
+    #'   - `hclust`: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all
+    #'     subtypes
+    estimateOntologyClusters=function(type="GO", subtype=NULL, genes="all", ind.h=0.66, total.h=0.5, p.adj=0.05,
+                                      min.genes=1, name=getOntClustField(subtype, genes), clust.naming="medoid",
+                                      verbose=self$verbose) {
+      ont.df <- private$getOntologyPvalueResults(genes, type=type, subtype=subtype, p.adj=p.adj, min.genes=min.genes)
       if (nrow(ont.df) == 0) {
         res <- list(df=ont.df)
         self$test.results[[type]][[name]] <- res
@@ -1412,8 +1416,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       ont.df$Cluster <- clusts$clusts[as.character(ont.df$Description)]
 
-      name.per.clust <- ont.df %>% group_by(Cluster, Description) %>% summarise(pvalue=exp(mean(log(pvalue)))) %>%
-        split(.$Cluster) %>% sapply(function(df) df$Description[which.min(df$pvalue)])
+      name.per.clust <- estimateOntologyClusterName(ont.df, clust.naming=clust.naming)
 
       ont.df$ClusterName <- name.per.clust[ont.df$Cluster]
       res <- list(df=ont.df, hclust=clusts$hclust)
@@ -1581,7 +1584,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left",
                                  selection=c("all", "common", "unique"), n=20, clusters=TRUE, cluster.name=NULL,
                                  cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE, max.log.p=10,
-                                 only.family.children=FALSE, ...) {
+                                 only.family.children=FALSE, description.regex=NULL, ...) {
       # Checks
       selection <- match.arg(selection)
 
@@ -1621,6 +1624,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (only.family.children) {
         ont.sum %<>% getOntologyFamilyChildren(fams=fams, subtype=subtype, genes=genes)
       }
+
+      if (!is.null(description.regex)) ont.sum %<>% .[grep(description.regex, .$Description),]
 
       ont.sum <- -groupOntologiesByCluster(ont.sum, field=group.field)
 

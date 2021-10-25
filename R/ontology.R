@@ -586,6 +586,33 @@ getOntClustField <- function(subtype, genes) {
   return(paste("clusters", paste(subtype, collapse="."), genes, sep="."))
 }
 
+estimateOntologyClusterName <- function(ont.df, clust.naming=c("medoid", "consensus", "min.pvalue")) {
+  clust.naming <- match.arg(clust.naming)
+
+  if (clust.naming == "min.pvalue") {
+    name.per.clust <- ont.df %>% group_by(Cluster, Description) %>% summarise(pvalue=exp(mean(log(pvalue)))) %>%
+        split(.$Cluster) %>% sapply(function(df) df$Description[which.min(df$pvalue)])
+    return(name.per.clust)
+  }
+
+  descs.per.clust <- ont.df %$% split(Description, Cluster) %>% lapply(unique)
+  words.per.desc.per.clust <- descs.per.clust %>%
+    lapply(function(ds) lapply(strsplit(ds, "[ ,-]"), function(x) x[nchar(x) > 0]))
+
+  if (clust.naming == "medoid") {
+    name.per.clust <- mapply(function(words, descs) {
+      if (length(descs) == 1) return(descs)
+      words %>% sapply(function(s1) sapply(., function(s2) 1 - length(intersect(s1, s2)) / length(union(s1, s2)))) %>%
+        rowSums() %>% setNames(descs) %>% sort() %>% names() %>% .[1]
+    }, words.per.desc.per.clust, descs.per.clust)
+
+    return(name.per.clust)
+  }
+
+  # TODO: implement consensus naming
+  stop("Not implemented")
+}
+
 getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {
   fams <- lapply(fams, function(x) {
     x[[subtype]][[genes]]$families %>% unlist() %>% unique() # These are only children IDs

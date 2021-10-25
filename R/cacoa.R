@@ -1993,16 +1993,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       ## Calculate normalized counts
       ref.cell.type <- res$ref.cell.type
 
-      ref.cnts <- cnts[, ref.cell.type, drop=F]
-      ref.cnts[ref.cnts == 0] = 0.5
-      norm.val <- 1 / nrow(ref.cnts) * log(apply(ref.cnts, 1, prod))
-      cnts.nonzero = cnts
-      cnts.nonzero[cnts.nonzero == 0] = 0.5
-      norm.cnts = log(cnts.nonzero) - norm.val
+      ref.cnts <- cnts[, ref.cell.type, drop=FALSE]
+      ref.cnts[ref.cnts == 0] <- 0.5
+      norm.val <- 1 / nrow(ref.cnts) * rowSums(log(ref.cnts))
+      cnts.nonzero <- cnts
+      cnts.nonzero[cnts.nonzero == 0] <- 0.5
+      norm.cnts <- log(cnts.nonzero) - norm.val
 
       self$test.results[['cell.groups.composition']] <- list(cell.list = res$cell.list,
                                                              cnts = cnts,
                                                              groups = groups,
+                                                             ref.cell.type=ref.cell.type,
                                                              norm.cnts = norm.cnts)
 
       self$test.results[['loadings']] = list(loadings = loadings.init,

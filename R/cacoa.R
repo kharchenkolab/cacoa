@@ -1984,10 +1984,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       padj <- res$padj
       pval <- res$pval
       ref.load.level <- res$ref.load.level
-      
+
       ## Calculate normalized counts
       ref.cell.type <- res$ref.cell.type
-      
+
       ref.cnts <- cnts[, ref.cell.type, drop=F]
       ref.cnts[ref.cnts == 0] = 0.5
       norm.val <- 1 / nrow(ref.cnts) * log(apply(ref.cnts, 1, prod))
@@ -2036,7 +2036,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       return(p)
     },
-    
+
     estimateWilcoxonTest = function(cell.groups=self$cell.groups, cells.to.remove = NULL, cells.to.remain = NULL) { # TODO: do we ever use this?
       tmp <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain)
       p.vals <- calcWilcoxonTest(tmp$d.counts, tmp$d.groups)
@@ -3068,10 +3068,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop(paste0("No results found for ", genes, " genes for ", type, ".")) # TODO: Include GSEA
 
       if (!is.null(cell.subgroups)) {
-        if (!cell.subgroups %in% unique(ont.res$Group))
-          stop("'cell.subgroups' not found in results.")
+        if (!any(cell.subgroups %in% unique(ont.res$Group)))
+          stop("None of 'cell.subgroups' was found in results.")
 
-        ont.res %<>% .[cell.subgroups]
+        ont.res %<>% filter(Group %in% cell.subgroups)
       }
 
       if(!is.null(subtype)) {

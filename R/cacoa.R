@@ -1984,10 +1984,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       padj <- res$padj
       pval <- res$pval
       ref.load.level <- res$ref.load.level
+      
+      ## Calculate normalized counts
+      ref.cell.type <- res$ref.cell.type
+      
+      ref.cnts <- cnts[, ref.cell.type, drop=F]
+      ref.cnts[ref.cnts == 0] = 0.5
+      norm.val <- 1 / nrow(ref.cnts) * log(apply(ref.cnts, 1, prod))
+      cnts.nonzero = cnts
+      cnts.nonzero[cnts.nonzero == 0] = 0.5
+      norm.cnts = log(cnts.nonzero) - norm.val
 
       self$test.results[['cell.groups.composition']] <- list(cell.list = res$cell.list,
                                                              cnts = cnts,
-                                                             groups = groups)
+                                                             groups = groups,
+                                                             norm.cnts = norm.cnts)
 
       self$test.results[['loadings']] = list(loadings = loadings.init,
                                              # loadings.data = loadings.init,
@@ -2025,7 +2036,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       return(p)
     },
-
+    
     estimateWilcoxonTest = function(cell.groups=self$cell.groups, cells.to.remove = NULL, cells.to.remain = NULL) { # TODO: do we ever use this?
       tmp <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain)
       p.vals <- calcWilcoxonTest(tmp$d.counts, tmp$d.groups)

@@ -594,10 +594,10 @@ prepareGeneExpressionComparisonPlotInfo <- function(de.info, genes, plots, smoot
   return(plot.parts)
 }
 
-pvalueToCode <- function(pvals) {
+pvalueToCode <- function(pvals, ns.symbol="ns") {
   symnum(pvals, corr=FALSE, na=FALSE, legend=FALSE,
          cutpoints = c(0, 0.001, 0.01, 0.05, 1),
-         symbols = c("***", "**", "*", "ns")) %>%
+         symbols = c("***", "**", "*", ns.symbol)) %>%
     as.character() %>% setNames(names(pvals))
 }
 

@@ -152,7 +152,7 @@ produceResampling <- function(cnts, groups, n.perm = 1000, remain.groups = TRUE,
   cnts.perm <- list()
   groups.perm <- list()
   set.seed(239)
-  for(i in 1:n.perm) {
+  for (i in 1:n.perm) {
     # Bootstrap samples
 
     samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = replace.samples)
@@ -163,11 +163,15 @@ produceResampling <- function(cnts, groups, n.perm = 1000, remain.groups = TRUE,
       names(groups.tmp) <- samples.tmp
     }
     # Check that both groups are presented
-    if((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) next
+    if ((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) next
 
     # Bootstrap cell types
     cnts.resampling <- apply(cnts[samples.tmp,], 1, function(v) {
-      table( c(names(v), sample(names(v), size = sum(v), replace = TRUE, prob = v / sum(v))) ) - 1   })
+      if (sum(v) == 0) return(setNames(rep(0, length(v)), names(v)))
+
+      sample(names(v), size=sum(v), replace=TRUE, prob = v / sum(v)) %>%
+        {c(names(v), .)} %>% table() %>% {. - 1}
+    })
 
     cnts.tmp <- t(cnts.resampling)
 

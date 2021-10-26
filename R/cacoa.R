@@ -1923,10 +1923,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
                               cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE,
-                              adjust.pvalues = TRUE, h.method='both', ...) {
-      h.method.options = c('up', 'down', 'both')
-      if(!(h.method %in% h.method.options)) stop('Impossible metho of clustering')
-      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
+                              adjust.pvalues = TRUE, h.method=c('both', 'up', 'down'), ...) {
+      h.method <- match.arg(h.method)
+      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain,
+                                     cell.groups=cell.groups)
       if(filter.empty.cell.types) {
         cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
           (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
@@ -1956,7 +1956,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
 
     estimateCellLoadings=function(n.perm=1000, n.boot=1000, coda.test='significance', # TODO: n.perm, coda.test, criteria and define.ref.cell.type are never used
-                                  ref.cell.type=NULL, criteria='cda.std',
+                                  ref.cell.type=NULL, criteria='cda.std', name='coda',
                                   n.seed=239, cells.to.remove=NULL, cells.to.remain=NULL,
                                   samples.to.remove=NULL, filter.empty.cell.types=TRUE,
                                   define.ref.cell.type=FALSE, n.cores=self$n.cores, verbose=self$verbose) {
@@ -2000,23 +2000,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       cnts.nonzero[cnts.nonzero == 0] <- 0.5
       norm.cnts <- log(cnts.nonzero) - norm.val
 
-      self$test.results[['cell.groups.composition']] <- list(cell.list = res$cell.list,
-                                                             cnts = cnts,
-                                                             groups = groups,
-                                                             ref.cell.type=ref.cell.type,
-                                                             norm.cnts = norm.cnts)
+      self$test.results[[name]] <- list(
+        loadings=loadings.init,
+        pval=pval,
+        padj = padj,
+        ref.load.level = ref.load.level,
+        cell.list=res$cell.list,
+        cnts=cnts,
+        groups=groups,
+        ref.cell.types=ref.cell.type,
+        norm.cnts=norm.cnts
+      )
 
-      self$test.results[['loadings']] = list(loadings = loadings.init,
-                                             # loadings.data = loadings.init,
-                                             # loadings.null = loadings.null,
-                                             # loadings.list = loadings,
-                                             pval = pval,
-                                             padj = padj,
-                                             cnts = cnts,
-                                             groups = groups,
-                                             ref.load.level = ref.load.level)
-
-      return(invisible(self$test.results[['loadings']]))
+      return(invisible(self$test.results[[name]]))
     },
 
     estimateGaPartition=function(cells.to.remain=NULL, cells.to.remove=NULL, samples.to.remove=NULL, ...){ # TODO: do we ever use this?
@@ -2031,14 +2027,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Plot Loadings
     #' @param palette palette specification for cell types (default: stored $cell.groups.palette)
     #' @return A ggplot2 object
-    plotCellLoadings=function(alpha=0.01, palette=self$cell.groups.palette, font.size=NULL,
-                              ordering='pvalue', signif.threshold=0.05, show.pvals=TRUE) {
+    plotCellLoadings=function(alpha=0.01, palette=self$cell.groups.palette, font.size=NULL, name='coda',
+                              ordering='pvalue', show.pvals=TRUE, ...) {
 
-      loadings <- private$getResults('loadings', 'estimateCellLoadings()')
-      p <- plotCellLoadings(loadings$loadings, pval=loadings$padj, signif.threshold=signif.threshold,
-                            jitter.alpha=alpha, palette=palette, show.pvals=show.pvals,
-                            ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme,
-                            ref.load.level = loadings$ref.load.level, ordering=ordering)
+      loadings <- private$getResults(name, 'estimateCellLoadings()')
+      p <- loadings %$% plotCellLoadings(
+        loadings, pval=padj, jitter.alpha=alpha, palette=palette, show.pvals=show.pvals,
+        ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme,
+        ref.load.level=ref.load.level, ordering=ordering, ...
+      )
 
       return(p)
     },
@@ -3091,9 +3088,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       d.counts <- cell.groups %>% data.frame(anno=., group=self$sample.per.cell[names(.)]) %>%
         table() %>% rbind() %>% t()
 
-      if(!is.null(cells.to.remove)) d.counts %<>% .[,!(colnames(.) %in% cells.to.remove)]
-      if(!is.null(cells.to.remain)) d.counts %<>% .[,colnames(.) %in% cells.to.remain]
-      if(!is.null(samples.to.remove)) d.counts %<>% .[!(rownames(.) %in% samples.to.remove),]
+      if (!is.null(cells.to.remove)) d.counts %<>% .[,!(colnames(.) %in% cells.to.remove)]
+      if (!is.null(cells.to.remain)) d.counts %<>% .[,colnames(.) %in% cells.to.remain]
+      if (!is.null(samples.to.remove)) d.counts %<>% .[!(rownames(.) %in% samples.to.remove),]
 
       if (!ret.groups)
         return(d.counts)

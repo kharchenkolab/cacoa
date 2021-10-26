@@ -2448,8 +2448,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param size point size. For `show.sample.size==TRUE`, it can be vector of length 2.  (default: 5)
     #' @return A ggplot2 object
     plotMDS=function(space='expression.shifts', cell.type=NULL, dist = 'cor',
-                     palette=NULL, font.size=NULL, show.sample.size=FALSE,
-                     show.ticks=FALSE, show.labels=FALSE, size=5, sample.colors=NULL,
+                     palette=NULL, font.size=NULL, show.sample.size=FALSE, title = NULL,
+                     show.ticks=FALSE, show.labels=FALSE, size=5, sample.colors=NULL,n.permutations = 2000,show.pvalues = FALSE,
                      color.title=NULL, ...) {
       sample.groups <- self$sample.groups
       if (space=='expression.shifts'){
@@ -2466,7 +2466,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             return(NULL)
           }
         } else { # weighted expression distance across all cell types
-          title <- ''
           p.dists <- prepareJointExpressionDistance(clust.info$p.dist.info)
           n.cells.per.samp <- table(self$sample.per.cell)
         }
@@ -2479,7 +2478,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         bal <- getRndBalances(tmp$d.counts)
         pca.res <- prcomp(bal$norm)
         cm.norm <- as.data.frame(pca.res$x)
-      }else if (space=='sudo.bulk'){
+      }else if (space=='pseudo.bulk'){
         n.cells.per.samp <- table(self$sample.per.cell)
         exp <- lapply(self$data.object$samples,function(x) t(x$misc$rawCounts))
         genelists <- lapply(exp, function(x) rownames(x))
@@ -2491,6 +2490,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         exp,
         names(exp))
         mat <- do.call(cbind,lapply(exp,rowSums)) # %>% t()
+        mat <- log(mat+1)
         cm.norm <- t(mat/colSums(mat))
       }else{
         stop("Unknown space: ", dist)
@@ -2523,8 +2523,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)
       }
+      
 
-      gg <- gg + self$plot.theme + xlab('') + ylab('')
+      
+      gg <- gg + self$plot.theme + xlab('') + ylab('') + theme(plot.title = element_text(hjust = 0.5))
 
       if (!show.ticks) {
         gg <- gg + ggplot2::theme(axis.ticks = ggplot2::element_blank(),
@@ -2544,6 +2546,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(font.size)) {
         gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
       }
+      
+      if (show.pvalues){
+        cluster <- as.numeric(sample.groups)
+        df <- df[names(sample.groups),c('x','y')]
+        score <- silhouette(group, dist(df)) %>% .[,3] %>% mean()
+        v <- lapply(sn(1:n.permutations),function(x) {ss = silhouette(sample(cluster,length(cluster)), dist(df)) 
+        mean(ss[, 3]) }) %>% unlist()
+        pvalue=1-ecdf(v)(s)
+        if (pvalue==0) { pvalue = 0.001 }
+        gg <- gg + ggtitle(paste(title,' pvalue:',round(pvalue,3),sep=''))
+      }
+      
+      if (!is.null(title) & !show.pvalues ) {
+        gg <- gg + ggtitle(title)
+      }
+      
+      
       return(gg)
     },
 

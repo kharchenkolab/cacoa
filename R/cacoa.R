@@ -2455,12 +2455,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param show.labels show axis labels (default: FALSE)
     #' @param size point size. For `show.sample.size==TRUE`, it can be vector of length 2.  (default: 5)
     #' @return A ggplot2 object
-    plotMDS=function(space='expression.shifts', cell.type=NULL, dist = 'cor',
-                     palette=NULL, font.size=NULL, show.sample.size=FALSE, title = NULL,
-                     show.ticks=FALSE, show.labels=FALSE, size=5, sample.colors=NULL,n.permutations = 2000,show.pvalues = FALSE,
-                     color.title=NULL, ...) {
+    plotMDS=function(space='expression.shifts', cell.type=NULL, dist=NULL, palette=NULL, font.size=NULL,
+                     show.sample.size=FALSE, title=NULL, show.ticks=FALSE, show.labels=FALSE, size=5,
+                     sample.colors=NULL, n.permutations=2000, show.pvalues=FALSE, color.title=NULL, ...) {
       sample.groups <- self$sample.groups
-      if (space=='expression.shifts'){
+      if (space=='expression.shifts') {
         clust.info <- private$getResults(space, 'estimateExpressionShiftMagnitudes()')
         if (is.null(palette) && is.null(sample.colors) && all(sample.groups == self$sample.groups)) {
           palette <- self$sample.groups.palette
@@ -2480,30 +2479,31 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (any(is.na(p.dists))) { # NA imputation
           p.dists %<>% ape::additive() %>% `dimnames<-`(dimnames(p.dists))
         }
-      }else if (space=='CDA'){
+      } else if (space=='coda') {
         n.cells.per.samp <- table(self$sample.per.cell)
         tmp <- private$extractCodaData()
         bal <- getRndBalances(tmp$d.counts)
         pca.res <- prcomp(bal$norm)
         cm.norm <- as.data.frame(pca.res$x)
-      }else if (space=='pseudo.bulk'){
+      } else if (space=='pseudo.bulk') {
+        warning("space='pseudo.bulk' is not implemented properly") # TODO: fix it
         n.cells.per.samp <- table(self$sample.per.cell)
-        exp <- lapply(self$data.object$samples,function(x) t(x$misc$rawCounts))
+        exp <- lapply(self$data.object$samples, function(x) t(x$misc$rawCounts))
         genelists <- lapply(exp, function(x) rownames(x))
-        commongenes <- Reduce(intersect,genelists)
+        commongenes <- Reduce(intersect, genelists)
         exp <- mapply(function(m, name) {
           colnames(m) <- paste(name, colnames(m), sep='_');
           m[commongenes,]
-        },
-        exp,
-        names(exp))
-        mat <- do.call(cbind,lapply(exp,rowSums)) # %>% t()
-        mat <- log(mat+1)
+        }, exp, names(exp))
+        mat <- do.call(cbind, lapply(exp, rowSums)) # %>% t()
+        mat <- log(mat+1) # TODO: should go after total-count
         cm.norm <- t(mat/colSums(mat))
-      }else{
-        stop("Unknown space: ", dist)
+      } else {
+        stop("Unknown space: ", space)
       }
-      if (space!='expression.shifts'){
+
+      if (space!='expression.shifts') {
+        dist %<>% parseDistance(ncol(cm.norm), NULL, verbose=FALSE)
         if (dist == 'cor') {
           p.dists <- 1 - cor(t(cm.norm))
         } else if (dist == 'l2') {
@@ -2555,18 +2555,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
       }
 
-      if (show.pvalues){
-        cluster <- as.numeric(sample.groups)
-        df <- df[names(sample.groups),c('x','y')]
-        score <- silhouette(group, dist(df)) %>% .[,3] %>% mean()
-        v <- lapply(sn(1:n.permutations),function(x) {ss = silhouette(sample(cluster,length(cluster)), dist(df))
-        mean(ss[, 3]) }) %>% unlist()
-        pvalue=1-ecdf(v)(s)
-        if (pvalue==0) { pvalue = 0.001 }
-        gg <- gg + ggtitle(paste(title,' pvalue:',round(pvalue,3),sep=''))
+      if (show.pvalues) {
+        checkPackageInstalled("cluster", cran=TRUE)
+        clusts <- as.numeric(sample.groups[colnames(p.dists)])
+        score <- cluster::silhouette(clusts, p.dists)[,3] %>% mean()
+        sil.perm <- sapply(1:n.permutations, function(x) mean(cluster::silhouette(sample(clusts), p.dists)[, 3]))
+        pvalue <- (sum(sil.perm >= score) + 1) / (n.permutations + 1)
+        gg <- gg + ggtitle(paste(title, 'pvalue:', signif(pvalue, 3)))
       }
 
-      if (!is.null(title) & !show.pvalues ) {
+      if (!is.null(title) & !show.pvalues) {
         gg <- gg + ggtitle(title)
       }
 

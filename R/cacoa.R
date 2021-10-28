@@ -2131,7 +2131,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         p
       })
 
-      if(!is.null(contours)) {
+      if (!is.null(contours)) {
         cn.geoms <- private$getDensityContours(groups=contours, conf=contour.conf, color=contour.color)
         ps %<>% lapply(`+`, cn.geoms)
       }
@@ -2197,8 +2197,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
         sig.ids <- rownames(density.mat) %>% as.integer()
         graph <- lapply(sig.ids, function (i) c(i+1, i-1, i+bins, i-bins)) %>%
-          mapIds(sig.ids) %>% graph_from_adj_list()
-        V(graph)$name <- sig.ids
+          mapIds(sig.ids) %>% igraph::graph_from_adj_list()
+        igraph::V(graph)$name <- sig.ids
       } else if (adjust.pvalues && smooth) {
         graph <- extractCellGraph(self$data.object)
       }
@@ -2238,16 +2238,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param type method to calculate differential cell density; t.test, wilcox or subtract (target subtract ref density);
     #' @param contours specify cell types for contour, multiple cell types are also supported (default: NULL)
     #' @param contour.color color for contour line (default: 'black')
-    #' @param z.cutoff absolute z score cutoff (default: NULL)
     #' @param contour.conf confidence interval of contour (default: '10%')
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    plotDiffCellDensity=function(type='permutation', name='cell.density', size=0.2, z.cutoff=NULL, palette=NULL, adjust.pvalues=NULL,
-                                 contours=NULL, contour.color='black', contour.conf='10%', plot.na=FALSE, color.range=NULL, mid.color='gray95', ...){
+    plotDiffCellDensity=function(type='permutation', name='cell.density', size=0.2, palette=NULL,
+                                 adjust.pvalues=NULL, contours=NULL, contour.color='black', contour.conf='10%',
+                                 plot.na=FALSE, color.range=NULL, mid.color='gray95',
+                                 scale.z.palette=adjust.pvalues, min.z=qnorm(0.9), ...) {
       if (is.null(palette)) {
         if (is.null(self$sample.groups.palette)) {
           palette <- c('blue', mid.color,'red')
         } else {
-          palette <- c(self$sample.groups.palette[self$ref.level], mid.color, self$sample.groups.palette[self$target.level])
+          palette <- self$sample.groups.palette %>% {c(.[self$ref.level], mid.color, .[self$target.level])}
         }
         palette %<>% grDevices::colorRampPalette(space="Lab")
       }
@@ -2259,7 +2260,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         adjust.pvalues <- TRUE
       } else if (adjust.pvalues) {
         if (is.null(scores$adj)) {
-          warning("Adjusted scores are not estimated. Using raw scores. Please, run estimateCellDensity with adjust.pvalues=TRUE")
+          warning("Adjusted scores are not estimated. Using raw scores. ",
+                  "Please, run estimateCellDensity with adjust.pvalues=TRUE")
           scores <- scores$raw
         } else {
           scores <- scores$adj
@@ -2269,7 +2271,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (is.null(scores)) {
-        warning("Can't find results for name, '", name, "' and type '", type, "'. Running estimateDiffCellDensity with default parameters.")
+        warning("Can't find results for name, '", name, "' and type '", type,
+                "'. Running estimateDiffCellDensity with default parameters.")
         self$estimateDiffCellDensity(type=type, name=name, adjust.pvalues=adjust.pvalues)
         dens.res <- self$test.results[[name]]
         scores <- dens.res$diff[[type]]
@@ -2285,16 +2288,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       density.mat <- dens.res$density.mat[names(scores),]
       density.emb <- density.emb[names(scores),]
 
-      if (!is.null(z.cutoff)) {
-        scores %<>% .[abs(.) >= z.cutoff]
+      if (is.null(color.range)) {
+        color.range <- c(-1, 1) * max(abs(scores))
+      } else {
+        color.range %<>% parseLimitRange(scores)
+        color.range <- max(abs(color.range)) %>% {c(-., .)}
+        scores %<>% pmin(color.range[2]) %>% pmax(color.range[1])
       }
 
-      if (is.null(color.range)) color.range <- c(-1, 1) * max(abs(scores))
+      leg.title <- if (type == 'subtract') 'Prop. change' else {if (adjust.pvalues) 'Z adj.' else 'Z-score'}
+      gg <- self$plotEmbedding(density.emb, colors=scores, size=size, legend.title=leg.title, palette=palette,
+                               midpoint=0, plot.na=plot.na, color.range=color.range, ...)
 
-      leg.title <- if (type == 'subtract') 'Prop. change' else 'Z-score'
-      gg <- self$plotEmbedding(density.emb, colors=scores, size=size, legend.title=leg.title, palette=palette, midpoint=0, plot.na=plot.na, color.range=color.range, ...)
+      if (scale.z.palette && (type != 'subtract')) {
+        gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
+        gg <- gg + getScaledZGradient(min.z=min.z, palette=palette, color.range=color.range)
+      }
 
-      if(!is.null(contours)){
+      if (!is.null(contours)) {
         gg <- gg + private$getDensityContours(groups=contours, conf=contour.conf, color=contour.color)
       }
       return(gg)
@@ -2520,9 +2531,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)
       }
-      
 
-      
+
+
       gg <- gg + self$plot.theme + xlab('') + ylab('') + theme(plot.title = element_text(hjust = 0.5))
 
       if (!show.ticks) {
@@ -2543,23 +2554,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(font.size)) {
         gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
       }
-      
+
       if (show.pvalues){
         cluster <- as.numeric(sample.groups)
         df <- df[names(sample.groups),c('x','y')]
         score <- silhouette(group, dist(df)) %>% .[,3] %>% mean()
-        v <- lapply(sn(1:n.permutations),function(x) {ss = silhouette(sample(cluster,length(cluster)), dist(df)) 
+        v <- lapply(sn(1:n.permutations),function(x) {ss = silhouette(sample(cluster,length(cluster)), dist(df))
         mean(ss[, 3]) }) %>% unlist()
         pvalue=1-ecdf(v)(s)
         if (pvalue==0) { pvalue = 0.001 }
         gg <- gg + ggtitle(paste(title,' pvalue:',round(pvalue,3),sep=''))
       }
-      
+
       if (!is.null(title) & !show.pvalues ) {
         gg <- gg + ggtitle(title)
       }
-      
-      
+
+
       return(gg)
     },
 
@@ -2933,10 +2944,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
           if ((n == "z.adj") && scale.z.palette) {
             gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
-            color.range <- c(-pp$max, pp$max)
-            col.vals <- c(seq(color.range[1], -min.z, length.out=10), 0, seq(min.z, color.range[2], length.out=10)) %>%
-              scales::rescale()
-            gg <- gg + scale_color_gradientn(colors=pp$palette(21), values=col.vals, limits=color.range)
+            gg <- gg + getScaledZGradient(min.z=min.z, palette=pp$palette, color.range=c(-pp$max, pp$max))
           }
 
           lst <- c(lst, list(gg))

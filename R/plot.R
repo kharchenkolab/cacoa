@@ -225,7 +225,7 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point', 'bar'), show.jitter=TRUE,
                                          notch=TRUE, jitter.alpha=0.05, palette=NULL, ylab='expression distance',
                                          yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0,
-                                         order.x=TRUE, pvalue.y=NULL, y.max=NULL, y.offset=NULL) {
+                                         order.x=TRUE, pvalue.y=NULL, y.max=NULL, y.offset=NULL, ns.symbol="ns") {
   type <- match.arg(type)
   df$Type %<>% as.factor()
   if (!is.null(y.offset)) {
@@ -292,7 +292,7 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
   };
 
   if (!is.null(pvalues)) {
-    pval.df <- pvalueToCode(pvalues) %>%
+    pval.df <- pvalueToCode(pvalues, ns.symbol=ns.symbol) %>%
       tibble(Type=factor(names(.), levels=levels(df$Type)), pvalue=.) %>% na.omit()
 
     p <- p + geom_text(data=pval.df, mapping=aes(x=Type, label=pvalue), y=pvalue.y, color="black")
@@ -612,4 +612,11 @@ transferLabelLayer <- function(gg.target, gg.source, font.size) {
     scale_size_continuous(range=font.size, trans='identity', guide='none')
 
   return(gg.target)
+}
+
+getScaledZGradient <- function(min.z, palette, color.range) {
+  col.vals <- c(seq(color.range[1], -min.z, length.out=10), 0, seq(min.z, color.range[2], length.out=10)) %>%
+    scales::rescale()
+  scale <- scale_color_gradientn(colors=palette(21), values=col.vals, limits=color.range)
+  return(scale)
 }

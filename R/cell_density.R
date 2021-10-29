@@ -1,4 +1,3 @@
-
 ##' @description Estimate cell density in giving embedding, Density will estimated for indivisual sample
 ##' @param emb cell embedding matrix
 ##' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
@@ -96,7 +95,7 @@ getDensityContour <- function(emb, cell.groups, group,  color='black', linetype=
 ##' @param bins number of bins for density estimation, should keep consistent with bins in estimateCellDensity
 ##' @param palette color palette function. Default: `YlOrRd`
 plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.labels=FALSE, show.ticks=FALSE,
-                           palette=NULL, ...) {
+                           palette=NULL, legend.title=NULL, ...) {
   if (is.null(lims)) {
     lims <- c(min(mat$z), max(mat$z)*1.1)
   }
@@ -111,6 +110,8 @@ plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.
     scale_x_continuous(breaks=breaks$x, expand = c(0,0)) +
     scale_y_continuous(breaks=breaks$y, expand = c(0,0)) +
     val2ggcol(mat$z, palette=palette, color.range=lims, return.fill=TRUE)
+
+  if (!is.null(legend.title)) p <- p + guides(fill=guide_colorbar(title=legend.title))
 
   p %<>% sccore::styleEmbeddingPlot(show.labels=show.labels, show.ticks=show.ticks, ...)
 

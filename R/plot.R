@@ -620,3 +620,59 @@ getScaledZGradient <- function(min.z, palette, color.range) {
   scale <- scale_color_gradientn(colors=palette(21), values=col.vals, limits=color.range)
   return(scale)
 }
+
+plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, method='MDS', sample.colors=NULL,
+                                     show.sample.size=TRUE, palette=NULL, font.size=NULL, show.ticks=FALSE, title=NULL,
+                                     show.labels=FALSE, size=5, color.title=NULL, perplexity=4, max.iter=1e3,
+                                     plot.theme=theme_get(), ...) {
+      if (method == 'tSNE') {
+        checkPackageInstalled('Rtsne', cran=TRUE, details='for `method="tSNE"`')
+        emb <- Rtsne::Rtsne(p.dists, is_distance=TRUE, perplexity=perplexity, max_iter=max.iter)$Y
+      } else if (method == 'MDS') {
+        emb <- cmdscale(p.dists, eig=TRUE, k=2)$points # k is the number of dim
+      } else if (method == 'heatmap') {
+        color.per.group <- NULL
+        if (!is.null(palette)) {
+          color.per.group <- sample.groups %>% {setNames(palette[as.character(.)], names(.))}
+        }
+        gg <- plotHeatmap(p.dists, color.per.group=color.per.group, legend.title="Distance", symmetric=TRUE)
+        return(gg)
+      } else {
+        stop("unknown embedding method")
+      }
+
+      df <- data.frame(emb) %>% set_rownames(rownames(p.dists)) %>% set_colnames(c("x", "y")) %>%
+        mutate(sample=rownames(.), condition=sample.groups[sample], n.cells=as.vector(n.cells.per.samp[sample]))
+
+      if (is.null(sample.colors)) {
+        gg <- ggplot(df, aes(x, y, color=condition, shape=condition))
+      } else {
+        df$color <- sample.colors[as.character(df$sample)]
+        gg <- ggplot(df, aes(x, y, color=color, shape=condition))
+        if (!is.null(color.title)) gg <- gg + labs(color=color.title)
+      }
+
+      if (!is.null(palette)) {
+        gg <- gg + scale_color_manual(values=palette)
+      }
+
+      gg <- gg + plot.theme
+
+      if (show.sample.size) {
+        if (length(size) == 1) {
+          size <- c(size * 0.5, size * 1.5)
+        }
+        gg <- gg + geom_point(aes(size=n.cells)) +
+          scale_size_continuous(trans="log10", range=size, name="Num. cells")
+      } else {
+        gg <- gg + geom_point(size=size)
+      }
+
+      gg %<>% sccore:::styleEmbeddingPlot(title=title, show.ticks=show.ticks, show.labels=show.labels, ...)
+
+      if (!is.null(font.size)) {
+        gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
+      }
+
+      return(gg)
+    }

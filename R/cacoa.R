@@ -2344,103 +2344,50 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' @title Plot sample-sample expression distance as a 2D embedding
-    #' @description  Plot results from cao$estimateExpressionShiftMagnitudes()
-    #' @param cell.type If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)
-    #' @param method dimension reduction methods: MDS, tSNE or heatmap (default: MDS)
-    #' @param perplexity tSNE perplexity (default: 4)
-    #' @param max.iter tSNE max_iter (default: 1e3)
-    #' @param palette a set of colors to use for conditions (default: stored $sample.groups.palette)
-    #' @param font.size font size of the sample labels. If NULL, the labels are not shown. (default: NULL)
-    #' @param show.sample.size make point size proportional to the log10 of the number of cells per sample (default: FALSE)
-    #' @param show.ticks show tick labels on axes (default: FALSE)
-    #' @param show.labels show axis labels (default: FALSE)
-    #' @param size point size. For `show.sample.size==TRUE`, it can be vector of length 2.  (default: 5)
-    #' @param ... arguments, forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}.
-    #' @return A ggplot2 object
-    plotExpressionDistanceEmbedding=function(name='expression.shifts', cell.type=NULL, method='MDS', perplexity=4,
-                                             max.iter=1e3, palette=NULL, font.size=NULL, show.sample.size=TRUE,
-                                             show.ticks=FALSE, show.labels=FALSE, size=5, sample.colors=NULL,
-                                             color.title=NULL, ...) {
-      # TODO: rename the function to account for heatmap visualization
-      clust.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
-      sample.groups <- clust.info$sample.groups
-      if (is.null(palette) && is.null(sample.colors) && all(sample.groups == self$sample.groups)) {
-        palette <- self$sample.groups.palette
-      }
-      if (!is.null(cell.type)) { # use distances based on the specified cell type
-        title <- cell.type
-        p.dists <- clust.info$p.dist.info[[cell.type]]
-        n.cells.per.samp <- self$sample.per.cell %>% .[clust.info$cell.groups[names(.)] == cell.type] %>% table()
-        if (is.null(p.dists)) {
-          warning("Distances were not estimated for cell type ", cell.type)
-          return(NULL)
+    getSampleDistanceMatrix=function(space=c('expression.shifts', 'coda', 'pseudo.bulk'), cell.type=NULL,
+                                     dist=NULL, name=NULL, verbose=self$verbose, ...) {
+      space <- match.arg(space)
+      if ((space != 'pseudo.bulk') && (length(list(...)) > 0)) stop("Unexpected arguments: ", names(list(...)))
+      sample.groups <- self$sample.groups
+      if (space == 'expression.shifts') {
+        if (is.null(name)) name <- 'expression.shifts'
+        clust.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
+        if (!is.null(cell.type)) { # use distances based on the specified cell type
+          title <- cell.type
+          p.dists <- clust.info$p.dist.info[[cell.type]]
+          if (is.null(p.dists)) {
+            warning("Distances were not estimated for cell type ", cell.type)
+            return(NULL)
+          }
+        } else { # weighted expression distance across all cell types
+          p.dists <- prepareJointExpressionDistance(clust.info$p.dist.info)
         }
-      } else { # weighted expression distance across all cell types
-        title <- NULL
-        p.dists <- prepareJointExpressionDistance(clust.info$p.dist.info)
+        if (any(is.na(p.dists))) { # NA imputation
+          p.dists %<>% ape::additive() %>% `dimnames<-`(dimnames(p.dists))
+        }
+
+        return(p.dists)
+      }
+
+      if (space=='coda') {
         n.cells.per.samp <- table(self$sample.per.cell)
+        mat <- private$extractCodaData() %$% getRndBalances(d.counts) %$% prcomp(norm) %$% as.data.frame(x)
+      } else { # space == 'pseudo.bulk'
+        stop("Not implemented!")
       }
 
-      if (any(is.na(p.dists))) { # NA imputation
-        p.dists %<>% ape::additive() %>% `dimnames<-`(dimnames(p.dists))
-      }
-
-      if (method == 'tSNE') {
-        checkPackageInstalled('Rtsne', cran=TRUE, details='for `method="tSNE"`')
-
-        emb <- Rtsne::Rtsne(p.dists, is_distance=TRUE, perplexity=perplexity, max_iter=max.iter)$Y
-      } else if (method == 'MDS') {
-        emb <- cmdscale(p.dists, eig=TRUE, k=2)$points # k is the number of dim
-      } else if (method == 'heatmap') {
-        color.per.group <- NULL
-        if (!is.null(palette)) {
-          color.per.group <- sample.groups %>% {setNames(palette[as.character(.)], names(.))}
-        }
-        gg <- plotHeatmap(p.dists, color.per.group=color.per.group, legend.title="Distance",
-                          symmetric=TRUE)
-        return(gg)
+      dist %<>% parseDistance(ncol(mat), NULL, verbose=FALSE)
+      if (dist == 'cor') {
+        p.dists <- 1 - cor(t(mat))
+      } else if (dist == 'l2') {
+        p.dists <- dist(mat, method="euclidean") %>% as.matrix()
+      } else if (dist == 'l1') {
+        p.dists <- dist(mat, method="manhattan") %>% as.matrix()
       } else {
-        stop("unknown embedding method")
+        stop("Unknown distance: ", dist)
       }
 
-      df <- data.frame(emb) %>% set_rownames(rownames(p.dists)) %>% set_colnames(c("x", "y")) %>%
-        mutate(sample=rownames(.), condition=sample.groups[sample], n.cells=as.vector(n.cells.per.samp[sample]))
-
-      if (is.null(sample.colors)) {
-        gg <- ggplot(df, aes(x, y, color=condition, shape=condition))
-        if (is.null(palette)) {
-          gg <- gg + scale_color_manual(values=self$sample.groups.palette)
-        }
-      } else {
-        df$color <- sample.colors[as.character(df$sample)]
-        gg <- ggplot(df, aes(x, y, color=color, shape=condition))
-        if (!is.null(color.title)) gg <- gg + labs(color=color.title)
-      }
-
-      if (!is.null(palette)) {
-        gg <- gg + scale_color_manual(values=palette)
-      }
-
-      gg <- gg + self$plot.theme
-
-      if (show.sample.size) {
-        if (length(size) == 1) {
-          size <- c(size * 0.5, size * 1.5)
-        }
-        gg <- gg + geom_point(aes(size=n.cells)) +
-          scale_size_continuous(trans="log10", range=size, name="Num. cells")
-      } else {
-        gg <- gg + geom_point(size=size)
-      }
-
-      gg %<>% sccore:::styleEmbeddingPlot(title=title, show.ticks=show.ticks, show.labels=show.labels, ...)
-
-      if (!is.null(font.size)) {
-        gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
-      }
-
-      return(gg)
+      return(p.dists)
     },
 
     #' @title Project samples to 2D space with MDS
@@ -2455,109 +2402,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param show.labels show axis labels (default: FALSE)
     #' @param size point size. For `show.sample.size==TRUE`, it can be vector of length 2.  (default: 5)
     #' @return A ggplot2 object
-    plotMDS=function(space='expression.shifts', cell.type=NULL, dist=NULL, palette=NULL, font.size=NULL,
-                     show.sample.size=FALSE, title=NULL, show.ticks=FALSE, show.labels=FALSE, size=5,
-                     sample.colors=NULL, n.permutations=2000, show.pvalues=FALSE, color.title=NULL, ...) {
-      sample.groups <- self$sample.groups
-      if (space=='expression.shifts') {
-        clust.info <- private$getResults(space, 'estimateExpressionShiftMagnitudes()')
-        if (is.null(palette) && is.null(sample.colors) && all(sample.groups == self$sample.groups)) {
-          palette <- self$sample.groups.palette
-        }
-        if (!is.null(cell.type)) { # use distances based on the specified cell type
-          title <- cell.type
-          p.dists <- clust.info$p.dist.info[[cell.type]]
-          n.cells.per.samp <- self$sample.per.cell %>% .[clust.info$cell.groups[names(.)] == cell.type] %>% table()
-          if (is.null(p.dists)) {
-            warning("Distances were not estimated for cell type ", cell.type)
-            return(NULL)
-          }
-        } else { # weighted expression distance across all cell types
-          p.dists <- prepareJointExpressionDistance(clust.info$p.dist.info)
-          n.cells.per.samp <- table(self$sample.per.cell)
-        }
-        if (any(is.na(p.dists))) { # NA imputation
-          p.dists %<>% ape::additive() %>% `dimnames<-`(dimnames(p.dists))
-        }
-      } else if (space=='coda') {
+    plotSampleDistances=function(space='expression.shifts', method='MDS', dist=NULL, name=NULL, cell.type=NULL,
+                                 palette=NULL, show.sample.size=FALSE, sample.colors=NULL, color.title=NULL,
+                                 title=NULL, n.permutations=2000, show.pvalues=FALSE, ...) {
+      if (is.null(cell.type)) {
         n.cells.per.samp <- table(self$sample.per.cell)
-        tmp <- private$extractCodaData()
-        bal <- getRndBalances(tmp$d.counts)
-        pca.res <- prcomp(bal$norm)
-        cm.norm <- as.data.frame(pca.res$x)
-      } else if (space=='pseudo.bulk') {
-        warning("space='pseudo.bulk' is not implemented properly") # TODO: fix it
-        n.cells.per.samp <- table(self$sample.per.cell)
-        exp <- lapply(self$data.object$samples, function(x) t(x$misc$rawCounts))
-        genelists <- lapply(exp, function(x) rownames(x))
-        commongenes <- Reduce(intersect, genelists)
-        exp <- mapply(function(m, name) {
-          colnames(m) <- paste(name, colnames(m), sep='_');
-          m[commongenes,]
-        }, exp, names(exp))
-        mat <- do.call(cbind, lapply(exp, rowSums)) # %>% t()
-        mat <- log(mat+1) # TODO: should go after total-count
-        cm.norm <- t(mat/colSums(mat))
+        if (is.null(title)) title <- cell.type
       } else {
-        stop("Unknown space: ", space)
+        n.cells.per.samp <- self$sample.per.cell %>% .[clust.info$cell.groups[names(.)] == cell.type] %>% table()
       }
 
-      if (space!='expression.shifts') {
-        dist %<>% parseDistance(ncol(cm.norm), NULL, verbose=FALSE)
-        if (dist == 'cor') {
-          p.dists <- 1 - cor(t(cm.norm))
-        } else if (dist == 'l2') {
-          p.dists <- dist(cm.norm, method="euclidean") %>% as.matrix()
-        } else if (dist == 'l1') {
-          p.dists <- dist(cm.norm, method="manhattan") %>% as.matrix()
-        } else {
-          stop("Unknown distance: ", dist)
-        }
-      }
-      emb <- cmdscale(p.dists, eig=TRUE, k=2)$points # k is the number of dim
-      df <- data.frame(emb) %>% set_rownames(rownames(p.dists)) %>% set_colnames(c("x", "y")) %>%
-        mutate(sample=rownames(.), condition=sample.groups[sample], n.cells=as.vector(n.cells.per.samp[sample]))
-      if (is.null(sample.colors)) {
-        gg <- ggplot(df, aes(x, y, color=condition, shape=condition))
-        if (is.null(palette)) {
-          gg <- gg + scale_color_manual(values=self$sample.groups.palette)
-        }
-      } else {
-        df$color <- sample.colors[as.character(df$sample)]
-        gg <- ggplot(df, aes(x, y, color=color, shape=condition))
-        if (!is.null(color.title)) gg <- gg + labs(color=color.title)
-      }
+      p.dists <- self$getSampleDistanceMatrix(space=space, cell.type=cell.type, dist=dist, name=name)
 
-      if (!is.null(palette)) {
-        gg <- gg + scale_color_manual(values=palette)
-      }
+      if (is.null(sample.colors) && is.null(palette)) palette <- self$sample.groups.palette
+      gg <- plotSampleDistanceMatrix(
+        p.dists=p.dists, sample.groups=self$sample.groups, n.cells.per.samp=n.cells.per.samp, method=method,
+        sample.colors=sample.colors, show.sample.size=show.sample.size, palette=palette, color.title=color.title,
+        title=title, plot.theme=self$plot.theme, ...
+      )
 
-
-
-      gg <- gg + self$plot.theme + xlab('') + ylab('') + theme(plot.title = element_text(hjust = 0.5))
-
-      if (!show.ticks) {
-        gg <- gg + ggplot2::theme(axis.ticks = ggplot2::element_blank(),
-                                  axis.text = ggplot2::element_blank())
-      }
-
-      if (show.sample.size) {
-        if (length(size) == 1) {
-          size <- c(size * 0.5, size * 1.5)
-        }
-        gg <- gg + geom_point(aes(size=n.cells)) +
-          scale_size_continuous(trans="log10", range=size, name="Num. cells")
-      } else {
-        gg <- gg + geom_point(size=size)
-      }
-
-      if (!is.null(font.size)) {
-        gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
-      }
+      return(gg)
 
       if (show.pvalues) {
         checkPackageInstalled("cluster", cran=TRUE)
-        clusts <- as.numeric(sample.groups[colnames(p.dists)])
+        clusts <- as.numeric(self$sample.groups[colnames(p.dists)])
         score <- cluster::silhouette(clusts, p.dists)[,3] %>% mean()
         sil.perm <- sapply(1:n.permutations, function(x) mean(cluster::silhouette(sample(clusts), p.dists)[, 3]))
         pvalue <- (sum(sil.perm >= score) + 1) / (n.permutations + 1)
@@ -2570,6 +2438,60 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
 
       return(gg)
+    },
+
+    estimateMetadataSeparation=function(sample.meta, space='expression.shifts', dist=NULL, space.name=NULL,
+                                        name='metadata.separation', n.permutations=5000, trim=0.05, show.warning=TRUE,
+                                        verbose=self$verbose, n.cores=self$n.cores, adjust.pvalues=TRUE,
+                                        p.adjust.method="BH", pvalue.cutoff=0.05) {
+      p.dists <- self$getSampleDistanceMatrix(space=space, cell.type=NULL, dist=dist, name=space.name)
+      if (is.null(p.dists)) return(NULL)
+
+      if (is.data.frame(sample.meta)) {
+        sample.meta %<>% lapply(setNames, rownames(.))
+      } else if (!is.list(sample.meta)) {
+        sample.meta %<>% list()
+      }
+
+      adj.mat <- p.dists %>% pmin(quantile(., 1 - trim)) %>%
+        {pmax(0, . - quantile(., trim))} %>% {1 - . / max(.)} %>%
+        matrix(ncol=ncol(p.dists))
+      diag(adj.mat) <- 0
+
+      pvalues <- plapply(sample.meta, function(mg) {
+        mg <- mg[colnames(p.dists)]
+        if (!is.numeric(mg)) {
+          mg <- as.factor(mg)
+          mg[is.na(mg)] <- table(mg) %>% which.max() %>% names()
+          comp.op <- "!="
+        } else {
+          mg[is.na(mg)] <- median(mg, na.rm=TRUE)
+          comp.op <- "-"
+        }
+
+        obs.var <- mg %>% outer(., ., comp.op) %>% {. * . * adj.mat} %>% sum()
+        perm.vars <- sapply(1:n.permutations, function(i) {
+          sample(mg) %>% outer(., ., comp.op) %>% {. * . * adj.mat} %>% sum()
+        })
+
+        (sum(perm.vars <= obs.var) + 1) / (n.permutations + 1)
+      }, progress=(verbose && (length(sample.meta) > 1)), n.cores=n.cores, mc.preschedule=TRUE) %>% unlist()
+
+      res <- list(metadata=sample.meta, pvalues=pvalues)
+      if (adjust.pvalues) {
+        pvalues %<>% p.adjust(method=p.adjust.method)
+        res$padjust <- pvalues
+      }
+
+      if (show.warning && any(pvalues < pvalue.cutoff))
+        warning("Significant separation by: ", paste(names(pvalues)[pvalues < pvalue.cutoff], collapse=', '))
+
+      self$test.results[[name]] <- res
+
+      # gg <- (-log10(pvalues)) %>% {tibble(Type=names(.), value=.)} %>%
+      #   plotMeanMedValuesPerCellType(type="bar", yline=-log10(0.05), palette=palette, ylab="-log10(separation P-value)")
+
+      return(invisible(res))
     },
 
     ### Cluster-free differential expression

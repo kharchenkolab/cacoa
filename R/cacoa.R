@@ -1923,7 +1923,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
                               cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE,
-                              adjust.pvalues = TRUE, h.method=c('both', 'up', 'down'), ...) {
+                              adjust.pvalues = TRUE, h.method=c('both', 'up', 'down'), 
+                              reorder.tree = TRUE, ...) {
       h.method <- match.arg(h.method)
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain,
                                      cell.groups=cell.groups)
@@ -1933,10 +1934,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
 
+      tree.order = NULL
+      pval.cell.types = NULL
+      if(reorder.tree){
+        if ("coda" %in% names(self$test.results)){
+          loadings.mean <- rowMeans(self$test.results$coda$loadings) - self$test.results$coda$ref.load.level
+          pval <- self$test.results$coda$pval
+          loadings.mean <- loadings.mean[order(pval)]
+          tree.order <- c(names(loadings.mean)[loadings.mean < 0], 
+                         rev(names(loadings.mean)[loadings.mean > 0]))
+          pval.cell.types <-self$test.results$coda$padj
+        }
+      } 
 
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
                              plot.theme=self$plot.theme, adjust.pvalues=adjust.pvalues,
-                             h.method=h.method, ...)
+                             h.method=h.method, tree.order=tree.order,
+                             pval.cell.types=pval.cell.types,...)
 
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)
@@ -1980,9 +1994,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       cnts <- tmp$d.counts
       groups <- tmp$d.groups
 
-      if(coda.test == 'confidence'){
-        n.perm <- 1
-      }
+      # if(coda.test == 'confidence'){
+      #   n.perm <- 1
+      # }
 
       res <- runCoda(cnts, groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type)
       loadings.init <- res$loadings.init

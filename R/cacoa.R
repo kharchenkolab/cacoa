@@ -1614,7 +1614,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                           cluster.name=NULL, cell.subgroups=NULL, palette=NULL, row.order=TRUE,
                                           col.order=TRUE, max.log.p=10, only.family.children=FALSE,
                                           description.regex=NULL, distance="manhattan", clust.method="complete",
-                                          clust.naming="consensus", ...) {
+                                          clust.naming="consensus", n.words=5, exclude.words=NULL, ...) {
       ont.sum <- private$getOntologyHeatmapInfo(
         genes=genes, type=type, subtype=subtype, min.genes=min.genes, p.adj=p.adj, selection=selection,
         clusters=clusters, cluster.name=cluster.name, cell.subgroups=cell.subgroups,
@@ -1633,13 +1633,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       gos.per.clust <- dist(ont.sum, method=distance) %>%
         hclust(method=clust.method) %>% cutree(k=n) %>% {split(names(.), .)}
-      desc.per.clust <-
 
       clust.names <- sapply(gos.per.clust, function(gos) {
         n.gos <- length(gos)
+        if (n.gos == 1) return(paste("1: ", gos))
         if (clusters) gos <- unlist(desc.per.clust[gos], use.names=FALSE)
 
-        estimateOntologyClusterName(gos, method=clust.naming) %>% {paste0(n.gos, ": ", .)}
+        estimateOntologyClusterName(gos, method=clust.naming, n.words=n.words, exclude.words=exclude.words) %>%
+          {paste0(n.gos, ": ", .)}
       })
 
       ont.sum <- lapply(gos.per.clust, function(ns) colMeans(ont.sum.raw[ns,,drop=FALSE])) %>%
@@ -2422,12 +2423,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                  title=NULL, n.permutations=2000, show.pvalues=FALSE, ...) {
       if (is.null(cell.type)) {
         n.cells.per.samp <- table(self$sample.per.cell)
-        if (is.null(title)) title <- cell.type
       } else {
-        n.cells.per.samp <- self$sample.per.cell %>% .[clust.info$cell.groups[names(.)] == cell.type] %>% table()
+        if (is.null(title)) title <- cell.type
+        n.cells.per.samp <- self$sample.per.cell %>% .[self$cell.groups[names(.)] == cell.type] %>% table()
       }
 
       p.dists <- self$getSampleDistanceMatrix(space=space, cell.type=cell.type, dist=dist, name=name)
+      if (is.null(p.dists)) return(NULL)
 
       if (is.null(sample.colors) && is.null(palette)) palette <- self$sample.groups.palette
       gg <- plotSampleDistanceMatrix(
@@ -2435,22 +2437,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         sample.colors=sample.colors, show.sample.size=show.sample.size, palette=palette, color.title=color.title,
         title=title, plot.theme=self$plot.theme, ...
       )
-
-      return(gg)
-
-      if (show.pvalues) {
-        checkPackageInstalled("cluster", cran=TRUE)
-        clusts <- as.numeric(self$sample.groups[colnames(p.dists)])
-        score <- cluster::silhouette(clusts, p.dists)[,3] %>% mean()
-        sil.perm <- sapply(1:n.permutations, function(x) mean(cluster::silhouette(sample(clusts), p.dists)[, 3]))
-        pvalue <- (sum(sil.perm >= score) + 1) / (n.permutations + 1)
-        gg <- gg + ggtitle(paste(title, 'pvalue:', signif(pvalue, 3)))
-      }
-
-      if (!is.null(title) & !show.pvalues) {
-        gg <- gg + ggtitle(title)
-      }
-
 
       return(gg)
     },

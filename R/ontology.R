@@ -586,7 +586,7 @@ getOntClustField <- function(subtype, genes) {
   return(paste("clusters", paste(subtype, collapse="."), genes, sep="."))
 }
 
-estimateOntologyClusterName <- function(descriptions, method=c("medoid", "consensus"), n.words=5) {
+estimateOntologyClusterName <- function(descriptions, method=c("medoid", "consensus"), n.words=5, exclude.words=NULL) {
   method <- match.arg(method)
   if (length(descriptions) == 1)
     return(descriptions)
@@ -603,7 +603,7 @@ estimateOntologyClusterName <- function(descriptions, method=c("medoid", "consen
 
   # method == "consensus"
   nm <- unlist(words.per.desc) %>% table() %>% sort(decreasing=TRUE) %>% names() %>%
-    setdiff(c("of", "and", "to", "in")) %>% head(n.words) %>% paste0(collapse=', ')
+    setdiff(c("of", "and", "to", "in", exclude.words)) %>% head(n.words) %>% paste0(collapse=', ')
 
   return(nm)
 }
@@ -616,7 +616,7 @@ estimateOntologyClusterNames <- function(ont.df, clust.naming=c("medoid", "conse
         split(.$Cluster) %>% sapply(function(df) df$Description[which.min(df$pvalue)])
   } else {
     name.per.clust <- ont.df %$% split(Description, Cluster) %>% lapply(unique) %>%
-      lapply(estimateOntologyClusterName, method=clust.naming)
+      sapply(estimateOntologyClusterName, method=clust.naming)
   }
 
   return(name.per.clust)

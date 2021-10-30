@@ -586,31 +586,40 @@ getOntClustField <- function(subtype, genes) {
   return(paste("clusters", paste(subtype, collapse="."), genes, sep="."))
 }
 
-estimateOntologyClusterName <- function(ont.df, clust.naming=c("medoid", "consensus", "min.pvalue")) {
+estimateOntologyClusterName <- function(descriptions, method=c("medoid", "consensus"), n.words=5) {
+  method <- match.arg(method)
+  if (length(descriptions) == 1)
+    return(descriptions)
+
+  words.per.desc <- strsplit(descriptions, "[ ,-]") %>% lapply(function(x) x[nchar(x) > 0])
+
+  if (method == "medoid") {
+    nm <- words.per.desc %>%
+      sapply(function(s1) sapply(., function(s2) 1 - length(intersect(s1, s2)) / length(union(s1, s2)))) %>%
+        rowSums() %>% setNames(descs) %>% sort() %>% names() %>% .[1]
+
+    return(nm)
+  }
+
+  # method == "consensus"
+  nm <- unlist(words.per.desc) %>% table() %>% sort(decreasing=TRUE) %>% names() %>%
+    setdiff(c("of", "and", "to", "in")) %>% head(n.words) %>% paste0(collapse=', ')
+
+  return(nm)
+}
+
+estimateOntologyClusterNames <- function(ont.df, clust.naming=c("medoid", "consensus", "min.pvalue")) {
   clust.naming <- match.arg(clust.naming)
 
   if (clust.naming == "min.pvalue") {
     name.per.clust <- ont.df %>% group_by(Cluster, Description) %>% summarise(pvalue=exp(mean(log(pvalue)))) %>%
         split(.$Cluster) %>% sapply(function(df) df$Description[which.min(df$pvalue)])
-    return(name.per.clust)
+  } else {
+    name.per.clust <- ont.df %$% split(Description, Cluster) %>% lapply(unique) %>%
+      lapply(estimateOntologyClusterName, method=clust.naming)
   }
 
-  descs.per.clust <- ont.df %$% split(Description, Cluster) %>% lapply(unique)
-  words.per.desc.per.clust <- descs.per.clust %>%
-    lapply(function(ds) lapply(strsplit(ds, "[ ,-]"), function(x) x[nchar(x) > 0]))
-
-  if (clust.naming == "medoid") {
-    name.per.clust <- mapply(function(words, descs) {
-      if (length(descs) == 1) return(descs)
-      words %>% sapply(function(s1) sapply(., function(s2) 1 - length(intersect(s1, s2)) / length(union(s1, s2)))) %>%
-        rowSums() %>% setNames(descs) %>% sort() %>% names() %>% .[1]
-    }, words.per.desc.per.clust, descs.per.clust)
-
-    return(name.per.clust)
-  }
-
-  # TODO: implement consensus naming
-  stop("Not implemented")
+  return(name.per.clust)
 }
 
 getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {

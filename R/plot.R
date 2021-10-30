@@ -151,7 +151,9 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE
     plot.theme +
     theme(axis.text.x=element_text(angle=90, hjust=0, vjust=0.5, color=color.per.group),
           axis.text=element_text(size=font.size), axis.ticks=element_blank(), axis.title=element_blank()) +
-    guides(fill=guide_colorbar(title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5))) +
+    guides(fill=guide_colorbar(
+      title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5)
+    )) +
     scale_y_discrete(position="right", expand=c(0, 0)) +
     scale_x_discrete(expand=c(0, 0), position=x.axis.position) +
     theme_legend_position(legend.position) +

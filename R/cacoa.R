@@ -1416,7 +1416,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       ont.df$Cluster <- clusts$clusts[as.character(ont.df$Description)]
 
-      name.per.clust <- estimateOntologyClusterName(ont.df, clust.naming=clust.naming)
+      name.per.clust <- estimateOntologyClusterNames(ont.df, clust.naming=clust.naming)
 
       ont.df$ClusterName <- name.per.clust[ont.df$Cluster]
       res <- list(df=ont.df, hclust=clusts$hclust)
@@ -1584,13 +1584,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left",
                                  selection=c("all", "common", "unique"), n=20, clusters=TRUE, cluster.name=NULL,
                                  cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE, max.log.p=10,
-                                 only.family.children=FALSE, description.regex=NULL, ...) {
+                                 only.family.children=FALSE, description.regex=NULL, collapse.by.patterns=FALSE,
+                                 distance="manhattan", clust.method="complete", clust.naming=NULL, ...) {
       # Checks
       selection <- match.arg(selection)
-
       if (!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
         stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
 
+      if (is.null(clust.naming)) clust.naming <- if (collapse.by.patterns) "consensus" else "medoid"
       if (only.family.children) {
         fams <- self$test.results[[type]]$families
         if (is.null(fams))
@@ -1612,13 +1613,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
           warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
           self$estimateOntologyClusters(type=type, subtype=subtype, genes=genes, name=name, p.adj=p.adj,
-                                        min.genes=min.genes)
+                                        min.genes=min.genes, clust.naming=clust.naming)
         }
 
         ont.sum <- self$test.results[[type]][[name]]$df
 
         if (!is.null(cell.subgroups)) ont.sum %<>% filter(Group %in% cell.subgroups)
         group.field <- "ClusterName"
+        desc.per.clust <- ont.sum %$% split(Description, ClusterName) %>% lapply(unique)
       }
 
       if (only.family.children) {
@@ -1643,12 +1645,34 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (is.null(palette)) palette <- getGenePalette(genes, high="white")
 
-      ont.sum[ont.sum > max.log.p] <- max.log.p
-      ont.sum %<>% .[, colSums(abs(.)) > 0, drop=FALSE] %>%
-        .[order(rowSums(.), decreasing=TRUE),,drop=FALSE] %>% head(n)
+      ont.sum %<>% .[, colSums(abs(.)) > 0, drop=FALSE]
 
-      plt <- plotHeatmap(ont.sum, legend.position=legend.position, row.order=row.order, col.order=col.order,
-                         plot.theme=self$plot.theme, palette=palette, ...)
+      ont.sum.raw <- ont.sum
+      ont.sum[ont.sum > max.log.p] <- max.log.p
+
+      if (collapse.by.patterns) {
+        gos.per.clust <- dist(ont.sum, method=distance) %>%
+          hclust(method=clust.method) %>% cutree(k=n) %>% {split(names(.), .)}
+
+        clust.names <- sapply(gos.per.clust, function(gos) {
+          n.gos <- length(gos)
+          if (clusters) gos <- unlist(desc.per.clust[gos], use.names=FALSE)
+
+          estimateOntologyClusterName(gos, method=clust.naming) %>% {paste0(n.gos, ": ", .)}
+        })
+
+        ont.sum <- lapply(gos.per.clust, function(ns) colMeans(ont.sum.raw[ns,,drop=FALSE])) %>%
+          do.call(rbind, .) %>% as.data.frame() %>% set_rownames(clust.names)
+        ont.sum[ont.sum > max.log.p] <- max.log.p
+        return(list(ont.sum=ont.sum, ont.sum.raw=ont.sum.raw, gos.per.clust=gos.per.clust))
+      } else {
+        ont.sum %<>% .[order(rowSums(.), decreasing=TRUE),,drop=FALSE] %>% head(n)
+      }
+
+      plt <- plotHeatmap(
+        ont.sum, legend.position=legend.position, row.order=row.order, col.order=col.order,
+        plot.theme=self$plot.theme, palette=palette, distance=distance, clust.method=clust.method, ...
+      )
       # plt <- as.matrix(ont.sum) %>%
       #   ComplexHeatmap::Heatmap(border=TRUE, show_row_dend=FALSE, show_column_dend=FALSE,
       #                           row_names_max_width=unit(8, "cm"), row_names_gp=grid::gpar(fontsize=10),
@@ -1923,7 +1947,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
                               cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE,
-                              adjust.pvalues = TRUE, h.method=c('both', 'up', 'down'), 
+                              adjust.pvalues = TRUE, h.method=c('both', 'up', 'down'),
                               reorder.tree = TRUE, ...) {
       h.method <- match.arg(h.method)
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain,
@@ -1941,11 +1965,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           loadings.mean <- rowMeans(self$test.results$coda$loadings) - self$test.results$coda$ref.load.level
           pval <- self$test.results$coda$pval
           loadings.mean <- loadings.mean[order(pval)]
-          tree.order <- c(names(loadings.mean)[loadings.mean < 0], 
+          tree.order <- c(names(loadings.mean)[loadings.mean < 0],
                          rev(names(loadings.mean)[loadings.mean > 0]))
           pval.cell.types <-self$test.results$coda$padj
         }
-      } 
+      }
 
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
                              plot.theme=self$plot.theme, adjust.pvalues=adjust.pvalues,

@@ -1574,7 +1574,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type);
     #'   'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms)
     #'   (default="all")
-    #' @param n Number of terms to show (default=10)
+    #' @param top.n Number of terms to show (default=Inf)
     #' @param clusters Whether to show GO clusters or raw GOs (default=TRUE)
     #' @param cluster.name Field with the results for GO clustering. Ignored if `clusters == FALSE`.
     #' @param cell.subgroups Cell groups to plot (default=NULL). This affects only visualization, but not clustering.
@@ -1582,7 +1582,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left",
-                                 selection="all", n=20, clusters=TRUE, cluster.name=NULL,
+                                 selection="all", top.n=Inf, clusters=TRUE, cluster.name=NULL,
                                  cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE, max.log.p=10,
                                  only.family.children=FALSE, description.regex=NULL, clust.naming="medoid", ...) {
       ont.sum <- private$getOntologyHeatmapInfo(
@@ -1595,7 +1595,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.null(palette)) palette <- getGenePalette(genes, high="white")
 
       ont.sum[ont.sum > max.log.p] <- max.log.p
-      ont.sum %<>% .[order(rowSums(.), decreasing=TRUE),,drop=FALSE] %>% head(n)
+      ont.sum %<>% .[order(rowSums(.), decreasing=TRUE),,drop=FALSE] %>% head(top.n)
 
       plt <- plotHeatmap(
         ont.sum, legend.position=legend.position, row.order=row.order, col.order=col.order,

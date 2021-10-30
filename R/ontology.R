@@ -596,7 +596,7 @@ estimateOntologyClusterName <- function(descriptions, method=c("medoid", "consen
   if (method == "medoid") {
     nm <- words.per.desc %>%
       sapply(function(s1) sapply(., function(s2) 1 - length(intersect(s1, s2)) / length(union(s1, s2)))) %>%
-        rowSums() %>% setNames(descs) %>% sort() %>% names() %>% .[1]
+        rowSums() %>% setNames(descriptions) %>% sort() %>% names() %>% .[1]
 
     return(nm)
   }

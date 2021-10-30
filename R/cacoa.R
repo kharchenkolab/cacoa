@@ -1582,102 +1582,79 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left",
-                                 selection=c("all", "common", "unique"), n=20, clusters=TRUE, cluster.name=NULL,
+                                 selection="all", n=20, clusters=TRUE, cluster.name=NULL,
                                  cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE, max.log.p=10,
-                                 only.family.children=FALSE, description.regex=NULL, collapse.by.patterns=FALSE,
-                                 distance="manhattan", clust.method="complete", clust.naming=NULL, ...) {
-      # Checks
-      selection <- match.arg(selection)
-      if (!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
-        stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
+                                 only.family.children=FALSE, description.regex=NULL, clust.naming="medoid", ...) {
+      ont.sum <- private$getOntologyHeatmapInfo(
+        genes=genes, type=type, subtype=subtype, min.genes=min.genes, p.adj=p.adj, selection=selection,
+        clusters=clusters, cluster.name=cluster.name, cell.subgroups=cell.subgroups,
+        only.family.children=only.family.children, description.regex=description.regex, clust.naming=clust.naming
+      )
 
-      if (is.null(clust.naming)) clust.naming <- if (collapse.by.patterns) "consensus" else "medoid"
-      if (only.family.children) {
-        fams <- self$test.results[[type]]$families
-        if (is.null(fams))
-          stop("No ontology family results found, please run 'estimateOntologyFamilies' first",
-               " or set only.family.children=FALSE")
-      }
-
-      # Extract results
-      if (!clusters) {
-        ont.sum <- private$getOntologyPvalueResults(
-          genes=genes, type=type, subtype=subtype, cell.subgroups=cell.subgroups, p.adj=p.adj, min.genes=min.genes
-        )
-        group.field <- "Description"
-      } else {
-        name <- if (is.null(cluster.name)) getOntClustField(subtype, genes) else cluster.name
-        if (is.null(self$test.results[[type]][[name]])) {
-          if (!is.null(cluster.name))
-            stop("Can't find the results for ", cluster.name) # stop if user specified a wrong cluster.name
-
-          warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
-          self$estimateOntologyClusters(type=type, subtype=subtype, genes=genes, name=name, p.adj=p.adj,
-                                        min.genes=min.genes, clust.naming=clust.naming)
-        }
-
-        ont.sum <- self$test.results[[type]][[name]]$df
-
-        if (!is.null(cell.subgroups)) ont.sum %<>% filter(Group %in% cell.subgroups)
-        group.field <- "ClusterName"
-        desc.per.clust <- ont.sum %$% split(Description, ClusterName) %>% lapply(unique)
-      }
-
-      if (only.family.children) {
-        ont.sum %<>% getOntologyFamilyChildren(fams=fams, subtype=subtype, genes=genes)
-      }
-
-      if (!is.null(description.regex)) ont.sum %<>% .[grep(description.regex, .$Description),]
-
-      ont.sum <- -groupOntologiesByCluster(ont.sum, field=group.field)
-
-      if (nrow(ont.sum) == 0) {
-        warning("No ontologies pass the filtration for type=", type, ", subtype=", subtype, " and genes=", genes)
-        return(ggplot())
-      }
-
-      if (selection=="unique") {
-        ont.sum %<>% .[rowSums(abs(.) > 0) == 1,,drop=FALSE]
-      } else if(selection=="common") {
-        ont.sum %<>% .[rowSums(abs(.) > 0) > 1,,drop=FALSE]
-      }
-      if (nrow(ont.sum) == 0) stop("Nothing to plot. Try another selection.")
-
+      if (is.null(ont.sum)) return(ggplot())
       if (is.null(palette)) palette <- getGenePalette(genes, high="white")
 
-      ont.sum %<>% .[, colSums(abs(.)) > 0, drop=FALSE]
-
-      ont.sum.raw <- ont.sum
       ont.sum[ont.sum > max.log.p] <- max.log.p
-
-      if (collapse.by.patterns) {
-        gos.per.clust <- dist(ont.sum, method=distance) %>%
-          hclust(method=clust.method) %>% cutree(k=n) %>% {split(names(.), .)}
-
-        clust.names <- sapply(gos.per.clust, function(gos) {
-          n.gos <- length(gos)
-          if (clusters) gos <- unlist(desc.per.clust[gos], use.names=FALSE)
-
-          estimateOntologyClusterName(gos, method=clust.naming) %>% {paste0(n.gos, ": ", .)}
-        })
-
-        ont.sum <- lapply(gos.per.clust, function(ns) colMeans(ont.sum.raw[ns,,drop=FALSE])) %>%
-          do.call(rbind, .) %>% as.data.frame() %>% set_rownames(clust.names)
-        ont.sum[ont.sum > max.log.p] <- max.log.p
-        return(list(ont.sum=ont.sum, ont.sum.raw=ont.sum.raw, gos.per.clust=gos.per.clust))
-      } else {
-        ont.sum %<>% .[order(rowSums(.), decreasing=TRUE),,drop=FALSE] %>% head(n)
-      }
+      ont.sum %<>% .[order(rowSums(.), decreasing=TRUE),,drop=FALSE] %>% head(n)
 
       plt <- plotHeatmap(
         ont.sum, legend.position=legend.position, row.order=row.order, col.order=col.order,
-        plot.theme=self$plot.theme, palette=palette, distance=distance, clust.method=clust.method, ...
+        plot.theme=self$plot.theme, palette=palette, ...
       )
       # plt <- as.matrix(ont.sum) %>%
       #   ComplexHeatmap::Heatmap(border=TRUE, show_row_dend=FALSE, show_column_dend=FALSE,
       #                           row_names_max_width=unit(8, "cm"), row_names_gp=grid::gpar(fontsize=10),
       #                           cluster_rows=row.order, cluster_columns=col.order,
       #                           col=palette(100), ...)
+      return(plt)
+    },
+
+    plotOntologyHeatmapCollapsed=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05,
+                                          legend.position="left", selection="all", n=20, clusters=TRUE,
+                                          cluster.name=NULL, cell.subgroups=NULL, palette=NULL, row.order=TRUE,
+                                          col.order=TRUE, max.log.p=10, only.family.children=FALSE,
+                                          description.regex=NULL, distance="manhattan", clust.method="complete",
+                                          clust.naming="consensus", ...) {
+      ont.sum <- private$getOntologyHeatmapInfo(
+        genes=genes, type=type, subtype=subtype, min.genes=min.genes, p.adj=p.adj, selection=selection,
+        clusters=clusters, cluster.name=cluster.name, cell.subgroups=cell.subgroups,
+        only.family.children=only.family.children, description.regex=description.regex, clust.naming=clust.naming,
+        return.descriptions=TRUE
+      )
+
+      desc.per.clust <- ont.sum$desc.per.clust
+      ont.sum <- ont.sum$ont.sum
+
+      if (is.null(ont.sum)) return(ggplot())
+      if (is.null(palette)) palette <- getGenePalette(genes, high="white")
+
+      ont.sum.raw <- ont.sum
+      ont.sum[ont.sum > max.log.p] <- max.log.p
+
+      gos.per.clust <- dist(ont.sum, method=distance) %>%
+        hclust(method=clust.method) %>% cutree(k=n) %>% {split(names(.), .)}
+      desc.per.clust <-
+
+      clust.names <- sapply(gos.per.clust, function(gos) {
+        n.gos <- length(gos)
+        if (clusters) gos <- unlist(desc.per.clust[gos], use.names=FALSE)
+
+        estimateOntologyClusterName(gos, method=clust.naming) %>% {paste0(n.gos, ": ", .)}
+      })
+
+      ont.sum <- lapply(gos.per.clust, function(ns) colMeans(ont.sum.raw[ns,,drop=FALSE])) %>%
+        do.call(rbind, .) %>% as.data.frame() %>% set_rownames(clust.names)
+      ont.sum[ont.sum > max.log.p] <- max.log.p
+
+      ont.freqs <- gos.per.clust %>%
+        lapply(function(gos) colMeans(ont.sum.raw[gos,] > 1e-5) * 100) %>%
+        do.call(rbind, .) %>% as.data.frame()
+
+      plt <- plotHeatmap(
+        ont.sum, size.df=ont.freqs, legend.position=legend.position, row.order=row.order, col.order=col.order,
+        plot.theme=self$plot.theme, palette=palette, distance=distance, clust.method=clust.method,
+        size.legend.title="Cluster GOs %", ...
+      )
       return(plt)
     },
 
@@ -3023,16 +3000,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     getOntologyPvalueResults=function(genes, type, p.adj=0.05, min.genes=1,
                                       subtype=NULL, cell.subgroups=NULL, name = NULL) {
-      if(!type %in% c("GO", "DO", "GSEA"))
+      if (!type %in% c("GO", "DO", "GSEA"))
         stop("'type' must be 'GO', 'DO', or 'GSEA'.")
-      if(is.null(name)) {
+      if (is.null(name)) {
         name <- type
       }
 
-      if(!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
+      if (!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
         stop("'subtype' must be 'BP', 'CC', or 'MF'.")
 
-      if((length(genes) != 1) || (!genes %in% c("down","up","all")))
+      if ((length(genes) != 1) || (!genes %in% c("down","up","all")))
         stop("'genes' must be 'down', 'up', or 'all'.")
 
       ont.res <- self$test.results[[name]]$res
@@ -3062,11 +3039,82 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         ont.res %<>% filter(Group %in% cell.subgroups)
       }
 
-      if(!is.null(subtype)) {
+      if (!is.null(subtype)) {
         ont.res %<>% filter(Type %in% subtype)
       }
 
       return(ont.res)
+    },
+
+    getOntologyHeatmapInfo=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05,
+                                    selection=c("all", "common", "unique"), clusters=TRUE, cluster.name=NULL,
+                                    cell.subgroups=NULL, only.family.children=FALSE, description.regex=NULL,
+                                    clust.naming="medoid", return.descriptions=FALSE) {
+      # Checks
+      selection <- match.arg(selection)
+      if (!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
+        stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
+
+      if (only.family.children) {
+        fams <- self$test.results[[type]]$families
+        if (is.null(fams))
+          stop("No ontology family results found, please run 'estimateOntologyFamilies' first",
+               " or set only.family.children=FALSE")
+      }
+
+      # Extract results
+      desc.per.clust <- NULL
+      if (!clusters) {
+        ont.sum <- private$getOntologyPvalueResults(
+          genes=genes, type=type, subtype=subtype, cell.subgroups=cell.subgroups, p.adj=p.adj, min.genes=min.genes
+        )
+        group.field <- "Description"
+      } else {
+        name <- if (is.null(cluster.name)) getOntClustField(subtype, genes) else cluster.name
+        if (is.null(self$test.results[[type]][[name]])) {
+          if (!is.null(cluster.name))
+            stop("Can't find the results for ", cluster.name) # stop if user specified a wrong cluster.name
+
+          warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
+          self$estimateOntologyClusters(type=type, subtype=subtype, genes=genes, name=name, p.adj=p.adj,
+                                        min.genes=min.genes, clust.naming=clust.naming)
+        }
+
+        ont.sum <- self$test.results[[type]][[name]]$df
+
+        if (!is.null(cell.subgroups)) ont.sum %<>% filter(Group %in% cell.subgroups)
+        group.field <- "ClusterName"
+        desc.per.clust <- ont.sum %$% split(Description, ClusterName) %>% lapply(unique)
+      }
+
+      if (only.family.children) {
+        ont.sum %<>% getOntologyFamilyChildren(fams=fams, subtype=subtype, genes=genes)
+      }
+
+      if (!is.null(description.regex)) ont.sum %<>% .[grep(description.regex, .$Description),]
+
+      ont.sum <- -groupOntologiesByCluster(ont.sum, field=group.field)
+
+      if (nrow(ont.sum) == 0) {
+        warning("No ontologies pass the filtration for type=", type, ", subtype=", subtype, " and genes=", genes)
+        return(NULL)
+      }
+
+      if (selection=="unique") {
+        ont.sum %<>% .[rowSums(abs(.) > 0) == 1,,drop=FALSE]
+      } else if(selection=="common") {
+        ont.sum %<>% .[rowSums(abs(.) > 0) > 1,,drop=FALSE]
+      }
+      if (nrow(ont.sum) == 0) {
+        warning("Nothing to plot. Try another selection.")
+        return(NULL)
+      }
+
+      ont.sum %<>% .[, colSums(abs(.)) > 0, drop=FALSE]
+      if (return.descriptions)
+        return(list(ont.sum=ont.sum, desc.per.clust=desc.per.clust))
+
+      return(ont.sum)
     },
 
     extractCodaData = function(ret.groups=TRUE, cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL, samples.to.remove=NULL) {

@@ -114,6 +114,7 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 #' @return A ggplot2 object
 #' @export
 plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE, legend.position="right",
+                        size.df=NULL, size.range=c(1, 5), size.legend.title="size",
                         legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
                         color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL, font.size=8,
                         distance="manhattan", clust.method="complete", grid.color="gray50") {
@@ -147,18 +148,35 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE
 
   df$value %<>% pmax(color.range[1]) %>% pmin(color.range[2])
 
-  gg <- ggplot(df) + geom_tile(aes(x=G2, y=G1, fill=value), color=grid.color) +
-    plot.theme +
+  color.guide <- guide_colorbar(
+    title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5)
+  )
+  if (is.null(size.df)) {
+    gg <- ggplot(df) + geom_tile(aes(x=G2, y=G1, fill=value), color=grid.color) + guides(fill=color.guide)
+    return.fill <- TRUE
+    expand <- expansion(0, 0.0)
+  } else {
+    df$size <- reshape2::melt(size.df, id.vars=NULL)$value
+    size.guide <- guide_legend(
+      title=size.legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5)
+    )
+
+    gg <- ggplot(df) +
+      geom_point(aes(x=G2, y=G1, color=value, size=size)) +
+      scale_size_continuous(range=size.range) +
+      guides(color=color.guide, size=size.guide)
+    return.fill <- FALSE
+    expand <- expansion(0, 0.5)
+  }
+
+  gg <- gg + plot.theme +
     theme(axis.text.x=element_text(angle=90, hjust=0, vjust=0.5, color=color.per.group),
           axis.text=element_text(size=font.size), axis.ticks=element_blank(), axis.title=element_blank()) +
-    guides(fill=guide_colorbar(
-      title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5)
-    )) +
-    scale_y_discrete(position="right", expand=c(0, 0)) +
-    scale_x_discrete(expand=c(0, 0), position=x.axis.position) +
+    scale_y_discrete(position="right", expand=expand) +
+    scale_x_discrete(expand=expand, position=x.axis.position) +
     theme_legend_position(legend.position) +
     theme(legend.key.width=legend.key.width, legend.background=element_blank()) +
-    val2ggcol(df$value, palette=palette, color.range=color.range, return.fill=TRUE)
+    val2ggcol(df$value, palette=palette, color.range=color.range, return.fill=return.fill)
 
   if (symmetric) {
     gg <- gg + theme(axis.text.y=element_text(color=color.per.group))

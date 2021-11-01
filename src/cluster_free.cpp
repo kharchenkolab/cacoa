@@ -571,6 +571,9 @@ double estimateVectorDistance(const VectorXd &v1, const VectorXd &v2, const std:
 CFShiftResult estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::vector<int> &sample_per_cell,
                                           const std::vector<int> &nn_ids,
                                           size_t min_n_obs_per_samp, const std::string &dist="cosine", bool log_vecs=true) {
+    if (nn_ids.size() < min_n_obs_per_samp)
+        return(CFShiftResult());
+
     auto n_ids_per_samp = count_values(sample_per_cell, nn_ids);
     auto mat_collapsed = collapseMatrixNorm(cm, sample_per_cell, nn_ids, n_ids_per_samp);
     if (log_vecs) {
@@ -645,10 +648,14 @@ List estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double> &cm,
                                           const std::vector<bool> &is_ref, const int min_n_between=1, const int min_n_within=1,
                                           const int min_n_obs_per_samp=1, bool norm_all=true, bool verbose=true, int n_cores=1,
                                           const std::string &dist="cor", bool log_vecs=true, int n_permutations=100,
-                                          bool smooth=true, double wins=0.01) {
+                                          bool smooth=true, double wins=0.01, int seed=0) {
     const auto samp_per_cell_c = as<std::vector<int>>(IntegerVector(sample_per_cell - 1));
     if (sample_per_cell.size() == 0 || (*std::max_element(samp_per_cell_c.begin(), samp_per_cell_c.end()) <= 0))
         stop("sample_per_cell must be a factor vector with non-empty levels");
+
+    assert_r(cm.cols() == samp_per_cell_c.size(),
+             "Number of columns in matrix (" + std::to_string(cm.cols()) +
+             ") must match the sample_per_cell size (" + std::to_string(samp_per_cell_c.size()) + ")");
 
     std::vector<std::vector<int>> nn_ids_c;
     for (auto &ids : nn_ids) {
@@ -685,8 +692,8 @@ List estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double> &cm,
     std::mutex mut;
 
     auto task2 = [&nn_ids_c, &res_info, &max_vals, &is_ref, &mut, &sum_null_dists, &n_null_dists, norm_all,
-            min_n_within, min_n_between, wins, smooth](int ri) {
-        std::mt19937 g(ri);
+            min_n_within, min_n_between, wins, smooth, seed](int ri) {
+        std::mt19937 g(ri + seed);
         std::vector<bool> is_ref_shuffled(is_ref.begin(), is_ref.end());
         std::shuffle(is_ref_shuffled.begin(), is_ref_shuffled.end(), g);
         std::vector<double> shuff_scores(nn_ids_c.size(), 0);

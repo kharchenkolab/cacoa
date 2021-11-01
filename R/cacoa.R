@@ -2583,20 +2583,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="z", name="cluster.free.expr.shifts",
                                                  min.n.between=2, min.n.within=max(min.n.between, 1),
                                                  min.expr.frac=0.0, min.n.obs.per.samp=3, normalize.both=FALSE,
-                                                 dist="cor", log.vectors=(dist != "js"), wins=0.025,
-                                                 n.permutations=500, verbose=self$verbose, n.cores=self$n.cores, ...) {
-      cm <- self$getJointCountMatrix(raw=FALSE)
-      genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, cm.joint=cm, min.expr.frac=min.expr.frac)
-      cm <- Matrix::t(cm[, genes])
+                                                 dist="cor", log.vectors=(dist != "js"), wins=0.025, genes=NULL,
+                                                 n.permutations=500, verbose=self$verbose, n.cores=self$n.cores,
+                                                 min.edge.weight=0.0, ...) {
+      if (is.null(genes)) {
+        genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, min.expr.frac=min.expr.frac)
+      }
 
-      is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
-
-      nns.per.cell <- extractCellGraph(self$data.object) %>%
-        igraph::as_adjacency_matrix() %>% as("dgTMatrix") %>%
-        {setNames(split(.@j, .@i + 1), rownames(.))}
-
-      shifts <- estimateClusterFreeExpressionShiftsC(
-        cm, self$sample.per.cell[names(nns.per.cell)], nn_ids=nns.per.cell, is_ref=is.ref, min_n_between=min.n.between,
+      inp <- private$getClusterFreeDEInput(genes, min.edge.weight=min.edge.weight)
+      shifts <- inp %$% estimateClusterFreeExpressionShiftsC(
+        t(cm), self$sample.per.cell[rownames(cm)], nn_ids=nns.per.cell, is_ref=is.ref, min_n_between=min.n.between,
         min_n_within=min.n.within, min_n_obs_per_samp=min.n.obs.per.samp, norm_all=normalize.both, verbose=verbose,
         n_cores=n.cores, dist=dist, log_vecs=log.vectors, wins=wins, n_permutations=n.permutations, ...
       )
@@ -3134,10 +3130,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     checkCellEmbedding = function(embedding=self$embedding) {
-      if(is.null(embedding) || ncol(embedding) != 2)
+      if (is.null(embedding) || ncol(embedding) != 2)
         stop("self$embedding must contain 2D cell embedding")
 
-      if(is.null(rownames(embedding)))
+      if (is.null(rownames(embedding)))
         stop("self$embedding must have rownames, equal to cell ids")
     },
 
@@ -3157,8 +3153,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         adj.mat %<>% drop0() %>% as("dgTMatrix")
       }
 
-      nns.per.cell <- split(adj.mat@j, adj.mat@i) %>% setNames(cell.names)
+      nns.per.cell <- adj.mat %>% {split(.@j, .@i + 1)} %>%
+        .[paste(1:nrow(adj.mat))] %>% setNames(cell.names)
       cm %<>% .[cell.names, genes, drop=FALSE]
+
+      for (id in which(sapply(nns.per.cell, is.null))) {
+         # If there are cells without neighbors. May be a consequence of graph modification
+        nns.per.cell[[id]] <- numeric()
+      }
 
       return(list(cm=cm, adj.mat=adj.mat, is.ref=is.ref, nns.per.cell=nns.per.cell))
     }

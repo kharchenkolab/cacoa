@@ -21,8 +21,8 @@ estimateClusterFreeExpressionShiftsInfo <- function(cm, sample_per_cell, nn_ids,
     .Call('_cacoa_estimateClusterFreeExpressionShiftsInfo', PACKAGE = 'cacoa', cm, sample_per_cell, nn_ids, min_n_obs_per_samp, verbose, n_cores, dist, log_vecs)
 }
 
-estimateClusterFreeExpressionShiftsC <- function(cm, sample_per_cell, nn_ids, is_ref, min_n_between = 1L, min_n_within = 1L, min_n_obs_per_samp = 1L, norm_all = TRUE, verbose = TRUE, n_cores = 1L, dist = "cor", log_vecs = TRUE, n_permutations = 100L, smooth = TRUE, wins = 0.01) {
-    .Call('_cacoa_estimateClusterFreeExpressionShiftsC', PACKAGE = 'cacoa', cm, sample_per_cell, nn_ids, is_ref, min_n_between, min_n_within, min_n_obs_per_samp, norm_all, verbose, n_cores, dist, log_vecs, n_permutations, smooth, wins)
+estimateClusterFreeExpressionShiftsC <- function(cm, sample_per_cell, nn_ids, is_ref, min_n_between = 1L, min_n_within = 1L, min_n_obs_per_samp = 1L, norm_all = TRUE, verbose = TRUE, n_cores = 1L, dist = "cor", log_vecs = TRUE, n_permutations = 100L, smooth = TRUE, wins = 0.01, seed = 0L) {
+    .Call('_cacoa_estimateClusterFreeExpressionShiftsC', PACKAGE = 'cacoa', cm, sample_per_cell, nn_ids, is_ref, min_n_between, min_n_within, min_n_obs_per_samp, norm_all, verbose, n_cores, dist, log_vecs, n_permutations, smooth, wins, seed)
 }
 
 mapIds <- function(ids_vec, id_map) {

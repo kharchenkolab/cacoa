@@ -2772,8 +2772,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param font.size size range for cell type labels
     #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
     plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=TRUE, plot.na=FALSE,
-                                               name="cluster.free.expr.shifts",
-                                               color.range=c("0", "97.5%"), alpha=0.2, font.size=c(3,5), adj.list=NULL,
+                                               name="cluster.free.expr.shifts", scale.z.palette=TRUE, min.z=qnorm(0.9),
+                                               color.range=c("0", "97.5%"), alpha=0.2, font.size=c(3, 5), adj.list=NULL,
                                                palette=brewerPalette("YlOrRd", rev=FALSE), build.panel=TRUE, ...) {
       shifts <- private$getResults(name, "estimateClusterFreeExpressionShifts")
       private$checkCellEmbedding()
@@ -2788,6 +2788,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         self$plotEmbedding(colors=cls, plot.na=plot.na, alpha=alpha, palette=palette, legend.title=lt, ...) +
           theme(legend.background = element_blank())
       }, list(shifts, z.scores), c("Distance", "Z-score"), SIMPLIFY=FALSE)
+
+      if (scale.z.palette) {
+        ggs[[2]]$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
+        max.score <- max(z.scores, na.rm=TRUE)
+        ggs[[2]] <- ggs[[2]] + getScaledZGradient(min.z=min.z, palette=palette, color.range=max.score)
+      }
 
       if (!is.null(cell.groups)) {
         ggs %<>% lapply(transferLabelLayer, self$plotEmbedding(groups=cell.groups), font.size=font.size)

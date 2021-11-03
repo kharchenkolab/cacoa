@@ -1956,7 +1956,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
                              plot.theme=self$plot.theme, adjust.pvalues=adjust.pvalues,
                              h.method=h.method, tree.order=tree.order,
-                             pval.cell.types=pval.cell.types,...)
+                             pval.cell.types=loadings.mean,...)
 
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)

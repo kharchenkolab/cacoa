@@ -57,7 +57,7 @@ ggdend <- function(dend.data, angle=90, plot.theme=theme_get(), font.size=3, hju
     theme(axis.text = element_blank(), axis.ticks = element_blank(),
           panel.grid = element_blank(), panel.border=element_blank(),
           axis.line=element_blank()) +
-    geom_text(data = dend.data$labels, aes(x, y, label = label),
+    geom_text(data = dend.data$labels, aes(x, y-0.1, label = label),
               hjust=hjust, angle=angle, size=font.size) + ylim(-0.5, NA)
 }
 
@@ -99,7 +99,9 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     tree.order <- intersect(tree.order, t$tip.label)
     # distance of the initial tree
     d = distTreeOrder(t, tree.order)
-    for(i.node in min(t$edge[,1]):max(t$edge[,1])){
+    idx = min(t$edge[,1]):max(t$edge[,1])
+    for(i.node in idx){
+    # for(i.node in max(t$edge[,1])){
       
       # alternative tree
       t.alt <- ape::rotate(t, i.node)
@@ -116,8 +118,6 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
   
   
   tree <- t.cur$tree
-  
-  
   sbp <- sbpInNodes(tree)
   # sbp = t.cur$sbp
   
@@ -248,11 +248,14 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     signif.levels = c('', '*')
     node.leaves$signif <- signif.levels[(node.leaves$pval < 0.05)*1+ 1]
     
-    
+    # print(node.leaves$pval)
+    print(pval.cell.types)
+
     # node.leaves <- node.leaves[node.leaves$pval < 0.05,]
-    px <- px + geom_tile(data=node.leaves, mapping=aes(x=xend, y=0.04, fill=signif)) +
-      scale_fill_manual(values=c('white', '#E69F00')) +
-      labs(fill='significance')
+    px <- px + geom_tile(data=node.leaves, mapping=aes(x=xend, y=-0.05, fill=pval, width = 0.5, height = 0.1)) +
+      # scale_fill_manual(values=c('white', '#E69F00')) +
+      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0)
+      labs(fill=' ')
   }
   
   return(px)

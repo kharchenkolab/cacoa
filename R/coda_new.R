@@ -145,47 +145,34 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
 #' @param replace.samples TRUE - is bootstrap on samples, FALAE - if to remain samples
 #' @param seed random seed
 #' @return Updated data frame with Z scores
-produceResampling <- function(cnts, groups, n.perm = 1000, remain.groups = TRUE, replace.samples = TRUE, seed = 239) {
-
-  if(!(remain.groups %in% c(NULL, TRUE, FALSE))) stop('Parameter remain.groups should be in {NULL, TRUE, FALSE}')
-
+produceResampling <- function(cnts, groups, n.perm = 1000, seed = 239) {
   cnts.perm <- list()
   groups.perm <- list()
   set.seed(seed)
-  for (i in 1:n.perm) {
-    
-    # Bootstrap samples
-    samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = replace.samples)
-    groups.tmp <- groups[samples.tmp]
-    # Check that both groups are presented
-    while ((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) {
-      # Create samples by bootstrap
-      samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = replace.samples)
-      groups.tmp <- groups[samples.tmp]
-    }
-    
-    if (remain.groups) {  # Remain labels
-      groups.tmp <- groups[samples.tmp]
-    } else {  # Null distribution
-      groups.tmp <- sample(groups, length(groups), replace = replace.samples)
-      names(groups.tmp) <- samples.tmp
-    }
-    # Check that both groups are presented
-    if ((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) next
 
-    # Bootstrap cell types
+  for (i in 1:n.perm) {
+    samples.tmp <- rownames(cnts) %>% split(groups[.]) %>% 
+      lapply(sample, replace=TRUE) %>% do.call(c, .)
+    # samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = TRUE)
+    groups.tmp <- groups[samples.tmp]
+    
+    # Check that both groups are presented
+    # while ((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) {
+    #   # Create samples by bootstrap
+    #   samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = TRUE)
+    #   groups.tmp <- groups[samples.tmp]
+    # }
+    
+    # sample cells
     cnts.resampling <- apply(cnts[samples.tmp,], 1, function(v) {
       if (sum(v) == 0) return(setNames(rep(0, length(v)), names(v)))
-
+      
       sample(names(v), size=sum(v), replace=TRUE, prob = v / sum(v)) %>%
         {c(names(v), .)} %>% table() %>% {. - 1}
-    })
+    }) %>% t()
 
-    cnts.tmp <- t(cnts.resampling)
-
-    cnts.perm[[length(cnts.perm) + 1]] <- cnts.tmp
+    cnts.perm[[length(cnts.perm) + 1]] <- cnts.resampling
     groups.perm[[length(groups.perm) + 1]] <- groups.tmp
-
   }
 
   return(list(cnts = cnts.perm, groups = groups.perm))
@@ -194,14 +181,10 @@ produceResampling <- function(cnts, groups, n.perm = 1000, remain.groups = TRUE,
 
 
 runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, null.distr=FALSE) {
-  
-
   # Create datasets as
-  samples.init <- produceResampling(cnts = cnts, groups = groups, n.perm = n.boot,
-                                replace.samples = TRUE,
-                                remain.groups = TRUE, seed = n.seed)
+  samples.init <- produceResampling(cnts = cnts, groups = groups, n.perm = n.boot, seed = n.seed)
   loadings <- do.call(cbind, lapply(1:length(samples.init$cnts), function(ib) {
-    res <- getLoadings(samples.init$cnts[[ib]], samples.init$groups[[ib]])
+    getLoadings(samples.init$cnts[[ib]], samples.init$groups[[ib]])
   }))
   
   
@@ -234,8 +217,6 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
   }
   ref.cell.type <- cell.list[[id.ref.cluster]]
 
-  null.distr = TRUE
-
   
   # sorting of cell types and reference level
   cell.types.order <- c()
@@ -253,23 +234,38 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
     pval <- (pmin(tmp, ncol(loadings) - tmp) + 1) / (ncol(loadings) + 1) * 2
     names(pval) <- rownames(loadings)
   } else {
-    n.samples = 50
-    loadings.perm = c()
-    for(i.perm in 1:300){
-      print(i.perm)
-      resample.perm <- samples.init
-      set.seed(n.seed + i.perm)
-      for(i in 1:n.samples){
-        resample.perm$groups[[i]] = sample(resample.perm$groups[[i]])
-        names(resample.perm$groups[[i]]) <- names(samples.init$groups[[i]])
-      }
-      loadings.perm.tmp <- do.call(cbind, lapply(1:n.samples, function(ib) {
-        res <- getLoadings(resample.perm$cnts[[ib]], resample.perm$groups[[ib]])
-      }))
-      loadings.perm = cbind(loadings.perm, rowMeans(loadings.perm.tmp))
-    }
     
-    loadings.stat = rowMeans(loadings[,1:n.samples]) - ref.load.level
+    
+    # samples.perm <- samples.init
+    # loadings.perm <- do.call(cbind, lapply(1:n.boot, function(ib) {
+    #   groups <- sample(samples.perm$groups[[ib]])
+    #   names(groups) <- names(samples.init$groups[[ib]])
+    #   getLoadings(samples.init$cnts[[ib]], groups)
+    # }))
+    
+
+    loadings.perm <- do.call(cbind, plapply(1:n.boot, function(ib) {
+      groups.perm <- sample(groups)
+      names(groups.perm) <- names(groups)
+      samples.perm <- produceResampling(cnts=cnts, groups=groups.perm, n.perm = 100, seed = n.seed + ib)
+      
+      do.call(cbind, lapply(1:length(samples.perm$cnts), function(ib) {
+        getLoadings(samples.perm$cnts[[ib]], samples.perm$groups[[ib]])
+      })) %>% rowMeans()
+    }, n.cores=60, progress=TRUE, mc.preschedule=TRUE))
+    
+    
+    # for(ib in 1:300){
+    #   groups.perm <- sample(groups)
+    #   names(groups.perm) <- names(groups)
+    #   samples.perm <- produceResampling(cnts = cnts, groups = groups.perm, n.perm = n.boot, seed = n.seed) 
+    # }
+    # 
+    
+    
+    
+    
+    loadings.stat = rowMeans(loadings) - ref.load.level
     pval = sapply(names(loadings.stat), function(s) {
       tmp = sum(loadings.stat[s] > loadings.perm[s,])
       p <- (pmin(tmp, ncol(loadings) - tmp) + 1) / (ncol(loadings) + 1) * 2
@@ -281,8 +277,8 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
   p.names <- names(pval)
   loadings <- loadings[p.names,]
   return(list(padj=padj,
-              # loadings.init=loadings,
-              loadings.init=loadings.perm,
+              loadings.init=loadings,
+              # loadings.init=loadings.perm,
               pval=pval,
               ref.load.level=ref.load.level,
               ref.cell.type=ref.cell.type,

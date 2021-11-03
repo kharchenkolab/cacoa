@@ -250,7 +250,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     
     
     # node.leaves <- node.leaves[node.leaves$pval < 0.05,]
-    px <- px + geom_point(data=node.leaves, mapping=aes(x=xend, y=0.04, fill=signif), shape=25, size=2) +
+    px <- px + geom_tile(data=node.leaves, mapping=aes(x=xend, y=0.04, fill=signif)) +
       scale_fill_manual(values=c('white', '#E69F00')) +
       labs(fill='significance')
   }
@@ -285,7 +285,7 @@ plotCellLoadings <- function(loadings, pval, signif.threshold=0.05, jitter.alpha
   }
   
   # Normalization of loadings
-  loadings <- loadings - yintercept
+  # loadings <- loadings - yintercept
   yintercept <- 0
   
   res.ordered <- t(loadings) %>% as.data.frame()

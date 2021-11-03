@@ -1938,7 +1938,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       tree.order = NULL
       pval.cell.types = NULL
-      if(reorder.tree){
+      if (reorder.tree){
         if ("coda" %in% names(self$test.results)){
           loadings.mean <- rowMeans(self$test.results$coda$loadings) - self$test.results$coda$ref.load.level
           pval <- self$test.results$coda$pval
@@ -1952,7 +1952,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
                              plot.theme=self$plot.theme, adjust.pvalues=adjust.pvalues,
                              h.method=h.method, tree.order=tree.order,
-                             pval.cell.types=pval.cell.types,...)
+                             pval.cell.types=pval.cell.types, ...)
 
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette)
@@ -2721,8 +2721,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    plotGeneProgramScores = function(name="gene.programs", prog.ids=NULL, build.panel=TRUE, nrow=NULL, legend.title="Score", adj.list=NULL,
-                                     palette=NULL, min.genes.per.prog=10, ...) {
+    plotGeneProgramScores=function(name="gene.programs", prog.ids=NULL, build.panel=TRUE, nrow=NULL, adj.list=NULL,
+                                   legend.title="Score", palette=NULL, min.genes.per.prog=10,
+                                   color.range=c("0.5%", "99.5%"), ...) {
       gene.progs <- private$getResults(name, "estimateGenePrograms")
       if (gene.progs$method == "fabia")
         stop("fabia is deprecated and plotting is not supported anymore")
@@ -2731,11 +2732,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         prog.ids <- (sapply(gene.progs$genes.per.clust, length) > min.genes.per.prog) %>% which()
       }
 
-      if (all(gene.progs$program.scores >= 0)) palette <- dark.red.palette
+      if (is.null(palette) && all(gene.progs$program.scores >= 0)) palette <- dark.red.palette
 
       ggs <- lapply(prog.ids, function(i) {
         title <- paste0("Program ", i, ". ", length(gene.progs$genes.per.clust[[i]]), " genes.")
-        gg <- self$plotEmbedding(colors=gene.progs$program.scores[i,], title=title, legend.title=legend.title, palette=palette, ...) +
+        cur.scores <- gene.progs$program.scores[i,]
+        cur.range <- parseLimitRange(color.range, cur.scores)
+        cur.scores %<>% pmax(cur.range[1]) %>% pmin(cur.range[2])
+        gg <- self$plotEmbedding(colors=cur.scores, title=title, legend.title=legend.title, palette=palette, ...) +
           theme(legend.background = element_blank())
         if (!is.null(adj.list)) gg <- gg + adj.list
         gg

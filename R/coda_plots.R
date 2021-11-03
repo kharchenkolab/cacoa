@@ -54,11 +54,11 @@ ggdend <- function(dend.data, angle=90, plot.theme=theme_get(), font.size=3, hju
   ggplot() +
     geom_segment(data = dend.data$segments, aes(x=x, y=y, xend=xend, yend=yend)) +
     labs(x = "", y = "") + plot.theme +
-    theme(axis.text = element_blank(), axis.ticks = element_blank(),
+    theme(axis.text.y = element_blank(), axis.ticks = element_blank(), axis.ticks.length = unit(0, "pt"),
+          axis.text.x=element_text(angle = 90, hjust = 1, vjust=0.5, margin = margin()),
           panel.grid = element_blank(), panel.border=element_blank(),
           axis.line=element_blank()) +
-    geom_text(data = dend.data$labels, aes(x, y-0.1, label = label),
-              hjust=hjust, angle=angle, size=font.size) + ylim(-0.5, NA)
+    scale_x_continuous(breaks=dend.data$labels$x, labels=dend.data$labels$label)
 }
 
 distTreeOrder <- function(t, tree.order){
@@ -74,7 +74,7 @@ distTreeOrder <- function(t, tree.order){
 
 plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme, label.angle=90,
                              p.threshold=0.05, adjust.pvalues=TRUE, h.methods='both', font.size=3, label.hjust=1,
-                             tree.order = NULL, pval.cell.types = NULL) {
+                             tree.order = NULL, loadings.mean = NULL) {
   log.f <- getLogFreq(d.counts)
   
   if(h.methods == 'up'){
@@ -98,10 +98,9 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     t <- t.cur$tree
     tree.order <- intersect(tree.order, t$tip.label)
     # distance of the initial tree
-    d = distTreeOrder(t, tree.order)
-    idx = min(t$edge[,1]):max(t$edge[,1])
+    d <- distTreeOrder(t, tree.order)
+    idx <- min(t$edge[,1]):max(t$edge[,1])
     for(i.node in idx){
-    # for(i.node in max(t$edge[,1])){
       
       # alternative tree
       t.alt <- ape::rotate(t, i.node)
@@ -241,21 +240,15 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     geom_text(data=df.bal.range, mapping=aes(x=x, y=y, label=sprintf('%2.1f', val)), vjust=0, hjust=0, size=font.size) +
     labs(col=" ")
   
-  if(!is.null(pval.cell.types)){
+  if(!is.null(loadings.mean)){
     node.leaves <- node.pos[node.pos$to < min(tree$edge[,1]),]
     node.leaves$label <- tree$tip.label[node.leaves$to]
-    node.leaves$pval <- pval.cell.types[node.leaves$label]
-    signif.levels = c('', '*')
-    node.leaves$signif <- signif.levels[(node.leaves$pval < 0.05)*1+ 1]
+    node.leaves$loadings <- loadings.mean[node.leaves$label]
     
-    # print(node.leaves$pval)
-    print(pval.cell.types)
-
     # node.leaves <- node.leaves[node.leaves$pval < 0.05,]
-    px <- px + geom_tile(data=node.leaves, mapping=aes(x=xend, y=-0.05, fill=pval, width = 0.5, height = 0.1)) +
-      # scale_fill_manual(values=c('white', '#E69F00')) +
-      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0)
-      labs(fill=' ')
+    px <- px + geom_tile(data=node.leaves, mapping=aes(x=xend, y=-0.1, fill=loadings, width = 0.5, height = 0.1)) +
+      guides(fill=guide_colorbar(title='loadings', title.position="top", direction="horizontal", title.hjust = 0.5))
+      # scale_fill_manual(values=c('white', '#E69F00'))
   }
   
   return(px)

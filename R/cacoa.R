@@ -1936,8 +1936,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
 
-      tree.order = NULL
-      pval.cell.types = NULL
+      tree.order <- NULL
+      loadings.mean <- NULL
       if(reorder.tree){
         if ("coda" %in% names(self$test.results)){
           loadings.mean <- rowMeans(self$test.results$coda$loadings) - self$test.results$coda$ref.load.level
@@ -1945,7 +1945,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           loadings.mean <- loadings.mean[order(pval)]
           tree.order <- c(names(loadings.mean)[loadings.mean < 0],
                          rev(names(loadings.mean)[loadings.mean > 0]))
-          pval.cell.types <-self$test.results$coda$padj
         } else {
           message('To show significance, please run plotCellLoadings()')
         }
@@ -1956,10 +1955,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
                              plot.theme=self$plot.theme, adjust.pvalues=adjust.pvalues,
                              h.method=h.method, tree.order=tree.order,
-                             pval.cell.types=loadings.mean,...)
+                             loadings.mean=loadings.mean,...)
 
       if (!is.null(palette)) {
-        gg <- gg + scale_color_manual(values=palette)
+        gg <- gg + scale_color_manual(values=palette) + 
+          scale_fill_gradient2(low=palette[self$ref.level], high=palette[self$target.level], midpoint=0)
       }
       return(gg)
     },

@@ -284,6 +284,10 @@ plotCellLoadings <- function(loadings, pval, signif.threshold=0.05, jitter.alpha
     n.significant.cells <- 0
   }
   
+  # Normalization of loadings
+  loadings <- loadings - yintercept
+  yintercept <- 0
+  
   res.ordered <- t(loadings) %>% as.data.frame()
   ymax <- max(loadings)
   

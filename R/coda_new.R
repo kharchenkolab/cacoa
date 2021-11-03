@@ -151,11 +151,19 @@ produceResampling <- function(cnts, groups, n.perm = 1000, remain.groups = TRUE,
 
   cnts.perm <- list()
   groups.perm <- list()
-  set.seed(239)
+  set.seed(seed)
   for (i in 1:n.perm) {
+    
     # Bootstrap samples
-
     samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = replace.samples)
+    groups.tmp <- groups[samples.tmp]
+    # Check that both groups are presented
+    while ((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) {
+      # Create samples by bootstrap
+      samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = replace.samples)
+      groups.tmp <- groups[samples.tmp]
+    }
+    
     if (remain.groups) {  # Remain labels
       groups.tmp <- groups[samples.tmp]
     } else {  # Null distribution
@@ -183,86 +191,38 @@ produceResampling <- function(cnts, groups, n.perm = 1000, remain.groups = TRUE,
   return(list(cnts = cnts.perm, groups = groups.perm))
 }
 
-runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL) {
-  # Apply bootstrap
-  loadings <- lapply(1:n.boot, function(ib) {
-    # Create samples by bootstrap
-    set.seed(n.seed+ib)
-    samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = TRUE)
-    groups.tmp <- groups[samples.tmp]
 
 
-    # Check that both groups are presented
-    while ((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) {
-      # Create samples by bootstrap
-      samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = TRUE)
-      groups.tmp <- groups[samples.tmp]
-    }
-    cnts.tmp <- cnts[samples.tmp,]
+runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, null.distr=FALSE) {
+  
 
-    init.tmp <- produceResampling(cnts = cnts.tmp, groups = groups.tmp, n.perm = 1,
-                                  replace.samples = FALSE,
-                                  remain.groups = TRUE, seed = n.seed+ib)
-
-    res <- getLoadings(init.tmp$cnts[[1]], init.tmp$groups[[1]])
-    res[colnames(cnts), , drop=F]
-  })
-
-  # Calculate p-values
-  loadings.init <- do.call(cbind, loadings)
-
-  # ld <- loadings.init
-  # threshold <- rowMeans(ld)[abs(rowMeans(ld)) == min(abs(rowMeans(ld)))]
-  # threshold <- 0
-
-  # # Calculate p-values of confidence interval by bootstrap
-  # if(is.null(ref.cell.type)){
-  #   tmp <- sapply(1:nrow(loadings.init), function(i) sum(threshold > loadings.init[i,])) / ncol(loadings.init)
-  #   pval <- apply((cbind(tmp, 1-tmp)), 1, min) * 2
-  # } else {
-  #   ref.level = abs(mean(loadings.init[ref.cell.type,]))
-  #   tmp1 <- sapply(1:nrow(loadings.init), function(i) sum(loadings.init[i,] > ref.level)) / ncol(loadings.init)
-  #   tmp2 <- sapply(1:nrow(loadings.init), function(i) sum(loadings.init[i,] < -ref.level)) / ncol(loadings.init)
-  #   pval = (1 -apply((cbind(tmp1, tmp2)), 1, max)) * 2
-  # }
-
+  # Create datasets as
+  samples.init <- produceResampling(cnts = cnts, groups = groups, n.perm = n.boot,
+                                replace.samples = TRUE,
+                                remain.groups = TRUE, seed = n.seed)
+  loadings <- do.call(cbind, lapply(1:length(samples.init$cnts), function(ib) {
+    res <- getLoadings(samples.init$cnts[[ib]], samples.init$groups[[ib]])
+  }))
+  
+  
   # Calculate p-values of confidence interval by bootstrap
-
-
   tmp <- referenceSet(cnts, groups, p.thresh = 0.1)
   cell.list <- tmp$cell.list
 
-  sdt.list <- c()  # standard deviation in a list
+
   mean.list <- c()  # mean value of loadings in a list
-  min.list <- c()  # min values of mean loadings
-  n.list <- c()  # number of cell types in a list
   for (i.list in 1:length(cell.list)) {
-    loadings.list <- loadings.init[cell.list[[i.list]],]
-    sdt.list <- c(sdt.list, sd(c(loadings.list)))
+    loadings.list <- loadings[cell.list[[i.list]],]
     mean.list <- c(mean.list, mean(c(loadings.list)))
 
-
-    n.list <- c(n.list, length(cell.list[[i.list]]))
     if (length(cell.list[[i.list]]) == 1) {  # if a list contains only one sample - it cannot be a reference group
       mean.list[i.list] <- 10
-      min.list <- c(min.list, 10)
-    } else {
-      min.list <- c(min.list, min(abs(apply(loadings.list, 1, mean)))  )
-      # min.list <- c(min.list, min(abs(apply(loadings.list, 1, mean))) / n.list[i.list] )
-    }
+    } 
   }
-  # print(sdt.list)
-  # print(mean.list)
-  # print(cell.list)
 
   # Define a cluster with reference cell type
   if (is.null(ref.cell.type)) {
-    # id.ref.cluster <- which(sdt.list == max(sdt.list))
-
-    # id.ref.cluster <- which(n.list == max(n.list))
-    # id.ref.cluster <- id.ref.cluster[abs(mean.list[id.ref.cluster]) == min(abs(mean.list[id.ref.cluster]))]
     id.ref.cluster <- which(abs(mean.list) == min(abs(mean.list)))  # <- working version
-    # id.ref.cluster <- which(min.list == min(min.list))  #
   } else {
     id.ref.cluster <- -1
     for (i.list in 1:length(cell.list)) {
@@ -274,61 +234,55 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL) {
   }
   ref.cell.type <- cell.list[[id.ref.cluster]]
 
-  # sorting of cell types
+  null.distr = TRUE
+
+  
+  # sorting of cell types and reference level
   cell.types.order <- c()
   for(i.list in order(-abs(mean.list - mean.list[id.ref.cluster]))){
     cell.types.tmp <- cell.list[[i.list]]
-    cell.types.tmp <- cell.types.tmp[order(-abs(rowMeans(loadings.init[cell.types.tmp,, drop=FALSE]) - mean.list[id.ref.cluster])  ) ]
+    cell.types.tmp <- cell.types.tmp[order(-abs(rowMeans(loadings[cell.types.tmp,, drop=FALSE]) - mean.list[id.ref.cluster])  ) ]
     cell.types.order <- c(cell.types.order, cell.types.tmp)
   }
-  loadings.init <- loadings.init[cell.types.order,]
-
-  # pval <- pvalInLoadingsOrder(cell.types.order, cnts, groups)
-
-  ref.load.level <- mean(loadings.init[ref.cell.type,])
-  tmp <- rowSums(ref.load.level > loadings.init)
-  pval <- (pmin(tmp, ncol(loadings.init) - tmp) + 1) / (ncol(loadings.init) + 1) * 2
-
-  names(pval) <- rownames(loadings.init)
-  #
-  # # ----------------------------
-  # # Additional correction of p-values
-  # ld <- loadings.init
-  # # ld.means <- rowMeans(ld)
-  #
-  # idx <- order(abs(rowMeans(ld)))
-  # ld <- ld[idx,]
-  # pval <- pval[rownames(ld)]
-  #
-  # idx <- names(pval)[order(-pval)]
-  # ld <- ld[idx,]
-  # ld.means <- rowMeans(ld)
-  # pvals_tmp <- pval[idx]
-  # pvals_tmp[1] <- 1
-  # current.mean <- ld.means[1]
-  #
-  # for(i in 2:length(ld.means)){
-  #   # Fid the index of previous closest
-  #   d.prev <- abs(ld.means[1:(i-1)] - ld.means[i])
-  #   j <- which(d.prev == min(d.prev))
-  #
-  #   tmp <- sum(ld[i,] > ld.means[j]) / ncol(ld)
-  #   tmp <- min(tmp, 1-tmp)
-  #   pvals_tmp[i] <- max(min(tmp, pvals_tmp[j]), pvals_tmp[i])
-  # }
-  # names(pvals_tmp) <- rownames(ld)
-  # # print(pvals_tmp)
-  # # Combining p-values
-  # p.names <- names(pval)
-  # pval <- pmax(pval, pvals_tmp[p.names])
-  # names(pval) <- p.names
-  # #s----------------------------
-
+  loadings <- loadings[cell.types.order,]
+  ref.load.level <- mean(loadings[ref.cell.type,])
+  
+  
+  if(!null.distr){
+    tmp <- rowSums(ref.load.level > loadings)
+    pval <- (pmin(tmp, ncol(loadings) - tmp) + 1) / (ncol(loadings) + 1) * 2
+    names(pval) <- rownames(loadings)
+  } else {
+    n.samples = 50
+    loadings.perm = c()
+    for(i.perm in 1:300){
+      print(i.perm)
+      resample.perm <- samples.init
+      set.seed(n.seed + i.perm)
+      for(i in 1:n.samples){
+        resample.perm$groups[[i]] = sample(resample.perm$groups[[i]])
+        names(resample.perm$groups[[i]]) <- names(samples.init$groups[[i]])
+      }
+      loadings.perm.tmp <- do.call(cbind, lapply(1:n.samples, function(ib) {
+        res <- getLoadings(resample.perm$cnts[[ib]], resample.perm$groups[[ib]])
+      }))
+      loadings.perm = cbind(loadings.perm, rowMeans(loadings.perm.tmp))
+    }
+    
+    loadings.stat = rowMeans(loadings[,1:n.samples]) - ref.load.level
+    pval = sapply(names(loadings.stat), function(s) {
+      tmp = sum(loadings.stat[s] > loadings.perm[s,])
+      p <- (pmin(tmp, ncol(loadings) - tmp) + 1) / (ncol(loadings) + 1) * 2
+      return(p)
+    })
+  }   
+  
   padj <- p.adjust(pval, method = "fdr")
   p.names <- names(pval)
-  loadings.init <- loadings.init[p.names,]
+  loadings <- loadings[p.names,]
   return(list(padj=padj,
-              loadings.init=loadings.init,
+              # loadings.init=loadings,
+              loadings.init=loadings.perm,
               pval=pval,
               ref.load.level=ref.load.level,
               ref.cell.type=ref.cell.type,

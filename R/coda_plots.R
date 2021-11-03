@@ -88,10 +88,10 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     t.cur <- constructTreeUpDown(d.counts, d.groups)
   }
 
-  
+
 
   # t.cur <- constructBestPartitionTree(d.counts, d.groups)
-  
+
   # Order the tree in the as similar as possible way
 
   if(!is.null(tree.order)){
@@ -100,11 +100,11 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     # distance of the initial tree
     d = distTreeOrder(t, tree.order)
     for(i.node in min(t$edge[,1]):max(t$edge[,1])){
-      
+
       # alternative tree
       t.alt <- ape::rotate(t, i.node)
       d.alt <- distTreeOrder(t.alt, tree.order)
-      
+
       if(d.alt <= d){
         t <- t.alt
         d <- d.alt
@@ -114,10 +114,10 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     t.cur$dendro <- tree2dendro_my(t.cur$tree)
   }
 
-  
+
   tree <- t.cur$tree
-  
-  
+
+
   sbp <- sbpInNodes(tree)
   # sbp = t.cur$sbp
 
@@ -140,7 +140,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
   node.pos <- dend.data$segments %$% .[(y == yend) & (yend != 0),]
   node.pos$id <- tree$edge[,1]  # id of the inner node
   node.pos$to <- tree$edge[,2]
-  
+
 
 
   # Positions of inner nodes
@@ -240,16 +240,14 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
                                         group=interaction(group, node)), size = 0.75) +
     geom_text(data=df.bal.range, mapping=aes(x=x, y=y, label=sprintf('%2.1f', val)), vjust=0, hjust=0, size=font.size) +
     labs(col=" ")
-  
+
   if(!is.null(pval.cell.types)){
     node.leaves <- node.pos[node.pos$to < min(tree$edge[,1]),]
     node.leaves$label <- tree$tip.label[node.leaves$to]
     node.leaves$pval <- pval.cell.types[node.leaves$label]
-    
-    node.leaves = node.leaves[node.leaves$pval < 0.05,]
-    
-    px <- px + geom_point(data=node.leaves, mapping=aes(x = xend, y=0.04), shape="\u25BC", size = 3)
-      
+
+    node.leaves <- node.leaves[node.leaves$pval < 0.05,]
+    px <- px + geom_point(data=node.leaves, mapping=aes(x=xend, y=0.04, color=pval), shape=25, size=3)
   }
 
   return(px)

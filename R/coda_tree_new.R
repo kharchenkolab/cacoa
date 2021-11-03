@@ -80,6 +80,8 @@ tree2dendro_my <- function(tree){
 
 constructTreeUpDown <- function(cnts, groups){
 
+  
+  
   cnts[cnts <= 0] <- 0.5
 
   ref.set <- referenceSet(cnts, groups)
@@ -101,6 +103,7 @@ constructTreeUpDown <- function(cnts, groups){
   sbp.list <- t.list$sbp
 
 
+  
   sbp.all <- matrix(ncol = 0, nrow = length(cell.types), dimnames = list(cell.types, c()))
   for(k in 1:ncol(sbp.list)){
     p <- sbp.list[,k]
@@ -132,7 +135,6 @@ constructTreeUpDown <- function(cnts, groups){
     sbp.all <- cbind(sbp.all, sbp.add)
 
   }
-
 
   tree <- sbp2tree(sbp.all)
   h.tmp <- compute.brlen(tree, method="Grafen") %>% as.hclust()

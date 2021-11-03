@@ -1946,8 +1946,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           tree.order <- c(names(loadings.mean)[loadings.mean < 0],
                          rev(names(loadings.mean)[loadings.mean > 0]))
           pval.cell.types <-self$test.results$coda$padj
+        } else {
+          message('To show significance, please run plotCellLoadings()')
         }
-      }
+
+      } 
+      # print(tree.order)
 
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
                              plot.theme=self$plot.theme, adjust.pvalues=adjust.pvalues,

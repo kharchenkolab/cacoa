@@ -5,14 +5,19 @@ NULL
 #' @useDynLib cacoa
 NULL
 
+
+#' @keywords internal
 .onUnload <- function (libpath) {
   library.dynam.unload("cacoa", libpath)
 }
 
+
+#' @keywords internal
 checkPackageInstalled <- function(pkgs, details='to run this function', install.help=NULL, bioc=FALSE, cran=FALSE) {
   pkgs <- pkgs[!sapply(pkgs, requireNamespace, quietly=TRUE)]
-  if (length(pkgs) == 0)
-    return()
+  if (length(pkgs) == 0) {
+    return(NULL)
+  }
 
   if (length(pkgs) > 1) {
     pkgs <- paste0("c('", paste0(pkgs, collapse="', '"), "')")
@@ -33,9 +38,11 @@ checkPackageInstalled <- function(pkgs, details='to run this function', install.
   stop(error.text)
 }
 
-#' @description iterate over tree (list of lists of lists, etc) for `length(ids)` level,
+#' Iterate over tree (list of lists of lists, etc) for `length(ids)` level,
 #' interpret each element as a data.frame and bind them appending all levels as columns with
 #' colnames correspoinding to `ids`
+#'
+#' @keywords internal
 rblapply <- function(list, ids, func) {
   if (length(ids) == 1) return(bind_rows(lapply(list, func), .id=ids[1]))
   return(bind_rows(lapply(list, rblapply, tail(ids, -1), func), .id=ids[1]))

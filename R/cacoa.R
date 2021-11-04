@@ -2586,6 +2586,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                  dist="cor", log.vectors=(dist != "js"), wins=0.025, genes=NULL,
                                                  n.permutations=500, verbose=self$verbose, n.cores=self$n.cores,
                                                  min.edge.weight=0.0, ...) {
+      if (normalize.both)
+        warning("Setting normalize.both=TRUE likely leads to wrong results for cluster-free shifts")
+
       if (is.null(genes)) {
         genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, min.expr.frac=min.expr.frac)
       }

@@ -170,7 +170,7 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
              universe=de.gene.ids[[id]]$universe, qvalueCutoff=qvalue.cutoff, ...)
       ), n.cores=1, progress=verbose)
   } else if(type=="GO") {
-    if(verbose) cat("Estimating enriched ontologies ... \n")
+    if(verbose) message("Estimating enriched ontologies ... \n")
     ont.list <- names(de.gene.ids) %>% sn() %>% plapply(function(id) suppressWarnings(
       estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])], go.environment = go.environment,
                          universe=de.gene.ids[[id]]$universe, org.db=org.db, qvalueCutoff=qvalue.cutoff, ...)
@@ -180,7 +180,7 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
       ont.list %<>% lapply(lapply, lapply, function(x) {x@geneSets <- list(); x})
     }
   } else if(type == "GSEA") {
-    if(verbose) cat("Estimating enriched ontologies ... \n")
+    if(verbose) message("Estimating enriched ontologies ... \n")
     ont.list <- names(de.gene.scores) %>% sn() %>% plapply(function(id) {suppressWarnings(suppressMessages(
       estimateEnrichedGSEGO(gene.ids=sort(de.gene.scores[[id]]$universe, decreasing=TRUE), org.db=org.db,
                             go.environment=go.environment, organism=clusterProfiler:::get_organism(org.db), ...)

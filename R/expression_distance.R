@@ -22,7 +22,7 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
 
   sample.type.table <- cell.groups %>% table(sample.per.cell[names(.)]) # table of sample types and cells
 
-  if (verbose) cat("Calculating pairwise distances using dist='", dist, "'...\n", sep="")
+  if (verbose) message("Calculating pairwise distances using dist='", dist, "'...\n", sep="")
 
   n.cores.inner <- max(n.cores %/% length(levels(cell.groups)), 1)
   res.per.type <- levels(cell.groups) %>% sccore:::sn() %>% plapply(function(ct) {
@@ -54,7 +54,7 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
     list(dists=dists, dist.mat=dist.mat, pvalue=pvalue)
   }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, mc.allow.recursive=TRUE, fail.on.error=TRUE)
 
-  if (verbose) cat("Done!\n")
+  if (verbose) message("Done!\n")
 
   pvalues <- sapply(res.per.type, `[[`, "pvalue")
   dists.per.type <- lapply(res.per.type, `[[`, "dists")

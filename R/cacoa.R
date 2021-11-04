@@ -179,14 +179,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                top.n.genes=NULL, ...) {
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
-      if (verbose) cat("Filtering data... ")
+      if (verbose) message("Filtering data... ")
       shift.inp <- filterExpressionDistanceInput(
         count.matrices, cell.groups=cell.groups,
         sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
         min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type,
         min.gene.frac=min.gene.frac, genes=genes, verbose=verbose
       )
-      if (verbose) cat("done!\n")
+      if (verbose) message("done!\n")
 
       if (!is.null(n.pcs)) {
         if (!is.null(top.n.genes) && n.pcs > top.n.genes) {
@@ -218,18 +218,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                      min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
                                                      genes=NULL, n.permutations=1000, trim=0.2, p.adjust.method="BH",
                                                      verbose=self$verbose, n.cores=self$n.cores, ...) {
-      if (verbose) cat("Filtering data... ")
+      if (verbose) message("Filtering data... ")
       shift.inp <- extractRawCountMatrices(self$data.object, transposed=TRUE) %>%
         filterExpressionDistanceInput(
           cell.groups=cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
           min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac,
           genes=genes
         )
-      if (verbose) cat("done!\n")
+      if (verbose) message("done!\n")
 
       sample.groups <- shift.inp$sample.groups
 
-      if (verbose) cat('Calculating distances ... ')
+      if (verbose) message('Calculating distances ... ')
 
       dists.norm <- list()
       res.per.type <- levels(shift.inp$cell.groups) %>% sccore:::sn() %>% plapply(function(ct) {
@@ -248,7 +248,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         list(dists=dists, pvalue=pvalue)
       }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE)
 
-      if (verbose) cat("done!\n")
+      if (verbose) message("done!\n")
 
       pvalues <- sapply(res.per.type, `[[`, "pvalue")
       dists.per.type <- lapply(res.per.type, `[[`, "dists")

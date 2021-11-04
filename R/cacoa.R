@@ -1946,7 +1946,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           tree.order <- c(names(loadings.mean)[loadings.mean < 0],
                          rev(names(loadings.mean)[loadings.mean > 0]))
         } else {
-          message('To show significance, please run plotCellLoadings()')
+          message('To show significance, please run estimateCellLoadings()')
         }
 
       } 
@@ -1959,7 +1959,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (!is.null(palette)) {
         gg <- gg + scale_color_manual(values=palette) + 
-          scale_fill_gradient2(low=palette[self$ref.level], high=palette[self$target.level], midpoint=0)
+          scale_fill_gradient2(low=palette[self$ref.level], high=palette[self$target.level], mid='grey80', midpoint=0)
       }
       return(gg)
     },

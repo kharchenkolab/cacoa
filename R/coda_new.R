@@ -181,6 +181,7 @@ produceResampling <- function(cnts, groups, n.perm = 1000, seed = 239) {
 
 
 runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, null.distr=FALSE) {
+  
   # Create datasets as
   samples.init <- produceResampling(cnts = cnts, groups = groups, n.perm = n.boot, seed = n.seed)
   loadings <- do.call(cbind, lapply(1:length(samples.init$cnts), function(ib) {
@@ -253,17 +254,6 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
         getLoadings(samples.perm$cnts[[ib]], samples.perm$groups[[ib]])
       })) %>% rowMeans()
     }, n.cores=60, progress=TRUE, mc.preschedule=TRUE))
-    
-    
-    # for(ib in 1:300){
-    #   groups.perm <- sample(groups)
-    #   names(groups.perm) <- names(groups)
-    #   samples.perm <- produceResampling(cnts = cnts, groups = groups.perm, n.perm = n.boot, seed = n.seed) 
-    # }
-    # 
-    
-    
-    
     
     loadings.stat = rowMeans(loadings) - ref.load.level
     pval = sapply(names(loadings.stat), function(s) {

@@ -50,7 +50,7 @@ plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, targe
 }
 
 # helper function for creating dendograms
-ggdend <- function(dend.data, angle=90, plot.theme=theme_get(), font.size=3, hjust=1) {
+createDendrogram <- function(dend.data, angle=90, plot.theme=theme_get(), font.size=3, hjust=1) {
   ggplot() +
     geom_segment(data = dend.data$segments, aes(x=x, y=y, xend=xend, yend=yend)) +
     labs(x = "", y = "") + plot.theme +
@@ -176,7 +176,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
   
   p.adj <- if (adjust.pvalues) p.adjust(p.val, method='fdr') else p.val
   
-  px.init <- ggdend(dend.data, plot.theme=plot.theme, font.size=font.size, angle=label.angle, hjust=label.hjust)
+  px.init <- createDendrogram(dend.data, plot.theme=plot.theme, font.size=font.size, angle=label.angle, hjust=label.hjust)
   
   if (sum(p.adj < p.threshold) == 0)
     return(px.init)
@@ -248,7 +248,6 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     # node.leaves <- node.leaves[node.leaves$pval < 0.05,]
     px <- px + geom_tile(data=node.leaves, mapping=aes(x=xend, y=-0.1, fill=loadings, width = 0.5, height = 0.1)) +
       guides(fill=guide_colorbar(title='loadings', title.position="top", direction="horizontal", title.hjust = 0.5))
-      # scale_fill_manual(values=c('white', '#E69F00'))
   }
   
   return(px)
@@ -281,7 +280,7 @@ plotCellLoadings <- function(loadings, pval, signif.threshold=0.05, jitter.alpha
   }
   
   # Normalization of loadings
-  # loadings <- loadings - yintercept
+  loadings <- loadings - yintercept
   yintercept <- 0
   
   res.ordered <- t(loadings) %>% as.data.frame()

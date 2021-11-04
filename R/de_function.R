@@ -35,6 +35,7 @@ subsetMatricesWithCommonGenes <- function(cms, sample.groups=NULL) {
   return(cms)
 }
 
+#' @keywords internal
 strpart <- function(x, split, n, fixed = FALSE) {
   as.character(x) %>% strsplit(split, fixed=fixed) %>% sapply("[", n)
 }

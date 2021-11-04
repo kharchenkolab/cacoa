@@ -179,14 +179,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                top.n.genes=NULL, ...) {
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
-      if (verbose) cat("Filtering data... ")
+      if (verbose) message("Filtering data... ")
       shift.inp <- filterExpressionDistanceInput(
         count.matrices, cell.groups=cell.groups,
         sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
         min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type,
         min.gene.frac=min.gene.frac, genes=genes, verbose=verbose
       )
-      if (verbose) cat("done!\n")
+      if (verbose) message("done!\n")
 
       if (!is.null(n.pcs)) {
         if (!is.null(top.n.genes) && n.pcs > top.n.genes) {
@@ -218,18 +218,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                      min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
                                                      genes=NULL, n.permutations=1000, trim=0.2, p.adjust.method="BH",
                                                      verbose=self$verbose, n.cores=self$n.cores, ...) {
-      if (verbose) cat("Filtering data... ")
+      if (verbose) message("Filtering data... ")
       shift.inp <- extractRawCountMatrices(self$data.object, transposed=TRUE) %>%
         filterExpressionDistanceInput(
           cell.groups=cell.groups, sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
           min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, min.gene.frac=min.gene.frac,
           genes=genes
         )
-      if (verbose) cat("done!\n")
+      if (verbose) message("done!\n")
 
       sample.groups <- shift.inp$sample.groups
 
-      if (verbose) cat('Calculating distances ... ')
+      if (verbose) message('Calculating distances ... ')
 
       dists.norm <- list()
       res.per.type <- levels(shift.inp$cell.groups) %>% sccore:::sn() %>% plapply(function(ct) {
@@ -248,7 +248,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         list(dists=dists, pvalue=pvalue)
       }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE)
 
-      if (verbose) cat("done!\n")
+      if (verbose) message("done!\n")
 
       pvalues <- sapply(res.per.type, `[[`, "pvalue")
       dists.per.type <- lapply(res.per.type, `[[`, "dists")
@@ -1936,26 +1936,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
 
-      tree.order = NULL
-      pval.cell.types = NULL
-      if (reorder.tree){
+      tree.order <- NULL
+      loadings.mean <- NULL
+      if(reorder.tree){
         if ("coda" %in% names(self$test.results)){
           loadings.mean <- rowMeans(self$test.results$coda$loadings) - self$test.results$coda$ref.load.level
           pval <- self$test.results$coda$pval
           loadings.mean <- loadings.mean[order(pval)]
           tree.order <- c(names(loadings.mean)[loadings.mean < 0],
                          rev(names(loadings.mean)[loadings.mean > 0]))
-          pval.cell.types <-self$test.results$coda$padj
+        } else {
+          message('To show significance, please run plotCellLoadings()')
         }
-      }
+
+      } 
+      # print(tree.order)
 
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
                              plot.theme=self$plot.theme, adjust.pvalues=adjust.pvalues,
                              h.method=h.method, tree.order=tree.order,
-                             pval.cell.types=pval.cell.types, ...)
+                             loadings.mean=loadings.mean,...)
 
       if (!is.null(palette)) {
-        gg <- gg + scale_color_manual(values=palette)
+        gg <- gg + scale_color_manual(values=palette) + 
+          scale_fill_gradient2(low=palette[self$ref.level], high=palette[self$target.level], midpoint=0)
       }
       return(gg)
     },

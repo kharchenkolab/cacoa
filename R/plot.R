@@ -5,6 +5,7 @@
 #' @importFrom reshape2 melt
 NULL
 
+#' @keywords internal
 theme_legend_position <- function(position) {
   theme(legend.position=position, legend.justification=position)
 }

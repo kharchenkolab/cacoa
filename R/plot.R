@@ -5,6 +5,7 @@
 #' @importFrom reshape2 melt
 NULL
 
+#' @keywords internal
 theme_legend_position <- function(position) {
   theme(legend.position=position, legend.justification=position)
 }
@@ -72,9 +73,9 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
 #' @param size marker size (default: 0.5)
 #' @param jitter.width width of the point jitter (default: 0.15)
-plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=c(0, 0), show.significance=FALSE, palette=NULL,
-                                     notch=FALSE, legend.position="right", alpha=0.2, plot.theme=theme_get(), size=0.5, jitter.width=0.15,
-                                     adjust.pvalues=T) {
+plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=1.05, show.significance=FALSE,
+                                     jitter.width=0.15, notch=FALSE, legend.position="right", alpha=0.2, size=0.5,
+                                     palette=NULL, adjust.pvalues=TRUE, plot.theme=theme_get(), label.y.npc=0.92) {
   gg <- ggplot(count.df, aes(x=variable, y=value, by=group, fill=group)) +
     geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
     labs(x=x.lab, y=y.lab) +
@@ -83,18 +84,18 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
     geom_point(position=position_jitterdodge(jitter.width=jitter.width), color="black", size=size, alpha=alpha) +
-    scale_y_continuous(expand=y.expand, limits=c(0, max(count.df$value) * 1.05))
+    scale_y_continuous(expand=c(0, 0), limits=c(0, max(count.df$value) * y.expand))
 
-  
   if (show.significance) {
     if (adjust.pvalues) {
-      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.adj")  # willcox test + adjustment
+      # willcox test + adjustment
+      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label="p.signif", label.y.npc=label.y.npc)
       # TODO
       # p.adjust.method = "fdr" ?
-    } else {
-      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label = "p.signif")  # willcox test
+    } else { # willcox test
+      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label="p.signif", label.y.npc=label.y.npc)
     }
-  } 
+  }
 
   if (!is.null(palette)) gg <- gg + scale_fill_manual(values=palette)
   return(gg)
@@ -110,23 +111,26 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 #' @param legend.title Title on plot (default="-log10(p-value)")
 #' @param x.axis.position Position of x axis (default="top")
 #' @param color.range Range for filling colors
+#' @param grid.color Color of the grid. Set to "transparent" to disable the grid. (default: "gray50")
 #' @return A ggplot2 object
 #' @export
 plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE, legend.position="right",
+                        size.df=NULL, size.range=c(1, 5), size.legend.title="size",
                         legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
-                        color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL, font.size=8) {
+                        color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL, font.size=8,
+                        distance="manhattan", clust.method="complete", grid.color="gray50") {
   if (is.null(color.range)) {
     color.range <- c(min(0, min(df)), max(df))
   }
 
   if (is.logical(row.order) && row.order) {
-    row.order <- rownames(df)[dist(df) %>% hclust() %>% .$order] %>% rev()
+    row.order <- rownames(df)[dist(df, method=distance) %>% hclust(method=clust.method) %>% .$order] %>% rev()
   } else if (is.logical(row.order) && !row.order) {
     row.order <- rownames(df)
   }
 
   if (is.logical(col.order) && col.order) {
-    col.order <- colnames(df)[dist(df %>% t()) %>% hclust() %>% .$order] %>% rev()
+    col.order <- colnames(df)[dist(t(df), method=distance) %>% hclust(method=clust.method) %>% .$order] %>% rev()
   } else if (is.logical(col.order) && !col.order) {
     col.order <- colnames(df)
   }
@@ -144,16 +148,36 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE
   }
 
   df$value %<>% pmax(color.range[1]) %>% pmin(color.range[2])
-  gg <- ggplot(df) + geom_tile(aes(x=G2, y=G1, fill=value), color="gray50") +
-    plot.theme +
+
+  color.guide <- guide_colorbar(
+    title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5)
+  )
+  if (is.null(size.df)) {
+    gg <- ggplot(df) + geom_tile(aes(x=G2, y=G1, fill=value), color=grid.color) + guides(fill=color.guide)
+    return.fill <- TRUE
+    expand <- expansion(0, 0.0)
+  } else {
+    df$size <- reshape2::melt(size.df, id.vars=NULL)$value
+    size.guide <- guide_legend(
+      title=size.legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5)
+    )
+
+    gg <- ggplot(df) +
+      geom_point(aes(x=G2, y=G1, color=value, size=size)) +
+      scale_size_continuous(range=size.range) +
+      guides(color=color.guide, size=size.guide)
+    return.fill <- FALSE
+    expand <- expansion(0, 0.5)
+  }
+
+  gg <- gg + plot.theme +
     theme(axis.text.x=element_text(angle=90, hjust=0, vjust=0.5, color=color.per.group),
           axis.text=element_text(size=font.size), axis.ticks=element_blank(), axis.title=element_blank()) +
-    guides(fill=guide_colorbar(title=legend.title, title.position="left", title.theme=element_text(angle=90, hjust=0.5))) +
-    scale_y_discrete(position="right", expand=c(0, 0)) +
-    scale_x_discrete(expand=c(0, 0), position=x.axis.position) +
+    scale_y_discrete(position="right", expand=expand) +
+    scale_x_discrete(expand=expand, position=x.axis.position) +
     theme_legend_position(legend.position) +
     theme(legend.key.width=legend.key.width, legend.background=element_blank()) +
-    val2ggcol(df$value, palette=palette, color.range=color.range, return.fill=TRUE)
+    val2ggcol(df$value, palette=palette, color.range=color.range, return.fill=return.fill)
 
   if (symmetric) {
     gg <- gg + theme(axis.text.y=element_text(color=color.per.group))
@@ -178,7 +202,7 @@ getGenePalette <- function(genes=c("up", "down", "all"), high="gray80") {
     low <- "green"
   }
 
-  return(colorRampPalette(c(low, high)))
+  return(colorRampPalette(c(high, low)))
 }
 
 prepareOntologyPlotDF <- function(ont.res, p.adj, n, log.colors) {
@@ -222,12 +246,19 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point', 'bar'), show.jitter=TRUE,
                                          notch=TRUE, jitter.alpha=0.05, palette=NULL, ylab='expression distance',
                                          yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0,
-                                         order.x=TRUE, pvalue.y=NULL) {
+                                         order.x=TRUE, pvalue.y=NULL, y.max=NULL, y.offset=NULL, ns.symbol="ns") {
   type <- match.arg(type)
   df$Type %<>% as.factor()
+  if (!is.null(y.offset)) {
+    df$value <- df$value + y.offset
+  }
 
   # calculate mean, se and median
   odf <- df <- na.omit(df); # full df is now in odf
+
+  if (!is.null(y.max)) {
+    odf$value %<>% pmin(y.max)
+  }
 
   if (is.null(pvalue.y)) pvalue.y <- max(odf$value)
 
@@ -253,35 +284,39 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
     df$Type %<>% factor(., levels=.)
   }
 
-  if(type=='box') { # boxplot
-    p <- ggplot(odf,aes(x=Type,y=value,fill=Type)) + geom_boxplot(notch=notch, outlier.shape=NA)
-  } else if(type=='point') { # point + se
-    p <- ggplot(df,aes(x=Type,y=mean,color=Type)) + geom_point(size=3) +
+  if (type=='box') { # boxplot
+    p <- ggplot(odf,aes(x=Type, y=value, fill=Type)) + geom_boxplot(notch=notch, outlier.shape=NA)
+  } else if (type=='point') { # point + se
+    p <- ggplot(df, aes(x=Type, y=mean, color=Type)) + geom_point(size=3) +
       geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, size=line.size)
-    if(!is.null(palette)) {p <- p + scale_color_manual(values=palette)}
+    if (!is.null(palette)) {p <- p + scale_color_manual(values=palette)}
   } else { # barplot
     p <- ggplot(df,aes(x=Type,y=mean,fill=Type)) + geom_bar(stat='identity') +
       geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, size=line.size)
   }
-  if(!is.na(yline) && !is.null(yline)) { p <- p + geom_hline(yintercept = yline, linetype=2, color='gray50') }
+  if (!is.na(yline) && !is.null(yline)) {p <- p + geom_hline(yintercept = yline, linetype=2, color='gray50')}
   p <- p +
     plot.theme +
-    theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12),
-          axis.text.y=element_text(angle=90, hjust=0.5, size=12)) + guides(fill="none")+
-    theme(legend.position = "none")+
+    theme(
+      axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12),
+      axis.text.y=element_text(angle=90, hjust=0.5, size=12),
+      panel.grid.major.x=element_blank(), panel.grid.minor=element_blank(),
+      legend.position="none"
+    ) +
+    guides(fill="none") +
     labs(x="", y=ylab)
 
-  if(show.jitter) {
+  if (show.jitter) {
     p <- p +
       geom_jitter(data=odf, aes(x=Type,y=value), color=1, position=position_jitter(0.1), show.legend=FALSE,
                   alpha=jitter.alpha, size=jitter.size)
   };
 
   if (!is.null(pvalues)) {
-    pval.df <- pvalueToCode(pvalues) %>%
+    pval.df <- pvalueToCode(pvalues, ns.symbol=ns.symbol) %>%
       tibble(Type=factor(names(.), levels=levels(df$Type)), pvalue=.) %>% na.omit()
 
-    p <- p + geom_text(data=pval.df, mapping=aes(x=Type, label=pvalue), y=pvalue.y)
+    p <- p + geom_text(data=pval.df, mapping=aes(x=Type, label=pvalue), y=pvalue.y, color="black")
   }
 
   if(!is.null(palette)) {
@@ -374,7 +409,7 @@ reduceEdges <- function(edges, verbose=TRUE, n.cores = 1) {
 ##' @param verbose Print messages (default: T)
 ##' @param n.cores Number of cores to use (default: 1)
 ##' @return Rgraphviz object
-plotOntologyFamily <- function(fam, data, plot.type = "complete", show.ids=FALSE, string.length=18, legend.label.size = 1,
+plotOntologyFamily <- function(fam, data, plot.type="complete", show.ids=FALSE, string.length=18, legend.label.size=1,
                                legend.position="topright", verbose=TRUE, n.cores=1, reduce.edges=FALSE, font.size=24) {
   checkPackageInstalled("Rgraphviz", bioc=TRUE)
   # Define nodes
@@ -580,9 +615,93 @@ prepareGeneExpressionComparisonPlotInfo <- function(de.info, genes, plots, smoot
   return(plot.parts)
 }
 
-pvalueToCode <- function(pvals) {
+pvalueToCode <- function(pvals, ns.symbol="ns") {
   symnum(pvals, corr=FALSE, na=FALSE, legend=FALSE,
          cutpoints = c(0, 0.001, 0.01, 0.05, 1),
-         symbols = c("***", "**", "*", "ns")) %>%
+         symbols = c("***", "**", "*", ns.symbol)) %>%
     as.character() %>% setNames(names(pvals))
 }
+
+transferLabelLayer <- function(gg.target, gg.source, font.size) {
+  ls <- gg.source$layers %>% .[sapply(., function(l) "GeomLabelRepel" %in% class(l$geom))]
+  if (length(ls) != 1) {
+    warning("Can't find annotation layer\n")
+    return(gg.target)
+  }
+
+  gg.target <- gg.target + ls[[1]] +
+    scale_size_continuous(range=font.size, trans='identity', guide='none')
+
+  return(gg.target)
+}
+
+getScaledZGradient <- function(min.z, palette, color.range) {
+  if (length(color.range) == 1) {
+    if (min.z > (color.range - 1e-10))
+      return(scale_color_gradientn(colors=palette(21)[1], limits=c(0, color.range)))
+
+    col.vals <- c(0, seq(min.z, color.range, length.out=20))
+    color.range <- c(0, color.range)
+  } else {
+    col.vals <- c(seq(color.range[1], -min.z, length.out=10), 0, seq(min.z, color.range[2], length.out=10))
+  }
+  col.vals %<>% scales::rescale()
+  scale <- scale_color_gradientn(colors=palette(21), values=col.vals, limits=color.range)
+  return(scale)
+}
+
+plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, method='MDS', sample.colors=NULL,
+                                     show.sample.size=TRUE, palette=NULL, font.size=NULL, show.ticks=FALSE, title=NULL,
+                                     show.labels=FALSE, size=5, color.title=NULL, perplexity=4, max.iter=1e3,
+                                     plot.theme=theme_get(), ...) {
+      if (method == 'tSNE') {
+        checkPackageInstalled('Rtsne', cran=TRUE, details='for `method="tSNE"`')
+        emb <- Rtsne::Rtsne(p.dists, is_distance=TRUE, perplexity=perplexity, max_iter=max.iter)$Y
+      } else if (method == 'MDS') {
+        emb <- cmdscale(p.dists, eig=TRUE, k=2)$points # k is the number of dim
+      } else if (method == 'heatmap') {
+        color.per.group <- NULL
+        if (!is.null(palette)) {
+          color.per.group <- sample.groups %>% {setNames(palette[as.character(.)], names(.))}
+        }
+        gg <- plotHeatmap(p.dists, color.per.group=color.per.group, legend.title="Distance", symmetric=TRUE)
+        return(gg)
+      } else {
+        stop("unknown embedding method")
+      }
+
+      df <- data.frame(emb) %>% set_rownames(rownames(p.dists)) %>% set_colnames(c("x", "y")) %>%
+        mutate(sample=rownames(.), condition=sample.groups[sample], n.cells=as.vector(n.cells.per.samp[sample]))
+
+      if (is.null(sample.colors)) {
+        gg <- ggplot(df, aes(x, y, color=condition, shape=condition))
+      } else {
+        df$color <- sample.colors[as.character(df$sample)]
+        gg <- ggplot(df, aes(x, y, color=color, shape=condition))
+        if (!is.null(color.title)) gg <- gg + labs(color=color.title)
+      }
+
+      if (!is.null(palette)) {
+        gg <- gg + scale_color_manual(values=palette)
+      }
+
+      gg <- gg + plot.theme
+
+      if (show.sample.size) {
+        if (length(size) == 1) {
+          size <- c(size * 0.5, size * 1.5)
+        }
+        gg <- gg + geom_point(aes(size=n.cells)) +
+          scale_size_continuous(trans="log10", range=size, name="Num. cells")
+      } else {
+        gg <- gg + geom_point(size=size)
+      }
+
+      gg %<>% sccore:::styleEmbeddingPlot(title=title, show.ticks=show.ticks, show.labels=show.labels, ...)
+
+      if (!is.null(font.size)) {
+        gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
+      }
+
+      return(gg)
+    }

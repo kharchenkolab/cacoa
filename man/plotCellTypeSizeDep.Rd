@@ -17,7 +17,7 @@ plotCellTypeSizeDep(
 )
 }
 \arguments{
-\item{df}{a data frame with $val and $cell columns, just like plotMeanValuesPerCellType}
+\item{df}{a data frame with $value and $Type columns, just like plotMeanValuesPerCellType}
 
 \item{cell.groups}{a cell groups vector for calculating number of cells per cell type}
 

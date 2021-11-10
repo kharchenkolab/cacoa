@@ -112,8 +112,7 @@ groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName") {
 }
 
 filterOntologies <- function(ont.list, p.adj) {
-  ont.list %>%
-    names() %>%
+  ont.list %>% names() %>% sn() %>%
     lapply(function(dir) {
       lapply(ont.list[[dir]] %>% names(), function(group) {
         dplyr::mutate(ont.list[[dir]][[group]], Group=group) %>%
@@ -122,8 +121,7 @@ filterOntologies <- function(ont.list, p.adj) {
       }) %>%
         setNames(ont.list[[dir]] %>% names()) %>%
         .[sapply(., nrow) > 0] # Remove empty data frames
-    }) %>%
-    setNames(c("down", "up", "all"))
+    })
 }
 
 ontologyListToDf <- function(ont.list) {
@@ -172,7 +170,7 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
              universe=de.gene.ids[[id]]$universe, qvalueCutoff=qvalue.cutoff, ...)
       ), n.cores=1, progress=verbose)
   } else if(type=="GO") {
-    if(verbose) cat("Estimating enriched ontologies ... \n")
+    if(verbose) message("Estimating enriched ontologies ... \n")
     ont.list <- names(de.gene.ids) %>% sn() %>% plapply(function(id) suppressWarnings(
       estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])], go.environment = go.environment,
                          universe=de.gene.ids[[id]]$universe, org.db=org.db, qvalueCutoff=qvalue.cutoff, ...)
@@ -182,7 +180,7 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
       ont.list %<>% lapply(lapply, lapply, function(x) {x@geneSets <- list(); x})
     }
   } else if(type == "GSEA") {
-    if(verbose) cat("Estimating enriched ontologies ... \n")
+    if(verbose) message("Estimating enriched ontologies ... \n")
     ont.list <- names(de.gene.scores) %>% sn() %>% plapply(function(id) {suppressWarnings(suppressMessages(
       estimateEnrichedGSEGO(gene.ids=sort(de.gene.scores[[id]]$universe, decreasing=TRUE), org.db=org.db,
                             go.environment=go.environment, organism=clusterProfiler:::get_organism(org.db), ...)
@@ -205,14 +203,13 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
 #' @param p.adj Cut-off for adj. P values
 #' @param min.genes Min. number of significant genes per pathway
 #' @return List of ontology data for plotting
-preparePlotData <- function(ont.res, type, p.adj, min.genes) {
+prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
   dir.names <- c("down", "up", "all")
 
   if(type == "DO") {
     # Split into fractions
-    ont.res <- dir.names %>%
+    ont.res <- dir.names %>% sn() %>%
       lapply(function(x) lapply(ont.res, `[[`, x)) %>%
-      setNames(dir.names) %>%
       lapply(plyr::compact) # Remove empty entries
 
     # Extract results
@@ -245,9 +242,8 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
     }
   } else if(type == "GO") {
     # Split into different fractions
-    ont.res <- dir.names %>%
-      lapply(function(x) lapply(ont.res, lapply, `[[`, x)) %>%
-      setNames(dir.names)
+    ont.res <- dir.names %>% sn() %>%
+      lapply(function(x) lapply(ont.res, lapply, `[[`, x))
 
     # Extract results
     ont.res %<>% lapply(lapply, lapply, function(x) if(length(x)) x@result else x)
@@ -258,8 +254,7 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
       lapply(plyr::compact)
 
     # Prep for filter
-    ont.res %<>%
-      names() %>%
+    ont.res %<>% names() %>% sn() %>%
       lapply(function(dir) {
         lapply(ont.res[[dir]] %>% names(), function(group) {
           lapply(ont.res[[dir]][[group]] %>% names, function(go) {
@@ -267,7 +262,7 @@ preparePlotData <- function(ont.res, type, p.adj, min.genes) {
           }) %>% setNames(ont.res[[dir]][[group]] %>% names()) %>%
             dplyr::bind_rows()
         }) %>% setNames(ont.res[[dir]] %>% names())
-      }) %>% setNames(dir.names)
+      })
 
     # Filter by p.adj
     ont.res %<>% filterOntologies(p.adj = p.adj) %>% ontologyListToDf()
@@ -406,20 +401,12 @@ identifyFamilies <- function(ids) {
     setNames(names(tmp))
 
   # Sort for lonely children (terms with no children)
-  idx <- tmp %>%
-    sapply(`[[`, "children_enrichment") %>%
-    unlist() %>%
-    .[. == 0]
-  tmp %<>%
-    .[idx %>% names()]
+  idx <- sapply(tmp, `[[`, "children_enrichment") %>% unlist() %>% .[. == 0]
+  tmp %<>% .[names(idx)]
 
   # Rank by enrichment
-  idx <- tmp %>%
-    sapply(function(x) x$Significance) %>%
-    unlist() %>%
-    .[order(., decreasing=F)]
-  tmp %<>%
-    .[names(idx)]
+  idx <- sapply(tmp, `[[`, "Significance") %>% unlist() %>% sort(decreasing=FALSE)
+  tmp %<>% .[names(idx)]
 
   return(tmp)
 }
@@ -437,7 +424,7 @@ collapseFamilies <- function(ont.res) {
       .[order(., decreasing = T)] %>%
       .[. > 1]
 
-    if(length(olaps) > 1) {
+    if (length(olaps) > 1) {
       # Create logical matrix and list of seeds and families
       olap.matrix <- sapply(ont.res, `[[`, "parents_in_IDs") %>%
         sapply(function(x) names(olaps) %in% x)
@@ -529,7 +516,7 @@ collapseFamilies <- function(ont.res) {
 #' @param type Type of ontology result, i.e., GO, GSEA, or DO
 #' @return List of families and ontology data per cell type
 estimateOntologyFamilies <- function(ont.list, type) {
-  if(type == "GO") {
+  if (type == "GO") {
     ont.fam <- lapply(ont.list, lapply, lapply, identifyFamilies) %>%
       setNames(names(ont.list))
     lapply(ont.fam, lapply, lapply, collapseFamilies) %>%
@@ -546,56 +533,105 @@ estimateOntologyFamilies <- function(ont.list, type) {
 
 #' @title Distance between terms
 #' @description Calculate distance matrix between ontology terms
-#' @param ont.res Results from prepareOntologyData (default: stored list)
+#' @param genes.per.go named list of genes per GO
 #' @return Distance matrix
-distanceBetweenTerms <- function(ont.res) {
-  genes.per.go <- sapply(ont.res$geneID, strsplit, "/") %>% setNames(ont.res$Description)
+distanceBetweenTerms <- function(genes.per.go) {
   all.go.genes <- unique(unlist(genes.per.go))
-  all.gos <- unique(ont.res$Description)
+  all.gos <- unique(names(genes.per.go))
 
   genes.per.go.mat <- matrix(0, length(all.go.genes), length(all.gos)) %>%
     `colnames<-`(all.gos) %>% `rownames<-`(all.go.genes)
 
   for (i in 1:length(genes.per.go)) {
-    genes.per.go.mat[genes.per.go[[i]], ont.res$Description[[i]]] <- 1
+    genes.per.go.mat[genes.per.go[[i]], names(genes.per.go)[i]] <- 1
   }
 
   return(dist(t(genes.per.go.mat), method="binary"))
 }
 
-clusterIndividualGOs <- function(gos, cut.h) {
-  clusts.per.go <- lapply(gos, distanceBetweenTerms) %>% lapply(function(ld)
-    if (ncol(as.matrix(ld)) == 1) 1 else {hclust(ld) %>% cutree(h=cut.h)})
+#' @inheritParams distanceBetweenTerms genes.per.go
+estimateClusterPerGO <- function(genes.per.go, cut.h) {
+  distanceBetweenTerms(genes.per.go) %>%
+    {if (ncol(as.matrix(.)) == 1) 1 else {cutree(hclust(.), h=cut.h)}}
+}
 
-  clust.df <- names(gos) %>%
-    lapply(function(n) mutate(gos[[n]], Cluster=clusts.per.go[[n]])) %>%
-    Reduce(rbind, .) %>%
+clusterIndividualGOs <- function(genes.per.go.per.type, cut.h) {
+  go.clusts.per.type <- genes.per.go.per.type %>%
+    lapply(estimateClusterPerGO, cut.h=cut.h)
+
+  clust.df <- names(genes.per.go.per.type) %>% lapply(function(ct) tibble(
+      Type=ct, Cluster=go.clusts.per.type[[ct]], Name=names(genes.per.go.per.type[[ct]])
+    )) %>% Reduce(rbind, .) %>%
     mutate(Cluster=factor(Cluster, levels=c(0, unique(Cluster)))) %>%
-    select(Group, Cluster, Description) %>%
-    tidyr::spread(Group, Cluster) %>% as.data.frame() %>%
-    set_rownames(.$Description) %>% .[, 2:ncol(.), drop=FALSE]
+    tidyr::spread(Type, Cluster) %>% as.data.frame() %>%
+    set_rownames(.$Name) %>% .[, 2:ncol(.), drop=FALSE]
 
-  return(clust.df)
+    return(clust.df)
+}
+
+clusterGOsPerType <- function(clust.df, cut.h, verbose=FALSE) {
+  apply.fun <- if (verbose) pbapply::pbapply else apply
+  clust.mat <- as.matrix(clust.df) %>% t()
+  cl.dists <- apply.fun(clust.mat, 2, function(ct1) apply(clust.mat, 2, function(ct2) {
+    mask <- !is.na(ct1) & !is.na(ct2)
+    if (sum(mask) == 0) 1 else (1 - mean(ct1[mask] == ct2[mask]))
+  }))
+
+  cl.clusts <- as.dist(cl.dists) %>% hclust(method="average")
+  clusts <- cutree(cl.clusts, h=cut.h)
+  return(list(clusts=clusts, hclust=cl.clusts))
 }
 
 getOntClustField <- function(subtype, genes) {
   return(paste("clusters", paste(subtype, collapse="."), genes, sep="."))
 }
 
-getHeatmapData <- function(ont.sum, fams, type, subtype, genes, field) {
-  fams %<>%
-    lapply(function(x) {
-      x[[subtype]][[genes]]$families %>% unlist() %>% unique()
-    }) %>%
-    setNames(names(fams))
+estimateOntologyClusterName <- function(descriptions, method=c("medoid", "consensus"), n.words=5, exclude.words=NULL) {
+  method <- match.arg(method)
+  if (length(descriptions) == 1)
+    return(descriptions)
+
+  words.per.desc <- strsplit(descriptions, "[ ,-]") %>% lapply(function(x) x[nchar(x) > 0])
+
+  if (method == "medoid") {
+    nm <- words.per.desc %>%
+      sapply(function(s1) sapply(., function(s2) 1 - length(intersect(s1, s2)) / length(union(s1, s2)))) %>%
+        rowSums() %>% setNames(descriptions) %>% sort() %>% names() %>% .[1]
+
+    return(nm)
+  }
+
+  # method == "consensus"
+  nm <- unlist(words.per.desc) %>% table() %>% sort(decreasing=TRUE) %>% names() %>%
+    setdiff(c("of", "and", "to", "in", exclude.words)) %>% head(n.words) %>% paste0(collapse=', ')
+
+  return(nm)
+}
+
+estimateOntologyClusterNames <- function(ont.df, clust.naming=c("medoid", "consensus", "min.pvalue")) {
+  clust.naming <- match.arg(clust.naming)
+
+  if (clust.naming == "min.pvalue") {
+    name.per.clust <- ont.df %>% group_by(Cluster, Description) %>% summarise(pvalue=exp(mean(log(pvalue)))) %>%
+        split(.$Cluster) %>% sapply(function(df) df$Description[which.min(df$pvalue)])
+  } else {
+    name.per.clust <- ont.df %$% split(Description, Cluster) %>% lapply(unique) %>%
+      sapply(estimateOntologyClusterName, method=clust.naming)
+  }
+
+  return(name.per.clust)
+}
+
+getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {
+  fams <- lapply(fams, function(x) {
+    x[[subtype]][[genes]]$families %>% unlist() %>% unique() # These are only children IDs
+  })
 
   ont.sum %<>% split(., .$Group)
 
-  ont.sum %<>%
-    names() %>%
-    lapply(function(x) {
-      ont.sum[[x]] %>% filter(ID %in% fams[[x]])
-    }) %>%
-    bind_rows() %>%
-    groupOntologiesByCluster(field=field)
+  ont.sum %<>% names() %>%
+    lapply(function(x) filter(ont.sum[[x]], ID %in% fams[[x]])) %>%
+    bind_rows()
+
+  return(ont.sum)
 }

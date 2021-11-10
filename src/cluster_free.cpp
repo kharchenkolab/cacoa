@@ -1,10 +1,13 @@
 #include <RcppEigen.h>
-#include <iostream>
-#include <vector>
+
+#include <algorithm>
 #include <cmath>
+#include <functional>
+#include <iostream>
 #include <mutex>
 #include <random>
-#include <functional>
+#include <vector>
+
 #include <sccore_par.hpp>
 
 #include <progress.hpp>
@@ -136,6 +139,12 @@ std::vector<double> applyMedianFilter(const std::vector<double> &signal, const s
         signal_smoothed[si] = median(sig_cur);
     }
     return signal_smoothed;
+}
+
+std::vector<double> applyMedianFilter(const std::vector<double> &signal, const std::vector<std::vector<int>> &nn_ids) {
+    std::vector<size_t> non_zero_ids(signal.size());
+    std::iota(non_zero_ids.begin(), non_zero_ids.end(), 0);
+    return applyMedianFilter(signal, nn_ids, non_zero_ids);
 }
 
 std::pair<double, double> range(const std::vector<double> &vec) {
@@ -303,6 +312,23 @@ estimateNullZScoreRanges(const VectorXd &gene_vec, const MatrixXd &sample_x_cell
     return std::make_pair(min_vals, max_vals);
 }
 
+// [[Rcpp::export]]
+std::vector<double> adjustZScoresWithPermutations(const std::vector<double> &z_scores, double wins, const std::vector<double> &max_vals) {
+    std::vector<double> z_adj(z_scores.begin(), z_scores.end());
+
+    auto max_val = range(z_adj, wins).second;
+    for (double &z : z_adj) {
+        if (std::isnan(z))
+            continue;
+
+        z = std::min(z, max_val);
+        size_t n = (max_vals.end() - std::lower_bound(max_vals.begin(), max_vals.end(), z - EPS)); // Number of elements that are >=z
+        z = std::max(1.0 - (n + 1.0) / (max_vals.size() + 1.0), 0.5);
+    }
+
+    return as<std::vector<double>>(NumericVector(qnorm(NumericVector(wrap(z_adj)))));
+}
+
 std::vector<double> adjustZScoresWithPermutations(const std::vector<double> &z_scores, const std::vector<std::vector<int>> &nn_ids,
                                                   const std::vector<size_t>& non_zero_ids,
                                                   double wins, bool smooth, const std::vector<double> &min_vals,
@@ -433,6 +459,12 @@ List clusterFreeZScoreMat(const SEXP count_mat, IntegerVector sample_per_cell, L
 
 ////// Expression shifts
 
+struct CFShiftResult{
+    std::vector<double> dists;
+    std::vector<size_t> s1_ids;
+    std::vector<size_t> s2_ids;
+};
+
 // [[Rcpp::export]]
 double estimateCorrelationDistance(const Eigen::VectorXd &v1, const Eigen::VectorXd &v2, bool centered=true) {
     if (v1.size() != v2.size())
@@ -493,12 +525,55 @@ double estimateJSDivergence(const Eigen::VectorXd &v1, const Eigen::VectorXd &v2
     return std::sqrt(0.5 * (d1 + d2));
 }
 
+double estimateNormalizedExpressionShift(const std::vector<double> &dists, const std::vector<bool> &is_ref,
+                                         const std::vector<size_t> &s1_ids, const std::vector<size_t> &s2_ids,
+                                         bool norm_all, size_t min_n_within, size_t min_n_between) {
+    std::vector<double> between_dists, ref_dists, non_ref_dists;
+    for (size_t i = 0; i < dists.size(); ++i) {
+        double d = dists.at(i);
+        size_t s1 = s1_ids.at(i), s2 = s2_ids.at(i);
+        if (is_ref.at(s1) != is_ref.at(s2)) {
+            between_dists.push_back(d);
+        } else if (is_ref.at(s1)) {
+            ref_dists.push_back(d);
+        } else if (norm_all) {
+            non_ref_dists.push_back(d);
+        }
+    }
+
+    bool is_nan = (
+        (between_dists.size() < min_n_between) ||
+        (ref_dists.size() < min_n_within) ||
+        (norm_all && (non_ref_dists.size() < min_n_within))
+    );
+
+    if (is_nan)
+        return NAN;
+
+    double norm_const = norm_all ? ((median(ref_dists) + median(non_ref_dists)) / 2) : median(ref_dists);
+
+    return median(between_dists) - norm_const;
+}
+
+double estimateVectorDistance(const VectorXd &v1, const VectorXd &v2, const std::string &dist) {
+    if (dist == "cosine")
+        return estimateCorrelationDistance(v1, v2, false);
+    if (dist == "js")
+        return estimateJSDivergence(v1, v2);
+    if (dist == "cor")
+        return estimateCorrelationDistance(v1, v2, true);
+
+    stop("Unknown dist: ", dist);
+}
+
 //' @param sample_per_cell must contains ids from 0 to n_samples-1
 //' @param n_samples must be equal to maximum(sample_per_cell) + 1
-double estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::vector<int> &sample_per_cell,
-                                   const std::vector<int> &nn_ids, const std::vector<bool> &is_ref,
-                                   const int min_n_between, const int min_n_within, const int min_n_obs_per_samp, bool norm_all,
-                                   const std::string &dist = "cosine", bool log_vecs=false) {
+CFShiftResult estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::vector<int> &sample_per_cell,
+                                          const std::vector<int> &nn_ids,
+                                          size_t min_n_obs_per_samp, const std::string &dist="cosine", bool log_vecs=true) {
+    if (nn_ids.size() < min_n_obs_per_samp)
+        return(CFShiftResult());
+
     auto n_ids_per_samp = count_values(sample_per_cell, nn_ids);
     auto mat_collapsed = collapseMatrixNorm(cm, sample_per_cell, nn_ids, n_ids_per_samp);
     if (log_vecs) {
@@ -507,47 +582,35 @@ double estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::ve
         }
     }
 
-    std::vector<double> within_dists, between_dists;
-    for (int s1 = 0; s1 < n_ids_per_samp.size(); ++s1) {
+    std::vector<double> dists;
+    std::vector<size_t> s1_ids, s2_ids;
+    for (size_t s1 = 0; s1 < n_ids_per_samp.size(); ++s1) {
         if (n_ids_per_samp.at(s1) < min_n_obs_per_samp)
             continue;
 
         auto v1 = mat_collapsed.col(s1);
-        for (int s2 = s1 + 1; s2 < n_ids_per_samp.size(); ++s2) {
+        for (size_t s2 = s1 + 1; s2 < n_ids_per_samp.size(); ++s2) {
             if (n_ids_per_samp.at(s2) < min_n_obs_per_samp)
                 continue;
 
             auto v2 = mat_collapsed.col(s2);
-            double d;
-            if (dist == "cosine") {
-                d = estimateCorrelationDistance(v1, v2, false);
-            } else if (dist == "js") {
-                d = estimateJSDivergence(v1, v2);
-            } else if (dist == "cor") {
-                d = estimateCorrelationDistance(v1, v2, true);
-            } else {
-                stop("Unknown dist: ", dist);
-            }
+            double d = estimateVectorDistance(v1, v2, dist);
 
-            bool is_within = norm_all ? (is_ref.at(s1) == is_ref.at(s2)) : (is_ref.at(s1) && is_ref.at(s2));
-            if (is_within) {
-                within_dists.push_back(d);
-            } else if (is_ref.at(s1) != is_ref.at(s2)) {
-                between_dists.push_back(d);
-            }
+            dists.push_back(d);
+            s1_ids.push_back(s1);
+            s2_ids.push_back(s2);
         }
     }
 
-    if ((within_dists.size() < min_n_within) || (between_dists.size() < min_n_between))
-        return NAN;
-
-    return median(between_dists) / median(within_dists);
+    return CFShiftResult{dists, s1_ids, s2_ids};
 }
 
+// This function is only needed for testing cluster-free shifts on simulations.
+// There we need to exclude certain sample pairs, so we return full information.
 // [[Rcpp::export]]
-NumericVector estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double> &cm, IntegerVector sample_per_cell, List nn_ids, const std::vector<bool> &is_ref,
-                                                   const int min_n_between=1, const int min_n_within=1, const int min_n_obs_per_samp=1, bool norm_all=false,
-                                                   bool verbose=true, int n_cores=1, const std::string &dist="cosine", bool log_vecs=false) {
+List estimateClusterFreeExpressionShiftsInfo(const Eigen::SparseMatrix<double> &cm, IntegerVector sample_per_cell, List nn_ids,
+                                             int min_n_obs_per_samp=1, bool verbose=true, int n_cores=1,
+                                             const std::string &dist="cor", bool log_vecs=true) {
     const auto samp_per_cell_c = as<std::vector<int>>(IntegerVector(sample_per_cell - 1));
     if (sample_per_cell.size() == 0 || (*std::max_element(samp_per_cell_c.begin(), samp_per_cell_c.end()) <= 0))
         stop("sample_per_cell must be a factor vector with non-empty levels");
@@ -557,20 +620,123 @@ NumericVector estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<dou
         nn_ids_c.emplace_back(as<std::vector<int>>(ids));
     }
 
-    std::vector<double> res_scores(nn_ids_c.size(), 0);
+    std::mutex mut;
+    std::vector<double> dists;
+    std::vector<int> s1s, s2s, cids;
+    auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &dists, &s1s, &s2s, &cids, min_n_obs_per_samp, dist, log_vecs, &mut](int ci) {
+        auto res = estimateCellExpressionShift(cm, samp_per_cell_c, nn_ids_c[ci], min_n_obs_per_samp, dist, log_vecs);
+        for (size_t i = 0; i < res.dists.size(); ++i) {
+            double d = res.dists.at(i);
+            int s1 = res.s1_ids.at(i), s2 = res.s2_ids.at(i);
 
-    auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &is_ref, &res_scores, &min_n_between, &min_n_within, &min_n_obs_per_samp, &norm_all,
-            dist, log_vecs](int i) {
-        res_scores[i] = estimateCellExpressionShift(cm, samp_per_cell_c, nn_ids_c[i], is_ref,
-                                                    min_n_between, min_n_within, min_n_obs_per_samp, norm_all,
-                                                    dist, log_vecs);
+            {
+                std::lock_guard<std::mutex> l(mut);
+                dists.push_back(d);
+                s1s.push_back(s1 + 1);
+                s2s.push_back(s2 + 1);
+                cids.push_back(ci);
+            }
+        }
     };
     sccore::runTaskParallelFor(0, nn_ids_c.size(), task, n_cores, verbose);
 
-    NumericVector res = wrap(res_scores);
-    res.attr("names") = nn_ids.names();
+    return List::create(_["dists"]=wrap(dists), _["s1s"]=wrap(s1s), _["s2s"]=wrap(s2s), _["cids"]=wrap(cids));
+}
 
-    return res;
+// [[Rcpp::export]]
+List estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double> &cm, IntegerVector sample_per_cell, List nn_ids,
+                                          const std::vector<bool> &is_ref, const int min_n_between=1, const int min_n_within=1,
+                                          const int min_n_obs_per_samp=1, bool norm_all=true, bool verbose=true, int n_cores=1,
+                                          const std::string &dist="cor", bool log_vecs=true, int n_permutations=100,
+                                          bool smooth=true, double wins=0.01, int seed=0) {
+    const auto samp_per_cell_c = as<std::vector<int>>(IntegerVector(sample_per_cell - 1));
+    if (sample_per_cell.size() == 0 || (*std::max_element(samp_per_cell_c.begin(), samp_per_cell_c.end()) <= 0))
+        stop("sample_per_cell must be a factor vector with non-empty levels");
+
+    assert_r(cm.cols() == samp_per_cell_c.size(),
+             "Number of columns in matrix (" + std::to_string(cm.cols()) +
+             ") must match the sample_per_cell size (" + std::to_string(samp_per_cell_c.size()) + ")");
+
+    std::vector<std::vector<int>> nn_ids_c;
+    for (auto &ids : nn_ids) {
+        nn_ids_c.emplace_back(as<std::vector<int>>(ids));
+    }
+
+    std::vector<double> res_scores(nn_ids_c.size(), 0);
+    std::vector<CFShiftResult> res_info(nn_ids_c.size());
+
+    // Prepare info for permutations
+
+    auto task = [&cm, &samp_per_cell_c, &nn_ids_c, &is_ref, &res_scores, &res_info, min_n_obs_per_samp, dist, log_vecs,
+                 norm_all, min_n_within, min_n_between](int i) {
+        auto res = estimateCellExpressionShift(cm, samp_per_cell_c, nn_ids_c[i], min_n_obs_per_samp, dist, log_vecs);
+        double d = estimateNormalizedExpressionShift(res.dists, is_ref, res.s1_ids, res.s2_ids,
+            norm_all, min_n_within, min_n_between);
+        res_scores[i] = d;
+        res_info[i] = res;
+    };
+    sccore::runTaskParallelFor(0, nn_ids_c.size(), task, n_cores, verbose);
+
+    if (n_permutations == 0) {
+        NumericVector scores_r = wrap(res_scores);
+        scores_r.attr("names") = nn_ids.names();
+
+        return List::create(_["shifts"] = scores_r);
+    }
+
+    // Run permutations
+
+    std::vector<double> max_vals(n_permutations, 0);
+    std::vector<double> sum_null_dists(nn_ids_c.size(), 0);
+    std::vector<double> n_null_dists(nn_ids_c.size(), 0);
+    std::mutex mut;
+
+    auto task2 = [&nn_ids_c, &res_info, &max_vals, &is_ref, &mut, &sum_null_dists, &n_null_dists, norm_all,
+            min_n_within, min_n_between, wins, smooth, seed](int ri) {
+        std::mt19937 g(ri + seed);
+        std::vector<bool> is_ref_shuffled(is_ref.begin(), is_ref.end());
+        std::shuffle(is_ref_shuffled.begin(), is_ref_shuffled.end(), g);
+        std::vector<double> shuff_scores(nn_ids_c.size(), 0);
+        for (size_t ci = 0; ci < nn_ids_c.size(); ++ci) {
+            const auto res = res_info.at(ci);
+
+            double d = estimateNormalizedExpressionShift(res.dists, is_ref_shuffled, res.s1_ids, res.s2_ids,
+                                                         norm_all, min_n_within, min_n_between);
+
+            if (std::isnan(d))
+                continue;
+
+            shuff_scores.at(ci) = d;
+
+            {
+                std::lock_guard<std::mutex> l(mut);
+                sum_null_dists.at(ci) += d;
+                n_null_dists.at(ci)++;
+            }
+        }
+
+        if (smooth) {
+            shuff_scores = applyMedianFilter(shuff_scores, nn_ids_c);
+        }
+
+        max_vals.at(ri) = range(shuff_scores, wins).second;
+    };
+    sccore::runTaskParallelFor(0, n_permutations, task2, n_cores, verbose);
+
+    std::sort(max_vals.begin(), max_vals.end());
+    auto z_scores = smooth ?
+        adjustZScoresWithPermutations(applyMedianFilter(res_scores, nn_ids_c), wins, max_vals) :
+        adjustZScoresWithPermutations(res_scores, wins, max_vals);
+
+    for (size_t ci = 0; ci < res_scores.size(); ++ci) {
+        res_scores.at(ci) -= sum_null_dists.at(ci) / n_null_dists.at(ci);
+    }
+
+    auto scores_smoothed = applyMedianFilter(res_scores, nn_ids_c);
+    NumericVector scores_r = wrap(res_scores), z_scores_r = wrap(z_scores), scores_smoothed_r = wrap(scores_smoothed);
+    scores_smoothed_r.attr("names") = z_scores_r.attr("names") = scores_r.attr("names") = nn_ids.names();
+
+    return List::create(_["shifts"]=scores_r, _["shifts_smoothed"]=scores_smoothed_r, _["z_scores"]=z_scores_r);
 }
 
 /* P-value processing */

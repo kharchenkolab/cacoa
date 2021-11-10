@@ -1,4 +1,3 @@
-
 ##' @description Estimate cell density in giving embedding, Density will estimated for indivisual sample
 ##' @param emb cell embedding matrix
 ##' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
@@ -75,21 +74,29 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
 ##' @param cell.groups vector of cell type annotation
 ##' @param group specify cell types for contour, multiple cell types are also supported
 ##' @param conf confidence interval of contour
-getDensityContour <- function(emb, cell.groups, group,  color='white', linetype = 2, conf = "10%"){
+getDensityContour <- function(emb, cell.groups, group,  color='black', linetype=2, conf="10%", bandwidth=NULL, ...) {
   emb %<>% .[rownames(.) %in% names(cell.groups)[cell.groups %in% group], ]
-  kd <- ks::kde(emb, compute.cont=TRUE)
+
+  if (is.null(bandwidth)) {
+    kd <- ks::kde(emb, compute.cont=TRUE, ...)
+  } else {
+    h <- matrix(c(bandwidth, 0, 0, bandwidth), ncol=2)
+    kd <- ks::kde(emb, compute.cont=TRUE, H=h, ...)
+  }
+
   lcn <- kd %$% contourLines(x=eval.points[[1]], y=eval.points[[2]], z=estimate, levels=cont[conf]) %>%
     .[[1]] %>% data.frame() %>% cbind(z=1)
-  cn <- geom_path(aes(x, y), data=lcn, linetype=linetype , color=color);
+  cn <- geom_path(aes(x, y), data=lcn, linetype=linetype, color=color);
   return(cn)
 }
 
 
 ##' @description Plot cell density
 ##' @param bins number of bins for density estimation, should keep consistent with bins in estimateCellDensity
-##' @param palette color palette function. Default: `viridis::viridis_pal(option="B")`
-plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.labels=FALSE, show.ticks=FALSE, palette=viridis::viridis_pal(option="B"), ...){
-  if (is.null(lims)){
+##' @param palette color palette function. Default: `YlOrRd`
+plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.labels=FALSE, show.ticks=FALSE,
+                           palette=NULL, legend.title=NULL, ...) {
+  if (is.null(lims)) {
     lims <- c(min(mat$z), max(mat$z)*1.1)
   }
 
@@ -104,9 +111,11 @@ plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.
     scale_y_continuous(breaks=breaks$y, expand = c(0,0)) +
     val2ggcol(mat$z, palette=palette, color.range=lims, return.fill=TRUE)
 
+  if (!is.null(legend.title)) p <- p + guides(fill=guide_colorbar(title=legend.title))
+
   p %<>% sccore::styleEmbeddingPlot(show.labels=show.labels, show.ticks=show.ticks, ...)
 
-  if(show.grid){ #  add grid manually
+  if (show.grid) { #  add grid manually
     p <- p +
       geom_vline(xintercept=breaks$x, col='grey', alpha=0.1) +
       geom_hline(yintercept=breaks$y, col='grey', alpha=0.1)
@@ -153,7 +162,7 @@ diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, t
     permut.scores <- plapply(1:n.permutations, function(i) {
       sg.shuff <- setNames(sample(sample.groups), names(sample.groups))
       diffCellDensity(density.mat, sample.groups=sg.shuff, ref.level=ref.level, target.level=target.level, type=type)
-    }, progress=verbose, n.cores=n.cores, fail.on.error=TRUE) %>% do.call(cbind, .)
+    }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE) %>% do.call(cbind, .)
 
     return(list(score=score, permut.scores=permut.scores))
   }
@@ -170,7 +179,7 @@ diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, t
   permut.diffs <- plapply(1:n.permutations, function(i) { # Null distribution looks normal, so we don't need a lot of samples
     rownames(dm.shuffled) %<>% sample()
     colRed(dm.shuffled[nt,]) - colRed(dm.shuffled[nr,])
-  }, progress=verbose, n.cores=n.cores, fail.on.error=TRUE) %>%  # according to tests, n.cores>1 here does not speed up calculations
+  }, progress=verbose, n.cores=1, fail.on.error=TRUE) %>%  # according to tests, n.cores>1 here does not speed up calculations
     do.call(cbind, .) %>% set_rownames(colnames(density.mat))
 
   sds <- apply(permut.diffs, 1, sd)

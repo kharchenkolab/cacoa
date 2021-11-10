@@ -42,6 +42,17 @@ estimateGeneClustersPam <- function(z.scores, n.programs) {
   return(pam.res$clustering)
 }
 
+geneProgramSimilarityScores <- function(program.scores, gene.scores) {
+  apply(gene.scores, 2, estimateCorrelationDistance, program.scores, centered=FALSE) %>%
+      {1 - .} %>% sort(decreasing=TRUE)
+}
+
+geneProgramLoadingScores <- function(program.scores, gene.scores, min.score=0.05) {
+  cell.subs <- which(abs(program.scores) > min.score) %>% names()
+  scores <- gene.scores[cell.subs,, drop=FALSE] %>% abs() %>% colSums() %>% sort(decreasing=TRUE)
+  return(scores)
+}
+
 geneProgramInfoByCluster <- function(clusters, z.scores, min.score=0.05, verbose=FALSE) {
   genes.per.clust <- clusters %>% {split(names(.), .)}
   program.scores <- genes.per.clust %>%
@@ -49,15 +60,11 @@ geneProgramInfoByCluster <- function(clusters, z.scores, min.score=0.05, verbose
     do.call(rbind, .) %>% set_colnames(rownames(z.scores))
 
   sim.scores <- lapply(1:nrow(program.scores), function(pid) {
-    gene.subs <- genes.per.clust[[pid]]
-    apply(z.scores[,gene.subs,drop=FALSE], 2, estimateCorrelationDistance, program.scores[pid,], centered=FALSE) %>%
-      {1 - .} %>% sort(decreasing=TRUE)
+    geneProgramSimilarityScores(program.scores[pid,], gene.scores=z.scores[, genes.per.clust[[pid]], drop=FALSE])
   })
 
   loading.scores <- lapply(1:nrow(program.scores), function(pid) {
-    gene.subs <- genes.per.clust[[pid]]
-    cell.subs <- which(abs(program.scores[pid,]) > min.score) %>% names()
-    z.scores[cell.subs, gene.subs,drop=FALSE] %>% abs() %>% colSums() %>% sort(decreasing=TRUE)
+    geneProgramLoadingScores(program.scores[pid,], z.scores[, genes.per.clust[[pid]], drop=FALSE], min.score=min.score)
   })
 
   return(list(program.scores=program.scores, genes.per.clust=genes.per.clust, clusters=clusters,

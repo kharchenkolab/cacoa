@@ -1,18 +1,22 @@
 Package: cacoa
 Title: Case-Control Analysis tools for single-cell RNA-seq
-Version: 0.1
+Version: 0.1.0
 Authors@R: c(person("Peter", "Kharchenko", email = "peter_kharchenko@hms.harvard.edu", role = c("aut", "cre")),
              person("Viktor","Petukhov", email="viktor.s.petuhov@ya.ru", role="aut"))
 Description: Case-Control Analysis tools for single-cell RNA-seq
 License: GPL3
 Encoding: UTF-8
 LazyData: true
+Depends:
+    R (>= 4.0.0), Matrix
+biocViews:
 Imports:
     abind,
     ape,
     candisc,
     cowplot,
     dplyr,
+    enrichplot,
     entropy,
     ggdendro,
     ggplot2,
@@ -25,6 +29,7 @@ Imports:
     magrittr,
     MASS,
     Matrix,
+    matrixStats (>= 0.60.1),
     matrixTests,
     methods,
     pbapply,
@@ -35,35 +40,35 @@ Imports:
     reshape2,
     rlang,
     roxygen2,
-    sccore (> 0.1.2),
-    tibble,
+    sccore (>= 1.0.0),
+    tibble, 
     tidyr,
     tidytree,
     viridis
-Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.1.1
-LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress, sccore
-NeedsCompilation: yes
 Suggests:
-    circlize,
     cluster,
     clusterProfiler (>= 3.0.0),
     coda.base,
-    ComplexHeatmap,
     DESeq2,
     DOSE,
     EnhancedVolcano,
-    enrichplot,
     fabia,
     ggrastr (>= 0.1.7),
+    ggtree,
     GOfuncR,
     graph,
     irlba,
     matrixStats,
     N2R,
     pagoda2,
+    proj4,
+    psych,
     RColorBrewer,
     Rgraphviz,
-    Rtsne
-Remotes:
-    kharchenkolab/sccore
+    Rtsne, 
+    SummarizedExperiment,
+    yulab.utils
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.2
+LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress, sccore
+NeedsCompilation: yes

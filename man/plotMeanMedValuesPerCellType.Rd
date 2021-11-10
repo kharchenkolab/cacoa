@@ -20,7 +20,9 @@ plotMeanMedValuesPerCellType(
   trim = 0,
   order.x = TRUE,
   pvalue.y = NULL,
-  y.max = NULL
+  y.max = NULL,
+  y.offset = NULL,
+  ns.symbol = "ns"
 )
 }
 \arguments{

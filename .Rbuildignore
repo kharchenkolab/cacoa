@@ -1,2 +1,9 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+CHANGELOG.md
+^LICENSE\.md$
+^doc$
+^Meta$
+cacoa*.tar.gz
+README.Rmd
+^\.circleci$

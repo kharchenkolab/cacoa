@@ -10,7 +10,7 @@ estimateExpressionShiftMagnitudes(
   cell.groups,
   sample.per.cell,
   dist = NULL,
-  normalize.both = TRUE,
+  dist.type = c("cross.both", "cross.ref", "var"),
   verbose = FALSE,
   ref.level = NULL,
   n.permutations = 1000,
@@ -20,7 +20,6 @@ estimateExpressionShiftMagnitudes(
   n.pcs = NULL,
   trim = 0.2,
   n.cores = 1,
-  norm.type = NULL,
   ...
 )
 }
@@ -32,8 +31,6 @@ estimateExpressionShiftMagnitudes(
 \item{cell.groups}{Named clustering/annotation factor with cell names}
 
 \item{dist}{what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values}
-
-\item{normalize.both}{(default=T)}
 
 \item{verbose}{(default=F)}
 

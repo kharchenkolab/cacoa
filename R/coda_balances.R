@@ -195,11 +195,11 @@ resampleCounts<- function(d.counts, n.tot.count=500, d.groups = NULL, n.seed = 2
   
   if (f.bootstrap) {
     if (is.null(d.groups)) {
-      sample.names.resampling = sample(1:nrow(d.counts), replace = T)
+      sample.names.resampling = sample(1:nrow(d.counts), replace = TRUE)
     } else {
-      sample.names.resampling = sample(1:nrow(d.counts), replace = T)
+      sample.names.resampling = sample(1:nrow(d.counts), replace = TRUE)
       while(length(unique(d.groups[sample.names.resampling])) == 1) 
-        sample.names.resampling = sample(1:nrow(d.counts), replace = T)
+        sample.names.resampling = sample(1:nrow(d.counts), replace = TRUE)
     }
   } else {
     sample.names.resampling = 1:nrow(d.counts)

@@ -86,7 +86,7 @@ plotStability <- function(jaccards,
                          sort.order,
                          xlabel = '',
                          ylabel = '',
-                         log.y.axis = F,
+                         log.y.axis = FALSE,
                          palette = NULL,
                          plot.theme=theme_get()) {
   jaccards$group <- as.factor(jaccards$group)

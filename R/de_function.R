@@ -13,14 +13,17 @@ validateDEPerCellTypeParams <- function(raw.mats, cell.groups, sample.groups, re
   if (is.null(sample.groups)) stop('"sample.groups" must be specified')
   if (class(sample.groups) != "list") stop('"sample.groups" must be a list')
   if (length(sample.groups) != 2) stop('"sample.groups" must be of length 2')
-  if (!all(unlist(lapply(sample.groups, function(x) class(x) == "character"))))
+  if (!all(unlist(lapply(sample.groups, function(x) class(x) == "character")))){
     stop('"sample.groups" must be a list of character vectors')
+  }
 
-  if (!all(unlist(lapply(sample.groups, function(x) length(x) > 0))))
+  if (!all(unlist(lapply(sample.groups, function(x) length(x) > 0)))){
     stop('"sample.groups" entries must be on length greater or equal to 1')
+  }
 
-  if (!all(unlist(lapply(sample.groups, function(x) all(x %in% names(raw.mats))))))
+  if (!all(unlist(lapply(sample.groups, function(x) all(x %in% names(raw.mats)))))){
     stop('"sample.groups" entries must be names of samples in the raw.mats')
+  }
 
   if (is.null(ref.level)) stop('"ref.level" is not defined')
   ## todo: check samplegrousp are named

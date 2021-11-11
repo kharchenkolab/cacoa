@@ -4,8 +4,8 @@
 ##' @param cell.groups Named clustering/annotation factor with cell names
 ##' @param dist what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values
 ##' @param n.cores number of cores (default=1)
-##' @param verbose (default=F)
-##' @param transposed.matrices (default=F)
+##' @param verbose (default=FALSE)
+##' @param transposed.matrices (default=FALSE)
 ##' @export
 estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
                                               dist=NULL, dist.type=c("cross.both", "cross.ref", "var"), verbose=FALSE,

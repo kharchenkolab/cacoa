@@ -322,7 +322,7 @@ f.stat <- function(b1, b2)
   ms_w = ss_wg / (n1 + n2 - 2)
 
   res = list(stat = ms_b/ms_w,
-             pval = 	pf(ms_b/ms_w, 2 - 1, n1 + n2 - 2, lower.tail=F))
+             pval = 	pf(ms_b/ms_w, 2 - 1, n1 + n2 - 2, lower.tail=FALSE))
 
   return(res)
 }

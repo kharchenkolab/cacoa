@@ -68,7 +68,7 @@ estimateEnrichedGO <- function(de.gene.ids, go.environment, ...) {
 }
 
 enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType = "ENTREZID", go.environment, ont = "BP", pvalueCutoff = 0.05,
-                           pAdjustMethod = "BH", minGSSize = 5, maxGSSize = 500, readable = FALSE, eps = 0, exponent = 1, seed = F, verbose = F) {
+                           pAdjustMethod = "BH", minGSSize = 5, maxGSSize = 500, readable = FALSE, eps = 0, exponent = 1, seed = FALSE, verbose = FALSE) {
   ont %<>% toupper %>% match.arg(c("BP", "CC", "MF"))
 
   res <- DOSE:::GSEA_internal(gene.ids, pvalueCutoff = pvalueCutoff, pAdjustMethod = pAdjustMethod, minGSSize = minGSSize,
@@ -142,11 +142,11 @@ ontologyListToDf <- function(ont.list) {
 
 #' @title Estimate ontology
 #' @description  Calculate ontologies based on DEs
-#' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information.
+#' @param type character string Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information.
 #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
-#' @param n.top.genes Number of most different genes to take as input. If less are left after filtering for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)
-#' @param verbose Print progress (default=T)
-#' @param qvalue.cutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
+#' @param n.top.genes numeric Number of most different genes to take as input. If less are left after filtering for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)
+#' @param verbose boolean Print progress (default=TRUE)
+#' @param qvalue.cutoff numeric Q value cutoff, please see clusterProfiler package for more information (default=0.2)
 #' @param ... Additional parameters for DO/GO/GSEA functions
 #' @return A list containing a list of ontologies per type of ontology, and a data frame with merged results
 #' @export
@@ -232,7 +232,7 @@ prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
       ont.res %<>% lapply(function(g) {
         if(class(g) != "character") {
           idx <- g$GeneRatio %>%
-            strsplit("/", fixed=T) %>%
+            strsplit("/", fixed=TRUE) %>%
             sapply(`[[`, 1)
 
           return(g[idx > min.genes,])
@@ -272,7 +272,7 @@ prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
       ont.res %<>% lapply(function(g) {
         if(class(g) != "character") {
           idx <- g$GeneRatio %>%
-            strsplit("/", fixed=T) %>%
+            strsplit("/", fixed=TRUE) %>%
             sapply(`[[`, 1)
 
           return(g[idx > min.genes,])
@@ -300,7 +300,7 @@ prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
       ont.res %<>% lapply(function(g) {
         if(class(g) != "character") {
           idx <- g$core_enrichment %>%
-            strsplit("/", fixed=T) %>%
+            strsplit("/", fixed=TRUE) %>%
             sapply(length)
 
           return(g[idx > min.genes,])
@@ -421,7 +421,7 @@ collapseFamilies <- function(ont.res) {
     olaps <- sapply(ont.res, `[[`, "parents_in_IDs") %>%
       unlist() %>%
       table() %>%
-      .[order(., decreasing = T)] %>%
+      .[order(., decreasing = TRUE)] %>%
       .[. > 1]
 
     if (length(olaps) > 1) {
@@ -429,7 +429,7 @@ collapseFamilies <- function(ont.res) {
       olap.matrix <- sapply(ont.res, `[[`, "parents_in_IDs") %>%
         sapply(function(x) names(olaps) %in% x)
       olap.list <- lapply(1:length(olaps), function(id) {
-        olap.matrix[,olap.matrix[id,] == T] %>% `rownames<-`(names(olaps))
+        olap.matrix[,olap.matrix[id,] == TRUE] %>% `rownames<-`(names(olaps))
       }) %>%
         setNames(names(olaps))
 
@@ -498,8 +498,8 @@ collapseFamilies <- function(ont.res) {
         as.list() %>%
         setNames(sapply(1:length(ont.res), function(n) paste0("Family",n)))
     } else {
-      res %<>% .[order(sapply(., length), decreasing=T)] %>%
-        append(as.list(names(ont.res)[order(sapply(names(ont.res), function(p) ont.res[[p]]$Significance), decreasing = F)])) %>%
+      res %<>% .[order(sapply(., length), decreasing=TRUE)] %>%
+        append(as.list(names(ont.res)[order(sapply(names(ont.res), function(p) ont.res[[p]]$Significance), decreasing = FALSE)])) %>%
         {setNames(., sapply(1:length(.), function(n) paste0("Family",n)))}
     }
 

@@ -52,3 +52,4 @@ A ggplot2 object
 \description{
 Generic function for plotting mean or median values per cell type (used for expression shift distances and others)
 }
+\keyword{internal}

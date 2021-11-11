@@ -46,3 +46,4 @@ id.edges <- getNodeOrder(t)
 
 }
 
+\keyword{internal}

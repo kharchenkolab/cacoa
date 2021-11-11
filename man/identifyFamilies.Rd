@@ -15,3 +15,4 @@ List of families and ontology data
 \description{
 Identify parents and/or children of significant ontology terms
 }
+\keyword{internal}

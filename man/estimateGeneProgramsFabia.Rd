@@ -45,3 +45,4 @@ it is interpreted as a vector of cell}
 \description{
 Estimate Gene Programs with FABIA
 }
+\keyword{internal}

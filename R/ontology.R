@@ -1,6 +1,7 @@
 #' @import dplyr
 NULL
 
+#' @keywords internal
 mapGeneIds <- function(genes, org.db) {
   suppressWarnings(suppressMessages(tryCatch({
     gene.id.map <- clusterProfiler::bitr(genes, 'SYMBOL', 'ENTREZID', org.db) %$%
@@ -17,6 +18,7 @@ mapGeneIds <- function(genes, org.db) {
 #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
 #' @param p.adj.cutoff Adj. P cutoff for filtering DE genes (default=0.05)
 #' @return A list containing DE ENSEMBL gene IDs, and filtered DE genes
+#' @keywords internal
 getDEEntrezIdsSplitted <- function(de.raw, org.db, p.adj=1) {
   checkPackageInstalled("clusterProfiler", bioc=TRUE)
   if(!(class(org.db) %in% "OrgDb")) stop("'org.db' must be of class 'OrgDb'. Please input an organism database, e.g., org.Hs.eg.db for human data.")
@@ -41,6 +43,7 @@ getDEEntrezIdsSplitted <- function(de.raw, org.db, p.adj=1) {
   return(de.gene.scores)
 }
 
+#' @keywords internal
 enrichGOOpt <- function(gene, org.db, go.environment, keyType = "ENTREZID", ont = "BP", pvalueCutoff = 0.05,
                         pAdjustMethod = "BH", universe=NULL, qvalueCutoff = 0.2, minGSSize = 5,
                         maxGSSize = 500, readable = FALSE, pool = FALSE) {
@@ -62,11 +65,13 @@ enrichGOOpt <- function(gene, org.db, go.environment, keyType = "ENTREZID", ont 
   if(!is.null(res)) return(res)
 }
 
+#' @keywords internal
 estimateEnrichedGO <- function(de.gene.ids, go.environment, ...) {
   names(go.environment) %>% sccore:::sn() %>%
     lapply(function(ont) lapply(de.gene.ids, enrichGOOpt, go.environment=go.environment[[ont]], ont=ont, ...))
 }
 
+#' @keywords internal
 enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType = "ENTREZID", go.environment, ont = "BP", pvalueCutoff = 0.05,
                            pAdjustMethod = "BH", minGSSize = 5, maxGSSize = 500, readable = FALSE, eps = 0, exponent = 1, seed = FALSE, verbose = FALSE) {
   ont %<>% toupper %>% match.arg(c("BP", "CC", "MF"))
@@ -86,11 +91,13 @@ enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType = "ENTREZID", go.
   if(!is.null(res)) return(res)
 }
 
+#' @keywords internal
 estimateEnrichedGSEGO <- function(go.environment, ...) {
   names(go.environment) %>% sccore:::sn() %>%
     lapply(function(ont) enrichGSEGOOpt(go.environment=go.environment[[ont]], ont=ont, ...))
 }
 
+#' @keywords internal
 groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName") {
   if (nrow(ont.clust.df) == 0)
     return(ont.clust.df)
@@ -111,6 +118,7 @@ groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName") {
   return(df)
 }
 
+#' @keywords internal
 filterOntologies <- function(ont.list, p.adj) {
   ont.list %>% names() %>% sn() %>%
     lapply(function(dir) {
@@ -124,6 +132,7 @@ filterOntologies <- function(ont.list, p.adj) {
     })
 }
 
+#' @keywords internal
 ontologyListToDf <- function(ont.list) {
   lapply(ont.list, function(x) {
     if(length(x) > 0) {
@@ -135,7 +144,7 @@ ontologyListToDf <- function(ont.list) {
         }
         }
     } else {
-      "No significant ontologies identified. Try relaxing p.adj."
+      stop("No significant ontologies identified. Try relaxing p.adj.")
     }
   })
 }
@@ -203,6 +212,7 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
 #' @param p.adj Cut-off for adj. P values
 #' @param min.genes Min. number of significant genes per pathway
 #' @return List of ontology data for plotting
+#' @keywords internal
 prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
   dir.names <- c("down", "up", "all")
 
@@ -338,6 +348,7 @@ wrap_strings <- function(strings, width) {
 #' @description Identify parents and/or children of significant ontology terms
 #' @param ids Data frame of cell type-specific ontology results from estimateOntology
 #' @return List of families and ontology data
+#' @keywords internal
 identifyFamilies <- function(ids) {
   tmp.parent <- GOfuncR::get_parent_nodes(ids$ID) %>%
     rename(parent_distance = distance) %>%
@@ -415,6 +426,7 @@ identifyFamilies <- function(ids) {
 #' @description Collapse ontology families based on overlaps between parents and/or children of significant ontology terms
 #' @param ont.res Results from identifyFamilies
 #' @return List of collapsed families and ontology data
+#' @keywords internal
 collapseFamilies <- function(ont.res) {
   if(length(ont.res) > 0) {
     # Identify overlapping parents (seeds) between families
@@ -515,6 +527,7 @@ collapseFamilies <- function(ont.res) {
 #' @param ont.list List of results from estimateOntology
 #' @param type Type of ontology result, i.e., GO, GSEA, or DO
 #' @return List of families and ontology data per cell type
+#' @keywords internal
 estimateOntologyFamilies <- function(ont.list, type) {
   if (type == "GO") {
     ont.fam <- lapply(ont.list, lapply, lapply, identifyFamilies) %>%
@@ -535,6 +548,7 @@ estimateOntologyFamilies <- function(ont.list, type) {
 #' @description Calculate distance matrix between ontology terms
 #' @param genes.per.go named list of genes per GO
 #' @return Distance matrix
+#' @keywords internal
 distanceBetweenTerms <- function(genes.per.go) {
   all.go.genes <- unique(unlist(genes.per.go))
   all.gos <- unique(names(genes.per.go))
@@ -550,11 +564,13 @@ distanceBetweenTerms <- function(genes.per.go) {
 }
 
 #' @inheritParams distanceBetweenTerms genes.per.go
+#' @keywords internal
 estimateClusterPerGO <- function(genes.per.go, cut.h) {
   distanceBetweenTerms(genes.per.go) %>%
     {if (ncol(as.matrix(.)) == 1) 1 else {cutree(hclust(.), h=cut.h)}}
 }
 
+#' @keywords internal
 clusterIndividualGOs <- function(genes.per.go.per.type, cut.h) {
   go.clusts.per.type <- genes.per.go.per.type %>%
     lapply(estimateClusterPerGO, cut.h=cut.h)
@@ -569,6 +585,7 @@ clusterIndividualGOs <- function(genes.per.go.per.type, cut.h) {
     return(clust.df)
 }
 
+#' @keywords internal
 clusterGOsPerType <- function(clust.df, cut.h, verbose=FALSE) {
   apply.fun <- if (verbose) pbapply::pbapply else apply
   clust.mat <- as.matrix(clust.df) %>% t()
@@ -582,10 +599,12 @@ clusterGOsPerType <- function(clust.df, cut.h, verbose=FALSE) {
   return(list(clusts=clusts, hclust=cl.clusts))
 }
 
+#' @keywords internal
 getOntClustField <- function(subtype, genes) {
   return(paste("clusters", paste(subtype, collapse="."), genes, sep="."))
 }
 
+#' @keywords internal
 estimateOntologyClusterName <- function(descriptions, method=c("medoid", "consensus"), n.words=5, exclude.words=NULL) {
   method <- match.arg(method)
   if (length(descriptions) == 1)
@@ -608,6 +627,7 @@ estimateOntologyClusterName <- function(descriptions, method=c("medoid", "consen
   return(nm)
 }
 
+#' @keywords internal
 estimateOntologyClusterNames <- function(ont.df, clust.naming=c("medoid", "consensus", "min.pvalue")) {
   clust.naming <- match.arg(clust.naming)
 
@@ -622,6 +642,7 @@ estimateOntologyClusterNames <- function(ont.df, clust.naming=c("medoid", "conse
   return(name.per.clust)
 }
 
+#' @keywords internal
 getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {
   fams <- lapply(fams, function(x) {
     x[[subtype]][[genes]]$families %>% unlist() %>% unique() # These are only children IDs

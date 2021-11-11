@@ -17,3 +17,4 @@ Matrix with balances in columns
 \description{
 Get balances based on the random ilr basis
 }
+\keyword{internal}

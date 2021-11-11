@@ -9,3 +9,4 @@ getLogFreq(d.counts)
 \description{
 Get log frequencies from the cell count table
 }
+\keyword{internal}

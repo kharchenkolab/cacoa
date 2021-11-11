@@ -15,3 +15,4 @@ List of collapsed families and ontology data
 \description{
 Collapse ontology families based on overlaps between parents and/or children of significant ontology terms
 }
+\keyword{internal}

@@ -32,11 +32,11 @@ estimateExpressionShiftMagnitudes(
 
 \item{dist}{what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values}
 
-\item{verbose}{(default=F)}
+\item{verbose}{(default=FALSE)}
 
 \item{n.cores}{number of cores (default=1)}
 
-\item{transposed.matrices}{(default=F)}
+\item{transposed.matrices}{(default=FALSE)}
 }
 \description{
 Expression shift magnitudes per cluster between conditions

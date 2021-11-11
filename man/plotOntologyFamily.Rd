@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot.R
 \name{plotOntologyFamily}
 \alias{plotOntologyFamily}
-\title{Plot ontology families}
+\title{Plot related ontologies in one hierarchical network plot}
 \usage{
 plotOntologyFamily(
   fam,
@@ -43,3 +43,4 @@ Rgraphviz object
 \description{
 Plot related ontologies in one hierarchical network plot
 }
+\keyword{internal}

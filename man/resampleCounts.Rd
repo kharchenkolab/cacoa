@@ -29,3 +29,4 @@ Resampled dataset
 \description{
 Resampling of cell type counts
 }
+\keyword{internal}

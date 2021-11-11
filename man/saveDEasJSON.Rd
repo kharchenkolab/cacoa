@@ -6,15 +6,17 @@
 \usage{
 saveDEasJSON(
   de.raw,
+  sample.groups = NULL,
   saveprefix = NULL,
   dir.name = "JSON",
   gene.metadata = NULL,
-  sample.groups = NULL,
   verbose = TRUE
 )
 }
 \arguments{
 \item{de.raw}{List of DE results}
+
+\item{sample.groups}{Sample groups as named list, each element containing a vector of samples}
 
 \item{saveprefix}{Prefix for created files (default=NULL)}
 
@@ -22,10 +24,9 @@ saveDEasJSON(
 
 \item{gene.metadata}{(default=NULL)}
 
-\item{sample.groups}{Sample groups as named list, each element containing a vector of samples}
-
 \item{verbose}{Show progress (default=TRUE)}
 }
 \description{
 Save DE results as JSON files
 }
+\keyword{internal}

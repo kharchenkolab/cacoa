@@ -1,8 +1,10 @@
-##' @description Estimate cell density in giving embedding, Density will estimated for indivisual sample
-##' @param emb cell embedding matrix
-##' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
-##' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
-##' @param bins number of bins for density estimation, default 400
+#' Estimate cell density in giving embedding, Density will estimated for indivisual sample
+#' 
+#' @param emb cell embedding matrix
+#' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
+#' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+#' @param bins number of bins for density estimation, default 400
+#' @keywords internal
 estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, bandwidth=0.05, expansion.mult=0.05){
   if (is.null(bandwidth)) {
     bandwidth <- apply(emb, 2, MASS::bandwidth.nrd)
@@ -44,11 +46,13 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ba
 }
 
 
-##' @description estimate graph smooth based cell density
-##' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
-##' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
-##' @param n.cores number of cores
-##' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
+#' Estimate graph smooth based cell density
+#'
+#' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
+#' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+#' @param n.cores number of cores
+#' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
+#' @keywords internal
 estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.cores=1, beta=30, m=50, verbose = TRUE) {
   sig.mat <- unique(sample.per.cell) %>% sapply(function(s) as.numeric(sample.per.cell == s)) %>%
     set_rownames(names(sample.per.cell)) %>% set_colnames(unique(sample.per.cell))
@@ -69,11 +73,13 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
 }
 
 
-##' @description extract contour from embedding
-##' @param emb cell embedding matrix
-##' @param cell.groups vector of cell type annotation
-##' @param group specify cell types for contour, multiple cell types are also supported
-##' @param conf confidence interval of contour
+#' Extract contour from embedding
+#' 
+#' @param emb cell embedding matrix
+#' @param cell.groups vector of cell type annotation
+#' @param group specify cell types for contour, multiple cell types are also supported
+#' @param conf confidence interval of contour
+#' @keywords internal
 getDensityContour <- function(emb, cell.groups, group,  color='black', linetype=2, conf="10%", bandwidth=NULL, ...) {
   emb %<>% .[rownames(.) %in% names(cell.groups)[cell.groups %in% group], ]
 
@@ -91,9 +97,11 @@ getDensityContour <- function(emb, cell.groups, group,  color='black', linetype=
 }
 
 
-##' @description Plot cell density
-##' @param bins number of bins for density estimation, should keep consistent with bins in estimateCellDensity
-##' @param palette color palette function. Default: `YlOrRd`
+#' @description Plot cell density
+#' 
+#' @param bins number of bins for density estimation, should keep consistent with bins in estimateCellDensity
+#' @param palette color palette function. Default: `YlOrRd`
+#' @keywords internal
 plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.labels=FALSE, show.ticks=FALSE,
                            palette=NULL, legend.title=NULL, ...) {
   if (is.null(lims)) {
@@ -124,13 +132,14 @@ plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.
   return(p)
 }
 
-##' @description estimate differential cell density
-##' @param density.mat estimated cell density matrix with estimateCellDensity
-##' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
-##' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
-##' @param target.level target/disease level for sample.group vector
-##' @param type method to calculate differential cell density of each bin; subtract: target density minus ref density; entropy: estimated kl divergence entropy between sample groups ; t.test: zscore of t-test,
-##' global variance is setting for t.test;
+#' @description estimate differential cell density
+#' @param density.mat estimated cell density matrix with estimateCellDensity
+#' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+#' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
+#' @param target.level target/disease level for sample.group vector
+#' @param type method to calculate differential cell density of each bin; subtract: target density minus ref density; entropy: estimated kl divergence entropy between sample groups ; t.test: zscore of t-test,
+#'   global variance is setting for t.test
+#' @keywords internal
 diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level, type='subtract'){
   nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
   nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
@@ -152,6 +161,7 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
   return(score)
 }
 
+#' @keywords internal
 diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, target.level, type='permutation',
                                         verbose=TRUE, n.permutations=200, n.cores=1) {
   nt <- names(sample.groups[sample.groups == target.level]) # sample name of target
@@ -191,6 +201,7 @@ diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, t
   return(list(score=score, permut.scores=permut.diffs))
 }
 
+#' @keywords internal
 adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smooth=FALSE, graph=NULL, beta=30, n.cores=1, verbose=TRUE) {
   checkPackageInstalled("matrixStats", details="for adjusting p-values", cran=TRUE)
   if (smooth) {
@@ -228,6 +239,7 @@ adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smoot
   return(z.scores)
 }
 
+#' @keywords internal
 findScoreGroupsGraph <- function(scores, min.score, graph) {
   graph %>% igraph::induced_subgraph(names(scores)[scores > min.score]) %>%
     igraph::components() %>% .$membership

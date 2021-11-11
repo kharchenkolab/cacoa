@@ -1,10 +1,11 @@
 #' @import ape
 NULL
 
-#' @description Get inner nodes on the tree from leaves to the root
+#' Get inner nodes on the tree from leaves to the root
 #'
 #' @param t A phylo object
 #' @return Order of inner nodes
+#' @keywords internal
 getNodeOrder <- function(t) {
   checkTree(t)
   # ---------
@@ -103,6 +104,7 @@ getNodeOrder <- function(t) {
 #' @param d.counts Table with cell type counts
 #' @param d.groups Groups variable for samples
 #' @return phylo tree
+#' @keywords internal
 constructCanonicalTree <- function(d.counts, d.groups){
   checkDataGroups(d.counts, d.groups)
   # ---------

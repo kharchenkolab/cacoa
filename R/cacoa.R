@@ -1,8 +1,7 @@
 #' @title Cacoa R6 class
 #'
+#' @description The class encompasses etc etc
 #' @import methods enrichplot dplyr
-#' @export Cacoa
-#' @exportClass Cacoa
 #' @param sample.groups a two-level factor on the sample names describing the conditions being compared (default: stored vector)
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
 #' @param n.cores number of cores for parallelization
@@ -12,20 +11,22 @@
 #' @param gene.selection a method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
 #' "expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "z".
 #' @param excluded.genes list of genes to exclude during estimation. For example, a list of mitochondrial genes.
+#' @export Cacoa
 Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
   public = list(
+    #' @field n.cores number of cores
     n.cores = 1,
 
-    #' @field verbose print diagnostic messages
+    #' @field verbose boolean Whether to provide verbose output with diagnostic messages (default=TRUE)
     verbose = FALSE,
 
-    #' @field test.results results of the estimations, ready to use
+    #' @field test.results list Results of the estimations, ready to use
     test.results = list(),
 
-    #' @field cache intermediate results of the estimations, which can be used during some other computations
+    #' @field cache list Intermediate results of the estimations, which can be used during some other computations
     cache = list(),
 
-    #' @field data.object the main object storing data (Conos or Seurat)
+    #' @field data.object list The main object storing data (Conos or Seurat)
     data.object = list(),
 
     #' @field sample.groups 2-factor vector with annotation of groups/condition per sample
@@ -58,28 +59,44 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field plot.params parameters, forwarded to all `plotEmbedding` calls
     plot.params=NULL,
 
+    #' @description initialize Cacoa class
+    #'
+    #' @param override.conos.plot.theme boolean Whether to reset plot settings to the ggplot2 default (default=FALSE)
+    #' @param ... additional parameters upon initializing Conos
+    #' @return a new 'Conos' object
+    #' @examples
+    #' con <- Conos$new(small_panel.preprocessed, n.cores=1)
+    #'
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL,
                         target.level=NULL, sample.groups.palette=NULL, cell.groups.palette=NULL,
-                        embedding=extractEmbedding(data.object), graph.name=NULL, n.cores=1, verbose=TRUE,
+                        embedding=extractEmbedding(data.object), graph.name=NULL, n.cores=1, verbose=self$verbose,
                         plot.theme=theme_bw(), plot.params=NULL) {
       if ('Cacoa' %in% class(data.object)) { # copy constructor
         for (n in ls(data.object)) {
           if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
         }
 
-        return()
+        return(NULL)
       }
 
       if (!is.null(sample.groups)) {
-        if (length(unique(sample.groups)) != 2) stop("sample.groups must have exactly two levels")
-        if (is.null(ref.level) && !is.null(target.level)) ref.level <- setdiff(unique(sample.groups), target.level)[1]
-        if (!is.null(ref.level) && is.null(target.level)) target.level <- setdiff(unique(sample.groups), ref.level)[1]
-        if (length(setdiff(sample.groups, c(ref.level, target.level)) > 0))
+        if (length(unique(sample.groups)) != 2) {
+          stop("sample.groups must have exactly two levels")
+        }
+        if (is.null(ref.level) && !is.null(target.level)){
+          ref.level <- setdiff(unique(sample.groups), target.level)[1]
+        } 
+        if (!is.null(ref.level) && is.null(target.level)){
+          target.level <- setdiff(unique(sample.groups), ref.level)[1]
+        } 
+        if (length(setdiff(sample.groups, c(ref.level, target.level)) > 0)){
           stop("sample.groups must contain only ref.level '", ref.level, "' and target.level '", target.level, "'")
+        }
       }
 
-      if (is.null(ref.level) || is.null(target.level))
+      if (is.null(ref.level) || is.null(target.level)){
         stop("Both ref.level and target.level must be provided")
+      }
 
       self$n.cores <- n.cores
       self$verbose <- verbose
@@ -87,17 +104,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$target.level <- target.level
 
       if ("Seurat" %in% class(data.object)) {
-        if (is.null(sample.groups) || is.null(sample.per.cell))
+        if (is.null(sample.groups) || is.null(sample.per.cell)){
           stop("Both sample.groups and sample.per.cell must be provided for Seurat objects")
+        }
         data.object$sample.per.cell <- sample.per.cell
-        if (is.null(graph.name)) warning("No graph.name provided. The algorithm will use the first available graph.")
+        if (is.null(graph.name)){
+          warning("No graph.name provided. The algorithm will use the first available graph.")
+        } 
         data.object@misc$graph.name <- graph.name
       } else if (('Conos' %in% class(data.object))) {
-        if (!is.null(graph.name)) warning("graph.name is not supported for Conos objects")
+        if (!is.null(graph.name)) {
+          warning("graph.name is not supported for Conos objects")
+        } 
       } else {
         warning("Many function may be not supported for an object of class ", class(data.object));
-        if (is.null(sample.groups) || is.null(sample.per.cell) || is.null(cell.groups))
+        if (is.null(sample.groups) || is.null(sample.per.cell) || is.null(cell.groups)){
           stop("All sample.groups, sample.per.cell and cell.groups must be provided")
+        }
       }
 
       if (any(c("dgCMatrix", "dgTMatrix", "dgEMatrix", "matrix") %in% class(data.object))) {
@@ -110,8 +133,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           attr(data.object, "raw") <- FALSE
         }
 
-        if (length(setdiff(names(sample.per.cell), rownames(data.object))) > 0)
+        if (length(setdiff(names(sample.per.cell), rownames(data.object))) > 0){
           stop("All cells in the count matrix columns must be present in sample.per.cell")
+        }
         attr(data.object, 'sample.per.cell') <- as.factor(sample.per.cell)
       }
 
@@ -156,7 +180,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     ### Expression shifts
 
-    #' @description  Calculate expression shift magnitudes of different clusters between conditions
+    #' Calculate expression shift magnitudes of different clusters between conditions
+    #' 
     #' @param cell.groups Named cell group factor with cell names (default: stored vector)
     #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default depends on dimensionality)
     #' @param within.group.normalization Normalize the shift magnitude by the mean magnitude of within-group variation (default=`TRUE`)
@@ -258,8 +283,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    #' @description  Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
+    #' Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
     #'   cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
+    #'
     #' @param name - results slot name (default: 'expression.shifts')
     #' @param show.jitter whether to show indivudal data points (default: FALSE)
     #' @param jitter.alpha transparency value for the data points (default: 0.05)
@@ -302,7 +328,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(self$estimateDEPerCellType(...))
     },
 
-    #' @description Estimate differential gene expression per cell type between conditions
+    #' Estimate differential gene expression per cell type between conditions
+    #' 
     #' @param cell.groups factor specifying cell types (default from self)
     #' @param sample.groups 2-factor vector with annotation of groups/condition per sample (default from self)
     #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy (default from self)
@@ -335,8 +362,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (tolower(test) == tolower('DESeq2')) test <- paste(test, 'Wald', sep='.')
       if (tolower(test) %in% tolower(c('Wilcoxon', 't-test')))  test <- paste(test, 'edgeR', sep='.')
 
-      if (!(tolower(test) %in% tolower(possible.tests)))
+      if (!(tolower(test) %in% tolower(possible.tests))){
         stop('Test ', test, ' is not supported. Available tests: ', paste(possible.tests, collapse=', '))
+      }
 
       # s.groups.new contains list of case/control groups of samples to run DE on.
       # First element in s.groups.new corresponds to the initial grouping.
@@ -352,7 +380,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         )
 
         if (resampling.method == 'fix.samples') {
-          if (is.null(fix.n.samples)) stop("fix.n.samples must be provided for resampling.method='fix.samples'")
+          if (is.null(fix.n.samples)) {
+            stop("fix.n.samples must be provided for resampling.method='fix.samples'")
+          }
           fix.samples <- fix.n.samples
         }
       }
@@ -393,32 +423,38 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    #' @description  Plot DE stability per cell type
+    #' Plot DE stability per cell type
+    #'
     #' @param name - results slot name (default: 'de')
     #' @param show.pairs transparency value for the data points (default: 0.05)
     #' @param notch - whether to show notches in the boxplot version (default=TRUE)
     #' @return A ggplot2 object
     estimateDEStabilityPerCellType=function(de.name='de', name='de.jaccards', top.n.genes=NULL, p.val.cutoff=NULL) {
-      if(!is.null(p.val.cutoff) & !is.null(top.n.genes))
+      if(!is.null(p.val.cutoff) & !is.null(top.n.genes)){
         stop('Only one threshold (top.n.genes or p.val.cutoff) should be provided')
-      if(is.null(p.val.cutoff) & is.null(top.n.genes))
+      }
+      if(is.null(p.val.cutoff) & is.null(top.n.genes)){
         stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
+      }
 
       de.res <- private$getResults(de.name, 'estimateDEPerCellType()')
 
-      if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]]))))
+      if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))){
         stop('Resampling was not performed')
+      }
 
       jaccards <- estimateStabilityPerCellType(de.res, top.n.genes, p.val.cutoff)
       self$test.results[[name]] <- jaccards
     },
 
     estimateDEStabilityPerTest=function(de.names, name='jacc.per.test', top.n.genes=NULL, p.val.cutoff=NULL) {
-      if(!is.null(p.val.cutoff) & !is.null(top.n.genes))
+      if(!is.null(p.val.cutoff) & !is.null(top.n.genes)){
         stop('Only one threshold (top.n.genes or p.val.cutoff) should be provided')
+      }
 
-      if(is.null(p.val.cutoff) & is.null(top.n.genes))
+      if(is.null(p.val.cutoff) & is.null(top.n.genes)){
         stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
+      }
 
       jaccards.all <- data.frame()
       for(de.name in de.names){
@@ -428,8 +464,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
         de.res <- private$getResults(de.name)
 
-        if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]]))))
+        if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))){
           stop('Resampling was not performed')
+        }
         jaccards <- estimateStabilityPerCellType(de.res=de.res, top.n.genes=top.n.genes, p.val.cutoff=p.val.cutoff)
         # print(jaccards)
 
@@ -489,8 +526,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                              top.n.genes = NULL,
                                              p.val.cutoff = NULL){
 
-      if( (!is.null(p.val.cutoff)) & (!is.null(top.n.genes)) ) stop('Only one threshold (top.n.genes or p.val.cutoff) should be provided')
-      if(is.null(p.val.cutoff) & is.null(top.n.genes)) stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
+      if( (!is.null(p.val.cutoff)) & (!is.null(top.n.genes)) ) {
+        stop('Only one threshold (top.n.genes or p.val.cutoff) should be provided')
+      }
+      if(is.null(p.val.cutoff) & is.null(top.n.genes)) {
+        stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
+      }
 
       data.all = data_frame()
       cell.types = levels(self$cell.groups)
@@ -1200,7 +1241,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       rlang::invoke(sccore::embeddingPlot, params)
     },
 
-    #' @description Estimate ontology terms based on DEs
+    #' Estimate ontology terms based on DEs
+    #' 
     #' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")
     #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
     #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
@@ -1300,8 +1342,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    #' @title Estimate ontology families
-    #' @description Estimate ontology families based on ontology results
+    #' Estimate ontology families based on ontology results
+    #' 
     #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
     #' @param p.adj Cut-off for adj. P values (default: 0.05)
     #' @return List of families and ontology data per cell type
@@ -1334,7 +1376,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    #' @description Identify families containing a specific ontology term or ID
+    #' Identify families containing a specific ontology term or ID
+    #' 
     #' @param go.term Character vector with term description(s)
     #' @param go.id Character vector with ID(s)
     #' @param common Boolean, only identify families with all the supplied terms or IDs (default = FALSE)
@@ -1384,7 +1427,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(mutate(res, Families=sapply(Families, paste, collapse=", ")))
     },
 
-    #' @description Estimate Gene Ontology clusters
+    #' Estimate Gene Ontology clusters
+    #' 
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all'. Default: "up".
     #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO". Default: "GO".
     #' @param name Name of the field to store the results. Default: `cacoa:::getOntClustField(subtype, genes)`.
@@ -1425,7 +1469,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(res))
     },
 
-    #' @description Bar plot of ontology terms per cell type
+    #' Bar plot of ontology terms per cell type
+    #' 
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @return A ggplot2 object
@@ -1504,7 +1549,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' @description Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
+    #' Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
+    #' 
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")
     #' @param cell.subgroup Cell group to plot
@@ -1712,8 +1758,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         geom_hline(aes(yintercept=x), data.frame(x=cumsum(clust.lengths)[clust.lengths > 1] + 0.5))
     },
 
-    #' @title Plot ontology families
-    #' @description Plot related ontologies in one hierarchical network plot
+    #' Plot related ontologies in one hierarchical network plot
+    #' 
     #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
     #' @param cell.subgroups Cell subtype to plot
     #' @param family Family within cell subtype to plot (numeric value)
@@ -1766,8 +1812,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                          verbose=verbose, n.cores=n.cores, ...)
     },
 
-    #' @title Save ontology results
-    #' @description Save ontology results as a table
+    #' Save ontology results as a table
+    #' 
     #' @param file File name. Set to NULL to return the table instead of saving
     #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
     #' @param subtype Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)
@@ -1787,8 +1833,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       write.table(res, file=file, sep=sep, row.names=FALSE, ...)
     },
 
-    #' @title Save family results
-    #' @description Save family results as a table
+    #' Save family results as a table
+    #' 
     #' @param file File name (default: Family_results.tsv)
     #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
     #' @param subtype Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)
@@ -1827,7 +1873,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       write.table(res, file=file, sep=sep, row.names=FALSE, ...)
     },
 
-    #' @description Plot the cell group sizes or proportions per sample
+    #' Plot the cell group sizes or proportions per sample
+    #' 
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
     #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001)
     #' @param proportions whether to plot proportions or absolute numbers (default: TRUE)

@@ -2,6 +2,7 @@
 #'
 #' @param
 #' @return Order of inner nodes
+#' @keywords internal
 resampleContrast <- function(d.counts, d.groups, n.cell.counts = 500, n.seed = 239, n.iter = 1000){
   checkDataGroups(d.counts, d.groups)
   # --------
@@ -47,6 +48,7 @@ resampleContrast <- function(d.counts, d.groups, n.cell.counts = 500, n.seed = 2
 #'
 #' @param bal.len length of partiotion
 #' @return random partition - verctor with values from {1, -1}
+#' @keywords internal
 getRndPartition <- function(bal.len){
   if(bal.len < 2)
     stop('Balance cannot be generated')
@@ -63,6 +65,7 @@ getRndPartition <- function(bal.len){
 #'
 #' @param n.cell.types number of cell types
 #' @return list with binary and normalised sbp matrices (partitions are in rows)
+#' @keywords internal
 getRndSbp <- function(n.cell.types, n.seed=239){
   if(n.cell.types < 2)
     stop('For a partition at least 2 cell types should be provided')
@@ -104,6 +107,7 @@ getRndSbp <- function(n.cell.types, n.seed=239){
 #' @param d.counts Cell count table
 #' @param n.seed Random seed
 #' @return Matrix with balances in columns
+#' @keywords internal
 getRndBalances <- function(d.counts, n.seed=239){
   checkData(d.counts)
   # ---------
@@ -124,6 +128,7 @@ getRndBalances <- function(d.counts, n.seed=239){
 
 
 #' Get log frequencies from the cell count table
+#' @keywords internal
 getLogFreq <- function(d.counts){
   checkData(d.counts)
   # ---------
@@ -142,6 +147,7 @@ getLogFreq <- function(d.counts){
 #' @param d.groups Group variable
 #' @param n.seed Random seed
 #' @return Vector with cda loadings
+#' @keywords internal
 getCdaLoadings <- function(d.counts, d.groups, n.seed = 239){
   checkDataGroups(d.counts, d.groups)
   # ---------
@@ -183,12 +189,14 @@ getCdaLoadings <- function(d.counts, d.groups, n.seed = 239){
 #' @param n.seed Random seed
 #' @param f.bootstrap if to use the bootstrap, dafault (TRUE) means the use of bootstrap
 #' @return Resampled dataset
+#' @keywords internal
 resampleCounts<- function(d.counts, n.tot.count=500, d.groups = NULL, n.seed = 239, f.bootstrap = TRUE){
 
-  if(is.null(d.groups))
+  if(is.null(d.groups)) {
     checkData(d.counts)
-  else
+  } else {
     checkDataGroups(d.counts, d.groups)
+  }
   # ---------
 
   set.seed(n.seed)
@@ -223,6 +231,7 @@ resampleCounts<- function(d.counts, n.tot.count=500, d.groups = NULL, n.seed = 2
 #' @param n.seed Random seed
 #' @param thresh.pc.var percentage of variance which should be characterised by PSc
 #' @return Balances without group effect
+#' @keywords internal 
 removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
   checkDataGroups(d.used, d.groups)
   # ---------
@@ -274,6 +283,7 @@ removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
 #' @param cell.set1 Set#1
 #' @param cell.set2 Set#1
 #' @return Balance values
+#' @keywords internal
 calcBalancesOnCellSets <- function(d.counts, cell.set1, cell.set2 = NULL){
   checkData(d.counts)
   checkDataAndCells(d.counts, cell.set1)
@@ -294,6 +304,7 @@ calcBalancesOnCellSets <- function(d.counts, cell.set1, cell.set2 = NULL){
 }
 
 
+#' @keywords internal
 calcWilcoxonTest <- function(d.counts, d.groups){
   d.freqs <- d.counts %>% magrittr::divide_by(rowSums(.))
 
@@ -319,6 +330,7 @@ calcWilcoxonTest <- function(d.counts, d.groups){
   return(p.vals.res)
 }
 
+#' @keywords internal
 getCellSignificance <- function(balances, bal.threshold = 0){
   n.bal <- ncol(balances)
   n.plus <- rowSums(balances[,2:n.bal] > bal.threshold)
@@ -326,5 +338,5 @@ getCellSignificance <- function(balances, bal.threshold = 0){
   perm.frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) /
     mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
 
-  perm.frac
+  return(perm.frac)
 }

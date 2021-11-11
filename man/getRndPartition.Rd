@@ -15,3 +15,4 @@ random partition - verctor with values from {1, -1}
 \description{
 Generate one random partition of given length
 }
+\keyword{internal}

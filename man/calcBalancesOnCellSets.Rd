@@ -19,3 +19,4 @@ Balance values
 \description{
 Calculate balances based on the contrast defines by two sets of cells
 }
+\keyword{internal}

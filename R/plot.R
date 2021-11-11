@@ -32,6 +32,7 @@ dark.red.palette <- colorRampPalette(c("gray95", "red", "#5A0000"), space="Lab")
 #' @param palette color palette
 #' @param plot.line plot the robust regression (default: TRUE)
 #' @param line.width regression line width (default: 0.5)
+#' @keywords internal
 plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", legend.position="right", label=TRUE, size=4,
                                 palette=NULL, plot.line=TRUE, line.width=0.5, plot.theme=theme_get()) {
   p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
@@ -73,6 +74,7 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
 #' @param size marker size (default: 0.5)
 #' @param jitter.width width of the point jitter (default: 0.15)
+#' @keywords internal
 plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=1.05, show.significance=FALSE,
                                      jitter.width=0.15, notch=FALSE, legend.position="right", alpha=0.2, size=0.5,
                                      palette=NULL, adjust.pvalues=TRUE, plot.theme=theme_get(), label.y.npc=0.92) {
@@ -205,6 +207,7 @@ getGenePalette <- function(genes=c("up", "down", "all"), high="gray80") {
   return(colorRampPalette(c(high, low)))
 }
 
+#' @keywords internal
 prepareOntologyPlotDF <- function(ont.res, p.adj, n, log.colors) {
   ont.res$GeneRatio %<>% sapply(function(s) strsplit(s, "/")) %>%
     sapply(function(x) as.numeric(x[1])/as.numeric(x[2]) * 100)
@@ -221,13 +224,16 @@ prepareOntologyPlotDF <- function(ont.res, p.adj, n, log.colors) {
   return(ont.res)
 }
 
+#' @keywords internal
 getOntologyPlotTitle <- function(genes, cell.subgroup, type) {
-  if(genes == "all")
+  if(genes == "all"){
     return(ggtitle(paste(cell.subgroup, type, "terms, all DE genes")))
+  }
 
   return(ggtitle(paste0(cell.subgroup, " ", type, " terms, ", genes,"-regulated DE genes")))
 }
 
+#' @keywords internal
 estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
   if (length(arr) == 1) return(c(NA, NA))
   s.means <- sapply(1:n.samples, function(i) mean(sample(arr, replace=TRUE), ...))
@@ -243,6 +249,7 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 #' @param notch - whether to show notches in the boxplot version (default=TRUE)
 #' @param palette - cell type palette
 #' @return A ggplot2 object
+#' @keywords internal
 plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point', 'bar'), show.jitter=TRUE,
                                          notch=TRUE, jitter.alpha=0.05, palette=NULL, ylab='expression distance',
                                          yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0,
@@ -326,15 +333,16 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
   return(p)
 }
 
-##' show a scatter plot of cell-type values vs. number of cells per cell type
-##'
-##' @param df a data frame with $value and $Type columns, just like plotMeanValuesPerCellType
-##' @param cell.groups a cell groups vector for calculating number of cells per cell type
-##' @param show.whiskers whether se values should be plotted
-##' @param palette cell type palette
-##' @param ylab y axis label
-##' @param yline value at which a horizontal reference value should be plotted
-##' @return ggplot2 object
+#' Show a scatter plot of cell-type values vs. number of cells per cell type
+#'
+#' @param df a data frame with $value and $Type columns, just like plotMeanValuesPerCellType
+#' @param cell.groups a cell groups vector for calculating number of cells per cell type
+#' @param show.whiskers whether se values should be plotted
+#' @param palette cell type palette
+#' @param ylab y axis label
+#' @param yline value at which a horizontal reference value should be plotted
+#' @return ggplot2 object
+#' @keywords internal
 plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab='expression distance', yline=1,
                                 show.regression=TRUE, show.whiskers=TRUE, plot.theme=theme_get()) {
   cell.groups <- table(cell.groups) # %>% .[names(.) %in% names(de.raw)]
@@ -373,6 +381,7 @@ plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab
 }
 
 # TODO: Improve speed of this function. No need to check BP/MF/CC all the time
+#' @keywords internal
 reduceEdges <- function(edges, verbose=TRUE, n.cores = 1) {
   edges %>%
     pull(to) %>%
@@ -397,18 +406,19 @@ reduceEdges <- function(edges, verbose=TRUE, n.cores = 1) {
     bind_rows()
 }
 
-##' @title Plot ontology families
-##' @description Plot related ontologies in one hierarchical network plot
-##' @param fam List of ontology IDs for the chosen family
-##' @param data Data frane if raw ontology data for the chosen cell type
-##' @param plot.type How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) (default: complete)
-##' @param show.ids Whether to show ontology IDs instead of names (default: F)
-##' @param string.length Length of strings for wrapping in order to fit text within boxes (default: 18)
-##' @param legend.label.size Size og legend labels (default: 1)
-##' @param legend.position Position of legend (default: topright)
-##' @param verbose Print messages (default: T)
-##' @param n.cores Number of cores to use (default: 1)
-##' @return Rgraphviz object
+#' Plot related ontologies in one hierarchical network plot
+#' 
+#' @param fam List of ontology IDs for the chosen family
+#' @param data Data frane if raw ontology data for the chosen cell type
+#' @param plot.type How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) (default: complete)
+#' @param show.ids Whether to show ontology IDs instead of names (default: F)
+#' @param string.length Length of strings for wrapping in order to fit text within boxes (default: 18)
+#' @param legend.label.size Size og legend labels (default: 1)
+#' @param legend.position Position of legend (default: topright)
+#' @param verbose Print messages (default: T)
+#' @param n.cores Number of cores to use (default: 1)
+#' @return Rgraphviz object
+#' @keywords internal
 plotOntologyFamily <- function(fam, data, plot.type="complete", show.ids=FALSE, string.length=18, legend.label.size=1,
                                legend.position="topright", verbose=TRUE, n.cores=1, reduce.edges=FALSE, font.size=24) {
   checkPackageInstalled("Rgraphviz", bioc=TRUE)
@@ -517,6 +527,7 @@ plotOntologyFamily <- function(fam, data, plot.type="complete", show.ids=FALSE, 
 }
 
 
+#' @keywords internal
 plotVolcano <- function(de.df, p.name='padj', color.var = 'CellFrac', legend.pos="none", palette=brewerPalette("RdYlBu"), lf.cutoff=1.5, p.cutoff=0.05,
                         cell.frac.cutoff=0.2, size=c(0.1, 1.0), lab.size=2, draw.connectors=TRUE, sel.labels=NULL, plot.theme=theme_get(), ...) {
 
@@ -554,6 +565,7 @@ plotVolcano <- function(de.df, p.name='padj', color.var = 'CellFrac', legend.pos
   return(gg)
 }
 
+#' @keywords internal
 parseLimitRange <- function(lims, vals) {
   if (is.null(lims)) return(range(vals))
   if (!is.character(lims)) return(lims)
@@ -563,6 +575,7 @@ parseLimitRange <- function(lims, vals) {
   return(as.numeric(lims))
 }
 
+#' @keywords internal
 prepareGeneExpressionComparisonPlotInfo <- function(de.info, genes, plots, smoothed, max.z, max.z.adj, max.lfc, z.palette, z.adj.palette, lfc.palette) {
   z.scores <- NULL
   z.adj <- NULL
@@ -615,6 +628,7 @@ prepareGeneExpressionComparisonPlotInfo <- function(de.info, genes, plots, smoot
   return(plot.parts)
 }
 
+#' @keywords internal
 pvalueToCode <- function(pvals, ns.symbol="ns") {
   symnum(pvals, corr=FALSE, na=FALSE, legend=FALSE,
          cutpoints = c(0, 0.001, 0.01, 0.05, 1),
@@ -622,6 +636,7 @@ pvalueToCode <- function(pvals, ns.symbol="ns") {
     as.character() %>% setNames(names(pvals))
 }
 
+#' @keywords internal
 transferLabelLayer <- function(gg.target, gg.source, font.size) {
   ls <- gg.source$layers %>% .[sapply(., function(l) "GeomLabelRepel" %in% class(l$geom))]
   if (length(ls) != 1) {
@@ -635,6 +650,7 @@ transferLabelLayer <- function(gg.target, gg.source, font.size) {
   return(gg.target)
 }
 
+#' @keywords internal
 getScaledZGradient <- function(min.z, palette, color.range) {
   if (length(color.range) == 1) {
     if (min.z > (color.range - 1e-10))
@@ -650,6 +666,8 @@ getScaledZGradient <- function(min.z, palette, color.range) {
   return(scale)
 }
 
+
+#' @keywords internal
 plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, method='MDS', sample.colors=NULL,
                                      show.sample.size=TRUE, palette=NULL, font.size=NULL, show.ticks=FALSE, title=NULL,
                                      show.labels=FALSE, size=5, color.title=NULL, perplexity=4, max.iter=1e3,

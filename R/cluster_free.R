@@ -3,6 +3,7 @@
 #' @param n.sampled.cells number of sub-sampled cells for estimating the gene programs. If 0, all cells are used.
 #' it is interpreted as a vector of cell
 #' @inheritDotParams fabia::fabia -p -X -cyc -alpha -random
+#' @keywords internal
 estimateGeneProgramsFabia <- function(z.scores, n.programs, n.sampled.cells=15000, cyc=1500, alpha=0.2, random=-1, ...) {
   checkPackageInstalled("fabia", bioc=TRUE)
 
@@ -18,6 +19,7 @@ estimateGeneProgramsFabia <- function(z.scores, n.programs, n.sampled.cells=1500
   return(list(fabia=fabia.res, sample.ids=sample.ids))
 }
 
+#' @keywords internal
 estimateGeneClustersLeiden <- function(z.scores, resolution=1, n.pcs=100, k=30, n.cores=1, verbose=FALSE) {
   checkPackageInstalled(c("N2R", "leidenAlg"), cran=TRUE)
   z.scores %<>% t()
@@ -34,6 +36,7 @@ estimateGeneClustersLeiden <- function(z.scores, resolution=1, n.pcs=100, k=30, 
   return(clusts)
 }
 
+#' @keywords internal
 estimateGeneClustersPam <- function(z.scores, n.programs) {
   checkPackageInstalled(c("cluster"), cran=TRUE)
   p.dists <- 1 - cor(as.matrix(z.scores))
@@ -42,17 +45,20 @@ estimateGeneClustersPam <- function(z.scores, n.programs) {
   return(pam.res$clustering)
 }
 
+#' @keywords internal
 geneProgramSimilarityScores <- function(program.scores, gene.scores) {
   apply(gene.scores, 2, estimateCorrelationDistance, program.scores, centered=FALSE) %>%
       {1 - .} %>% sort(decreasing=TRUE)
 }
 
+#' @keywords internal
 geneProgramLoadingScores <- function(program.scores, gene.scores, min.score=0.05) {
   cell.subs <- which(abs(program.scores) > min.score) %>% names()
   scores <- gene.scores[cell.subs,, drop=FALSE] %>% abs() %>% colSums() %>% sort(decreasing=TRUE)
   return(scores)
 }
 
+#' @keywords internal
 geneProgramInfoByCluster <- function(clusters, z.scores, min.score=0.05, verbose=FALSE) {
   genes.per.clust <- clusters %>% {split(names(.), .)}
   program.scores <- genes.per.clust %>%

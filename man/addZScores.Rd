@@ -7,10 +7,10 @@
 addZScores(df)
 }
 \arguments{
-\item{df}{Data frame with the columns "pval", "padj" and "log2FoldChange"}
+\item{df}{Data.frame with the columns "pval", "padj" and "log2FoldChange"}
 }
 \value{
-Updated data frame with Z scores
+Updated data.frame with Z scores
 }
 \description{
 Add Z scores to DE results

@@ -4,32 +4,31 @@
 \alias{Cacoa}
 \title{Cacoa R6 class}
 \description{
-Cacoa R6 class
+The class encompasses etc etc
+}
+\examples{
 
-Cacoa R6 class
+## ------------------------------------------------
+## Method `Cacoa$new`
+## ------------------------------------------------
 
-Estimate ontology families
+con <- Conos$new(small_panel.preprocessed, n.cores=1)
 
-Plot ontology families
+Calculate expression shift magnitudes of different clusters between conditions
 
-Save ontology results
-
-Save family results
-
-Plot inter-sample expression distance
-
-Project samples to 2D space with MDS
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{
-\item{\code{verbose}}{print diagnostic messages}
+\item{\code{n.cores}}{number of cores}
 
-\item{\code{test.results}}{results of the estimations, ready to use}
+\item{\code{verbose}}{boolean Whether to provide verbose output with diagnostic messages (default=TRUE)}
 
-\item{\code{cache}}{intermediate results of the estimations, which can be used during some other computations}
+\item{\code{test.results}}{list Results of the estimations, ready to use}
 
-\item{\code{data.object}}{the main object storing data (Conos or Seurat)}
+\item{\code{cache}}{list Intermediate results of the estimations, which can be used during some other computations}
+
+\item{\code{data.object}}{list The main object storing data (Conos or Seurat)}
 
 \item{\code{sample.groups}}{2-factor vector with annotation of groups/condition per sample}
 
@@ -135,6 +134,7 @@ Project samples to 2D space with MDS
 \if{html}{\out{<a id="method-new"></a>}}
 \if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
+initialize Cacoa class
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$new(
   data.object,
@@ -148,7 +148,7 @@ Project samples to 2D space with MDS
   embedding = extractEmbedding(data.object),
   graph.name = NULL,
   n.cores = 1,
-  verbose = TRUE,
+  verbose = self$verbose,
   plot.theme = theme_bw(),
   plot.params = NULL
 )}\if{html}{\out{</div>}}
@@ -164,15 +164,32 @@ Project samples to 2D space with MDS
 \item{\code{n.cores}}{number of cores for parallelization}
 
 \item{\code{verbose}}{show progress (default: stored value)}
+
+\item{\code{override.conos.plot.theme}}{boolean Whether to reset plot settings to the ggplot2 default (default=FALSE)}
+
+\item{\code{...}}{additional parameters upon initializing Conos}
 }
 \if{html}{\out{</div>}}
 }
+\subsection{Returns}{
+a new 'Conos' object
+}
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{con <- Conos$new(small_panel.preprocessed, n.cores=1)
+
+Calculate expression shift magnitudes of different clusters between conditions
+
+}
+\if{html}{\out{</div>}}
+
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateExpressionShiftMagnitudes"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateExpressionShiftMagnitudes}{}}}
 \subsection{Method \code{estimateExpressionShiftMagnitudes()}}{
-Calculate expression shift magnitudes of different clusters between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateExpressionShiftMagnitudes(
   cell.groups = self$cell.groups,
@@ -229,6 +246,8 @@ a list include
 \item \code{p.dist.info}: list of distance matrices per cell type
 \item \code{sample.groups}: filtered sample groups
 \item \code{cell.groups}: filtered cell groups
+Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
+cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
 }
 }
 }
@@ -271,8 +290,6 @@ a list include
 \if{html}{\out{<a id="method-plotExpressionShiftMagnitudes"></a>}}
 \if{latex}{\out{\hypertarget{method-plotExpressionShiftMagnitudes}{}}}
 \subsection{Method \code{plotExpressionShiftMagnitudes()}}{
-Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
-cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionShiftMagnitudes(
   name = NULL,
@@ -317,6 +334,7 @@ A ggplot2 object
 \if{latex}{\out{\hypertarget{method-estimatePerCellTypeDE}{}}}
 \subsection{Method \code{estimatePerCellTypeDE()}}{
 Alias for estimateDEPerCellType
+Estimate differential gene expression per cell type between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimatePerCellTypeDE(...)}\if{html}{\out{</div>}}
 }
@@ -326,7 +344,6 @@ Alias for estimateDEPerCellType
 \if{html}{\out{<a id="method-estimateDEPerCellType"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateDEPerCellType}{}}}
 \subsection{Method \code{estimateDEPerCellType()}}{
-Estimate differential gene expression per cell type between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEPerCellType(
   cell.groups = self$cell.groups,
@@ -387,13 +404,13 @@ Estimate differential gene expression per cell type between conditions
 }
 \subsection{Returns}{
 A list of DE genes
+Plot DE stability per cell type
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateDEStabilityPerCellType"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateDEStabilityPerCellType}{}}}
 \subsection{Method \code{estimateDEStabilityPerCellType()}}{
-Plot DE stability per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEStabilityPerCellType(
   de.name = "de",
@@ -892,7 +909,8 @@ Plot embedding
 
 \item{\code{plot.theme}}{plot theme to use (default: \code{self$plot.theme})}
 
-\item{\code{...}}{other parameters passed to \link[sccore:embeddingPlot]{embeddingPlot}}
+\item{\code{...}}{other parameters passed to \link[sccore:embeddingPlot]{embeddingPlot}
+Estimate ontology terms based on DEs}
 }
 \if{html}{\out{</div>}}
 }
@@ -901,7 +919,6 @@ Plot embedding
 \if{html}{\out{<a id="method-estimateOntology"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateOntology}{}}}
 \subsection{Method \code{estimateOntology()}}{
-Estimate ontology terms based on DEs
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntology(
   type = "GO",
@@ -952,6 +969,7 @@ Estimate ontology terms based on DEs
 }
 \subsection{Returns}{
 A list containing a list of terms per ontology, and a data frame with merged results
+Estimate ontology families based on ontology results
 }
 }
 \if{html}{\out{<hr>}}
@@ -991,7 +1009,6 @@ A list containing a list of terms per ontology, and a data frame with merged res
 \if{html}{\out{<a id="method-estimateOntologyFamilies"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateOntologyFamilies}{}}}
 \subsection{Method \code{estimateOntologyFamilies()}}{
-Estimate ontology families based on ontology results
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntologyFamilies(type = "GO", p.adj = 0.05, name = NULL)}\if{html}{\out{</div>}}
 }
@@ -1009,13 +1026,13 @@ Estimate ontology families based on ontology results
 }
 \subsection{Returns}{
 List of families and ontology data per cell type
+Identify families containing a specific ontology term or ID
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getFamiliesPerGO"></a>}}
 \if{latex}{\out{\hypertarget{method-getFamiliesPerGO}{}}}
 \subsection{Method \code{getFamiliesPerGO()}}{
-Identify families containing a specific ontology term or ID
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getFamiliesPerGO(go.term = NULL, go.id = NULL, common = FALSE)}\if{html}{\out{</div>}}
 }
@@ -1033,13 +1050,13 @@ Identify families containing a specific ontology term or ID
 }
 \subsection{Returns}{
 Data frame
+Estimate Gene Ontology clusters
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateOntologyClusters"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateOntologyClusters}{}}}
 \subsection{Method \code{estimateOntologyClusters()}}{
-Estimate Gene Ontology clusters
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntologyClusters(
   type = "GO",
@@ -1082,6 +1099,7 @@ List containing:
 for the clustering info
 \item \code{hclust}: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all
 subtypes
+Bar plot of ontology terms per cell type
 }
 }
 }
@@ -1089,7 +1107,6 @@ subtypes
 \if{html}{\out{<a id="method-plotNumOntologyTermsPerType"></a>}}
 \if{latex}{\out{\hypertarget{method-plotNumOntologyTermsPerType}{}}}
 \subsection{Method \code{plotNumOntologyTermsPerType()}}{
-Bar plot of ontology terms per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotNumOntologyTermsPerType(
   genes = "up",
@@ -1116,13 +1133,13 @@ Bar plot of ontology terms per cell type
 }
 \subsection{Returns}{
 A ggplot2 object
+Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotOntology"></a>}}
 \if{latex}{\out{\hypertarget{method-plotOntology}{}}}
 \subsection{Method \code{plotOntology()}}{
-Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntology(
   cell.subgroups,
@@ -1277,13 +1294,13 @@ Plot correlation matrix for ontology terms between cell types
 }
 \subsection{Returns}{
 A ggplot2 object
+Plot related ontologies in one hierarchical network plot
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotOntologyFamily"></a>}}
 \if{latex}{\out{\hypertarget{method-plotOntologyFamily}{}}}
 \subsection{Method \code{plotOntologyFamily()}}{
-Plot related ontologies in one hierarchical network plot
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyFamily(
   type = "GO",
@@ -1333,13 +1350,13 @@ Plot related ontologies in one hierarchical network plot
 }
 \subsection{Returns}{
 Rgraphviz object
+Save ontology results as a table
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-saveOntologyAsTable"></a>}}
 \if{latex}{\out{\hypertarget{method-saveOntologyAsTable}{}}}
 \subsection{Method \code{saveOntologyAsTable()}}{
-Save ontology results as a table
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveOntologyAsTable(
   file,
@@ -1371,13 +1388,13 @@ Save ontology results as a table
 }
 \subsection{Returns}{
 Table for import into text editor
+Save family results as a table
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-saveFamiliesAsTable"></a>}}
 \if{latex}{\out{\hypertarget{method-saveFamiliesAsTable}{}}}
 \subsection{Method \code{saveFamiliesAsTable()}}{
-Save family results as a table
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveFamiliesAsTable(
   file,
@@ -1409,13 +1426,13 @@ Save family results as a table
 }
 \subsection{Returns}{
 Table for import into text editor
+Plot the cell group sizes or proportions per sample
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotCellGroupSizes"></a>}}
 \if{latex}{\out{\hypertarget{method-plotCellGroupSizes}{}}}
 \subsection{Method \code{plotCellGroupSizes()}}{
-Plot the cell group sizes or proportions per sample
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellGroupSizes(
   cell.groups = self$cell.groups,

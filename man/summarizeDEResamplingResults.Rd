@@ -12,3 +12,4 @@ summarizeDEResamplingResults(de.list, var.to.sort = "pvalue")
 \description{
 Summarize DE Resampling Results
 }
+\keyword{internal}

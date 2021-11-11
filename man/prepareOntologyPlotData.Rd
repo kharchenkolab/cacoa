@@ -21,3 +21,4 @@ List of ontology data for plotting
 \description{
 Prepare ontology results for plotting
 }
+\keyword{internal}

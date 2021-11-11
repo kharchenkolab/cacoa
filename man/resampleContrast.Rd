@@ -18,3 +18,4 @@ Order of inner nodes
 \description{
 Perform re-sampling in two ways: fixed total count and bootstrap
 }
+\keyword{internal}

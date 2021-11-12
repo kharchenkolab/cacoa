@@ -63,10 +63,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'
     #' @param override.conos.plot.theme boolean Whether to reset plot settings to the ggplot2 default (default=FALSE)
     #' @param ... additional parameters upon initializing Conos
-    #' @return a new 'Conos' object
-    #' @examples
-    #' con <- Conos$new(small_panel.preprocessed, n.cores=1)
-    #'
+    #' @return a new 'Cacoa' object
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL,
                         target.level=NULL, sample.groups.palette=NULL, cell.groups.palette=NULL,
                         embedding=extractEmbedding(data.object), graph.name=NULL, n.cores=1, verbose=self$verbose,

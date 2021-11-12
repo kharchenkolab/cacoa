@@ -6,17 +6,6 @@
 \description{
 The class encompasses etc etc
 }
-\examples{
-
-## ------------------------------------------------
-## Method `Cacoa$new`
-## ------------------------------------------------
-
-con <- Conos$new(small_panel.preprocessed, n.cores=1)
-
-Calculate expression shift magnitudes of different clusters between conditions
-
-}
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{
@@ -172,19 +161,9 @@ initialize Cacoa class
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-a new 'Conos' object
-}
-\subsection{Examples}{
-\if{html}{\out{<div class="r example copy">}}
-\preformatted{con <- Conos$new(small_panel.preprocessed, n.cores=1)
-
+a new 'Cacoa' object
 Calculate expression shift magnitudes of different clusters between conditions
-
 }
-\if{html}{\out{</div>}}
-
-}
-
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateExpressionShiftMagnitudes"></a>}}

@@ -5,7 +5,6 @@ Authors@R: c(person("Peter", "Kharchenko", email = "peter_kharchenko@hms.harvard
 Description: Case-Control Analysis tools for single-cell RNA-seq
 License: GPL-3
 Encoding: UTF-8
-LazyData: true
 Depends:
     R (>= 4.0.0), Matrix
 biocViews:

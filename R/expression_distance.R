@@ -1,12 +1,14 @@
-##' @title Expression shift magnitudes per cluster between conditions
-##' @param cm.per.type List of normalized count matrices per cell type
-##' @param sample.groups Named factor with cell names indicating condition/sample, e.g., ctrl/disease
-##' @param cell.groups Named clustering/annotation factor with cell names
-##' @param dist what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values
-##' @param n.cores number of cores (default=1)
-##' @param verbose (default=FALSE)
-##' @param transposed.matrices (default=FALSE)
-##' @export
+#' Expression shift magnitudes per cluster between conditions
+#'
+#' @param cm.per.type List of normalized count matrices per cell type
+#' @param sample.groups Named factor with cell names indicating condition/sample, e.g., ctrl/disease
+#' @param cell.groups Named clustering/annotation factor with cell names
+#' @param dist what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values
+#' @param n.cores number of cores (default=1)
+#' @param verbose (default=FALSE)
+#' @param transposed.matrices (default=FALSE)
+#' @return List of distances per cell type, distance matrices, sample groups, cell types, pvalues, and adjusted p-values. 
+#' @export
 estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
                                               dist=NULL, dist.type=c("cross.both", "cross.ref", "var"), verbose=FALSE,
                                               ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
@@ -66,6 +68,8 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
               cell.groups=cell.groups, pvalues=pvalues, padjust=padjust))
 }
 
+
+#' @keywords internal
 estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, top.n.genes=NULL, n.pcs=NULL,
                                                 gene.selection="wilcox", exclude.genes=NULL) {
   if (!is.null(top.n.genes)) {
@@ -101,6 +105,7 @@ estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, to
   return(dist.mat)
 }
 
+#' @keywords internal
 estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, cell.groups, sample.groups,
                                                 dist='cor', top.n.genes=NULL, n.pcs=NULL, ...) {
   sample.type.table <- cell.groups %>% table(sample.per.cell[names(.)]) # table of sample types and cells
@@ -114,6 +119,7 @@ estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, ce
   return(ctdm)
 }
 
+#' @keywords internal
 subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df=FALSE) {
   comp.selector <- if (cross.factor) "!=" else "=="
   selection.mask <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], comp.selector);
@@ -129,6 +135,7 @@ subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df
   return(na.omit(dist.mat[selection.mask]))
 }
 
+#' @keywords internal
 estimateExpressionShiftsByDistMat <- function(dist.mat, sample.groups, norm.type=c("both", "ref", "none"),
                                               ref.level=NULL, return.type=c("cross", "target")) {
   norm.type <- match.arg(norm.type)
@@ -164,6 +171,7 @@ estimateExpressionShiftsByDistMat <- function(dist.mat, sample.groups, norm.type
   return(dists)
 }
 
+#' @keywords internal
 joinExpressionShiftDfs <- function(dist.df.per.type, sample.groups) {
   dist.df.per.type %<>% .[!sapply(., is.null)]
   df <- names(dist.df.per.type) %>%
@@ -175,6 +183,7 @@ joinExpressionShiftDfs <- function(dist.df.per.type, sample.groups) {
   return(df)
 }
 
+#' @keywords internal
 prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, return.dists=TRUE) {
   # bring to a common set of cell types
   common.types <- lapply(p.dist.per.type, colnames) %>% unlist() %>% unique()
@@ -222,6 +231,7 @@ prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, 
   return(xmd2)
 }
 
+#' @keywords internal
 filterCellTypesByNSamples <- function(cell.groups, sample.per.cell, sample.groups,
                                       min.cells.per.sample, min.samp.per.type, verbose=TRUE) {
   freq.table <- table(Type=cell.groups, Sample=sample.per.cell) %>% as.data.frame() %>%
@@ -243,6 +253,7 @@ filterCellTypesByNSamples <- function(cell.groups, sample.per.cell, sample.group
   return(freq.table)
 }
 
+#' @keywords internal
 filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sample.groups,
                                           min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
                                           genes=NULL, verbose=FALSE) {
@@ -287,7 +298,9 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
 
 ## Common shifts
 
-##' @description calculate consensus change direction and distances between samples along this axis
+#' Calculate consensus change direction and distances between samples along this axis
+#' 
+#' @keywords internal
 consensusShiftDistances <- function(tcm, sample.groups, use.median=FALSE, mean.trim=0, use.cpp=TRUE) {
   sample.groups %<>% .[colnames(tcm)]
   if (min(table(sample.groups)) < 1) return(NA); # not enough samples
@@ -319,9 +332,12 @@ consensusShiftDistances <- function(tcm, sample.groups, use.median=FALSE, mean.t
   return(abs(as.numeric(dm %*% dmm)))
 }
 
+#' @keywords internal
 estimateExplainedVariance <- function(cm, sample.groups) {
   spg <- rownames(cm) %>% split(droplevels(as.factor(sample.groups[.])))
-  if (length(spg) == 1) return(NULL)
+  if (length(spg) == 1){
+    return(NULL)
+  } 
 
   sapply(spg, function(spc) matrixStats::colVars(cm[spc,,drop=FALSE]) * (length(spc) - 1)) %>%
     rowSums(na.rm=TRUE) %>%
@@ -329,6 +345,7 @@ estimateExplainedVariance <- function(cm, sample.groups) {
     setNames(colnames(cm))
 }
 
+#' @keywords internal
 filterGenesForCellType <- function(cm.norm, sample.groups, top.n.genes=500, gene.selection=c("wilcox", "var", "od"),
                                    exclude.genes=NULL) {
   gene.selection <- match.arg(gene.selection)
@@ -353,6 +370,7 @@ filterGenesForCellType <- function(cm.norm, sample.groups, top.n.genes=500, gene
   return(sel.genes)
 }
 
+#' @keywords internal
 parseDistance <- function(dist, top.n.genes, n.pcs, verbose) {
   n.comps <- min(top.n.genes, n.pcs, Inf)
   if (is.null(dist)) {

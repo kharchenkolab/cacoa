@@ -38,6 +38,9 @@ estimateExpressionShiftMagnitudes(
 
 \item{transposed.matrices}{(default=FALSE)}
 }
+\value{
+List of distances per cell type, distance matrices, sample groups, cell types, pvalues, and adjusted p-values.
+}
 \description{
 Expression shift magnitudes per cluster between conditions
 }

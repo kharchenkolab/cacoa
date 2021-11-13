@@ -1,3 +1,12 @@
+#' @importFrom grDevices colorRampPalette contourLines
+#' @importFrom graphics legend
+#' @importFrom stats as.dendrogram as.dist as.formula as.hclust cmdscale coef 
+#' @importFrom stats cor cutree dist hclust lm loadings median model.matrix na.omit p.adjust pf prcomp 
+#' @importFrom stats qnorm quantile relevel reorder rmultinom runif sd setNames symnum var wilcox.test
+#' @importFrom utils
+NULL
+
+
 #' @title Cacoa R6 class
 #'
 #' @description The class encompasses etc etc

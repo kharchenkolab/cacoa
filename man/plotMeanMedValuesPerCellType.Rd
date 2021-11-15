@@ -20,7 +20,9 @@ plotMeanMedValuesPerCellType(
   trim = 0,
   order.x = TRUE,
   pvalue.y = NULL,
-  y.max = NULL
+  y.max = NULL,
+  y.offset = NULL,
+  ns.symbol = "ns"
 )
 }
 \arguments{
@@ -50,3 +52,4 @@ A ggplot2 object
 \description{
 Generic function for plotting mean or median values per cell type (used for expression shift distances and others)
 }
+\keyword{internal}

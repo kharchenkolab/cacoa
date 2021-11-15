@@ -1,8 +1,9 @@
-#' @description Transform sequential binary partition (sbp) into balances
+#' Transform sequential binary partition (sbp) into balances
 #'
 #' @param d.counts Cell count table
 #' @param sbp.pop matrix with binary partiotions in rows
 #' @return matrix of balances in columns; rows are samples
+#' @keywords internal
 sbp2balances <- function(d.counts, sbp.pop){
   checkDataSbp(d.counts, sbp.pop)
   # ---------
@@ -23,7 +24,7 @@ sbp2balances <- function(d.counts, sbp.pop){
 }
 
 
-#' @description Genetic algorithm to obtaint the most contrast balance between cell types
+#' Genetic algorithm to obtaint the most contrast balance between cell types
 #'
 #' @param d.counts Cell count table
 #' @param d.groups Group variable
@@ -31,6 +32,7 @@ sbp2balances <- function(d.counts, sbp.pop){
 #' @param n.epoch number of epochs
 #' @param n.seed seed id
 #' @return matrix with final population, rows - individuals, top individual - the best partition
+#' @keywords internal
 gaPartition <- function(d.counts, d.groups, n.pop = 1000, n.epoch = 100, n.seed = 239){
   checkDataGroups(d.counts, d.groups)
   set.seed(n.seed)
@@ -98,7 +100,7 @@ gaPartition <- function(d.counts, d.groups, n.pop = 1000, n.epoch = 100, n.seed 
 }
 
 
-#' @description Genetic algorithm to obtaint the most contrast balance including all cell types
+#' Genetic algorithm to obtaint the most contrast balance including all cell types
 #'
 #' @param d.counts Cell count table
 #' @param d.groups Group variable
@@ -106,6 +108,7 @@ gaPartition <- function(d.counts, d.groups, n.pop = 1000, n.epoch = 100, n.seed 
 #' @param n.epoch number of epochs
 #' @param n.seed seed id
 #' @return matrix with final population, rows - individuals, top individual - the best partition
+#' @keywords internal
 gaPartitionAll <- function(d.counts, d.groups, n.pop = 1000, n.epoch = 100, n.seed = 239){
   checkDataGroups(d.counts, d.groups)
   set.seed(n.seed)
@@ -158,6 +161,7 @@ gaPartitionAll <- function(d.counts, d.groups, n.pop = 1000, n.epoch = 100, n.se
 #' @param n.seed seed id
 #' @param thresh.parent fraction of parents for a next epoch
 #' @return list of significant cell types and two contrast sets of cells
+#' @keywords internal
 getSignifCellTypes <- function(d.counts, d.groups,
                                n.pop = 1000, n.epoch = 100, n.seed = 239,
                                thresh.parent = 1/4){
@@ -206,6 +210,7 @@ getSignifCellTypes <- function(d.counts, d.groups,
 #' @param d.groups Group variable
 #' @param n.dim number of components to return
 #' @return Caconical components
+#' @keywords internal
 getCanonicalContrasts <- function(d.counts, d.groups, n.dim = 2){
   checkDataGroups(d.counts, d.groups)
   if(n.dim < 1)
@@ -247,6 +252,7 @@ getCanonicalContrasts <- function(d.counts, d.groups, n.dim = 2){
 #' @param thresh.parent fraction of parents for a next epoch
 #' @param p.val.thresh p-value threshold
 #' @return list of significant cell types and two contrast sets of cells
+#' @keywords internal
 getSignifCellTypesIteratively <- function(d.counts, d.groups,
                                           n.pop = 1000, n.epoch = 100, n.seed = 239,
                                           thresh.parent = 1/4, p.val.thresh = 0.01){
@@ -298,6 +304,7 @@ getSignifCellTypesIteratively <- function(d.counts, d.groups,
 }
 
 
+#' @keywords internal
 f.stat <- function(b1, b2)
 {
   n1 = length(b1)
@@ -322,7 +329,7 @@ f.stat <- function(b1, b2)
   ms_w = ss_wg / (n1 + n2 - 2)
 
   res = list(stat = ms_b/ms_w,
-             pval = 	pf(ms_b/ms_w, 2 - 1, n1 + n2 - 2, lower.tail=F))
+             pval = 	pf(ms_b/ms_w, 2 - 1, n1 + n2 - 2, lower.tail=FALSE))
 
   return(res)
 }

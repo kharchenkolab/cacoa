@@ -19,3 +19,4 @@ A list containing DE ENSEMBL gene IDs, and filtered DE genes
 \description{
 Filter and prepare DE genes for ontology calculations
 }
+\keyword{internal}

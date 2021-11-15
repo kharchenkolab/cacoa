@@ -15,3 +15,4 @@ list with binary and normalised sbp matrices (partitions are in rows)
 \description{
 Generate random sbp
 }
+\keyword{internal}

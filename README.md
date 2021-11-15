@@ -1,7 +1,7 @@
-# cacoa
+[![<kharchenkolab>](https://circleci.com/gh/kharchenkolab/cacoa.svg?style=svg)](https://app.circleci.com/pipelines/github/kharchenkolab/cacoa)
 
-<!-- badges: start -->
-<!-- badges: end -->
+
+# cacoa
 
 Case-Control Analysis of scRNA-seq experiments
 

@@ -1,5 +1,4 @@
 #include <RcppEigen.h>
-
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -7,9 +6,7 @@
 #include <mutex>
 #include <random>
 #include <vector>
-
 #include <sccore_par.hpp>
-
 #include <progress.hpp>
 #include <unistd.h>
 

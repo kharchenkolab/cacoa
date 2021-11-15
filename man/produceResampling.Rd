@@ -4,27 +4,20 @@
 \alias{produceResampling}
 \title{This function produces the resampling dataset}
 \usage{
-produceResampling(
-  cnts,
-  groups,
-  n.perm = 1000,
-  remain.groups = TRUE,
-  replace.samples = TRUE,
-  seed = 239
-)
+produceResampling(cnts, groups, n.perm = 1000, seed = 239)
 }
 \arguments{
 \item{cnts}{Counts of cell types in samples. Rows - samples, columns - cell types}
 
 \item{groups}{Vector with boolean values. TRUE - sample in the case group, FALSE - sample in the control group}
 
-\item{remain.groups}{TRUE - if the labels of groups remain, FALSE - if to produce the null distribution}
-
-\item{replace.samples}{TRUE - is bootstrap on samples, FALAE - if to remain samples}
-
 \item{seed}{random seed}
 
 \item{n.iter}{Number of permutations}
+
+\item{remain.groups}{TRUE - if the labels of groups remain, FALSE - if to produce the null distribution}
+
+\item{replace.samples}{TRUE - is bootstrap on samples, FALAE - if to remain samples}
 }
 \value{
 Updated data frame with Z scores
@@ -32,3 +25,4 @@ Updated data frame with Z scores
 \description{
 This function produces the resampling dataset
 }
+\keyword{internal}

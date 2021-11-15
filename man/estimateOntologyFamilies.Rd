@@ -17,3 +17,4 @@ List of families and ontology data per cell type
 \description{
 Estimate ontology families based on ontology results
 }
+\keyword{internal}

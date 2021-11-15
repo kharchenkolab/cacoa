@@ -1,3 +1,4 @@
+#' @keywords internal
 jaccardPwTop <- function(subsamples, top.thresh){
   jac.all = c()
   idxs = c()
@@ -17,6 +18,7 @@ jaccardPwTop <- function(subsamples, top.thresh){
   return(list(jac = jac.all, id = idxs))
 }
 
+#' @keywords internal
 jaccardPwPval <- function(subsamples, p.val.cutoff){
   jac.all = c()
   idxs = c()
@@ -37,6 +39,7 @@ jaccardPwPval <- function(subsamples, p.val.cutoff){
 }
 
 
+#' @keywords internal
 estimateStabilityPerCellType <- function(de.res,
                                          top.n.genes,
                                          p.val.cutoff) {
@@ -78,6 +81,7 @@ estimateStabilityPerCellType <- function(de.res,
 }
 
 
+#' @keywords internal
 plotStability <- function(jaccards,
                          notch,
                          show.jitter,
@@ -86,7 +90,7 @@ plotStability <- function(jaccards,
                          sort.order,
                          xlabel = '',
                          ylabel = '',
-                         log.y.axis = F,
+                         log.y.axis = FALSE,
                          palette = NULL,
                          plot.theme=theme_get()) {
   jaccards$group <- as.factor(jaccards$group)
@@ -123,6 +127,7 @@ plotStability <- function(jaccards,
   
 }
 
+#' @keywords internal
 estimateNumberOfTermsStability <- function(de.res,
                                            p.adjust,
                                            pvalue.cutoff){
@@ -185,6 +190,7 @@ estimateNumberOfTermsStability <- function(de.res,
 # }
 
 
+#' @keywords internal
 estimateDEStabilityFDR = function(de.res, p.adj.cutoffs) {
     
   df.n.common.genes <- matrix(ncol=length(de.res),
@@ -233,6 +239,7 @@ estimateDEStabilityFDR = function(de.res, p.adj.cutoffs) {
   return(df.n.genes)
 }
 
+#' @keywords internal
 estimateDEStabilityFDR1loo = function(de.res, p.adj.cutoffs) {
   
   df.n.common.genes <- c()
@@ -272,7 +279,7 @@ estimateDEStabilityFDR1loo = function(de.res, p.adj.cutoffs) {
 }
   
   
-
+#' @keywords internal
 estimateStabilityPerCellType <- function(de.res,
                                          top.n.genes,
                                          p.val.cutoff) {
@@ -314,7 +321,3 @@ estimateStabilityPerCellType <- function(de.res,
 }
 
 
-
-  
-  
-  

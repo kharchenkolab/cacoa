@@ -1,11 +1,13 @@
 #' @import sccore
 NULL
 
-##' @title Validate parameters per cell type
-##' @param raw.mats List of raw count matrices
-##' @param cell.groups Named clustering/annotation factor with cell names
-##' @param sample.groups Named factor with cell names indicating condition/sample, e.g., ctrl/disease
-##' @param ref.level Reference cluster level in 'sample.groups', e.g., ctrl, healthy, wt
+#' Validate parameters per cell type
+#'
+#' @param raw.mats List of raw count matrices
+#' @param cell.groups Named clustering/annotation factor with cell names
+#' @param sample.groups Named factor with cell names indicating condition/sample, e.g., ctrl/disease
+#' @param ref.level Reference cluster level in 'sample.groups', e.g., ctrl, healthy, wt
+#' @keywords internal
 validateDEPerCellTypeParams <- function(raw.mats, cell.groups, sample.groups, ref.level) {
   checkPackageInstalled("DESeq2", bioc=TRUE)
 
@@ -13,14 +15,17 @@ validateDEPerCellTypeParams <- function(raw.mats, cell.groups, sample.groups, re
   if (is.null(sample.groups)) stop('"sample.groups" must be specified')
   if (class(sample.groups) != "list") stop('"sample.groups" must be a list')
   if (length(sample.groups) != 2) stop('"sample.groups" must be of length 2')
-  if (!all(unlist(lapply(sample.groups, function(x) class(x) == "character"))))
+  if (!all(unlist(lapply(sample.groups, function(x) class(x) == "character")))){
     stop('"sample.groups" must be a list of character vectors')
+  }
 
-  if (!all(unlist(lapply(sample.groups, function(x) length(x) > 0))))
+  if (!all(unlist(lapply(sample.groups, function(x) length(x) > 0)))){
     stop('"sample.groups" entries must be on length greater or equal to 1')
+  }
 
-  if (!all(unlist(lapply(sample.groups, function(x) all(x %in% names(raw.mats))))))
+  if (!all(unlist(lapply(sample.groups, function(x) all(x %in% names(raw.mats)))))){
     stop('"sample.groups" entries must be names of samples in the raw.mats')
+  }
 
   if (is.null(ref.level)) stop('"ref.level" is not defined')
   ## todo: check samplegrousp are named
@@ -28,6 +33,7 @@ validateDEPerCellTypeParams <- function(raw.mats, cell.groups, sample.groups, re
   if (class(cell.groups) != "factor") stop('"cell.groups" must be a factor')
 }
 
+#' @keywords internal
 subsetMatricesWithCommonGenes <- function(cms, sample.groups=NULL) {
   if (!is.null(sample.groups)) cms <- cms[unlist(sample.groups)]
   common.genes <- do.call(intersect, lapply(cms, colnames))
@@ -41,8 +47,9 @@ strpart <- function(x, split, n, fixed = FALSE) {
 }
 
 #' Add Z scores to DE results
-#' @param df Data frame with the columns "pval", "padj" and "log2FoldChange"
-#' @return Updated data frame with Z scores
+#' 
+#' @param df Data.frame with the columns "pval", "padj" and "log2FoldChange"
+#' @return Updated data.frame with Z scores
 #' @export
 addZScores <- function(df) {
   df$Z <- -qnorm(df$pval/2)
@@ -55,15 +62,17 @@ addZScores <- function(df) {
   return(df)
 }
 
-#' @title Save DE results as JSON files
+#' Save DE results as JSON files
+#'
 #' @param de.raw List of DE results
 #' @param sample.groups Sample groups as named list, each element containing a vector of samples
 #' @param saveprefix Prefix for created files (default=NULL)
 #' @param dir.name Name for directory with results. If it doesn't exist, it will be created. To disable, set as NULL (default="JSON")
 #' @param gene.metadata (default=NULL)
 #' @param verbose Show progress (default=TRUE)
-saveDEasJSON <- function(de.raw, saveprefix=NULL, dir.name="JSON", gene.metadata=NULL,
-                         sample.groups=NULL, verbose=TRUE) {
+#' @keywords internal
+saveDEasJSON <- function(de.raw, sample.groups=NULL, saveprefix=NULL, 
+      dir.name="JSON", gene.metadata=NULL,verbose=TRUE) {
   if(!is.null(dir.name)) {
     if(!dir.exists(dir.name)) dir.create(dir.name)
   } else {
@@ -156,6 +165,8 @@ saveDEasJSON <- function(de.raw, saveprefix=NULL, dir.name="JSON", gene.metadata
   write(s, file=toc.file)
 }
 
+
+#' @keywords internal
 prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'bootstrap', 'fix.cells', 'fix.samples'),
                                 n.resamplings=30, n.biosamples=NULL) {
   resampling.method <- match.arg(resampling.method)
@@ -175,6 +186,7 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 }
 
 #' Differential expression using different methods (deseq2, edgeR, wilcoxon, ttest) with various covariates
+#' 
 #' @param raw.mats list of counts matrices; column for gene and row for cell
 #' @param cell.groups factor specifying cell types (default=NULL)
 #' @param sample.groups a list of two character vector specifying the app groups to compare (default=NULL)
@@ -301,6 +313,7 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
   return(de.res)
 }
 
+#' @keywords internal
 normalizePseudoBulkMatrix <- function(cm, meta=NULL, design.formula=NULL, type='totcount') {
   if (type == 'deseq2') {
     cnts.norm <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula)  %>%
@@ -315,6 +328,7 @@ normalizePseudoBulkMatrix <- function(cm, meta=NULL, design.formula=NULL, type='
   return(cnts.norm)
 }
 
+#' @keywords internal
 estimateDEForTypePairwiseStat <- function(cm.norm, meta, target.level, test) {
   if (test == 'wilcoxon') {
     res <- scran::pairwiseWilcox(cm.norm, groups = meta$group)$statistics[[1]] %>%
@@ -331,6 +345,7 @@ estimateDEForTypePairwiseStat <- function(cm.norm, meta, target.level, test) {
   return(res)
 }
 
+#' @keywords internal
 estimateDEForTypeDESeq <- function(cm, meta, design.formula, ref.level, target.level, test.type, ...) {
   res <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula)
   if (test.type == 'wald') {
@@ -346,6 +361,7 @@ estimateDEForTypeDESeq <- function(cm, meta, design.formula, ref.level, target.l
   return(res)
 }
 
+#' @keywords internal
 estimateDEForTypeEdgeR <- function(cm, meta, design.formula) {
   design <- model.matrix(design.formula, meta)
 
@@ -361,6 +377,7 @@ estimateDEForTypeEdgeR <- function(cm, meta, design.formula) {
   return(res)
 }
 
+#' @keywords internal
 estimateDEForTypeLimma <- function(cm, meta, design.formula, target.level) {
   mm <- model.matrix(design.formula, meta)
   fit <- limma::voom(cm, mm, plot = FALSE) %>% limma::lmFit(mm)
@@ -373,7 +390,9 @@ estimateDEForTypeLimma <- function(cm, meta, design.formula, target.level) {
 }
 
 #' Summarize DE Resampling Results
+#' 
 #' @param var.to.sort Variable to calculate ranks
+#' @keywords internal
 summarizeDEResamplingResults <- function(de.list, var.to.sort='pvalue') {
   de.res <- de.list[[1]]
   for (cell.type in names(de.res)) {
@@ -407,6 +426,7 @@ summarizeDEResamplingResults <- function(de.list, var.to.sort='pvalue') {
   return(de.res)
 }
 
+#' @keywords internal
 appendStatisticsToDE <- function(de.list, expr.frac.per.type) {
   for (n in names(de.list)) {
     de.list[[n]]$res %<>% mutate(Gene=rownames(.), CellFrac=expr.frac.per.type[Gene, n],
@@ -417,6 +437,7 @@ appendStatisticsToDE <- function(de.list, expr.frac.per.type) {
   return(de.list)
 }
 
+#' @keywords internal
 getExpressionFractionPerGroup <- function(cm, cell.groups) {
   cm@x <- as.numeric(cm@x > 1e-10)
   fracs <- collapseCellsByType(cm, cell.groups, min.cell.count=0) %>%

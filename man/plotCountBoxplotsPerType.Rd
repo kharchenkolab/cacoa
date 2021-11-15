@@ -37,3 +37,4 @@ plotCountBoxplotsPerType(
 \description{
 Plot Count Boxplots Per Type
 }
+\keyword{internal}

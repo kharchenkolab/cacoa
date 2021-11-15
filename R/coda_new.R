@@ -1,9 +1,11 @@
 #' Get loadings by different methods
+#' 
 #' @param cnts Counts of cell typer in samples. Rows - samples, columns - cell types
 #' @param groups Vector with boolean values. TRUE - sample in the case group, FALSE - sample in the control group
 #' @param criteria Method to get loadings
 #' @param ref.cell.type Reference cell type
 #' @return Updated data frame with Z scores
+#' @keywords internal
 getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
   discriminant.methods <- c('lda', 'svm', 'cda', 'cda.std')
   if(!(criteria %in% discriminant.methods)) stop(paste('The discriminant method', criteria, 'is not supported'))
@@ -138,6 +140,7 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
 }
 
 #' This function produces the resampling dataset
+#' 
 #' @param cnts Counts of cell types in samples. Rows - samples, columns - cell types
 #' @param groups Vector with boolean values. TRUE - sample in the case group, FALSE - sample in the control group
 #' @param n.iter Number of permutations
@@ -145,6 +148,7 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
 #' @param replace.samples TRUE - is bootstrap on samples, FALAE - if to remain samples
 #' @param seed random seed
 #' @return Updated data frame with Z scores
+#' @keywords internal
 produceResampling <- function(cnts, groups, n.perm = 1000, seed = 239) {
   cnts.perm <- list()
   groups.perm <- list()
@@ -179,8 +183,9 @@ produceResampling <- function(cnts, groups, n.perm = 1000, seed = 239) {
 }
 
 
-
+#' @keywords internal
 runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, null.distr=FALSE) {
+  
   # Create datasets as
   samples.init <- produceResampling(cnts = cnts, groups = groups, n.perm = n.boot, seed = n.seed)
   loadings <- do.call(cbind, lapply(1:length(samples.init$cnts), function(ib) {
@@ -254,17 +259,6 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
       })) %>% rowMeans()
     }, n.cores=60, progress=TRUE, mc.preschedule=TRUE))
     
-    
-    # for(ib in 1:300){
-    #   groups.perm <- sample(groups)
-    #   names(groups.perm) <- names(groups)
-    #   samples.perm <- produceResampling(cnts = cnts, groups = groups.perm, n.perm = n.boot, seed = n.seed) 
-    # }
-    # 
-    
-    
-    
-    
     loadings.stat = rowMeans(loadings) - ref.load.level
     pval = sapply(names(loadings.stat), function(s) {
       tmp = sum(loadings.stat[s] > loadings.perm[s,])
@@ -285,6 +279,7 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
               cell.list=cell.list))
 }
 
+#' @keywords internal
 referenceSet <- function(freqs, groups, p.thresh=0.05) {
   checkPackageInstalled("psych", cran=TRUE)
   freqs[freqs == 0] <- min(freqs[freqs != 0])/2
@@ -342,7 +337,7 @@ referenceSet <- function(freqs, groups, p.thresh=0.05) {
 }
 
 
-
+#' @keywords internal
 sbpDiff <- function(freqs, groups){
   freqs[freqs == 0] <- min(freqs[freqs != 0])/2
   cell.types <- colnames(freqs)
@@ -382,6 +377,7 @@ sbpDiff <- function(freqs, groups){
   return(t(sbp))
 }
 
+#' @keywords internal
 pvalInLoadingsOrder <- function(cell.types.order, cnts, groups){
   p <- c()
   cnts[cnts <= 0] <- 0.5
@@ -408,7 +404,7 @@ pvalInLoadingsOrder <- function(cell.types.order, cnts, groups){
   return(p)
 }
 
-
+#' @keywords internal
 estimateCdaSpaceNew <- function(cnts, groups){
   # ----- Get data -----
 

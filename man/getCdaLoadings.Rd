@@ -19,3 +19,4 @@ Vector with cda loadings
 \description{
 Get Loadings from the caconical data analysis
 }
+\keyword{internal}

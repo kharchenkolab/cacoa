@@ -18,3 +18,4 @@ validateDEPerCellTypeParams(raw.mats, cell.groups, sample.groups, ref.level)
 \description{
 Validate parameters per cell type
 }
+\keyword{internal}

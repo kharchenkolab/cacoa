@@ -21,3 +21,4 @@ Updated data frame with Z scores
 \description{
 Get loadings by different methods
 }
+\keyword{internal}

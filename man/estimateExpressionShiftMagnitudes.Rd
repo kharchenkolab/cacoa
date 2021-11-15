@@ -10,7 +10,7 @@ estimateExpressionShiftMagnitudes(
   cell.groups,
   sample.per.cell,
   dist = NULL,
-  normalize.both = TRUE,
+  dist.type = c("cross.both", "cross.ref", "var"),
   verbose = FALSE,
   ref.level = NULL,
   n.permutations = 1000,
@@ -20,7 +20,6 @@ estimateExpressionShiftMagnitudes(
   n.pcs = NULL,
   trim = 0.2,
   n.cores = 1,
-  norm.type = NULL,
   ...
 )
 }
@@ -33,13 +32,14 @@ estimateExpressionShiftMagnitudes(
 
 \item{dist}{what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values}
 
-\item{normalize.both}{(default=T)}
-
-\item{verbose}{(default=F)}
+\item{verbose}{(default=FALSE)}
 
 \item{n.cores}{number of cores (default=1)}
 
-\item{transposed.matrices}{(default=F)}
+\item{transposed.matrices}{(default=FALSE)}
+}
+\value{
+List of distances per cell type, distance matrices, sample groups, cell types, pvalues, and adjusted p-values.
 }
 \description{
 Expression shift magnitudes per cluster between conditions

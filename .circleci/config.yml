@@ -1,0 +1,39 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: rocker/verse:4.1.1
+    environment:
+            _R_CHECK_FORCE_SUGGESTS_: false
+    steps:
+      - checkout
+      - run:
+          name: Install system dependencies
+          command: sudo apt-get update -y && sudo apt-get install tk zip libcurl4-openssl-dev libssl-dev libxml2-dev libgmp-dev libproj-dev libgdal-dev libglpk-dev -y  
+      - run: 
+          name: Install matrixStats v0.61.0 and proj4
+          command: R -e "install.packages('https://cran.rstudio.com/src/contrib/matrixStats_0.61.0.tar.gz', repos=NULL, type='source')"  \
+                   R -e "install.packages('proj4', dependencies=TRUE)" 
+      - run:
+          name: Install EnhancedVolcando
+          command: R -e 'if (!requireNamespace("BiocManager", quietly = TRUE)){ install.packages("BiocManager") }' \
+            R -e 'BiocManager::install(c("EnhancedVolcano"))'
+      - run:
+          name: Install Bioconductor dependencies 
+          command: R -e 'if (!requireNamespace("BiocManager", quietly = TRUE)){ install.packages("BiocManager") }' \
+            R -e 'BiocManager::install(c("clusterProfiler", "DESeq2", "DOSE", "EnhancedVolcano", "enrichplot", "fabia", "GOfuncR", "Rgraphviz", "SummarizedExperiment", "ggtree", "MatrixGenerics", "DelayedArray"))'  
+      - run:
+          name: Install package dependencies
+          command: R -e "devtools::install_deps(dep = TRUE)" 
+      - run: 
+          name: Install sccore v1.0.0
+          command: R -e "install.packages('pbmcapply')" \
+                   R -e "install.packages('https://cran.r-project.org/src/contrib/sccore_1.0.0.tar.gz', repos=NULL, type='source')" 
+      - run:
+          name: Build package
+          command: R CMD build .
+      - run:
+          name: Check package
+          command: R CMD check --no-manual *tar.gz
+      - store_test_results:
+          path: tmp/tests

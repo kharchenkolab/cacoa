@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot.R
 \name{plotCellTypeSizeDep}
 \alias{plotCellTypeSizeDep}
-\title{show a scatter plot of cell-type values vs. number of cells per cell type}
+\title{Show a scatter plot of cell-type values vs. number of cells per cell type}
 \usage{
 plotCellTypeSizeDep(
   df,
@@ -33,5 +33,6 @@ plotCellTypeSizeDep(
 ggplot2 object
 }
 \description{
-show a scatter plot of cell-type values vs. number of cells per cell type
+Show a scatter plot of cell-type values vs. number of cells per cell type
 }
+\keyword{internal}

@@ -122,7 +122,7 @@ constructTreeUpDown <- function(cnts, groups){
 
   # Construct sbps from sublists
   for(i in 1:length(cell.lists)){
-    freqs.tmp <- freqs[,cell.lists[[i]], drop = F]
+    freqs.tmp <- freqs[,cell.lists[[i]], drop = FALSE]
     if(ncol(freqs.tmp) == 1) next
 
     # tmp <- constructTree(freqs.tmp, groups)

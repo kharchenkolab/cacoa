@@ -4,32 +4,20 @@
 \alias{Cacoa}
 \title{Cacoa R6 class}
 \description{
-Cacoa R6 class
-
-Cacoa R6 class
-
-Estimate ontology families
-
-Plot ontology families
-
-Save ontology results
-
-Save family results
-
-Plot inter-sample expression distance
-
-Plot sample-sample expression distance as a 2D embedding
+The class encompasses etc etc
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{
-\item{\code{verbose}}{print diagnostic messages}
+\item{\code{n.cores}}{number of cores}
 
-\item{\code{test.results}}{results of the estimations, ready to use}
+\item{\code{verbose}}{boolean Whether to provide verbose output with diagnostic messages (default=TRUE)}
 
-\item{\code{cache}}{intermediate results of the estimations, which can be used during some other computations}
+\item{\code{test.results}}{list Results of the estimations, ready to use}
 
-\item{\code{data.object}}{the main object storing data (Conos or Seurat)}
+\item{\code{cache}}{list Intermediate results of the estimations, which can be used during some other computations}
+
+\item{\code{data.object}}{list The main object storing data (Conos or Seurat)}
 
 \item{\code{sample.groups}}{2-factor vector with annotation of groups/condition per sample}
 
@@ -92,6 +80,7 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-plotNumOntologyTermsPerType}{\code{Cacoa$plotNumOntologyTermsPerType()}}
 \item \href{#method-plotOntology}{\code{Cacoa$plotOntology()}}
 \item \href{#method-plotOntologyHeatmap}{\code{Cacoa$plotOntologyHeatmap()}}
+\item \href{#method-plotOntologyHeatmapCollapsed}{\code{Cacoa$plotOntologyHeatmapCollapsed()}}
 \item \href{#method-plotOntologySimilarities}{\code{Cacoa$plotOntologySimilarities()}}
 \item \href{#method-plotOntologyFamily}{\code{Cacoa$plotOntologyFamily()}}
 \item \href{#method-saveOntologyAsTable}{\code{Cacoa$saveOntologyAsTable()}}
@@ -111,7 +100,9 @@ Plot sample-sample expression distance as a 2D embedding
 \item \href{#method-estimateDiffCellDensity}{\code{Cacoa$estimateDiffCellDensity()}}
 \item \href{#method-plotDiffCellDensity}{\code{Cacoa$plotDiffCellDensity()}}
 \item \href{#method-plotExpressionDistance}{\code{Cacoa$plotExpressionDistance()}}
-\item \href{#method-plotExpressionDistanceEmbedding}{\code{Cacoa$plotExpressionDistanceEmbedding()}}
+\item \href{#method-getSampleDistanceMatrix}{\code{Cacoa$getSampleDistanceMatrix()}}
+\item \href{#method-plotSampleDistances}{\code{Cacoa$plotSampleDistances()}}
+\item \href{#method-estimateMetadataSeparation}{\code{Cacoa$estimateMetadataSeparation()}}
 \item \href{#method-estimateClusterFreeDE}{\code{Cacoa$estimateClusterFreeDE()}}
 \item \href{#method-getMostChangedGenes}{\code{Cacoa$getMostChangedGenes()}}
 \item \href{#method-estimateClusterFreeExpressionShifts}{\code{Cacoa$estimateClusterFreeExpressionShifts()}}
@@ -132,6 +123,7 @@ Plot sample-sample expression distance as a 2D embedding
 \if{html}{\out{<a id="method-new"></a>}}
 \if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
+initialize Cacoa class
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$new(
   data.object,
@@ -145,7 +137,7 @@ Plot sample-sample expression distance as a 2D embedding
   embedding = extractEmbedding(data.object),
   graph.name = NULL,
   n.cores = 1,
-  verbose = TRUE,
+  verbose = self$verbose,
   plot.theme = theme_bw(),
   plot.params = NULL
 )}\if{html}{\out{</div>}}
@@ -161,20 +153,27 @@ Plot sample-sample expression distance as a 2D embedding
 \item{\code{n.cores}}{number of cores for parallelization}
 
 \item{\code{verbose}}{show progress (default: stored value)}
+
+\item{\code{override.conos.plot.theme}}{boolean Whether to reset plot settings to the ggplot2 default (default=FALSE)}
+
+\item{\code{...}}{additional parameters upon initializing Conos}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a new 'Cacoa' object
+Calculate expression shift magnitudes of different clusters between conditions
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateExpressionShiftMagnitudes"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateExpressionShiftMagnitudes}{}}}
 \subsection{Method \code{estimateExpressionShiftMagnitudes()}}{
-Calculate expression shift magnitudes of different clusters between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateExpressionShiftMagnitudes(
   cell.groups = self$cell.groups,
   dist = NULL,
-  normalize.both = TRUE,
+  dist.type = "cross.both",
   min.cells.per.sample = 10,
   min.samp.per.type = 2,
   min.gene.frac = 0.01,
@@ -226,6 +225,8 @@ a list include
 \item \code{p.dist.info}: list of distance matrices per cell type
 \item \code{sample.groups}: filtered sample groups
 \item \code{cell.groups}: filtered cell groups
+Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
+cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
 }
 }
 }
@@ -240,6 +241,7 @@ a list include
   min.cells.per.sample = 10,
   min.samp.per.type = 2,
   min.gene.frac = 0.01,
+  genes = NULL,
   n.permutations = 1000,
   trim = 0.2,
   p.adjust.method = "BH",
@@ -267,8 +269,6 @@ a list include
 \if{html}{\out{<a id="method-plotExpressionShiftMagnitudes"></a>}}
 \if{latex}{\out{\hypertarget{method-plotExpressionShiftMagnitudes}{}}}
 \subsection{Method \code{plotExpressionShiftMagnitudes()}}{
-Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
-cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionShiftMagnitudes(
   name = NULL,
@@ -313,6 +313,7 @@ A ggplot2 object
 \if{latex}{\out{\hypertarget{method-estimatePerCellTypeDE}{}}}
 \subsection{Method \code{estimatePerCellTypeDE()}}{
 Alias for estimateDEPerCellType
+Estimate differential gene expression per cell type between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimatePerCellTypeDE(...)}\if{html}{\out{</div>}}
 }
@@ -322,7 +323,6 @@ Alias for estimateDEPerCellType
 \if{html}{\out{<a id="method-estimateDEPerCellType"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateDEPerCellType}{}}}
 \subsection{Method \code{estimateDEPerCellType()}}{
-Estimate differential gene expression per cell type between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEPerCellType(
   cell.groups = self$cell.groups,
@@ -383,13 +383,13 @@ Estimate differential gene expression per cell type between conditions
 }
 \subsection{Returns}{
 A list of DE genes
+Plot DE stability per cell type
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateDEStabilityPerCellType"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateDEStabilityPerCellType}{}}}
 \subsection{Method \code{estimateDEStabilityPerCellType()}}{
-Plot DE stability per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEStabilityPerCellType(
   de.name = "de",
@@ -888,7 +888,8 @@ Plot embedding
 
 \item{\code{plot.theme}}{plot theme to use (default: \code{self$plot.theme})}
 
-\item{\code{...}}{other parameters passed to \link[sccore:embeddingPlot]{embeddingPlot}}
+\item{\code{...}}{other parameters passed to \link[sccore:embeddingPlot]{embeddingPlot}
+Estimate ontology terms based on DEs}
 }
 \if{html}{\out{</div>}}
 }
@@ -897,7 +898,6 @@ Plot embedding
 \if{html}{\out{<a id="method-estimateOntology"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateOntology}{}}}
 \subsection{Method \code{estimateOntology()}}{
-Estimate ontology terms based on DEs
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntology(
   type = "GO",
@@ -948,6 +948,7 @@ Estimate ontology terms based on DEs
 }
 \subsection{Returns}{
 A list containing a list of terms per ontology, and a data frame with merged results
+Estimate ontology families based on ontology results
 }
 }
 \if{html}{\out{<hr>}}
@@ -987,7 +988,6 @@ A list containing a list of terms per ontology, and a data frame with merged res
 \if{html}{\out{<a id="method-estimateOntologyFamilies"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateOntologyFamilies}{}}}
 \subsection{Method \code{estimateOntologyFamilies()}}{
-Estimate ontology families based on ontology results
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntologyFamilies(type = "GO", p.adj = 0.05, name = NULL)}\if{html}{\out{</div>}}
 }
@@ -1005,13 +1005,13 @@ Estimate ontology families based on ontology results
 }
 \subsection{Returns}{
 List of families and ontology data per cell type
+Identify families containing a specific ontology term or ID
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getFamiliesPerGO"></a>}}
 \if{latex}{\out{\hypertarget{method-getFamiliesPerGO}{}}}
 \subsection{Method \code{getFamiliesPerGO()}}{
-Identify families containing a specific ontology term or ID
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getFamiliesPerGO(go.term = NULL, go.id = NULL, common = FALSE)}\if{html}{\out{</div>}}
 }
@@ -1029,13 +1029,13 @@ Identify families containing a specific ontology term or ID
 }
 \subsection{Returns}{
 Data frame
+Estimate Gene Ontology clusters
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateOntologyClusters"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateOntologyClusters}{}}}
 \subsection{Method \code{estimateOntologyClusters()}}{
-Estimate Gene Ontology clusters
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntologyClusters(
   type = "GO",
@@ -1043,10 +1043,11 @@ Estimate Gene Ontology clusters
   genes = "all",
   ind.h = 0.66,
   total.h = 0.5,
-  verbose = self$verbose,
   p.adj = 0.05,
   min.genes = 1,
-  name = getOntClustField(subtype, genes)
+  name = getOntClustField(subtype, genes),
+  clust.naming = "medoid",
+  verbose = self$verbose
 )}\if{html}{\out{</div>}}
 }
 
@@ -1061,19 +1062,23 @@ Estimate Gene Ontology clusters
 Approximately equal to the fraction of genes, shared between the GOs. Default: 0.66.}
 
 \item{\code{total.h}}{Cut height for hierarchical clustering of GOs across all subtypes.
-Approximately equal to the fraction of subtypes for which two GOs should belong to the same cluster. Default: 0.5.}
-
-\item{\code{verbose}}{show progress (default: stored value)}
+Approximately equal to the fraction of subtypes for which two GOs should belong to the same cluster.
+Default: 0.5.}
 
 \item{\code{name}}{Name of the field to store the results. Default: \code{cacoa:::getOntClustField(subtype, genes)}.}
+
+\item{\code{verbose}}{show progress (default: stored value)}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 List containing:
 \itemize{
-\item \code{df}: data.frame with information about individual gene ontolodies and columns \code{Cluster} and \code{ClusterName} for the clustering info
-\item \code{hclust}: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all subtypes
+\item \code{df}: data.frame with information about individual gene ontolodies and columns \code{Cluster} and \code{ClusterName}
+for the clustering info
+\item \code{hclust}: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all
+subtypes
+Bar plot of ontology terms per cell type
 }
 }
 }
@@ -1081,7 +1086,6 @@ List containing:
 \if{html}{\out{<a id="method-plotNumOntologyTermsPerType"></a>}}
 \if{latex}{\out{\hypertarget{method-plotNumOntologyTermsPerType}{}}}
 \subsection{Method \code{plotNumOntologyTermsPerType()}}{
-Bar plot of ontology terms per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotNumOntologyTermsPerType(
   genes = "up",
@@ -1108,13 +1112,13 @@ Bar plot of ontology terms per cell type
 }
 \subsection{Returns}{
 A ggplot2 object
+Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotOntology"></a>}}
 \if{latex}{\out{\hypertarget{method-plotOntology}{}}}
 \subsection{Method \code{plotOntology()}}{
-Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntology(
   cell.subgroups,
@@ -1163,8 +1167,8 @@ Plot a heatmap of ontology P values per cell type
   min.genes = 1,
   p.adj = 0.05,
   legend.position = "left",
-  selection = c("all", "common", "unique"),
-  n = 20,
+  selection = "all",
+  top.n = Inf,
   clusters = TRUE,
   cluster.name = NULL,
   cell.subgroups = NULL,
@@ -1173,6 +1177,8 @@ Plot a heatmap of ontology P values per cell type
   col.order = TRUE,
   max.log.p = 10,
   only.family.children = FALSE,
+  description.regex = NULL,
+  clust.naming = "medoid",
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1180,21 +1186,24 @@ Plot a heatmap of ontology P values per cell type
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{genes}}{Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all' (default="up")}
+\item{\code{genes}}{Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all'
+(default="up")}
 
 \item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")}
 
 \item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="left")}
 
-\item{\code{selection}}{Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type); 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms) (default="all")}
+\item{\code{selection}}{Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type);
+'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms)
+(default="all")}
 
-\item{\code{n}}{Number of terms to show (default=10)}
+\item{\code{top.n}}{Number of terms to show (default=Inf)}
 
 \item{\code{clusters}}{Whether to show GO clusters or raw GOs (default=TRUE)}
 
 \item{\code{cluster.name}}{Field with the results for GO clustering. Ignored if \code{clusters == FALSE}.}
 
-\item{\code{cell.subgroups}}{Cell groups to plot (default=NULL)}
+\item{\code{cell.subgroups}}{Cell groups to plot (default=NULL). This affects only visualization, but not clustering.}
 
 \item{\code{...}}{parameters forwarded to \link{plotHeatmap}}
 
@@ -1205,6 +1214,39 @@ Plot a heatmap of ontology P values per cell type
 \subsection{Returns}{
 A ggplot2 object
 }
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotOntologyHeatmapCollapsed"></a>}}
+\if{latex}{\out{\hypertarget{method-plotOntologyHeatmapCollapsed}{}}}
+\subsection{Method \code{plotOntologyHeatmapCollapsed()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyHeatmapCollapsed(
+  genes = "up",
+  type = "GO",
+  subtype = "BP",
+  min.genes = 1,
+  p.adj = 0.05,
+  legend.position = "left",
+  selection = "all",
+  n = 20,
+  clusters = TRUE,
+  cluster.name = NULL,
+  cell.subgroups = NULL,
+  palette = NULL,
+  row.order = TRUE,
+  col.order = TRUE,
+  max.log.p = 10,
+  only.family.children = FALSE,
+  description.regex = NULL,
+  distance = "manhattan",
+  clust.method = "complete",
+  clust.naming = "consensus",
+  n.words = 5,
+  exclude.words = NULL,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotOntologySimilarities"></a>}}
@@ -1231,13 +1273,13 @@ Plot correlation matrix for ontology terms between cell types
 }
 \subsection{Returns}{
 A ggplot2 object
+Plot related ontologies in one hierarchical network plot
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotOntologyFamily"></a>}}
 \if{latex}{\out{\hypertarget{method-plotOntologyFamily}{}}}
 \subsection{Method \code{plotOntologyFamily()}}{
-Plot related ontologies in one hierarchical network plot
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyFamily(
   type = "GO",
@@ -1287,13 +1329,13 @@ Plot related ontologies in one hierarchical network plot
 }
 \subsection{Returns}{
 Rgraphviz object
+Save ontology results as a table
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-saveOntologyAsTable"></a>}}
 \if{latex}{\out{\hypertarget{method-saveOntologyAsTable}{}}}
 \subsection{Method \code{saveOntologyAsTable()}}{
-Save ontology results as a table
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveOntologyAsTable(
   file,
@@ -1325,13 +1367,13 @@ Save ontology results as a table
 }
 \subsection{Returns}{
 Table for import into text editor
+Save family results as a table
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-saveFamiliesAsTable"></a>}}
 \if{latex}{\out{\hypertarget{method-saveFamiliesAsTable}{}}}
 \subsection{Method \code{saveFamiliesAsTable()}}{
-Save family results as a table
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveFamiliesAsTable(
   file,
@@ -1363,13 +1405,13 @@ Save family results as a table
 }
 \subsection{Returns}{
 Table for import into text editor
+Plot the cell group sizes or proportions per sample
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotCellGroupSizes"></a>}}
 \if{latex}{\out{\hypertarget{method-plotCellGroupSizes}{}}}
 \subsection{Method \code{plotCellGroupSizes()}}{
-Plot the cell group sizes or proportions per sample
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellGroupSizes(
   cell.groups = self$cell.groups,
@@ -1464,7 +1506,8 @@ Plot contrast tree
   cells.to.remove = NULL,
   filter.empty.cell.types = TRUE,
   adjust.pvalues = TRUE,
-  h.method = "both",
+  h.method = c("both", "up", "down"),
+  reorder.tree = TRUE,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1515,6 +1558,7 @@ A ggplot2 object
   coda.test = "significance",
   ref.cell.type = NULL,
   criteria = "cda.std",
+  name = "coda",
   n.seed = 239,
   cells.to.remove = NULL,
   cells.to.remain = NULL,
@@ -1529,6 +1573,8 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{name}}{field name where the test results are stored}
+
 \item{\code{n.cores}}{number of cores for parallelization}
 
 \item{\code{verbose}}{show progress (default: stored value)}
@@ -1560,9 +1606,10 @@ Plot Loadings
   alpha = 0.01,
   palette = self$cell.groups.palette,
   font.size = NULL,
+  name = "coda",
   ordering = "pvalue",
-  signif.threshold = 0.05,
-  show.pvals = TRUE
+  show.pvals = TRUE,
+  ...
 )}\if{html}{\out{</div>}}
 }
 
@@ -1570,6 +1617,8 @@ Plot Loadings
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{palette}}{palette specification for cell types (default: stored $cell.groups.palette)}
+
+\item{\code{name}}{field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -1651,9 +1700,10 @@ Plot cell density depending on the method that was used for estimating \code{cao
   add.points = TRUE,
   size = 0.1,
   show.legend = FALSE,
-  point.col = "#FCFDBFFF",
+  palette = NULL,
+  point.col = "#313695",
   contours = NULL,
-  contour.color = "white",
+  contour.color = "black",
   contour.conf = "10\%",
   name = "cell.density",
   show.cell.groups = TRUE,
@@ -1754,7 +1804,6 @@ estimate differential cell density
   type = "permutation",
   name = "cell.density",
   size = 0.2,
-  z.cutoff = NULL,
   palette = NULL,
   adjust.pvalues = NULL,
   contours = NULL,
@@ -1763,6 +1812,8 @@ estimate differential cell density
   plot.na = FALSE,
   color.range = NULL,
   mid.color = "gray95",
+  scale.z.palette = adjust.pvalues,
+  min.z = qnorm(0.9),
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1773,8 +1824,6 @@ estimate differential cell density
 \item{\code{type}}{method to calculate differential cell density; t.test, wilcox or subtract (target subtract ref density);}
 
 \item{\code{name}}{slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')}
-
-\item{\code{z.cutoff}}{absolute z score cutoff (default: NULL)}
 
 \item{\code{palette}}{color palette, default is c('blue','white','red')}
 
@@ -1820,25 +1869,16 @@ A ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotExpressionDistanceEmbedding"></a>}}
-\if{latex}{\out{\hypertarget{method-plotExpressionDistanceEmbedding}{}}}
-\subsection{Method \code{plotExpressionDistanceEmbedding()}}{
-Plot results from cao$estimateExpressionShiftMagnitudes()
+\if{html}{\out{<a id="method-getSampleDistanceMatrix"></a>}}
+\if{latex}{\out{\hypertarget{method-getSampleDistanceMatrix}{}}}
+\subsection{Method \code{getSampleDistanceMatrix()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionDistanceEmbedding(
-  name = "expression.shifts",
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$getSampleDistanceMatrix(
+  space = c("expression.shifts", "coda", "pseudo.bulk"),
   cell.type = NULL,
-  method = "MDS",
-  perplexity = 4,
-  max.iter = 1000,
-  palette = NULL,
-  font.size = NULL,
-  show.sample.size = TRUE,
-  show.ticks = FALSE,
-  show.labels = FALSE,
-  size = 5,
-  sample.colors = NULL,
-  color.title = NULL,
+  dist = NULL,
+  name = NULL,
+  verbose = self$verbose,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1848,32 +1888,95 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \describe{
 \item{\code{name}}{field name where the test results are stored}
 
+\item{\code{verbose}}{show progress (default: stored value)}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-plotSampleDistances"></a>}}
+\if{latex}{\out{\hypertarget{method-plotSampleDistances}{}}}
+\subsection{Method \code{plotSampleDistances()}}{
+Plot results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoadings()
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotSampleDistances(
+  space = "expression.shifts",
+  method = "MDS",
+  dist = NULL,
+  name = NULL,
+  cell.type = NULL,
+  palette = NULL,
+  show.sample.size = FALSE,
+  sample.colors = NULL,
+  color.title = NULL,
+  title = NULL,
+  n.permutations = 2000,
+  show.pvalues = FALSE,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{space}}{expression.shifts- expression shifts results from cao$estimateExpressionShiftMagnitudes(); CDA- cell composition shifts result from cao$estimateCellLoadings(); sudo.bulk- expression distance of sudo bulk}
+
+\item{\code{dist}}{'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default correlation distance)}
+
+\item{\code{name}}{field name where the test results are stored}
+
 \item{\code{cell.type}}{If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)}
-
-\item{\code{method}}{dimension reduction methods: MDS, tSNE or heatmap (default: MDS)}
-
-\item{\code{perplexity}}{tSNE perplexity (default: 4)}
-
-\item{\code{max.iter}}{tSNE max_iter (default: 1e3)}
 
 \item{\code{palette}}{a set of colors to use for conditions (default: stored $sample.groups.palette)}
 
-\item{\code{font.size}}{font size of the sample labels. If NULL, the labels are not shown. (default: NULL)}
-
 \item{\code{show.sample.size}}{make point size proportional to the log10 of the number of cells per sample (default: FALSE)}
+
+\item{\code{font.size}}{font size of the sample labels. If NULL, the labels are not shown. (default: NULL)}
 
 \item{\code{show.ticks}}{show tick labels on axes (default: FALSE)}
 
 \item{\code{show.labels}}{show axis labels (default: FALSE)}
 
 \item{\code{size}}{point size. For \code{show.sample.size==TRUE}, it can be vector of length 2.  (default: 5)}
-
-\item{\code{...}}{arguments, forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}.}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 A ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateMetadataSeparation"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateMetadataSeparation}{}}}
+\subsection{Method \code{estimateMetadataSeparation()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateMetadataSeparation(
+  sample.meta,
+  space = "expression.shifts",
+  dist = NULL,
+  space.name = NULL,
+  name = "metadata.separation",
+  n.permutations = 5000,
+  trim = 0.05,
+  show.warning = TRUE,
+  verbose = self$verbose,
+  n.cores = self$n.cores,
+  adjust.pvalues = TRUE,
+  p.adjust.method = "BH",
+  pvalue.cutoff = 0.05
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{field name where the test results are stored}
+
+\item{\code{verbose}}{show progress (default: stored value)}
+
+\item{\code{n.cores}}{number of cores for parallelization}
+}
+\if{html}{\out{</div>}}
 }
 }
 \if{html}{\out{<hr>}}
@@ -1987,9 +2090,11 @@ Estimate Cluster-free Expression Shift
   dist = "cor",
   log.vectors = (dist != "js"),
   wins = 0.025,
+  genes = NULL,
   n.permutations = 500,
   verbose = self$verbose,
   n.cores = self$n.cores,
+  min.edge.weight = 0,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -2200,6 +2305,8 @@ Plot cluster-free expression shift z-scores
   smooth = TRUE,
   plot.na = FALSE,
   name = "cluster.free.expr.shifts",
+  scale.z.palette = TRUE,
+  min.z = qnorm(0.9),
   color.range = c("0", "97.5\%"),
   alpha = 0.2,
   font.size = c(3, 5),

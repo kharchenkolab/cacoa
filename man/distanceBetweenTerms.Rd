@@ -15,3 +15,4 @@ Distance matrix
 \description{
 Calculate distance matrix between ontology terms
 }
+\keyword{internal}

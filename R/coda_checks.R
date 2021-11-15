@@ -1,6 +1,7 @@
-#' @description Check cell count data
+#' Check cell count data
 #' 
 #' @param d.counts Cell count table
+#' @keywords internal
 checkData <- function(d.counts){
   if(is.null(d.counts)) 
     stop('Cell count matrix is not provided')
@@ -11,9 +12,10 @@ checkData <- function(d.counts){
 }
 
 
-#' @description Check groups
+#' Check groups
 #' 
 #' @param d.groups Groups variable for samples
+#' @keywords internal
 checkGroups <- function(d.groups){
   if(is.null(d.groups)) 
     stop('Groups are not provided')
@@ -22,10 +24,11 @@ checkGroups <- function(d.groups){
 }
 
 
-#' @description Check cell count data and groups
+#' Check cell count data and groups
 #' 
 #' @param d.counts Cell count table
 #' @param d.groups Groups variable for samples
+#' @keywords internal
 checkDataGroups <- function(d.counts, d.groups){
   checkData(d.counts)
   checkGroups(d.groups)
@@ -34,9 +37,10 @@ checkDataGroups <- function(d.counts, d.groups){
 }
 
 
-#' @description Check sequential binary partitions(sbp)
+#' Check sequential binary partitions(sbp)
 #' 
 #' @param sbp Sbp matrix: each row - partition
+#' @keywords internal
 checkSbp <- function(sbp){
   if(is.null(sbp)) 
     stop('Sequential binary partitions are not provided')
@@ -45,9 +49,10 @@ checkSbp <- function(sbp){
 }
 
 
-#' @description Check sequential binary partitions(sbp) for the whole set of balances
+#' Check sequential binary partitions(sbp) for the whole set of balances
 #' 
 #' @param sbp Sbp matrix: each row - partition
+#' @keywords internal
 checkSbpWhole <- function(sbp){
   checkSbp(sbp)
   if(nrow(sbp) < 2) 
@@ -57,10 +62,11 @@ checkSbpWhole <- function(sbp){
 }
 
 
-#' @description Check the agreement between sbp and cell count table
+#' Check the agreement between sbp and cell count table
 #' 
 #' @param d.counts Cell count table
 #' @param sbp Sbp matrix: each row - partition
+#' @keywords internal
 checkDataSbp <- function(d.counts, sbp){
   checkData(d.counts)
   checkSbp(sbp)
@@ -69,10 +75,11 @@ checkDataSbp <- function(d.counts, sbp){
 }
 
 
-#' @description Check data and list of cells
+#' Check data and list of cells
 #' 
 #' @param d.counts Cell count table
 #' @param cells List of cell types of interest
+#' @keywords internal
 checkDataAndCells <- function(d.counts, cells){
   if(is.null(cells))
     stop('Cell types are not provided')
@@ -83,9 +90,10 @@ checkDataAndCells <- function(d.counts, cells){
 }
 
 
-#' @description Check Tree
+#' Check Tree
 #' 
 #' @param tree phylo tree
+#' @keywords internal
 checkTree <- function(tree){
   if(is.null(tree))
     stop('Tree is not provided')
@@ -93,10 +101,11 @@ checkTree <- function(tree){
 }
 
 
-#' @description Check agreement between Tree and the Cell count table
+#' Check agreement between Tree and the Cell count table
 #' 
 #' @param d.counts Cell count table
 #' @param tree phylo tree
+#' @keywords internal
 checkDataTree <- function(d.counts, tree){
   checkTree(tree)
   checkData(d.counts)

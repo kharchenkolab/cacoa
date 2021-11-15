@@ -2,26 +2,26 @@
 
 
 #' Extract the cell groups from the object
-#' 
+#'
 #' @param object object from which to extract the cell groups
 #' @rdname extractCellGroups
-#' @export 
+#' @export
 extractCellGroups <- function(object) UseMethod("extractCellGroups", object)
 
 #' @rdname extractCellGroups
 extractCellGroups.Conos <- function(object) {
   if(is.null(object$clusters)) {
     stop('No cell groups specified and no clusterings found')
-  } 
+  }
   return(as.factor(object$clusters[[1]]$groups))
 }
 
 #' @rdname extractCellGroups
 extractCellGroups.Seurat <- function(object) {
   groups <- Seurat::Idents(object)
-  if(length(unique(groups)) <= 1){
+  if (length(unique(groups)) <= 1) {
     stop('No cell groups specified and no clusterings found')
-  } 
+  }
   return(as.factor(groups))
 }
 
@@ -29,17 +29,17 @@ extractCellGroups.Seurat <- function(object) {
 
 
 #' Extract the cell groups from the object
-#' 
+#'
 #' @param object object from which to extract the cell groups
 #' @rdname extractCellGraph
-#' @export 
+#' @export
 extractCellGraph <- function(object) UseMethod("extractCellGraph", object)
 
 #' @rdname extractCellGraph
 extractCellGraph.Conos <- function(object) {
-  if(is.null(object$graph)){
+  if (is.null(object$graph)) {
     stop('No cell graph found in the object')
-  } 
+  }
   return(object$graph)
 }
 
@@ -52,9 +52,9 @@ extractCellGraph.Seurat <- function(object) {
     }
     graph <- object@graphs[[graph.name]]
   } else {
-    if(length(object@graphs) == 0){
+    if (length(object@graphs) == 0) {
       stop('No cell graph found in the object')
-    } 
+    }
     graph <- object@graphs[[1]]
   }
 
@@ -67,12 +67,12 @@ extractCellGraph.Seurat <- function(object) {
 
 
 #' Extract the cell groups from the object
-#' 
+#'
 #' @param object object from which to extract the cell groups
 #' @param transposed boolean Whether the raw count matrix should be transposed (default=TRUE)
 #' @rdname extractRawCountMatrices
-#' @export 
-extractRawCountMatrices <- function(object, transposed=TRUE) UseMethod("extractRawCountMatrices", obj)
+#' @export
+extractRawCountMatrices <- function(object, transposed=TRUE) UseMethod("extractRawCountMatrices", object)
 
 #' @rdname extractRawCountMatrices
 extractRawCountMatrices.Conos <- function(object, transposed=TRUE) {
@@ -104,12 +104,12 @@ extractRawCountMatrices.dgCMatrix <- function(object, transposed=TRUE) {
 
 
 #' Extract the joint count matrix from the object
-#' 
+#'
 #' @param object object from which to extract the cell groups
 #' @param raw boolean If TRUE, return merged "raw" count matrices (default=TRUE)
 #' @rdname extractJointCountMatrix
-#' @export 
-extractJointCountMatrix <- function(object, raw=TRUE, ...) UseMethod("extractJointCountMatrix", obj)
+#' @export
+extractJointCountMatrix <- function(object, raw=TRUE, ...) UseMethod("extractJointCountMatrix", object)
 
 #' @rdname extractJointCountMatrix
 extractJointCountMatrix.Conos <- function(object, raw=TRUE) {
@@ -122,7 +122,7 @@ extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sp
     dat <- object@assays$RNA@counts
     if (transposed){
       dat %<>% Matrix::t()
-    } 
+    }
     return(dat)
   }
 
@@ -135,7 +135,7 @@ extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sp
 
   if (transposed){
     dat %<>% Matrix::t()
-  } 
+  }
   if (is.matrix(dat) && sparse){
     dat %<>% as("dgCMatrix")
   }
@@ -158,11 +158,11 @@ extractJointCountMatrix.dgCMatrix <- function(object, raw=TRUE) {
 
 
 #' Extract the top overdispersed genes from the object
-#' 
-#' @param object object from which to extract the top overdispersed genes 
+#'
+#' @param object object from which to extract the top overdispersed genes
 #' @param n.genes numeric Number of overdispersed genes to extract (default=NULL)
 #' @rdname extractOdGenes
-#' @export 
+#' @export
 extractOdGenes <- function(object, n.genes=NULL) UseMethod("extractOdGenes", object)
 
 #' @rdname extractOdGenes
@@ -187,10 +187,10 @@ extractOdGenes.Seurat <- function(object, n.genes=NULL) {
 
 
 #' Extract the sample/dataset per cell from the object
-#' 
-#' @param object object from which to extract the sample/dataset per cell 
+#'
+#' @param object object from which to extract the sample/dataset per cell
 #' @rdname extractSamplePerCell
-#' @export 
+#' @export
 extractSamplePerCell <- function(object) UseMethod("extractSamplePerCell", object)
 
 #' @rdname extractSamplePerCell
@@ -207,7 +207,7 @@ extractSamplePerCell.Seurat <- function(object) {
 
 extractSampleGroups <- function(object, ref.level, target.level) {
   samp.names <- unique(extractSamplePerCell(object))
-  if(!any(grep(ref.level,con.names))){
+  if(!any(grep(ref.level, con.names))) {
     stop("'ref.level' not in the data object sample names.")
   }
   sg <- grepl(ref.level, samp.names) %>% ifelse(ref.level, target.level) %>%
@@ -219,10 +219,10 @@ extractSampleGroups <- function(object, ref.level, target.level) {
 
 
 #' Extract embeddings from the object
-#' 
+#'
 #' @param object object from which to extract the embeddings
 #' @rdname extractEmbedding
-#' @export 
+#' @export
 extractEmbedding <- function(object) UseMethod("extractEmbedding", object)
 
 #' @rdname extractEmbedding
@@ -245,11 +245,11 @@ extractEmbedding.Seurat <- function(object) {
 
 
 #' Extract the gene exrpession from the object
-#' 
+#'
 #' @param object object from which to extract the cell groups
-#' @param gene character vector of the specific gene names on which to subset 
+#' @param gene character vector of the specific gene names on which to subset
 #' @rdname extractGeneExpression
-#' @export 
+#' @export
 extractGeneExpression <- function(object, gene) UseMethod("extractGeneExpression", object)
 
 #' @rdname extractGeneExpression
@@ -266,4 +266,3 @@ extractGeneExpression.Seurat <- function(object, gene) {
 extractGeneExpression.dgCMatrix <- function(object, gene) {
   return(object[,gene])
 }
-

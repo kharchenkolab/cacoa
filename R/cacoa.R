@@ -1736,23 +1736,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param verbose Print messages (default: stored value)
     #' @param n.cores Number of cores to use (default: stored value)
     #' @return Rgraphviz object
-    plotOntologyFamily=function(type = "GO", cell.subgroups, family=NULL, genes="up", subtype="BP",
+    plotOntologyFamily=function(name="GO", cell.type, family=NULL, genes="up", subtype="BP",
                                 plot.type="complete", show.ids=FALSE, string.length=14, legend.label.size=1,
                                 legend.position="topright", verbose=self$verbose, n.cores=self$n.cores, ...) {
       #Checks
       checkPackageInstalled(c("GOfuncR", "graph", "Rgraphviz"), bioc=TRUE)
 
-      ont.fam.res <- self$test.results[[type]]$families
-      if(is.null(ont.fam.res))
-        stop("No results found for type '", type, "'. Please run 'estimateOntologyFamilies' first.")
+      ont.res <- private$getResults(name, 'estimateOntology()')
+      ont.fam.res <- ont.res$families
+      if (is.null(ont.fam.res))
+        stop("No results found for '", name, "'. Please run 'estimateOntologyFamilies' first.")
 
-      ont.fam.res %<>% .[[cell.subgroups]]
-      if (is.null(ont.fam.res)) stop("No results found for cell.subgroups '", cell.subgroups, "'.")
+      ont.fam.res %<>% .[[cell.type]]
+      if (is.null(ont.fam.res)) stop("No results found for cell.type '", cell.type, "'.")
       # TODO: Test for GSEA/GO. Update description!
       ont.fam.res %<>% .[[subtype]]
       if (is.null(ont.fam.res)) stop("No results found for subtype '", subtype, "'.")
 
-      if (type != "GSEA") {
+      if (ont.res$type != "GSEA") {
         ont.fam.res %<>% .[[genes]]
         if (is.null(ont.fam.res)) stop("No results found for genes '", genes, "'.")
       }
@@ -1763,30 +1764,32 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (!is.numeric(family)) {
           fam.names <- family
         } else {
-          fam.names <- paste0("Family",family)
+          fam.names <- paste0("Family", family)
         }
       }
 
-      if(!all(fam.names %in% names(ont.fam.res$families))) stop("Not all families are found in 'ont.fam.res'.")
+      if (!all(fam.names %in% names(ont.fam.res$families))) stop("Not all families are found in 'ont.fam.res'.")
       families <- lapply(fam.names, function(n) ont.fam.res$families[[n]]) %>% unlist() %>% unique()
 
       plotOntologyFamily(fam=families, data=ont.fam.res$data, plot.type=plot.type, show.ids=show.ids,
-                         string.length=string.length, legend.label.size=legend.label.size, legend.position=legend.position,
-                         verbose=verbose, n.cores=n.cores, ...)
+                         string.length=string.length, legend.label.size=legend.label.size,
+                         legend.position=legend.position, verbose=verbose, n.cores=n.cores, ...)
     },
 
     #' Save ontology results as a table
     #'
     #' @param file File name. Set to NULL to return the table instead of saving
-    #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
+    #' @param name Name of ontology result (default: GO)
     #' @param subtype Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)
     #' @param genes Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)
     #' @param p.adj Adjusted P to filter by (default: 0.05)
     #' @param sep Separator (default: tab)
     #' @return Table for import into text editor
-    saveOntologyAsTable=function(file, type="GO", subtype=NULL, genes=NULL, p.adj=0.05, sep="\t", ...) {
-      res <- self$test.results[[type]]$res %>%
-        rblapply(c("CellType", "Subtype", "Genes"), function (r) r@result) %>%
+    saveOntologyAsTable=function(file, name="GO", subtype=NULL, genes=NULL, p.adj=0.05, sep="\t", ...) {
+      ont.res <- private$getResults(name, 'estimateOntology()')
+
+      list.levels <- getOntologyListLevels(ont.res$type)
+      res <- rblapply(ont.res$res, list.levels, function(r) r@result) %>%
         filter(p.adjust <= p.adj) %>% as_tibble()
 
       if (!is.null(subtype)) res %<>% filter(Subtype %in% subtype)
@@ -1805,27 +1808,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param p.adj Adjusted P to filter by (default: 0.05)
     #' @param sep Separator (default: tab)
     #' @return Table for import into text editor
-    saveFamiliesAsTable=function(file, type="GO", subtype=NULL, genes=NULL, p.adj=0.05, sep="\t", ...) {
+    saveFamiliesAsTable=function(file, name="GO", subtype=NULL, genes=NULL, p.adj=0.05, sep="\t", ...) {
       # Extract results
-      tmp <- lapply(self$test.results[[type]]$families, lapply, lapply, function(x) {
+      ont.res <- private$getResults(name, 'estimateOntology()')
+      ont.fam.res <- ont.res$families
+      if (is.null(ont.fam.res))
+        stop("No results found for '", name, "'. Please run 'estimateOntologyFamilies' first.")
+
+      list.levels <- getOntologyListLevels(ont.res$type)
+      res <- rblapply(ont.fam.res, list.levels, function(x) {
         lapply(x$families, function(y) {
-          if (length(y) <= 1) return(NULL) # What about == 1?
+          if (length(y) <= 1) return(NULL) # TODO: What about == 1?
           tmp.data <- x$data[y] %>%
             lapply(lapply, function(z) if (length(z) > 1) paste0(z, collapse="/") else z) %>%
             lapply(function(z) z[c("Description", "Significance", "parents_in_IDs", "parent_go_id")]) %>%
             bind_rows() %>%
             data.frame() %>%
             mutate(No_parents=sapply(.$parents_in_IDs, function(z) length(strsplit(z, split="/", fixed=TRUE)[[1]])),
-                    Child_terms = nrow(.))
+                   Child_terms = nrow(.))
 
           data.frame(y, tmp.data) %>%
             setNames(c("Lonely_child_IDs", "Description", "P.adj", "Significant_parents", "All_parents",
                         "#_sig_parents", "#_child_terms"))
-        }) %>% .[!sapply(., is.null)]
+        }) %>% .[!sapply(., is.null)] %>% bind_rows(.id='Family')
       })
-
-      # Convert to data frame
-      res <- rblapply(tmp, c("CellType", "Subtype", "Genes", "Family"), function (r) r)
 
       # Filtering
       if (!is.null(subtype)) res %<>% filter(subtype %in% subtype)

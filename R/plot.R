@@ -407,7 +407,7 @@ reduceEdges <- function(edges, verbose=TRUE, n.cores = 1) {
 }
 
 #' Plot related ontologies in one hierarchical network plot
-#' 
+#'
 #' @param fam List of ontology IDs for the chosen family
 #' @param data Data frane if raw ontology data for the chosen cell type
 #' @param plot.type How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) (default: complete)
@@ -490,18 +490,15 @@ plotOntologyFamily <- function(fam, data, plot.type="complete", show.ids=FALSE, 
   tmp.dat$id %<>% wrap_strings(string.length)
 
   ## Color by significance
-  node.color = tmp.dat$sig %>%
-    as.numeric() %>%
-    sapply(function(p) {
-      if(p <= 0.05 & p > 0.01) {
-        return("mistyrose1")
-      } else if(p <= 0.01 & p > 0.001) {
-        return("lightpink1")
-      } else {
-        return("indianred2")
-      }
-    }) %>%
-    setNames(tmp.dat$id)
+  node.color <- as.numeric(tmp.dat$sig) %>% sapply(function(p) {
+    if(p <= 0.05 & p > 0.01) {
+      return("mistyrose1")
+    } else if (p <= 0.01 & p > 0.001) {
+      return("lightpink1")
+    } else {
+      return("indianred2")
+    }
+  }) %>% setNames(tmp.dat$id)
 
   ## Assign changes
   node.names <- p@renderInfo@nodes$fill %>%

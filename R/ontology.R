@@ -522,6 +522,14 @@ collapseFamilies <- function(ont.res) {
   }
 }
 
+getOntologyListLevels <- function(type=c('GO', 'GSEA', 'DO')) {
+  type <- match.arg(type)
+  list.levels <- c("CellType")
+  if (type != 'DO') list.levels %<>% c("Subtype")
+  if (type != 'GSEA') list.levels %<>% c("Genes")
+  return(list.levels)
+}
+
 #' @title Estimate ontology families
 #' @description Estimate ontology families based on ontology results
 #' @param ont.list List of results from estimateOntology

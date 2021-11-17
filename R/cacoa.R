@@ -368,7 +368,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (tolower(test) == tolower('DESeq2')) test <- paste(test, 'Wald', sep='.')
       if (tolower(test) %in% tolower(c('Wilcoxon', 't-test')))  test <- paste(test, 'edgeR', sep='.')
 
-      if (!(tolower(test) %in% tolower(possible.tests))){
+      if (!(tolower(test) %in% tolower(possible.tests))) {
         stop('Test ', test, ' is not supported. Available tests: ', paste(possible.tests, collapse=', '))
       }
 
@@ -1204,7 +1204,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           setNames(c(ref.level, self$target.level))
       }
 
-      if (class(de.raw[[1]]) != "list") stop("Please rerun 'estimateDEPerCellType' with return.matrix=T")
+      if (!("list" %in% class(de.raw[[1]]))) stop("Please rerun 'estimateDEPerCellType' with return.matrix=T")
 
       if (is.null(saveprefix)) saveprefix <- ""
 

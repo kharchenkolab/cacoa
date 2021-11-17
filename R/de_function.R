@@ -47,7 +47,7 @@ strpart <- function(x, split, n, fixed = FALSE) {
 }
 
 #' Add Z scores to DE results
-#' 
+#'
 #' @param df Data.frame with the columns "pval", "padj" and "log2FoldChange"
 #' @return Updated data.frame with Z scores
 #' @export
@@ -71,12 +71,12 @@ addZScores <- function(df) {
 #' @param gene.metadata (default=NULL)
 #' @param verbose Show progress (default=TRUE)
 #' @keywords internal
-saveDEasJSON <- function(de.raw, sample.groups=NULL, saveprefix=NULL, 
+saveDEasJSON <- function(de.raw, sample.groups=NULL, saveprefix=NULL,
       dir.name="JSON", gene.metadata=NULL,verbose=TRUE) {
-  if(!is.null(dir.name)) {
-    if(!dir.exists(dir.name)) dir.create(dir.name)
+  if (!is.null(dir.name)) {
+    if (!dir.exists(dir.name)) dir.create(dir.name)
   } else {
-    dir.name = "."
+    dir.name <- "."
   }
 
   if (is.null(gene.metadata)) {
@@ -186,7 +186,7 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 }
 
 #' Differential expression using different methods (deseq2, edgeR, wilcoxon, ttest) with various covariates
-#' 
+#'
 #' @param raw.mats list of counts matrices; column for gene and row for cell
 #' @param cell.groups factor specifying cell types (default=NULL)
 #' @param sample.groups a list of two character vector specifying the app groups to compare (default=NULL)
@@ -295,6 +295,8 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
         res <- addZScores(res) %>% .[order(.$pvalue, decreasing=FALSE),]
       }
 
+      res$Gene <- rownames(res)
+
       if (return.matrix)
         return(list(res = res, cm = cm, meta=meta))
 
@@ -390,7 +392,7 @@ estimateDEForTypeLimma <- function(cm, meta, design.formula, target.level) {
 }
 
 #' Summarize DE Resampling Results
-#' 
+#'
 #' @param var.to.sort Variable to calculate ranks
 #' @keywords internal
 summarizeDEResamplingResults <- function(de.list, var.to.sort='pvalue') {
@@ -429,8 +431,8 @@ summarizeDEResamplingResults <- function(de.list, var.to.sort='pvalue') {
 #' @keywords internal
 appendStatisticsToDE <- function(de.list, expr.frac.per.type) {
   for (n in names(de.list)) {
-    de.list[[n]]$res %<>% mutate(Gene=rownames(.), CellFrac=expr.frac.per.type[Gene, n],
-                                 SampleFrac=Matrix::rowMeans(de.list[[n]]$cm > 0)[Gene]) %>%
+    de.list[[n]]$res %<>%
+      mutate(CellFrac=expr.frac.per.type[Gene, n], SampleFrac=Matrix::rowMeans(de.list[[n]]$cm > 0)[Gene]) %>%
       as.data.frame(stringsAsFactors=FALSE) %>% set_rownames(.$Gene)
   }
 

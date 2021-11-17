@@ -1466,59 +1466,49 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotNumOntologyTermsPerType=function(name="GO", genes="up", p.adj=0.05, min.genes=1) {
       type <- private$getResults(name, 'estimateOntology()')$type
-      if (length(genes) > 0) {
+      if (length(genes) > 1) {
         ont.res <- genes %>% setNames(., .) %>% lapply(function(g) {
           private$getOntologyPvalueResults(name=name, gene=g, p.adj=p.adj, min.genes=min.genes)
         })
 
-        if (type != "GSEA") {
-          classes <- sapply(ont.res[genes], class)
-          if (any(classes == "character")) {
-            message("No significant results found for genes = '",
-                    paste(names(classes[classes == "character"]), collapse=','), "'.")
-            genes <- names(classes[classes == "data.frame"])
-            if (length(genes) == 0) stop("No results to plot.")
-          }
+        classes <- sapply(ont.res[genes], class)
+        if (any(classes == "character")) {
+          message("No significant results found for genes = '",
+                  paste(names(classes[classes == "character"]), collapse=','), "'.")
+          genes <- names(classes[classes == "data.frame"])
+          if (length(genes) == 0) stop("No results to plot.")
 
           ont.res %<>% .[genes]
-          ont.res %<>% names() %>%
-            lapply(function(d) ont.res[[d]] %>% dplyr::mutate(direction = d))
         }
 
-        ont.res %<>% Reduce(rbind, .)
+        ont.res %<>% names() %>% lapply(function(d) dplyr::mutate(ont.res[[d]], Direction=d)) %>% 
+          Reduce(rbind, .)
       } else {
-        ont.res <- private$getOntologyPvalueResults(name=name, genes=genes, p.adj=p.adj, min.genes=min.genes)
-        if (type != "GSEA") {
-          ont.res %<>% dplyr::mutate(direction = genes)
-        }
+        ont.res <- private$getOntologyPvalueResults(name=name, genes=genes, p.adj=p.adj, min.genes=min.genes) %>%
+          dplyr::mutate(Direction=genes)
       }
 
       # Prepare data further
-      if (type=="GO") {
-        p.df <- table(Group=ont.res$Group, Type=ont.res$Type, direction=ont.res$direction) %>%
-          as.data.frame(responseName='N')
+      if (type %in% c("GO", "GSEA")) {
+        p.df <- ont.res %$% table(Group=Group, Type=Type, Direction=Direction) %>% as.data.frame(responseName='N')
 
         gg <- ggplot(p.df, aes(x=Group, y=N, fill=Type, group=Group)) +
             geom_bar(stat="identity")
-        if (length(unique(p.df$direction)) > 1) {
-          gg <- gg + facet_grid(~direction, switch="x")
+        if (length(unique(p.df$Direction)) > 1) {
+          gg <- gg + facet_grid(~Direction, switch="x")
         }
-      } else if (type=="DO") {
-        p.df <- table(Group=ont.res$Group, direction=ont.res$direction) %>% as.data.frame(responseName='N')
+      } else if (type == "DO") {
+        p.df <- ont.res %$% table(Group=Group, Direction=Direction) %>% as.data.frame(responseName='N')
 
-        if (length(unique(p.df$direction)) > 1) {
+        if (length(unique(p.df$Direction)) > 1) {
           gg <- ggplot(p.df) +
-            geom_bar(aes(x=Group, y=N, fill=direction), stat="identity", position="dodge") +
+            geom_bar(aes(x=Group, y=N, fill=Direction), stat="identity", position="dodge") +
             labs(fill="Gene set")
         } else {
           gg <- ggplot(p.df) +
             geom_bar(aes(x=Group, y=N), stat="identity")
         }
-      } else if (type == "GSEA") {
-        p.df <- table(Group=ont.res$Group, Type=ont.res$Type) %>% as.data.frame(responseName='N')
-        gg <- ggplot(p.df) +
-          geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
-      }
+      } else stop("Unexpected type ", type)
 
       gg <- gg +
         scale_y_continuous(expand=c(0, 0)) +

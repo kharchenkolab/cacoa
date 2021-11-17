@@ -1,7 +1,7 @@
 #' @importFrom grDevices colorRampPalette contourLines
 #' @importFrom graphics legend
-#' @importFrom stats as.dendrogram as.dist as.formula as.hclust cmdscale coef 
-#' @importFrom stats cor cutree dist hclust lm loadings median model.matrix na.omit p.adjust pf prcomp 
+#' @importFrom stats as.dendrogram as.dist as.formula as.hclust cmdscale coef
+#' @importFrom stats cor cutree dist hclust lm loadings median model.matrix na.omit p.adjust pf prcomp
 #' @importFrom stats qnorm quantile relevel reorder rmultinom runif sd setNames symnum var wilcox.test
 #' @importFrom utils stack
 NULL
@@ -91,10 +91,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
         if (is.null(ref.level) && !is.null(target.level)){
           ref.level <- setdiff(unique(sample.groups), target.level)[1]
-        } 
+        }
         if (!is.null(ref.level) && is.null(target.level)){
           target.level <- setdiff(unique(sample.groups), ref.level)[1]
-        } 
+        }
         if (length(setdiff(sample.groups, c(ref.level, target.level)) > 0)){
           stop("sample.groups must contain only ref.level '", ref.level, "' and target.level '", target.level, "'")
         }
@@ -116,12 +116,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         data.object$sample.per.cell <- sample.per.cell
         if (is.null(graph.name)){
           warning("No graph.name provided. The algorithm will use the first available graph.")
-        } 
+        }
         data.object@misc$graph.name <- graph.name
       } else if (('Conos' %in% class(data.object))) {
         if (!is.null(graph.name)) {
           warning("graph.name is not supported for Conos objects")
-        } 
+        }
       } else {
         warning("Many function may be not supported for an object of class ", class(data.object));
         if (is.null(sample.groups) || is.null(sample.per.cell) || is.null(cell.groups)){
@@ -187,7 +187,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     ### Expression shifts
 
     #' Calculate expression shift magnitudes of different clusters between conditions
-    #' 
+    #'
     #' @param cell.groups Named cell group factor with cell names (default: stored vector)
     #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default depends on dimensionality)
     #' @param within.group.normalization Normalize the shift magnitude by the mean magnitude of within-group variation (default=`TRUE`)
@@ -335,7 +335,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' Estimate differential gene expression per cell type between conditions
-    #' 
+    #'
     #' @param cell.groups factor specifying cell types (default from self)
     #' @param sample.groups 2-factor vector with annotation of groups/condition per sample (default from self)
     #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy (default from self)
@@ -1248,7 +1248,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' Estimate ontology terms based on DEs
-    #' 
+    #'
     #' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")
     #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
     #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
@@ -1258,21 +1258,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5)
     #' @param max.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
-    estimateOntology=function(type="GO", name=NULL, de.name='de', org.db, n.top.genes=500, p.adj=1,
+    estimateOntology=function(type=c("GO", "DO", "GSEA"), name=NULL, de.name='de', org.db, n.top.genes=500, p.adj=1,
                               p.adjust.method="BH", readable=TRUE, verbose=TRUE, qvalue.cutoff=0.2, min.gs.size=10,
                               max.gs.size=5e2, keep.gene.sets=FALSE, ignore.cache=NULL, de.raw=NULL, ...) {
-      if(!is.null(type) & !type %in% c("GO", "DO", "GSEA"))
-        stop("'type' must be 'GO', 'DO', or 'GSEA'.")
-
-      if(is.null(name)) {
+      type <- match.arg(type)
+      if (is.null(name)) {
         name <- type
       }
+
       if (is.null(de.raw)) {
         de.raw <- private$getResults(de.name, "estimateDEPerCellType()")
       }
 
       # If estimateDEPerCellType was run with return.matrix = TRUE, remove matrix before calculating
-      if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, "res")
+      if ("list" %in% class(de.raw[[1]])) de.raw %<>% lapply(`[[`, "res")
 
       de.gene.ids <- getDEEntrezIdsSplitted(de.raw, org.db=org.db, p.adj=p.adj)
 
@@ -1283,44 +1282,37 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         minGSSize=min.gs.size, maxGSSize=max.gs.size, keep.gene.sets=keep.gene.sets, ...
       )
 
-      self$test.results[[name]] <- list(res=res, de.gene.ids=de.gene.ids) # redundancy needed
+      self$test.results[[name]] <- list(res=res, de.gene.ids=de.gene.ids, type=type) # redundancy needed
       return(invisible(self$test.results[[name]]))
     },
 
-    estimateOntologyGsea=function(name = NULL, de.name='de', org.db, p.adj=1,
-                              p.adjust.method="BH",
-                              readable=TRUE, verbose=TRUE,
-                              qvalue.cutoff=0.2, min.gs.size=10,
-                              max.gs.size=5e2, keep.gene.sets=FALSE,
-                              ignore.cache=NULL, de.raw=NULL, ...) {
-
-      if(is.null(name)) {
-        name <- type
-      }
+    estimateOntologyGsea=function(name="GSEA", de.name='de', org.db, p.adj=1, p.adjust.method="BH", readable=TRUE,
+                                  verbose=self$verbose, qvalue.cutoff=0.2, min.gs.size=10, max.gs.size=5e2,
+                                  keep.gene.sets=FALSE, ignore.cache=NULL, de.raw=NULL, n.permutations=10000, ...) {
+      .Deprecated() # TODO: remove this function in the sake of estimateOntology?
       if (is.null(de.raw)) {
         de.raw <- private$getResults(de.name, "estimateDEPerCellType()")
       }
 
       # If estimateDEPerCellType was run with return.matrix = TRUE, remove matrix before calculating
-      if(class(de.raw[[1]]) == "list") de.raw %<>% lapply(`[[`, "res")
+      if ("list" %in% class(de.raw[[1]])) de.raw %<>% lapply(`[[`, "res")
 
       de.gene.ids <- getDEEntrezIdsSplitted(de.raw, org.db=org.db, p.adj=p.adj)
 
       go.environment <- self$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
 
-      options(warn=-1)
+      # options(warn=-1)
       res <- list()
-      for(cell.type in names(de.gene.ids)){
-        print(cell.type)
+      for (cell.type in names(de.gene.ids)) {
+        if (verbose) message(cell.type)
         # stats - Named numeric vector with gene-level statistics sorted in decreasing order
         stats <- sort(de.gene.ids[[cell.type]]$all)
-        for(go.type in c('BP', 'MF', 'CC')){
-          # print(go.type)
+        for (go.type in c('BP', 'MF', 'CC')) {
           pathways <- go.environment[[go.type]]$PATHID2EXTID
 
           # All genes together
           # fgsea.res <- fgsea(pathways = pathways, stats = stats)
-          suppressMessages(fgsea.res <- fgsea::fgsea(pathways = pathways, stats = stats, nperm = 10000))
+          suppressMessages(fgsea.res <- fgsea::fgsea(pathways=pathways, stats=stats, nperm=n.permutations))
           fgsea.res$pathw.name <- go.environment[[go.type]]$PATHID2NAME[fgsea.res$pathway]
 
           res.up <- fgsea.res[fgsea.res$ES > 0,]
@@ -1329,27 +1321,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           res.down$padj.new <- p.adjust(res.down$pval, method = 'fdr')
           res[[cell.type]][[go.type]]$up <- res.up[order(res.up$pval),]
           res[[cell.type]][[go.type]]$down <- res.down[order(res.down$pval),]
-
-          # # Up and down regulated genes separately
-          # suppressMessages(fgsea.res.up <- fgsea::fgsea(pathways = pathways, stats = stats[stats>0], nperm = 10000))
-          # suppressMessages(fgsea.res.down <- fgsea::fgsea(pathways = pathways, stats = stats[stats<0], nperm = 10000))
-          #
-          # res.up <- fgsea.res.up[fgsea.res.up$ES > 0,]
-          # res.up$padj.new <- p.adjust(res.up$pval, method = 'fdr')
-          # res.down <- fgsea.res.down[fgsea.res.down$ES < 0,]
-          # res.down$padj.new <- p.adjust(res.down$pval, method = 'fdr')
-          # res[[cell.type]][[go.type]]$up.sep <- res.up[order(res.up$pval),]
-          # res[[cell.type]][[go.type]]$down.sep <- res.down[order(res.down$pval),]
         }
       }
-      options(warn=0)
+      # options(warn=0)
 
       self$test.results[[name]] <- list(res=res, de.gene.ids=de.gene.ids)
       return(invisible(self$test.results[[name]]))
     },
 
     #' Estimate ontology families based on ontology results
-    #' 
+    #'
     #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
     #' @param p.adj Cut-off for adj. P values (default: 0.05)
     #' @return List of families and ontology data per cell type
@@ -1383,7 +1364,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' Identify families containing a specific ontology term or ID
-    #' 
+    #'
     #' @param go.term Character vector with term description(s)
     #' @param go.id Character vector with ID(s)
     #' @param common Boolean, only identify families with all the supplied terms or IDs (default = FALSE)
@@ -1434,7 +1415,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' Estimate Gene Ontology clusters
-    #' 
+    #'
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all'. Default: "up".
     #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO". Default: "GO".
     #' @param name Name of the field to store the results. Default: `cacoa:::getOntClustField(subtype, genes)`.
@@ -1476,7 +1457,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' Bar plot of ontology terms per cell type
-    #' 
+    #'
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @return A ggplot2 object
@@ -1488,10 +1469,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
         if (type != "GSEA") {
           classes <- sapply(ont.res[genes], class)
-          if(any(classes == "character")) {
+          if (any(classes == "character")) {
             message(paste0("No significant results found for genes = '", names(classes[classes == "character"]), "'."))
             genes <- names(classes[classes == "data.frame"])
-            if(length(genes) == 0) stop("No results to plot.")
+            if (length(genes) == 0) stop("No results to plot.")
           }
 
           ont.res %<>% .[genes]
@@ -1508,13 +1489,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       # Prepare data further
-      if(type=="GO") {
+      if (type=="GO") {
         p.df <- table(ont.res$Group, ont.res$Type, ont.res$direction) %>%
           as.data.frame() %>%
           setNames(c("Group","Type","direction","N")) %>%
           dplyr::arrange(Group)
 
-        if(length(unique(p.df$direction)) > 1) {
+        if (length(unique(p.df$direction)) > 1) {
           gg <- ggplot(p.df, aes(x=Group, y=N, fill=Type, group=Group)) +
             geom_bar(stat="identity") +
             facet_grid(~direction, switch="x")
@@ -1522,13 +1503,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           gg <- ggplot(p.df) +
             geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
         }
-      } else if(type=="DO") {
+      } else if (type=="DO") {
         p.df <- table(ont.res$Group, ont.res$direction) %>%
           as.data.frame() %>%
-          setNames(c("Group","direction","N")) %>%
+          setNames(c("Group", "direction", "N")) %>%
           dplyr::arrange(Group)
 
-        if(length(unique(p.df$direction)) > 1) {
+        if (length(unique(p.df$direction)) > 1) {
           gg <- ggplot(p.df) +
             geom_bar(aes(x=Group, y=N, fill=direction), stat="identity", position="dodge") +
             labs(fill="Gene set")
@@ -1536,10 +1517,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           gg <- ggplot(p.df) +
             geom_bar(aes(x=Group, y=N), stat="identity")
         }
-      } else if(type == "GSEA") {
+      } else if (type == "GSEA") {
         p.df <- table(ont.res$Group, ont.res$Type) %>%
           as.data.frame() %>%
-          setNames(c("Group","Type","N")) %>%
+          setNames(c("Group", "Type", "N")) %>%
           dplyr::arrange(Group)
 
           gg <- ggplot(p.df) +
@@ -1556,7 +1537,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
-    #' 
+    #'
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")
     #' @param cell.subgroup Cell group to plot
@@ -1765,7 +1746,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' Plot related ontologies in one hierarchical network plot
-    #' 
+    #'
     #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
     #' @param cell.subgroups Cell subtype to plot
     #' @param family Family within cell subtype to plot (numeric value)
@@ -1819,7 +1800,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' Save ontology results as a table
-    #' 
+    #'
     #' @param file File name. Set to NULL to return the table instead of saving
     #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
     #' @param subtype Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)
@@ -1840,7 +1821,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' Save family results as a table
-    #' 
+    #'
     #' @param file File name (default: Family_results.tsv)
     #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
     #' @param subtype Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)
@@ -1880,7 +1861,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' Plot the cell group sizes or proportions per sample
-    #' 
+    #'
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
     #' @param show.significance whether to show statistical significance betwwen sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001)
     #' @param proportions whether to plot proportions or absolute numbers (default: TRUE)
@@ -2002,7 +1983,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           message('To show significance, please run estimateCellLoadings()')
         }
 
-      } 
+      }
       # print(tree.order)
 
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
@@ -2011,7 +1992,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                              loadings.mean=loadings.mean,...)
 
       if (!is.null(palette)) {
-        gg <- gg + scale_color_manual(values=palette) + 
+        gg <- gg + scale_color_manual(values=palette) +
           scale_fill_gradient2(low=palette[self$ref.level], high=palette[self$target.level], mid='grey80', midpoint=0)
       }
       return(gg)
@@ -3050,8 +3031,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(genes)
     },
 
-    getOntologyPvalueResults=function(genes, type, p.adj=0.05, min.genes=1,
-                                      subtype=NULL, cell.subgroups=NULL, name = NULL) {
+    getOntologyPvalueResults=function(genes, type, p.adj=0.05, min.genes=1, subtype=NULL, cell.subgroups=NULL,
+                                      name=NULL) {
       if (!type %in% c("GO", "DO", "GSEA"))
         stop("'type' must be 'GO', 'DO', or 'GSEA'.")
       if (is.null(name)) {
@@ -3061,11 +3042,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
         stop("'subtype' must be 'BP', 'CC', or 'MF'.")
 
-      if ((length(genes) != 1) || (!genes %in% c("down","up","all")))
+      if ((length(genes) != 1) || (!genes %in% c("down", "up", "all")))
         stop("'genes' must be 'down', 'up', or 'all'.")
 
       ont.res <- self$test.results[[name]]$res
-      if (is.null(ont.res)) stop(paste0("No results found for '", type, "'. Please run 'estimateOntology' first."))
+      if (is.null(ont.res)) stop("No results found for '", type, "'. Please run 'estimateOntology' first.")
 
       ont.res %<>% prepareOntologyPlotData(type, p.adj, min.genes)
 
@@ -3082,7 +3063,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (is.null(ont.res))
-        stop(paste0("No results found for ", genes, " genes for ", type, ".")) # TODO: Include GSEA
+        stop("No results found for ", genes, " genes for ", type, ".") # TODO: Include GSEA
 
       if (!is.null(cell.subgroups)) {
         if (!any(cell.subgroups %in% unique(ont.res$Group)))
@@ -3122,17 +3103,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         )
         group.field <- "Description"
       } else {
-        name <- if (is.null(cluster.name)) getOntClustField(subtype, genes) else cluster.name
-        if (is.null(self$test.results[[type]][[name]])) {
-          if (!is.null(cluster.name))
-            stop("Can't find the results for ", cluster.name) # stop if user specified a wrong cluster.name
+        passed.clust.name <- cluster.name
+        if (is.null(cluster.name)) cluster.name <- getOntClustField(subtype, genes)
+        if (is.null(self$test.results[[type]][[cluster.name]])) {
+          if (!is.null(passed.clust.name))
+            stop("Can't find the results for ", passed.clust.name) # stop if user specified a wrong cluster.name
 
-          warning("Can't find the results for ", name, ". Running estimateOntologyClusters()...\n")
-          self$estimateOntologyClusters(type=type, subtype=subtype, genes=genes, name=name, p.adj=p.adj,
+          warning("Can't find the results for ", cluster.name, ". Running estimateOntologyClusters()...\n")
+          self$estimateOntologyClusters(type=type, subtype=subtype, genes=genes, name=cluster.name, p.adj=p.adj,
                                         min.genes=min.genes, clust.naming=clust.naming)
         }
 
-        ont.sum <- self$test.results[[type]][[name]]$df
+        ont.sum <- self$test.results[[type]][[cluster.name]]$df
 
         if (!is.null(cell.subgroups)) ont.sum %<>% filter(Group %in% cell.subgroups)
         group.field <- "ClusterName"

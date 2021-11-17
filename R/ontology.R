@@ -159,11 +159,11 @@ ontologyListToDf <- function(ont.list) {
 #' @param ... Additional parameters for DO/GO/GSEA functions
 #' @return A list containing a list of ontologies per type of ontology, and a data frame with merged results
 #' @export
-estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", org.db=NULL, n.top.genes=5e2, keep.gene.sets=FALSE, verbose=TRUE,
-                                    qvalue.cutoff=0.2, ...) {
+estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", org.db=NULL, n.top.genes=5e2,
+                                    keep.gene.sets=FALSE, verbose=TRUE, qvalue.cutoff=0.2, ...) {
   checkPackageInstalled("DOSE", bioc=TRUE)
 
-  if(type %in% c("GO","DO") && (n.top.genes > 0)) {
+  if (type %in% c("GO", "DO") && (n.top.genes > 0)) {
     # Adjust to n.top.genes
     de.gene.ids <- lapply(de.gene.scores, function(celltype) {
         lapply(celltype[-length(celltype)], function(dir) head(names(dir), n.top.genes)) %>% # universe is not accounted for
@@ -172,14 +172,14 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
   }
 
   # Estimate ontologies
-  if(type=="DO") {
+  if (type=="DO") {
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
     ont.list <- names(de.gene.ids) %>% sn() %>% plapply(function(id) suppressWarnings(
       lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])], DOSE::enrichDO,
              universe=de.gene.ids[[id]]$universe, qvalueCutoff=qvalue.cutoff, ...)
       ), n.cores=1, progress=verbose)
-  } else if(type=="GO") {
-    if(verbose) message("Estimating enriched ontologies ... \n")
+  } else if (type=="GO") {
+    if (verbose) message("Estimating enriched ontologies ... \n")
     ont.list <- names(de.gene.ids) %>% sn() %>% plapply(function(id) suppressWarnings(
       estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])], go.environment = go.environment,
                          universe=de.gene.ids[[id]]$universe, org.db=org.db, qvalueCutoff=qvalue.cutoff, ...)
@@ -188,8 +188,8 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
     if (!keep.gene.sets) {
       ont.list %<>% lapply(lapply, lapply, function(x) {x@geneSets <- list(); x})
     }
-  } else if(type == "GSEA") {
-    if(verbose) message("Estimating enriched ontologies ... \n")
+  } else if (type == "GSEA") {
+    if (verbose) message("Estimating enriched ontologies ... \n")
     ont.list <- names(de.gene.scores) %>% sn() %>% plapply(function(id) {suppressWarnings(suppressMessages(
       estimateEnrichedGSEGO(gene.ids=sort(de.gene.scores[[id]]$universe, decreasing=TRUE), org.db=org.db,
                             go.environment=go.environment, organism=clusterProfiler:::get_organism(org.db), ...)

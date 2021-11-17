@@ -1429,13 +1429,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'     for the clustering info
     #'   - `hclust`: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all
     #'     subtypes
-    estimateOntologyClusters=function(type="GO", subtype=NULL, genes="all", ind.h=0.66, total.h=0.5, p.adj=0.05,
+    estimateOntologyClusters=function(ont.name="GO", subtype=NULL, genes="all", ind.h=0.66, total.h=0.5, p.adj=0.05,
                                       min.genes=1, name=getOntClustField(subtype, genes), clust.naming="medoid",
                                       verbose=self$verbose) {
-      ont.df <- private$getOntologyPvalueResults(genes, type=type, subtype=subtype, p.adj=p.adj, min.genes=min.genes)
+      ont.df <- private$getOntologyPvalueResults(
+        name=ont.name, genes=genes, subtype=subtype, p.adj=p.adj, min.genes=min.genes
+      )
+
       if (nrow(ont.df) == 0) {
         res <- list(df=ont.df)
-        self$test.results[[type]][[name]] <- res
+        self$test.results[[ont.name]][[name]] <- res
         return(invisible(res))
       }
 
@@ -1451,7 +1454,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       ont.df$ClusterName <- name.per.clust[ont.df$Cluster]
       res <- list(df=ont.df, hclust=clusts$hclust)
-      self$test.results[[type]][[name]] <- res
+      self$test.results[[ont.name]][[name]] <- res
 
       return(invisible(res))
     },
@@ -1461,16 +1464,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @return A ggplot2 object
-    plotNumOntologyTermsPerType=function(genes="up", type="GO", p.adj=0.05, min.genes=1,
-                                         cell.groups=self$cell.groups, name=NULL) {
+    plotNumOntologyTermsPerType=function(name="GO", genes="up", p.adj=0.05, min.genes=1) {
+      type <- private$getResults(name, 'estimateOntology()')$type
       if (length(genes) > 0) {
-        ont.res <- genes %>% setNames(., .) %>%
-          lapply(private$getOntologyPvalueResults, type=type, p.adj=p.adj, min.genes=min.genes)
+        ont.res <- genes %>% setNames(., .) %>% lapply(function(g) {
+          private$getOntologyPvalueResults(name=name, gene=g, p.adj=p.adj, min.genes=min.genes)
+        })
 
         if (type != "GSEA") {
           classes <- sapply(ont.res[genes], class)
           if (any(classes == "character")) {
-            message(paste0("No significant results found for genes = '", names(classes[classes == "character"]), "'."))
+            message("No significant results found for genes = '",
+                    paste(names(classes[classes == "character"]), collapse=','), "'.")
             genes <- names(classes[classes == "data.frame"])
             if (length(genes) == 0) stop("No results to plot.")
           }
@@ -1482,7 +1487,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
         ont.res %<>% Reduce(rbind, .)
       } else {
-        ont.res <- private$getOntologyPvalueResults(genes=genes, type=type, p.adj=p.adj, min.genes=min.genes)
+        ont.res <- private$getOntologyPvalueResults(name=name, genes=genes, p.adj=p.adj, min.genes=min.genes)
         if (type != "GSEA") {
           ont.res %<>% dplyr::mutate(direction = genes)
         }
@@ -1492,13 +1497,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (type=="GO") {
         p.df <- table(ont.res$Group, ont.res$Type, ont.res$direction) %>%
           as.data.frame() %>%
-          setNames(c("Group","Type","direction","N")) %>%
+          setNames(c("Group", "Type", "direction", "N")) %>%
           dplyr::arrange(Group)
 
         if (length(unique(p.df$direction)) > 1) {
           gg <- ggplot(p.df, aes(x=Group, y=N, fill=Type, group=Group)) +
             geom_bar(stat="identity") +
-            facet_grid(~direction, switch="x")
+            facet_grid(~direction, switch="x") # TODO: can we just append facet on one if?
         } else {
           gg <- ggplot(p.df) +
             geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
@@ -1523,15 +1528,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           setNames(c("Group", "Type", "N")) %>%
           dplyr::arrange(Group)
 
-          gg <- ggplot(p.df) +
+          gg <- ggplot(p.df) + # TODO: no direction separation here?
             geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
       }
 
       gg <- gg +
         scale_y_continuous(expand=c(0, 0)) +
         self$plot.theme +
-        theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5),
-              legend.position="right") +
+        theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5), legend.position="right",
+              axis.title.x=element_blank()) +
         labs(x="", y=paste0("No. of ", type, " terms"))
       return(gg)
     },
@@ -1614,12 +1619,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param color.range vector with two values for min/max values of p-values
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
-    plotOntologyHeatmap=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left",
+    plotOntologyHeatmap=function(name="GO", genes="up", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left",
                                  selection="all", top.n=Inf, clusters=TRUE, cluster.name=NULL,
                                  cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE, max.log.p=10,
                                  only.family.children=FALSE, description.regex=NULL, clust.naming="medoid", ...) {
       ont.sum <- private$getOntologyHeatmapInfo(
-        genes=genes, type=type, subtype=subtype, min.genes=min.genes, p.adj=p.adj, selection=selection,
+        name=name, genes=genes, subtype=subtype, min.genes=min.genes, p.adj=p.adj, selection=selection,
         clusters=clusters, cluster.name=cluster.name, cell.subgroups=cell.subgroups,
         only.family.children=only.family.children, description.regex=description.regex, clust.naming=clust.naming
       )
@@ -1642,14 +1647,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(plt)
     },
 
-    plotOntologyHeatmapCollapsed=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05,
+    plotOntologyHeatmapCollapsed=function(name="GO", genes="up", subtype="BP", min.genes=1, p.adj=0.05,
                                           legend.position="left", selection="all", n=20, clusters=TRUE,
                                           cluster.name=NULL, cell.subgroups=NULL, palette=NULL, row.order=TRUE,
                                           col.order=TRUE, max.log.p=10, only.family.children=FALSE,
                                           description.regex=NULL, distance="manhattan", clust.method="complete",
                                           clust.naming="consensus", n.words=5, exclude.words=NULL, ...) {
       ont.sum <- private$getOntologyHeatmapInfo(
-        genes=genes, type=type, subtype=subtype, min.genes=min.genes, p.adj=p.adj, selection=selection,
+        name=name, genes=genes, subtype=subtype, min.genes=min.genes, p.adj=p.adj, selection=selection,
         clusters=clusters, cluster.name=cluster.name, cell.subgroups=cell.subgroups,
         only.family.children=only.family.children, description.regex=description.regex, clust.naming=clust.naming,
         return.descriptions=TRUE
@@ -1696,18 +1701,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @return A ggplot2 object
-    plotOntologySimilarities=function(genes = "up", type = "GO", p.adj = 0.05, min.genes = 1) {
-      ont.res <- private$getOntologyPvalueResults(genes=genes, type=type, p.adj=p.adj, min.genes=min.genes)
+    plotOntologySimilarities=function(name="GO", genes="up", p.adj=0.05, min.genes=1) {
+      ont.res <- private$getOntologyPvalueResults(name=name, genes=genes, p.adj=p.adj, min.genes=min.genes)
+      type <- private$getResults(name, 'estimateOntology()')$type
 
-      if((ont.res$Group %>% unique() %>% length()) == 1)
+      if ((ont.res$Group %>% unique() %>% length()) == 1)
         stop("Only one group present, correlation cannot be performed.")
 
-      if(nrow(ont.res) == 0)
+      if (nrow(ont.res) == 0)
         stop("No significant ontology terms identified. Try relaxing p.adj.")
 
-      if(type %in% c("GO", "GSEA")) {
+      if (type %in% c("GO", "GSEA")) {
         pathway.df <- ont.res[c("Description", "Group", "Type")] %>% rename(Pathway=Description, GO=Type)
-      } else if(type=="DO") {
+      } else if (type=="DO") {
         pathway.df <- unique(ont.res$Group) %>%
           lapply(function(cell.group) {
             tibble::tibble(Pathway=ont.res %>%
@@ -3031,24 +3037,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(genes)
     },
 
-    getOntologyPvalueResults=function(genes, type, p.adj=0.05, min.genes=1, subtype=NULL, cell.subgroups=NULL,
-                                      name=NULL) {
-      if (!type %in% c("GO", "DO", "GSEA"))
-        stop("'type' must be 'GO', 'DO', or 'GSEA'.")
-      if (is.null(name)) {
-        name <- type
-      }
-
+    getOntologyPvalueResults=function(name, genes, p.adj=0.05, min.genes=1, subtype=NULL, cell.subgroups=NULL) {
       if (!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
         stop("'subtype' must be 'BP', 'CC', or 'MF'.")
 
       if ((length(genes) != 1) || (!genes %in% c("down", "up", "all")))
         stop("'genes' must be 'down', 'up', or 'all'.")
 
-      ont.res <- self$test.results[[name]]$res
-      if (is.null(ont.res)) stop("No results found for '", type, "'. Please run 'estimateOntology' first.")
-
-      ont.res %<>% prepareOntologyPlotData(type, p.adj, min.genes)
+      ont.res <- private$getResults(name, 'estimateOntology()')
+      type <- ont.res$type
+      ont.res %<>% .$res %>% prepareOntologyPlotData(type, p.adj, min.genes)
 
       # Extract genes and subgroups
       if (type == "GSEA") {
@@ -3063,7 +3061,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (is.null(ont.res))
-        stop("No results found for ", genes, " genes for ", type, ".") # TODO: Include GSEA
+        stop("No results found for ", genes, " genes for ", name, ".") # TODO: Include GSEA
 
       if (!is.null(cell.subgroups)) {
         if (!any(cell.subgroups %in% unique(ont.res$Group)))
@@ -3079,7 +3077,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(ont.res)
     },
 
-    getOntologyHeatmapInfo=function(genes="up", type="GO", subtype="BP", min.genes=1, p.adj=0.05,
+    getOntologyHeatmapInfo=function(name="GO", genes="up", subtype="BP", min.genes=1, p.adj=0.05,
                                     selection=c("all", "common", "unique"), clusters=TRUE, cluster.name=NULL,
                                     cell.subgroups=NULL, only.family.children=FALSE, description.regex=NULL,
                                     clust.naming="medoid", return.descriptions=FALSE) {
@@ -3089,7 +3087,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
 
       if (only.family.children) {
-        fams <- self$test.results[[type]]$families
+        fams <- self$test.results[[name]]$families
         if (is.null(fams))
           stop("No ontology family results found, please run 'estimateOntologyFamilies' first",
                " or set only.family.children=FALSE")
@@ -3099,22 +3097,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       desc.per.clust <- NULL
       if (!clusters) {
         ont.sum <- private$getOntologyPvalueResults(
-          genes=genes, type=type, subtype=subtype, cell.subgroups=cell.subgroups, p.adj=p.adj, min.genes=min.genes
+          name=name, genes=genes, subtype=subtype, cell.subgroups=cell.subgroups, p.adj=p.adj, min.genes=min.genes
         )
         group.field <- "Description"
       } else {
         passed.clust.name <- cluster.name
         if (is.null(cluster.name)) cluster.name <- getOntClustField(subtype, genes)
-        if (is.null(self$test.results[[type]][[cluster.name]])) {
+        if (is.null(self$test.results[[name]][[cluster.name]])) {
           if (!is.null(passed.clust.name))
             stop("Can't find the results for ", passed.clust.name) # stop if user specified a wrong cluster.name
 
           warning("Can't find the results for ", cluster.name, ". Running estimateOntologyClusters()...\n")
-          self$estimateOntologyClusters(type=type, subtype=subtype, genes=genes, name=cluster.name, p.adj=p.adj,
+          self$estimateOntologyClusters(ont.name=name, subtype=subtype, genes=genes, name=cluster.name, p.adj=p.adj,
                                         min.genes=min.genes, clust.naming=clust.naming)
         }
 
-        ont.sum <- self$test.results[[type]][[cluster.name]]$df
+        ont.sum <- self$test.results[[name]][[cluster.name]]$df
 
         if (!is.null(cell.subgroups)) ont.sum %<>% filter(Group %in% cell.subgroups)
         group.field <- "ClusterName"
@@ -3130,13 +3128,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       ont.sum <- -groupOntologiesByCluster(ont.sum, field=group.field)
 
       if (nrow(ont.sum) == 0) {
-        warning("No ontologies pass the filtration for type=", type, ", subtype=", subtype, " and genes=", genes)
+        warning("No ontologies pass the filtration for name=", name, ", subtype=", subtype, " and genes=", genes)
         return(NULL)
       }
 
       if (selection=="unique") {
         ont.sum %<>% .[rowSums(abs(.) > 0) == 1,,drop=FALSE]
-      } else if(selection=="common") {
+      } else if (selection=="common") {
         ont.sum %<>% .[rowSums(abs(.) > 0) > 1,,drop=FALSE]
       }
       if (nrow(ont.sum) == 0) {

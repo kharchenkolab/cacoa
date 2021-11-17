@@ -1334,32 +1334,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
     #' @param p.adj Cut-off for adj. P values (default: 0.05)
     #' @return List of families and ontology data per cell type
-    estimateOntologyFamilies=function(type = "GO", p.adj = 0.05, name = NULL) {
+    estimateOntologyFamilies=function(name="GO", p.adj=0.05) {
       checkPackageInstalled("GOfuncR", bioc=TRUE)
-      if(!type %in% c("GO", "DO", "GSEA")) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
-
-      if(is.null(name)) {
-        name <- type
-      }
+      ont.res <- private$getResults(name, 'estimateOntology()')
 
       # TODO: Test DO
-      if (type == "GO") {
-        ont.list <- self$test.results[[type]]$res %>%
-          lapply(lapply, lapply, function(x) {
-            tmp <- x@result %>% filter(p.adjust <= p.adj)
-            if (nrow(tmp) > 0) return(tmp)
-          }) %>%
-          lapply(lapply, plyr::compact) %>%
-          lapply(plyr::compact)
+      if (ont.res$type == "GO") {
+        ont.list <- lapply(ont.res$res, lapply, lapply, function(x) {
+          tmp <- x@result %>% filter(p.adjust <= p.adj)
+          if (nrow(tmp) > 0) return(tmp)
+        }) %>% lapply(lapply, plyr::compact) %>% lapply(plyr::compact)
       } else {
-        ont.list <- self$test.results[[type]]$res %>%
-          lapply(lapply, function(x) {
-            tmp <- x@result %>% filter(p.adjust <= p.adj)
-            if (nrow(tmp) > 0) return(tmp)
-          }) %>%
-          lapply(plyr::compact)
+        ont.list <- lapply(ont.res$res, lapply, function(x) {
+          tmp <- x@result %>% filter(p.adjust <= p.adj)
+          if (nrow(tmp) > 0) return(tmp)
+        }) %>% lapply(plyr::compact)
       }
-      self$test.results[[name]]$families <- estimateOntologyFamilies(ont.list=ont.list, type=type)
+      self$test.results[[name]]$families <- estimateOntologyFamilies(ont.list=ont.list, type=ont.res$type)
       return(invisible(self$test.results[[name]]))
     },
 
@@ -1369,23 +1360,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param go.id Character vector with ID(s)
     #' @param common Boolean, only identify families with all the supplied terms or IDs (default = FALSE)
     #' @return Data frame
-    getFamiliesPerGO=function(go.term=NULL, go.id=NULL, common = FALSE) {
-      type <- "GO" # Maybe it would be nice to support other types
+    getFamiliesPerGO=function(name="GO", go.term=NULL, go.id=NULL, common=FALSE) {
+      ont.res <- private$getResults(name, 'estimateOntology()')
+      if (ont.res$type != "GO") stop("Only GO is currently supported")
+
       if (is.null(go.term) && is.null(go.id)) stop("Please specify either 'go.term' or 'go.id'.")
       if (!is.null(go.term) && !is.null(go.id))
         warning("Both 'go.term' and 'go.id' specified, will only use 'go.term'.")
 
       # Extract data
-      test.res <- self$test.results[[type]]
-      ont.fam <- test.res$families
+      ont.fam <- ont.res$families
       if (is.null(ont.fam)) stop("No family data found.")
 
       # Get mapping of IDs to Descriptions
-      desc.per.id <- rapply(test.res$res, function(x) x@result %$% setNames(Description, ID), how="list") %>%
+      desc.per.id <- rapply(ont.res$res, function(x) x@result %$% setNames(Description, ID), how="list") %>%
         do.call(c, .) %>% do.call(c, .) %>% unname() %>% do.call(c, .)
 
       # Make data.frame
-      res <- ont.fam %>% rblapply(c("CellType", "Ontology", "Genes"), function (fs) {
+      res <- ont.fam %>% rblapply(c("CellType", "Ontology", "Genes"), function(fs) {
           fpg <- aggregate(f ~ value, rblapply(fs$families, "f", as_tibble), paste, collapse=",")
           mapply(function(go, f) {
               tibble(ID=c(go, fs$data[[go]]$parents_in_IDs), Families=strsplit(gsub("Family", "", f), ",", TRUE))
@@ -1481,7 +1473,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           ont.res %<>% .[genes]
         }
 
-        ont.res %<>% names() %>% lapply(function(d) dplyr::mutate(ont.res[[d]], Direction=d)) %>% 
+        ont.res %<>% names() %>% lapply(function(d) dplyr::mutate(ont.res[[d]], Direction=d)) %>%
           Reduce(rbind, .)
       } else {
         ont.res <- private$getOntologyPvalueResults(name=name, genes=genes, p.adj=p.adj, min.genes=min.genes) %>%
@@ -1528,28 +1520,28 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param p.adj Adjusted P cutoff (default=0.05)
     #' @param log.colors Use log10 p-values for coloring (default=FALSE)
     #' @return A ggplot2 object
-    plotOntology = function(cell.subgroups, plot="dot", genes="up", type="GO", subtype="BP", n=20, p.adj=0.05,
-                            min.genes=1, ...) {
+    plotOntology = function(cell.type, name="GO", plot="dot", genes=c("up", "down", "all"),
+                            subtype=c("BP", "CC", "MF"), n=20, p.adj=0.05, min.genes=1, ...) {
       # Checks
       checkPackageInstalled("enrichplot", bioc=TRUE)
-      if (is.null(type) || (!type %in% c("GO","DO","GSEA"))) stop("'type' must be 'GO', 'DO', or 'GSEA'.")
-      if (is.null(subtype) || (!subtype %in% c("BP","CC","MF"))) stop("'subtype' must be 'BP', 'CC', or 'MF'.")
-      if (is.null(genes) || (!genes %in% c("down","up","all"))) stop("'genes' must be 'down', 'up', or 'all'.")
-      if (is.null(cell.subgroups)) stop("Please define which cells to plot using 'cell.subgroups'.")
-      if (type == "GSEA" & plot == "bar") stop("No 'enrichplot' method exists for making barplots of GSEA results.")
+      subtype <- match.arg(subtype)
+      genes <- match.arg(genes)
+
+      ont.res <- private$getResults(name, 'estimateOntology()')
+      type <- ont.res$type
+      ont.res <- ont.res$res
+      if ((type == "GSEA") && (plot == "bar")) stop("No 'enrichplot' method exists for making barplots of GSEA results.")
 
       # Extract results
-      ont.res <- self$test.results[[type]]$res
-      if (is.null(ont.res)) stop("No results found for ", type)
-      if (!cell.subgroups %in% names(ont.res)) stop("'cell.subgroups' not found in results.")
-      ont.res %<>% .[[cell.subgroups]]
+      if (!cell.type %in% names(ont.res)) stop("'cell.type' not found in results.")
+      ont.res %<>% .[[cell.type]]
       if (type != "DO") ont.res %<>% .[[subtype]]
       if (is.null(ont.res))
-        stop("No results found for ", type, ", ", subtype, " for ", cell.subgroups)
+        stop("No results found for ", name, ", ", subtype, " for ", cell.type)
 
-      if (type %in% c("GO","DO")) ont.res %<>% .[[genes]]
+      if (type %in% c("GO", "DO")) ont.res %<>% .[[genes]]
       if (is.null(ont.res))
-        stop("No results found for ", genes, " genes for ", type, ", ", subtype, " for ", cell.subgroups)
+        stop("No results found for ", genes, " genes for ", name, ", ", subtype, " for ", cell.type)
 
       # Prepare data
       df <- ont.res@result %>% filter(p.adjust <= p.adj)
@@ -1558,7 +1550,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
              formatC(min(ont.res@result$p.adjust), digits=3))
 
       # Allow plotting of terms with p.adj > 0.05
-      if (p.adj != 0.05) {
+      if (p.adj > 0.05) {
         ont.res@pvalueCutoff <- 1
         ont.res@qvalueCutoff <- 1
       }

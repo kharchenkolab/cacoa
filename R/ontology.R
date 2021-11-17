@@ -531,15 +531,13 @@ collapseFamilies <- function(ont.res) {
 estimateOntologyFamilies <- function(ont.list, type) {
   if (type == "GO") {
     ont.fam <- lapply(ont.list, lapply, lapply, identifyFamilies) %>%
-      setNames(names(ont.list))
-    lapply(ont.fam, lapply, lapply, collapseFamilies) %>%
-      setNames(names(ont.fam))
+      lapply(lapply, lapply, collapseFamilies)
   } else {
     ont.fam <- lapply(ont.list, lapply, identifyFamilies) %>%
-      setNames(names(ont.list))
-    lapply(ont.fam, lapply, collapseFamilies) %>%
-      setNames(names(ont.fam))
+      lapply(lapply, collapseFamilies)
   }
+
+  return(ont.fam)
 }
 
 ### Clustering

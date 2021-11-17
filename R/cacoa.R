@@ -1495,24 +1495,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # Prepare data further
       if (type=="GO") {
-        p.df <- table(ont.res$Group, ont.res$Type, ont.res$direction) %>%
-          as.data.frame() %>%
-          setNames(c("Group", "Type", "direction", "N")) %>%
-          dplyr::arrange(Group)
+        p.df <- table(Group=ont.res$Group, Type=ont.res$Type, direction=ont.res$direction) %>%
+          as.data.frame(responseName='N')
 
+        gg <- ggplot(p.df, aes(x=Group, y=N, fill=Type, group=Group)) +
+            geom_bar(stat="identity")
         if (length(unique(p.df$direction)) > 1) {
-          gg <- ggplot(p.df, aes(x=Group, y=N, fill=Type, group=Group)) +
-            geom_bar(stat="identity") +
-            facet_grid(~direction, switch="x") # TODO: can we just append facet on one if?
-        } else {
-          gg <- ggplot(p.df) +
-            geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
+          gg <- gg + facet_grid(~direction, switch="x")
         }
       } else if (type=="DO") {
-        p.df <- table(ont.res$Group, ont.res$direction) %>%
-          as.data.frame() %>%
-          setNames(c("Group", "direction", "N")) %>%
-          dplyr::arrange(Group)
+        p.df <- table(Group=ont.res$Group, direction=ont.res$direction) %>% as.data.frame(responseName='N')
 
         if (length(unique(p.df$direction)) > 1) {
           gg <- ggplot(p.df) +
@@ -1523,13 +1515,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             geom_bar(aes(x=Group, y=N), stat="identity")
         }
       } else if (type == "GSEA") {
-        p.df <- table(ont.res$Group, ont.res$Type) %>%
-          as.data.frame() %>%
-          setNames(c("Group", "Type", "N")) %>%
-          dplyr::arrange(Group)
-
-          gg <- ggplot(p.df) + # TODO: no direction separation here?
-            geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
+        p.df <- table(Group=ont.res$Group, Type=ont.res$Type) %>% as.data.frame(responseName='N')
+        gg <- ggplot(p.df) +
+          geom_bar(aes(x=Group, y=N, fill=Type), stat="identity")
       }
 
       gg <- gg +

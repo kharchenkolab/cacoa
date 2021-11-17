@@ -3,3 +3,10 @@
 .RData
 .Ruserdata
 cacoa*.tar.gz
+
+.idea
+.vscode
+*.o
+*.so
+*.a
+cmake-build*

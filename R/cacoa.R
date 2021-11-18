@@ -1257,6 +1257,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param qvalue.cutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
     #' @param min.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5)
     #' @param max.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
+    #' @param ... further argument for ontology estimation. Pass `nPerm` with `type='GSEA'` to use fgseaSimple method
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
     estimateOntology=function(type=c("GO", "DO", "GSEA"), name=NULL, de.name='de', org.db, n.top.genes=500, p.adj=1,
                               p.adjust.method="BH", readable=TRUE, verbose=TRUE, qvalue.cutoff=0.2, min.gs.size=10,
@@ -1283,49 +1284,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       )
 
       self$test.results[[name]] <- list(res=res, de.gene.ids=de.gene.ids, type=type) # redundancy needed
-      return(invisible(self$test.results[[name]]))
-    },
-
-    estimateOntologyGsea=function(name="GSEA", de.name='de', org.db, p.adj=1, p.adjust.method="BH", readable=TRUE,
-                                  verbose=self$verbose, qvalue.cutoff=0.2, min.gs.size=10, max.gs.size=5e2,
-                                  keep.gene.sets=FALSE, ignore.cache=NULL, de.raw=NULL, n.permutations=10000, ...) {
-      .Deprecated() # TODO: remove this function in the sake of estimateOntology?
-      if (is.null(de.raw)) {
-        de.raw <- private$getResults(de.name, "estimateDEPerCellType()")
-      }
-
-      # If estimateDEPerCellType was run with return.matrix = TRUE, remove matrix before calculating
-      if ("list" %in% class(de.raw[[1]])) de.raw %<>% lapply(`[[`, "res")
-
-      de.gene.ids <- getDEEntrezIdsSplitted(de.raw, org.db=org.db, p.adj=p.adj)
-
-      go.environment <- self$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
-
-      # options(warn=-1)
-      res <- list()
-      for (cell.type in names(de.gene.ids)) {
-        if (verbose) message(cell.type)
-        # stats - Named numeric vector with gene-level statistics sorted in decreasing order
-        stats <- sort(de.gene.ids[[cell.type]]$all)
-        for (go.type in c('BP', 'MF', 'CC')) {
-          pathways <- go.environment[[go.type]]$PATHID2EXTID
-
-          # All genes together
-          # fgsea.res <- fgsea(pathways = pathways, stats = stats)
-          suppressMessages(fgsea.res <- fgsea::fgsea(pathways=pathways, stats=stats, nperm=n.permutations))
-          fgsea.res$pathw.name <- go.environment[[go.type]]$PATHID2NAME[fgsea.res$pathway]
-
-          res.up <- fgsea.res[fgsea.res$ES > 0,]
-          res.up$padj.new <- p.adjust(res.up$pval, method = 'fdr')
-          res.down <- fgsea.res[fgsea.res$ES < 0,]
-          res.down$padj.new <- p.adjust(res.down$pval, method = 'fdr')
-          res[[cell.type]][[go.type]]$up <- res.up[order(res.up$pval),]
-          res[[cell.type]][[go.type]]$down <- res.down[order(res.down$pval),]
-        }
-      }
-      # options(warn=0)
-
-      self$test.results[[name]] <- list(res=res, de.gene.ids=de.gene.ids)
       return(invisible(self$test.results[[name]]))
     },
 

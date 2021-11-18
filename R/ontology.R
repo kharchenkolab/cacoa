@@ -72,23 +72,26 @@ estimateEnrichedGO <- function(de.gene.ids, go.environment, ...) {
 }
 
 #' @keywords internal
-enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType = "ENTREZID", go.environment, ont = "BP", pvalueCutoff = 0.05,
-                           pAdjustMethod = "BH", minGSSize = 5, maxGSSize = 500, readable = FALSE, eps = 0, exponent = 1, seed = FALSE, verbose = FALSE) {
+enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType="ENTREZID", go.environment, ont="BP", pvalueCutoff=0.05,
+                           pAdjustMethod="BH", minGSSize=5, maxGSSize=500, readable=FALSE, eps=0, exponent=1,
+                           seed=FALSE, verbose=FALSE, ...) {
   ont %<>% toupper %>% match.arg(c("BP", "CC", "MF"))
 
-  res <- DOSE:::GSEA_internal(gene.ids, pvalueCutoff = pvalueCutoff, pAdjustMethod = pAdjustMethod, minGSSize = minGSSize,
-                              maxGSSize = maxGSSize, USER_DATA = go.environment, eps = eps, exponent = exponent, seed = seed,
-                              verbose = verbose)
-  if(is.null(res))
+  res <- DOSE:::GSEA_internal(
+    gene.ids, pvalueCutoff=pvalueCutoff, pAdjustMethod=pAdjustMethod, minGSSize=minGSSize, maxGSSize=maxGSSize,
+    USER_DATA=go.environment, eps=eps, exponent=exponent, seed=seed, verbose=verbose, ...
+  )
+
+  if (is.null(res))
     return(res)
 
   res@keytype <- keyType
   res@organism <- organism
-  if(readable) {
+  if (readable) {
     res <- DOSE::setReadable(res, org.db)
   }
   res@setType <- ont
-  if(!is.null(res)) return(res)
+  if (!is.null(res)) return(res)
 }
 
 #' @keywords internal
@@ -151,23 +154,28 @@ ontologyListToDf <- function(ont.list) {
 
 #' @title Estimate ontology
 #' @description  Calculate ontologies based on DEs
-#' @param type character string Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information.
-#' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
-#' @param n.top.genes numeric Number of most different genes to take as input. If less are left after filtering for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)
+#' @param type character string Ontology type, either GO (gene ontology) or DO (disease ontology).
+#' Please see DOSE package for more information.
+#' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse.
+#' Input must be of class 'OrgDb'
+#' @param n.top.genes numeric Number of most different genes to take as input. If less are left after filtering
+#' for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)
 #' @param verbose boolean Print progress (default=TRUE)
 #' @param qvalue.cutoff numeric Q value cutoff, please see clusterProfiler package for more information (default=0.2)
-#' @param ... Additional parameters for DO/GO/GSEA functions
+#' @param ... Additional parameters for DO/GO/GSEA functions. In case of GSEA, pass nPerm to call fgseaSimple
+#' instead of fgseaMultilevel
 #' @return A list containing a list of ontologies per type of ontology, and a data frame with merged results
 #' @export
 estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", org.db=NULL, n.top.genes=5e2,
                                     keep.gene.sets=FALSE, verbose=TRUE, qvalue.cutoff=0.2, ...) {
+  # TODO: pass BPPARAM=BiocParallel::MulticoreParam(n.cores) to GSEA to restrict maximal number of cores used
   checkPackageInstalled("DOSE", bioc=TRUE)
 
   if (type %in% c("GO", "DO") && (n.top.genes > 0)) {
     # Adjust to n.top.genes
     de.gene.ids <- lapply(de.gene.scores, function(celltype) {
-        lapply(celltype[-length(celltype)], function(dir) head(names(dir), n.top.genes)) %>% # universe is not accounted for
-          append(list(universe=names(celltype$universe)))
+        lapply(celltype[-length(celltype)], function(dir) head(names(dir), n.top.genes)) %>%
+          append(list(universe=names(celltype$universe))) # universe is not accounted for
     })
   }
 
@@ -180,18 +188,18 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
       ), n.cores=1, progress=verbose)
   } else if (type=="GO") {
     if (verbose) message("Estimating enriched ontologies ... \n")
-    ont.list <- names(de.gene.ids) %>% sn() %>% plapply(function(id) suppressWarnings(
-      estimateEnrichedGO(de.gene.ids[[id]][-length(de.gene.ids[[id]])], go.environment = go.environment,
-                         universe=de.gene.ids[[id]]$universe, org.db=org.db, qvalueCutoff=qvalue.cutoff, ...)
-      ), progress = verbose, n.cores = 1)
+    ont.list <- plapply(de.gene.ids, function(de.ids) suppressWarnings(
+      estimateEnrichedGO(de.ids[-length(de.ids)], go.environment=go.environment, universe=de.ids$universe,
+                         org.db=org.db, qvalueCutoff=qvalue.cutoff, ...)
+      ), progress=verbose, n.cores=1)
 
     if (!keep.gene.sets) {
       ont.list %<>% lapply(lapply, lapply, function(x) {x@geneSets <- list(); x})
     }
   } else if (type == "GSEA") {
     if (verbose) message("Estimating enriched ontologies ... \n")
-    ont.list <- names(de.gene.scores) %>% sn() %>% plapply(function(id) {suppressWarnings(suppressMessages(
-      estimateEnrichedGSEGO(gene.ids=sort(de.gene.scores[[id]]$universe, decreasing=TRUE), org.db=org.db,
+    ont.list <- plapply(de.gene.scores, function(scores) {suppressWarnings(suppressMessages(
+      estimateEnrichedGSEGO(gene.ids=sort(scores$universe, decreasing=TRUE), org.db=org.db,
                             go.environment=go.environment, organism=clusterProfiler:::get_organism(org.db), ...)
     ))}, progress=verbose, n.cores=1)
 
@@ -661,4 +669,20 @@ getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {
     bind_rows()
 
   return(ont.sum)
+}
+
+#' @keywords internal
+clusterOntologyDF <- function(ont.df, clust.naming, ind.h=0.66, total.h=0.5, verbose=FALSE) {
+  genes.per.go.per.type <- ont.df$geneID %>% strsplit("/") %>%
+    setNames(ont.df$Description) %>% split(ont.df$Group)
+
+  clust.df <- clusterIndividualGOs(genes.per.go.per.type, cut.h=ind.h)
+  clusts <- clusterGOsPerType(clust.df, cut.h=total.h, verbose=verbose)
+
+  ont.df$Cluster <- clusts$clusts[as.character(ont.df$Description)]
+
+  name.per.clust <- estimateOntologyClusterNames(ont.df, clust.naming=clust.naming)
+
+  ont.df$ClusterName <- name.per.clust[ont.df$Cluster]
+  return(ont.df)
 }

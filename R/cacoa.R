@@ -1551,17 +1551,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       )
 
       if (is.null(ont.sum)) return(ggplot())
-
-      ont.sum[ont.sum > max.log.p] <- max.log.p
-      ont.sum %<>% .[order(rowSums(abs(.)), decreasing=TRUE),,drop=FALSE] %>% head(top.n)
-
-      if (prod(range(ont.sum)) < 0) { # directional values, like in type='GSEA', genes='all'
-        ont.sum[ont.sum < -max.log.p] <- -max.log.p
-        if (is.null(palette)) palette <- brewerPalette('RdBu')
-        if (is.null(color.range)) color.range <- c(-1, 1) * max(abs(ont.sum))
-      } else {
-        if (is.null(palette)) palette <- getGenePalette(genes, high="white")
+      if (is.null(palette)) {
+        palette <- getGenePalette(genes, bidirectional=(prod(range(ont.sum, na.rm=TRUE)) < 0))
       }
+
+      ont.sum[abs(ont.sum) > max.log.p] %<>% {max.log.p * sign(.)}
+      ont.sum %<>% .[order(rowSums(abs(.)), decreasing=TRUE),,drop=FALSE] %>% head(top.n)
 
       plt <- plotHeatmap(
         ont.sum, legend.position=legend.position, row.order=row.order, col.order=col.order,
@@ -1576,9 +1571,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                           cluster.name=NULL, cell.subgroups=NULL, palette=NULL, row.order=TRUE,
                                           col.order=TRUE, max.log.p=10, only.family.children=FALSE,
                                           description.regex=NULL, description.exclude.regex=NULL,
-                                          distance="manhattan", clust.method="complete",
-                                          clust.naming="consensus", n.words=5, exclude.words=NULL,
-                                          recluster.after.filtration=FALSE, ...) {
+                                          distance="manhattan", clust.method="complete", clust.naming="consensus",
+                                          n.words=5, exclude.words=NULL, recluster.after.filtration=FALSE, ...) {
       ont.sum <- private$getOntologyHeatmapInfo(
         name=name, genes=genes, subtype=subtype, min.genes=min.genes, p.adj=p.adj, selection=selection,
         clusters=clusters, cluster.name=cluster.name, cell.subgroups=cell.subgroups,
@@ -1591,10 +1585,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       ont.sum <- ont.sum$ont.sum
 
       if (is.null(ont.sum)) return(ggplot())
-      if (is.null(palette)) palette <- getGenePalette(genes, high="white")
+      if (is.null(palette)) {
+        palette <- getGenePalette(genes, bidirectional=(prod(range(ont.sum, na.rm=TRUE)) < 0))
+      }
 
       ont.sum.raw <- ont.sum
-      ont.sum[ont.sum > max.log.p] <- max.log.p
+      ont.sum[abs(ont.sum) > max.log.p] %<>% {max.log.p * sign(.)}
 
       gos.per.clust <- dist(ont.sum, method=distance) %>%
         hclust(method=clust.method) %>% cutree(k=n) %>% {split(names(.), .)}
@@ -1610,10 +1606,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       ont.sum <- lapply(gos.per.clust, function(ns) colMeans(ont.sum.raw[ns,,drop=FALSE])) %>%
         do.call(rbind, .) %>% as.data.frame() %>% set_rownames(clust.names)
-      ont.sum[ont.sum > max.log.p] <- max.log.p
+      ont.sum[abs(ont.sum) > max.log.p] %<>% {max.log.p * sign(.)}
 
       ont.freqs <- gos.per.clust %>%
-        lapply(function(gos) colMeans(ont.sum.raw[gos,] > 1e-5) * 100) %>%
+        lapply(function(gos) colMeans(abs(ont.sum.raw[gos,]) > 1e-5) * 100) %>%
         do.call(rbind, .) %>% as.data.frame()
 
       plt <- plotHeatmap(
@@ -3062,9 +3058,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         ont.sum %<>% .[grep(description.exclude.regex, .$Description, invert=TRUE),]
       }
 
+      if (nrow(ont.sum) == 0) {
+        warning("No ontologies pass the regex filtration for name=", name, ", subtype=", subtype, " and genes=", genes)
+        return(NULL)
+      }
+
       if (recluster.after.filtration) {
         ont.sum %<>% clusterOntologyDF(clust.naming=clust.naming, verbose=self$verbose) %>% .$df
         group.field <- "ClusterName"
+        desc.per.clust <- ont.sum %$% split(Description, ClusterName) %>% lapply(unique)
       }
 
       sign.field <- if ((genes == "all") && !is.null(ont.sum$enrichmentScore)) 'enrichmentScore' else 'p.adjust'

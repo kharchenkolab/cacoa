@@ -229,7 +229,7 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
 prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
   dir.names <- c("down", "up", "all")
 
-  if(type == "DO") {
+  if (type == "DO") {
     # Split into fractions
     ont.res <- dir.names %>% sn() %>%
       lapply(function(x) lapply(ont.res, `[[`, x)) %>%
@@ -251,7 +251,7 @@ prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
     ont.res %<>% filterOntologies(p.adj = p.adj) %>% ontologyListToDf()
 
     # Filter by min. number of genes per pathway
-    if(min.genes > 1) {
+    if (min.genes > 1) {
       ont.res %<>% lapply(function(g) {
         if(class(g) != "character") {
           idx <- g$GeneRatio %>%
@@ -263,7 +263,7 @@ prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
         g
       })
     }
-  } else if(type == "GO") {
+  } else if (type == "GO") {
     # Split into different fractions
     ont.res <- dir.names %>% sn() %>%
       lapply(function(x) lapply(ont.res, lapply, `[[`, x))
@@ -611,7 +611,8 @@ clusterGOsPerType <- function(clust.df, cut.h, verbose=FALSE) {
   cl.dists <- apply.fun(clust.mat, 2, function(ct1) apply(clust.mat, 2, function(ct2) {
     mask <- !is.na(ct1) & !is.na(ct2)
     if (sum(mask) == 0) 1 else (1 - mean(ct1[mask] == ct2[mask]))
-  }))
+  })) %>% set_colnames(colnames(clust.mat)) %>% set_rownames(colnames(clust.mat))
+  # there is a bug in apply with name for symmetric matrices ^
 
   cl.clusts <- as.dist(cl.dists) %>% hclust(method="average")
   clusts <- cutree(cl.clusts, h=cut.h)

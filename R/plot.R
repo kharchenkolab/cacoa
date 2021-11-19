@@ -122,7 +122,11 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE
                         color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL, font.size=8,
                         distance="manhattan", clust.method="complete", grid.color="gray50") {
   if (is.null(color.range)) {
-    color.range <- c(min(0, min(df)), max(df))
+    if (prod(range(df, na.rm=TRUE)) < 0) {
+      color.range <- c(-1, 1) * max(abs(df), na.rm=TRUE)
+    } else {
+      color.range <- c(min(0, min(df, na.rm=TRUE)), max(df, na.rm=TRUE))
+    }
   }
 
   if (is.logical(row.order) && row.order) {
@@ -193,18 +197,24 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE
 #' @param high color for the highest value (default: "gray80")
 #' @return palette function
 #' @export
-getGenePalette <- function(genes=c("up", "down", "all"), high="gray80") {
+getGenePalette <- function(genes=c("up", "down", "all"), neutral.col="white", bidirectional=FALSE) {
   genes <- match.arg(genes)
+  up.cols <- c("#d6604d", "#67001f")
+  down.cols <- c("#4393c3", "#053061")
+  all.cols <- c("#5aae61", "#00441b")
+
+  if (bidirectional)
+    return(colorRampPalette(c(rev(down.cols), neutral.col, up.cols)))
 
   if (genes == "up") {
-    low <- "red"
+    sign.cols <- up.cols
   } else if (genes == "down") {
-    low <- "blue"
+    sign.cols <- down.cols
   } else {
-    low <- "green"
+    sign.cols <- all.cols
   }
 
-  return(colorRampPalette(c(high, low)))
+  return(colorRampPalette(c(neutral.col, sign.cols)))
 }
 
 #' @keywords internal

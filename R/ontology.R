@@ -167,8 +167,8 @@ ontologyListToDf <- function(ont.list) {
 #' @return A list containing a list of ontologies per type of ontology, and a data frame with merged results
 #' @export
 estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", org.db=NULL, n.top.genes=5e2,
-                                    keep.gene.sets=FALSE, verbose=TRUE, qvalue.cutoff=0.2, ...) {
-  # TODO: pass BPPARAM=BiocParallel::MulticoreParam(n.cores) to GSEA to restrict maximal number of cores used
+                                    keep.gene.sets=FALSE, verbose=TRUE, qvalue.cutoff=0.2, n.cores=1, ...) {
+  # TODO: n.cores only affects GSEA. Need to understand if it can be passed to GO/DO
   checkPackageInstalled("DOSE", bioc=TRUE)
 
   if (type %in% c("GO", "DO") && (n.top.genes > 0)) {
@@ -197,11 +197,14 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
       ont.list %<>% lapply(lapply, lapply, function(x) {x@geneSets <- list(); x})
     }
   } else if (type == "GSEA") {
+    checkPackageInstalled("BiocParallel", bioc=TRUE)
     if (verbose) message("Estimating enriched ontologies ... \n")
     ont.list <- plapply(de.gene.scores, function(scores) {suppressWarnings(suppressMessages(
-      estimateEnrichedGSEGO(gene.ids=sort(scores$universe, decreasing=TRUE), org.db=org.db,
-                            go.environment=go.environment, organism=clusterProfiler:::get_organism(org.db), ...)
-    ))}, progress=verbose, n.cores=1)
+      estimateEnrichedGSEGO(
+        gene.ids=sort(scores$universe, decreasing=TRUE), org.db=org.db, go.environment=go.environment,
+        organism=clusterProfiler:::get_organism(org.db), BPPARAM=BiocParallel::SerialParam(), ...
+      )
+    ))}, progress=verbose, n.cores=n.cores, fail.on.error=TRUE)
 
     if (!keep.gene.sets) {
       ont.list %<>% lapply(lapply, function(x) {x@geneSets <- list(); x})

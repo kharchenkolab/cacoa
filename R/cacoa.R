@@ -1393,8 +1393,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         return(invisible(res))
       }
 
-      ont.df %<>% clusterOntologyDF(clust.naming=clust.naming, ind.h=ind.h, total.h=total.h, verbose=verbose)
-      res <- list(df=ont.df, hclust=clusts$hclust)
+      res <- clusterOntologyDF(ont.df, clust.naming=clust.naming, ind.h=ind.h, total.h=total.h, verbose=verbose)
       self$test.results[[ont.name]][[name]] <- res
 
       return(invisible(res))
@@ -1452,10 +1451,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else stop("Unexpected type ", type)
 
       gg <- gg +
-        scale_y_continuous(expand=c(0, 0)) +
+        scale_y_continuous(expand=c(0, 0, 0.05, 0)) +
         self$plot.theme +
         theme(axis.text.x=element_text(angle=90, hjust=1, vjust=0.5), legend.position="right",
-              axis.title.x=element_blank()) +
+              axis.title.x=element_blank(), panel.grid.major.x=element_blank()) +
         labs(x="", y=paste0("No. of ", type, " terms"))
       return(gg)
     },
@@ -1542,7 +1541,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                  selection="all", top.n=Inf, clusters=TRUE, cluster.name=NULL,
                                  cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE, max.log.p=10,
                                  only.family.children=FALSE, description.regex=NULL, description.exclude.regex=NULL,
-                                 recluster.after.filtration=FALSE, clust.naming="medoid", ...) {
+                                 recluster.after.filtration=FALSE, clust.naming="medoid", color.range=NULL, ...) {
       ont.sum <- private$getOntologyHeatmapInfo(
         name=name, genes=genes, subtype=subtype, min.genes=min.genes, p.adj=p.adj, selection=selection,
         clusters=clusters, cluster.name=cluster.name, cell.subgroups=cell.subgroups,
@@ -1552,20 +1551,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       )
 
       if (is.null(ont.sum)) return(ggplot())
-      if (is.null(palette)) palette <- getGenePalette(genes, high="white")
 
       ont.sum[ont.sum > max.log.p] <- max.log.p
-      ont.sum %<>% .[order(rowSums(.), decreasing=TRUE),,drop=FALSE] %>% head(top.n)
+      ont.sum %<>% .[order(rowSums(abs(.)), decreasing=TRUE),,drop=FALSE] %>% head(top.n)
+
+      if (prod(range(ont.sum)) < 0) { # directional values, like in type='GSEA', genes='all'
+        ont.sum[ont.sum < -max.log.p] <- -max.log.p
+        if (is.null(palette)) palette <- brewerPalette('RdBu')
+        if (is.null(color.range)) color.range <- c(-1, 1) * max(abs(ont.sum))
+      } else {
+        if (is.null(palette)) palette <- getGenePalette(genes, high="white")
+      }
 
       plt <- plotHeatmap(
         ont.sum, legend.position=legend.position, row.order=row.order, col.order=col.order,
-        plot.theme=self$plot.theme, palette=palette, ...
+        plot.theme=self$plot.theme, palette=palette, color.range=color.range, ...
       )
-      # plt <- as.matrix(ont.sum) %>%
-      #   ComplexHeatmap::Heatmap(border=TRUE, show_row_dend=FALSE, show_column_dend=FALSE,
-      #                           row_names_max_width=unit(8, "cm"), row_names_gp=grid::gpar(fontsize=10),
-      #                           cluster_rows=row.order, cluster_columns=col.order,
-      #                           col=palette(100), ...)
+
       return(plt)
     },
 
@@ -3061,11 +3063,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (recluster.after.filtration) {
-        ont.sum %<>% clusterOntologyDF(clust.naming=clust.naming, verbose=self$verbose)
+        ont.sum %<>% clusterOntologyDF(clust.naming=clust.naming, verbose=self$verbose) %>% .$df
         group.field <- "ClusterName"
       }
 
-      ont.sum <- -groupOntologiesByCluster(ont.sum, field=group.field)
+      sign.field <- if ((genes == "all") && !is.null(ont.sum$enrichmentScore)) 'enrichmentScore' else 'p.adjust'
+      ont.sum <- -groupOntologiesByCluster(ont.sum, field=group.field, sign.field=sign.field)
 
       if (nrow(ont.sum) == 0) {
         warning("No ontologies pass the filtration for name=", name, ", subtype=", subtype, " and genes=", genes)

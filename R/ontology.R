@@ -101,16 +101,18 @@ estimateEnrichedGSEGO <- function(go.environment, ...) {
 }
 
 #' @keywords internal
-groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName") {
+groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName", sign.field="p.adjust") {
   if (nrow(ont.clust.df) == 0)
     return(ont.clust.df)
   order.anno <- ont.clust.df$Group %>% unique %>% .[order(.)]
 
   df <- ont.clust.df %>%
+    mutate(Sign=sign(.[[sign.field]])) %>%
     group_by(Group, CN=.[[field]]) %>%
-    summarise(p.adjust=min(p.adjust)) %>%
+    summarise(p.adjust=min(p.adjust), Sign=sort(Sign, decreasing=TRUE)[1]) %>%
     ungroup() %>%
-    mutate(p.adjust=log10(p.adjust)) %>%
+    mutate(p.adjust=log10(p.adjust) * Sign) %>%
+    select(-Sign) %>%
     tidyr::spread(Group, p.adjust) %>%
     as.data.frame() %>%
     set_rownames(.$CN) %>%
@@ -687,5 +689,5 @@ clusterOntologyDF <- function(ont.df, clust.naming, ind.h=0.66, total.h=0.5, ver
   name.per.clust <- estimateOntologyClusterNames(ont.df, clust.naming=clust.naming)
 
   ont.df$ClusterName <- name.per.clust[ont.df$Cluster]
-  return(ont.df)
+  return(list(df=ont.df, clusts=clusts$hclust))
 }

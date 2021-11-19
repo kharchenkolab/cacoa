@@ -157,7 +157,7 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE
   if (is.null(size.df)) {
     gg <- ggplot(df) + geom_tile(aes(x=G2, y=G1, fill=value), color=grid.color) + guides(fill=color.guide)
     return.fill <- TRUE
-    expand <- expansion(0, 0.0)
+    expand <- expansion(0, 0)
   } else {
     df$size <- reshape2::melt(size.df, id.vars=NULL)$value
     size.guide <- guide_legend(
@@ -169,7 +169,7 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE
       scale_size_continuous(range=size.range) +
       guides(color=color.guide, size=size.guide)
     return.fill <- FALSE
-    expand <- expansion(0, 0.5)
+    expand <- expansion(mult=0, add=0.5)
   }
 
   gg <- gg + plot.theme +

@@ -239,13 +239,12 @@ prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
     ont.res %<>% lapply(lapply, function(x) if(length(x)) x@result else x)
 
     # Prep for filter
-    ont.res %<>%
-      names() %>%
+    ont.res %<>% names() %>% sn() %>%
       lapply(function(dir) {
-        lapply(ont.res[[dir]] %>% names(), function(ct) {
+        lapply(sn(names(ont.res[[dir]])), function(ct) {
           dplyr::mutate(ont.res[[dir]][[ct]], Type = "DO")
-        }) %>% setNames(ont.res[[dir]] %>% names())
-      }) %>% setNames(ont.res %>% names())
+        })
+      })
 
     # Filter by p.adj
     ont.res %<>% filterOntologies(p.adj = p.adj) %>% ontologyListToDf()
@@ -253,7 +252,7 @@ prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
     # Filter by min. number of genes per pathway
     if (min.genes > 1) {
       ont.res %<>% lapply(function(g) {
-        if(class(g) != "character") {
+        if (class(g) != "character") {
           idx <- g$GeneRatio %>%
             strsplit("/", fixed=TRUE) %>%
             sapply(`[[`, 1)
@@ -277,15 +276,7 @@ prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
       lapply(plyr::compact)
 
     # Prep for filter
-    ont.res %<>% names() %>% sn() %>%
-      lapply(function(dir) {
-        lapply(ont.res[[dir]] %>% names(), function(group) {
-          lapply(ont.res[[dir]][[group]] %>% names, function(go) {
-            dplyr::mutate(ont.res[[dir]][[group]][[go]], Type = go)
-          }) %>% setNames(ont.res[[dir]][[group]] %>% names()) %>%
-            dplyr::bind_rows()
-        }) %>% setNames(ont.res[[dir]] %>% names())
-      })
+    ont.res %<>% lapply(lapply, dplyr::bind_rows, .id='Type')
 
     # Filter by p.adj
     ont.res %<>% filterOntologies(p.adj = p.adj) %>% ontologyListToDf()
@@ -303,20 +294,19 @@ prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
         g
       })
     }
-  } else if(type == "GSEA") {
+  } else if (type == "GSEA") {
     # Extract results
     ont.res %<>% lapply(lapply, function(x) if(length(x)) x@result else x) %>%
       lapply(plyr::compact) # Remove empty entries
 
     # Prep for filter
-    ont.res %<>%
-      names() %>%
+    ont.res %<>% names() %>% sn() %>%
       lapply(function(ct) {
         lapply(ont.res[[ct]] %>% names(), function(ont) {
           dplyr::mutate(ont.res[[ct]][[ont]], Type = ont)
         }) %>% setNames(ont.res[[ct]] %>% names()) %>%
           dplyr::bind_rows()
-      }) %>% setNames(ont.res %>% names())
+      })
 
     # Filter by min. number of genes per pathway
     if(min.genes > 1) {

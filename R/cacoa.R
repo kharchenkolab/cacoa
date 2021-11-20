@@ -2999,7 +2999,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         ont.res %<>% filter(Group %in% cell.subgroups)
       }
 
-      if (!is.null(subtype)) {
+      if (!is.null(subtype) && (type != 'DO')) {
         ont.res %<>% filter(Type %in% subtype)
       }
 
@@ -3047,6 +3047,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (!is.null(cell.subgroups)) ont.sum %<>% filter(Group %in% cell.subgroups)
         group.field <- "ClusterName"
         desc.per.clust <- ont.sum %$% split(Description, ClusterName) %>% lapply(unique)
+      }
+
+      if (nrow(ont.sum) == 0) {
+        warning("No ontologies found for name=", name, ", subtype=", subtype, " and genes=", genes)
+        return(NULL)
       }
 
       if (only.family.children) {

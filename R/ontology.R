@@ -203,12 +203,12 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
 #' @param min.genes Min. number of significant genes per pathway
 #' @return List of ontology data for plotting
 #' @keywords internal
-prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes, genes) {
+prepareOntologyPlotData <- function(ont.res, type, genes, p.adj, q.value, min.genes) {
   if (type == "DO") {
     ont.res <- lapply(ont.res, `[[`, genes) %>%
       lapply(function(x) if (length(x)) x@result else x) %>%
       plyr::compact() %>%
-      lapply(dplyr::mutate, Type='DO')
+      lapply(mutate, Type='DO')
   } else if (type == "GO") {
     ont.res <- lapply(ont.res, lapply, `[[`, genes)
   }
@@ -217,12 +217,10 @@ prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes, genes) {
     ont.res %<>%
       lapply(lapply, function(x) if (length(x)) x@result else x) %>%
       lapply(plyr::compact) %>%
-      lapply(dplyr::bind_rows, .id='Type')
+      lapply(bind_rows, .id='Type')
   }
 
-  ont.res %<>%
-    dplyr::bind_rows(.id='Group') %>%
-    dplyr::filter(p.adjust < p.adj)
+  ont.res %<>% bind_rows(.id='Group')
 
   if (type == "GSEA") {
     ont.res %<>% rename(geneID=core_enrichment, qvalue=qvalues)
@@ -234,7 +232,8 @@ prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes, genes) {
   }
   # Filter by min. number of genes per pathway
   n.genes <- strsplit(ont.res$geneID, "/", fixed=TRUE) %>% sapply(length)
-  ont.res %<>% .[n.genes >= min.genes,]
+  ont.res %<>% .[n.genes >= min.genes,] %>%
+    filter(p.adjust <= p.adj, qvalue <= q.value)
 
   return(ont.res)
 }

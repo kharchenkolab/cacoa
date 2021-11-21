@@ -1370,11 +1370,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @return A ggplot2 object
-    plotNumOntologyTermsPerType=function(name="GO", genes="up", p.adj=0.05, min.genes=1) {
+    plotNumOntologyTermsPerType=function(name="GO", genes="up", p.adj=0.05, q.value=0.2, min.genes=1) {
       type <- private$getResults(name, 'estimateOntology()')$type
       if (length(genes) > 1) {
         ont.res <- genes %>% setNames(., .) %>% lapply(function(g) {
-          private$getOntologyPvalueResults(name=name, gene=g, p.adj=p.adj, min.genes=min.genes)
+          private$getOntologyPvalueResults(name=name, gene=g, p.adj=p.adj, q.value=q.value, min.genes=min.genes)
         })
 
         classes <- sapply(ont.res[genes], class)
@@ -1390,8 +1390,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         ont.res %<>% names() %>% lapply(function(d) dplyr::mutate(ont.res[[d]], Direction=d)) %>%
           Reduce(rbind, .)
       } else {
-        ont.res <- private$getOntologyPvalueResults(name=name, genes=genes, p.adj=p.adj, min.genes=min.genes) %>%
-          dplyr::mutate(Direction=genes)
+        ont.res <- private$getOntologyPvalueResults(
+          name=name, genes=genes, p.adj=p.adj, q.value=q.value, min.genes=min.genes
+        ) %>% dplyr::mutate(Direction=genes)
       }
 
       # Prepare data further
@@ -1503,14 +1504,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param color.range vector with two values for min/max values of p-values
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
-    plotOntologyHeatmap=function(name="GO", genes="up", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left",
-                                 selection="all", top.n=Inf, cluster=TRUE, cell.subgroups=NULL, palette=NULL,
+    plotOntologyHeatmap=function(name="GO", genes="up", subtype="BP", p.adj=0.05, q.value=0.2, min.genes=1, top.n=Inf,
+                                 legend.position="left", selection="all", cluster=TRUE, cell.subgroups=NULL,
                                  row.order=TRUE, col.order=TRUE, max.log.p=10, only.family.children=FALSE,
                                  description.regex=NULL, description.exclude.regex=NULL, clust.naming="medoid",
-                                 color.range=NULL, return.info=FALSE, ...) {
+                                 palette=NULL, color.range=NULL, return.info=FALSE, ...) {
       ont.info <- private$getOntologyHeatmapInfo(
-        name=name, genes=genes, subtype=subtype, min.genes=min.genes, p.adj=p.adj, selection=selection,
-        cluster=cluster, cell.subgroups=cell.subgroups, only.family.children=only.family.children,
+        name=name, genes=genes, subtype=subtype, p.adj=p.adj, q.value=q.value, min.genes=min.genes,
+        selection=selection, cluster=cluster, cell.subgroups=cell.subgroups, only.family.children=only.family.children,
         clust.naming=clust.naming, description.regex=description.regex,
         description.exclude.regex=description.exclude.regex
       )
@@ -1538,16 +1539,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    plotOntologyHeatmapCollapsed=function(name="GO", genes="up", subtype="BP", min.genes=1, p.adj=0.05, n=20,
-                                          legend.position="left", selection="all", max.log.p=10, cluster=TRUE,
+    plotOntologyHeatmapCollapsed=function(name="GO", genes="up", subtype="BP", p.adj=0.05, q.value=0.2, min.genes=1,
+                                          n=20, legend.position="left", selection="all", max.log.p=10, cluster=TRUE,
                                           cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE,
                                           only.family.children=FALSE,
                                           description.regex=NULL, description.exclude.regex=NULL,
                                           distance="manhattan", clust.method="complete", clust.naming="consensus",
                                           n.words=5, exclude.words=NULL, return.info=FALSE, ...) {
       ont.info <- private$getOntologyHeatmapInfo(
-        name=name, genes=genes, subtype=subtype, min.genes=min.genes, p.adj=p.adj, selection=selection,
-        cluster=cluster, cell.subgroups=cell.subgroups, only.family.children=only.family.children,
+        name=name, genes=genes, subtype=subtype, p.adj=p.adj, q.value=q.value, min.genes=min.genes,
+        selection=selection, cluster=cluster, cell.subgroups=cell.subgroups, only.family.children=only.family.children,
         clust.naming=clust.naming, description.regex=description.regex,
         description.exclude.regex=description.exclude.regex
       )
@@ -1603,8 +1604,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param type Ontology, must be either "GO" or "DO" (default="GO")
     #' @return A ggplot2 object
-    plotOntologySimilarities=function(name="GO", genes="up", p.adj=0.05, min.genes=1) {
-      ont.res <- private$getOntologyPvalueResults(name=name, genes=genes, p.adj=p.adj, min.genes=min.genes)
+    plotOntologySimilarities=function(name="GO", genes="up", p.adj=0.05, q.value=0.2, min.genes=1) {
+      ont.res <- private$getOntologyPvalueResults(
+        name=name, genes=genes, p.adj=p.adj, q.value=q.value, min.genes=min.genes
+      )
       type <- private$getResults(name, 'estimateOntology()')$type
 
       if ((ont.res$Group %>% unique() %>% length()) == 1)
@@ -2945,8 +2948,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(genes)
     },
 
-    getOntologyPvalueResults=function(name, genes=c('up', 'down', 'all'), p.adj=0.05, min.genes=1, subtype=NULL,
-                                      cell.subgroups=NULL) {
+    getOntologyPvalueResults=function(name, genes=c('up', 'down', 'all'), p.adj=0.05, q.value=0.2, min.genes=1,
+                                      subtype=NULL, cell.subgroups=NULL) {
       if (!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
         stop("'subtype' must be 'BP', 'CC', or 'MF'.")
 
@@ -2954,9 +2957,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       ont.res <- private$getResults(name, 'estimateOntology()')
       type <- ont.res$type
-      ont.res %<>% .$res %>% prepareOntologyPlotData(type=type, p.adj=p.adj, min.genes=min.genes, genes=genes)
+      ont.res %<>% .$res %>%
+        prepareOntologyPlotData(type=type, genes=genes, p.adj=p.adj, q.value=q.value, min.genes=min.genes)
 
-      if (is.null(ont.res))
+      if (is.null(ont.res) || (nrow(ont.res) == 0))
         stop("No results found for ", genes, " genes for ", name, ".")
 
       if (!is.null(cell.subgroups)) {
@@ -2973,7 +2977,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(ont.res)
     },
 
-    getOntologyHeatmapInfo=function(name="GO", genes="up", subtype="BP", min.genes=1, p.adj=0.05,
+    getOntologyHeatmapInfo=function(name="GO", genes="up", subtype="BP", p.adj=0.05, q.value=0.2, min.genes=1,
                                     selection=c("all", "common", "unique"), cell.subgroups=NULL,
                                     only.family.children=FALSE, description.regex=NULL, description.exclude.regex=NULL,
                                     cluster=TRUE, clust.naming="medoid") {
@@ -2991,7 +2995,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # Extract results
       ont.df <- private$getOntologyPvalueResults(
-        name=name, genes=genes, subtype=subtype, cell.subgroups=cell.subgroups, p.adj=p.adj, min.genes=min.genes
+        name=name, genes=genes, subtype=subtype, cell.subgroups=cell.subgroups, p.adj=p.adj, q.value=q.value,
+        min.genes=min.genes
       )
 
       if (nrow(ont.df) == 0) {

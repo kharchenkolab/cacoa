@@ -44,9 +44,9 @@ getDEEntrezIdsSplitted <- function(de.raw, org.db, p.adj=1) {
 }
 
 #' @keywords internal
-enrichGOOpt <- function(gene, org.db, go.environment, keyType = "ENTREZID", ont = "BP", pvalueCutoff = 0.05,
-                        pAdjustMethod = "BH", universe=NULL, qvalueCutoff = 0.2, minGSSize = 5,
-                        maxGSSize = 500, readable = FALSE, pool = FALSE) {
+enrichGOOpt <- function(gene, org.db, go.environment, keyType="ENTREZID", ont="BP", pvalueCutoff=0.05,
+                        pAdjustMethod="BH", universe=NULL, qvalueCutoff=0.2, minGSSize=5, maxGSSize=500,
+                        readable=FALSE, pool=FALSE) {
   ont %<>% toupper %>% match.arg(c("BP", "CC", "MF"))
 
   res <- clusterProfiler:::enricher_internal(gene, pvalueCutoff = pvalueCutoff,
@@ -62,7 +62,7 @@ enrichGOOpt <- function(gene, org.db, go.environment, keyType = "ENTREZID", ont 
     res <- DOSE::setReadable(res, org.db)
   }
   res@ontology <- ont
-  if(!is.null(res)) return(res)
+  if (!is.null(res)) return(res)
 }
 
 #' @keywords internal
@@ -72,7 +72,7 @@ estimateEnrichedGO <- function(de.gene.ids, go.environment, ...) {
 }
 
 #' @keywords internal
-enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType="ENTREZID", go.environment, ont="BP", pvalueCutoff=0.05,
+enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType="ENTREZID", go.environment, ont="BP", pvalueCutoff=1,
                            pAdjustMethod="BH", minGSSize=5, maxGSSize=500, readable=FALSE, eps=0, exponent=1,
                            seed=FALSE, verbose=FALSE, ...) {
   ont %<>% toupper %>% match.arg(c("BP", "CC", "MF"))
@@ -145,7 +145,7 @@ filterOntologies <- function(ont.list, p.adj) {
 #' @return A list containing a list of ontologies per type of ontology, and a data frame with merged results
 #' @export
 estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", org.db=NULL, n.top.genes=5e2,
-                                    keep.gene.sets=FALSE, verbose=TRUE, qvalue.cutoff=0.2, n.cores=1, ...) {
+                                    keep.gene.sets=FALSE, verbose=TRUE, n.cores=1, ...) {
   # TODO: n.cores only affects GSEA. Need to understand if it can be passed to GO/DO
   checkPackageInstalled("DOSE", bioc=TRUE)
 
@@ -162,13 +162,13 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
     # TODO enable mapping to human genes for non-human data https://support.bioconductor.org/p/88192/
     ont.list <- names(de.gene.ids) %>% sn() %>% plapply(function(id) suppressWarnings(
       lapply(de.gene.ids[[id]][-length(de.gene.ids[[id]])], DOSE::enrichDO,
-             universe=de.gene.ids[[id]]$universe, qvalueCutoff=qvalue.cutoff, ...)
+             universe=de.gene.ids[[id]]$universe, qvalueCutoff=1.0, pvalueCutoff=1.0, ...)
       ), n.cores=1, progress=verbose)
   } else if (type=="GO") {
     if (verbose) message("Estimating enriched ontologies ... \n")
     ont.list <- plapply(de.gene.ids, function(de.ids) suppressWarnings(
       estimateEnrichedGO(de.ids[-length(de.ids)], go.environment=go.environment, universe=de.ids$universe,
-                         org.db=org.db, qvalueCutoff=qvalue.cutoff, ...)
+                         org.db=org.db, qvalueCutoff=1.0, pvalueCutoff=1.0, ...)
       ), progress=verbose, n.cores=1)
 
     if (!keep.gene.sets) {
@@ -180,7 +180,8 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
     ont.list <- plapply(de.gene.scores, function(scores) {suppressWarnings(suppressMessages(
       estimateEnrichedGSEGO(
         gene.ids=sort(scores$universe, decreasing=TRUE), org.db=org.db, go.environment=go.environment,
-        organism=clusterProfiler:::get_organism(org.db), BPPARAM=BiocParallel::SerialParam(), ...
+        organism=clusterProfiler:::get_organism(org.db), BPPARAM=BiocParallel::SerialParam(),
+        pvalueCutoff=1, ...
       )
     ))}, progress=verbose, n.cores=n.cores, fail.on.error=TRUE)
 
@@ -224,7 +225,7 @@ prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes, genes) {
     dplyr::filter(p.adjust < p.adj)
 
   if (type == "GSEA") {
-    ont.res %<>% rename(geneID=core_enrichment)
+    ont.res %<>% rename(geneID=core_enrichment, qvalue=qvalues)
     if (genes == "up") {
       ont.res %<>% filter(enrichmentScore > 0)
     } else if (genes == "down") {

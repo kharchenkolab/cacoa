@@ -1260,7 +1260,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... further argument for ontology estimation. Pass `nPerm` with `type='GSEA'` to use fgseaSimple method
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
     estimateOntology=function(type=c("GO", "DO", "GSEA"), name=NULL, de.name='de', org.db, n.top.genes=500, p.adj=1,
-                              p.adjust.method="BH", readable=TRUE, qvalue.cutoff=0.2, min.gs.size=10, max.gs.size=500,
+                              p.adjust.method="BH", readable=TRUE, min.gs.size=10, max.gs.size=500,
                               keep.gene.sets=FALSE, ignore.cache=NULL, de.raw=NULL, verbose=self$verbose,
                               n.cores=self$n.cores, ...) {
       type <- match.arg(type)
@@ -1280,8 +1280,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       go.environment <- self$getGOEnvironment(org.db, verbose=verbose, ignore.cache=ignore.cache)
       res <- estimateOntologyFromIds(
         de.gene.ids, type=type, org.db=org.db, n.top.genes=n.top.genes, go.environment=go.environment,
-        qvalue.cutoff=qvalue.cutoff, pAdjustMethod=p.adjust.method, readable=readable, minGSSize=min.gs.size,
-        maxGSSize=max.gs.size, keep.gene.sets=keep.gene.sets, verbose=verbose, n.cores=n.cores, ...
+        pAdjustMethod=p.adjust.method, readable=readable, minGSSize=min.gs.size, maxGSSize=max.gs.size,
+        keep.gene.sets=keep.gene.sets, verbose=verbose, n.cores=n.cores, ...
       )
 
       self$test.results[[name]] <- list(res=res, de.gene.ids=de.gene.ids, type=type) # redundancy needed
@@ -2966,7 +2966,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(genes)
     },
 
-    getOntologyPvalueResults=function(name, genes=c('up', 'down', 'all'), p.adj=0.05, min.genes=1, subtype=NULL, cell.subgroups=NULL) {
+    getOntologyPvalueResults=function(name, genes=c('up', 'down', 'all'), p.adj=0.05, min.genes=1, subtype=NULL,
+                                      cell.subgroups=NULL) {
       if (!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
         stop("'subtype' must be 'BP', 'CC', or 'MF'.")
 

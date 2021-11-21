@@ -1508,12 +1508,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                  legend.position="left", selection="all", cluster=TRUE, cell.subgroups=NULL,
                                  row.order=TRUE, col.order=TRUE, max.log.p=10, only.family.children=FALSE,
                                  description.regex=NULL, description.exclude.regex=NULL, clust.naming="medoid",
+                                 readjust.p=TRUE, p.adjust.method='BH',
                                  palette=NULL, color.range=NULL, return.info=FALSE, ...) {
       ont.info <- private$getOntologyHeatmapInfo(
         name=name, genes=genes, subtype=subtype, p.adj=p.adj, q.value=q.value, min.genes=min.genes,
         selection=selection, cluster=cluster, cell.subgroups=cell.subgroups, only.family.children=only.family.children,
         clust.naming=clust.naming, description.regex=description.regex,
-        description.exclude.regex=description.exclude.regex
+        description.exclude.regex=description.exclude.regex, readjust.p=readjust.p, p.adjust.method=p.adjust.method
       )
 
       ont.sum <- ont.info$ont.sum
@@ -1542,7 +1543,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotOntologyHeatmapCollapsed=function(name="GO", genes="up", subtype="BP", p.adj=0.05, q.value=0.2, min.genes=1,
                                           n=20, legend.position="left", selection="all", max.log.p=10, cluster=TRUE,
                                           cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE,
-                                          only.family.children=FALSE,
+                                          only.family.children=FALSE, readjust.p=TRUE, p.adjust.method='BH',
                                           description.regex=NULL, description.exclude.regex=NULL,
                                           distance="manhattan", clust.method="complete", clust.naming="consensus",
                                           n.words=5, exclude.words=NULL, return.info=FALSE, ...) {
@@ -1550,7 +1551,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         name=name, genes=genes, subtype=subtype, p.adj=p.adj, q.value=q.value, min.genes=min.genes,
         selection=selection, cluster=cluster, cell.subgroups=cell.subgroups, only.family.children=only.family.children,
         clust.naming=clust.naming, description.regex=description.regex,
-        description.exclude.regex=description.exclude.regex
+        description.exclude.regex=description.exclude.regex, readjust.p=readjust.p, p.adjust.method=p.adjust.method,
       )
 
       desc.per.clust <- ont.info$desc.per.clust
@@ -2948,7 +2949,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(genes)
     },
 
-    getOntologyPvalueResults=function(name, genes=c('up', 'down', 'all'), ...) {
+    getOntologyPvalueResults=function(name, genes=c('up', 'down', 'all'), readjust.p=FALSE, p.adjust.method='BH',
+                                      p.adj=0.05, q.value=0.2, min.genes=1, subtype=NULL, cell.subgroups=NULL) {
       genes <- match.arg(genes)
       ont.res <- private$getResults(name, 'estimateOntology()')
       type <- ont.res$type
@@ -2974,14 +2976,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (type == "GSEA") {
         ont.res %<>% rename(geneID=core_enrichment, qvalue=qvalues)
-        if (genes == "up") {
-          ont.res %<>% filter(enrichmentScore > 0)
-        } else if (genes == "down") {
-          ont.res %<>% filter(enrichmentScore < 0)
-        }
       }
 
-      ont.res %<>% filterOntologyDf(...)
+      if (readjust.p) {
+        ont.res$p.adjust <- p.adjust(ont.res$pvalue, method=p.adjust.method)
+      }
+
+      if ((type == "GSEA") && (genes != "all")) {
+        ont.res %<>% {if (genes == "up") filter(., enrichmentScore > 0) else filter(., enrichmentScore < 0)}
+      }
+
+      ont.res %<>% filterOntologyDf(
+        p.adj=p.adj, q.value=q.value, min.genes=min.genes, subtype=subtype, cell.subgroups=cell.subgroups
+      )
 
       return(ont.res)
     },
@@ -2989,7 +2996,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     getOntologyHeatmapInfo=function(name="GO", genes="up", subtype="BP", p.adj=0.05, q.value=0.2, min.genes=1,
                                     selection=c("all", "common", "unique"), cell.subgroups=NULL,
                                     only.family.children=FALSE, description.regex=NULL, description.exclude.regex=NULL,
-                                    cluster=TRUE, clust.naming="medoid") {
+                                    cluster=TRUE, clust.naming="medoid", readjust.p=TRUE, p.adjust.method='BH') {
       # Checks
       selection <- match.arg(selection)
       if (!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
@@ -3005,7 +3012,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # Extract results
       ont.df <- private$getOntologyPvalueResults(
         name=name, genes=genes, subtype=subtype, cell.subgroups=cell.subgroups, p.adj=p.adj, q.value=q.value,
-        min.genes=min.genes
+        min.genes=min.genes, readjust.p=readjust.p, p.adjust.method=p.adjust.method
       )
 
       if (nrow(ont.df) == 0) {

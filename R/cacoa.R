@@ -2948,31 +2948,40 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(genes)
     },
 
-    getOntologyPvalueResults=function(name, genes=c('up', 'down', 'all'), p.adj=0.05, q.value=0.2, min.genes=1,
-                                      subtype=NULL, cell.subgroups=NULL) {
-      if (!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
-        stop("'subtype' must be 'BP', 'CC', or 'MF'.")
-
+    getOntologyPvalueResults=function(name, genes=c('up', 'down', 'all'), ...) {
       genes <- match.arg(genes)
-
       ont.res <- private$getResults(name, 'estimateOntology()')
       type <- ont.res$type
-      ont.res %<>% .$res %>%
-        prepareOntologyPlotData(type=type, genes=genes, p.adj=p.adj, q.value=q.value, min.genes=min.genes)
+      ont.res %<>% .$res
 
-      if (is.null(ont.res) || (nrow(ont.res) == 0))
-        stop("No results found for ", genes, " genes for ", name, ".")
-
-      if (!is.null(cell.subgroups)) {
-        if (!any(cell.subgroups %in% unique(ont.res$Group)))
-          stop("None of 'cell.subgroups' was found in results.")
-
-        ont.res %<>% filter(Group %in% cell.subgroups)
+      if (type == "DO") {
+        ont.res <- lapply(ont.res, `[[`, genes) %>%
+          lapply(function(x) if (length(x)) x@result else x) %>%
+          plyr::compact() %>%
+          lapply(mutate, Type='DO')
+      } else if (type == "GO") {
+        ont.res <- lapply(ont.res, lapply, `[[`, genes)
       }
 
-      if (!is.null(subtype) && (type != 'DO')) {
-        ont.res %<>% filter(Type %in% subtype)
+      if (type %in% c("GO", "GSEA")) {
+        ont.res %<>%
+          lapply(lapply, function(x) if (length(x)) x@result else x) %>%
+          lapply(plyr::compact) %>%
+          lapply(bind_rows, .id='Type')
       }
+
+      ont.res %<>% bind_rows(.id='Group')
+
+      if (type == "GSEA") {
+        ont.res %<>% rename(geneID=core_enrichment, qvalue=qvalues)
+        if (genes == "up") {
+          ont.res %<>% filter(enrichmentScore > 0)
+        } else if (genes == "down") {
+          ont.res %<>% filter(enrichmentScore < 0)
+        }
+      }
+
+      ont.res %<>% filterOntologyDf(...)
 
       return(ont.res)
     },

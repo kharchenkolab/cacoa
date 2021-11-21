@@ -195,47 +195,28 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
   return(ont.list)
 }
 
-#' @title Prepare plot data
-#' @description Prepare ontology results for plotting
-#' @param ont.res List of results from estimateOntology
-#' @param type Type of ontology results, i.e., GO, GSEA, or DO
-#' @param p.adj Cut-off for adj. P values
-#' @param min.genes Min. number of significant genes per pathway
-#' @return List of ontology data for plotting
-#' @keywords internal
-prepareOntologyPlotData <- function(ont.res, type, genes, p.adj, q.value, min.genes) {
-  if (type == "DO") {
-    ont.res <- lapply(ont.res, `[[`, genes) %>%
-      lapply(function(x) if (length(x)) x@result else x) %>%
-      plyr::compact() %>%
-      lapply(mutate, Type='DO')
-  } else if (type == "GO") {
-    ont.res <- lapply(ont.res, lapply, `[[`, genes)
+filterOntologyDf <- function(ont.df, p.adj=0.05, q.value=0.2, min.genes=1, subtype=NULL, cell.subgroups=NULL) {
+  if (!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
+    stop("'subtype' must be 'BP', 'CC', or 'MF'.")
+
+  n.genes <- strsplit(ont.df$geneID, "/", fixed=TRUE) %>% sapply(length)
+  ont.df %<>% .[n.genes >= min.genes,] %>% filter(p.adjust <= p.adj, qvalue <= q.value)
+  if (nrow(ont.df) == 0)
+    stop("No ontologies passed filtration by p.adj, q.value and min.genes")
+
+  if (!is.null(cell.subgroups)) {
+    ont.df %<>% filter(Group %in% cell.subgroups)
+    if (nrow(ont.df) == 0)
+      stop("None of 'cell.subgroups' was found in results.")
   }
 
-  if (type %in% c("GO", "GSEA")) {
-    ont.res %<>%
-      lapply(lapply, function(x) if (length(x)) x@result else x) %>%
-      lapply(plyr::compact) %>%
-      lapply(bind_rows, .id='Type')
+  if (!is.null(subtype) && (ont.df$Type[1] != 'DO')) {
+    ont.df %<>% filter(Type %in% subtype)
+    if (nrow(ont.df) == 0)
+      stop("subtype=", subtype, " was not found in the results after filtration")
   }
 
-  ont.res %<>% bind_rows(.id='Group')
-
-  if (type == "GSEA") {
-    ont.res %<>% rename(geneID=core_enrichment, qvalue=qvalues)
-    if (genes == "up") {
-      ont.res %<>% filter(enrichmentScore > 0)
-    } else if (genes == "down") {
-      ont.res %<>% filter(enrichmentScore < 0)
-    }
-  }
-  # Filter by min. number of genes per pathway
-  n.genes <- strsplit(ont.res$geneID, "/", fixed=TRUE) %>% sapply(length)
-  ont.res %<>% .[n.genes >= min.genes,] %>%
-    filter(p.adjust <= p.adj, qvalue <= q.value)
-
-  return(ont.res)
+  return(ont.df)
 }
 
 #' @title Wrap strings for readibility on plots

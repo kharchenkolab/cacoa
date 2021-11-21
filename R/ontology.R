@@ -125,28 +125,8 @@ groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName", sign.fie
 
 #' @keywords internal
 filterOntologies <- function(ont.list, p.adj) {
-  ont.list %>% names() %>% sn() %>%
-    lapply(function(dir) {
-      lapply(sn(names(ont.list[[dir]])), function(group) {
-        dplyr::mutate(ont.list[[dir]][[group]], Group=group) %>%
-          dplyr::arrange(p.adjust) %>%
-          dplyr::filter(p.adjust < p.adj)
-      }) %>% .[sapply(., nrow) > 0] # Remove empty data frames
-    })
-}
-
-#' @keywords internal
-ontologyListToDf <- function(ont.list) {
-  lapply(ont.list, function(x) {
-    if (length(x) == 0)
-      stop("No significant ontologies identified. Try relaxing p.adj.")
-    dplyr::bind_rows(x) %>%
-      {if("Type" %in% colnames(.)) {
-        dplyr::select(., Group, Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue, Count)
-      } else {
-        dplyr::select(., Group, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue, Count)
-      }
-      }
+  ont.list %>% lapply(function(ol) {
+    dplyr::bind_rows(ol, .id='Group') %>% dplyr::filter(p.adjust < p.adj)
   })
 }
 
@@ -222,54 +202,40 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
 #' @param min.genes Min. number of significant genes per pathway
 #' @return List of ontology data for plotting
 #' @keywords internal
-prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
-  dir.names <- c("down", "up", "all")
-
-  gene.col <- 'geneID'
+prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes, genes) {
   if (type == "DO") {
-    ont.res <- dir.names %>% sn() %>%
-      lapply(function(x) lapply(ont.res, `[[`, x)) %>%
-      lapply(plyr::compact) %>%
-      lapply(lapply, function(x) if (length(x)) x@result else x) %>%
-      lapply(lapply, dplyr::mutate, Type = "DO") %>%
-      filterOntologies(p.adj=p.adj) %>%
-      ontologyListToDf()
+    ont.res <- lapply(ont.res, `[[`, genes) %>%
+      lapply(function(x) if (length(x)) x@result else x) %>%
+      plyr::compact() %>%
+      lapply(dplyr::mutate, Type='DO')
   } else if (type == "GO") {
-    ont.res <- dir.names %>% sn() %>%
-      lapply(function(x) lapply(ont.res, lapply, `[[`, x)) %>%
-      lapply(lapply, lapply, function(x) if (length(x)) x@result else x) %>%
-      lapply(lapply, plyr::compact) %>%
-      lapply(lapply, function(x) if (length(x)) x) %>%
-      lapply(plyr::compact) %>%
-      lapply(lapply, dplyr::bind_rows, .id='Type') %>%
-      filterOntologies(p.adj=p.adj) %>%
-      ontologyListToDf()
-  } else if (type == "GSEA") {
+    ont.res <- lapply(ont.res, lapply, `[[`, genes)
+  }
+
+  if (type %in% c("GO", "GSEA")) {
     ont.res %<>%
       lapply(lapply, function(x) if (length(x)) x@result else x) %>%
       lapply(plyr::compact) %>%
       lapply(dplyr::bind_rows, .id='Type')
-    gene.col <- 'core_enrichment'
   }
 
+  ont.res %<>%
+    dplyr::bind_rows(.id='Group') %>%
+    dplyr::filter(p.adjust < p.adj)
+
+  if (type == "GSEA") {
+    ont.res %<>% rename(geneID=core_enrichment)
+    if (genes == "up") {
+      ont.res %<>% filter(enrichmentScore > 0)
+    } else if (genes == "down") {
+      ont.res %<>% filter(enrichmentScore < 0)
+    }
+  }
   # Filter by min. number of genes per pathway
-  ont.res %<>% lapply(function(g) {
-    if (class(g) == "character") return(g)
-    n.genes <- strsplit(g[[gene.col]], "/", fixed=TRUE) %>% sapply(length)
-    g[n.genes >= min.genes,]
-  })
+  n.genes <- strsplit(ont.res$geneID, "/", fixed=TRUE) %>% sapply(length)
+  ont.res %<>% .[n.genes >= min.genes,]
 
   return(ont.res)
-}
-
-addGseaGroup <- function(ont.res) {
-  ont.res %>%
-    names() %>%
-    lapply(function(ct) {
-      ont.res[[ct]] %>% mutate(Group = ct)
-    }) %>%
-    setNames(ont.res %>% names()) %>%
-    bind_rows()
 }
 
 #' @title Wrap strings for readibility on plots

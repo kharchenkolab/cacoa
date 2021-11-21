@@ -2966,31 +2966,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(genes)
     },
 
-    getOntologyPvalueResults=function(name, genes, p.adj=0.05, min.genes=1, subtype=NULL, cell.subgroups=NULL) {
+    getOntologyPvalueResults=function(name, genes=c('up', 'down', 'all'), p.adj=0.05, min.genes=1, subtype=NULL, cell.subgroups=NULL) {
       if (!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
         stop("'subtype' must be 'BP', 'CC', or 'MF'.")
 
-      if ((length(genes) != 1) || (!genes %in% c("down", "up", "all")))
-        stop("'genes' must be 'down', 'up', or 'all'.")
+      genes <- match.arg(genes)
 
       ont.res <- private$getResults(name, 'estimateOntology()')
       type <- ont.res$type
-      ont.res %<>% .$res %>% prepareOntologyPlotData(type=type, p.adj=p.adj, min.genes=min.genes)
-
-      # Extract genes and subgroups
-      if (type == "GSEA") {
-        ont.res %<>% addGseaGroup() %>% rename(geneID=core_enrichment)
-        if (genes == "up") {
-          ont.res %<>% filter(enrichmentScore > 0)
-        } else if (genes == "down") {
-          ont.res %<>% filter(enrichmentScore < 0)
-        }
-      } else {
-        ont.res %<>% .[[genes]]
-      }
+      ont.res %<>% .$res %>% prepareOntologyPlotData(type=type, p.adj=p.adj, min.genes=min.genes, genes=genes)
 
       if (is.null(ont.res))
-        stop("No results found for ", genes, " genes for ", name, ".") # TODO: Include GSEA
+        stop("No results found for ", genes, " genes for ", name, ".")
 
       if (!is.null(cell.subgroups)) {
         if (!any(cell.subgroups %in% unique(ont.res$Group)))

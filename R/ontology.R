@@ -514,11 +514,6 @@ clusterGOsPerType <- function(clust.df, cut.h, verbose=FALSE) {
 }
 
 #' @keywords internal
-getOntClustField <- function(subtype, genes) {
-  return(paste("clusters", paste(subtype, collapse="."), genes, sep="."))
-}
-
-#' @keywords internal
 estimateOntologyClusterName <- function(descriptions, method=c("medoid", "consensus"), n.words=5, exclude.words=NULL) {
   method <- match.arg(method)
   if (length(descriptions) == 1)
@@ -571,6 +566,18 @@ getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {
   return(ont.sum)
 }
 
+#' Cluster Ontology DataFrame
+#'
+#' @param ind.h Cut height for hierarchical clustering of terms per cell type.
+#' Approximately equal to the fraction of genes, shared between the GOs. Default: 0.66.
+#' @param total.h Cut height for hierarchical clustering of GOs across all subtypes.
+#' Approximately equal to the fraction of subtypes for which two GOs should belong to the same cluster.
+#'   Default: 0.5.
+#' @return List containing:
+#'   - `df`: data.frame with information about individual gene ontolodies and columns `Cluster` and `ClusterName`
+#'     for the clustering info
+#'   - `hclust`: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all
+#'     subtypes
 #' @keywords internal
 clusterOntologyDF <- function(ont.df, clust.naming, ind.h=0.66, total.h=0.5, verbose=FALSE) {
   genes.per.go.per.type <- ont.df$geneID %>% strsplit("/") %>%

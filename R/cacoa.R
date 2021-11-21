@@ -1365,40 +1365,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(mutate(res, Families=sapply(Families, paste, collapse=", ")))
     },
 
-    #' Estimate Gene Ontology clusters
-    #'
-    #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all'. Default: "up".
-    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO". Default: "GO".
-    #' @param name Name of the field to store the results. Default: `cacoa:::getOntClustField(subtype, genes)`.
-    #' @param ind.h Cut height for hierarchical clustering of terms per cell type.
-    #' Approximately equal to the fraction of genes, shared between the GOs. Default: 0.66.
-    #' @param total.h Cut height for hierarchical clustering of GOs across all subtypes.
-    #' Approximately equal to the fraction of subtypes for which two GOs should belong to the same cluster.
-    #'   Default: 0.5.
-    #' @return List containing:
-    #'   - `df`: data.frame with information about individual gene ontolodies and columns `Cluster` and `ClusterName`
-    #'     for the clustering info
-    #'   - `hclust`: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all
-    #'     subtypes
-    estimateOntologyClusters=function(ont.name="GO", subtype=NULL, genes="all", ind.h=0.66, total.h=0.5, p.adj=0.05,
-                                      min.genes=1, name=getOntClustField(subtype, genes), clust.naming="medoid",
-                                      verbose=self$verbose) {
-      ont.df <- private$getOntologyPvalueResults(
-        name=ont.name, genes=genes, subtype=subtype, p.adj=p.adj, min.genes=min.genes
-      )
-
-      if (nrow(ont.df) == 0) {
-        res <- list(df=ont.df)
-        self$test.results[[ont.name]][[name]] <- res
-        return(invisible(res))
-      }
-
-      res <- clusterOntologyDF(ont.df, clust.naming=clust.naming, ind.h=ind.h, total.h=total.h, verbose=verbose)
-      self$test.results[[ont.name]][[name]] <- res
-
-      return(invisible(res))
-    },
-
     #' Bar plot of ontology terms per cell type
     #'
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
@@ -1538,17 +1504,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... parameters forwarded to \link{plotHeatmap}
     #' @return A ggplot2 object
     plotOntologyHeatmap=function(name="GO", genes="up", subtype="BP", min.genes=1, p.adj=0.05, legend.position="left",
-                                 selection="all", top.n=Inf, clusters=TRUE, cluster.name=NULL,
-                                 cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE, max.log.p=10,
-                                 only.family.children=FALSE, description.regex=NULL, description.exclude.regex=NULL,
-                                 recluster.after.filtration=FALSE, clust.naming="medoid", color.range=NULL,
-                                 return.info=FALSE,...) {
+                                 selection="all", top.n=Inf, cluster=TRUE, cell.subgroups=NULL, palette=NULL,
+                                 row.order=TRUE, col.order=TRUE, max.log.p=10, only.family.children=FALSE,
+                                 description.regex=NULL, description.exclude.regex=NULL, clust.naming="medoid",
+                                 color.range=NULL, return.info=FALSE, ...) {
       ont.info <- private$getOntologyHeatmapInfo(
         name=name, genes=genes, subtype=subtype, min.genes=min.genes, p.adj=p.adj, selection=selection,
-        clusters=clusters, cluster.name=cluster.name, cell.subgroups=cell.subgroups,
-        only.family.children=only.family.children, clust.naming=clust.naming,
-        description.regex=description.regex, description.exclude.regex=description.exclude.regex,
-        recluster.after.filtration=recluster.after.filtration
+        cluster=cluster, cell.subgroups=cell.subgroups, only.family.children=only.family.children,
+        clust.naming=clust.naming, description.regex=description.regex,
+        description.exclude.regex=description.exclude.regex
       )
 
       ont.sum <- ont.info$ont.sum
@@ -1574,20 +1538,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    plotOntologyHeatmapCollapsed=function(name="GO", genes="up", subtype="BP", min.genes=1, p.adj=0.05,
-                                          legend.position="left", selection="all", n=20, clusters=TRUE,
-                                          cluster.name=NULL, cell.subgroups=NULL, palette=NULL, row.order=TRUE,
-                                          col.order=TRUE, max.log.p=10, only.family.children=FALSE,
+    plotOntologyHeatmapCollapsed=function(name="GO", genes="up", subtype="BP", min.genes=1, p.adj=0.05, n=20,
+                                          legend.position="left", selection="all", max.log.p=10, cluster=TRUE,
+                                          cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE,
+                                          only.family.children=FALSE,
                                           description.regex=NULL, description.exclude.regex=NULL,
                                           distance="manhattan", clust.method="complete", clust.naming="consensus",
-                                          n.words=5, exclude.words=NULL, recluster.after.filtration=FALSE,
-                                          return.info=FALSE, ...) {
+                                          n.words=5, exclude.words=NULL, return.info=FALSE, ...) {
       ont.info <- private$getOntologyHeatmapInfo(
         name=name, genes=genes, subtype=subtype, min.genes=min.genes, p.adj=p.adj, selection=selection,
-        clusters=clusters, cluster.name=cluster.name, cell.subgroups=cell.subgroups,
-        only.family.children=only.family.children, clust.naming=clust.naming,
-        description.regex=description.regex, description.exclude.regex=description.exclude.regex,
-        recluster.after.filtration=recluster.after.filtration
+        cluster=cluster, cell.subgroups=cell.subgroups, only.family.children=only.family.children,
+        clust.naming=clust.naming, description.regex=description.regex,
+        description.exclude.regex=description.exclude.regex
       )
 
       desc.per.clust <- ont.info$desc.per.clust
@@ -3012,10 +2974,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     getOntologyHeatmapInfo=function(name="GO", genes="up", subtype="BP", min.genes=1, p.adj=0.05,
-                                    selection=c("all", "common", "unique"), clusters=TRUE, cluster.name=NULL,
-                                    cell.subgroups=NULL, only.family.children=FALSE, description.regex=NULL,
-                                    description.exclude.regex=NULL, clust.naming="medoid",
-                                    recluster.after.filtration=FALSE) {
+                                    selection=c("all", "common", "unique"), cell.subgroups=NULL,
+                                    only.family.children=FALSE, description.regex=NULL, description.exclude.regex=NULL,
+                                    cluster=TRUE, clust.naming="medoid") {
       # Checks
       selection <- match.arg(selection)
       if (!is.null(cell.subgroups) && (length(cell.subgroups) == 1))
@@ -3029,30 +2990,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       # Extract results
-      desc.per.clust <- NULL
-      if (!clusters || recluster.after.filtration) {
-        ont.df <- private$getOntologyPvalueResults(
-          name=name, genes=genes, subtype=subtype, cell.subgroups=cell.subgroups, p.adj=p.adj, min.genes=min.genes
-        )
-        group.field <- "Description"
-      } else {
-        passed.clust.name <- cluster.name
-        if (is.null(cluster.name)) cluster.name <- getOntClustField(subtype, genes)
-        if (is.null(self$test.results[[name]][[cluster.name]])) {
-          if (!is.null(passed.clust.name))
-            stop("Can't find the results for ", passed.clust.name) # stop if user specified a wrong cluster.name
-
-          warning("Can't find the results for ", cluster.name, ". Running estimateOntologyClusters()...\n")
-          self$estimateOntologyClusters(ont.name=name, subtype=subtype, genes=genes, name=cluster.name, p.adj=p.adj,
-                                        min.genes=min.genes, clust.naming=clust.naming)
-        }
-
-        ont.df <- self$test.results[[name]][[cluster.name]]$df
-
-        if (!is.null(cell.subgroups)) ont.df %<>% filter(Group %in% cell.subgroups)
-        group.field <- "ClusterName"
-        desc.per.clust <- ont.df %$% split(Description, ClusterName) %>% lapply(unique)
-      }
+      ont.df <- private$getOntologyPvalueResults(
+        name=name, genes=genes, subtype=subtype, cell.subgroups=cell.subgroups, p.adj=p.adj, min.genes=min.genes
+      )
 
       if (nrow(ont.df) == 0) {
         warning("No ontologies found for name=", name, ", subtype=", subtype, " and genes=", genes)
@@ -3073,10 +3013,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         return(NULL)
       }
 
-      if (recluster.after.filtration) {
+      desc.per.clust <- NULL
+      group.field <- "Description"
+      if (cluster) {
         ont.df %<>% clusterOntologyDF(clust.naming=clust.naming, verbose=self$verbose) %>% .$df
-        group.field <- "ClusterName"
         desc.per.clust <- ont.df %$% split(Description, ClusterName) %>% lapply(unique)
+        group.field <- "ClusterName"
       }
 
       sign.field <- if ((genes == "all") && !is.null(ont.df$enrichmentScore)) 'enrichmentScore' else 'p.adjust'

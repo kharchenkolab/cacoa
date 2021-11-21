@@ -467,7 +467,7 @@ distanceBetweenTerms <- function(genes.per.go) {
   all.gos <- unique(names(genes.per.go))
 
   genes.per.go.mat <- matrix(0, length(all.go.genes), length(all.gos)) %>%
-    `colnames<-`(all.gos) %>% `rownames<-`(all.go.genes)
+    set_colnames(all.gos) %>% set_rownames(all.go.genes)
 
   for (i in 1:length(genes.per.go)) {
     genes.per.go.mat[genes.per.go[[i]], names(genes.per.go)[i]] <- 1

@@ -2975,7 +2975,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       ont.res <- private$getResults(name, 'estimateOntology()')
       type <- ont.res$type
-      ont.res %<>% .$res %>% prepareOntologyPlotData(type, p.adj, min.genes)
+      ont.res %<>% .$res %>% prepareOntologyPlotData(type=type, p.adj=p.adj, min.genes=min.genes)
 
       # Extract genes and subgroups
       if (type == "GSEA") {

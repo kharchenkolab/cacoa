@@ -127,30 +127,26 @@ groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName", sign.fie
 filterOntologies <- function(ont.list, p.adj) {
   ont.list %>% names() %>% sn() %>%
     lapply(function(dir) {
-      lapply(ont.list[[dir]] %>% names(), function(group) {
+      lapply(sn(names(ont.list[[dir]])), function(group) {
         dplyr::mutate(ont.list[[dir]][[group]], Group=group) %>%
           dplyr::arrange(p.adjust) %>%
           dplyr::filter(p.adjust < p.adj)
-      }) %>%
-        setNames(ont.list[[dir]] %>% names()) %>%
-        .[sapply(., nrow) > 0] # Remove empty data frames
+      }) %>% .[sapply(., nrow) > 0] # Remove empty data frames
     })
 }
 
 #' @keywords internal
 ontologyListToDf <- function(ont.list) {
   lapply(ont.list, function(x) {
-    if(length(x) > 0) {
-      dplyr::bind_rows(x) %>%
-        {if("Type" %in% colnames(.)) {
-          dplyr::select(., Group, Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue, Count)
-        } else {
-          dplyr::select(., Group, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue, Count)
-        }
-        }
-    } else {
+    if (length(x) == 0)
       stop("No significant ontologies identified. Try relaxing p.adj.")
-    }
+    dplyr::bind_rows(x) %>%
+      {if("Type" %in% colnames(.)) {
+        dplyr::select(., Group, Type, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue, Count)
+      } else {
+        dplyr::select(., Group, ID, Description, GeneRatio, geneID, pvalue, p.adjust, qvalue, Count)
+      }
+      }
   })
 }
 
@@ -229,99 +225,40 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
 prepareOntologyPlotData <- function(ont.res, type, p.adj, min.genes) {
   dir.names <- c("down", "up", "all")
 
+  gene.col <- 'geneID'
   if (type == "DO") {
-    # Split into fractions
     ont.res <- dir.names %>% sn() %>%
       lapply(function(x) lapply(ont.res, `[[`, x)) %>%
-      lapply(plyr::compact) # Remove empty entries
-
-    # Extract results
-    ont.res %<>% lapply(lapply, function(x) if(length(x)) x@result else x)
-
-    # Prep for filter
-    ont.res %<>% names() %>% sn() %>%
-      lapply(function(dir) {
-        lapply(sn(names(ont.res[[dir]])), function(ct) {
-          dplyr::mutate(ont.res[[dir]][[ct]], Type = "DO")
-        })
-      })
-
-    # Filter by p.adj
-    ont.res %<>% filterOntologies(p.adj = p.adj) %>% ontologyListToDf()
-
-    # Filter by min. number of genes per pathway
-    if (min.genes > 1) {
-      ont.res %<>% lapply(function(g) {
-        if (class(g) != "character") {
-          idx <- g$GeneRatio %>%
-            strsplit("/", fixed=TRUE) %>%
-            sapply(`[[`, 1)
-
-          return(g[idx > min.genes,])
-        }
-        g
-      })
-    }
+      lapply(plyr::compact) %>%
+      lapply(lapply, function(x) if (length(x)) x@result else x) %>%
+      lapply(lapply, dplyr::mutate, Type = "DO") %>%
+      filterOntologies(p.adj=p.adj) %>%
+      ontologyListToDf()
   } else if (type == "GO") {
-    # Split into different fractions
     ont.res <- dir.names %>% sn() %>%
-      lapply(function(x) lapply(ont.res, lapply, `[[`, x))
-
-    # Extract results
-    ont.res %<>% lapply(lapply, lapply, function(x) if(length(x)) x@result else x)
-
-    # Remove empty entries
-    ont.res %<>% lapply(lapply, plyr::compact) %>%
-      lapply(lapply, function(x) if(length(x)) x) %>%
-      lapply(plyr::compact)
-
-    # Prep for filter
-    ont.res %<>% lapply(lapply, dplyr::bind_rows, .id='Type')
-
-    # Filter by p.adj
-    ont.res %<>% filterOntologies(p.adj = p.adj) %>% ontologyListToDf()
-
-    # Filter by min. number of genes per pathway
-    if(min.genes > 1) {
-      ont.res %<>% lapply(function(g) {
-        if(class(g) != "character") {
-          idx <- g$GeneRatio %>%
-            strsplit("/", fixed=TRUE) %>%
-            sapply(`[[`, 1)
-
-          return(g[idx > min.genes,])
-        }
-        g
-      })
-    }
+      lapply(function(x) lapply(ont.res, lapply, `[[`, x)) %>%
+      lapply(lapply, lapply, function(x) if (length(x)) x@result else x) %>%
+      lapply(lapply, plyr::compact) %>%
+      lapply(lapply, function(x) if (length(x)) x) %>%
+      lapply(plyr::compact) %>%
+      lapply(lapply, dplyr::bind_rows, .id='Type') %>%
+      filterOntologies(p.adj=p.adj) %>%
+      ontologyListToDf()
   } else if (type == "GSEA") {
-    # Extract results
-    ont.res %<>% lapply(lapply, function(x) if(length(x)) x@result else x) %>%
-      lapply(plyr::compact) # Remove empty entries
-
-    # Prep for filter
-    ont.res %<>% names() %>% sn() %>%
-      lapply(function(ct) {
-        lapply(ont.res[[ct]] %>% names(), function(ont) {
-          dplyr::mutate(ont.res[[ct]][[ont]], Type = ont)
-        }) %>% setNames(ont.res[[ct]] %>% names()) %>%
-          dplyr::bind_rows()
-      })
-
-    # Filter by min. number of genes per pathway
-    if(min.genes > 1) {
-      ont.res %<>% lapply(function(g) {
-        if(class(g) != "character") {
-          idx <- g$core_enrichment %>%
-            strsplit("/", fixed=TRUE) %>%
-            sapply(length)
-
-          return(g[idx > min.genes,])
-        }
-        g
-      })
-    }
+    ont.res %<>%
+      lapply(lapply, function(x) if (length(x)) x@result else x) %>%
+      lapply(plyr::compact) %>%
+      lapply(dplyr::bind_rows, .id='Type')
+    gene.col <- 'core_enrichment'
   }
+
+  # Filter by min. number of genes per pathway
+  ont.res %<>% lapply(function(g) {
+    if (class(g) == "character") return(g)
+    n.genes <- strsplit(g[[gene.col]], "/", fixed=TRUE) %>% sapply(length)
+    g[n.genes >= min.genes,]
+  })
+
   return(ont.res)
 }
 

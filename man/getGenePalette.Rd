@@ -4,7 +4,11 @@
 \alias{getGenePalette}
 \title{Get Gene Scale}
 \usage{
-getGenePalette(genes = c("up", "down", "all"), high = "gray80")
+getGenePalette(
+  genes = c("up", "down", "all"),
+  neutral.col = "white",
+  bidirectional = FALSE
+)
 }
 \arguments{
 \item{genes}{type of genes ("up", "down" or "all")}

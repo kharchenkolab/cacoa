@@ -12,22 +12,26 @@ estimateOntologyFromIds(
   n.top.genes = 500,
   keep.gene.sets = FALSE,
   verbose = TRUE,
-  qvalue.cutoff = 0.2,
+  n.cores = 1,
   ...
 )
 }
 \arguments{
-\item{type}{character string Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information.}
+\item{type}{character string Ontology type, either GO (gene ontology) or DO (disease ontology).
+Please see DOSE package for more information.}
 
-\item{org.db}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'}
+\item{org.db}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse.
+Input must be of class 'OrgDb'}
 
-\item{n.top.genes}{numeric Number of most different genes to take as input. If less are left after filtering for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)}
+\item{n.top.genes}{numeric Number of most different genes to take as input. If less are left after filtering
+for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)}
 
 \item{verbose}{boolean Print progress (default=TRUE)}
 
-\item{qvalue.cutoff}{numeric Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
+\item{...}{Additional parameters for DO/GO/GSEA functions. In case of GSEA, pass nPerm to call fgseaSimple
+instead of fgseaMultilevel}
 
-\item{...}{Additional parameters for DO/GO/GSEA functions}
+\item{qvalue.cutoff}{numeric Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
 }
 \value{
 A list containing a list of ontologies per type of ontology, and a data frame with merged results

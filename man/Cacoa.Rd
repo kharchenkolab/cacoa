@@ -73,10 +73,8 @@ The class encompasses etc etc
 \item \href{#method-saveDEasJSON}{\code{Cacoa$saveDEasJSON()}}
 \item \href{#method-plotEmbedding}{\code{Cacoa$plotEmbedding()}}
 \item \href{#method-estimateOntology}{\code{Cacoa$estimateOntology()}}
-\item \href{#method-estimateOntologyGsea}{\code{Cacoa$estimateOntologyGsea()}}
 \item \href{#method-estimateOntologyFamilies}{\code{Cacoa$estimateOntologyFamilies()}}
 \item \href{#method-getFamiliesPerGO}{\code{Cacoa$getFamiliesPerGO()}}
-\item \href{#method-estimateOntologyClusters}{\code{Cacoa$estimateOntologyClusters()}}
 \item \href{#method-plotNumOntologyTermsPerType}{\code{Cacoa$plotNumOntologyTermsPerType()}}
 \item \href{#method-plotOntology}{\code{Cacoa$plotOntology()}}
 \item \href{#method-plotOntologyHeatmap}{\code{Cacoa$plotOntologyHeatmap()}}
@@ -183,7 +181,6 @@ Calculate expression shift magnitudes of different clusters between conditions
   n.cores = self$n.cores,
   name = "expression.shifts",
   n.permutations = 1000,
-  p.adjust.method = "BH",
   genes = NULL,
   n.pcs = NULL,
   top.n.genes = NULL,
@@ -841,7 +838,7 @@ Save DE results as JSON files
   de.name = "de",
   ref.level = self$ref.level,
   gene.metadata = NULL,
-  verbose = TRUE
+  verbose = self$verbose
 )}\if{html}{\out{</div>}}
 }
 
@@ -900,7 +897,7 @@ Estimate ontology terms based on DEs}
 \subsection{Method \code{estimateOntology()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntology(
-  type = "GO",
+  type = c("GO", "DO", "GSEA"),
   name = NULL,
   de.name = "de",
   org.db,
@@ -908,13 +905,13 @@ Estimate ontology terms based on DEs}
   p.adj = 1,
   p.adjust.method = "BH",
   readable = TRUE,
-  verbose = TRUE,
-  qvalue.cutoff = 0.2,
   min.gs.size = 10,
   max.gs.size = 500,
   keep.gene.sets = FALSE,
   ignore.cache = NULL,
   de.raw = NULL,
+  verbose = self$verbose,
+  n.cores = self$n.cores,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -934,15 +931,19 @@ Estimate ontology terms based on DEs}
 
 \item{\code{readable}}{Mapping gene ID to gene name (default=TRUE)}
 
-\item{\code{verbose}}{show progress (default: stored value)}
-
-\item{\code{qvalue.cutoff}}{Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
-
 \item{\code{min.gs.size}}{Minimal geneset size, please see clusterProfiler package for more information (default=5)}
 
 \item{\code{max.gs.size}}{Minimal geneset size, please see clusterProfiler package for more information (default=5e2)}
 
+\item{\code{verbose}}{show progress (default: stored value)}
+
+\item{\code{n.cores}}{number of cores for parallelization}
+
+\item{\code{...}}{further argument for ontology estimation. Pass \code{nPerm} with \code{type='GSEA'} to use fgseaSimple method}
+
 \item{\code{min.genes}}{Minimum number of input genes overlapping with ontologies (default=0)}
+
+\item{\code{qvalue.cutoff}}{Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
 }
 \if{html}{\out{</div>}}
 }
@@ -952,54 +953,21 @@ Estimate ontology families based on ontology results
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateOntologyGsea"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateOntologyGsea}{}}}
-\subsection{Method \code{estimateOntologyGsea()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntologyGsea(
-  name = NULL,
-  de.name = "de",
-  org.db,
-  p.adj = 1,
-  p.adjust.method = "BH",
-  readable = TRUE,
-  verbose = TRUE,
-  qvalue.cutoff = 0.2,
-  min.gs.size = 10,
-  max.gs.size = 500,
-  keep.gene.sets = FALSE,
-  ignore.cache = NULL,
-  de.raw = NULL,
-  ...
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{field name where the test results are stored}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-}
-\if{html}{\out{</div>}}
-}
-}
-\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateOntologyFamilies"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateOntologyFamilies}{}}}
 \subsection{Method \code{estimateOntologyFamilies()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntologyFamilies(type = "GO", p.adj = 0.05, name = NULL)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntologyFamilies(name = "GO", p.adj = 0.05)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
+\item{\code{name}}{field name where the test results are stored}
 
 \item{\code{p.adj}}{Cut-off for adj. P values (default: 0.05)}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1013,12 +981,19 @@ Identify families containing a specific ontology term or ID
 \if{latex}{\out{\hypertarget{method-getFamiliesPerGO}{}}}
 \subsection{Method \code{getFamiliesPerGO()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$getFamiliesPerGO(go.term = NULL, go.id = NULL, common = FALSE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$getFamiliesPerGO(
+  name = "GO",
+  go.term = NULL,
+  go.id = NULL,
+  common = FALSE
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{name}}{field name where the test results are stored}
+
 \item{\code{go.term}}{Character vector with term description(s)}
 
 \item{\code{go.id}}{Character vector with ID(s)}
@@ -1029,57 +1004,7 @@ Identify families containing a specific ontology term or ID
 }
 \subsection{Returns}{
 Data frame
-Estimate Gene Ontology clusters
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateOntologyClusters"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateOntologyClusters}{}}}
-\subsection{Method \code{estimateOntologyClusters()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntologyClusters(
-  type = "GO",
-  subtype = NULL,
-  genes = "all",
-  ind.h = 0.66,
-  total.h = 0.5,
-  p.adj = 0.05,
-  min.genes = 1,
-  name = getOntClustField(subtype, genes),
-  clust.naming = "medoid",
-  verbose = self$verbose
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO". Default: "GO".}
-
-\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all'. Default: "up".}
-
-\item{\code{ind.h}}{Cut height for hierarchical clustering of terms per cell type.
-Approximately equal to the fraction of genes, shared between the GOs. Default: 0.66.}
-
-\item{\code{total.h}}{Cut height for hierarchical clustering of GOs across all subtypes.
-Approximately equal to the fraction of subtypes for which two GOs should belong to the same cluster.
-Default: 0.5.}
-
-\item{\code{name}}{Name of the field to store the results. Default: \code{cacoa:::getOntClustField(subtype, genes)}.}
-
-\item{\code{verbose}}{show progress (default: stored value)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-List containing:
-\itemize{
-\item \code{df}: data.frame with information about individual gene ontolodies and columns \code{Cluster} and \code{ClusterName}
-for the clustering info
-\item \code{hclust}: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all
-subtypes
 Bar plot of ontology terms per cell type
-}
 }
 }
 \if{html}{\out{<hr>}}
@@ -1088,25 +1013,22 @@ Bar plot of ontology terms per cell type
 \subsection{Method \code{plotNumOntologyTermsPerType()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotNumOntologyTermsPerType(
+  name = "GO",
   genes = "up",
-  type = "GO",
   p.adj = 0.05,
-  min.genes = 1,
-  cell.groups = self$cell.groups,
-  name = NULL
+  q.value = 0.2,
+  min.genes = 1
 )}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{name}}{field name where the test results are stored}
+
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
 \item{\code{type}}{Ontology, must be either "GO" or "DO" (default="GO")}
-
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
-
-\item{\code{name}}{field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -1121,11 +1043,11 @@ Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Method \code{plotOntology()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntology(
-  cell.subgroups,
+  cell.type,
+  name = "GO",
   plot = "dot",
-  genes = "up",
-  type = "GO",
-  subtype = "BP",
+  genes = c("up", "down", "all"),
+  subtype = c("BP", "CC", "MF"),
   n = 20,
   p.adj = 0.05,
   min.genes = 1,
@@ -1136,13 +1058,15 @@ Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
+\item{\code{name}}{field name where the test results are stored}
 
-\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")}
+\item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
 \item{\code{n}}{Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
 
 \item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
+
+\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")}
 
 \item{\code{cell.subgroup}}{Cell group to plot}
 
@@ -1161,24 +1085,29 @@ A ggplot2 object
 Plot a heatmap of ontology P values per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyHeatmap(
+  name = "GO",
   genes = "up",
-  type = "GO",
   subtype = "BP",
-  min.genes = 1,
   p.adj = 0.05,
+  q.value = 0.2,
+  min.genes = 1,
+  top.n = Inf,
   legend.position = "left",
   selection = "all",
-  top.n = Inf,
-  clusters = TRUE,
-  cluster.name = NULL,
+  cluster = TRUE,
   cell.subgroups = NULL,
-  palette = NULL,
   row.order = TRUE,
   col.order = TRUE,
   max.log.p = 10,
   only.family.children = FALSE,
   description.regex = NULL,
+  description.exclude.regex = NULL,
   clust.naming = "medoid",
+  readjust.p = TRUE,
+  p.adjust.method = "BH",
+  palette = NULL,
+  color.range = NULL,
+  return.info = FALSE,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1186,10 +1115,12 @@ Plot a heatmap of ontology P values per cell type
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{name}}{field name where the test results are stored}
+
 \item{\code{genes}}{Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all'
 (default="up")}
 
-\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")}
+\item{\code{top.n}}{Number of terms to show (default=Inf)}
 
 \item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="left")}
 
@@ -1197,17 +1128,17 @@ Plot a heatmap of ontology P values per cell type
 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms)
 (default="all")}
 
-\item{\code{top.n}}{Number of terms to show (default=Inf)}
+\item{\code{cell.subgroups}}{Cell groups to plot (default=NULL). This affects only visualization, but not clustering.}
+
+\item{\code{color.range}}{vector with two values for min/max values of p-values}
+
+\item{\code{...}}{parameters forwarded to \link{plotHeatmap}}
+
+\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")}
 
 \item{\code{clusters}}{Whether to show GO clusters or raw GOs (default=TRUE)}
 
 \item{\code{cluster.name}}{Field with the results for GO clustering. Ignored if \code{clusters == FALSE}.}
-
-\item{\code{cell.subgroups}}{Cell groups to plot (default=NULL). This affects only visualization, but not clustering.}
-
-\item{\code{...}}{parameters forwarded to \link{plotHeatmap}}
-
-\item{\code{color.range}}{vector with two values for min/max values of p-values}
 }
 \if{html}{\out{</div>}}
 }
@@ -1221,32 +1152,43 @@ A ggplot2 object
 \subsection{Method \code{plotOntologyHeatmapCollapsed()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyHeatmapCollapsed(
+  name = "GO",
   genes = "up",
-  type = "GO",
   subtype = "BP",
-  min.genes = 1,
   p.adj = 0.05,
+  q.value = 0.2,
+  min.genes = 1,
+  n = 20,
   legend.position = "left",
   selection = "all",
-  n = 20,
-  clusters = TRUE,
-  cluster.name = NULL,
+  max.log.p = 10,
+  cluster = TRUE,
   cell.subgroups = NULL,
   palette = NULL,
   row.order = TRUE,
   col.order = TRUE,
-  max.log.p = 10,
   only.family.children = FALSE,
+  readjust.p = TRUE,
+  p.adjust.method = "BH",
   description.regex = NULL,
+  description.exclude.regex = NULL,
   distance = "manhattan",
   clust.method = "complete",
   clust.naming = "consensus",
   n.words = 5,
   exclude.words = NULL,
+  return.info = FALSE,
   ...
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{field name where the test results are stored}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotOntologySimilarities"></a>}}
@@ -1255,9 +1197,10 @@ A ggplot2 object
 Plot correlation matrix for ontology terms between cell types
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologySimilarities(
+  name = "GO",
   genes = "up",
-  type = "GO",
   p.adj = 0.05,
+  q.value = 0.2,
   min.genes = 1
 )}\if{html}{\out{</div>}}
 }
@@ -1265,6 +1208,8 @@ Plot correlation matrix for ontology terms between cell types
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{name}}{field name where the test results are stored}
+
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
 \item{\code{type}}{Ontology, must be either "GO" or "DO" (default="GO")}
@@ -1282,8 +1227,8 @@ Plot related ontologies in one hierarchical network plot
 \subsection{Method \code{plotOntologyFamily()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyFamily(
-  type = "GO",
-  cell.subgroups,
+  name = "GO",
+  cell.type,
   family = NULL,
   genes = "up",
   subtype = "BP",
@@ -1301,9 +1246,7 @@ Plot related ontologies in one hierarchical network plot
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
-
-\item{\code{cell.subgroups}}{Cell subtype to plot}
+\item{\code{name}}{field name where the test results are stored}
 
 \item{\code{family}}{Family within cell subtype to plot (numeric value)}
 
@@ -1324,6 +1267,10 @@ Plot related ontologies in one hierarchical network plot
 \item{\code{verbose}}{Print messages (default: stored value)}
 
 \item{\code{n.cores}}{Number of cores to use (default: stored value)}
+
+\item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
+
+\item{\code{cell.subgroups}}{Cell subtype to plot}
 }
 \if{html}{\out{</div>}}
 }
@@ -1339,7 +1286,7 @@ Save ontology results as a table
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveOntologyAsTable(
   file,
-  type = "GO",
+  name = "GO",
   subtype = NULL,
   genes = NULL,
   p.adj = 0.05,
@@ -1353,7 +1300,7 @@ Save ontology results as a table
 \describe{
 \item{\code{file}}{File name. Set to NULL to return the table instead of saving}
 
-\item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
+\item{\code{name}}{Name of ontology result (default: GO)}
 
 \item{\code{subtype}}{Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)}
 
@@ -1377,7 +1324,7 @@ Save family results as a table
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveFamiliesAsTable(
   file,
-  type = "GO",
+  name = "GO",
   subtype = NULL,
   genes = NULL,
   p.adj = 0.05,
@@ -1391,7 +1338,7 @@ Save family results as a table
 \describe{
 \item{\code{file}}{File name (default: Family_results.tsv)}
 
-\item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
+\item{\code{name}}{field name where the test results are stored}
 
 \item{\code{subtype}}{Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)}
 
@@ -1400,6 +1347,8 @@ Save family results as a table
 \item{\code{p.adj}}{Adjusted P to filter by (default: 0.05)}
 
 \item{\code{sep}}{Separator (default: tab)}
+
+\item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
 }
 \if{html}{\out{</div>}}
 }
@@ -2255,10 +2204,11 @@ the program usin fabia biclustering.
   prog.ids = NULL,
   build.panel = TRUE,
   nrow = NULL,
-  legend.title = "Score",
   adj.list = NULL,
+  legend.title = "Score",
   palette = NULL,
   min.genes.per.prog = 10,
+  color.range = c("0.5\%", "99.5\%"),
   ...
 )}\if{html}{\out{</div>}}
 }

@@ -459,8 +459,10 @@ distanceBetweenTerms <- function(genes.per.go) {
 #' @inheritParams distanceBetweenTerms genes.per.go
 #' @keywords internal
 estimateClusterPerGO <- function(genes.per.go, cut.h) {
-  distanceBetweenTerms(genes.per.go) %>%
-    {if (ncol(as.matrix(.)) == 1) 1 else {cutree(hclust(.), h=cut.h)}}
+  if (length(genes.per.go) == 1)
+    return(setNames(1, names(genes.per.go)))
+
+  distanceBetweenTerms(genes.per.go) %>% hclust() %>% cutree(h=cut.h)
 }
 
 #' @keywords internal
@@ -485,8 +487,11 @@ clusterGOsPerType <- function(clust.df, cut.h, verbose=FALSE) {
   cl.dists <- apply.fun(clust.mat, 2, function(ct1) apply(clust.mat, 2, function(ct2) {
     mask <- !is.na(ct1) & !is.na(ct2)
     if (sum(mask) == 0) 1 else (1 - mean(ct1[mask] == ct2[mask]))
-  })) %>% set_colnames(colnames(clust.mat)) %>% set_rownames(colnames(clust.mat))
+  })) %>% as.matrix() %>% set_colnames(colnames(clust.mat)) %>% set_rownames(colnames(clust.mat))
   # there is a bug in apply with name for symmetric matrices ^
+
+  if (ncol(cl.dists) == 1)
+    return(list(clusts=setNames(1, colnames(cl.dists))))
 
   cl.clusts <- as.dist(cl.dists) %>% hclust(method="average")
   clusts <- cutree(cl.clusts, h=cut.h)

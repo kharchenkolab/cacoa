@@ -129,16 +129,20 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE
     }
   }
 
-  if (is.logical(row.order) && row.order) {
-    row.order <- rownames(df)[dist(df, method=distance) %>% hclust(method=clust.method) %>% .$order] %>% rev()
-  } else if (is.logical(row.order) && !row.order) {
-    row.order <- rownames(df)
+  if (is.logical(row.order)) {
+    if (row.order && (nrow(df) > 2)) {
+      row.order <- rownames(df)[dist(df, method=distance) %>% hclust(method=clust.method) %>% .$order] %>% rev()
+    } else {
+      row.order <- rownames(df)
+    }
   }
 
-  if (is.logical(col.order) && col.order) {
-    col.order <- colnames(df)[dist(t(df), method=distance) %>% hclust(method=clust.method) %>% .$order] %>% rev()
-  } else if (is.logical(col.order) && !col.order) {
-    col.order <- colnames(df)
+  if (is.logical(col.order)) {
+    if (col.order && (ncol(df) > 2)) {
+      col.order <- colnames(df)[dist(t(df), method=distance) %>% hclust(method=clust.method) %>% .$order] %>% rev()
+    } else {
+      col.order <- colnames(df)
+    }
   }
 
   df %<>% tibble::as_tibble(rownames="G1") %>%

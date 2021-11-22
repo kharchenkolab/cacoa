@@ -1550,11 +1550,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         name=name, genes=genes, subtype=subtype, p.adj=p.adj, q.value=q.value, min.genes=min.genes,
         selection=selection, cluster=cluster, cell.subgroups=cell.subgroups, only.family.children=only.family.children,
         clust.naming=clust.naming, description.regex=description.regex,
-        description.exclude.regex=description.exclude.regex, readjust.p=readjust.p, p.adjust.method=p.adjust.method,
+        description.exclude.regex=description.exclude.regex, readjust.p=readjust.p, p.adjust.method=p.adjust.method
       )
 
       desc.per.clust <- ont.info$desc.per.clust
-      ont.sum <- ont.sum$ont.sum
+      ont.sum <- ont.info$ont.sum
 
       if (is.null(ont.sum)) return(NULL)
       if (is.null(palette)) {
@@ -1570,7 +1570,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       clust.names <- sapply(gos.per.clust, function(gos) {
         n.gos <- length(gos)
         if (n.gos == 1) return(paste("1: ", gos))
-        if (clusters) gos <- unlist(desc.per.clust[gos], use.names=FALSE)
+        if (cluster) gos <- unlist(desc.per.clust[gos], use.names=FALSE)
 
         estimateOntologyClusterName(gos, method=clust.naming, n.words=n.words, exclude.words=exclude.words) %>%
           {paste0(n.gos, ": ", .)}

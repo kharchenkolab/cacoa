@@ -692,6 +692,7 @@ List estimateClusterFreeExpressionShiftsC(const Eigen::SparseMatrix<double> &cm,
             min_n_within, min_n_between, wins, smooth, seed](int ri) {
         std::mt19937 g(ri + seed);
         std::vector<bool> is_ref_shuffled(is_ref.begin(), is_ref.end());
+        // TODO: this is likely wrong. In cluster-based shifts we shuffle only labels for samples present within the cell type
         std::shuffle(is_ref_shuffled.begin(), is_ref_shuffled.end(), g);
         std::vector<double> shuff_scores(nn_ids_c.size(), 0);
         for (size_t ci = 0; ci < nn_ids_c.size(); ++ci) {

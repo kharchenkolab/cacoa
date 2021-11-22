@@ -33,3 +33,7 @@ projdiff <- function(mat, g1, g2) {
     .Call('_cacoa_projdiff', PACKAGE = 'cacoa', mat, g1, g2)
 }
 
+colwiseBinaryDistance <- function(mat) {
+    .Call('_cacoa_colwiseBinaryDistance', PACKAGE = 'cacoa', mat)
+}
+

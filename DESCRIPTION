@@ -29,7 +29,6 @@ Imports:
     matrixStats (>= 0.60.1),
     matrixTests,
     methods,
-    pbapply,
     plyr,
     purrr,
     R6,
@@ -38,7 +37,7 @@ Imports:
     rlang,
     roxygen2,
     sccore (>= 1.0.0),
-    tibble, 
+    tibble,
     tidyr,
     tidytree,
     viridis
@@ -60,7 +59,7 @@ Suggests:
     psych,
     RColorBrewer,
     Rgraphviz,
-    Rtsne, 
+    Rtsne,
     SummarizedExperiment
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2

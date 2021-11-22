@@ -481,15 +481,8 @@ clusterIndividualGOs <- function(genes.per.go.per.type, cut.h) {
 }
 
 #' @keywords internal
-clusterGOsPerType <- function(clust.df, cut.h, verbose=FALSE) {
-  apply.fun <- if (verbose) pbapply::pbapply else apply
-  clust.mat <- as.matrix(clust.df) %>% t()
-  cl.dists <- apply.fun(clust.mat, 2, function(ct1) apply(clust.mat, 2, function(ct2) {
-    mask <- !is.na(ct1) & !is.na(ct2)
-    if (sum(mask) == 0) 1 else (1 - mean(ct1[mask] == ct2[mask]))
-  })) %>% as.matrix() %>% set_colnames(colnames(clust.mat)) %>% set_rownames(colnames(clust.mat))
-  # there is a bug in apply with name for symmetric matrices ^
-
+clusterGOsPerType <- function(clust.df, cut.h) {
+  cl.dists <- as.matrix(clust.df) %>% `mode<-`('integer') %>% t() %>% colwiseBinaryDistance()
   if (ncol(cl.dists) == 1)
     return(list(clusts=setNames(1, colnames(cl.dists))))
 
@@ -564,12 +557,12 @@ getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {
 #'   - `hclust`: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all
 #'     subtypes
 #' @keywords internal
-clusterOntologyDF <- function(ont.df, clust.naming, ind.h=0.66, total.h=0.5, verbose=FALSE) {
+clusterOntologyDF <- function(ont.df, clust.naming, ind.h=0.66, total.h=0.5) {
   genes.per.go.per.type <- ont.df$geneID %>% strsplit("/") %>%
     setNames(ont.df$Description) %>% split(ont.df$Group)
 
   clust.df <- clusterIndividualGOs(genes.per.go.per.type, cut.h=ind.h)
-  clusts <- clusterGOsPerType(clust.df, cut.h=total.h, verbose=verbose)
+  clusts <- clusterGOsPerType(clust.df, cut.h=total.h)
 
   ont.df$Cluster <- clusts$clusts[as.character(ont.df$Description)]
 

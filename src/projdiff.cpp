@@ -8,6 +8,8 @@
 // g1, g2 - vectors of indices for the two groups (0-based)
 // [[Rcpp::export]]
 arma::rowvec projdiff(const arma::mat & mat, const arma::ivec & g1, const arma::ivec & g2) {
+  // TODO: remove with common expression shifts
+
   // mat: columns - samples; rows - genes;
   // determine consensus difference
   arma::mat dm(mat.n_rows,g1.n_elem * g2.n_elem);

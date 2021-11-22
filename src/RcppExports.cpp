@@ -2,7 +2,6 @@
 // Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 #include <RcppArmadillo.h>
-#define NDEBUG 1
 #include <RcppEigen.h>
 #include <Rcpp.h>
 
@@ -133,6 +132,17 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// colwiseBinaryDistance
+NumericMatrix colwiseBinaryDistance(IntegerMatrix mat);
+RcppExport SEXP _cacoa_colwiseBinaryDistance(SEXP matSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerMatrix >::type mat(matSEXP);
+    rcpp_result_gen = Rcpp::wrap(colwiseBinaryDistance(mat));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_adjustZScoresWithPermutations", (DL_FUNC) &_cacoa_adjustZScoresWithPermutations, 3},
@@ -142,6 +152,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_estimateClusterFreeExpressionShiftsC", (DL_FUNC) &_cacoa_estimateClusterFreeExpressionShiftsC, 16},
     {"_cacoa_mapIds", (DL_FUNC) &_cacoa_mapIds, 2},
     {"_cacoa_projdiff", (DL_FUNC) &_cacoa_projdiff, 3},
+    {"_cacoa_colwiseBinaryDistance", (DL_FUNC) &_cacoa_colwiseBinaryDistance, 1},
     {NULL, NULL, 0}
 };
 

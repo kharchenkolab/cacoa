@@ -3036,7 +3036,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       desc.per.clust <- NULL
       group.field <- "Description"
       if (cluster) {
-        ont.df %<>% clusterOntologyDF(clust.naming=clust.naming, verbose=self$verbose) %>% .$df
+        ont.df %<>% clusterOntologyDF(clust.naming=clust.naming) %>% .$df
         desc.per.clust <- ont.df %$% split(Description, ClusterName) %>% lapply(unique)
         group.field <- "ClusterName"
       }

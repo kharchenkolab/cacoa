@@ -206,8 +206,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
                                                ref.level=self$ref.level, sample.groups=self$sample.groups,
                                                verbose=self$verbose, n.cores=self$n.cores, name="expression.shifts",
-                                               n.permutations=1000, p.adjust.method='BH', genes=NULL, n.pcs=NULL,
-                                               top.n.genes=NULL, ...) {
+                                               n.permutations=1000, genes=NULL, n.pcs=NULL, top.n.genes=NULL, ...) {
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
       if (verbose) message("Filtering data... ")

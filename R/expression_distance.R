@@ -336,6 +336,7 @@ consensusShiftDistances <- function(tcm, sample.groups, use.median=FALSE, mean.t
 
 #' @keywords internal
 estimateExplainedVariance <- function(cm, sample.groups) {
+  checkPackageInstalled("matrixStats", cran=TRUE)
   spg <- rownames(cm) %>% split(droplevels(as.factor(sample.groups[.])))
   if (length(spg) == 1){
     return(NULL)

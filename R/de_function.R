@@ -73,6 +73,8 @@ addZScores <- function(df) {
 #' @keywords internal
 saveDEasJSON <- function(de.raw, sample.groups=NULL, saveprefix=NULL,
       dir.name="JSON", gene.metadata=NULL,verbose=TRUE) {
+
+  checkPackageInstalled(c("jsonlite"), cran=TRUE)
   if (!is.null(dir.name)) {
     if (!dir.exists(dir.name)) dir.create(dir.name)
   } else {

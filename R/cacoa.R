@@ -1,3 +1,4 @@
+#' @import methods dplyr
 #' @importFrom grDevices colorRampPalette contourLines
 #' @importFrom graphics legend
 #' @importFrom stats as.dendrogram as.dist as.formula as.hclust cmdscale coef
@@ -10,7 +11,6 @@ NULL
 #' @title Cacoa R6 class
 #'
 #' @description The class encompasses etc etc
-#' @import methods enrichplot dplyr
 #' @param sample.groups a two-level factor on the sample names describing the conditions being compared (default: stored vector)
 #' @param cell.groups Vector indicating cell groups with cell names (default: stored vector)
 #' @param n.cores number of cores for parallelization

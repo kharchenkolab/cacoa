@@ -1,4 +1,5 @@
 #' Estimate Gene Programs with FABIA
+#' 
 #' @param n.programs maximal number of gene programs to find (parameter `p` for fabia).
 #' @param n.sampled.cells number of sub-sampled cells for estimating the gene programs. If 0, all cells are used.
 #' it is interpreted as a vector of cell

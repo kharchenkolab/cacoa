@@ -9,14 +9,10 @@ Depends:
     R (>= 4.0.0), Matrix
 biocViews:
 Imports:
-    abind,
     ape,
     candisc,
     cowplot,
     dplyr,
-    enrichplot,
-    entropy,
-    ggdendro,
     ggplot2,
     ggpubr,
     ggrepel,
@@ -30,24 +26,24 @@ Imports:
     matrixTests,
     methods,
     plyr,
-    purrr,
     R6,
-    RcppProgress,
     reshape2,
     rlang,
     roxygen2,
     sccore (>= 1.0.0),
     tibble,
     tidyr,
-    tidytree,
-    viridis
+    tidytree
 Suggests:
+    abind,
     cluster,
     clusterProfiler (>= 3.0.0),
     coda.base,
     DESeq2,
     DOSE,
     EnhancedVolcano,
+    enrichplot,
+    entropy,
     fabia,
     ggrastr (>= 0.1.7),
     ggtree,
@@ -57,10 +53,12 @@ Suggests:
     N2R,
     pagoda2,
     psych,
+    purrr,
     RColorBrewer,
     Rgraphviz,
     Rtsne,
-    SummarizedExperiment
+    SummarizedExperiment,
+    viridis
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
 LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress, sccore

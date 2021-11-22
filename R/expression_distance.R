@@ -185,6 +185,8 @@ joinExpressionShiftDfs <- function(dist.df.per.type, sample.groups) {
 
 #' @keywords internal
 prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, return.dists=TRUE) {
+  
+  checkPackageInstalled(c("abind"), cran=TRUE)
   # bring to a common set of cell types
   common.types <- lapply(p.dist.per.type, colnames) %>% unlist() %>% unique()
 

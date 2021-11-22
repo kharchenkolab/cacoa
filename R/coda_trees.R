@@ -98,7 +98,7 @@ getNodeOrder <- function(t) {
 # }
 
 
-#' @description Construct the canonical tree
+#' Construct the canonical tree
 #'
 #' @param d.counts Table with cell type counts
 #' @param d.groups Groups variable for samples

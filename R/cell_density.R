@@ -1,18 +1,20 @@
 #' Estimate cell density in giving embedding, Density will estimated for indivisual sample
-#' 
+#'
 #' @param emb cell embedding matrix
 #' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
 #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 #' @param bins number of bins for density estimation, default 400
 #' @keywords internal
-estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, bandwidth=0.05, expansion.mult=0.05){
+estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, bandwidth=0.05, expansion.mult=0.05) {
   if (is.null(bandwidth)) {
     bandwidth <- apply(emb, 2, MASS::bandwidth.nrd)
   } else {
     bandwidth <- apply(emb, 2, quantile, c(0.1, 0.9)) %>% diff() %>% {. * bandwidth} %>% .[1,]
   }
 
-  lims <- as.numeric(apply(emb,2,function(x) ggplot2:::expand_limits_continuous(range(x), expansion(mult=expansion.mult))))
+  lims <- emb %>%
+    apply(2, function(x) ggplot2:::expand_limits_continuous(range(x), expansion(mult=expansion.mult))) %>%
+    as.numeric()
 
   cname <- intersect(names(sample.per.cell), rownames(emb))
   sample.per.cell <- sample.per.cell[cname]
@@ -74,7 +76,7 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
 
 
 #' Extract contour from embedding
-#' 
+#'
 #' @param emb cell embedding matrix
 #' @param cell.groups vector of cell type annotation
 #' @param group specify cell types for contour, multiple cell types are also supported
@@ -98,7 +100,7 @@ getDensityContour <- function(emb, cell.groups, group,  color='black', linetype=
 
 
 #' @description Plot cell density
-#' 
+#'
 #' @param bins number of bins for density estimation, should keep consistent with bins in estimateCellDensity
 #' @param palette color palette function. Default: `YlOrRd`
 #' @keywords internal
@@ -168,7 +170,9 @@ diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, t
   nr <- names(sample.groups[sample.groups == ref.level]) # sample name of reference
 
   if (type %in% c('subtract', 't.test', 'wilcox')) {
-    score <- diffCellDensity(density.mat, sample.groups=sample.groups, ref.level=ref.level, target.level=target.level, type=type)
+    score <- diffCellDensity(
+      density.mat, sample.groups=sample.groups, ref.level=ref.level, target.level=target.level, type=type
+    )
     permut.scores <- plapply(1:n.permutations, function(i) {
       sg.shuff <- setNames(sample(sample.groups), names(sample.groups))
       diffCellDensity(density.mat, sample.groups=sg.shuff, ref.level=ref.level, target.level=target.level, type=type)
@@ -224,17 +228,17 @@ adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smoot
   }
 
   p.vals <- c()
-  sign_mask <- (score >= 0)
-  if (any(sign_mask)) {
-    p.vals %<>% c((sapply(score[sign_mask], function(x) sum((x - 1e-10) < scores.shuffled.ranges[,2])) + 1) / (ncol(scores.shuffled) + 1))
+  sign.mask <- (score >= 0)
+  if (any(sign.mask)) {
+    p.vals %<>% c((sapply(score[sign.mask], function(x) sum((x - 1e-10) < scores.shuffled.ranges[,2])) + 1) / (ncol(scores.shuffled) + 1))
   }
 
-  if (any(!sign_mask)) {
-    p.vals %<>% c((sapply(score[!sign_mask], function(x) sum((x + 1e-10) > scores.shuffled.ranges[,1])) + 1) / (ncol(scores.shuffled) + 1))
+  if (any(!sign.mask)) {
+    p.vals %<>% c((sapply(score[!sign.mask], function(x) sum((x + 1e-10) > scores.shuffled.ranges[,1])) + 1) / (ncol(scores.shuffled) + 1))
   }
 
   z.scores <- pmax(1 - p.vals[names(score)], 0.5) %>% qnorm(lower.tail=TRUE)
-  z.scores[!sign_mask] %<>% {. * -1}
+  z.scores[!sign.mask] %<>% {. * -1}
 
   return(z.scores)
 }

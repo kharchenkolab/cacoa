@@ -105,7 +105,7 @@ MatrixXd buildCellXSampleMatrix(const VectorXd &gene_vec, const std::vector<int>
         auto n_obs = n_obs_per_samp.at(ci);
         for (int nni : nn_ids.at(ci)) {
             int fac = sample_factor.at(nni);
-            sample_x_cell_cm(fac, ci) += gene_vec(nni) / n_obs.at(fac);
+            sample_x_cell_cm(fac, ci) += gene_vec(nni) / n_obs.at(fac); // TODO: try to log-normalize
         }
     }
 

@@ -1,3 +1,7 @@
+#' @import ape
+NULL
+
+
 estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
   cell.loadings <- c()
   sample.pos <- c()
@@ -75,6 +79,9 @@ distTreeOrder <- function(t, tree.order){
 plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme, label.angle=90,
                              p.threshold=0.05, adjust.pvalues=TRUE, h.methods='both', font.size=3, label.hjust=1,
                              tree.order = NULL, loadings.mean = NULL) {
+  
+  checkPackageInstalled(c("ggdendro"), cran=TRUE)
+
   log.f <- getLogFreq(d.counts)
   
   if(h.methods == 'up'){

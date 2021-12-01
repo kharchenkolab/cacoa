@@ -352,7 +352,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    ref.level=self$ref.level, target.level=self$target.level, name='de',
                                    test='DESeq2.Wald', resampling.method=NULL, n.resamplings=30, seed.resampling=239,
                                    min.cell.frac=0.05, covariates=NULL, common.genes=FALSE, n.cores=self$n.cores,
-                                   cooks.cutoff=FALSE, independent.filtering=FALSE, min.cell.count=10,
+                                   cooks.cutoff=FALSE, independent.filtering=FALSE, min.cell.count=10, max.cell.count=Inf,
                                    n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, ...) {
       set.seed(seed.resampling)
       if (!is.list(sample.groups)) {
@@ -376,7 +376,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (!is.null(n.cells.subsample) && is.null(resampling.method)) resampling.method <- 'fix.cells'
       s.groups.new <- list(initial=sample.groups)
-      max.cell.count <- Inf
+      
       fix.samples <- NULL
       # If resampling is defined, new contrasts will append to s.groups.new
       if (!is.null(resampling.method) && (n.resamplings != 0)) {
@@ -405,6 +405,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # parallelize the outer loop if subsampling is on
       outer.multicore <- (length(s.groups.new) >= n.cores) && (n.cores > 1)
       inner.verbose <- (length(s.groups.new) == 1) || (!outer.multicore && verbose > 1)
+
+      outer.multicore <- FALSE
+      inner.verbose <- TRUE
       de.res <- names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
         estimateDEPerCellTypeInner(
           raw.mats=raw.mats, cell.groups=cell.groups, s.groups=s.groups.new[[resampling.name]],
@@ -416,11 +419,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           return.matrix=(resampling.name == 'initial'),
           verbose=(inner.verbose & verbose), ...
         )
-      }, n.cores=ifelse(outer.multicore, n.cores, 1), progress=(!inner.verbose & verbose))
+      }, n.cores=ifelse(outer.multicore, n.cores, 1), progress=(!inner.verbose & verbose), mc.preschedule=TRUE)
 
       # if resampling: calculate median and variance on ranks after resampling
-      de.res <- if (length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
-      de.res %<>% appendStatisticsToDE(expr.fracs)
+      #de.res <- if (length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
+      # de.res %<>% appendStatisticsToDE(expr.fracs)
       self$test.results[[name]] <- de.res
 
       # TODO: add overall p-adjustment
@@ -444,7 +447,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       de.res <- private$getResults(de.name, 'estimateDEPerCellType()')
 
-      if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))){
+      if(length(de.res) < 3){
         stop('Resampling was not performed')
       }
 
@@ -469,7 +472,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
         de.res <- private$getResults(de.name)
 
-        if(!all(sapply(names(de.res), function(x) 'subsamples' %in% names(de.res[[x]])))){
+        if(length(de.res) < 3){
           stop('Resampling was not performed')
         }
         jaccards <- estimateStabilityPerCellType(de.res=de.res, top.n.genes=top.n.genes, p.val.cutoff=p.val.cutoff)
@@ -485,29 +488,29 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
 
     estimateDEStabilityPerGene=function(de.name,
-                                        top.n.genes = 500,
+                                        top.n.genes = 100,
                                         p.adj.cutoff = NULL,
                                         visualize=FALSE) {
       de.res <- self$test.results[[de.name]]
-      for(cell.type in names(de.res)) {
+      for(cell.type in names(de.res$initial)) {
         if(!is.null(p.adj.cutoff)) {
-          top.n.genes <- sum(de.res[[cell.type]]$res$padj <= p.adj.cutoff)
+          top.n.genes <- sum(de.res$initial[[cell.type]]$res$padj <= p.adj.cutoff)
         }
-        genes.tmp <- de.res[[cell.type]]$res$Gene
+        genes.tmp <- rownames(de.res$initial[[cell.type]]$res)
         tmp <- rep(0, length(genes.tmp))
         n.tmp <- 0
-        for(i in 1:length(de.res[[cell.type]]$subsamples)){
-          if(is.null(de.res[[cell.type]]$subsamples[[i]])) next
-          tmp <- tmp + 1*(rank(de.res[[cell.type]]$subsamples[[i]][genes.tmp,'padj']) < top.n.genes)
+        for(resampling.name in setdiff(names(de.res), 'initial')){
+          if(is.null(de.res[[resampling.name]][[cell.type]])) next
+          tmp <- tmp + 1*(rank(de.res[[resampling.name]][[cell.type]][genes.tmp,'padj']) < top.n.genes)
           n.tmp <- n.tmp + 1
         }
-        de.res[[cell.type]]$res$Stability <- tmp / n.tmp
+        de.res$initial[[cell.type]]$res$Stability <- tmp / n.tmp
       }
       self$test.results[[de.name]] <- de.res
       if(visualize){
         stability.all <- c()
-        for(cell.type in names(de.res)) {
-          tmp <- de.res[[cell.type]]$res
+        for(cell.type in names(de.res$initial)) {
+          tmp <- de.res$initial[[cell.type]]$res
           stability.all <- rbind(stability.all,
                                  data.frame(rank = 1:nrow(tmp),
                                             stability = tmp$Stability, cell.type = cell.type))
@@ -519,7 +522,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           scale_color_manual(values=self$cell.groups.palette) +
           guides(color=guide_legend(override.aes=list(fill=NA), ncol=1)) +
           theme(legend.text = element_text(size=6),legend.key.height= unit(0.1, 'cm'),
-                legend.key.width = unit(0.2, 'cm'))
+                legend.key.width = unit(0.2, 'cm')) + ylim(0, 1)
         return(p)
       }
 
@@ -538,6 +541,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
       }
 
+      
       data.all = data_frame()
       cell.types = levels(self$cell.groups)
       for(cell.type in cell.types) {
@@ -546,8 +550,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           for(j in 1:length(de.names)) {
             if(j <= i) next
 
-            common.resamplings = intersect(names(self$test.results[[de.names[i]]][[cell.type]]$subsamples),
-                                           names(self$test.results[[de.names[j]]][[cell.type]]$subsamples))
+            common.resamplings = setdiff(intersect(names(self$test.results[[de.names[i]]]),
+                                                   names(self$test.results[[de.names[j]]]) ), 'initial')
             if (length(common.resamplings) == 0){
               # message(paste('There is no corresponding resamplings for',
               #               de.names[i], 'and', de.names[j], 'in', cell.type))
@@ -555,8 +559,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
             }
             for(sample.name in common.resamplings) {
 
-              s1 = self$test.results[[de.names[i]]][[cell.type]]$subsamples[[sample.name]]
-              s2 = self$test.results[[de.names[j]]][[cell.type]]$subsamples[[sample.name]]
+              s1 = self$test.results[[de.names[i]]][[sample.name]][[cell.type]]
+              s2 = self$test.results[[de.names[j]]][[sample.name]][[cell.type]]
               if(is.null(p.val.cutoff)) {
                 jac = jaccardPwTop(list(s1, s2), top.n.genes)
               } else {
@@ -927,9 +931,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                          xlabel = 'Cutoffs',
                          ylabel = 'Jaccard Index',
                          palette=self$cell.groups.palette,
-                         plot.theme=self$plot.theme) +
-        theme(legend.position = "right") +
-        geom_jitter(aes(color = cmp)) + labs(color = "Cell types")
+                         plot.theme=self$plot.theme, set.color = FALSE,
+                         set.fill=TRUE) +
+        theme(legend.position = "right")  +
+        ylim(0, 1) +
+        theme(legend.position = "none")
       return(p)
     },
 
@@ -999,7 +1005,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           (data.all$cell.type %in% cell.types)
         data.tmp = data.frame(s1 = unique.combinations$s1[i],
                               s2 = unique.combinations$s2[i],
-                              val = median(data.all$val[idx]))
+                              val = median(data.all$val[idx], na.rm = TRUE) )
+        # print(data.tmp)
         data.all.median = rbind(data.all.median, data.tmp)
       }
 
@@ -1021,7 +1028,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                        show.jitter = TRUE,
                                        jitter.alpha = 0.05,
                                        show.pairs = FALSE,
-                                       sort.order = TRUE) {
+                                       sort.order = TRUE,
+                                       pallete=self$cell.groups.palette,
+                                       set.fill=TRUE) {
 
       jaccards <- private$getResults(name, 'estimateDEStability()')
       p <- plotStability(jaccards = jaccards,
@@ -1032,11 +1041,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                          sort.order = sort.order,
                          xlabel = 'Cell Type',
                          ylabel = 'Jaccard Index',
-                         palette=self$cell.groups.palette,
-                         plot.theme=self$plot.theme) + theme(legend.position = "none")
+                         palette=NULL,
+                         plot.theme=self$plot.theme, set.fill = set.fill) + theme(legend.position = "none")
+      # return(p)
       p <- p + theme(legend.position = "none") +
         theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-        scale_color_manual(values=self$cell.groups.palette)
+        ylim(0, 1)  + xlab('')
+      if(!is.null(palette) && !(show.pairs) ){
+        p <- p + scale_color_manual(values=self$cell.groups.palette)
+      }
+      
+      if(!set.fill){
+        p <- p + scale_fill_manual(values=c('white'))
+      }
+      
       return(p)
     },
 
@@ -1056,10 +1074,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                          jitter.alpha = jitter.alpha,
                          show.pairs = show.pairs,
                          sort.order = sort.order,
-                         xlabel = 'Test name',
+                         xlabel = '',
                          ylabel = 'Jaccard Index',
                          palette=self$cell.groups.palette,
-                         plot.theme=self$plot.theme) + ylim(0, 1) +
+                         plot.theme=self$plot.theme,
+                         set.color=FALSE,
+                         set.fill=TRUE) + ylim(0, 1) +
         labs(color = "Cell types")
       return(p)
     },
@@ -1101,12 +1121,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       de.res <- private$getResults(name, 'estimateDEPerCellType()')
       possible.scores = c('stab.median.rank', 'stab.mean.rank', 'stab.var.rank')
       if ( !(stability.score %in% possible.scores) ) stop('Please provide correct name of the stability core')
-      if ( !(cell.type %in% names(de.res)) ) stop('Please provide correct cell type to visualise')
-      if ( !(stability.score %in% names(de.res[[cell.type]]$res)) ) stop('Stability score was not calculated')
+      if ( !(cell.type %in% names(de.res$initial)) ) stop('Please provide correct cell type to visualise')
+      if ( !(stability.score %in% names(de.res$initial[[cell.type]]$res)) ) stop('Stability score was not estimated')
 
-      idx = rank(de.res[[cell.type]]$res$pvalue) < 500
-      p <- smoothScatter(x = rank(de.res[[cell.type]]$res$pvalue)[idx],
-                         y = rank(de.res[[cell.type]]$res[[stability.score]])[idx],
+      idx = rank(de.res$initial[[cell.type]]$res$pvalue) < 500
+      p <- smoothScatter(x = rank(de.res$initial[[cell.type]]$res$pvalue)[idx],
+                         y = rank(de.res$initial[[cell.type]]$res[[stability.score]])[idx],
                          xlab = 'rank of DE gene', ylab = 'stability score',
                          colramp = colorRampPalette(c("white", 'seagreen4')))
     },
@@ -1270,7 +1290,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.null(de.raw)) {
         de.raw <- private$getResults(de.name, "estimateDEPerCellType()")
       }
-
       # If estimateDEPerCellType was run with return.matrix = TRUE, remove matrix before calculating
       if ("list" %in% class(de.raw[[1]])) de.raw %<>% lapply(`[[`, "res")
 

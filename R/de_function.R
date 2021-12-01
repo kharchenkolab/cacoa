@@ -219,7 +219,8 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
     raw.mats %<>% subsetMatricesWithCommonGenes(s.groups)
   } else {
     gene.union <- lapply(raw.mats, colnames) %>% Reduce(union, .)
-    raw.mats %<>% plapply(sccore:::extendMatrix, gene.union, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE)
+    # raw.mats %<>% plapply(sccore:::extendMatrix, gene.union, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE)
+    raw.mats %<>% lapply(sccore:::extendMatrix, gene.union)
   }
 
   cm.bulk.per.samp <- raw.mats[unlist(s.groups)] %>% # Only consider samples in s.groups
@@ -246,65 +247,100 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
   # For every cell type get differential expression results
   if (verbose) message("Estimating DE per cell type")
   de.res <- names(cm.bulk.per.type) %>% sn()%>% plapply(function(l) {
-    tryCatch({
-      cm <- cm.bulk.per.type[[l]]
-      if (!is.null(gene.filter)) {
-        gene.to.remain <- gene.filter %>% {rownames(.)[.[,l]]} %>% intersect(rownames(cm))
-        cm <- cm[gene.to.remain,,drop=FALSE]
+    message(l)
+    cm <- cm.bulk.per.type[[l]]
+    if (!is.null(gene.filter)) {
+      gene.to.remain <- gene.filter %>% {rownames(.)[.[,l]]} %>% intersect(rownames(cm))
+      cm <- cm[gene.to.remain,,drop=FALSE]
+    }
+
+    cur.s.groups <- lapply(s.groups, intersect, colnames(cm))
+    if (!is.null(fix.n.samples)) {
+      if (min(sapply(s.groups, length)) < fix.n.samples) {
+        warning("The cluster does not have enough samples")
+        return(NULL)
       }
+      cur.s.groups %<>% lapply(sample, fix.n.samples)
+      cm <- cm[, unlist(cur.s.groups), drop=FALSE]
+    }
 
-      cur.s.groups <- lapply(s.groups, intersect, colnames(cm))
-      if (!is.null(fix.n.samples)) {
-        if (min(sapply(s.groups, length)) < fix.n.samples) stop("The cluster does not have enough samples")
-        cur.s.groups %<>% lapply(sample, fix.n.samples)
-        cm <- cm[, unlist(cur.s.groups), drop=FALSE]
+    ## Generate metadata
+    meta.groups <- colnames(cm) %>% lapply(function(y) {
+      names(cur.s.groups)[sapply(cur.s.groups, function(x) any(x %in% y))]
+    }) %>% unlist() %>% as.factor()
+
+    if (length(levels(meta.groups)) < 2) {
+      warning("The cluster is not present in both conditions")
+      return(NULL)
+    }
+    
+    # Each group should be presented in at least two samples
+    n.samples <- sapply(levels(meta.groups), function(s) sum(meta.groups == s))
+    if(min(n.samples) == 1){
+      warning("Each group should be presented in at least two samples")
+      return(NULL)
+    }
+    
+    
+    if (!ref.level %in% levels(meta.groups)) {
+      warning("The reference level is absent in this comparison")
+      return(NULL)
+    }
+
+    meta <- data.frame(sample.id=colnames(cm), group=relevel(meta.groups, ref=ref.level))
+
+    ## External covariates
+    if (is.null(meta.info)) {
+      design.formula <- as.formula('~ group')
+    } else {
+      meta %<>% cbind(meta.info[meta$sample.id, , drop=FALSE])
+      meta <- filterDEMetadata(meta)
+      
+      
+      if(is.null(meta)){
+        warning('Covariates are not independent')
+        return(NULL)
       }
-
-      ## Generate metadata
-      meta.groups <- colnames(cm) %>% lapply(function(y) {
-        names(cur.s.groups)[sapply(cur.s.groups, function(x) any(x %in% y))]
-      }) %>% unlist() %>% as.factor()
-
-      if (length(levels(meta.groups)) < 2) stop("The cluster is not present in both conditions")
-      if (!ref.level %in% levels(meta.groups)) stop("The reference level is absent in this comparison")
-
-      meta <- data.frame(sample.id=colnames(cm), group=relevel(meta.groups, ref=ref.level))
-
-      ## External covariates
-      if (is.null(meta.info)) {
-        design.formula <- as.formula('~ group')
-      } else {
-        design.formula <- c(colnames(meta.info), 'group') %>%
-          paste(collapse=' + ') %>% {paste('~', .)} %>% as.formula()
-        meta %<>% cbind(meta.info[meta$sample.id, , drop=FALSE])
+      
+      if(!('group' %in% colnames(meta))) {
+        warning('All samples of the same group')
+        return(NULL)
       }
+      
+      design.formula <- c(colnames(meta)[-c(1,2)], 'group') %>%
+        paste(collapse=' + ') %>% {paste('~', .)} %>% as.formula()
+      message(design.formula)
+    }
 
-      if (test %in% c('wilcoxon', 't-test')) {
-        cm <- normalizePseudoBulkMatrix(cm, meta=meta, design.formula=design.formula, type=test.type)
-        res <- estimateDEForTypePairwiseStat(cm, meta=meta, target.level=target.level, test=test)
-      } else if (test == 'deseq2') {
-        res <- estimateDEForTypeDESeq(
-          cm, meta=meta, design.formula=design.formula, ref.level=ref.level, target.level=target.level,
-          test.type=test.type, cooksCutoff=cooks.cutoff, independentFiltering=independent.filtering
-        )
-      } else if (test == 'edger') {
-        res <- estimateDEForTypeEdgeR(cm, meta=meta, design.formula=design.formula)
-      } else if (test == 'limma-voom') {
-        res <- estimateDEForTypeLimma(cm, meta=meta, design.formula=design.formula, target.level=target.level)
-      }
+    if (test %in% c('wilcoxon', 't-test')) {
+      cm <- normalizePseudoBulkMatrix(cm, meta=meta, design.formula=design.formula, type=test.type)
+      res <- estimateDEForTypePairwiseStat(cm, meta=meta, target.level=target.level, test=test)
+    } else if (test == 'deseq2') {
+      res <- estimateDEForTypeDESeq(
+        cm, meta=meta, design.formula=design.formula, ref.level=ref.level, target.level=target.level,
+        test.type=test.type, cooksCutoff=cooks.cutoff, independentFiltering=independent.filtering
+      )
+    } else if (test == 'edger') {
+      res <- estimateDEForTypeEdgeR(cm, meta=meta, design.formula=design.formula)
+    } else if (test == 'limma-voom') {
+      res <- estimateDEForTypeLimma(cm, meta=meta, design.formula=design.formula, target.level=target.level)
+    }
 
-      if (!is.na(res[[1]][1])) {
-        res <- addZScores(res) %>% .[order(.$pvalue, decreasing=FALSE),]
-      }
 
-      res$Gene <- rownames(res)
+    # res$Gene <- rownames(res)
 
-      if (return.matrix)
-        return(list(res = res, cm = cm, meta=meta))
 
-      return(res)
-    }, error = function(err) NA)
-  }, n.cores=n.cores, progress=verbose) %>%  .[!sapply(., is.logical)]
+    if (!is.na(res[[1]][1])) {
+      res <- addZScores(res) %>% .[order(.$pvalue, decreasing=FALSE),]
+    }
+
+
+    if (return.matrix)
+      return(list(res = res, cm = cm, meta=meta))
+
+    return(res)
+  }, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE)  %>%  .[!sapply(., is.null)]
+  # })  %>%  .[!sapply(., is.null)]
 
 
   if (verbose) {
@@ -317,7 +353,27 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
   return(de.res)
 }
 
+
 #' @keywords internal
+filterDEMetadata <- function(meta) {
+  # Remove unique columns
+  i.m.remain <- c()
+  for(i.m in 1:ncol(meta)){
+    if(length(unique(meta[, i.m])) != 1) i.m.remain <- c(i.m.remain, i.m)
+  }
+  meta <- meta[, i.m.remain, drop=F]
+  if(ncol(meta) == 1) return(meta)
+  # The same columns
+  for(i in 2:ncol(meta)){
+    for(j in i:ncol(meta)){
+      if(i == j) next
+      if((nrow(unique(meta[,c(i, j)])) == length(unique(meta[,i])))) 
+        return(NULL)
+    }
+  }
+  return(meta)
+}
+
 normalizePseudoBulkMatrix <- function(cm, meta=NULL, design.formula=NULL, type='totcount') {
   if (type == 'deseq2') {
     cnts.norm <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula)  %>%
@@ -386,7 +442,7 @@ estimateDEForTypeLimma <- function(cm, meta, design.formula, target.level) {
   mm <- model.matrix(design.formula, meta)
   fit <- limma::voom(cm, mm, plot = FALSE) %>% limma::lmFit(mm)
 
-  contr <- paste0('group', target.level) %>% limma::makeContrasts(levels=colnames(coef(fit)))
+  contr <- limma::makeContrasts(paste0('group', target.level), levels=colnames(coef(fit)))
   res <- limma::contrasts.fit(fit, contr) %>% limma::eBayes() %>% limma::topTable(sort.by="P", n=Inf) %>%
     set_colnames(c('log2FoldChange', 'AveExpr', 'stat', 'pvalue', 'padj', 'B'))
 

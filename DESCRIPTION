@@ -1,6 +1,6 @@
 Package: cacoa
 Title: Case-Control Analysis tools for single-cell RNA-seq
-Version: 0.1.0
+Version: 0.2.0
 Authors@R: c(person("Peter", "Kharchenko", email = "peter_kharchenko@hms.harvard.edu", role = c("aut", "cre")), person("Viktor","Petukhov", email="viktor.s.petuhov@ya.ru", role="aut"))
 Description: Case-Control Analysis tools for single-cell RNA-seq
 License: GPL-3

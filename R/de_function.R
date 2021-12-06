@@ -170,7 +170,7 @@ saveDEasJSON <- function(de.raw, sample.groups=NULL, saveprefix=NULL,
 
 #' @keywords internal
 prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'bootstrap', 'fix.cells', 'fix.samples'),
-                                n.resamplings=30, n.biosamples=NULL) {
+                                n.resamplings=30) {
   resampling.method <- match.arg(resampling.method)
 
   if (resampling.method == 'loo') {

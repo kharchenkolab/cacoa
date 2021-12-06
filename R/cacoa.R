@@ -2158,20 +2158,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param type method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);
     #' @param adjust.pvalues whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='sutract', TRUE for everything else)
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    estimateDiffCellDensity=function(type='permutation', adjust.pvalues=(type != 'subtract'), name='cell.density',
+    estimateDiffCellDensity=function(type='permutation', adjust.pvalues=NULL, name='cell.density',
                                      n.permutations=400, smooth=TRUE, verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
+      if (is.null(adjust.pvalues)) adjust.pvalues <- (type != 'subtract') # NULL can be forwarded here
       density.mat <- dens.res$density.mat
       if (dens.res$method == 'kde'){
-        density.mat <- density.mat[dens.res$density.emb$counts > 0,]
-        bins <- dens.res$bins
+        if (adjust.pvalues) {
+          # For p-value adjustment matrix filtration can result in disconnected grid and break estimating l.max
+          l.max <- rownames(density.mat) %>% as.integer() %>% graphFromGrid(n.bins=dens.res$bins) %>%
+            igraph::laplacian_matrix(sparse=TRUE) %>% irlba::partial_eigen(n=1) %>% .$values
+        }
 
-        sig.ids <- rownames(density.mat) %>% as.integer()
-        graph <- lapply(sig.ids, function (i) c(i+1, i-1, i+bins, i-bins)) %>%
-          mapIds(sig.ids) %>% igraph::graph_from_adj_list()
-        igraph::V(graph)$name <- sig.ids
+        density.mat <- density.mat[dens.res$density.emb$counts > 0,]
+        graph <- rownames(density.mat) %>% as.integer() %>% graphFromGrid(n.bins=dens.res$bins)
       } else if (adjust.pvalues && smooth) {
         graph <- extractCellGraph(self$data.object)
+        l.max <- NULL
       }
 
       if (!adjust.pvalues) {
@@ -2194,7 +2197,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         res <- list(
           raw=perm.res$score,
           adj=perm.res %$% adjustZScoresByPermutations(
-            score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores, verbose=verbose, ...
+            score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores, verbose=verbose,
+            l.max=l.max, ...
           )
         )
       }
@@ -2226,9 +2230,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       private$checkCellEmbedding()
       dens.res <- private$getResults(name, 'estimateCellDensity')
       scores <- dens.res$diff[[type]]
+      if (is.null(scores)) {
+        warning("Can't find results for name, '", name, "' and type '", type,
+                "'. Running estimateDiffCellDensity with default parameters.")
+        self$estimateDiffCellDensity(type=type, name=name, adjust.pvalues=adjust.pvalues)
+        dens.res <- self$test.results[[name]]
+        scores <- dens.res$diff[[type]]
+      }
+
       if (is.null(adjust.pvalues)) {
-        scores <- if (!is.null(scores$adj)) scores$adj else scores$raw
-        adjust.pvalues <- TRUE
+        if (!is.null(scores$adj)) {
+          scores <- scores$adj
+          adjust.pvalues <- TRUE
+        } else {
+          scores <- scores$raw
+          adjust.pvalues <- FALSE
+        }
       } else if (adjust.pvalues) {
         if (is.null(scores$adj)) {
           warning("Adjusted scores are not estimated. Using raw scores. ",
@@ -2239,14 +2256,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
       } else {
         scores <- scores$raw
-      }
-
-      if (is.null(scores)) {
-        warning("Can't find results for name, '", name, "' and type '", type,
-                "'. Running estimateDiffCellDensity with default parameters.")
-        self$estimateDiffCellDensity(type=type, name=name, adjust.pvalues=adjust.pvalues)
-        dens.res <- self$test.results[[name]]
-        scores <- dens.res$diff[[type]]
       }
 
       if (dens.res$method == 'graph'){

@@ -206,15 +206,16 @@ diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, t
 }
 
 #' @keywords internal
-adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smooth=FALSE, graph=NULL, beta=30, n.cores=1, verbose=TRUE) {
+adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smooth=FALSE, graph=NULL, beta=30,
+                                        l.max=NULL, n.cores=1, verbose=TRUE) {
   checkPackageInstalled("matrixStats", details="for adjusting p-values", cran=TRUE)
   if (smooth) {
     if (is.null(graph)) stop("graph has to be provided if smooth is TRUE")
 
     g.filt <- function(...) heatFilter(..., beta=beta)
-    score %<>% smoothSignalOnGraph(filter=g.filt, graph=graph)
-    scores.shuffled %<>% smoothSignalOnGraph(filter=g.filt, graph=graph, n.cores=n.cores,
-                                             progress=verbose) %>%
+    score %<>% smoothSignalOnGraph(filter=g.filt, graph=graph, l.max=l.max)
+    scores.shuffled %<>%
+      smoothSignalOnGraph(filter=g.filt, graph=graph, n.cores=n.cores, l.max=l.max, progress=verbose) %>%
       as.matrix()
   }
 
@@ -244,9 +245,15 @@ adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smoot
 }
 
 #' @keywords internal
-findScoreGroupsGraph <- function(scores, min.score, graph) {
+findScoreGroupsGraph <- function(scores, min.score, graph) { # TODO: deprecated?
   graph %>% igraph::induced_subgraph(names(scores)[scores > min.score]) %>%
     igraph::components() %>% .$membership
 }
 
-
+#' @keywords internal
+graphFromGrid <- function(grid.ids, n.bins) {
+  graph <- lapply(grid.ids, function (i) c(i+1, i-1, i+n.bins, i-n.bins)) %>%
+    mapIds(grid.ids) %>% igraph::graph_from_adj_list() %>% igraph::as.undirected()
+  igraph::V(graph)$name <- grid.ids
+  return(graph)
+}

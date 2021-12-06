@@ -1925,23 +1925,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
 
-
-    estimateCellLoadings=function(n.perm=1000, n.boot=1000, coda.test='significance', # TODO: n.perm, coda.test, criteria and define.ref.cell.type are never used
-                                  ref.cell.type=NULL, criteria='cda.std', name='coda',
-                                  n.seed=239, cells.to.remove=NULL, cells.to.remain=NULL,
-                                  samples.to.remove=NULL, filter.empty.cell.types=TRUE,
-                                  define.ref.cell.type=FALSE, n.cores=self$n.cores, verbose=self$verbose) {
-
-      if (!(coda.test %in% c('significance', 'confidence'))) stop('Test is not supported')
+    estimateCellLoadings=function(n.boot=1000, ref.cell.type=NULL, name='coda', n.seed=239,
+                                  cells.to.remove=NULL, cells.to.remain=NULL, samples.to.remove=NULL,
+                                  filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose) {
       checkPackageInstalled(c("coda.base", "psych"), cran=TRUE)
 
       if ((!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))))
         stop('Incorrect reference cell type')
-      if (define.ref.cell.type & (!is.null(ref.cell.type))) define.ref.cell.type <- FALSE
 
       # Get cell counts and groups
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
-      # self$test.results[['tmp']] <- tmp
 
       if(filter.empty.cell.types) {
         cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
@@ -1950,10 +1943,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       cnts <- tmp$d.counts
       groups <- tmp$d.groups
-
-      # if(coda.test == 'confidence'){
-      #   n.perm <- 1
-      # }
 
       res <- runCoda(cnts, groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type)
       loadings.init <- res$loadings.init

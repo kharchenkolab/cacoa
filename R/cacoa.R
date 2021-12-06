@@ -1480,10 +1480,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # Plot
       if (plot == "dot")
-        return(dotplot(ont.res, showCategory=n, orderBy="x", ...))
+        return(enrichplot::dotplot(ont.res, showCategory=n, orderBy="x", ...))
 
       if (plot == "bar")
-        return(barplot(ont.res, showCategory=n, ...))
+        return(enrichplot::barplot(ont.res, showCategory=n, ...))
 
       stop("Unknown plot type: ", plot)
     },

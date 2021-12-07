@@ -7,7 +7,7 @@
 #' @param n.cores number of cores (default=1)
 #' @param verbose (default=FALSE)
 #' @param transposed.matrices (default=FALSE)
-#' @return List of distances per cell type, distance matrices, sample groups, cell types, pvalues, and adjusted p-values. 
+#' @return List of distances per cell type, distance matrices, sample groups, cell types, pvalues, and adjusted p-values.
 #' @export
 estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
                                               dist=NULL, dist.type=c("cross.both", "cross.ref", "var"), verbose=FALSE,
@@ -185,7 +185,6 @@ joinExpressionShiftDfs <- function(dist.df.per.type, sample.groups) {
 
 #' @keywords internal
 prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, return.dists=TRUE) {
-  
   checkPackageInstalled(c("abind"), cran=TRUE)
   # bring to a common set of cell types
   common.types <- lapply(p.dist.per.type, colnames) %>% unlist() %>% unique()
@@ -301,7 +300,7 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
 ## Common shifts
 
 #' Calculate consensus change direction and distances between samples along this axis
-#' 
+#'
 #' @keywords internal
 consensusShiftDistances <- function(tcm, sample.groups, use.median=FALSE, mean.trim=0, use.cpp=TRUE) {
   sample.groups %<>% .[colnames(tcm)]
@@ -340,7 +339,7 @@ estimateExplainedVariance <- function(cm, sample.groups) {
   spg <- rownames(cm) %>% split(droplevels(as.factor(sample.groups[.])))
   if (length(spg) == 1){
     return(NULL)
-  } 
+  }
 
   sapply(spg, function(spc) matrixStats::colVars(cm[spc,,drop=FALSE]) * (length(spc) - 1)) %>%
     rowSums(na.rm=TRUE) %>%

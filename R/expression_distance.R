@@ -106,20 +106,6 @@ estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, to
 }
 
 #' @keywords internal
-estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, cell.groups, sample.groups,
-                                                dist='cor', top.n.genes=NULL, n.pcs=NULL, ...) {
-  sample.type.table <- cell.groups %>% table(sample.per.cell[names(.)]) # table of sample types and cells
-
-  ctdm <- levels(cell.groups) %>% sccore:::sn() %>% lapply(function(ct) {
-    estimateExpressionShiftsForCellType(cm.per.type[[ct]], sample.groups=sample.groups, dist=dist,
-                                        top.n.genes=top.n.genes, n.pcs=n.pcs, ...) %>%
-      set_attr('n.cells', sample.type.table[ct, rownames(.)]) # calculate how many cells there are
-  })
-
-  return(ctdm)
-}
-
-#' @keywords internal
 subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df=FALSE) {
   comp.selector <- if (cross.factor) "!=" else "=="
   selection.mask <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], comp.selector);
@@ -289,9 +275,8 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
   cell.groups <- droplevels(cell.groups[cell.names])
 
   cm.per.type <- levels(cell.groups) %>% sccore:::sn() %>% lapply(function(ct) {
-    lapply(cms.filt, function(x) x[ct == rownames(x),]) %>%
-      do.call(rbind, .) %>% na.omit() %>% as.matrix() %>% {. / pmax(1, rowSums(.))} %>%
-      {log10(. * 1e3 + 1)}
+    lapply(cms.filt, function(x) if (ct %in% rownames(x)) x[ct,] else NULL) %>%
+      do.call(rbind, .) %>% {. / pmax(1, rowSums(.))} %>% {log10(. * 1e3 + 1)}
   })
 
   return(list(cm.per.type=cm.per.type, cell.groups=cell.groups, sample.groups=sample.groups[names(cms)]))

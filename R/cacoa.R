@@ -2204,13 +2204,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param contour.color color for contour line (default: 'black')
     #' @param contour.conf confidence interval of contour (default: '10%')
     #' @param name slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    plotDiffCellDensity=function(type='permutation', name='cell.density', size=0.2, palette=NULL,
+    plotDiffCellDensity=function(type=NULL, name='cell.density', size=0.2, palette=NULL,
                                  adjust.pvalues=NULL, contours=NULL, contour.color='black', contour.conf='10%',
                                  plot.na=FALSE, color.range=NULL, mid.color='gray95',
                                  scale.z.palette=adjust.pvalues, min.z=qnorm(0.9), ...) {
       if (is.null(palette)) {
         if (is.null(self$sample.groups.palette)) {
-          palette <- c('blue', mid.color,'red')
+          palette <- c('blue', mid.color, 'red')
         } else {
           palette <- self$sample.groups.palette %>% {c(.[self$ref.level], mid.color, .[self$target.level])}
         }
@@ -2218,6 +2218,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       private$checkCellEmbedding()
       dens.res <- private$getResults(name, 'estimateCellDensity')
+
+      if (is.null(type)) {
+        type <- if (length(dens.res$diff) == 0) 'permutation' else names(dens.res$diff)[1]
+      }
       scores <- dens.res$diff[[type]]
       if (is.null(scores)) {
         warning("Can't find results for name, '", name, "' and type '", type,
@@ -2247,7 +2251,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         scores <- scores$raw
       }
 
-      if (dens.res$method == 'graph'){
+      if (dens.res$method == 'graph') {
         density.emb <- self$embedding
         scores %<>% .[intersect(names(.), rownames(density.emb))]
       } else if (dens.res$method == 'kde') {

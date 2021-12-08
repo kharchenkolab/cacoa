@@ -289,8 +289,8 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
   cell.groups <- droplevels(cell.groups[cell.names])
 
   cm.per.type <- levels(cell.groups) %>% sccore:::sn() %>% lapply(function(ct) {
-    lapply(cms.filt, function(x) x[match(ct, rownames(x)),]) %>%
-      do.call(rbind, .) %>% na.omit() %>% {. / pmax(1, rowSums(.))} %>%
+    lapply(cms.filt, function(x) x[ct == rownames(x),]) %>%
+      do.call(rbind, .) %>% na.omit() %>% as.matrix() %>% {. / pmax(1, rowSums(.))} %>%
       {log10(. * 1e3 + 1)}
   })
 

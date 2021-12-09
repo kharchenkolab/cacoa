@@ -1874,44 +1874,31 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Plot contrast tree
     #' @return A ggplot2 object
-    plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette,
-                              cells.to.remain = NULL, cells.to.remove = NULL, filter.empty.cell.types = TRUE,
-                              adjust.pvalues = TRUE, h.method=c('both', 'up', 'down'),
-                              reorder.tree = TRUE, ...) {
+    plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette, name='coda',
+                              cells.to.remain=NULL, cells.to.remove=NULL, filter.empty.cell.types=TRUE,
+                              adjust.pvalues=TRUE, h.method=c('both', 'up', 'down'), reorder.tree=TRUE, ...) {
       h.method <- match.arg(h.method)
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain,
                                      cell.groups=cell.groups)
-      if(filter.empty.cell.types) {
+      if (filter.empty.cell.types) {
         cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
           (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
 
-      tree.order <- NULL
       loadings.mean <- NULL
-      if(reorder.tree){
-        if ("coda" %in% names(self$test.results)){
-          loadings.mean <- rowMeans(self$test.results$coda$loadings) - self$test.results$coda$ref.load.level
-          pval <- self$test.results$coda$pval
-          loadings.mean <- loadings.mean[order(pval)]
-          tree.order <- c(names(loadings.mean)[loadings.mean < 0],
-                         rev(names(loadings.mean)[loadings.mean > 0]))
+      if (reorder.tree) {
+        if (name %in% names(self$test.results)) {
+          loadings.mean <- rowMeans(self$test.results[[name]]$loadings)
         } else {
           message('To show significance, please run estimateCellLoadings()')
         }
-
       }
-      # print(tree.order)
 
       gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
                              plot.theme=self$plot.theme, adjust.pvalues=adjust.pvalues,
-                             h.method=h.method, tree.order=tree.order,
-                             loadings.mean=loadings.mean,...)
+                             h.method=h.method, loadings.mean=loadings.mean, palette=palette, ...)
 
-      if (!is.null(palette)) {
-        gg <- gg + scale_color_manual(values=palette) +
-          scale_fill_gradient2(low=palette[self$ref.level], high=palette[self$target.level], mid='grey80', midpoint=0)
-      }
       return(gg)
     },
 
@@ -1934,9 +1921,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop('Incorrect reference cell type')
 
       # Get cell counts and groups
-      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
+      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain,
+                                     samples.to.remove=samples.to.remove)
 
-      if(filter.empty.cell.types) {
+      if (filter.empty.cell.types) {
         cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
           (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
@@ -1945,10 +1933,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       groups <- tmp$d.groups
 
       res <- runCoda(cnts, groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type)
-      loadings.init <- res$loadings.init
-      padj <- res$padj
-      pval <- res$pval
-      ref.load.level <- res$ref.load.level
+      res$cnts <- cnts
+      res$groups <- groups
 
       ## Calculate normalized counts
       ref.cell.type <- res$ref.cell.type
@@ -1958,21 +1944,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       norm.val <- 1 / nrow(ref.cnts) * rowSums(log(ref.cnts))
       cnts.nonzero <- cnts
       cnts.nonzero[cnts.nonzero == 0] <- 0.5
-      norm.cnts <- log(cnts.nonzero) - norm.val
+      res$norm.cnts <- log(cnts.nonzero) - norm.val
 
-      self$test.results[[name]] <- list(
-        loadings=loadings.init,
-        pval=pval,
-        padj = padj,
-        ref.load.level = ref.load.level,
-        cell.list=res$cell.list,
-        cnts=cnts,
-        groups=groups,
-        ref.cell.types=ref.cell.type,
-        norm.cnts=norm.cnts
-      )
+      self$test.results[[name]] <- res
 
-      return(invisible(self$test.results[[name]]))
+      return(invisible(res))
     },
 
     estimateGaPartition=function(cells.to.remain=NULL, cells.to.remove=NULL, samples.to.remove=NULL, ...){ # TODO: do we ever use this?
@@ -2613,7 +2589,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateGenePrograms = function(method=c("pam", "leiden", "fabia"), n.top.genes=Inf, genes=NULL, n.programs=15,
                                     z.adj=FALSE, gene.selection=ifelse(z.adj, "z.adj", "z"), smooth=TRUE,
                                     abs.scores=FALSE, name="gene.programs", cell.subset=NULL, n.cores=self$n.cores,
-                                    verbose=self$verbose, max.z=5, min.z=0.5, min.change.frac=0.01, de.name="cluster.free.de", ...) {
+                                    verbose=self$verbose, max.z=5, min.z=0.5, min.change.frac=0.01,
+                                    de.name="cluster.free.de", ...) {
       z.scores <- private$getResults(de.name, "estimateClusterFreeDE")
       method <- match.arg(method)
       if (smooth) {

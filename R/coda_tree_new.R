@@ -61,8 +61,7 @@ constructTree <- function(cnts, groups, partition.thresh = 0){
   return(list(tree = tree, sbp = sbp.cda, dendro = d.cur))
 }
 
-constructTreeUp <- function(freqs, groups){
-
+constructTreeUp <- function(freqs, groups) {
   sbp <- sbpDiff(freqs, groups)
 
   tree <- sbp2tree(sbp)
@@ -72,16 +71,7 @@ constructTreeUp <- function(freqs, groups){
   return(list(tree = tree, sbp = sbp, dendro = d.cur))
 }
 
-tree2dendro_my <- function(tree){
-  h.tmp <- compute.brlen(tree, method="Grafen") %>% as.hclust()
-  d.cur <- as.dendrogram(h.tmp)
-  return(d.cur)
-}
-
-constructTreeUpDown <- function(cnts, groups){
-
-  
-  
+constructTreeUpDown <- function(cnts, groups) {
   cnts[cnts <= 0] <- 0.5
 
   ref.set <- referenceSet(cnts, groups)
@@ -93,8 +83,8 @@ constructTreeUpDown <- function(cnts, groups){
   # Constrtuct sbp from lists
   freqs <- (cnts)/rowSums(cnts)
   freqs.lists <- c()
-  for(i in 1:length(cell.lists)){
-    freqs.lists <- cbind(freqs.lists, apply(freqs[,cell.lists[[i]],drop=F], 1, psych::geometric.mean))
+  for (i in 1:length(cell.lists)) {
+    freqs.lists <- cbind(freqs.lists, apply(freqs[,cell.lists[[i]],drop=FALSE], 1, psych::geometric.mean))
   }
   colnames(freqs.lists) <- paste('tmp', 1:length(cell.lists), sep = '')
 
@@ -102,8 +92,6 @@ constructTreeUpDown <- function(cnts, groups){
   t.list <- constructBestPartitionTree(freqs.lists, groups)
   sbp.list <- t.list$sbp
 
-
-  
   sbp.all <- matrix(ncol = 0, nrow = length(cell.types), dimnames = list(cell.types, c()))
   for(k in 1:ncol(sbp.list)){
     p <- sbp.list[,k]
@@ -142,8 +130,6 @@ constructTreeUpDown <- function(cnts, groups){
   tree <- as.phylo(h.tmp)
   return(list(tree = tree, sbp = sbp.all, dendro = d.cur))
 }
-
-
 
 
 #' @description Get tree from balances

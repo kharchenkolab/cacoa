@@ -1,16 +1,15 @@
 #' @import ape
 NULL
 
-
-estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
+estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2) {
   cell.loadings <- c()
   sample.pos <- c()
 
   bal <- getRndBalances(d.counts)
   d.used <- bal$norm
 
-  if(ncol(d.used) != 2){
-    for(i in 1:n.dim){
+  if (ncol(d.used) != 2) {
+    for (i in 1:n.dim) {
       res.remove <- removeGroupEffect(d.used, d.groups, thresh.pc.var = 0.9)
       cell.loadings <- cbind(cell.loadings, bal$psi %*% res.remove$rotation)
       sample.pos <- cbind(sample.pos, res.remove$scores)
@@ -36,7 +35,7 @@ plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, targe
     geom_point(aes(colour = factor(group.names[d.groups + 1] ))) +
     labs(colour="Condition")
 
-  if(!is.null(palette)) rda.plot <- rda.plot + scale_color_manual(values=palette)
+  if (!is.null(palette)) rda.plot <- rda.plot + scale_color_manual(values=palette)
 
   rda.biplot <- rda.plot +
     geom_segment(data=df.loadings, aes(x=0, xend=S1, y=0, yend=S2),
@@ -266,9 +265,9 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
 
 plotCellLoadings <- function(loadings, pval, ref.level, target.level, signif.threshold=0.05, jitter.alpha=0.1,
                              palette=NULL, show.pvals=FALSE, plot.theme=theme_get(), jitter.size=1,
-                             ordering=c("pvalue", "loading"), ref.load.level=0, annotation.position=1) {
+                             ordering=c("pvalue", "loading"), ref.load.level=0, annotation.x=NULL, annotation.y=1) {
   ordering <- match.arg(ordering)
-  yintercept <- ref.load.level
+  xintercept <- ref.load.level
 
   loading.order <- order(abs(rowMeans(loadings)))
   loadings <- loadings[loading.order, ]
@@ -289,37 +288,42 @@ plotCellLoadings <- function(loadings, pval, ref.level, target.level, signif.thr
   }
 
   # Normalization of loadings
-  loadings <- loadings - yintercept
-  yintercept <- 0
+  loadings <- loadings - xintercept
 
   res.ordered <- t(loadings) %>% as.data.frame()
-  ymax <- max(loadings)
+  if (is.null(annotation.x)) {
+    annotation.x <- max(loadings)
+  }
 
-  p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
-    geom_boxplot(notch=TRUE, outlier.shape = NA) +
-    geom_jitter(aes(x = ind, y = values), alpha = jitter.alpha, size=jitter.size) +
-    geom_hline(yintercept = yintercept, color = "grey37") +
-    coord_flip() + xlab('') + ylab('loadings') + plot.theme + theme(legend.position = "none") +
-    scale_x_discrete(position = "top") + ylim(-1, 1)
+  p <- ggplot(stack(res.ordered), aes(y=ind, x=values, fill=factor(ind))) +
+    geom_boxplot(notch=TRUE, outlier.shape = NA)
+
+  if ((jitter.alpha > 1e-5) && (jitter.size > 1e-5)) {
+    p <- p + geom_jitter(alpha=jitter.alpha, size=jitter.size)
+  }
+
+  p <- p + geom_vline(xintercept=0, color = "grey37") +
+    labs(y='', x='loadings') + plot.theme + theme(legend.position = "none") +
+    scale_y_discrete(position = "right") + xlim(-1, 1)
 
   # Add text
   p <- p +
-    annotate('text', x = annotation.position, y = -ymax, label = paste('\u2190', ref.level), hjust = 'left') +
-    annotate('text', x = annotation.position, y = ymax, label = paste(target.level, '\u2192'), hjust = 'right')
+    annotate('text', x=-annotation.x, y=annotation.y, label=paste('\u2190', ref.level), hjust='left') +
+    annotate('text', x=annotation.x, y=annotation.y, label=paste(target.level, '\u2192'), hjust='right')
 
   if (!is.null(palette)) p <- p + scale_fill_manual(values=palette)
   if ((n.significant.cells > 0) && (ordering == "pvalue")) {
-    p <- p + geom_vline(xintercept=nrow(loadings) - n.significant.cells + 0.5, color='red')
+    p <- p + geom_hline(yintercept=nrow(loadings) - n.significant.cells + 0.5, color='red')
   }
 
   if (show.pvals) {
     d <- data.frame(y=-log(pval, base=10), x=names(pval), row=1:length(pval))
-    p.pval <- ggplot(d, aes(x=reorder(x, row), y=y, fill=factor(x))) +
+    p.pval <- ggplot(d, aes(y=reorder(x, row), x=y, fill=factor(x))) +
       geom_bar(stat="identity") +
-      geom_hline(yintercept=-log(signif.threshold, base=10)) +
-      scale_y_continuous(expand=c(0, 0)) +
-      coord_flip() + labs(x='', y='-log10(adj. p-value)') +
-      plot.theme + theme(legend.position = "none") + theme(axis.text.y = element_blank())
+      geom_vline(xintercept=-log(signif.threshold, base=10)) +
+      scale_x_continuous(expand=c(0, 0, 0.02, 0)) +
+      labs(y='', x='-log10(adj. p-value)') +
+      plot.theme + theme(legend.position="none") + theme(axis.text.y=element_blank())
 
     if (!is.null(palette)) p.pval <- p.pval + scale_fill_manual(values=palette)
 

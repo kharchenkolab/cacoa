@@ -1905,10 +1905,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Plot composition similarity
     #' @return A ggplot2 object
-    plotCompositionSimilarity=function(cell.groups=self$cell.groups, cells.to.remain=NULL, cells.to.remove=NULL) {
-      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups)
-      res <- referenceSet(tmp$d.counts, tmp$d.groups)
-      heatmap(res$mx.first, scale = 'none')
+    plotCompositionSimilarity=function(cell.groups=self$cell.groups, cells.to.remain=NULL, cells.to.remove=NULL,
+                                       palette=brewerPalette("YlOrRd", rev=FALSE), ...) {
+      tmp <- private$extractCodaData(
+        cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, cell.groups=cell.groups
+      )
+      mat <- referenceSet(tmp$d.counts, tmp$d.groups)$mx.first
+      diag(mat) <- 1
+      gg <- plotHeatmap(mat, legend.title="Similarity", palette=palette, ...)
+      return(gg)
     },
 
 

@@ -1451,6 +1451,7 @@ Plot contrast tree
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotContrastTree(
   cell.groups = self$cell.groups,
   palette = self$sample.groups.palette,
+  name = "coda",
   cells.to.remain = NULL,
   cells.to.remove = NULL,
   filter.empty.cell.types = TRUE,
@@ -1465,6 +1466,8 @@ Plot contrast tree
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+
+\item{\code{name}}{field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -1481,7 +1484,9 @@ Plot composition similarity
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCompositionSimilarity(
   cell.groups = self$cell.groups,
   cells.to.remain = NULL,
-  cells.to.remove = NULL
+  cells.to.remove = NULL,
+  palette = brewerPalette("YlOrRd", rev = FALSE),
+  ...
 )}\if{html}{\out{</div>}}
 }
 
@@ -1502,18 +1507,14 @@ A ggplot2 object
 \subsection{Method \code{estimateCellLoadings()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateCellLoadings(
-  n.perm = 1000,
   n.boot = 1000,
-  coda.test = "significance",
   ref.cell.type = NULL,
-  criteria = "cda.std",
   name = "coda",
   n.seed = 239,
   cells.to.remove = NULL,
   cells.to.remain = NULL,
   samples.to.remove = NULL,
   filter.empty.cell.types = TRUE,
-  define.ref.cell.type = FALSE,
   n.cores = self$n.cores,
   verbose = self$verbose
 )}\if{html}{\out{</div>}}
@@ -1717,7 +1718,7 @@ estimate differential cell density
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDiffCellDensity(
   type = "permutation",
-  adjust.pvalues = (type != "subtract"),
+  adjust.pvalues = NULL,
   name = "cell.density",
   n.permutations = 400,
   smooth = TRUE,
@@ -1750,7 +1751,7 @@ estimate differential cell density
 estimate differential cell density
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDiffCellDensity(
-  type = "permutation",
+  type = NULL,
   name = "cell.density",
   size = 0.2,
   palette = NULL,

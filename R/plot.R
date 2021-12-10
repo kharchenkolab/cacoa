@@ -77,7 +77,8 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 #' @keywords internal
 plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=1.05, show.significance=FALSE,
                                      jitter.width=0.15, notch=FALSE, legend.position="right", alpha=0.2, size=0.5,
-                                     palette=NULL, adjust.pvalues=TRUE, plot.theme=theme_get(), label.y.npc=0.92) {
+                                     palette=NULL, adjust.pvalues=TRUE, plot.theme=theme_get(), label.y.npc=0.92,
+                                     ns.symbol="") {
   checkPackageInstalled(c("ggpubr"), cran=TRUE)
   gg <- ggplot(count.df, aes(x=variable, y=value, by=group, fill=group)) +
     geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
@@ -92,11 +93,13 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
   if (show.significance) {
     if (adjust.pvalues) {
       # willcox test + adjustment
-      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label="p.signif", label.y.npc=label.y.npc)
-      # TODO
-      # p.adjust.method = "fdr" ?
+      gg <- gg +
+      ggpubr::stat_compare_means(aes(group=group, label=pvalueToCode(..p.adj.., ns.symbol=ns.symbol)),
+                                 label.y.npc=label.y.npc)
     } else { # willcox test
-      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label="p.signif", label.y.npc=label.y.npc)
+      gg <- gg +
+      ggpubr::stat_compare_means(aes(group = group), label="p.signif", label.y.npc=label.y.npc,
+                                 symnum.args=c("****", "***", "**", "*", ns.symbol))
     }
   }
 

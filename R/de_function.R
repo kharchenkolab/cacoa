@@ -95,7 +95,7 @@ saveDEasJSON <- function(de.raw, sample.groups=NULL, saveprefix=NULL,
     if(is.null(gene.metadata$gene.id)) stop("gene.metadata must contain $gene.id field")
   }
 
-  lapply(sccore:::sn(de.raw %>% names()), function(ncc) {
+  lapply(sccore::sn(de.raw %>% names()), function(ncc) {
     if(verbose) print(ncc)
     res.celltype <- de.raw[[ncc]]
     res.table <- res.celltype$res %>% as.data.frame()
@@ -219,7 +219,7 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
     raw.mats %<>% subsetMatricesWithCommonGenes(s.groups)
   } else {
     gene.union <- lapply(raw.mats, colnames) %>% Reduce(union, .)
-    raw.mats %<>% plapply(sccore:::extendMatrix, gene.union, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE)
+    raw.mats %<>% plapply(sccore::extendMatrix, gene.union, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE)
   }
 
   cm.bulk.per.samp <- raw.mats[unlist(s.groups)] %>% # Only consider samples in s.groups

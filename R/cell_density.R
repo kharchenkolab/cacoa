@@ -62,7 +62,7 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
     set_rownames(names(sample.per.cell)) %>% set_colnames(unique(sample.per.cell))
 
   score.mat <- sccore::smoothSignalOnGraph(
-    sig.mat, filter=function(...) sccore:::heatFilter(..., beta=beta), graph=graph,
+    sig.mat, filter=function(...) sccore::heatFilter(..., beta=beta), graph=graph,
     m=m, n.cores=n.cores, progress.chunk=(verbose + 1), progress=verbose,
   ) %>% as.matrix()
 
@@ -101,7 +101,7 @@ getDensityContour <- function(emb, cell.groups, group,  color='black', linetype=
 }
 
 
-#' @description Plot cell density
+#' Plot cell density
 #'
 #' @param bins number of bins for density estimation, should keep consistent with bins in estimateCellDensity
 #' @param palette color palette function. Default: `YlOrRd`
@@ -136,7 +136,8 @@ plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.
   return(p)
 }
 
-#' @description estimate differential cell density
+#' Estimate differential cell density
+#'
 #' @param density.mat estimated cell density matrix with estimateCellDensity
 #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 #' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
@@ -214,7 +215,7 @@ adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smoot
   if (smooth) {
     if (is.null(graph)) stop("graph has to be provided if smooth is TRUE")
 
-    g.filt <- function(...) heatFilter(..., beta=beta)
+    g.filt <- function(...) sccore::heatFilter(..., beta=beta)
     score %<>% smoothSignalOnGraph(filter=g.filt, graph=graph, l.max=l.max)
     scores.shuffled %<>%
       smoothSignalOnGraph(filter=g.filt, graph=graph, n.cores=n.cores, l.max=l.max, progress=verbose) %>%

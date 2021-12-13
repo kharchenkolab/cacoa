@@ -51,6 +51,9 @@ estimateDEPerCellTypeInner(
 
 \item{covariates}{list of covariates to include; for example, cdr, sex or age}
 }
+\value{
+differential expression for each cell type
+}
 \description{
 Differential expression using different methods (deseq2, edgeR, wilcoxon, ttest) with various covariates
 }

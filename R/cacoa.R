@@ -2577,7 +2577,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (verbose) message("Smoothing Z-scores for ", ncol(z.scores), " genes passed filtration")
       if (is.null(filter)) {
-        filter <- function(...) heatFilter(..., beta=smoothing)
+        filter <- function(...) sccore::heatFilter(..., beta=smoothing)
       }
 
       z.smoothed <- z.scores
@@ -2598,7 +2598,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Estimate Gene Programs based on cluster-free Z-scores on a subsample of
     #' cells using \link[fabia:fabia]{fabia}. # TODO: update it
     #' @param n.programs maximal number of gene programs to find (parameter `p` for fabia). Default: 15.
-    #' @param ... keyword arguments forwarded to \link{estimateGenePrograms}
+    #' @param ... keyword arguments forwarded to estimateGenePrograms
     #' @return a list includes:
     #'   - `fabia`: \link[fabia:Factorization]{fabia::Factorization} object, result of the
     #'       \link[fabia:fabia]{fabia::fabia} call

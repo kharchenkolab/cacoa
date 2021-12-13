@@ -202,6 +202,8 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 #' @param covariates list of covariates to include; for example, cdr, sex or age
 #' @param meta.info dataframe with possible covariates; for example, sex or age
 #' @param test DE method: deseq2, edgeR, wilcoxon, ttest
+#' @return differential expression for each cell type
+#'
 #' @export
 estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, ref.level=NULL, target.level=NULL,
                                     common.genes=FALSE, cooks.cutoff=FALSE, min.cell.count=10, max.cell.count=Inf,

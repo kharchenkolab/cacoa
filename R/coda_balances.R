@@ -1,6 +1,5 @@
 #' Perform re-sampling in two ways: fixed total count and bootstrap
 #'
-#' @param
 #' @return Order of inner nodes
 #' @keywords internal
 resampleContrast <- function(d.counts, d.groups, n.cell.counts = 500, n.seed = 239, n.iter = 1000){

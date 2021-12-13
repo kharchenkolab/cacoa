@@ -1502,18 +1502,14 @@ A ggplot2 object
 \subsection{Method \code{estimateCellLoadings()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateCellLoadings(
-  n.perm = 1000,
   n.boot = 1000,
-  coda.test = "significance",
   ref.cell.type = NULL,
-  criteria = "cda.std",
   name = "coda",
   n.seed = 239,
   cells.to.remove = NULL,
   cells.to.remain = NULL,
   samples.to.remove = NULL,
   filter.empty.cell.types = TRUE,
-  define.ref.cell.type = FALSE,
   n.cores = self$n.cores,
   verbose = self$verbose
 )}\if{html}{\out{</div>}}
@@ -1717,7 +1713,7 @@ estimate differential cell density
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDiffCellDensity(
   type = "permutation",
-  adjust.pvalues = (type != "subtract"),
+  adjust.pvalues = NULL,
   name = "cell.density",
   n.permutations = 400,
   smooth = TRUE,
@@ -1750,7 +1746,7 @@ estimate differential cell density
 estimate differential cell density
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDiffCellDensity(
-  type = "permutation",
+  type = NULL,
   name = "cell.density",
   size = 0.2,
   palette = NULL,
@@ -2174,7 +2170,7 @@ cells using \link[fabia:fabia]{fabia}. # TODO: update it
 
 \item{\code{verbose}}{show progress (default: stored value)}
 
-\item{\code{...}}{keyword arguments forwarded to \link{estimateGenePrograms}}
+\item{\code{...}}{keyword arguments forwarded to estimateGenePrograms}
 }
 \if{html}{\out{</div>}}
 }

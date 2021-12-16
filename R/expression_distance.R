@@ -27,7 +27,7 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
   if (verbose) message("Calculating pairwise distances using dist='", dist, "'...\n", sep="")
 
   n.cores.inner <- max(n.cores %/% length(levels(cell.groups)), 1)
-  res.per.type <- levels(cell.groups) %>% sccore:::sn() %>% plapply(function(ct) {
+  res.per.type <- levels(cell.groups) %>% sccore::sn() %>% plapply(function(ct) {
     cm.norm <- cm.per.type[[ct]]
     dist.mat <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sample.groups, dist=dist, n.pcs=n.pcs,
                                                     top.n.genes=top.n.genes, gene.selection=gene.selection, ...)
@@ -269,12 +269,12 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
   # Collapse matrices and extend to the same genes
   cms.filt %<>% lapply(collapseCellsByType, groups=cell.groups, min.cell.count=1)
 
-  cms.filt %<>% lapply(sccore:::extendMatrix, genes) %>% lapply(`[`,,genes, drop=FALSE)
+  cms.filt %<>% lapply(sccore::extendMatrix, genes) %>% lapply(`[`,,genes, drop=FALSE)
 
   # Group matrices by cell type
   cell.groups <- droplevels(cell.groups[cell.names])
 
-  cm.per.type <- levels(cell.groups) %>% sccore:::sn() %>% lapply(function(ct) {
+  cm.per.type <- levels(cell.groups) %>% sccore::sn() %>% lapply(function(ct) {
     lapply(cms.filt, function(x) if (ct %in% rownames(x)) x[ct,] else NULL) %>%
       do.call(rbind, .) %>% {. / pmax(1, rowSums(.))} %>% {log10(. * 1e3 + 1)}
   })

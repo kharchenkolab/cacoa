@@ -25,7 +25,7 @@ constructTree <- function(cnts, groups, partition.thresh = 0){
     d.tmp <- cnts[, colnames(cnts) %in% unsolved.cells[[id.bal]]]
 
     # -------
-    # Difene the most contrast balance
+    # Define the most contrast balance
     # can.loadings <- getCdaLoadings(d.tmp, d.groups)
     can.loadings <- getLoadings(d.tmp, groups)
 

@@ -730,7 +730,7 @@ plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, m
         gg <- gg + geom_point(size=size)
       }
 
-      gg %<>% sccore:::styleEmbeddingPlot(title=title, show.ticks=show.ticks, show.labels=show.labels, ...)
+      gg %<>% sccore::styleEmbeddingPlot(title=title, show.ticks=show.ticks, show.labels=show.labels, ...)
 
       if (!is.null(font.size)) {
         gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")

@@ -262,7 +262,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (verbose) message('Calculating distances ... ')
 
       dists.norm <- list()
-      res.per.type <- levels(shift.inp$cell.groups) %>% sccore:::sn() %>% plapply(function(ct) {
+      res.per.type <- levels(shift.inp$cell.groups) %>% sccore::sn() %>% plapply(function(ct) {
         cm.norm <- t(shift.inp$cm.per.type[[ct]])
 
         dists <- consensusShiftDistances(cm.norm, sample.groups, ...)
@@ -2870,11 +2870,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (!ignore.cache) return(self$cache$go.environment)
       }
 
-      if (!("OrgDb" %in% class(org.db)))
+      if (!("OrgDb" %in% class(org.db))){
         stop("'org.db' must be of class 'OrgDb'. Please input an organism database.")
+      }
 
+      get_GO_data <- utils::getFromNamespace("GSEA_internal", "clusterProfiler")
       self$cache$go.environment <- c("BP", "CC", "MF") %>% sn() %>%
-        plapply(function(n) clusterProfiler:::get_GO_data(org.db, n, "ENTREZID") %>%
+        plapply(function(n) get_GO_data(org.db, n, "ENTREZID") %>%
                   as.list() %>% as.environment(), n.cores=1, progress=verbose)
       return(self$cache$go.environment)
     }
@@ -2882,8 +2884,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
   private = list(
     getResults=function(name, suggested.function=NULL) {
-      if (!is.null(self$test.results[[name]]))
+      if (!is.null(self$test.results[[name]])){
         return(self$test.results[[name]])
+      }
 
       msg <- paste0("A result named \"", name, "\" cannot be found.");
       if(!is.null(suggested.function)) {

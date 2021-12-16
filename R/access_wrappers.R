@@ -76,7 +76,7 @@ extractRawCountMatrices <- function(object, transposed=TRUE) UseMethod("extractR
 
 #' @rdname extractRawCountMatrices
 extractRawCountMatrices.Conos <- function(object, transposed=TRUE) {
-  return(lapply(object$samples, conos:::getRawCountMatrix, transposed=transposed))
+  return(lapply(object$samples, conos::getRawCountMatrix, transposed=transposed))
 }
 
 #' @rdname extractRawCountMatrices
@@ -167,7 +167,8 @@ extractOdGenes <- function(object, n.genes=NULL) UseMethod("extractOdGenes", obj
 
 #' @rdname extractOdGenes
 extractOdGenes.Conos <- function(object, n.genes=NULL) {
-  return(conos:::getOdGenesUniformly(object$samples, n.genes))
+  getOdGenesUniformly <- utils::getFromNamespace("getOdGenesUniformly", "conos")
+  return(getOdGenesUniformly(object$samples, n.genes))
 }
 
 #' @rdname extractOdGenes
@@ -254,7 +255,7 @@ extractGeneExpression <- function(object, gene) UseMethod("extractGeneExpression
 
 #' @rdname extractGeneExpression
 extractGeneExpression.Conos <- function(object, gene) {
-  return(conos:::getGeneExpression(object, gene))
+  return(conos::getGeneExpression(object, gene))
 }
 
 #' @rdname extractGeneExpression

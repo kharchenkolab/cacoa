@@ -12,8 +12,10 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ba
     bandwidth <- apply(emb, 2, quantile, c(0.1, 0.9)) %>% diff() %>% {. * bandwidth} %>% .[1,]
   }
 
+  expand_limits_continuous <- utils::getFromNamespace("expand_limits_continuous", "ggplot2")
+
   lims <- emb %>%
-    apply(2, function(x) ggplot2:::expand_limits_continuous(range(x), expansion(mult=expansion.mult))) %>%
+    apply(2, function(x) expand_limits_continuous(range(x), expansion(mult=expansion.mult))) %>%
     as.numeric()
 
   cname <- intersect(names(sample.per.cell), rownames(emb))
@@ -59,7 +61,7 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
   sig.mat <- unique(sample.per.cell) %>% sapply(function(s) as.numeric(sample.per.cell == s)) %>%
     set_rownames(names(sample.per.cell)) %>% set_colnames(unique(sample.per.cell))
 
-  score.mat <- sccore:::smoothSignalOnGraph(
+  score.mat <- sccore::smoothSignalOnGraph(
     sig.mat, filter=function(...) sccore:::heatFilter(..., beta=beta), graph=graph,
     m=m, n.cores=n.cores, progress.chunk=(verbose + 1), progress=verbose,
   ) %>% as.matrix()

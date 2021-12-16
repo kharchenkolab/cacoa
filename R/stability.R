@@ -39,46 +39,6 @@ jaccardPwPval <- function(subsamples, p.val.cutoff){
 }
 
 
-#' @keywords internal
-estimateStabilityPerCellType <- function(de.res,
-                                         top.n.genes,
-                                         p.val.cutoff) {
-
-  data.all <- data.frame()
-  for(cell.type in names(de.res)){
-    # print(cell.type)
-    subsamples <- de.res[[cell.type]]$subsamples
-    
-    # Remove some subsamples due to the min.cell.counts
-    # coomare resampling results with "initial"
-    jacc.init <- c()
-    for(subs.name in names(subsamples)){
-      subsamples.tmp = list(de.res[[cell.type]]$subsamples[[subs.name]],
-                            de.res[[cell.type]]$res)
-      jacc.pw.tmp <- jaccardPwTop(subsamples.tmp, 200)
-      jacc.init <- c(jacc.init, jacc.pw.tmp$jac)  # please remain 200 here - it is only a technical thing
-    }
-    subsamples <- subsamples[(jacc.init != 0) & (jacc.init != 1)]
-    
-    if(length(subsamples) <= 2) next
-    
-    # Calculate jaccard
-    if (is.null(p.val.cutoff)) {
-      jacc.tmp <- jaccardPwTop(subsamples, top.n.genes)  
-    } else {
-      jacc.tmp <- jaccardPwPval(subsamples, p.val.cutoff)  
-    }
-    
-    if(is.null(jacc.tmp$jac)) next
-    # print(jacc.tmp)
-    data.tmp <- data.frame(group = cell.type,
-                           value = jacc.tmp$jac,
-                           cmp = jacc.tmp$id)
-    data.all <- rbind(data.all, data.tmp)
-  }
-  
-  return(data.all)
-}
 
 
 #' @keywords internal

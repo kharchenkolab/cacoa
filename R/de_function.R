@@ -480,7 +480,7 @@ summarizeDEResamplingResults <- function(de.list, var.to.sort='pvalue') {
     de.res[[cell.type]]$res$stab.var.rank <- stab.var.rank[genes.init]
 
     # Save subsamples
-    de.res[[cell.type]]$subsamples <- lapply(de.list[2:length(de.list)], `[[`, cell.type)
+    # de.res[[cell.type]]$subsamples <- lapply(de.list[2:length(de.list)], `[[`, cell.type)
   }
 
   return(de.res)

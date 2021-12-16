@@ -421,8 +421,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         )
       }, n.cores=ifelse(outer.multicore, n.cores, 1), progress=(!inner.verbose & verbose), mc.preschedule=TRUE)
 
+      
+      
       # if resampling: calculate median and variance on ranks after resampling
-      #de.res <- if (length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
+      de.res[[1]] <- if (length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
       # de.res %<>% appendStatisticsToDE(expr.fracs)
       self$test.results[[name]] <- de.res
 
@@ -466,6 +468,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       jaccards.all <- data.frame()
       for(de.name in de.names){
+        print(de.name)
         if(!(de.name %in% names(self$test.results)) || (length(self$test.results[[de.name]]) == 0) ){
           message(paste0('DE by ', de.name, ' was not estimated', collapse = ' '))
           next

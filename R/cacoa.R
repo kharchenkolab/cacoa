@@ -1320,7 +1320,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return Data frame
     getFamiliesPerGO=function(name="GO", go.term=NULL, go.id=NULL, common=FALSE) {
       ont.res <- private$getResults(name, 'estimateOntology()')
-      if (ont.res$type != "GO") stop("Only GO is currently supported")
 
       if (is.null(go.term) && is.null(go.id)) stop("Please specify either 'go.term' or 'go.id'.")
       if (!is.null(go.term) && !is.null(go.id))
@@ -1332,10 +1331,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # Get mapping of IDs to Descriptions
       desc.per.id <- rapply(ont.res$res, function(x) x@result %$% setNames(Description, ID), how="list") %>%
-        do.call(c, .) %>% do.call(c, .) %>% unname() %>% do.call(c, .)
+        do.call(c, .)
+
+      if (ont.res$type == "GO") desc.per.id %<>% do.call(c, .)
+      desc.per.id %<>% unname() %>% do.call(c, .)
 
       # Make data.frame
-      res <- ont.fam %>% rblapply(c("CellType", "Ontology", "Genes"), function(fs) {
+      list.levels <- getOntologyListLevels(ont.res$type)
+      res <- ont.fam %>% rblapply(list.levels, function(fs) {
           fpg <- aggregate(f ~ value, rblapply(fs$families, "f", as_tibble), paste, collapse=",")
           mapply(function(go, f) {
               tibble(ID=c(go, fs$data[[go]]$parents_in_IDs), Families=strsplit(gsub("Family", "", f), ",", TRUE))

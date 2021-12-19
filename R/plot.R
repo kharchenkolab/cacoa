@@ -738,3 +738,19 @@ plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, m
 
       return(gg)
     }
+
+#' Clustered Ontology Dotplot
+#' @description Performs ontology clustering by genes and then shows medoids of the clusters with
+#'   enrichplot::dotplot
+#' @export
+clusteredOntologyDotplot <- function(ont.res, p.adj=0.05, min.genes=1, cut.h=0.66, top.n=Inf, ...) {
+  checkPackageInstalled("enrichplot", bioc=TRUE)
+  clusts <- ont.res@result %>% filter(p.adjust < p.adj) %$%
+    setNames(strsplit(geneID, "/"), Description) %>% .[sapply(., length) >= min.genes] %>%
+    estimateClusterPerGO(cut.h=cut.h) %>% {split(names(.), .)} %>%
+    sapply(estimateOntologyClusterName, method='medoid')
+
+  ont.res@result %<>% filter(Description %in% clusts)
+
+  enrichplot::dotplot(ont.res, showCategory=top.n, ...)
+}

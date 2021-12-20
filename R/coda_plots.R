@@ -1,7 +1,6 @@
 #' @import ape
 NULL
 
-
 #' @keywords internal
 estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
   cell.loadings <- c()
@@ -10,8 +9,8 @@ estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2
   bal <- getRndBalances(d.counts)
   d.used <- bal$norm
 
-  if(ncol(d.used) != 2){
-    for(i in 1:n.dim){
+  if (ncol(d.used) != 2) {
+    for (i in 1:n.dim) {
       res.remove <- removeGroupEffect(d.used, d.groups, thresh.pc.var = 0.9)
       cell.loadings <- cbind(cell.loadings, bal$psi %*% res.remove$rotation)
       sample.pos <- cbind(sample.pos, res.remove$scores)
@@ -38,7 +37,7 @@ plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, targe
     geom_point(aes(colour = factor(group.names[d.groups + 1] ))) +
     labs(colour="Condition")
 
-  if(!is.null(palette)) rda.plot <- rda.plot + scale_color_manual(values=palette)
+  if (!is.null(palette)) rda.plot <- rda.plot + scale_color_manual(values=palette)
 
   rda.biplot <- rda.plot +
     geom_segment(data=df.loadings, aes(x=0, xend=S1, y=0, yend=S2),
@@ -65,7 +64,8 @@ createDendrogram <- function(dend.data, angle=90, plot.theme=theme_get(), font.s
           axis.text.x=element_text(angle = 90, hjust = 1, vjust=0.5, margin = margin()),
           panel.grid = element_blank(), panel.border=element_blank(),
           axis.line=element_blank()) +
-    scale_x_continuous(breaks=dend.data$labels$x, labels=dend.data$labels$label)
+    scale_x_continuous(breaks=dend.data$labels$x, labels=dend.data$labels$label) +
+    scale_y_continuous(expand=c(0, 0, 0.1, 0))
 }
 
 #' helper function for creating dendograms
@@ -81,12 +81,13 @@ distTreeOrder <- function(t, tree.order){
   return(s)
 }
 
+
 #' helper function for creating dendograms
 #' @keywords internal
-plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme, label.angle=90,
-                             p.threshold=0.05, adjust.pvalues=TRUE, h.methods='both', font.size=3, label.hjust=1,
-                             tree.order=NULL, loadings.mean=NULL, verbose=FALSE) {
+plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme=theme_get(), label.angle=90,
 
+                             p.threshold=0.05, adjust.pvalues=TRUE, h.methods='both', font.size=3, label.hjust=1,
+                             tree.order=NULL, loadings.mean=NULL, palette=NULL, verbose=FALSE) {
   checkPackageInstalled(c("ggdendro"), cran=TRUE)
 
   log.f <- getLogFreq(d.counts)
@@ -104,27 +105,30 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
 
   # t.cur <- constructBestPartitionTree(d.counts, d.groups)
 
-  # Order the tree in the as similar as possible way
+  if (!is.null(loadings.mean) && is.null(tree.order)) {
+    tree.order <- names(sort(loadings.mean))
+  }
 
-  if(!is.null(tree.order)){
+  # Order the tree in the as similar as possible way
+  if (!is.null(tree.order)) {
     t <- t.cur$tree
     tree.order <- intersect(tree.order, t$tip.label)
     # distance of the initial tree
     d <- distTreeOrder(t, tree.order)
     idx <- min(t$edge[,1]):max(t$edge[,1])
-    for(i.node in idx){
+    for (i.node in idx) {
 
       # alternative tree
       t.alt <- ape::rotate(t, i.node)
       d.alt <- distTreeOrder(t.alt, tree.order)
 
-      if(d.alt <= d){
+      if (d.alt <= d) {
         t <- t.alt
         d <- d.alt
       }
     }
     t.cur$tree <- t
-    t.cur$dendro <- tree2dendro_my(t.cur$tree)
+    t.cur$dendro <- compute.brlen(t.cur$tree, method="Grafen") %>% as.hclust() %>% as.dendrogram()
   }
 
 
@@ -141,7 +145,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     p <- sbp[, k]
     type.plus <- rownames(sbp)[p > 0]
     type.minus <- rownames(sbp)[p < 0]
-    if(which(types.order == type.plus[1]) < which(types.order == type.minus[1])){
+    if (which(types.order == type.plus[1]) < which(types.order == type.minus[1])) {
       sbp[, k] <- -sbp[, k]
     }
   }
@@ -153,7 +157,6 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
   node.pos$to <- tree$edge[,2]
 
 
-
   # Positions of inner nodes
   innode.pos <- unique(node.pos[,c('x','y','id')])
   rownames(innode.pos) <- innode.pos$id
@@ -163,7 +166,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     tmp <- node.pos$xend[node.pos$id == innode.pos$id[i]]
     innode.pos$range[i] <- max(tmp) - min(tmp)
   }
-  innode.pos = innode.pos[order(innode.pos$id),]
+  innode.pos <- innode.pos[order(innode.pos$id),]
 
   # ----------------------------------------
 
@@ -188,7 +191,8 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
 
   p.adj <- if (adjust.pvalues) p.adjust(p.val, method='fdr') else p.val
 
-  px.init <- createDendrogram(dend.data, plot.theme=plot.theme, font.size=font.size, angle=label.angle, hjust=label.hjust)
+  px.init <- createDendrogram(dend.data, plot.theme=plot.theme, font.size=font.size, angle=label.angle,
+                              hjust=label.hjust)
 
   if (sum(p.adj < p.threshold) == 0)
     return(px.init)
@@ -260,16 +264,19 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
       guides(fill=guide_colorbar(title='loadings', title.position="top", direction="horizontal", title.hjust = 0.5))
   }
 
+  if (!is.null(palette)) {
+    px <- px + scale_color_manual(values=palette) +
+      scale_fill_gradient2(low=palette[ref.level], high=palette[target.level], mid='grey80', midpoint=0)
+  }
+
   return(px)
 }
 
-
-plotCellLoadings <- function(loadings, pval, signif.threshold=0.05, jitter.alpha=0.1, palette,
-                             show.pvals, ref.level, target.level, plot.theme,
-                             jitter.size=1,
-                             ordering=c("pvalue", "loading"), ref.load.level=0, annotation.position=1) {
+plotCellLoadings <- function(loadings, pval, ref.level, target.level, signif.threshold=0.05, jitter.alpha=0.1,
+                             palette=NULL, show.pvals=FALSE, plot.theme=theme_get(), jitter.size=1,
+                             ordering=c("pvalue", "loading"), ref.load.level=0, annotation.x=NULL, annotation.y=1) {
   ordering <- match.arg(ordering)
-  yintercept <- ref.load.level
+  xintercept <- ref.load.level
 
   loading.order <- order(abs(rowMeans(loadings)))
   loadings <- loadings[loading.order, ]
@@ -290,38 +297,42 @@ plotCellLoadings <- function(loadings, pval, signif.threshold=0.05, jitter.alpha
   }
 
   # Normalization of loadings
-  loadings <- loadings - yintercept
-  yintercept <- 0
+  loadings <- loadings - xintercept
 
   res.ordered <- t(loadings) %>% as.data.frame()
-  ymax <- max(loadings)
+  if (is.null(annotation.x)) {
+    annotation.x <- max(loadings)
+  }
 
-  p <- ggplot(stack(res.ordered), aes(x = ind, y = values, fill=factor(ind))) +
-    geom_boxplot(notch=TRUE, outlier.shape = NA) +
-    geom_jitter(aes(x = ind, y = values), alpha = jitter.alpha, size=jitter.size) +
-    geom_hline(yintercept = yintercept, color = "grey37") +
-    coord_flip() + xlab('') + ylab('loadings') + plot.theme + theme(legend.position = "none") +
-    scale_x_discrete(position = "top") + ylim(-1, 1)
+  p <- ggplot(stack(res.ordered), aes(y=ind, x=values, fill=factor(ind))) +
+    geom_boxplot(notch=TRUE, outlier.shape = NA)
+
+  if ((jitter.alpha > 1e-5) && (jitter.size > 1e-5)) {
+    p <- p + geom_jitter(alpha=jitter.alpha, size=jitter.size)
+  }
+
+  p <- p + geom_vline(xintercept=0, color = "grey37") +
+    labs(y='', x='loadings') + plot.theme + theme(legend.position = "none") +
+    scale_y_discrete(position = "right") + xlim(-1, 1)
 
   # Add text
   p <- p +
-    annotate('text', x = annotation.position, y = -ymax, label = paste('\u2190', ref.level), hjust = 'left') +
-    annotate('text', x = annotation.position, y = ymax, label = paste(target.level, '\u2192'), hjust = 'right')
+    annotate('text', x=-annotation.x, y=annotation.y, label=paste('\u2190', ref.level), hjust='left') +
+    annotate('text', x=annotation.x, y=annotation.y, label=paste(target.level, '\u2192'), hjust='right')
 
   if (!is.null(palette)) p <- p + scale_fill_manual(values=palette)
   if ((n.significant.cells > 0) && (ordering == "pvalue")) {
-    p <- p + geom_vline(xintercept=nrow(loadings) - n.significant.cells + 0.5, color='red')
+    p <- p + geom_hline(yintercept=nrow(loadings) - n.significant.cells + 0.5, color='red')
   }
-
 
   if (show.pvals) {
     d <- data.frame(y=-log(pval, base=10), x=names(pval), row=1:length(pval))
-    p.pval <- ggplot(d, aes(x=reorder(x, row), y=y, fill=factor(x))) +
+    p.pval <- ggplot(d, aes(y=reorder(x, row), x=y, fill=factor(x))) +
       geom_bar(stat="identity") +
-      geom_hline(yintercept=-log(signif.threshold, base=10)) +
-      scale_y_continuous(expand=c(0, 0)) +
-      coord_flip() + labs(x='', y='-log10(adj. p-value)') +
-      plot.theme + theme(legend.position = "none") + theme(axis.text.y = element_blank())
+      geom_vline(xintercept=-log(signif.threshold, base=10)) +
+      scale_x_continuous(expand=c(0, 0, 0.02, 0)) +
+      labs(y='', x='-log10(adj. p-value)') +
+      plot.theme + theme(legend.position="none") + theme(axis.text.y=element_blank())
 
     if (!is.null(palette)) p.pval <- p.pval + scale_fill_manual(values=palette)
 

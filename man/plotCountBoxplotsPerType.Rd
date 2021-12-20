@@ -18,7 +18,8 @@ plotCountBoxplotsPerType(
   palette = NULL,
   adjust.pvalues = TRUE,
   plot.theme = theme_get(),
-  label.y.npc = 0.92
+  label.y.npc = 0.92,
+  ns.symbol = ""
 )
 }
 \arguments{

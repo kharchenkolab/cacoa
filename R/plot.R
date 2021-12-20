@@ -5,7 +5,7 @@
 #' @importFrom reshape2 melt
 NULL
 
-#' @keywords internal
+#' @export
 theme_legend_position <- function(position) {
   theme(legend.position=position, legend.justification=position)
 }
@@ -90,8 +90,8 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 #' @keywords internal
 plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=1.05, show.significance=FALSE,
                                      jitter.width=0.15, notch=FALSE, legend.position="right", alpha=0.2, size=0.5,
-                                     palette=NULL, adjust.pvalues=TRUE, plot.theme=theme_get(), label.y.npc=0.92) {
-  
+                                     palette=NULL, adjust.pvalues=TRUE, plot.theme=theme_get(), label.y.npc=0.92,
+                                     ns.symbol="") {
   checkPackageInstalled(c("ggpubr"), cran=TRUE)
   gg <- ggplot(count.df, aes(x=variable, y=value, by=group, fill=group)) +
     geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
@@ -106,11 +106,13 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
   if (show.significance) {
     if (adjust.pvalues) {
       # willcox test + adjustment
-      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label="p.signif", label.y.npc=label.y.npc)
-      # TODO
-      # p.adjust.method = "fdr" ?
+      gg <- gg +
+      ggpubr::stat_compare_means(aes(group=group, label=pvalueToCode(..p.adj.., ns.symbol=ns.symbol)),
+                                 label.y.npc=label.y.npc)
     } else { # willcox test
-      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label="p.signif", label.y.npc=label.y.npc)
+      gg <- gg +
+      ggpubr::stat_compare_means(aes(group = group), label="p.signif", label.y.npc=label.y.npc,
+                                 symnum.args=c("****", "***", "**", "*", ns.symbol))
     }
   }
 
@@ -289,7 +291,7 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point', 'bar'), show.jitter=TRUE,
                                          notch=TRUE, jitter.alpha=0.05, palette=NULL, ylab='expression distance',
                                          yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0,
-                                         order.x=TRUE, pvalue.y=NULL, y.max=NULL, y.offset=NULL, ns.symbol="ns") {
+                                         order.x=TRUE, pvalue.y=NULL, y.max=NULL, y.offset=NULL, ns.symbol="") {
   type <- match.arg(type)
   df$Type %<>% as.factor()
   if (!is.null(y.offset)) {
@@ -759,3 +761,19 @@ plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, m
 
       return(gg)
     }
+
+#' Clustered Ontology Dotplot
+#' @description Performs ontology clustering by genes and then shows medoids of the clusters with
+#'   enrichplot::dotplot
+#' @export
+clusteredOntologyDotplot <- function(ont.res, p.adj=0.05, min.genes=1, cut.h=0.66, top.n=Inf, ...) {
+  checkPackageInstalled("enrichplot", bioc=TRUE)
+  clusts <- ont.res@result %>% filter(p.adjust < p.adj) %$%
+    setNames(strsplit(geneID, "/"), Description) %>% .[sapply(., length) >= min.genes] %>%
+    estimateClusterPerGO(cut.h=cut.h) %>% {split(names(.), .)} %>%
+    sapply(estimateOntologyClusterName, method='medoid')
+
+  ont.res@result %<>% filter(Description %in% clusts)
+
+  enrichplot::dotplot(ont.res, showCategory=top.n, ...)
+}

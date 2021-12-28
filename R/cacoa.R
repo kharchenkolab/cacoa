@@ -17,61 +17,61 @@ NULL
 #' @param verbose show progress (default: stored value)
 #' @param name field name where the test results are stored
 #' @param n.top.genes number of top genes for estimation
+#' @param p.adj Cut-off for adjusted p-values (default=0.05)
+#' @param p.adjust.method Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")
 #' @param gene.selection a method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
 #' "expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "z".
 #' @param excluded.genes list of genes to exclude during estimation. For example, a list of mitochondrial genes.
 #' @export Cacoa
 Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
   public = list(
-    #' @field n.cores number of cores
+    #' @field n.cores Number of cores (default=1)
     n.cores = 1,
 
-    #' @field verbose boolean Whether to provide verbose output with diagnostic messages (default=TRUE)
+    #' @field verbose boolean Whether to provide verbose output with diagnostic messages (default=FALSE)
     verbose = FALSE,
 
-    #' @field test.results list Results of the estimations, ready to use
+    #' @field test.results list Results of the estimations, ready to use (default=list())
     test.results = list(),
 
-    #' @field cache list Intermediate results of the estimations, which can be used during some other computations
+    #' @field cache list Intermediate results of the estimations, which can be used during some other computations (default=list())
     cache = list(),
 
-    #' @field data.object list The main object storing data (Conos or Seurat)
+    #' @field data.object list The main object storing data (Conos or Seurat) (default=list())
     data.object = list(),
 
-    #' @field sample.groups 2-factor vector with annotation of groups/condition per sample
+    #' @field sample.groups 2-factor vector with annotation of groups/condition per sample (default=NULL)
     sample.groups = NULL,
 
-    #' @field cell.groups named factor with cell names with cluster per cell
+    #' @field cell.groups Named factor with cell names with cluster per cell (default=NULL)
     cell.groups = NULL,
 
-    #' @field embedding a 2D embedding to visualize the cells in
+    #' @field embedding 2D embedding to visualize the cells in (default=NULL)
     embedding = NULL,
 
-    #' @field sample.per.cell named factor with cell names
+    #' @field sample.per.cell Named factor with cell names (default=NULL)
     sample.per.cell = NULL,
 
-    #' @field ref.level reference level for sample.group vector
+    #' @field ref.level Reference level for sample.group vector (default=NULL)
     ref.level = NULL,
 
-    #' @field target.level target/disease level for sample.group vector
+    #' @field target.level Target/disease level for sample.group vector (default=NULL)
     target.level = NULL,
-
-    #' @field sample.groups.palette a color palette for the sample.groups
+ 
+    #' @field sample.groups.palette Color palette for the sample.groups (default=NULL)
     sample.groups.palette = NULL,
 
-    #' @field cell.groups.palette a color palette for the cell.groups
+    #' @field cell.groups.palette Color palette for the cell.groups (default=NULL)
     cell.groups.palette = NULL,
 
-    #' @field plot.theme ggplot2 theme for all plots
-    plot.theme=NULL,
+    #' @field plot.theme ggplot2 theme for all plots (default=NULL)
+    plot.theme = NULL,
 
-    #' @field plot.params parameters, forwarded to all `plotEmbedding` calls
-    plot.params=NULL,
+    #' @field plot.params parameters, forwarded to all `plotEmbedding` calls  (default=NULL)
+    plot.params = NULL,
 
-    #' @description initialize Cacoa class
+    #' @description Initialize Cacoa class
     #'
-    #' @param override.conos.plot.theme boolean Whether to reset plot settings to the ggplot2 default (default=FALSE)
-    #' @param ... additional parameters upon initializing Conos
     #' @return a new 'Cacoa' object
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL,
                         target.level=NULL, sample.groups.palette=NULL, cell.groups.palette=NULL,
@@ -188,15 +188,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' Calculate expression shift magnitudes of different clusters between conditions
     #'
-    #' @param cell.groups Named cell group factor with cell names (default: stored vector)
-    #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default depends on dimensionality)
-    #' @param within.group.normalization Normalize the shift magnitude by the mean magnitude of within-group variation (default=`TRUE`)
+    #' @param cell.groups Named cell group factor with cell names (default=stored vector, self$cell.groups)
+    #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default=NULL, depends on dimensionality)
+    #' @param dist.type character string (default="cross.both")
+    #' @param min.cells.per.sample numeric (default=10)
+    #' @param min.samp.per.type numeric (default=2)
+    #' @param min.gene.frac numeric (default=0.01)
     #' @param n.cells Number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)
-    #' @param n.top.genes Number of top highest-expressed genes to consider (default: all genes)
     #' @param n.subsamples Number of samples to draw (default=100)
     #' @param min.cells Minimum number of cells per cluster/per sample to be included in the analysis (default=10)
     #' @param n.cores Number of cores (default: stored integer)
     #' @param name Test name (default="expression.shifts")
+    #' @param n.permutations numeric (default=1000)
     #' @return a list include
     #'   - `dist.df`: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update
     #'   - `p.dist.info`: list of distance matrices per cell type
@@ -244,6 +247,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
+    #' Estimate common expression shift magnitudes
+    #'
+    #' @param n.permutations numeric (default=1000)
+    #' @param trim numeric (deafult=0.2)
+    #' @param n.permutations numeric (default=1000)
     estimateCommonExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, name='common.expression.shifts',
                                                      min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
                                                      genes=NULL, n.permutations=1000, trim=0.2, p.adjust.method="BH",
@@ -1250,12 +1258,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'
     #' @param type Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")
     #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
-    #' @param p.adjust.method Method for calculating adj. P. Please see DOSE package for more information (default="BH")
-    #' @param readable Mapping gene ID to gene name (default=TRUE)
-    #' @param min.genes Minimum number of input genes overlapping with ontologies (default=0)
-    #' @param qvalue.cutoff Q value cutoff, please see clusterProfiler package for more information (default=0.2)
-    #' @param min.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5)
-    #' @param max.gs.size Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
+    #' @param n.top.genes numeric Number of top highest-expressed genes to consider (default=500)
+    #' @param readable boolean Mapping gene ID to gene name (default=TRUE)
+    #' @param min.genes numeric Minimum number of input genes overlapping with ontologies (default=0)
+    #' @param qvalue.cutoff numeric Q value cutoff, please see clusterProfiler package for more information (default=0.2)
+    #' @param min.gs.size numeric Minimal geneset size, please see clusterProfiler package for more information (default=5)
+    #' @param max.gs.size numeric Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
     #' @param ... further argument for ontology estimation. Pass `nPerm` with `type='GSEA'` to use fgseaSimple method
     #' @return A list containing a list of terms per ontology, and a data frame with merged results
     estimateOntology=function(type=c("GO", "DO", "GSEA"), name=NULL, de.name='de', org.db, n.top.genes=500, p.adj=1,
@@ -1289,8 +1297,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' Estimate ontology families based on ontology results
     #'
-    #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
-    #' @param p.adj Cut-off for adj. P values (default: 0.05)
+    #' @param name character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
     #' @return List of families and ontology data per cell type
     estimateOntologyFamilies=function(name="GO", p.adj=0.05) {
       checkPackageInstalled("GOfuncR", bioc=TRUE)
@@ -1314,11 +1321,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' Identify families containing a specific ontology term or ID
     #'
-    #' @param go.term Character vector with term description(s)
-    #' @param go.id Character vector with ID(s)
-    #' @param common Boolean, only identify families with all the supplied terms or IDs (default = FALSE)
+    #' @param name character string (default="GO")
+    #' @param go.term Character vector with term description(s) (default=NULL)
+    #' @param go.id Character vector with ID(s) (default=NULL)
+    #' @param common boolean Only identify families with all the supplied terms or IDs (default = FALSE)
     #' @return Data frame
     getFamiliesPerGO=function(name="GO", go.term=NULL, go.id=NULL, common=FALSE) {
+
       ont.res <- private$getResults(name, 'estimateOntology()')
 
       if (is.null(go.term) && is.null(go.id)) stop("Please specify either 'go.term' or 'go.id'.")
@@ -1510,7 +1519,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                  legend.position="left", selection="all", cluster=TRUE, cell.subgroups=NULL,
                                  row.order=TRUE, col.order=TRUE, max.log.p=10, only.family.children=FALSE,
                                  description.regex=NULL, description.exclude.regex=NULL, clust.naming="medoid",
-                                 readjust.p=TRUE, p.adjust.method='BH',
+                                 readjust.p=TRUE, p.adjust.method="BH",
                                  palette=NULL, color.range=NULL, return.info=FALSE, ...) {
       ont.info <- private$getOntologyHeatmapInfo(
         name=name, genes=genes, subtype=subtype, p.adj=p.adj, q.value=q.value, min.genes=min.genes,
@@ -2446,6 +2455,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param robust whether to use median estimates instead of mean. Using median is more robust,
     #' but greatly increase the number of zeros in the data, leading to bias towards highly-express genes. (Default: FALSE)
     #' @param lfc.pseudocount pseudocount value for estimation of log2(fold-change)
+    #' @param min.edge.weight numeric (default=0.6)
     #' @return list with sparce matrices containing various DE metrics with genes as columns and cells as rows:
     #'   - `z`: DE Z-scores
     #'   - `reference` mean or median expression in reference samples
@@ -2519,6 +2529,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param dist distance measure. Options: "cor" (correlation), "cosine" or "js" (Jensen–Shannon)
     #' @param log.vectors whether to use log10 on the normalized expression before estimating the distance.
     #' In most cases, must be TRUE for "cosine" and "cor" distances and always must be FALSE for "js". (default: `dist != 'js'`)
+    #' @param min.edge.weight numeric (default=0.0)
     #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
     #' Results are also stored in the `cluster.free.expr.shifts` field.
     estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="z", name="cluster.free.expr.shifts",
@@ -3054,6 +3065,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(list(ont.sum=ont.sum, ont.df=ont.df, desc.per.clust=desc.per.clust, group.field=group.field))
     },
 
+    #' @description Extract coda data
+    #'
+    #' @param ret.groups boolean Whether to return groups (default=TRUE). If FASLE, returns table of cell counts.
+    #' @param cells.to.remove character vector Cells to remove (default=NULL)
+    #' @param cells.to.remain character vector Cells which should remain (default=NULL)
+    #' @param samples.to.remove character vector Samples which should remain (default=NULL)
+    #' @return list of cell counts and cell groups
     extractCodaData=function(ret.groups=TRUE, cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL,
                              samples.to.remove=NULL) {
       d.counts <- cell.groups %>% data.frame(anno=., group=self$sample.per.cell[names(.)]) %>%
@@ -3063,8 +3081,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(cells.to.remain)) d.counts %<>% .[,colnames(.) %in% cells.to.remain]
       if (!is.null(samples.to.remove)) d.counts %<>% .[!(rownames(.) %in% samples.to.remove),]
 
-      if (!ret.groups)
+      if (!ret.groups) {
         return(d.counts)
+      }
 
       d.groups <- (self$sample.groups[rownames(d.counts)] == self$target.level) %>%
         setNames(rownames(d.counts))
@@ -3074,8 +3093,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' @description Extract contours from embedding
+    #'
     #' @param groups specify cell groups for contour, multiple cell groups are also supported
     #' @param conf confidence interval of contour
+    #' @return density contours
     getDensityContours = function(groups, color='black', linetype=2, conf="10%", n.cores=1, verbose=FALSE, ...) {
       cnl <- sn(groups) %>% plapply(function(g) {
         getDensityContour(
@@ -3085,14 +3106,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(cnl)
     },
 
+    #' @description Check cell embedding. The function throws errors in the embedding is empty or incorrectly formatted.
     checkCellEmbedding = function(embedding=self$embedding) {
-      if (is.null(embedding) || ncol(embedding) != 2)
+      if (is.null(embedding) || ncol(embedding) != 2) {
         stop("self$embedding must contain 2D cell embedding")
+      }
 
-      if (is.null(rownames(embedding)))
+      if (is.null(rownames(embedding))){
         stop("self$embedding must have rownames, equal to cell ids")
+      }
     },
 
+    #' @description Get cluster-free DE input
+    #'     
+    #' @param genes 
+    #' @param min.edge.weight numeric (default=0.6)
     getClusterFreeDEInput = function(genes, min.edge.weight=0.0) {
       cm <- self$getJointCountMatrix(raw=FALSE)
       is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)

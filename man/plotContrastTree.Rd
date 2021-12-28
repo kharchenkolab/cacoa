@@ -9,7 +9,7 @@ plotContrastTree(
   d.groups,
   ref.level,
   target.level,
-  plot.theme,
+  plot.theme = theme_get(),
   label.angle = 90,
   p.threshold = 0.05,
   adjust.pvalues = TRUE,
@@ -18,6 +18,7 @@ plotContrastTree(
   label.hjust = 1,
   tree.order = NULL,
   loadings.mean = NULL,
+  palette = NULL,
   verbose = FALSE
 )
 }

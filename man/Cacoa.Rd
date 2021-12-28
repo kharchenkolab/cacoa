@@ -9,35 +9,35 @@ The class encompasses etc etc
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{
-\item{\code{n.cores}}{number of cores}
+\item{\code{n.cores}}{Number of cores (default=1)}
 
-\item{\code{verbose}}{boolean Whether to provide verbose output with diagnostic messages (default=TRUE)}
+\item{\code{verbose}}{boolean Whether to provide verbose output with diagnostic messages (default=FALSE)}
 
-\item{\code{test.results}}{list Results of the estimations, ready to use}
+\item{\code{test.results}}{list Results of the estimations, ready to use (default=list())}
 
-\item{\code{cache}}{list Intermediate results of the estimations, which can be used during some other computations}
+\item{\code{cache}}{list Intermediate results of the estimations, which can be used during some other computations (default=list())}
 
-\item{\code{data.object}}{list The main object storing data (Conos or Seurat)}
+\item{\code{data.object}}{list The main object storing data (Conos or Seurat) (default=list())}
 
-\item{\code{sample.groups}}{2-factor vector with annotation of groups/condition per sample}
+\item{\code{sample.groups}}{2-factor vector with annotation of groups/condition per sample (default=NULL)}
 
-\item{\code{cell.groups}}{named factor with cell names with cluster per cell}
+\item{\code{cell.groups}}{Named factor with cell names with cluster per cell (default=NULL)}
 
-\item{\code{embedding}}{a 2D embedding to visualize the cells in}
+\item{\code{embedding}}{2D embedding to visualize the cells in (default=NULL)}
 
-\item{\code{sample.per.cell}}{named factor with cell names}
+\item{\code{sample.per.cell}}{Named factor with cell names (default=NULL)}
 
-\item{\code{ref.level}}{reference level for sample.group vector}
+\item{\code{ref.level}}{Reference level for sample.group vector (default=NULL)}
 
-\item{\code{target.level}}{target/disease level for sample.group vector}
+\item{\code{target.level}}{Target/disease level for sample.group vector (default=NULL)}
 
-\item{\code{sample.groups.palette}}{a color palette for the sample.groups}
+\item{\code{sample.groups.palette}}{Color palette for the sample.groups (default=NULL)}
 
-\item{\code{cell.groups.palette}}{a color palette for the cell.groups}
+\item{\code{cell.groups.palette}}{Color palette for the cell.groups (default=NULL)}
 
-\item{\code{plot.theme}}{ggplot2 theme for all plots}
+\item{\code{plot.theme}}{ggplot2 theme for all plots (default=NULL)}
 
-\item{\code{plot.params}}{parameters, forwarded to all \code{plotEmbedding} calls}
+\item{\code{plot.params}}{parameters, forwarded to all \code{plotEmbedding} calls  (default=NULL)}
 }
 \if{html}{\out{</div>}}
 }
@@ -121,7 +121,7 @@ The class encompasses etc etc
 \if{html}{\out{<a id="method-new"></a>}}
 \if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
-initialize Cacoa class
+Initialize Cacoa class
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$new(
   data.object,
@@ -151,10 +151,6 @@ initialize Cacoa class
 \item{\code{n.cores}}{number of cores for parallelization}
 
 \item{\code{verbose}}{show progress (default: stored value)}
-
-\item{\code{override.conos.plot.theme}}{boolean Whether to reset plot settings to the ggplot2 default (default=FALSE)}
-
-\item{\code{...}}{additional parameters upon initializing Conos}
 }
 \if{html}{\out{</div>}}
 }
@@ -191,9 +187,17 @@ Calculate expression shift magnitudes of different clusters between conditions
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{Named cell group factor with cell names (default: stored vector)}
+\item{\code{cell.groups}}{Named cell group factor with cell names (default=stored vector, self$cell.groups)}
 
-\item{\code{dist}}{'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default depends on dimensionality)}
+\item{\code{dist}}{'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default=NULL, depends on dimensionality)}
+
+\item{\code{dist.type}}{character string (default="cross.both")}
+
+\item{\code{min.cells.per.sample}}{numeric (default=10)}
+
+\item{\code{min.samp.per.type}}{numeric (default=2)}
+
+\item{\code{min.gene.frac}}{numeric (default=0.01)}
 
 \item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
 
@@ -203,11 +207,9 @@ Calculate expression shift magnitudes of different clusters between conditions
 
 \item{\code{name}}{Test name (default="expression.shifts")}
 
-\item{\code{within.group.normalization}}{Normalize the shift magnitude by the mean magnitude of within-group variation (default=\code{TRUE})}
+\item{\code{n.permutations}}{numeric (default=1000)}
 
 \item{\code{n.cells}}{Number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)}
-
-\item{\code{n.top.genes}}{Number of top highest-expressed genes to consider (default: all genes)}
 
 \item{\code{n.subsamples}}{Number of samples to draw (default=100)}
 
@@ -222,8 +224,7 @@ a list include
 \item \code{p.dist.info}: list of distance matrices per cell type
 \item \code{sample.groups}: filtered sample groups
 \item \code{cell.groups}: filtered cell groups
-Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
-cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
+Estimate common expression shift magnitudes
 }
 }
 }
@@ -254,6 +255,16 @@ cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
 \item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
 
 \item{\code{name}}{field name where the test results are stored}
+
+\item{\code{n.permutations}}{numeric (default=1000)}
+
+\item{\code{n.permutations}}{numeric (default=1000)
+Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
+cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")}
+
+\item{\code{trim}}{numeric (deafult=0.2)}
+
+\item{\code{p.adjust.method}}{Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
 
 \item{\code{verbose}}{show progress (default: stored value)}
 
@@ -925,15 +936,17 @@ Estimate ontology terms based on DEs}
 
 \item{\code{org.db}}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'}
 
-\item{\code{n.top.genes}}{number of top genes for estimation}
+\item{\code{n.top.genes}}{numeric Number of top highest-expressed genes to consider (default=500)}
 
-\item{\code{p.adjust.method}}{Method for calculating adj. P. Please see DOSE package for more information (default="BH")}
+\item{\code{p.adj}}{Cut-off for adjusted p-values (default=0.05)}
 
-\item{\code{readable}}{Mapping gene ID to gene name (default=TRUE)}
+\item{\code{p.adjust.method}}{Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
 
-\item{\code{min.gs.size}}{Minimal geneset size, please see clusterProfiler package for more information (default=5)}
+\item{\code{readable}}{boolean Mapping gene ID to gene name (default=TRUE)}
 
-\item{\code{max.gs.size}}{Minimal geneset size, please see clusterProfiler package for more information (default=5e2)}
+\item{\code{min.gs.size}}{numeric Minimal geneset size, please see clusterProfiler package for more information (default=5)}
+
+\item{\code{max.gs.size}}{numeric Minimal geneset size, please see clusterProfiler package for more information (default=5e2)}
 
 \item{\code{verbose}}{show progress (default: stored value)}
 
@@ -941,9 +954,9 @@ Estimate ontology terms based on DEs}
 
 \item{\code{...}}{further argument for ontology estimation. Pass \code{nPerm} with \code{type='GSEA'} to use fgseaSimple method}
 
-\item{\code{min.genes}}{Minimum number of input genes overlapping with ontologies (default=0)}
+\item{\code{min.genes}}{numeric Minimum number of input genes overlapping with ontologies (default=0)}
 
-\item{\code{qvalue.cutoff}}{Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
+\item{\code{qvalue.cutoff}}{numeric Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
 }
 \if{html}{\out{</div>}}
 }
@@ -963,11 +976,9 @@ Estimate ontology families based on ontology results
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")}
 
-\item{\code{p.adj}}{Cut-off for adj. P values (default: 0.05)}
-
-\item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
+\item{\code{p.adj}}{Cut-off for adjusted p-values (default=0.05)}
 }
 \if{html}{\out{</div>}}
 }
@@ -992,13 +1003,13 @@ Identify families containing a specific ontology term or ID
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string (default="GO")}
 
-\item{\code{go.term}}{Character vector with term description(s)}
+\item{\code{go.term}}{Character vector with term description(s) (default=NULL)}
 
-\item{\code{go.id}}{Character vector with ID(s)}
+\item{\code{go.id}}{Character vector with ID(s) (default=NULL)}
 
-\item{\code{common}}{Boolean, only identify families with all the supplied terms or IDs (default = FALSE)}
+\item{\code{common}}{boolean Only identify families with all the supplied terms or IDs (default = FALSE)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1027,6 +1038,8 @@ Bar plot of ontology terms per cell type
 \item{\code{name}}{field name where the test results are stored}
 
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
+
+\item{\code{p.adj}}{Cut-off for adjusted p-values (default=0.05)}
 
 \item{\code{type}}{Ontology, must be either "GO" or "DO" (default="GO")}
 }
@@ -1120,6 +1133,8 @@ Plot a heatmap of ontology P values per cell type
 \item{\code{genes}}{Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all'
 (default="up")}
 
+\item{\code{p.adj}}{Cut-off for adjusted p-values (default=0.05)}
+
 \item{\code{top.n}}{Number of terms to show (default=Inf)}
 
 \item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="left")}
@@ -1129,6 +1144,8 @@ Plot a heatmap of ontology P values per cell type
 (default="all")}
 
 \item{\code{cell.subgroups}}{Cell groups to plot (default=NULL). This affects only visualization, but not clustering.}
+
+\item{\code{p.adjust.method}}{Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
 
 \item{\code{color.range}}{vector with two values for min/max values of p-values}
 
@@ -1186,6 +1203,10 @@ A ggplot2 object
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{name}}{field name where the test results are stored}
+
+\item{\code{p.adj}}{Cut-off for adjusted p-values (default=0.05)}
+
+\item{\code{p.adjust.method}}{Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
 }
 \if{html}{\out{</div>}}
 }
@@ -1211,6 +1232,8 @@ Plot correlation matrix for ontology terms between cell types
 \item{\code{name}}{field name where the test results are stored}
 
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
+
+\item{\code{p.adj}}{Cut-off for adjusted p-values (default=0.05)}
 
 \item{\code{type}}{Ontology, must be either "GO" or "DO" (default="GO")}
 }
@@ -1925,6 +1948,8 @@ A ggplot2 object
 \item{\code{verbose}}{show progress (default: stored value)}
 
 \item{\code{n.cores}}{number of cores for parallelization}
+
+\item{\code{p.adjust.method}}{Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
 }
 \if{html}{\out{</div>}}
 }
@@ -1973,6 +1998,8 @@ Estimate differential expression Z-scores between two conditions per individual 
 but greatly increase the number of zeros in the data, leading to bias towards highly-express genes. (Default: FALSE)}
 
 \item{\code{lfc.pseudocount}}{pseudocount value for estimation of log2(fold-change)}
+
+\item{\code{min.edge.weight}}{numeric (default=0.6)}
 
 \item{\code{verbose}}{show progress (default: stored value)}
 
@@ -2075,6 +2102,8 @@ In most cases, must be TRUE for "cosine" and "cor" distances and always must be 
 \item{\code{verbose}}{show progress (default: stored value)}
 
 \item{\code{n.cores}}{number of cores for parallelization}
+
+\item{\code{min.edge.weight}}{numeric (default=0.0)}
 }
 \if{html}{\out{</div>}}
 }

@@ -3,6 +3,7 @@
 export(Cacoa)
 export(addZScores)
 export(brewerPalette)
+export(clusteredOntologyDotplot)
 export(estimateDEPerCellTypeInner)
 export(estimateExpressionShiftMagnitudes)
 export(estimateOntologyFromIds)

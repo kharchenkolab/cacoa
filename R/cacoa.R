@@ -73,11 +73,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Initialize Cacoa class
     #'
+    #' @param data.object Object used to initialize the Cacoa class. Either a raw or normalized count matrix, Conos object, or Seurat object.
+    #' @param sample.groups (default=NULL)
+    #' @param cell.groups (default=NULL)
+    #' @param sample.per.cell (default=NULL)
+    #' @param ref.level (default=NULL)
+    #' @param target.level (default=NULL)
+    #' @param sample.groups.palette (default=NULL)
+    #' @param cell.groups.palette (default=NULL)
+    #' @param embedding (default=extractEmbedding(data.object))
+    #' @param graph.name (default=NULL)
+    #' @param n.cores numeric (default=1)
+    #' @param verbose boolean (default=TRUE)
+    #' @param plot.theme (default=ggplot2::theme_bw())
+    #' @param plot.params (default=NULL)
     #' @return a new 'Cacoa' object
-    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, ref.level=NULL,
-                        target.level=NULL, sample.groups.palette=NULL, cell.groups.palette=NULL,
-                        embedding=extractEmbedding(data.object), graph.name=NULL, n.cores=1, verbose=self$verbose,
-                        plot.theme=theme_bw(), plot.params=NULL) {
+    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, 
+                        ref.level=NULL, target.level=NULL, sample.groups.palette=NULL, 
+                        cell.groups.palette=NULL, embedding=extractEmbedding(data.object), 
+                        graph.name=NULL, n.cores=1, verbose=TRUE,
+                        plot.theme=ggplot2::theme_bw(), plot.params=NULL) {
       if ('Cacoa' %in% class(data.object)) { # copy constructor
         for (n in ls(data.object)) {
           if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
@@ -1242,10 +1257,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' Plot number of significant DE genes
     #'
-    #' @param name results slot in which the DE results should be stored (default: 'de')
-    #' @param pvalue.cutoff P value cutoff (default=0.05)
-    #' @param p.adjust whether the cutoff should be based on the adjusted P value (default: TRUE)
-    #' @param show.resampling.results whether to show uncertainty based on resampling results (default: TRUE)
+    #' @param name character string Results slot in which the DE results should be stored (default='de')
+    #' @param pvalue.cutoff numeric P-value cutoff (default=0.05)
+    #' @param p.adjust boolean Whether the cutoff should be based on the adjusted P value (default=TRUE)
+    #' @param show.resampling.results boolean Whether to show uncertainty based on resampling results (default=TRUE)
     #' @return A ggplot2 object
     plotNumberOfDEGenes=function(name='de', p.adjust=TRUE, pvalue.cutoff=0.05, show.resampling.results=TRUE,
                                  show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE, ...) {
@@ -1331,6 +1346,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param de.raw List of DE results
     #' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
     #' @param gene.metadata (default=NULL)
+    #' @return saved JSON object
     saveDEasJSON=function(saveprefix=NULL, dir.name="JSON", de.raw=NULL, sample.groups=self$sample.groups, de.name='de',
                           ref.level=self$ref.level, gene.metadata=NULL, verbose=self$verbose) {
       if (is.null(de.raw)) {
@@ -1359,6 +1375,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param plot.theme plot theme to use (default: `self$plot.theme`)
     #' @param color.by color cells by 'cell.groups', 'condition' or 'sample'. Overrides `groups` and `palette`. (default: NULL)
     #' @param ... other parameters passed to \link[sccore:embeddingPlot]{embeddingPlot}
+    #' @return embedding plot as output by sccore::embeddingPlot
     plotEmbedding=function(embedding=self$embedding, color.by=NULL, plot.theme=self$plot.theme, ...) {
       new.params <- list(...)
       params <- if (is.null(self$plot.params)) list() else self$plot.params
@@ -1881,13 +1898,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' Save ontology results as a table
     #'
-    #' @param file File name. Set to NULL to return the table instead of saving
-    #' @param name Name of ontology result (default: GO)
-    #' @param subtype Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)
+    #' @param file character string File name passed to write.table(). Set to NULL to return the table instead of saving.
+    #' @param name chacter string Name of ontology result (default='GO')
+    #' @param subtype character string Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)
     #' @param genes Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)
-    #' @param p.adj Adjusted P to filter by (default: 0.05)
     #' @param sep Separator (default: tab)
-    #' @return Table for import into text editor
+    #' @return table for import into text editor
     saveOntologyAsTable=function(file, name="GO", subtype=NULL, genes=NULL, p.adj=0.05, sep="\t", ...) {
       ont.res <- private$getResults(name, 'estimateOntology()')
 
@@ -1904,13 +1920,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' Save family results as a table
     #'
-    #' @param file File name (default: Family_results.tsv)
-    #' @param type Type of ontology result, i.e., GO, GSEA, or DO (default: GO)
-    #' @param subtype Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)
-    #' @param genes Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)
-    #' @param p.adj Adjusted P to filter by (default: 0.05)
-    #' @param sep Separator (default: tab)
-    #' @return Table for import into text editor
+    #' @param file character string File name passed to write.table(). Set to NULL to return the table instead of saving.
+    #' @param name chacter string Name of ontology result (default='GO')
+    #' @param type character string Type of ontology result, i.e., GO, GSEA, or DO (default='GO')
+    #' @param subtype Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default=NULL)
+    #' @param genes Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default=NULL)
+    #' @param p.adj Adjusted P to filter by (default=0.05)
+    #' @param sep Separator (default="\t")
+    #' @return table for import into text editor
     saveFamiliesAsTable=function(file, name="GO", subtype=NULL, genes=NULL, p.adj=0.05, sep="\t", ...) {
       # Extract results
       ont.res <- private$getResults(name, 'estimateOntology()')
@@ -1986,6 +2003,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
+    #' Plot the cell group sizes or proportions per sample
+    #'
+    #' @param cell.groups (default=self$cell.groups)
+    #' @param type character string (default='mad')
+    #' @param rotate.xticks boolean (deafult=TRUE)
+    #' @param min.rel.abundance numeric (default=0.05)
+    #' @return ggplot2 object
     plotCellGroupAbundanceVariation=function(cell.groups=self$cell.groups, type='mad', rotate.xticks=TRUE, min.rel.abundance=0.05) {
       n.cells.per.samp <- table(self$sample.per.cell)
       vars.per.group <- cell.groups %>%
@@ -2017,8 +2041,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'
     #' @param space either 'PCA' or 'CDA'
     #' @return A ggplot2 object
-    plotCodaSpace=function(space='CDA', cell.groups=self$cell.groups, font.size=3, cells.to.remain=NULL, cells.to.remove=NULL,
-                           samples.to.remove=NULL, palette=self$sample.groups.palette) {
+    plotCodaSpace=function(space='CDA', cell.groups=self$cell.groups, font.size=3, 
+                            cells.to.remain=NULL, cells.to.remove=NULL,
+                            samples.to.remove=NULL, palette=self$sample.groups.palette) {
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove, cell.groups=cell.groups)
 
       if (space == 'PCA') {

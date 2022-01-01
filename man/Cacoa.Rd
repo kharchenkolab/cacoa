@@ -146,11 +146,11 @@ Initialize Cacoa class
 \describe{
 \item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
 
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
 
-\item{\code{n.cores}}{number of cores for parallelization}
+\item{\code{n.cores}}{numeric Number of cores for parallelization}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 }
 \if{html}{\out{</div>}}
 }
@@ -201,7 +201,7 @@ Calculate expression shift magnitudes of different clusters between conditions
 
 \item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 
 \item{\code{n.cores}}{Number of cores (default: stored integer)}
 
@@ -209,16 +209,16 @@ Calculate expression shift magnitudes of different clusters between conditions
 
 \item{\code{n.permutations}}{numeric (default=1000)}
 
-\item{\code{n.cells}}{Number of cells to subsmaple across all samples (if not specified, defaults to the total size of the smallest cell cluster)}
+\item{\code{genes}}{(default=NULL)}
 
-\item{\code{n.subsamples}}{Number of samples to draw (default=100)}
+\item{\code{n.pcs}}{numeric Number of principal components (default=NULL)}
 
-\item{\code{min.cells}}{Minimum number of cells per cluster/per sample to be included in the analysis (default=10)}
+\item{\code{...}}{extra parameters}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-a list include
+List including:
 \itemize{
 \item \code{dist.df}: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update
 \item \code{p.dist.info}: list of distance matrices per cell type
@@ -252,25 +252,38 @@ Estimate common expression shift magnitudes
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored (default="common.expression.shifts")}
+
+\item{\code{min.cells.per.sample}}{numeric (default=10)}
+
+\item{\code{min.samp.per.type}}{numeric (default=2)}
+
+\item{\code{min.gene.frac}}{numeric (default=0.01)}
+
+\item{\code{genes}}{(default=NULL)}
 
 \item{\code{n.permutations}}{numeric (default=1000)}
 
-\item{\code{n.permutations}}{numeric (default=1000)
-Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
-cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")}
+\item{\code{n.permutations}}{numeric (default=1000)}
 
 \item{\code{trim}}{numeric (deafult=0.2)}
 
-\item{\code{p.adjust.method}}{Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
+\item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 
-\item{\code{n.cores}}{number of cores for parallelization}
+\item{\code{n.cores}}{numeric Number of cores for parallelization}
+
+\item{\code{...}}{additional parameters}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+List of expression shift magnitudes. Distributions per type, p-values, and adjusted p-values.
+Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
+cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
 }
 }
 \if{html}{\out{<hr>}}
@@ -295,20 +308,24 @@ cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")}
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{name}}{\itemize{
-\item results slot name (default: 'expression.shifts')
+\item results slot name (default=NULL)
 }}
 
 \item{\code{type}}{\itemize{
 \item type of a plot "bar" (default) or "box"
 }}
 
-\item{\code{notch}}{\itemize{
-\item whether to show notches in the boxplot version (default=TRUE)
-}}
+\item{\code{show.jitter}}{boolean Whether to show indivudal data points (default=FALSE)}
 
-\item{\code{show.jitter}}{whether to show indivudal data points (default: FALSE)}
+\item{\code{jitter.alpha}}{numeric Transparency value for the data points (default=0.05)}
 
-\item{\code{jitter.alpha}}{transparency value for the data points (default: 0.05)}
+\item{\code{show.pvalues}}{character string Which p-values to plot. Accepted values are "none", "raw", or "adjusted". (default=c("adjusted", "raw", "none"))}
+
+\item{\code{ylab}}{character string Label of the y-axis (default="normalized expression distance")}
+
+\item{\code{...}}{additional arguments}
+
+\item{\code{shift.types}}{character string Either "normal" or "common". (default=c("normal", "common"))}
 }
 \if{html}{\out{</div>}}
 }
@@ -359,39 +376,47 @@ Estimate differential gene expression per cell type between conditions
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{factor specifying cell types (default from self)}
+\item{\code{cell.groups}}{factor specifying cell types (default=self$cell.groups)}
 
-\item{\code{sample.groups}}{2-factor vector with annotation of groups/condition per sample (default from self)}
+\item{\code{sample.groups}}{2-factor vector with annotation of groups/condition per sample (default=self$sample.groups)}
 
-\item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy (default from self)}
+\item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy (default=self$ref.level)}
 
-\item{\code{target.level}}{Reference level in 'sample.groups', e.g., case, diseased (default from self)}
+\item{\code{target.level}}{Reference level in 'sample.groups', e.g., case, diseased (default=self$target.level)}
 
-\item{\code{name}}{slot in which to save the results (default: 'de')}
+\item{\code{name}}{character string Slot in which to save the results (default='de')}
 
-\item{\code{test}}{which DESeq2 test to use (options: "LRT" (default), "Wald")}
+\item{\code{test}}{character string Which DESeq2 test to use. The available options are "LRT", "Wald". (default="DESeq2.Wald")}
 
-\item{\code{resampling.method}}{which resampling method should be used "loo" for leave-one-out or "bootstrap", (default:NULL no resampling)}
+\item{\code{resampling.method}}{which resampling method should be used "loo" for leave-one-out or "bootstrap", (default=NULL, i.e. no resampling)}
 
-\item{\code{common.genes}}{Only investigate common genes across cell groups (default=FALSE)}
+\item{\code{n.resamplings}}{numeric Number of resamplings to perform (default=30)}
 
-\item{\code{n.cores}}{number of cores for parallelization}
+\item{\code{covariates}}{numeric (default=NULL)}
 
-\item{\code{cooks.cutoff}}{cooksCutoff for DESeq2 (default=FALSE)}
+\item{\code{common.genes}}{boolean Whether to investigate common genes across cell groups (default=FALSE)}
 
-\item{\code{cooks.cutoff}}{cooksCutoff for DESeq2 (default=FALSE)}
+\item{\code{n.cores}}{numeric Number of cores for parallelization}
 
-\item{\code{independent.filtering}}{independentFiltering parameter for DESeq2 (default=FALSE)}
+\item{\code{cooks.cutoff}}{boolean cooksCutoff for DESeq2 (default=FALSE)}
+
+\item{\code{independent.filtering}}{boolean independentFiltering parameter for DESeq2 (default=FALSE)}
 
 \item{\code{min.cell.count}}{minimum number of cells that need to be present in a given cell type in a given sample in order to be taken into account (default=10)}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
+
+\item{\code{...}}{additional parameters}
+
+\item{\code{seed.resamplings}}{numeric Seed to use for resamplings, input to set.seed() (default=239)}
+
+\item{\code{min.cell.frace}}{numeric Minimum fraction of cells to use to perform DE (default=0.05)}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 A list of DE genes
-Plot DE stability per cell type
+Estimate DE stability per cell type
 }
 }
 \if{html}{\out{<hr>}}
@@ -410,20 +435,19 @@ Plot DE stability per cell type
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{\itemize{
-\item results slot name (default: 'de')
-}}
+\item{\code{de.name}}{character string Results slot name (default='de')}
 
-\item{\code{show.pairs}}{transparency value for the data points (default: 0.05)}
+\item{\code{name}}{character string (default='de.jaccards')}
 
-\item{\code{notch}}{\itemize{
-\item whether to show notches in the boxplot version (default=TRUE)
-}}
+\item{\code{top.n.genes}}{numeric Number of top DE genes to return (default=NULL)}
+
+\item{\code{p.val.cutoff}}{numeric The p-value cutoff to apply for returned DE values (default=NULL)}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 A ggplot2 object
+Estimate DE stability per test
 }
 }
 \if{html}{\out{<hr>}}
@@ -442,9 +466,19 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string (default='de.jaccards')}
+
+\item{\code{top.n.genes}}{numeric Number of top DE genes to return (default=NULL)}
+
+\item{\code{p.val.cutoff}}{numeric The p-value cutoff to apply for returned DE values (default=NULL)}
+
+\item{\code{de.name}}{character string Results slot name (default='de')}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+Estimate DE stability per gene
 }
 }
 \if{html}{\out{<hr>}}
@@ -460,6 +494,23 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{de.name}}{character string Results slot name (default='de')}
+
+\item{\code{top.n.genes}}{numeric Number of top DE genes to return (default=500)}
+
+\item{\code{visualize}}{boolean Whether to visualize results (default=FALSE)}
+
+\item{\code{p.val.cutoff}}{numeric The p-value cutoff to apply for returned DE values (default=NULL)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+Estimate DE stability between tests
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateDEStabilityBetweenTests"></a>}}
@@ -477,9 +528,19 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string (default='jacc.bw.tests')}
+
+\item{\code{top.n.genes}}{numeric Number of top DE genes to return (default=NULL)}
+
+\item{\code{p.val.cutoff}}{numeric The p-value cutoff to apply for returned DE values (default=NULL)}
+
+\item{\code{de.name}}{character string Results slot name (default='de')}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+Estimate DE stability trend
 }
 }
 \if{html}{\out{<hr>}}
@@ -498,9 +559,19 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{de.name}}{character string Results slot name (default='de')}
+
+\item{\code{name}}{character string (default='de.trend')}
+
+\item{\code{top.n.genes}}{numeric Number of top DE genes to return (default=c(100, 200, 300))}
+
+\item{\code{p.val.cutoff}}{numeric The p-value cutoff to apply for returned DE values (default=NULL)}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+Estimate GO stability per cell type permutation directory
 }
 }
 \if{html}{\out{<hr>}}
@@ -510,18 +581,28 @@ A ggplot2 object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGOStabilityPerCellTypePermDir(
   de.test = "de",
+  name = "go.jaccards",
   top.n.de = 500,
-  padj.go = 0.05,
-  name = "go.jaccards"
+  padj.go = 0.05
 )}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{de.test}}{character string (default='de')}
+
+\item{\code{name}}{character string (default='de.trend')}
+
+\item{\code{top.n.de}}{numeric Number of top DE genes to return (default=500)}
+
+\item{\code{padj.go}}{numeric (default=0.05)}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+Estimate GO stability per cell type permutation
 }
 }
 \if{html}{\out{<hr>}}
@@ -540,9 +621,19 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{de.test}}{character string (default='de')}
+
+\item{\code{top.n.de}}{numeric Number of top DE genes to return (default=500)}
+
+\item{\code{padj.go}}{numeric (default=0.05)}
+
+\item{\code{name}}{character string (default='de.trend')}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+Estimate GO stability per cell GSEA directory
 }
 }
 \if{html}{\out{<hr>}}
@@ -560,9 +651,17 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{de.test}}{character string (default='de')}
+
+\item{\code{padj.go}}{numeric (default=0.05)}
+
+\item{\code{name}}{character string (default='de.trend')}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+Estimate GO stability per cell GSEA directory
 }
 }
 \if{html}{\out{<hr>}}
@@ -580,9 +679,17 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{de.test}}{character string (default='de')}
+
+\item{\code{padj.go}}{numeric (default=0.05)}
+
+\item{\code{name}}{character string (default='de.trend')}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+Estimate GO stability trend
 }
 }
 \if{html}{\out{<hr>}}
@@ -601,9 +708,19 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string (default='de.trend')}
+
+\item{\code{top.n.genes}}{numeric vector (default=c(100, 200, 300))}
+
+\item{\code{p.val.cutoffs}}{numeric (default=NULL)}
+
+\item{\code{de.test}}{character string (default='de')}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+plot GO stability per cell type
 }
 }
 \if{html}{\out{<hr>}}
@@ -624,9 +741,23 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string (default='go.jaccards')}
+
+\item{\code{notch}}{boolean (default=FALSE)}
+
+\item{\code{show.jitter}}{boolean (default=TRUE)}
+
+\item{\code{jitter.alpha}}{numeric (default=0.05)}
+
+\item{\code{show.pairs}}{boolean (default=FALSE)}
+
+\item{\code{sort.order}}{boolean (default=FALSE)}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+plot DE stability trends
 }
 }
 \if{html}{\out{<hr>}}
@@ -647,9 +778,23 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string (default='de.trend')}
+
+\item{\code{notch}}{boolean (default=FALSE)}
+
+\item{\code{show.jitter}}{boolean (default=TRUE)}
+
+\item{\code{jitter.alpha}}{numeric (default=0.05)}
+
+\item{\code{show.pairs}}{boolean (default=FALSE)}
+
+\item{\code{sort.order}}{boolean (default=FALSE)}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+plot DE stability FDR
 }
 }
 \if{html}{\out{<hr>}}
@@ -665,6 +810,23 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{de.name}}{character string (default='de')}
+
+\item{\code{p.adj.cutoffs}}{numeric vector (default=cc(0.001, 0.005, 0.01, 0.05, 0.1, 0.2))}
+
+\item{\code{cell.types}}{(default=NULL)}
+
+\item{\code{type}}{character string (default='relative')}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+plot DE stability FDR
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotDEStabilityFDR1loo"></a>}}
@@ -680,6 +842,23 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{de.name}}{character string (default='de')}
+
+\item{\code{p.adj.cutoffs}}{numeric vector (default=cc(0.001, 0.005, 0.01, 0.05, 0.1, 0.2))}
+
+\item{\code{cell.types}}{(default=NULL)}
+
+\item{\code{type}}{character string (default='relative')}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+plot DE stability between tests
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotDEStabilityBetweenTests"></a>}}
@@ -692,16 +871,21 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string (default='jacc.bw.tests')}
+
+\item{\code{cell.type}}{(default=NULL)}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+Plot DE stability per cell type
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotDEStabilityPerCellType"></a>}}
 \if{latex}{\out{\hypertarget{method-plotDEStabilityPerCellType}{}}}
 \subsection{Method \code{plotDEStabilityPerCellType()}}{
-Plot DE stability per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityPerCellType(
   name = "de.jaccards",
@@ -716,20 +900,23 @@ Plot DE stability per cell type
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{\itemize{
-\item results slot name (default: 'de')
-}}
+\item{\code{name}}{character string Results slot name (default='de.jaccards')}
 
-\item{\code{notch}}{\itemize{
-\item whether to show notches in the boxplot version (default=TRUE)
-}}
+\item{\code{notch}}{boolean Whether (default=FALSE)}
 
-\item{\code{show.pairs}}{transparency value for the data points (default: 0.05)}
+\item{\code{show.jitter}}{boolean Whether to show jitter on plots (default=TRUE)}
+
+\item{\code{jitter.alpha}}{numeric Parameter for jitter (default=0.05)}
+
+\item{\code{show.pairs}}{boolwan Whether to show pairs (default=FALSE)}
+
+\item{\code{sort.order}}{whether to show notches in the boxplot version (default=TRUE)}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 A ggplot2 object
+Plot DE stability per test
 }
 }
 \if{html}{\out{<hr>}}
@@ -750,9 +937,23 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Results slot name (default='jacc.per.test')}
+
+\item{\code{notch}}{boolean Whether (default=FALSE)}
+
+\item{\code{show.jitter}}{boolean Whether to show jitter on plots (default=TRUE)}
+
+\item{\code{jitter.alpha}}{numeric Parameter for jitter (default=0.05)}
+
+\item{\code{show.pairs}}{boolwan Whether to show pairs (default=FALSE)}
+
+\item{\code{sort.order}}{whether to show notches in the boxplot version (default=TRUE)}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+Plot DE stability per gene
 }
 }
 \if{html}{\out{<hr>}}
@@ -770,16 +971,23 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Results slot name (default='de')}
+
+\item{\code{cell.type}}{(default=NULL)}
+
+\item{\code{stability.score}}{character string (default='stab.median.rank')}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+Plot number of significant DE genes
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotNumberOfDEGenes"></a>}}
 \if{latex}{\out{\hypertarget{method-plotNumberOfDEGenes}{}}}
 \subsection{Method \code{plotNumberOfDEGenes()}}{
-Plot number of significant DE genes
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotNumberOfDEGenes(
   name = "de",
@@ -809,6 +1017,7 @@ Plot number of significant DE genes
 }
 \subsection{Returns}{
 A ggplot2 object
+Make volcano plots
 }
 }
 \if{html}{\out{<hr>}}
@@ -830,16 +1039,29 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string (default='de')}
+
+\item{\code{cell.types}}{(default=NULL)}
+
+\item{\code{palette}}{(default=NULL)}
+
+\item{\code{build.panel}}{boolean (default=TRUE)}
+
+\item{\code{n.col}}{numeric Number of columns (default=3)}
+
+\item{\code{color.var}}{character strign (default='CellFrac')}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+Save DE results as JSON files
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-saveDEasJSON"></a>}}
 \if{latex}{\out{\hypertarget{method-saveDEasJSON}{}}}
 \subsection{Method \code{saveDEasJSON()}}{
-Save DE results as JSON files
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveDEasJSON(
   saveprefix = NULL,
@@ -866,9 +1088,10 @@ Save DE results as JSON files
 
 \item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
 
-\item{\code{gene.metadata}}{(default=NULL)}
+\item{\code{gene.metadata}}{(default=NULL)
+Plot embedding}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 }
 \if{html}{\out{</div>}}
 }
@@ -877,7 +1100,6 @@ Save DE results as JSON files
 \if{html}{\out{<a id="method-plotEmbedding"></a>}}
 \if{latex}{\out{\hypertarget{method-plotEmbedding}{}}}
 \subsection{Method \code{plotEmbedding()}}{
-Plot embedding
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotEmbedding(
   embedding = self$embedding,
@@ -932,15 +1154,15 @@ Estimate ontology terms based on DEs}
 \describe{
 \item{\code{type}}{Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
 \item{\code{org.db}}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'}
 
 \item{\code{n.top.genes}}{numeric Number of top highest-expressed genes to consider (default=500)}
 
-\item{\code{p.adj}}{Cut-off for adjusted p-values (default=0.05)}
+\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
 
-\item{\code{p.adjust.method}}{Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
+\item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
 
 \item{\code{readable}}{boolean Mapping gene ID to gene name (default=TRUE)}
 
@@ -948,9 +1170,9 @@ Estimate ontology terms based on DEs}
 
 \item{\code{max.gs.size}}{numeric Minimal geneset size, please see clusterProfiler package for more information (default=5e2)}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 
-\item{\code{n.cores}}{number of cores for parallelization}
+\item{\code{n.cores}}{numeric Number of cores for parallelization}
 
 \item{\code{...}}{further argument for ontology estimation. Pass \code{nPerm} with \code{type='GSEA'} to use fgseaSimple method}
 
@@ -978,7 +1200,7 @@ Estimate ontology families based on ontology results
 \describe{
 \item{\code{name}}{character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")}
 
-\item{\code{p.adj}}{Cut-off for adjusted p-values (default=0.05)}
+\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1035,13 +1257,15 @@ Bar plot of ontology terms per cell type
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string (default="GO")}
 
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
-\item{\code{p.adj}}{Cut-off for adjusted p-values (default=0.05)}
+\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
 
-\item{\code{type}}{Ontology, must be either "GO" or "DO" (default="GO")}
+\item{\code{q.value}}{numeric (default=0.2)}
+
+\item{\code{min.genes}}{numeric (default=1)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1071,7 +1295,7 @@ Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
@@ -1089,13 +1313,13 @@ Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 }
 \subsection{Returns}{
 A ggplot2 object
+Plot a heatmap of ontology P values per cell type
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotOntologyHeatmap"></a>}}
 \if{latex}{\out{\hypertarget{method-plotOntologyHeatmap}{}}}
 \subsection{Method \code{plotOntologyHeatmap()}}{
-Plot a heatmap of ontology P values per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyHeatmap(
   name = "GO",
@@ -1128,12 +1352,12 @@ Plot a heatmap of ontology P values per cell type
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
 \item{\code{genes}}{Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all'
 (default="up")}
 
-\item{\code{p.adj}}{Cut-off for adjusted p-values (default=0.05)}
+\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
 
 \item{\code{top.n}}{Number of terms to show (default=Inf)}
 
@@ -1145,7 +1369,7 @@ Plot a heatmap of ontology P values per cell type
 
 \item{\code{cell.subgroups}}{Cell groups to plot (default=NULL). This affects only visualization, but not clustering.}
 
-\item{\code{p.adjust.method}}{Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
+\item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
 
 \item{\code{color.range}}{vector with two values for min/max values of p-values}
 
@@ -1161,6 +1385,7 @@ Plot a heatmap of ontology P values per cell type
 }
 \subsection{Returns}{
 A ggplot2 object
+Plot a heatmap of ontology p-values per cell type heatmap, collapsed
 }
 }
 \if{html}{\out{<hr>}}
@@ -1202,20 +1427,46 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
-\item{\code{p.adj}}{Cut-off for adjusted p-values (default=0.05)}
+\item{\code{genes}}{Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all'
+(default="up")}
 
-\item{\code{p.adjust.method}}{Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
+\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
+
+\item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="left")}
+
+\item{\code{selection}}{Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type);
+'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms)
+(default="all")}
+
+\item{\code{cell.subgroups}}{Cell groups to plot (default=NULL). This affects only visualization, but not clustering.}
+
+\item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
+
+\item{\code{...}}{parameters forwarded to \link{plotHeatmap}}
+
+\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")}
+
+\item{\code{top.n}}{Number of terms to show (default=Inf)}
+
+\item{\code{clusters}}{Whether to show GO clusters or raw GOs (default=TRUE)}
+
+\item{\code{cluster.name}}{Field with the results for GO clustering. Ignored if \code{clusters == FALSE}.}
+
+\item{\code{color.range}}{vector with two values for min/max values of p-values}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+Plot correlation matrix for ontology terms between cell types
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotOntologySimilarities"></a>}}
 \if{latex}{\out{\hypertarget{method-plotOntologySimilarities}{}}}
 \subsection{Method \code{plotOntologySimilarities()}}{
-Plot correlation matrix for ontology terms between cell types
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologySimilarities(
   name = "GO",
@@ -1229,13 +1480,15 @@ Plot correlation matrix for ontology terms between cell types
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string (default="GO")}
 
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
-\item{\code{p.adj}}{Cut-off for adjusted p-values (default=0.05)}
+\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
 
-\item{\code{type}}{Ontology, must be either "GO" or "DO" (default="GO")}
+\item{\code{q.value}}{numeric (default=0.2)}
+
+\item{\code{min.genes}}{numeric (default=1)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1269,7 +1522,7 @@ Plot related ontologies in one hierarchical network plot
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
 \item{\code{family}}{Family within cell subtype to plot (numeric value)}
 
@@ -1361,7 +1614,7 @@ Save family results as a table
 \describe{
 \item{\code{file}}{File name (default: Family_results.tsv)}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
 \item{\code{subtype}}{Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)}
 
@@ -1398,7 +1651,7 @@ Plot the cell group sizes or proportions per sample
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
 
 \item{\code{show.significance}}{whether to show statistical significance betwwen sample groups. wilcox.test was used; (\code{*} < 0.05; \verb{**} < 0.01; \verb{***} < 0.001)}
 
@@ -1412,6 +1665,7 @@ Plot the cell group sizes or proportions per sample
 }
 \subsection{Returns}{
 A ggplot2 object
+Plot compositions in CoDA space (PCA or CDA)
 }
 }
 \if{html}{\out{<hr>}}
@@ -1430,7 +1684,7 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1439,7 +1693,6 @@ A ggplot2 object
 \if{html}{\out{<a id="method-plotCodaSpace"></a>}}
 \if{latex}{\out{\hypertarget{method-plotCodaSpace}{}}}
 \subsection{Method \code{plotCodaSpace()}}{
-Plot compositions in CoDA space (PCA or CDA)
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCodaSpace(
   space = "CDA",
@@ -1457,7 +1710,7 @@ Plot compositions in CoDA space (PCA or CDA)
 \describe{
 \item{\code{space}}{either 'PCA' or 'CDA'}
 
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1488,9 +1741,9 @@ Plot contrast tree
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -1516,7 +1769,7 @@ Plot composition similarity
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1546,11 +1799,11 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
-\item{\code{n.cores}}{number of cores for parallelization}
+\item{\code{n.cores}}{numeric Number of cores for parallelization}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 }
 \if{html}{\out{</div>}}
 }
@@ -1591,7 +1844,7 @@ Plot Loadings
 \describe{
 \item{\code{palette}}{palette specification for cell types (default: stored $cell.groups.palette)}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -1614,7 +1867,7 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1652,9 +1905,9 @@ Estimate cell density in giving embedding
 
 \item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 
-\item{\code{n.cores}}{number of cores for parallelization}
+\item{\code{n.cores}}{numeric Number of cores for parallelization}
 
 \item{\code{bandwidth}}{KDE bandwidth multiplier. The full bandwidth is estimated by multiplying this value on the difference between 90\% and 10\%
 of the corresponding embedding dimension. Set it to NULL to use \link[MASS:bandwidth.nrd]{bandwidth.nrd} estimator. (default: 0.05)}
@@ -1700,7 +1953,7 @@ Plot cell density depending on the method that was used for estimating \code{cao
 
 \item{\code{name}}{slot in which to saved results from estimateCellDensity (default: 'cell.density')}
 
-\item{\code{cell.groups}}{Vector indicating cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
 
 \item{\code{...}}{plot style parameters forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}.}
 }
@@ -1728,7 +1981,7 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -1760,9 +2013,9 @@ estimate differential cell density
 
 \item{\code{name}}{slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 
-\item{\code{n.cores}}{number of cores for parallelization}
+\item{\code{n.cores}}{numeric Number of cores for parallelization}
 }
 \if{html}{\out{</div>}}
 }
@@ -1859,9 +2112,9 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 }
 \if{html}{\out{</div>}}
 }
@@ -1896,7 +2149,7 @@ Plot results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoa
 
 \item{\code{dist}}{'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default correlation distance)}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
 \item{\code{cell.type}}{If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)}
 
@@ -1943,13 +2196,13 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 
-\item{\code{n.cores}}{number of cores for parallelization}
+\item{\code{n.cores}}{numeric Number of cores for parallelization}
 
-\item{\code{p.adjust.method}}{Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
+\item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
 }
 \if{html}{\out{</div>}}
 }
@@ -1984,7 +2237,7 @@ Estimate differential expression Z-scores between two conditions per individual 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{number of top genes for estimation}
+\item{\code{n.top.genes}}{numeric Number of top genes for estimation}
 
 \item{\code{max.z}}{z-score value to winsorize the estimates for reducing impact of outliers. Default: 20.}
 
@@ -2001,11 +2254,11 @@ but greatly increase the number of zeros in the data, leading to bias towards hi
 
 \item{\code{min.edge.weight}}{numeric (default=0.6)}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 
-\item{\code{n.cores}}{number of cores for parallelization}
+\item{\code{n.cores}}{numeric Number of cores for parallelization}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -2042,9 +2295,9 @@ Results are also stored in the \code{cluster.free.de} field.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{excluded.genes}}{list of genes to exclude during estimation. For example, a list of mitochondrial genes.}
+\item{\code{excluded.genes}}{List of genes to exclude during estimation. For example, a list of mitochondrial genes.}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -2081,10 +2334,10 @@ Estimate Cluster-free Expression Shift
 \describe{
 \item{\code{n.top.genes}}{number of top genes for the distance estimation (default: 3000)}
 
-\item{\code{gene.selection}}{a method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
+\item{\code{gene.selection}}{character string Method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
 "expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "z".}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
 \item{\code{min.n.between}}{minimal number of pairs between condition for distance estimation (default: 2)}
 
@@ -2099,9 +2352,9 @@ Estimate Cluster-free Expression Shift
 \item{\code{log.vectors}}{whether to use log10 on the normalized expression before estimating the distance.
 In most cases, must be TRUE for "cosine" and "cor" distances and always must be FALSE for "js". (default: \code{dist != 'js'})}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 
-\item{\code{n.cores}}{number of cores for parallelization}
+\item{\code{n.cores}}{numeric Number of cores for parallelization}
 
 \item{\code{min.edge.weight}}{numeric (default=0.0)}
 }
@@ -2135,22 +2388,22 @@ Performs graph smoothing of the cluster-free DE Z-scores
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{number of top genes for estimation}
+\item{\code{n.top.genes}}{numeric Number of top genes for estimation}
 
 \item{\code{smoothing}}{\code{beta} parameter of the \link[sccore:heatFilter]{heatFilter}. Default: 20.}
 
 \item{\code{filter}}{graph filter function. Default: \link[sccore:heatFilter]{heatFilter}.}
 
-\item{\code{gene.selection}}{a method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
+\item{\code{gene.selection}}{character string Method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
 "expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "z".}
 
-\item{\code{excluded.genes}}{list of genes to exclude during estimation. For example, a list of mitochondrial genes.}
+\item{\code{excluded.genes}}{List of genes to exclude during estimation. For example, a list of mitochondrial genes.}
 
-\item{\code{n.cores}}{number of cores for parallelization}
+\item{\code{n.cores}}{numeric Number of cores for parallelization}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
 \item{\code{...}}{parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}}
 }
@@ -2191,18 +2444,18 @@ cells using \link[fabia:fabia]{fabia}. # TODO: update it
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{number of top genes for estimation}
+\item{\code{n.top.genes}}{numeric Number of top genes for estimation}
 
 \item{\code{n.programs}}{maximal number of gene programs to find (parameter \code{p} for fabia). Default: 15.}
 
-\item{\code{gene.selection}}{a method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
+\item{\code{gene.selection}}{character string Method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
 "expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "z".}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
-\item{\code{n.cores}}{number of cores for parallelization}
+\item{\code{n.cores}}{numeric Number of cores for parallelization}
 
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 
 \item{\code{...}}{keyword arguments forwarded to estimateGenePrograms}
 }
@@ -2246,7 +2499,7 @@ the program usin fabia biclustering.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -2269,7 +2522,7 @@ the program usin fabia biclustering.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -2302,7 +2555,7 @@ Plot cluster-free expression shift z-scores
 \describe{
 \item{\code{cell.groups}}{cell type labels. Set to NULL if it shouldn't be shown}
 
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 
 \item{\code{font.size}}{size range for cell type labels}
 
@@ -2334,9 +2587,9 @@ make sense, as control cells always have small distance from control.}
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{number of top genes for estimation}
+\item{\code{n.top.genes}}{numeric Number of top genes for estimation}
 
-\item{\code{excluded.genes}}{list of genes to exclude during estimation. For example, a list of mitochondrial genes.}
+\item{\code{excluded.genes}}{List of genes to exclude during estimation. For example, a list of mitochondrial genes.}
 }
 \if{html}{\out{</div>}}
 }
@@ -2377,7 +2630,7 @@ make sense, as control cells always have small distance from control.}
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{field name where the test results are stored}
+\item{\code{name}}{character string Field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
 }
@@ -2411,7 +2664,7 @@ make sense, as control cells always have small distance from control.}
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{verbose}}{show progress (default: stored value)}
+\item{\code{verbose}}{boolean Whether to show progress}
 }
 \if{html}{\out{</div>}}
 }

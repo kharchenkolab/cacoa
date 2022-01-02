@@ -135,8 +135,8 @@ Initialize Cacoa class
   embedding = extractEmbedding(data.object),
   graph.name = NULL,
   n.cores = 1,
-  verbose = self$verbose,
-  plot.theme = theme_bw(),
+  verbose = TRUE,
+  plot.theme = ggplot2::theme_bw(),
   plot.params = NULL
 )}\if{html}{\out{</div>}}
 }
@@ -144,13 +144,33 @@ Initialize Cacoa class
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
+\item{\code{data.object}}{Object used to initialize the Cacoa class. Either a raw or normalized count matrix, Conos object, or Seurat object.}
 
-\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
+\item{\code{sample.groups}}{(default=NULL)}
 
-\item{\code{n.cores}}{numeric Number of cores for parallelization}
+\item{\code{cell.groups}}{(default=NULL)}
 
-\item{\code{verbose}}{boolean Whether to show progress}
+\item{\code{sample.per.cell}}{(default=NULL)}
+
+\item{\code{ref.level}}{(default=NULL)}
+
+\item{\code{target.level}}{(default=NULL)}
+
+\item{\code{sample.groups.palette}}{(default=NULL)}
+
+\item{\code{cell.groups.palette}}{(default=NULL)}
+
+\item{\code{embedding}}{(default=extractEmbedding(data.object))}
+
+\item{\code{graph.name}}{(default=NULL)}
+
+\item{\code{n.cores}}{numeric (default=1)}
+
+\item{\code{verbose}}{boolean (default=TRUE)}
+
+\item{\code{plot.theme}}{(default=ggplot2::theme_bw())}
+
+\item{\code{plot.params}}{(default=NULL)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1005,13 +1025,13 @@ Plot number of significant DE genes
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{results slot in which the DE results should be stored (default: 'de')}
+\item{\code{name}}{character string Results slot in which the DE results should be stored (default='de')}
 
-\item{\code{p.adjust}}{whether the cutoff should be based on the adjusted P value (default: TRUE)}
+\item{\code{p.adjust}}{boolean Whether the cutoff should be based on the adjusted P value (default=TRUE)}
 
-\item{\code{pvalue.cutoff}}{P value cutoff (default=0.05)}
+\item{\code{pvalue.cutoff}}{numeric P-value cutoff (default=0.05)}
 
-\item{\code{show.resampling.results}}{whether to show uncertainty based on resampling results (default: TRUE)}
+\item{\code{show.resampling.results}}{boolean Whether to show uncertainty based on resampling results (default=TRUE)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1088,12 +1108,15 @@ Save DE results as JSON files
 
 \item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
 
-\item{\code{gene.metadata}}{(default=NULL)
-Plot embedding}
+\item{\code{gene.metadata}}{(default=NULL)}
 
 \item{\code{verbose}}{boolean Whether to show progress}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+saved JSON object
+Plot embedding
 }
 }
 \if{html}{\out{<hr>}}
@@ -1118,10 +1141,13 @@ Plot embedding}
 
 \item{\code{plot.theme}}{plot theme to use (default: \code{self$plot.theme})}
 
-\item{\code{...}}{other parameters passed to \link[sccore:embeddingPlot]{embeddingPlot}
-Estimate ontology terms based on DEs}
+\item{\code{...}}{other parameters passed to \link[sccore:embeddingPlot]{embeddingPlot}}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+embedding plot as output by sccore::embeddingPlot
+Estimate ontology terms based on DEs
 }
 }
 \if{html}{\out{<hr>}}
@@ -1574,22 +1600,22 @@ Save ontology results as a table
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{file}}{File name. Set to NULL to return the table instead of saving}
+\item{\code{file}}{character string File name passed to write.table(). Set to NULL to return the table instead of saving.}
 
-\item{\code{name}}{Name of ontology result (default: GO)}
+\item{\code{name}}{chacter string Name of ontology result (default='GO')}
 
-\item{\code{subtype}}{Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)}
+\item{\code{subtype}}{character string Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)}
 
 \item{\code{genes}}{Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)}
 
-\item{\code{p.adj}}{Adjusted P to filter by (default: 0.05)}
+\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
 
 \item{\code{sep}}{Separator (default: tab)}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-Table for import into text editor
+table for import into text editor
 Save family results as a table
 }
 }
@@ -1612,24 +1638,24 @@ Save family results as a table
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{file}}{File name (default: Family_results.tsv)}
+\item{\code{file}}{character string File name passed to write.table(). Set to NULL to return the table instead of saving.}
 
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{name}}{chacter string Name of ontology result (default='GO')}
 
-\item{\code{subtype}}{Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)}
+\item{\code{subtype}}{Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default=NULL)}
 
-\item{\code{genes}}{Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)}
+\item{\code{genes}}{Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default=NULL)}
 
-\item{\code{p.adj}}{Adjusted P to filter by (default: 0.05)}
+\item{\code{p.adj}}{Adjusted P to filter by (default=0.05)}
 
-\item{\code{sep}}{Separator (default: tab)}
+\item{\code{sep}}{Separator (default="\t")}
 
-\item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
+\item{\code{type}}{character string Type of ontology result, i.e., GO, GSEA, or DO (default='GO')}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-Table for import into text editor
+table for import into text editor
 Plot the cell group sizes or proportions per sample
 }
 }
@@ -1655,9 +1681,13 @@ Plot the cell group sizes or proportions per sample
 
 \item{\code{show.significance}}{whether to show statistical significance betwwen sample groups. wilcox.test was used; (\code{*} < 0.05; \verb{**} < 0.01; \verb{***} < 0.001)}
 
-\item{\code{proportions}}{whether to plot proportions or absolute numbers (default: TRUE)}
+\item{\code{filter.empty.cell.types}}{boolean (default=TRUE)}
+
+\item{\code{proportions}}{boolean Whether to plot proportions or absolute numbers (default=TRUE)}
 
 \item{\code{palette}}{color palette to use for conditions (default: stored $sample.groups.palette)}
+
+\item{\code{palette}}{(default=self$sample.group.palette)}
 
 \item{\code{...}}{additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}}
 }
@@ -1665,7 +1695,7 @@ Plot the cell group sizes or proportions per sample
 }
 \subsection{Returns}{
 A ggplot2 object
-Plot compositions in CoDA space (PCA or CDA)
+Plot the cell group sizes or proportions per sample
 }
 }
 \if{html}{\out{<hr>}}
@@ -1684,9 +1714,19 @@ Plot compositions in CoDA space (PCA or CDA)
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{(default=self$cell.groups)}
+
+\item{\code{type}}{character string (default='mad')}
+
+\item{\code{rotate.xticks}}{boolean (deafult=TRUE)}
+
+\item{\code{min.rel.abundance}}{numeric (default=0.05)}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+ggplot2 object
+Plot compositions in CoDA space (PCA or CDA)
 }
 }
 \if{html}{\out{<hr>}}
@@ -1711,18 +1751,28 @@ Plot compositions in CoDA space (PCA or CDA)
 \item{\code{space}}{either 'PCA' or 'CDA'}
 
 \item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
+
+\item{\code{font.size}}{numeric (default=3)}
+
+\item{\code{cells.to.remain}}{(default=NULL)}
+
+\item{\code{cells.to.remove}}{(default=NULL)}
+
+\item{\code{samples.to.remove}}{(default=NULL)}
+
+\item{\code{palette}}{(self$sample.groups.palette)}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 A ggplot2 object
+Plot contrast tree
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotContrastTree"></a>}}
 \if{latex}{\out{\hypertarget{method-plotContrastTree}{}}}
 \subsection{Method \code{plotContrastTree()}}{
-Plot contrast tree
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotContrastTree(
   cell.groups = self$cell.groups,
@@ -1741,21 +1791,37 @@ Plot contrast tree
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{(default=self$cell.groups)}
 
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{palette}}{(default=self$sample.groups.palette)}
+
+\item{\code{name}}{(default='coda')}
+
+\item{\code{cells.to.remain}}{(default=NULL)}
+
+\item{\code{cells.to.remove}}{(default=NULL)}
+
+\item{\code{filter.empty.cell.types}}{boolean (default=TRUE)}
+
+\item{\code{adjust.pvalues}}{boolean (default=TRUE)}
+
+\item{\code{h.method}}{(default=c('both', 'up', 'down'))}
+
+\item{\code{reorder.tree}}{boolean (default=TRUE)}
+
+\item{\code{...}}{additional parameters}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 A ggplot2 object
+Plot composition similarity
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotCompositionSimilarity"></a>}}
 \if{latex}{\out{\hypertarget{method-plotCompositionSimilarity}{}}}
 \subsection{Method \code{plotCompositionSimilarity()}}{
-Plot composition similarity
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCompositionSimilarity(
   cell.groups = self$cell.groups,
@@ -1770,11 +1836,14 @@ Plot composition similarity
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
+
+\item{\code{palette}}{(default=brewerPalette("YlOrRd", rev=FALSE))}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 A ggplot2 object
+Estimate cell loadings
 }
 }
 \if{html}{\out{<hr>}}
@@ -1799,13 +1868,31 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{n.boot}}{numeric (default=1000)}
 
-\item{\code{n.cores}}{numeric Number of cores for parallelization}
+\item{\code{ref.cell.type}}{(default=NULL)}
 
-\item{\code{verbose}}{boolean Whether to show progress}
+\item{\code{name}}{character string (default='coda')}
+
+\item{\code{n.seed}}{numeric (default=239)}
+
+\item{\code{cells.to.remove}}{vector (default=NULL)}
+
+\item{\code{cells.to.remain}}{vector (default=NULL)}
+
+\item{\code{samples.to.remove}}{vector (default=NULL)}
+
+\item{\code{filter.empty.cell.types}}{vector (default=NULL)}
+
+\item{\code{n.cores}}{numeric (default=self$n.cores)}
+
+\item{\code{verbose}}{boolean (default=self$verbose)}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+resulting cell loadings
+Estimate Ga partitions
 }
 }
 \if{html}{\out{<hr>}}
@@ -1821,12 +1908,28 @@ A ggplot2 object
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{cells.to.remain}}{vector (default=NULL)}
+
+\item{\code{cells.to.remove}}{vector (default=NULL)}
+
+\item{\code{samples.to.remove}}{vector (default=NULL)}
+
+\item{\code{...}}{additional parameters}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+estimated Ga partitions
+Plot Loadings
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotCellLoadings"></a>}}
 \if{latex}{\out{\hypertarget{method-plotCellLoadings}{}}}
 \subsection{Method \code{plotCellLoadings()}}{
-Plot Loadings
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellLoadings(
   alpha = 0.01,
@@ -1842,14 +1945,25 @@ Plot Loadings
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{alpha}}{numeric (default=0.01)}
+
 \item{\code{palette}}{palette specification for cell types (default: stored $cell.groups.palette)}
 
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{font.size}}{(default=NULL)}
+
+\item{\code{name}}{character string (default='pvalue')}
+
+\item{\code{ordering}}{character string (default='pvalue')}
+
+\item{\code{show.pvals}}{boolean (default=TRUE)}
+
+\item{\code{...}}{additional parameters}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 A ggplot2 object
+Estimate Wilcoxon signed-rank test
 }
 }
 \if{html}{\out{<hr>}}
@@ -1867,16 +1981,23 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{vector (default=NULL)}
+
+\item{\code{cells.to.remove}}{vector (default=NULL)}
+
+\item{\code{cells.to.remain}}{vector (default=NULL)}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+p-values
+Estimate cell density in giving embedding
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateCellDensity"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateCellDensity}{}}}
 \subsection{Method \code{estimateCellDensity()}}{
-Estimate cell density in giving embedding
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateCellDensity(
   bins = 400,
@@ -1895,31 +2016,36 @@ Estimate cell density in giving embedding
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{bins}}{number of bins for density estimation, default 400}
+\item{\code{bins}}{numeric Number of bins for density estimation (default=400)}
 
-\item{\code{method}}{density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')}
+\item{\code{method}}{character string Density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')}
 
-\item{\code{name}}{slot in which to save the results (default: 'cell.density')}
+\item{\code{name}}{slot in which to save the results (default='cell.density')}
 
-\item{\code{beta}}{smoothing strength parameter of the \link[sccore:heatFilter]{heatFilter} for graph based cell density (default: 30)}
+\item{\code{beta}}{numeric Smoothing strength parameter of the \link[sccore:heatFilter]{heatFilter} for graph based cell density (default=30)}
 
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
+\item{\code{estimate.variation}}{boolean (default=TRUE)}
 
-\item{\code{verbose}}{boolean Whether to show progress}
+\item{\code{sample.groups}}{(default=self$sample.groups)}
 
-\item{\code{n.cores}}{numeric Number of cores for parallelization}
+\item{\code{verbose}}{boolean (default=self$verbose)}
 
-\item{\code{bandwidth}}{KDE bandwidth multiplier. The full bandwidth is estimated by multiplying this value on the difference between 90\% and 10\%
-of the corresponding embedding dimension. Set it to NULL to use \link[MASS:bandwidth.nrd]{bandwidth.nrd} estimator. (default: 0.05)}
+\item{\code{n.cores}}{numeric (default=self$n.cores)}
+
+\item{\code{bandwidth}}{numeric KDE bandwidth multiplier (default=0.5). The full bandwidth is estimated by multiplying this value on the difference between 90\% and 10\%
+of the corresponding embedding dimension. Set it to NULL to use \link[MASS:bandwidth.nrd]{bandwidth.nrd} estimator. (default=0.05)}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+estimated cell densities
+Plot cell density depending on the method that was used for estimating \code{cao$test.resulst[[name]]}
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotCellDensity"></a>}}
 \if{latex}{\out{\hypertarget{method-plotCellDensity}{}}}
 \subsection{Method \code{plotCellDensity()}}{
-Plot cell density depending on the method that was used for estimating \code{cao$test.resulst[[name]]}
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellDensity(
   show.grid = TRUE,
@@ -1943,17 +2069,31 @@ Plot cell density depending on the method that was used for estimating \code{cao
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{add.points}}{default is TRUE, add points to cell density figure}
+\item{\code{add.points}}{boolean Add points to cell density figure (default=TRUE)}
 
-\item{\code{contours}}{specify cell types for contour, multiple cell types are also supported}
+\item{\code{size}}{numeric (default=0.1)}
 
-\item{\code{contour.color}}{color for contour line}
+\item{\code{show.legend}}{boolean (default=FALSE)}
 
-\item{\code{contour.conf}}{confidence interval of contour}
+\item{\code{palette}}{(default=NULL)}
 
-\item{\code{name}}{slot in which to saved results from estimateCellDensity (default: 'cell.density')}
+\item{\code{point.col}}{character string (default='#313695')}
 
-\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
+\item{\code{contours}}{specify cell types for contour, multiple cell types are also supported (default=NULL)}
+
+\item{\code{contour.color}}{color for contour line (default='black')}
+
+\item{\code{contour.conf}}{confidence interval of contour  (default='10\%')}
+
+\item{\code{name}}{slot in which to saved results from estimateCellDensity (default='cell.density')}
+
+\item{\code{show.cell.groups}}{boolean (default=TRUE)}
+
+\item{\code{cell.groups}}{(default=self$cell.groups)}
+
+\item{\code{font.size}}{(default=c(2, 4))}
+
+\item{\code{color.range}}{(default=c(0, "99\%"))}
 
 \item{\code{...}}{plot style parameters forwarded to \link[sccore:styleEmbeddingPlot]{sccore::styleEmbeddingPlot}.}
 }
@@ -1961,6 +2101,7 @@ Plot cell density depending on the method that was used for estimating \code{cao
 }
 \subsection{Returns}{
 A ggplot2 object
+Plot cell density variation
 }
 }
 \if{html}{\out{<hr>}}
@@ -1981,16 +2122,27 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{type}}{character string (default='mad')}
+
+\item{\code{plot.type}}{character string (default='embedding')}
+
+\item{\code{name}}{character string (default='cell.density')}
+
+\item{\code{cutoff}}{(default=NULL)}
+
+\item{\code{condition}}{character vector (default=c('both', 'ref', 'target'))}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+ggplot2 object
+Estimate differential cell density
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateDiffCellDensity"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateDiffCellDensity}{}}}
 \subsection{Method \code{estimateDiffCellDensity()}}{
-estimate differential cell density
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDiffCellDensity(
   type = "permutation",
@@ -2013,18 +2165,27 @@ estimate differential cell density
 
 \item{\code{name}}{slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')}
 
-\item{\code{verbose}}{boolean Whether to show progress}
+\item{\code{n.permutations}}{numeric (default=400)}
 
-\item{\code{n.cores}}{numeric Number of cores for parallelization}
+\item{\code{smooth}}{boolean (default=TRUE)}
+
+\item{\code{verbose}}{boolean (default=self$verbose)}
+
+\item{\code{n.cores}}{numeric (default=self$n.cores)}
+
+\item{\code{...}}{additional arguments to the function}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+estimated differential cell densities
+Estimate differential cell density
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotDiffCellDensity"></a>}}
 \if{latex}{\out{\hypertarget{method-plotDiffCellDensity}{}}}
 \subsection{Method \code{plotDiffCellDensity()}}{
-estimate differential cell density
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDiffCellDensity(
   type = NULL,
@@ -2051,22 +2212,39 @@ estimate differential cell density
 
 \item{\code{name}}{slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')}
 
+\item{\code{size}}{numeric (default=0.2)}
+
 \item{\code{palette}}{color palette, default is c('blue','white','red')}
+
+\item{\code{adjust.pvalues}}{(default=NULL)}
 
 \item{\code{contours}}{specify cell types for contour, multiple cell types are also supported (default: NULL)}
 
 \item{\code{contour.color}}{color for contour line (default: 'black')}
 
 \item{\code{contour.conf}}{confidence interval of contour (default: '10\%')}
+
+\item{\code{plot.na}}{boolean (default=FALSE)}
+
+\item{\code{color.range}}{(default=NULL)}
+
+\item{\code{mid.color}}{character string (default='gray95')}
+
+\item{\code{scale.z.palette}}{(default=adjust.pvalues)}
+
+\item{\code{min.z}}{(default=qnorm(0.9))}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+ggplot2 object
+Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotExpressionDistance"></a>}}
 \if{latex}{\out{\hypertarget{method-plotExpressionDistance}{}}}
 \subsection{Method \code{plotExpressionDistance()}}{
-Plot results from cao$estimateExpressionShiftMagnitudes()
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionDistance(
   name = "expression.shifts",
@@ -2080,9 +2258,11 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{Test results to plot (default=expression.shifts)}
+\item{\code{name}}{character string Test results to plot (default=expression.shifts)}
 
-\item{\code{joint}}{whether to show joint boxplot with the expression distance weighed by the sizes of cell types (default: TRUE), or show distances for each individual cell type}
+\item{\code{joint}}{boolean Whether to show joint boxplot with the expression distance weighed by the sizes of cell types (default: TRUE), or show distances for each individual cell type}
+
+\item{\code{palette}}{(default=self$sample.groups.palette)}
 
 \item{\code{show.significance}}{whether to show statistical significance between sample groups. wilcox.test was used; (\code{*} < 0.05; \verb{**} < 0.01; \verb{***} < 0.001)}
 
@@ -2092,6 +2272,7 @@ Plot results from cao$estimateExpressionShiftMagnitudes()
 }
 \subsection{Returns}{
 A ggplot2 object
+Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
 }
 }
 \if{html}{\out{<hr>}}
@@ -2112,18 +2293,28 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{space}}{(default=c('expression.shifts', 'coda', 'pseudo.bulk'))}
 
-\item{\code{verbose}}{boolean Whether to show progress}
+\item{\code{cell.type}}{(default=NULL)}
+
+\item{\code{dist}}{(default=NULL)}
+
+\item{\code{name}}{(default=NULL)}
+
+\item{\code{verbose}}{boolean (default=self$verbose)}
+
+\item{\code{...}}{additional arguments}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+Project samples to 2D space with MDS. Plots results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoadings()
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-plotSampleDistances"></a>}}
 \if{latex}{\out{\hypertarget{method-plotSampleDistances}{}}}
 \subsection{Method \code{plotSampleDistances()}}{
-Plot results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoadings()
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotSampleDistances(
   space = "expression.shifts",
@@ -2145,11 +2336,13 @@ Plot results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoa
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{space}}{expression.shifts- expression shifts results from cao$estimateExpressionShiftMagnitudes(); CDA- cell composition shifts result from cao$estimateCellLoadings(); sudo.bulk- expression distance of sudo bulk}
+\item{\code{space}}{character string "expression.shifts" Results from cao$estimateExpressionShiftMagnitudes(); CDA- cell composition shifts result from cao$estimateCellLoadings(); sudo.bulk- expression distance of sudo bulk}
+
+\item{\code{method}}{character string "MDS"}
 
 \item{\code{dist}}{'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default correlation distance)}
 
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{name}}{(default=NULL)}
 
 \item{\code{cell.type}}{If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)}
 
@@ -2157,18 +2350,21 @@ Plot results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoa
 
 \item{\code{show.sample.size}}{make point size proportional to the log10 of the number of cells per sample (default: FALSE)}
 
-\item{\code{font.size}}{font size of the sample labels. If NULL, the labels are not shown. (default: NULL)}
+\item{\code{sample.colors}}{(default=NULL)}
 
-\item{\code{show.ticks}}{show tick labels on axes (default: FALSE)}
+\item{\code{color.title}}{(default=NULL)}
 
-\item{\code{show.labels}}{show axis labels (default: FALSE)}
+\item{\code{title}}{(default=NULL)}
 
-\item{\code{size}}{point size. For \code{show.sample.size==TRUE}, it can be vector of length 2.  (default: 5)}
+\item{\code{n.permutations}}{numeric (default=2000)}
+
+\item{\code{show.pvalues}}{boolean (default=FALSE)}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 A ggplot2 object
+Estimate metadata separation
 }
 }
 \if{html}{\out{<hr>}}
@@ -2196,22 +2392,43 @@ A ggplot2 object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{sample.meta}}{sample metadata}
 
-\item{\code{verbose}}{boolean Whether to show progress}
+\item{\code{space}}{(default="expression shifts")}
 
-\item{\code{n.cores}}{numeric Number of cores for parallelization}
+\item{\code{dist}}{(default=NULL)}
 
-\item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
+\item{\code{space.name}}{(default=NULL)}
+
+\item{\code{name}}{(default="metadata.separation")}
+
+\item{\code{n.permutations}}{(default=5000)}
+
+\item{\code{trim}}{(default=0.05)}
+
+\item{\code{show.warning}}{boolean (default=TRUE)}
+
+\item{\code{verbose}}{boolean (default=self$verbose)}
+
+\item{\code{n.cores}}{numeric (default=self$n.cores)}
+
+\item{\code{adjust.pvalues}}{boolean (default=TRUE)}
+
+\item{\code{p.adjust.method}}{character string (default="BH")}
+
+\item{\code{pvalue.cutoff}}{numeric (default=0.05)}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+results
+Estimate differential expression Z-scores between two conditions per individual cell
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateClusterFreeDE"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateClusterFreeDE}{}}}
 \subsection{Method \code{estimateClusterFreeDE()}}{
-Estimate differential expression Z-scores between two conditions per individual cell
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeDE(
   n.top.genes = Inf,
@@ -2237,7 +2454,9 @@ Estimate differential expression Z-scores between two conditions per individual 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{numeric Number of top genes for estimation}
+\item{\code{n.top.genes}}{(default=Inf)}
+
+\item{\code{genes}}{(default=NULL)}
 
 \item{\code{max.z}}{z-score value to winsorize the estimates for reducing impact of outliers. Default: 20.}
 
@@ -2250,15 +2469,25 @@ Estimate differential expression Z-scores between two conditions per individual 
 \item{\code{robust}}{whether to use median estimates instead of mean. Using median is more robust,
 but greatly increase the number of zeros in the data, leading to bias towards highly-express genes. (Default: FALSE)}
 
+\item{\code{norm.both}}{boolean (default=TRUE)}
+
+\item{\code{adjust.pvalues}}{boolean (default=FALSE)}
+
+\item{\code{wins}}{numeric (default=0.01)}
+
+\item{\code{n.permutations}}{numeric (default=200)}
+
 \item{\code{lfc.pseudocount}}{pseudocount value for estimation of log2(fold-change)}
 
 \item{\code{min.edge.weight}}{numeric (default=0.6)}
 
-\item{\code{verbose}}{boolean Whether to show progress}
+\item{\code{verbose}}{boolean (default=self$verbose)}
 
-\item{\code{n.cores}}{numeric Number of cores for parallelization}
+\item{\code{n.cores}}{numeric (default=self$n.cores)}
 
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{name}}{character string (default='cluster.free.de')}
+
+\item{\code{smoooth}}{boolean (default=TRUE)}
 }
 \if{html}{\out{</div>}}
 }
@@ -2271,6 +2500,7 @@ list with sparce matrices containing various DE metrics with genes as columns an
 \item \code{lfc}: log2(fold-change) of expression
 Cells that have only one condition in their expression neighborhood have NA Z-scores for all genes.
 Results are also stored in the \code{cluster.free.de} field.
+Get most changed genes
 }
 }
 }
@@ -2295,18 +2525,33 @@ Results are also stored in the \code{cluster.free.de} field.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{excluded.genes}}{List of genes to exclude during estimation. For example, a list of mitochondrial genes.}
+\item{\code{method}}{(default=c("z", "z.adj", "lfc"))}
 
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{min.z}}{numeric (default=0.5)}
+
+\item{\code{min.lfc}}{numeric (default=1)}
+
+\item{\code{max.score}}{numeric (default=20)}
+
+\item{\code{cell.subset}}{(default=NULL)}
+
+\item{\code{excluded.genes}}{(default=NULL)}
+
+\item{\code{included.genes}}{(default=NULL)}
+
+\item{\code{name}}{(default="cluster.free.de")}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+results
+Estimate Cluster-free Expression Shift
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateClusterFreeExpressionShifts"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateClusterFreeExpressionShifts}{}}}
 \subsection{Method \code{estimateClusterFreeExpressionShifts()}}{
-Estimate Cluster-free Expression Shift
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeExpressionShifts(
   n.top.genes = 3000,
@@ -2334,10 +2579,9 @@ Estimate Cluster-free Expression Shift
 \describe{
 \item{\code{n.top.genes}}{number of top genes for the distance estimation (default: 3000)}
 
-\item{\code{gene.selection}}{character string Method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
-"expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "z".}
+\item{\code{gene.selection}}{character string (default="z")}
 
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{name}}{character string (default="cluster.free.expr.shifts")}
 
 \item{\code{min.n.between}}{minimal number of pairs between condition for distance estimation (default: 2)}
 
@@ -2352,9 +2596,15 @@ Estimate Cluster-free Expression Shift
 \item{\code{log.vectors}}{whether to use log10 on the normalized expression before estimating the distance.
 In most cases, must be TRUE for "cosine" and "cor" distances and always must be FALSE for "js". (default: \code{dist != 'js'})}
 
-\item{\code{verbose}}{boolean Whether to show progress}
+\item{\code{wins}}{numeric (default=0.025)}
 
-\item{\code{n.cores}}{numeric Number of cores for parallelization}
+\item{\code{genes}}{(default=NULL)}
+
+\item{\code{n.permutations}}{numeric (default=500)}
+
+\item{\code{verbose}}{boolean (default=self$verbose)}
+
+\item{\code{n.cores}}{numeric (default=self$n.cores)}
 
 \item{\code{min.edge.weight}}{numeric (default=0.0)}
 }
@@ -2363,13 +2613,13 @@ In most cases, must be TRUE for "cosine" and "cor" distances and always must be 
 \subsection{Returns}{
 Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
 Results are also stored in the \code{cluster.free.expr.shifts} field.
+Performs graph smoothing of the cluster-free DE Z-scores
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-smoothClusterFreeZScores"></a>}}
 \if{latex}{\out{\hypertarget{method-smoothClusterFreeZScores}{}}}
 \subsection{Method \code{smoothClusterFreeZScores()}}{
-Performs graph smoothing of the cluster-free DE Z-scores
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$smoothClusterFreeZScores(
   n.top.genes = 1000,
@@ -2388,37 +2638,40 @@ Performs graph smoothing of the cluster-free DE Z-scores
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{numeric Number of top genes for estimation}
+\item{\code{n.top.genes}}{numeric (default=1000)}
 
-\item{\code{smoothing}}{\code{beta} parameter of the \link[sccore:heatFilter]{heatFilter}. Default: 20.}
+\item{\code{smoothing}}{\code{beta} parameter of the \link[sccore:heatFilter]{heatFilter}. (default=20)}
 
-\item{\code{filter}}{graph filter function. Default: \link[sccore:heatFilter]{heatFilter}.}
+\item{\code{filter}}{graph filter function. (default=NULL)}
 
-\item{\code{gene.selection}}{character string Method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
-"expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "z".}
+\item{\code{z.adj}}{boolean (default=FALSE)}
+
+\item{\code{gene.selection}}{(default=ifelse(z.adj, "z.adj", "z"))}
 
 \item{\code{excluded.genes}}{List of genes to exclude during estimation. For example, a list of mitochondrial genes.}
 
-\item{\code{n.cores}}{numeric Number of cores for parallelization}
+\item{\code{n.cores}}{numeric (default=self$n.cores)}
 
-\item{\code{verbose}}{boolean Whether to show progress}
+\item{\code{verbose}}{boolean (default=self$verbose)}
 
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{name}}{character string (default='cluster.free.de')}
 
 \item{\code{...}}{parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}}
+
+\item{\code{exluded.genes}}{(default=NULL)}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 Sparse matrix of smoothed Z-scores. Results are also stored in the \code{cluster.free.de$z.smoothed} field.
+Estimate Gene Programs based on cluster-free Z-scores on a subsample of
+cells using \link[fabia:fabia]{fabia}. # TODO: update it
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateGenePrograms"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateGenePrograms}{}}}
 \subsection{Method \code{estimateGenePrograms()}}{
-Estimate Gene Programs based on cluster-free Z-scores on a subsample of
-cells using \link[fabia:fabia]{fabia}. # TODO: update it
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGenePrograms(
   method = c("pam", "leiden", "fabia"),
@@ -2444,18 +2697,35 @@ cells using \link[fabia:fabia]{fabia}. # TODO: update it
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{numeric Number of top genes for estimation}
+\item{\code{n.top.genes}}{(default=Inf)}
 
-\item{\code{n.programs}}{maximal number of gene programs to find (parameter \code{p} for fabia). Default: 15.}
+\item{\code{genes}}{(default=NULL)}
 
-\item{\code{gene.selection}}{character string Method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
-"expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "z".}
+\item{\code{n.programs}}{maximal number of gene programs to find (parameter \code{p} for fabia). (default=15)}
+
+\item{\code{z.adj}}{boolean (default=FALSE)}
+
+\item{\code{gene.selection}}{(default=ifelse(z.adj, "z.adj", "z"))}
+
+\item{\code{smooth}}{boolean (default=TRUE)}
+
+\item{\code{abs.scores}}{boolean (default=FALSE)}
 
 \item{\code{name}}{character string Field name where the test results are stored}
 
-\item{\code{n.cores}}{numeric Number of cores for parallelization}
+\item{\code{cell.subset}}{(default=NULL)}
 
-\item{\code{verbose}}{boolean Whether to show progress}
+\item{\code{n.cores}}{numeric (default=self$n.cores)}
+
+\item{\code{verbose}}{boolean (default=self$verbose)}
+
+\item{\code{max.z}}{numeric (default=5)}
+
+\item{\code{min.z}}{numeric (default=0.5)}
+
+\item{\code{min.change.frac}}{numeric (default=0.01)}
+
+\item{\code{de.name}}{character string (default="cluster.free.de")}
 
 \item{\code{...}}{keyword arguments forwarded to estimateGenePrograms}
 }
@@ -2474,6 +2744,7 @@ subsampled cells.
 \item \code{gene.scores}: list of vectors of gene scores per program. Contains only genes, selected for
 the program usin fabia biclustering.
 \item \code{bi.clusts} fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
+Plot gene program scores
 }
 }
 }
@@ -2499,9 +2770,30 @@ the program usin fabia biclustering.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{name}}{character string (default='gene.programs')}
+
+\item{\code{prog.ids}}{(default=NULL)}
+
+\item{\code{build.panel}}{boolean (default=TRUE)}
+
+\item{\code{nrow}}{(default=NULL)}
+
+\item{\code{adj.list}}{(default=NULL)}
+
+\item{\code{legend.title}}{character string (default="Score")}
+
+\item{\code{palette}}{(default=NULL)}
+
+\item{\code{min.genes.per.prog}}{numeric (default=10)}
+
+\item{\code{color.range}}{(default=c("0.5\%", "99.5\%"))}
+
+\item{\code{...}}{additional parameters}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+Plot gene program genes
 }
 }
 \if{html}{\out{<hr>}}
@@ -2523,6 +2815,8 @@ the program usin fabia biclustering.
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{name}}{character string Field name where the test results are stored}
+
+\item{\code{Plot}}{cluster-free expression shift z-scores}
 }
 \if{html}{\out{</div>}}
 }
@@ -2531,7 +2825,6 @@ the program usin fabia biclustering.
 \if{html}{\out{<a id="method-plotClusterFreeExpressionShifts"></a>}}
 \if{latex}{\out{\hypertarget{method-plotClusterFreeExpressionShifts}{}}}
 \subsection{Method \code{plotClusterFreeExpressionShifts()}}{
-Plot cluster-free expression shift z-scores
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotClusterFreeExpressionShifts(
   cell.groups = self$cell.groups,
@@ -2555,14 +2848,28 @@ Plot cluster-free expression shift z-scores
 \describe{
 \item{\code{cell.groups}}{cell type labels. Set to NULL if it shouldn't be shown}
 
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{smooth}}{boolean (default=TRUE)}
+
+\item{\code{plot.na}}{boolean (default=FALSE)}
+
+\item{\code{name}}{(default='cluster.free.expr.shifts')}
+
+\item{\code{scale.z.palette}}{boolean (default=TRUE)}
+
+\item{\code{min.z}}{(default=qnorm(0.9))}
+
+\item{\code{color.range}}{(default=c("0", "97.5\%"))}
+
+\item{\code{alpha}}{numeric (default=0.2)}
 
 \item{\code{font.size}}{size range for cell type labels}
 
-\item{\code{...}}{parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}}
+\item{\code{palette}}{(default=brewerPalette("YlOrRd", rev=FALSE))}
 
-\item{\code{plot.both.conditions}}{show both case and control cells. Normally, showing control cells doesn't
-make sense, as control cells always have small distance from control.}
+\item{\code{build.panel}}{boolean (default=TRUE)}
+
+\item{\code{...}}{parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
+Plot most changed genes}
 }
 \if{html}{\out{</div>}}
 }
@@ -2587,9 +2894,22 @@ make sense, as control cells always have small distance from control.}
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{numeric Number of top genes for estimation}
+\item{\code{n.top.genes}}{numeric}
 
-\item{\code{excluded.genes}}{List of genes to exclude during estimation. For example, a list of mitochondrial genes.}
+\item{\code{method}}{character string (default='z')}
+
+\item{\code{min.lfc}}{numeric (default=1)}
+
+\item{\code{max.score}}{numeric (default=20)}
+
+\item{\code{cell.subset}}{(default=NULL)}
+
+\item{\code{excluded.genes}}{(default=NULL)}
+
+\item{\code{...}}{additional parameters input to self$plotGeneExpressionComparison()
+Plot gene expression comparison}
+
+\item{\code{min}}{numeric (default=0.5)}
 }
 \if{html}{\out{</div>}}
 }
@@ -2630,9 +2950,57 @@ make sense, as control cells always have small distance from control.}
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{genes}}{(default=NULL)}
+
+\item{\code{scores}}{(default=NULL)}
+
+\item{\code{max.expr}}{character string (default="97.5\%")}
+
+\item{\code{plots}}{(default=c("z.adj", "z", "expression"))}
+
+\item{\code{min.z}}{(default=qname(0.9))}
+
+\item{\code{max.z}}{numeric (default=4)}
+
+\item{\code{max.z.adj}}{(default=NULL)}
+
+\item{\code{max.lfc}}{numeric (default=3)}
+
+\item{\code{smoothed}}{boolean (default=FALSE)}
+
+\item{\code{gene.palette}}{(default=dark.red.palette)}
+
+\item{\code{z.palette}}{(default=NULL)}
+
+\item{\code{z.adj.palette}}{(default=z.palette)}
+
+\item{\code{lfc.palette}}{(default=NULL)}
+
+\item{\code{scale.z.palette}}{boolean (default=TRUE)}
+
+\item{\code{plot.na}}{(default=-1)}
+
+\item{\code{adj.list}}{(default=NULL)}
+
+\item{\code{build.panel}}{boolean (default=TRUE)}
+
+\item{\code{nrow}}{(default=1)}
+
+\item{\code{cell.subset}}{(default=NULL)}
+
+\item{\code{groups}}{(default=NULL)}
+
+\item{\code{subgroups}}{(default=NULL)}
+
+\item{\code{keep.limits}}{(default=NULL)}
+
 \item{\code{name}}{character string Field name where the test results are stored}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+list
+Get condition per cell
 }
 }
 \if{html}{\out{<hr>}}
@@ -2643,6 +3011,10 @@ make sense, as control cells always have small distance from control.}
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getConditionPerCell()}\if{html}{\out{</div>}}
 }
 
+\subsection{Returns}{
+conditions per cell
+Get joint count matrix
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getJointCountMatrix"></a>}}
@@ -2652,6 +3024,19 @@ make sense, as control cells always have small distance from control.}
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getJointCountMatrix(force = FALSE, raw = TRUE)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{force}}{boolean (default=FALSE)}
+
+\item{\code{raw}}{boolean (default=TRUE)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+joint count matrix
+Get GO environment
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-getGOEnvironment"></a>}}
@@ -2664,9 +3049,17 @@ make sense, as control cells always have small distance from control.}
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{verbose}}{boolean Whether to show progress}
+\item{\code{org.db}}{object of class OrgDB from Bioconductor (e.g. org.Hs.eg.db)}
+
+\item{\code{verbose}}{boolean (default=FALSE)}
+
+\item{\code{ignore.cache}}{(default=NULL)}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+GO environment
+Extract coda data
 }
 }
 \if{html}{\out{<hr>}}

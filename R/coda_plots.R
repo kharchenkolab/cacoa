@@ -78,7 +78,8 @@ distTreeOrder <- function(t, tree.order){
 
 plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme=theme_get(), label.angle=90,
                              p.threshold=0.05, adjust.pvalues=TRUE, h.methods='both', font.size=3, label.hjust=1,
-                             tree.order=NULL, loadings.mean=NULL, palette=NULL, verbose=FALSE) {
+                             show.text='pvalue.code', tree.order=NULL, loadings.mean=NULL, palette=NULL,
+                             verbose=FALSE) {
   checkPackageInstalled(c("ggdendro"), cran=TRUE)
 
   log.f <- getLogFreq(d.counts)
@@ -190,27 +191,28 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
 
   df.pval <- data.frame()
   df.bals <- data.frame()
-  df.bal.range <- data.frame()
   df.bal.quartile <- data.frame()
   df.bal.median <- data.frame()
-  df.bal.range <- data.frame()
+  df.text <- data.frame()
   group.levels <- c(ref.level, target.level)
 
   for(id.node in 1:ncol(balances)){
+    if (p.adj[id.node] > p.threshold) next
 
-    if(p.adj[id.node] < p.threshold){
-      df.pval <- rbind(df.pval, innode.pos[id.node, c('x', 'y')])
-    }else
-      next
+    df.pval <- rbind(df.pval, innode.pos[id.node, c('x', 'y')])
 
-    # Normalization of values of balances according to the  range between nodes
+    # Normalization of values of balances according to the range between nodes
     x.tmp <- balances[,id.node]
     x.tmp <- x.tmp - mean(x.tmp)
 
     # DO NOT MOVE THIS LINE DOWN:
-    df.bal.range <- rbind(df.bal.range, tibble(x=innode.pos$x[id.node] + innode.pos$range[id.node]/2,
-                                               y=innode.pos$y[id.node],
-                                               val=max(abs(x.tmp))))
+    df.text %<>% rbind(data.frame(
+      x=innode.pos$x[id.node] + innode.pos$range[id.node]/2,
+      y=innode.pos$y[id.node],
+      range=sprintf('%2.1f', max(abs(x.tmp))),
+      pvalue=signif(p.adj[id.node], 2),
+      pvalue.code=pvalueToCode(p.adj[id.node])
+    ))
 
     x.tmp <- x.tmp / max(abs(x.tmp)) / 2 * innode.pos$range[id.node] * 0.9
     x.tmp <- x.tmp + innode.pos$x[id.node]
@@ -219,31 +221,42 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     q.case <- quantile(x.tmp[d.groups], c(0.25, 0.75))
     q.control <- quantile(x.tmp[!d.groups], c(0.25, 0.75))
 
-    df.bal.quartile <- rbind(df.bal.quartile,
-                             tibble(x=c(q.case, q.control),
-                                    y=c(rep(y.tmp[d.groups][1],2), rep(y.tmp[!d.groups][1],2)),
-                                    group=group.levels[1 + c(T, T, F, F)], node = id.node))
+    df.bal.quartile %<>% rbind(data.frame(
+      x=c(q.case, q.control),
+      y=c(rep(y.tmp[d.groups][1],2), rep(y.tmp[!d.groups][1],2)),
+      group=group.levels[1 + c(1, 1, 0, 0)],
+      node = id.node
+    ))
 
-    df.bal.median <- rbind(df.bal.median,
-                           tibble(x=c(median(x.tmp[d.groups]), median(x.tmp[!d.groups])),
-                                  y=c(y.tmp[d.groups][1], y.tmp[!d.groups][1]),
-                                  group=group.levels[1 + c(T, F)], node = id.node))
+    df.bal.median %<>% rbind(data.frame(
+      x=c(median(x.tmp[d.groups]), median(x.tmp[!d.groups])),
+      y=c(y.tmp[d.groups][1], y.tmp[!d.groups][1]),
+      group=group.levels[1 + c(1, 0)],
+      node=id.node
+    ))
 
-    df.bals <- rbind(df.bals, data.frame(x=x.tmp, y=y.tmp, group=group.levels[1 + d.groups], node = id.node))
-
+    df.bals %<>% rbind(data.frame(x=x.tmp, y=y.tmp, group=group.levels[1 + d.groups], node = id.node))
   }
 
-  px <- px.init + geom_point(data = df.bals,
-                             aes(x=x, y=y, col = as.factor(group), group=as.factor(node)), alpha = 0.1, size = 1) +
-    geom_point(data = df.bal.median,
-               aes(x=x, y=y, col = as.factor(group)),
+  px <- px.init + geom_point(data=df.bals,
+                             aes(x=x, y=y, col=as.factor(group), group=as.factor(node)), alpha = 0.1, size = 1) +
+    geom_point(data=df.bal.median,
+               aes(x=x, y=y, col=as.factor(group)),
                size = 2.5, shape = 18) +
-    geom_point(data = df.pval, aes(x=x, y=y)) +
-    geom_line(data=df.bal.quartile, aes(x = x, y = y,
-                                        col = as.factor(group),
+    geom_point(data=df.pval, aes(x=x, y=y)) +
+    geom_line(data=df.bal.quartile, aes(x=x, y=y,
+                                        col=as.factor(group),
                                         group=interaction(group, node)), size = 0.75) +
-    geom_text(data=df.bal.range, mapping=aes(x=x, y=y, label=sprintf('%2.1f', val)), vjust=0, hjust=0, size=font.size) +
     labs(col=" ")
+
+  if (is.logical(show.text) && !show.text) show.text <- NULL
+  if (!is.null(show.text)) {
+    if (!(show.text %in% colnames(df.text)))
+      stop("Unexpected value for show.text: ", show.text)
+
+    px <- px +
+      geom_text(data=df.text, mapping=aes_string(x='x', y='y', label=show.text), vjust=0, hjust=0, size=font.size)
+  }
 
   if (!is.null(loadings.mean)) {
     node.leaves <- node.pos[node.pos$to < min(tree$edge[,1]),]

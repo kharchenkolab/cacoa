@@ -47,7 +47,6 @@ Suggests:
     entropy,
     fabia,
     ggdendro,
-    ggpubr,
     ggrastr (>= 0.1.7),
     ggtree,
     GOfuncR,

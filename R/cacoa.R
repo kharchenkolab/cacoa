@@ -1644,11 +1644,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       ont.res@result <- df
 
       # Plot
-      if (plot == "dot")
+      if (plot == "dot"){
         return(enrichplot::dotplot(ont.res, showCategory=n, orderBy="x", ...))
+      }
 
-      if (plot == "bar")
+      if (plot == "bar"){
         return(enrichplot::barplot(ont.res, showCategory=n, ...))
+      }
 
       stop("Unknown plot type: ", plot)
     },
@@ -1926,7 +1928,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param subtype Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default=NULL)
     #' @param genes Only for GO results: Direction of genes to filter by, must be "up", "down", or "all" (default=NULL)
     #' @param p.adj Adjusted P to filter by (default=0.05)
-    #' @param sep Separator (default="\t")
+    #' @param sep Separator (default=tab)
     #' @return table for import into text editor
     saveFamiliesAsTable=function(file, name="GO", subtype=NULL, genes=NULL, p.adj=0.05, sep="\t", ...) {
       # Extract results

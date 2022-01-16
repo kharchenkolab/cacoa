@@ -1648,7 +1648,7 @@ Save family results as a table
 
 \item{\code{p.adj}}{Adjusted P to filter by (default=0.05)}
 
-\item{\code{sep}}{Separator (default="\t")}
+\item{\code{sep}}{Separator (default=tab)}
 
 \item{\code{type}}{character string Type of ontology result, i.e., GO, GSEA, or DO (default='GO')}
 }

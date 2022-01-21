@@ -152,7 +152,7 @@ gaPartitionAll <- function(d.counts, d.groups, n.pop = 1000, n.epoch = 100, n.se
 }
 
 
-#' @description Get the most contrast balance based on genetic algorithm
+#' Get the most contrast balance based on genetic algorithm
 #'
 #' @param d.counts Cell count table
 #' @param d.groups Group variable
@@ -204,7 +204,7 @@ getSignifCellTypes <- function(d.counts, d.groups,
 }
 
 
-#' @description Get caconical decomposisiotn of balances based
+#' Get caconical decomposisiotn of balances based
 #'
 #' @param d.counts Cell count table
 #' @param d.groups Group variable
@@ -242,7 +242,7 @@ getCanonicalContrasts <- function(d.counts, d.groups, n.dim = 2){
 }
 
 
-#' @description Get the most contrast balance based on genetic algorithm iteratively(!)
+#' Get the most contrast balance based on genetic algorithm iteratively(!)
 #'
 #' @param d.counts Cell count table
 #' @param d.groups Group variable

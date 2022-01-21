@@ -1,9 +1,10 @@
 
-#' @description Construct the canonical tree
+#' Construct the canonical tree
 #'
 #' @param cnts Table with cell type counts
 #' @param groups Groups variable for samples
 #' @return phylo tree
+#' @keywords internal
 constructTree <- function(cnts, groups, partition.thresh = 0){
   checkDataGroups(cnts, groups)
   # ---------
@@ -61,7 +62,10 @@ constructTree <- function(cnts, groups, partition.thresh = 0){
   return(list(tree = tree, sbp = sbp.cda, dendro = d.cur))
 }
 
+
+#' @keywords internal
 constructTreeUp <- function(freqs, groups) {
+
   sbp <- sbpDiff(freqs, groups)
 
   tree <- sbp2tree(sbp)
@@ -71,7 +75,16 @@ constructTreeUp <- function(freqs, groups) {
   return(list(tree = tree, sbp = sbp, dendro = d.cur))
 }
 
-constructTreeUpDown <- function(cnts, groups) {
+
+#' @keywords internal
+tree2dendro_my <- function(tree){
+  h.tmp <- compute.brlen(tree, method="Grafen") %>% as.hclust()
+  d.cur <- as.dendrogram(h.tmp)
+  return(d.cur)
+}
+
+#' @keywords internal
+constructTreeUpDown <- function(cnts, groups){
   cnts[cnts <= 0] <- 0.5
 
   ref.set <- referenceSet(cnts, groups)
@@ -132,12 +145,13 @@ constructTreeUpDown <- function(cnts, groups) {
 }
 
 
-#' @description Get tree from balances
+#' Get tree from balances
 #'
 #' @param sbpart A contrast matrix for balances, sequential binary partition
 #' @return phylo tree
 #' @details We use ellipsis because a previous version of this function
 #'          contains additional and insignificant parameters.
+#' @keywords internal
 sbp2tree <- function(sbpart){
   checkSbpWhole(sbpart)
   # ---------
@@ -170,11 +184,12 @@ sbp2tree <- function(sbpart){
 }
 
 
-#' @description Get balances for all inner nodes of the tree
+#' Get balances for all inner nodes of the tree
 #'
 #' @param t A phylo object
 #' @param log.f Logarithms of frequnencies
 #' @return Balances, contrast matrix and names on cell types
+#' @keywords internal
 getNodeBalances <- function(log.f, sbp.my){
 
   # get psi matrix
@@ -193,6 +208,7 @@ getNodeBalances <- function(log.f, sbp.my){
   return(balances)
 }
 
+#' @keywords internal
 hclustSbp <- function(freqs, groups){
   cell.types <- colnames(freqs)
 
@@ -219,6 +235,7 @@ hclustSbp <- function(freqs, groups){
   hclust(dist(mx))
 }
 
+#' @keywords internal
 bestPartition <- function(freqs.tmp, groups){
 
 
@@ -260,11 +277,12 @@ bestPartition <- function(freqs.tmp, groups){
 
 
 
-#' @description Construct the canonical tree
+#' Construct the canonical tree
 #'
 #' @param cnts Table with cell type counts
 #' @param groups Groups variable for samples
 #' @return phylo tree
+#' @keywords internal
 constructBestPartitionTree <- function(cnts, groups, partition.thresh = 0){
   checkDataGroups(cnts, groups)
   # ---------
@@ -321,7 +339,7 @@ constructBestPartitionTree <- function(cnts, groups, partition.thresh = 0){
   return(list(tree = tree, sbp = sbp.cda, dendro = d.cur))
 }
 
-
+#' @keywords internal
 sbpInNodes <- function(tree){
   edges <- tree$edge
   n.nodes <- max(edges)

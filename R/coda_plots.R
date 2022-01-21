@@ -1,7 +1,8 @@
 #' @import ape
 NULL
 
-estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2) {
+#' @keywords internal
+estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
   cell.loadings <- c()
   sample.pos <- c()
 
@@ -26,6 +27,7 @@ estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2
   return(list(red=df.cda, loadings=df.loadings))
 }
 
+#' @keywords internal
 plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, target.level, font.size=3, palette=NULL) {
   group.names <- c(ref.level, target.level)
   rda.plot <- ggplot(df.space, aes(x=S1, y=S2)) +
@@ -52,7 +54,8 @@ plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, targe
   return(rda.biplot)
 }
 
-# helper function for creating dendograms
+#' helper function for creating dendograms
+#' @keywords internal
 createDendrogram <- function(dend.data, angle=90, plot.theme=theme_get(), font.size=3, hjust=1) {
   ggplot() +
     geom_segment(data = dend.data$segments, aes(x=x, y=y, xend=xend, yend=yend)) +
@@ -65,6 +68,8 @@ createDendrogram <- function(dend.data, angle=90, plot.theme=theme_get(), font.s
     scale_y_continuous(expand=c(0, 0, 0.1, 0))
 }
 
+#' helper function for creating dendograms
+#' @keywords internal
 distTreeOrder <- function(t, tree.order){
   t.labels <- t$tip.label[t$edge[t$edge[,2] < min(t$edge[,1]),2]]
   t.labels <- t.labels[t.labels %in% tree.order]
@@ -76,7 +81,11 @@ distTreeOrder <- function(t, tree.order){
   return(s)
 }
 
+
+#' helper function for creating dendograms
+#' @keywords internal
 plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme=theme_get(), label.angle=90,
+
                              p.threshold=0.05, adjust.pvalues=TRUE, h.methods='both', font.size=3, label.hjust=1,
                              show.text='pvalue.code', tree.order=NULL, loadings.mean=NULL, palette=NULL,
                              verbose=FALSE) {

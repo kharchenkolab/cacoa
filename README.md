@@ -35,7 +35,7 @@ devtools::install_github("kharchenkolab/cacoa")
 ```
 ## Usage
 
-Cacoa currently supports input in several formats (see below). Most of them require the following metadata:
+Cacoa currently supports inputs in several formats (see below). Most of them require the following metadata:
 
 - `sample.groups`: vector with condition labels per sample named with sample ids
 - `cell.groups`: cell type annotation vector named by cell ids
@@ -59,7 +59,7 @@ cao <- Cacoa$new(so, sample.groups=sample.groups, cell.groups=cell.groups, sampl
                  ref.level=ref.level, target.level=target.level, graph.name=graph.name)
 ```
 
-Parameter `graph.name` is required for cluster-free analysis, and must contain a name of joint graph in Seurat object. For that, the Seurat object must have a joint graph estimated (see [FindNeighbors](https://satijalab.org/seurat/reference/findneighbors)). For visualization purpuses, Seurat also must have cell embedding estimated or the embedding data frame must be provided in the `embedding` parameter.
+Parameter `graph.name` is required for cluster-free analysis, and must contain a name of joint graph in Seurat object. For that, the Seurat object must have a joint graph estimated (see [FindNeighbors](https://satijalab.org/seurat/reference/findneighbors)). For visualization purposes, Seurat also must have cell embedding estimated or the embedding data frame must be provided in the `embedding` parameter.
 
 ### Conos object `co`
 
@@ -68,7 +68,7 @@ cao <- Cacoa$new(co, sample.groups=sample.groups, cell.groups=cell.groups,
                  ref.level=ref.level, target.level=target.level)
 ```
 
-For visualization purpuses, Conos must have cell embedding estimated or the embedding data frame must be provided in the `embedding` parameter. And for cluster-free analysis it should have a joint graph (see [Conos$buildGraph](https://cran.r-project.org/web/packages/conos/conos.pdf) method).
+For visualization purpuses, Conos must have cell embedding estimated or the embedding data frame must be provided in the `embedding` parameter. And for cluster-free analysis it should have a joint graph (see the method `Conos$buildGraph()` from [conos](https://CRAN.R-project.org/package=conos) method).
 
 ## Example
 

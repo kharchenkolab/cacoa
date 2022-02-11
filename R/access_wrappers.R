@@ -118,7 +118,7 @@ extractJointCountMatrix.Conos <- function(object, raw=TRUE) {
 }
 
 #' @param transposed boolean If TRUE, return merged transposed count matrices (default=TRUE)
-#' @param raw boolean If TRUE, return merged the sparse dgCMatrix matrix (default=TRUE)
+#' @param sparse boolean If TRUE, return merged the sparse dgCMatrix matrix (default=TRUE)
 #' @rdname extractJointCountMatrix
 extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sparse=TRUE) {
   if (raw) {

@@ -140,7 +140,7 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 #' @param legend.title Title on plot (default="-log10(p-value)")
 #' @param x.axis.position Position of x axis (default="top")
 #' @param color.range Range for filling colors
-#' @param plot.therem (default=ggplot2::theme_get())
+#' @param plot.theme (default=ggplot2::theme_get())
 #' @param symmetric boolean (default=FALSE)
 #' @param palette (default=NULL)
 #' @param font.size integer (default=8)
@@ -300,7 +300,7 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 #' @param type character vector (default=c('box', 'point', 'bar')) Type of a plot "bar" (default), "point" (mean + sd), or "box" for boxplot
 #' @param show.jitter boolean (default = FALSE) Whether to show individual data points 
 #' @param jitter.alpha transparency value for the data points (default: 0.05)
-#' @param notch - whether to show notches in the boxplot version (default=TRUE)
+#' @param notch boolean Whether to show notches in the boxplot version (default=TRUE)
 #' @param palette - cell type palette
 #' @return A ggplot2 object
 #' @keywords internal

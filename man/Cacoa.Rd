@@ -186,6 +186,7 @@ Calculate expression shift magnitudes of different clusters between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateExpressionShiftMagnitudes(
   cell.groups = self$cell.groups,
+  sample.per.cell = self$sample.per.cell,
   dist = NULL,
   dist.type = "cross.both",
   min.cells.per.sample = 10,
@@ -208,6 +209,8 @@ Calculate expression shift magnitudes of different clusters between conditions
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{cell.groups}}{Named cell group factor with cell names (default=stored vector, self$cell.groups)}
+
+\item{\code{sample.per.cell}}{(default=self$sample.per.cell)}
 
 \item{\code{dist}}{'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default=NULL, depends on dimensionality)}
 
@@ -246,8 +249,9 @@ List including:
 \item \code{p.dist.info}: list of distance matrices per cell type
 \item \code{sample.groups}: filtered sample groups
 \item \code{cell.groups}: filtered cell groups
-Estimate common expression shift magnitudes
 }
+
+Estimate common expression shift magnitudes
 }
 }
 \if{html}{\out{<hr>}}

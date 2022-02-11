@@ -10,6 +10,8 @@
 #include <progress.hpp>
 #include <unistd.h>
 
+#define BOOST_DISABLE_ASSERTS
+
 using namespace Rcpp;
 using namespace Eigen;
 
@@ -563,8 +565,8 @@ double estimateVectorDistance(const VectorXd &v1, const VectorXd &v2, const std:
     stop("Unknown dist: ", dist);
 }
 
-//' @param sample_per_cell must contains ids from 0 to n_samples-1
-//' @param n_samples must be equal to maximum(sample_per_cell) + 1
+// sample_per_cell must contains ids from 0 to n_samples-1
+// n_samples must be equal to maximum(sample_per_cell) + 1
 CFShiftResult estimateCellExpressionShift(const SparseMatrix<double> &cm, const std::vector<int> &sample_per_cell,
                                           const std::vector<int> &nn_ids,
                                           size_t min_n_obs_per_samp, const std::string &dist="cosine", bool log_vecs=true) {

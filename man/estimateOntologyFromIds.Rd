@@ -38,8 +38,6 @@ for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (
 
 \item{...}{Additional parameters for DO/GO/GSEA functions. In case of GSEA, pass nPerm to call fgseaSimple
 instead of fgseaMultilevel}
-
-\item{qvalue.cutoff}{numeric Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
 }
 \value{
 A list containing a list of ontologies per type of ontology, and a data frame with merged results

@@ -51,6 +51,8 @@ plotHeatmap(
 
 \item{color.range}{Range for filling colors}
 
+\item{plot.theme}{(default=ggplot2::theme_get())}
+
 \item{symmetric}{boolean (default=FALSE)}
 
 \item{palette}{(default=NULL)}
@@ -62,8 +64,6 @@ plotHeatmap(
 \item{clust.method}{character string (default="complete")}
 
 \item{grid.color}{Color of the grid. Set to "transparent" to disable the grid. (default: "gray50")}
-
-\item{plot.therem}{(default=ggplot2::theme_get())}
 }
 \value{
 A ggplot2 object

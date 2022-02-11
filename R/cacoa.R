@@ -1648,7 +1648,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if ((type == "GSEA") && (plot == "bar")) stop("No 'enrichplot' method exists for making barplots of GSEA results.")
 
       if (plot != "dot" && plot != "bar") {
-        stop(paste("Unknown plot type: ", plot". The plot parameter must be specified as either 'dot' or 'bar'. Please fix."))
+        stop(paste("Unknown plot type: ", plot, ". The plot parameter must be specified as either 'dot' or 'bar'. Please fix."))
       }
       # Extract results
       if (!cell.type %in% names(ont.res)) stop("'cell.type' not found in results.")

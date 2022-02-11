@@ -2,7 +2,8 @@
 % Please edit documentation in R/plot.R
 \name{clusteredOntologyDotplot}
 \alias{clusteredOntologyDotplot}
-\title{Clustered Ontology Dotplot}
+\title{Performs ontology clustering by genes and then shows medoids of the clusters with
+enrichplot::dotplot}
 \usage{
 clusteredOntologyDotplot(
   ont.res,
@@ -12,6 +13,22 @@ clusteredOntologyDotplot(
   top.n = Inf,
   ...
 )
+}
+\arguments{
+\item{ont.res}{something}
+
+\item{p.adj}{numeric Adjusted p-value set (default=0.05)}
+
+\item{min.genes}{integer Minimun number of genes (default=1)}
+
+\item{cut.h}{numeric (default=0.66)}
+
+\item{top.n}{integer Number of enriched terms to display (default=Inf). If Inf, no limit is set.}
+
+\item{...}{additional parameters passed to enrichplot::dotplot()}
+}
+\value{
+enrichplot::dotplot showing medoids of gene clustering
 }
 \description{
 Performs ontology clustering by genes and then shows medoids of the clusters with

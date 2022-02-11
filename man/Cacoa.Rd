@@ -219,7 +219,9 @@ Calculate expression shift magnitudes of different clusters between conditions
 
 \item{\code{min.gene.frac}}{numeric (default=0.01)}
 
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
+\item{\code{ref.level}}{(default=self$ref.level)}
+
+\item{\code{sample.groups}}{(default=self$sample.groups)}
 
 \item{\code{verbose}}{boolean Whether to show progress}
 

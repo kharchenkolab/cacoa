@@ -5,9 +5,15 @@
 #' @importFrom reshape2 melt
 NULL
 
+#' Helper function for creating color palettes
+#' Syncs input to ggplot2::theme() params legend.position (i.e. the position of the legends) 
+#' and legend.justification (i.e. the anchor point for positioning legend inside the plot)
+#'
+#' @param position 
+#' @return returns ggplot2 theme() such that ggplot2::theme(legend.position=position, legend.justification=position)
 #' @export
 theme_legend_position <- function(position) {
-  theme(legend.position=position, legend.justification=position)
+  ggplot2::theme(legend.position=position, legend.justification=position)
 }
 
 
@@ -127,10 +133,19 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 #' @param row.order Forced row order (default=NULL)
 #' @param col.order Forced column order (default=NULL)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
+#' @param size.df (default=NULL)
+#' @param size.range (default=c(1, 5))
+#' @param size.legend.title (default="size")
 #' @param legend.key.width (default=unit(8, "pt))
 #' @param legend.title Title on plot (default="-log10(p-value)")
 #' @param x.axis.position Position of x axis (default="top")
 #' @param color.range Range for filling colors
+#' @param plot.therem (default=ggplot2::theme_get())
+#' @param symmetric boolean (default=FALSE)
+#' @param palette (default=NULL)
+#' @param font.size integer (default=8)
+#' @param distance character string (default="manhattan")
+#' @param clust.method character string (default="complete")
 #' @param grid.color Color of the grid. Set to "transparent" to disable the grid. (default: "gray50")
 #' @return A ggplot2 object
 #' 
@@ -138,7 +153,7 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE, legend.position="right",
                         size.df=NULL, size.range=c(1, 5), size.legend.title="size",
                         legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
-                        color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL, font.size=8,
+                        color.range=NULL, plot.theme=ggplot2::theme_get(), symmetric=FALSE, palette=NULL, font.size=8,
                         distance="manhattan", clust.method="complete", grid.color="gray50") {
   if (is.null(color.range)) {
     if (prod(range(df, na.rm=TRUE)) < 0) {
@@ -217,8 +232,9 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE
 
 #' Get Gene Scale
 #' 
-#' @param genes character vector (default=c("up", "down" or "all")) Type of genes 
-#' @param high color for the highest value (default: "gray80")
+#' @param genes character vector Type of genes (default=c("up", "down" or "all")) 
+#' @param neutral.col character string (default="white")
+#' @param bidirectional boolean (default=FALSE)
 #' @return palette function
 #' 
 #' @export
@@ -762,9 +778,16 @@ plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, m
       return(gg)
     }
 
-#' Clustered Ontology Dotplot
-#' @description Performs ontology clustering by genes and then shows medoids of the clusters with
+#' Performs ontology clustering by genes and then shows medoids of the clusters with
 #'   enrichplot::dotplot
+#'
+#' @param ont.res something
+#' @param p.adj numeric Adjusted p-value set (default=0.05)
+#' @param min.genes integer Minimun number of genes (default=1)
+#' @param cut.h numeric (default=0.66)
+#' @param top.n integer Number of enriched terms to display (default=Inf). If Inf, no limit is set.
+#' @param ... additional parameters passed to enrichplot::dotplot()
+#' @return enrichplot::dotplot showing medoids of gene clustering
 #' @export
 clusteredOntologyDotplot <- function(ont.res, p.adj=0.05, min.genes=1, cut.h=0.66, top.n=Inf, ...) {
   checkPackageInstalled("enrichplot", bioc=TRUE)

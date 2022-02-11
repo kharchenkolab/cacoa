@@ -187,21 +187,27 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
   return(samples)
 }
 
+
+
 #' Differential expression using different methods (deseq2, edgeR, wilcoxon, ttest) with various covariates
 #'
 #' @param raw.mats list of counts matrices; column for gene and row for cell
 #' @param cell.groups factor specifying cell types (default=NULL)
-#' @param sample.groups a list of two character vector specifying the app groups to compare (default=NULL)
-#' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
-#' @param common.genes Only investigate common genes across cell groups (default=FALSE)
-#' @param cooks.cutoff cooksCutoff for DESeq2 (default=FALSE)
-#' @param min.cell.count (default=10)
-#' @param independent.filtering independentFiltering for DESeq2 (default=FALSE)
-#' @param n.cores Number of cores (default=1)
+#' @param s.groups list of two character vector specifying the app groups to compare (default=NULL)
+#' @param ref.level reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
+#' @param target.level target level in 'sample.groups' (default=NULL)
+#' @param common.genes boolean Only investigate common genes across cell groups (default=FALSE)
+#' @param cooks.cutoff boolean cooksCutoff for DESeq2 (default=FALSE)
+#' @param min.cell.count numeric Minimum cell count (default=10)
+#' @param max.cell.count numeric Maximum cell count (default=Inf). If Inf, there is no limit set. 
+#' @param fix.n.samples 
+#' @param verbose boolean Whether to output verbose messages (default=TRUE)
+#' @param independent.filtering boolean independentFiltering for DESeq2 (default=FALSE)
+#' @param n.cores numeric Number of cores (default=1)
 #' @param return.matrix Return merged matrix of results (default=TRUE)
-#' @param covariates list of covariates to include; for example, cdr, sex or age
 #' @param meta.info dataframe with possible covariates; for example, sex or age
 #' @param test DE method: deseq2, edgeR, wilcoxon, ttest
+#' @param gene.filter (default=NULL) 
 #' @return differential expression for each cell type
 #'
 #' @export

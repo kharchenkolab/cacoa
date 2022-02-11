@@ -18,7 +18,11 @@ extractJointCountMatrix(object, raw = TRUE, ...)
 \arguments{
 \item{object}{object from which to extract the cell groups}
 
-\item{raw}{boolean If TRUE, return merged "raw" count matrices (default=TRUE)}
+\item{raw}{boolean If TRUE, return merged the sparse dgCMatrix matrix (default=TRUE)}
+
+\item{...}{additional parameters to be passed to extractJointCountMatrix}
+
+\item{transposed}{boolean If TRUE, return merged transposed count matrices (default=TRUE)}
 }
 \description{
 Extract the joint count matrix from the object

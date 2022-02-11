@@ -107,6 +107,7 @@ extractRawCountMatrices.dgCMatrix <- function(object, transposed=TRUE) {
 #'
 #' @param object object from which to extract the cell groups
 #' @param raw boolean If TRUE, return merged "raw" count matrices (default=TRUE)
+#' @param ... additional parameters to be passed to extractJointCountMatrix
 #' @rdname extractJointCountMatrix
 #' @export
 extractJointCountMatrix <- function(object, raw=TRUE, ...) UseMethod("extractJointCountMatrix", object)
@@ -116,6 +117,8 @@ extractJointCountMatrix.Conos <- function(object, raw=TRUE) {
   return(object$getJointCountMatrix(raw=raw))
 }
 
+#' @param transposed boolean If TRUE, return merged transposed count matrices (default=TRUE)
+#' @param raw boolean If TRUE, return merged the sparse dgCMatrix matrix (default=TRUE)
 #' @rdname extractJointCountMatrix
 extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sparse=TRUE) {
   if (raw) {

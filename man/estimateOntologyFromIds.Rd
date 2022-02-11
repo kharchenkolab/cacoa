@@ -2,7 +2,7 @@
 % Please edit documentation in R/ontology.R
 \name{estimateOntologyFromIds}
 \alias{estimateOntologyFromIds}
-\title{Estimate ontology}
+\title{Calculate ontologies based on DEs}
 \usage{
 estimateOntologyFromIds(
   de.gene.scores,
@@ -17,7 +17,11 @@ estimateOntologyFromIds(
 )
 }
 \arguments{
-\item{type}{character string Ontology type, either GO (gene ontology) or DO (disease ontology).
+\item{de.gene.scores}{input DE gene scores}
+
+\item{go.environment}{GO environment set (Homo sapiens, Mus musculus, etc.)}
+
+\item{type}{character string Ontology type, either GO (gene ontology) or DO (disease ontology) (default="GO")
 Please see DOSE package for more information.}
 
 \item{org.db}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse.
@@ -26,7 +30,11 @@ Input must be of class 'OrgDb'}
 \item{n.top.genes}{numeric Number of most different genes to take as input. If less are left after filtering
 for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)}
 
+\item{keep.gene.sets}{boolean Keep gene sets (default=FALSE)}
+
 \item{verbose}{boolean Print progress (default=TRUE)}
+
+\item{n.cores}{integer Number of cores (default=1)}
 
 \item{...}{Additional parameters for DO/GO/GSEA functions. In case of GSEA, pass nPerm to call fgseaSimple
 instead of fgseaMultilevel}

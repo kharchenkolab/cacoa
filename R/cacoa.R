@@ -210,6 +210,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.cells.per.sample numeric (default=10)
     #' @param min.samp.per.type numeric (default=2)
     #' @param min.gene.frac numeric (default=0.01)
+    #' @param ref.level (default=self$ref.level)
+    #' @param sample.groups (default=self$sample.groups)
     #' @param n.cores Number of cores (default: stored integer)
     #' @param name Test name (default="expression.shifts")
     #' @param n.permutations numeric (default=1000)

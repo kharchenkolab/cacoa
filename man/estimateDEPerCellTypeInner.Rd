@@ -29,27 +29,35 @@ estimateDEPerCellTypeInner(
 
 \item{cell.groups}{factor specifying cell types (default=NULL)}
 
-\item{ref.level}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
+\item{s.groups}{list of two character vector specifying the app groups to compare (default=NULL)}
 
-\item{common.genes}{Only investigate common genes across cell groups (default=FALSE)}
+\item{ref.level}{reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
 
-\item{cooks.cutoff}{cooksCutoff for DESeq2 (default=FALSE)}
+\item{target.level}{target level in 'sample.groups' (default=NULL)}
 
-\item{min.cell.count}{(default=10)}
+\item{common.genes}{boolean Only investigate common genes across cell groups (default=FALSE)}
 
-\item{independent.filtering}{independentFiltering for DESeq2 (default=FALSE)}
+\item{cooks.cutoff}{boolean cooksCutoff for DESeq2 (default=FALSE)}
 
-\item{n.cores}{Number of cores (default=1)}
+\item{min.cell.count}{numeric Minimum cell count (default=10)}
+
+\item{max.cell.count}{numeric Maximum cell count (default=Inf). If Inf, there is no limit set.}
+
+\item{independent.filtering}{boolean independentFiltering for DESeq2 (default=FALSE)}
+
+\item{n.cores}{numeric Number of cores (default=1)}
 
 \item{return.matrix}{Return merged matrix of results (default=TRUE)}
+
+\item{fix.n.samples}{}
+
+\item{verbose}{boolean Whether to output verbose messages (default=TRUE)}
 
 \item{test}{DE method: deseq2, edgeR, wilcoxon, ttest}
 
 \item{meta.info}{dataframe with possible covariates; for example, sex or age}
 
-\item{sample.groups}{a list of two character vector specifying the app groups to compare (default=NULL)}
-
-\item{covariates}{list of covariates to include; for example, cdr, sex or age}
+\item{gene.filter}{(default=NULL)}
 }
 \value{
 differential expression for each cell type

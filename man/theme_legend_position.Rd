@@ -9,7 +9,7 @@ and legend.justification (i.e. the anchor point for positioning legend inside th
 theme_legend_position(position)
 }
 \arguments{
-\item{position}{}
+\item{position}{character string to pass into ggplot2::theme(legend.position=position, legend.justification=position)}
 }
 \value{
 returns ggplot2 theme() such that ggplot2::theme(legend.position=position, legend.justification=position)

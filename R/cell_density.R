@@ -52,6 +52,7 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ba
 
 #' Estimate graph smooth based cell density
 #'
+#' @param graph input graph
 #' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
 #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 #' @param n.cores number of cores

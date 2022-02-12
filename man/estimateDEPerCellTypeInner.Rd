@@ -49,7 +49,7 @@ estimateDEPerCellTypeInner(
 
 \item{return.matrix}{Return merged matrix of results (default=TRUE)}
 
-\item{fix.n.samples}{}
+\item{fix.n.samples}{Number of samples to fix (default=NULL). If greater the the length of the s.groups, an error is thrown.}
 
 \item{verbose}{boolean Whether to output verbose messages (default=TRUE)}
 

@@ -9,7 +9,7 @@ NULL
 #' Syncs input to ggplot2::theme() params legend.position (i.e. the position of the legends) 
 #' and legend.justification (i.e. the anchor point for positioning legend inside the plot)
 #'
-#' @param position 
+#' @param position character string to pass into ggplot2::theme(legend.position=position, legend.justification=position)
 #' @return returns ggplot2 theme() such that ggplot2::theme(legend.position=position, legend.justification=position)
 #' @export
 theme_legend_position <- function(position) {

@@ -200,7 +200,7 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 #' @param cooks.cutoff boolean cooksCutoff for DESeq2 (default=FALSE)
 #' @param min.cell.count numeric Minimum cell count (default=10)
 #' @param max.cell.count numeric Maximum cell count (default=Inf). If Inf, there is no limit set. 
-#' @param fix.n.samples 
+#' @param fix.n.samples Number of samples to fix (default=NULL). If greater the the length of the s.groups, an error is thrown.
 #' @param verbose boolean Whether to output verbose messages (default=TRUE)
 #' @param independent.filtering boolean independentFiltering for DESeq2 (default=FALSE)
 #' @param n.cores numeric Number of cores (default=1)

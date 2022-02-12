@@ -26,7 +26,6 @@ Imports:
     R6,
     reshape2,
     rlang,
-    roxygen2,
     sccore (>= 1.0.0),
     tibble,
     tidyr,

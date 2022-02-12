@@ -34,9 +34,7 @@ plotMeanMedValuesPerCellType(
 
 \item{show.jitter}{boolean (default = FALSE) Whether to show individual data points}
 
-\item{notch}{\itemize{
-\item whether to show notches in the boxplot version (default=TRUE)
-}}
+\item{notch}{boolean Whether to show notches in the boxplot version (default=TRUE)}
 
 \item{jitter.alpha}{transparency value for the data points (default: 0.05)}
 

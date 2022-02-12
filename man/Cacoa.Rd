@@ -176,13 +176,13 @@ Initialize Cacoa class
 }
 \subsection{Returns}{
 a new 'Cacoa' object
-Calculate expression shift magnitudes of different clusters between conditions
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateExpressionShiftMagnitudes"></a>}}
 \if{latex}{\out{\hypertarget{method-estimateExpressionShiftMagnitudes}{}}}
 \subsection{Method \code{estimateExpressionShiftMagnitudes()}}{
+Calculate expression shift magnitudes of different clusters between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateExpressionShiftMagnitudes(
   cell.groups = self$cell.groups,
@@ -210,7 +210,7 @@ Calculate expression shift magnitudes of different clusters between conditions
 \describe{
 \item{\code{cell.groups}}{Named cell group factor with cell names (default=stored vector, self$cell.groups)}
 
-\item{\code{sample.per.cell}}{(default=self$sample.per.cell)}
+\item{\code{sample.per.cell}}{Sample per cell (default=self$sample.per.cell)}
 
 \item{\code{dist}}{'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default=NULL, depends on dimensionality)}
 
@@ -238,7 +238,9 @@ Calculate expression shift magnitudes of different clusters between conditions
 
 \item{\code{n.pcs}}{numeric Number of principal components (default=NULL)}
 
-\item{\code{...}}{extra parameters}
+\item{\code{top.n.genes}}{character vector Vector of top genes to show (default=NULL)}
+
+\item{\code{...}}{extra parameters to estimateExpressionShiftMagnitudes()}
 }
 \if{html}{\out{</div>}}
 }
@@ -292,8 +294,6 @@ Estimate common expression shift magnitudes
 
 \item{\code{n.permutations}}{numeric (default=1000)}
 
-\item{\code{n.permutations}}{numeric (default=1000)}
-
 \item{\code{trim}}{numeric (deafult=0.2)}
 
 \item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
@@ -341,17 +341,19 @@ cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
 \item type of a plot "bar" (default) or "box"
 }}
 
+\item{\code{notch}}{boolean Whether to show notches in the boxplot version (default=TRUE)}
+
 \item{\code{show.jitter}}{boolean Whether to show indivudal data points (default=FALSE)}
 
 \item{\code{jitter.alpha}}{numeric Transparency value for the data points (default=0.05)}
 
 \item{\code{show.pvalues}}{character string Which p-values to plot. Accepted values are "none", "raw", or "adjusted". (default=c("adjusted", "raw", "none"))}
 
+\item{\code{shift.type}}{character string Either "normal" or "common". (default=c("normal", "common"))}
+
 \item{\code{ylab}}{character string Label of the y-axis (default="normalized expression distance")}
 
 \item{\code{...}}{additional arguments}
-
-\item{\code{shift.types}}{character string Either "normal" or "common". (default=c("normal", "common"))}
 }
 \if{html}{\out{</div>}}
 }
@@ -364,11 +366,21 @@ A ggplot2 object
 \if{latex}{\out{\hypertarget{method-estimatePerCellTypeDE}{}}}
 \subsection{Method \code{estimatePerCellTypeDE()}}{
 Alias for estimateDEPerCellType
-Estimate differential gene expression per cell type between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimatePerCellTypeDE(...)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{...}}{parameters fed to estimateDEPerCellType}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A list of DE genes
+Estimate differential gene expression per cell type between conditions
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-estimateDEPerCellType"></a>}}
@@ -418,6 +430,10 @@ Estimate differential gene expression per cell type between conditions
 
 \item{\code{n.resamplings}}{numeric Number of resamplings to perform (default=30)}
 
+\item{\code{seed.resampling}}{numeric Seed to use for resamplings, input to set.seed() (default=239)}
+
+\item{\code{min.cell.frac}}{numeric Minimum fraction of cells to use to perform DE (default=0.05)}
+
 \item{\code{covariates}}{numeric (default=NULL)}
 
 \item{\code{common.genes}}{boolean Whether to investigate common genes across cell groups (default=FALSE)}
@@ -430,13 +446,13 @@ Estimate differential gene expression per cell type between conditions
 
 \item{\code{min.cell.count}}{minimum number of cells that need to be present in a given cell type in a given sample in order to be taken into account (default=10)}
 
+\item{\code{n.cells.subsample}}{integer Number of cells to subsample (default=NULL)}
+
 \item{\code{verbose}}{boolean Whether to show progress}
 
+\item{\code{fix.n.samples}}{Samples to be provided if resampling.method='fix.samples'.}
+
 \item{\code{...}}{additional parameters}
-
-\item{\code{seed.resamplings}}{numeric Seed to use for resamplings, input to set.seed() (default=239)}
-
-\item{\code{min.cell.frace}}{numeric Minimum fraction of cells to use to perform DE (default=0.05)}
 }
 \if{html}{\out{</div>}}
 }
@@ -492,13 +508,13 @@ Estimate DE stability per test
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{de.names}}{character string Results slot name (default='de')}
+
 \item{\code{name}}{character string (default='de.jaccards')}
 
 \item{\code{top.n.genes}}{numeric Number of top DE genes to return (default=NULL)}
 
 \item{\code{p.val.cutoff}}{numeric The p-value cutoff to apply for returned DE values (default=NULL)}
-
-\item{\code{de.name}}{character string Results slot name (default='de')}
 }
 \if{html}{\out{</div>}}
 }
@@ -527,9 +543,9 @@ Estimate DE stability per gene
 
 \item{\code{top.n.genes}}{numeric Number of top DE genes to return (default=500)}
 
-\item{\code{visualize}}{boolean Whether to visualize results (default=FALSE)}
+\item{\code{p.adj.cutoff}}{numeric The adjusted p-value cutoff to apply for returned DE values (default=NULL)}
 
-\item{\code{p.val.cutoff}}{numeric The p-value cutoff to apply for returned DE values (default=NULL)}
+\item{\code{visualize}}{boolean Whether to visualize results (default=FALSE)}
 }
 \if{html}{\out{</div>}}
 }
@@ -554,13 +570,13 @@ Estimate DE stability between tests
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{de.names}}{character string Results slot name (default='de')}
+
 \item{\code{name}}{character string (default='jacc.bw.tests')}
 
 \item{\code{top.n.genes}}{numeric Number of top DE genes to return (default=NULL)}
 
 \item{\code{p.val.cutoff}}{numeric The p-value cutoff to apply for returned DE values (default=NULL)}
-
-\item{\code{de.name}}{character string Results slot name (default='de')}
 }
 \if{html}{\out{</div>}}
 }
@@ -591,7 +607,7 @@ Estimate DE stability trend
 
 \item{\code{top.n.genes}}{numeric Number of top DE genes to return (default=c(100, 200, 300))}
 
-\item{\code{p.val.cutoff}}{numeric The p-value cutoff to apply for returned DE values (default=NULL)}
+\item{\code{p.val.cutoffs}}{numeric The p-value cutoff to apply for returned DE values (default=NULL)}
 }
 \if{html}{\out{</div>}}
 }
@@ -734,13 +750,13 @@ Estimate GO stability trend
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{de.name}}{character string (default='de')}
+
 \item{\code{name}}{character string (default='de.trend')}
 
 \item{\code{top.n.genes}}{numeric vector (default=c(100, 200, 300))}
 
 \item{\code{p.val.cutoffs}}{numeric (default=NULL)}
-
-\item{\code{de.test}}{character string (default='de')}
 }
 \if{html}{\out{</div>}}
 }
@@ -769,7 +785,7 @@ plot GO stability per cell type
 \describe{
 \item{\code{name}}{character string (default='go.jaccards')}
 
-\item{\code{notch}}{boolean (default=FALSE)}
+\item{\code{notch}}{boolean Whether to show notches in the boxplot version (default=TRUE)}
 
 \item{\code{show.jitter}}{boolean (default=TRUE)}
 
@@ -871,11 +887,13 @@ plot DE stability FDR
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{cell.type}}{cell type input}
+
 \item{\code{de.name}}{character string (default='de')}
 
 \item{\code{p.adj.cutoffs}}{numeric vector (default=cc(0.001, 0.005, 0.01, 0.05, 0.1, 0.2))}
 
-\item{\code{cell.types}}{(default=NULL)}
+\item{\code{cell.types}}{cell types (default=NULL)}
 
 \item{\code{type}}{character string (default='relative')}
 }
@@ -899,7 +917,7 @@ plot DE stability between tests
 \describe{
 \item{\code{name}}{character string (default='jacc.bw.tests')}
 
-\item{\code{cell.type}}{(default=NULL)}
+\item{\code{cell.types}}{(default=NULL)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1038,6 +1056,16 @@ Plot number of significant DE genes
 \item{\code{pvalue.cutoff}}{numeric P-value cutoff (default=0.05)}
 
 \item{\code{show.resampling.results}}{boolean Whether to show uncertainty based on resampling results (default=TRUE)}
+
+\item{\code{show.jitter}}{boolean Whether to apply jitter to the ggplot (default=FALSE)}
+
+\item{\code{jitter.alpha}}{numeric Opacity setting (default=0.05)}
+
+\item{\code{type}}{character string (default='bar')}
+
+\item{\code{notch}}{boolean Whether to show notches (default=TRUE)}
+
+\item{\code{...}}{additional parameters passed to plotMeanMedValuesPerCellType()}
 }
 \if{html}{\out{</div>}}
 }
@@ -1076,6 +1104,8 @@ Make volcano plots
 \item{\code{n.col}}{numeric Number of columns (default=3)}
 
 \item{\code{color.var}}{character strign (default='CellFrac')}
+
+\item{\code{...}}{additional parameters fed to plotVolcano}
 }
 \if{html}{\out{</div>}}
 }
@@ -1112,11 +1142,13 @@ Save DE results as JSON files
 
 \item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
 
+\item{\code{de.name}}{character string (default='de')}
+
 \item{\code{ref.level}}{Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)}
 
 \item{\code{gene.metadata}}{(default=NULL)}
 
-\item{\code{verbose}}{boolean Whether to show progress}
+\item{\code{verbose}}{boolean Whether to output verbose messages (default=self$verbose)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1186,13 +1218,15 @@ Estimate ontology terms based on DEs
 \describe{
 \item{\code{type}}{Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")}
 
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{name}}{(default=NULL)}
+
+\item{\code{de.name}}{character string (default='de.name')}
 
 \item{\code{org.db}}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'}
 
 \item{\code{n.top.genes}}{numeric Number of top highest-expressed genes to consider (default=500)}
 
-\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
+\item{\code{p.adj}}{numeric adjust-pvalues cutoff fed to getDEEntrezIdsSplitted()}
 
 \item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
 
@@ -1201,6 +1235,12 @@ Estimate ontology terms based on DEs
 \item{\code{min.gs.size}}{numeric Minimal geneset size, please see clusterProfiler package for more information (default=5)}
 
 \item{\code{max.gs.size}}{numeric Minimal geneset size, please see clusterProfiler package for more information (default=5e2)}
+
+\item{\code{keep.gene.sets}}{boolean (default=FALSE)}
+
+\item{\code{ignore.cache}}{(default=NULL)}
+
+\item{\code{de.raw}}{(default=NULL)}
 
 \item{\code{verbose}}{boolean Whether to show progress}
 
@@ -1232,7 +1272,7 @@ Estimate ontology families based on ontology results
 \describe{
 \item{\code{name}}{character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")}
 
-\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
+\item{\code{p.adj}}{numeric adjusted p-value cutoff (default=0.05)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1293,11 +1333,11 @@ Bar plot of ontology terms per cell type
 
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
-\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
+\item{\code{p.adj}}{numeric adjusted p-value cutoff (default=0.05)}
 
 \item{\code{q.value}}{numeric (default=0.2)}
 
-\item{\code{min.genes}}{numeric (default=1)}
+\item{\code{min.genes}}{integer (default=1)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1327,19 +1367,25 @@ Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{cell.type}}{character string Cell type to plot}
+
+\item{\code{name}}{chracter string (default="GO")}
+
+\item{\code{plot}}{chracter string Type of plot to return (default="dot"). Either}
 
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
+
+\item{\code{subtype}}{character string Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")}
 
 \item{\code{n}}{Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)}
 
 \item{\code{p.adj}}{Adjusted P cutoff (default=0.05)}
 
-\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")}
+\item{\code{min.genes}}{integer Minimum genes (default=1)}
+
+\item{\code{...}}{additional parameters passed to enrichplot::dotplot() or enrichplot::barplot()}
 
 \item{\code{cell.subgroup}}{Cell group to plot}
-
-\item{\code{log.colors}}{Use log10 p-values for coloring (default=FALSE)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1384,12 +1430,18 @@ Plot a heatmap of ontology P values per cell type
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{name}}{character string (default="GO")}
 
 \item{\code{genes}}{Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all'
 (default="up")}
 
+\item{\code{subtype}}{character string (default="BP")}
+
 \item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
+
+\item{\code{q.value}}{numeric (default=0.2)}
+
+\item{\code{min.genes}}{integer Minimum genes (default=1)}
 
 \item{\code{top.n}}{Number of terms to show (default=Inf)}
 
@@ -1399,19 +1451,37 @@ Plot a heatmap of ontology P values per cell type
 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms)
 (default="all")}
 
+\item{\code{cluster}}{boolean Whether to show GO clusters or raw GOs (default=TRUE)}
+
 \item{\code{cell.subgroups}}{Cell groups to plot (default=NULL). This affects only visualization, but not clustering.}
 
-\item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
+\item{\code{row.order}}{boolean Whether to order rows (default=TRUE)}
+
+\item{\code{col.order}}{boolean Whether to order columns (default=TRUE)}
+
+\item{\code{max.log.p}}{numeric (default=10)}
+
+\item{\code{only.family.children}}{boolean (default=FALSE)}
+
+\item{\code{description.regex}}{(default=NULL)}
+
+\item{\code{description.exclude.regex}}{(default=NULL)}
+
+\item{\code{clust.naming}}{Field with the results for GO clustering. Ignored if \code{clusters == FALSE}.}
+
+\item{\code{readjust.p}}{boolean Whether to re-adjust p-values (default=TRUE)}
+
+\item{\code{p.adjust.method}}{character string Method used to adjust p-values (default="BH")}
+
+\item{\code{palette}}{(default=NULL)}
 
 \item{\code{color.range}}{vector with two values for min/max values of p-values}
+
+\item{\code{return.info}}{boolean (default=FALSE)}
 
 \item{\code{...}}{parameters forwarded to \link{plotHeatmap}}
 
 \item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")}
-
-\item{\code{clusters}}{Whether to show GO clusters or raw GOs (default=TRUE)}
-
-\item{\code{cluster.name}}{Field with the results for GO clustering. Ignored if \code{clusters == FALSE}.}
 }
 \if{html}{\out{</div>}}
 }
@@ -1459,12 +1529,20 @@ Plot a heatmap of ontology p-values per cell type heatmap, collapsed
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{name}}{character string (default="GO")}
 
 \item{\code{genes}}{Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all'
 (default="up")}
 
-\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
+\item{\code{subtype}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")}
+
+\item{\code{p.adj}}{numeric (default=0.05)}
+
+\item{\code{q.value}}{numeric (default=0.2)}
+
+\item{\code{min.genes}}{integer (default=1)}
+
+\item{\code{n}}{integer (default=20)}
 
 \item{\code{legend.position}}{Position of legend in plot. See ggplot2::theme (default="left")}
 
@@ -1472,19 +1550,43 @@ Plot a heatmap of ontology p-values per cell type heatmap, collapsed
 'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms)
 (default="all")}
 
+\item{\code{max.log.p}}{numeric (default=10)}
+
+\item{\code{cluster}}{Whether to show GO clusters or raw GOs (default=TRUE)}
+
 \item{\code{cell.subgroups}}{Cell groups to plot (default=NULL). This affects only visualization, but not clustering.}
 
-\item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
+\item{\code{palette}}{(default=NULL)}
+
+\item{\code{row.order}}{boolean Whether to order rows (default=TRUE)}
+
+\item{\code{col.order}}{boolean Whether to order columns (default=TRUE)}
+
+\item{\code{only.family.children}}{boolean (default=FALSE)}
+
+\item{\code{readjust.p}}{boolean Whether to re-adjust p-values (default=TRUE)}
+
+\item{\code{p.adjust.method}}{character string (default="BH")}
+
+\item{\code{description.regex}}{(default=NULL)}
+
+\item{\code{description.exclude.regex}}{(default=NULL)}
+
+\item{\code{distance}}{character string (default="manhattan")}
+
+\item{\code{clust.method}}{character string (default="complete")}
+
+\item{\code{clust.naming}}{Field with the results for GO clustering. Ignored if \code{clusters == FALSE}.}
+
+\item{\code{n.words}}{integer (default=5)}
+
+\item{\code{exclude.words}}{(default=NULL)}
+
+\item{\code{return.info}}{boolean Whether to return the info (default=FALSE)}
 
 \item{\code{...}}{parameters forwarded to \link{plotHeatmap}}
 
-\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")}
-
 \item{\code{top.n}}{Number of terms to show (default=Inf)}
-
-\item{\code{clusters}}{Whether to show GO clusters or raw GOs (default=TRUE)}
-
-\item{\code{cluster.name}}{Field with the results for GO clustering. Ignored if \code{clusters == FALSE}.}
 
 \item{\code{color.range}}{vector with two values for min/max values of p-values}
 }
@@ -1554,17 +1656,19 @@ Plot related ontologies in one hierarchical network plot
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{name}}{Type of ontology result, i.e., GO, GSEA, or DO (default="GO")}
 
-\item{\code{family}}{Family within cell subtype to plot (numeric value)}
+\item{\code{cell.type}}{Cell subtype to plot}
 
-\item{\code{genes}}{Only for GO results: Direction of genes, must be "up", "down", or "all" (default: up)}
+\item{\code{family}}{numeric Family within cell subtype to plot (default=NULL)}
 
-\item{\code{subtype}}{Only for GO results: Type of result, must be "BP", "MF", or "CC" (default: BP)}
+\item{\code{genes}}{character string Only for GO results: Direction of genes, must be "up", "down", or "all" (default="up")}
 
-\item{\code{plot.type}}{How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) (default: complete)}
+\item{\code{subtype}}{Only for GO results: Type of result, must be "BP", "MF", or "CC" (default="BP")}
 
-\item{\code{show.ids}}{Whether to show ontology IDs instead of names (default: FALSE)}
+\item{\code{plot.type}}{How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) (default="complete")}
+
+\item{\code{show.ids}}{boolean Whether to show ontology IDs instead of names (default=FALSE)}
 
 \item{\code{string.length}}{Length of strings for wrapping in order to fit text within boxes (default: 14)}
 
@@ -1576,9 +1680,7 @@ Plot related ontologies in one hierarchical network plot
 
 \item{\code{n.cores}}{Number of cores to use (default: stored value)}
 
-\item{\code{type}}{Type of ontology result, i.e., GO, GSEA, or DO (default: GO)}
-
-\item{\code{cell.subgroups}}{Cell subtype to plot}
+\item{\code{...}}{additional parameters passed to plotOntologyFamily}
 }
 \if{html}{\out{</div>}}
 }
@@ -1617,6 +1719,8 @@ Save ontology results as a table
 \item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
 
 \item{\code{sep}}{Separator (default: tab)}
+
+\item{\code{...}}{additional arguments passed to write.table()}
 }
 \if{html}{\out{</div>}}
 }
@@ -1656,6 +1760,8 @@ Save family results as a table
 
 \item{\code{sep}}{Separator (default=tab)}
 
+\item{\code{...}}{additional arguments passed to write.table()}
+
 \item{\code{type}}{character string Type of ontology result, i.e., GO, GSEA, or DO (default='GO')}
 }
 \if{html}{\out{</div>}}
@@ -1683,7 +1789,7 @@ Plot the cell group sizes or proportions per sample
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{(default=self$cell.groups)}
 
 \item{\code{show.significance}}{whether to show statistical significance betwwen sample groups. wilcox.test was used; (\code{*} < 0.05; \verb{**} < 0.01; \verb{***} < 0.001)}
 
@@ -1692,8 +1798,6 @@ Plot the cell group sizes or proportions per sample
 \item{\code{proportions}}{boolean Whether to plot proportions or absolute numbers (default=TRUE)}
 
 \item{\code{palette}}{color palette to use for conditions (default: stored $sample.groups.palette)}
-
-\item{\code{palette}}{(default=self$sample.group.palette)}
 
 \item{\code{...}}{additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}}
 }
@@ -1841,9 +1945,15 @@ Plot composition similarity
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{cell groups}
+
+\item{\code{cells.to.remain}}{cells to remain}
+
+\item{\code{cells.to.remove}}{cells to remove}
 
 \item{\code{palette}}{(default=brewerPalette("YlOrRd", rev=FALSE))}
+
+\item{\code{...}}{parameters passed to plotHeatmap()}
 }
 \if{html}{\out{</div>}}
 }
@@ -1923,7 +2033,7 @@ Estimate Ga partitions
 
 \item{\code{samples.to.remove}}{vector (default=NULL)}
 
-\item{\code{...}}{additional parameters}
+\item{\code{...}}{additional parameters passed to gaPartition()}
 }
 \if{html}{\out{</div>}}
 }
@@ -1963,7 +2073,7 @@ Plot Loadings
 
 \item{\code{show.pvals}}{boolean (default=TRUE)}
 
-\item{\code{...}}{additional parameters}
+\item{\code{...}}{additional parameters plotCellLoadings()}
 }
 \if{html}{\out{</div>}}
 }
@@ -2040,6 +2150,8 @@ Estimate cell density in giving embedding
 
 \item{\code{bandwidth}}{numeric KDE bandwidth multiplier (default=0.5). The full bandwidth is estimated by multiplying this value on the difference between 90\% and 10\%
 of the corresponding embedding dimension. Set it to NULL to use \link[MASS:bandwidth.nrd]{bandwidth.nrd} estimator. (default=0.05)}
+
+\item{\code{...}}{additional arguments}
 }
 \if{html}{\out{</div>}}
 }
@@ -2075,6 +2187,8 @@ Plot cell density depending on the method that was used for estimating \code{cao
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{show.grid}}{boolean Whether to show grid (default=TRUE)}
+
 \item{\code{add.points}}{boolean Add points to cell density figure (default=TRUE)}
 
 \item{\code{size}}{numeric (default=0.1)}
@@ -2137,6 +2251,8 @@ Plot cell density variation
 \item{\code{cutoff}}{(default=NULL)}
 
 \item{\code{condition}}{character vector (default=c('both', 'ref', 'target'))}
+
+\item{\code{...}}{additional arguments}
 }
 \if{html}{\out{</div>}}
 }
@@ -2239,6 +2355,8 @@ Estimate differential cell density
 \item{\code{scale.z.palette}}{(default=adjust.pvalues)}
 
 \item{\code{min.z}}{(default=qnorm(0.9))}
+
+\item{\code{...}}{additional parameters}
 }
 \if{html}{\out{</div>}}
 }
@@ -2365,6 +2483,8 @@ Project samples to 2D space with MDS. Plots results from cao$estimateExpressionS
 \item{\code{n.permutations}}{numeric (default=2000)}
 
 \item{\code{show.pvalues}}{boolean (default=FALSE)}
+
+\item{\code{...}}{additional parameters passed to plotSampleDistanceMatrix()}
 }
 \if{html}{\out{</div>}}
 }
@@ -2479,6 +2599,8 @@ but greatly increase the number of zeros in the data, leading to bias towards hi
 
 \item{\code{adjust.pvalues}}{boolean (default=FALSE)}
 
+\item{\code{smooth}}{boolean Whether to apply smoothing (default=TRUE)}
+
 \item{\code{wins}}{numeric (default=0.01)}
 
 \item{\code{n.permutations}}{numeric (default=200)}
@@ -2531,6 +2653,8 @@ Get most changed genes
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{n}}{numeric Number of genes to retrieve}
+
 \item{\code{method}}{(default=c("z", "z.adj", "lfc"))}
 
 \item{\code{min.z}}{numeric (default=0.5)}
@@ -2593,6 +2717,8 @@ Estimate Cluster-free Expression Shift
 
 \item{\code{min.n.within}}{minimal number of pairs within one condition for distance estimation (default: \code{min.n.between})}
 
+\item{\code{min.expr.frac}}{numeric (default=0.0)}
+
 \item{\code{min.n.obs.per.samp}}{minimal number of cells per sample for using it in distance estimation (default: 3)}
 
 \item{\code{normalize.both}}{whether to normalize results relative to distances within both conditions (TRUE) or only to the control (FALSE)}
@@ -2604,7 +2730,7 @@ In most cases, must be TRUE for "cosine" and "cor" distances and always must be 
 
 \item{\code{wins}}{numeric (default=0.025)}
 
-\item{\code{genes}}{(default=NULL)}
+\item{\code{genes}}{character vector (default=NULL)}
 
 \item{\code{n.permutations}}{numeric (default=500)}
 
@@ -2613,6 +2739,8 @@ In most cases, must be TRUE for "cosine" and "cor" distances and always must be 
 \item{\code{n.cores}}{numeric (default=self$n.cores)}
 
 \item{\code{min.edge.weight}}{numeric (default=0.0)}
+
+\item{\code{...}}{additional parameters passed to estimateClusterFreeExpressionShiftsC()}
 }
 \if{html}{\out{</div>}}
 }
@@ -2703,6 +2831,8 @@ cells using \link[fabia:fabia]{fabia}. # TODO: update it
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{method}}{character String Method to use (default=c("pam", "leiden", "fabia"))}
+
 \item{\code{n.top.genes}}{(default=Inf)}
 
 \item{\code{genes}}{(default=NULL)}
@@ -2717,7 +2847,7 @@ cells using \link[fabia:fabia]{fabia}. # TODO: update it
 
 \item{\code{abs.scores}}{boolean (default=FALSE)}
 
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{name}}{character string}
 
 \item{\code{cell.subset}}{(default=NULL)}
 
@@ -2820,11 +2950,23 @@ Plot gene program genes
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{character string Field name where the test results are stored}
+\item{\code{program.id}}{program id}
 
-\item{\code{Plot}}{cluster-free expression shift z-scores}
+\item{\code{name}}{character string (default="gene.programs")}
+
+\item{\code{ordering}}{character vector (default=c("similarity", "loading"))}
+
+\item{\code{max.genes}}{integer (default=9)}
+
+\item{\code{plots}}{character string (default="z.adj")}
+
+\item{\code{...}}{additional parameters passed to plotGeneExpressionComparison()}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+plotGeneExpressionComparison
+Plot cluster-free expression shift z-scores
 }
 }
 \if{html}{\out{<hr>}}
@@ -2870,6 +3012,8 @@ Plot gene program genes
 
 \item{\code{font.size}}{size range for cell type labels}
 
+\item{\code{adj.list}}{(default=NULL)}
+
 \item{\code{palette}}{(default=brewerPalette("YlOrRd", rev=FALSE))}
 
 \item{\code{build.panel}}{boolean (default=TRUE)}
@@ -2904,6 +3048,8 @@ Plot most changed genes}
 
 \item{\code{method}}{character string (default='z')}
 
+\item{\code{min.z}}{numeric (default=0.5)}
+
 \item{\code{min.lfc}}{numeric (default=1)}
 
 \item{\code{max.score}}{numeric (default=20)}
@@ -2912,12 +3058,13 @@ Plot most changed genes}
 
 \item{\code{excluded.genes}}{(default=NULL)}
 
-\item{\code{...}}{additional parameters input to self$plotGeneExpressionComparison()
-Plot gene expression comparison}
-
-\item{\code{min}}{numeric (default=0.5)}
+\item{\code{...}}{additional parameters input to self$plotGeneExpressionComparison()}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+plot of the most changed genes via plotGeneExpressionComparison()
+Plot gene expression comparison
 }
 }
 \if{html}{\out{<hr>}}
@@ -3001,6 +3148,8 @@ Plot gene expression comparison}
 \item{\code{keep.limits}}{(default=NULL)}
 
 \item{\code{name}}{character string Field name where the test results are stored}
+
+\item{\code{...}}{additional parameters}
 }
 \if{html}{\out{</div>}}
 }
@@ -3065,7 +3214,6 @@ Get GO environment
 }
 \subsection{Returns}{
 GO environment
-Extract coda data
 }
 }
 \if{html}{\out{<hr>}}

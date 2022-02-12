@@ -1,4 +1,4 @@
-#include <RcppEigen.h>
+
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -10,7 +10,11 @@
 #include <progress.hpp>
 #include <unistd.h>
 
-#define BOOST_DISABLE_ASSERTS
+
+#define NDEBUG 1
+#include <RcppEigen.h>
+#include <Rcpp.h>
+
 
 using namespace Rcpp;
 using namespace Eigen;

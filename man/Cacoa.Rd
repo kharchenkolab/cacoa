@@ -45,8 +45,8 @@ The class encompasses etc etc
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-new}{\code{Cacoa$new()}}
-\item \href{#method-estimateExpressionShiftMagnitudes}{\code{Cacoa$estimateExpressionShiftMagnitudes()}}
 \item \href{#method-estimateCommonExpressionShiftMagnitudes}{\code{Cacoa$estimateCommonExpressionShiftMagnitudes()}}
+\item \href{#method-estimateExpressionShiftMagnitudes}{\code{Cacoa$estimateExpressionShiftMagnitudes()}}
 \item \href{#method-plotExpressionShiftMagnitudes}{\code{Cacoa$plotExpressionShiftMagnitudes()}}
 \item \href{#method-estimatePerCellTypeDE}{\code{Cacoa$estimatePerCellTypeDE()}}
 \item \href{#method-estimateDEPerCellType}{\code{Cacoa$estimateDEPerCellType()}}
@@ -176,83 +176,6 @@ Initialize Cacoa class
 }
 \subsection{Returns}{
 a new 'Cacoa' object
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateExpressionShiftMagnitudes"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateExpressionShiftMagnitudes}{}}}
-\subsection{Method \code{estimateExpressionShiftMagnitudes()}}{
-Calculate expression shift magnitudes of different clusters between conditions
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateExpressionShiftMagnitudes(
-  cell.groups = self$cell.groups,
-  sample.per.cell = self$sample.per.cell,
-  dist = NULL,
-  dist.type = "cross.both",
-  min.cells.per.sample = 10,
-  min.samp.per.type = 2,
-  min.gene.frac = 0.01,
-  ref.level = self$ref.level,
-  sample.groups = self$sample.groups,
-  verbose = self$verbose,
-  n.cores = self$n.cores,
-  name = "expression.shifts",
-  n.permutations = 1000,
-  genes = NULL,
-  n.pcs = NULL,
-  top.n.genes = NULL,
-  ...
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cell.groups}}{Named cell group factor with cell names (default=stored vector, self$cell.groups)}
-
-\item{\code{sample.per.cell}}{Sample per cell (default=self$sample.per.cell)}
-
-\item{\code{dist}}{'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default=NULL, depends on dimensionality)}
-
-\item{\code{dist.type}}{character string (default="cross.both")}
-
-\item{\code{min.cells.per.sample}}{numeric (default=10)}
-
-\item{\code{min.samp.per.type}}{numeric (default=2)}
-
-\item{\code{min.gene.frac}}{numeric (default=0.01)}
-
-\item{\code{ref.level}}{(default=self$ref.level)}
-
-\item{\code{sample.groups}}{(default=self$sample.groups)}
-
-\item{\code{verbose}}{boolean Whether to show progress}
-
-\item{\code{n.cores}}{Number of cores (default: stored integer)}
-
-\item{\code{name}}{Test name (default="expression.shifts")}
-
-\item{\code{n.permutations}}{numeric (default=1000)}
-
-\item{\code{genes}}{(default=NULL)}
-
-\item{\code{n.pcs}}{numeric Number of principal components (default=NULL)}
-
-\item{\code{top.n.genes}}{character vector Vector of top genes to show (default=NULL)}
-
-\item{\code{...}}{extra parameters to estimateExpressionShiftMagnitudes()}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-List including:
-\itemize{
-\item \code{dist.df}: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update
-\item \code{p.dist.info}: list of distance matrices per cell type
-\item \code{sample.groups}: filtered sample groups
-\item \code{cell.groups}: filtered cell groups
-}
-
 Estimate common expression shift magnitudes
 }
 }
@@ -308,6 +231,77 @@ Estimate common expression shift magnitudes
 }
 \subsection{Returns}{
 List of expression shift magnitudes. Distributions per type, p-values, and adjusted p-values.
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-estimateExpressionShiftMagnitudes"></a>}}
+\if{latex}{\out{\hypertarget{method-estimateExpressionShiftMagnitudes}{}}}
+\subsection{Method \code{estimateExpressionShiftMagnitudes()}}{
+Calculate expression shift magnitudes of different clusters between conditions
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateExpressionShiftMagnitudes(
+  cell.groups = self$cell.groups,
+  sample.per.cell = self$sample.per.cell,
+  dist = NULL,
+  dist.type = "cross.both",
+  min.cells.per.sample = 10,
+  min.samp.per.type = 2,
+  min.gene.frac = 0.01,
+  ref.level = self$ref.level,
+  sample.groups = self$sample.groups,
+  verbose = self$verbose,
+  n.cores = self$n.cores,
+  name = "expression.shifts",
+  n.permutations = 1000,
+  genes = NULL,
+  n.pcs = NULL,
+  top.n.genes = NULL,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
+
+\item{\code{dist.type}}{character string (default="cross.both")}
+
+\item{\code{min.cells.per.sample}}{numeric (default=10)}
+
+\item{\code{min.samp.per.type}}{numeric (default=2)}
+
+\item{\code{min.gene.frac}}{numeric (default=0.01)}
+
+\item{\code{ref.level}}{(default=self$ref.level)}
+
+\item{\code{sample.groups}}{(default=stored sample.groups)}
+
+\item{\code{verbose}}{boolean Whether to show progress}
+
+\item{\code{n.cores}}{Number of cores (defaultstored integer)}
+
+\item{\code{name}}{Test name (default="expression.shifts")}
+
+\item{\code{n.permutations}}{numeric (default=1000)}
+
+\item{\code{genes}}{(default=NULL)}
+
+\item{\code{n.pcs}}{numeric Number of principal components (default=NULL)}
+
+\item{\code{top.n.genes}}{character vector Vector of top genes to show (default=NULL)}
+
+\item{\code{...}}{extra parameters to estimateExpressionShiftMagnitudes()}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+List including:
+\code{dist.df}: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update
+\code{p.dist.info}: list of distance matrices per cell type
+\code{sample.groups}: filtered sample groups
+\code{cell.groups}: filtered cell groups
+
 Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
 cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
 }

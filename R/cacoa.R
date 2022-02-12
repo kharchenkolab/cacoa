@@ -87,6 +87,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param verbose boolean (default=TRUE)
     #' @param plot.theme (default=ggplot2::theme_bw())
     #' @param plot.params (default=NULL)
+    #'
     #' @return a new 'Cacoa' object
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL, 
                         ref.level=NULL, target.level=NULL, sample.groups.palette=NULL, 
@@ -201,74 +202,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$plot.params <- plot.params
     },
 
-    ### Expression shifts
-
-    #' @description Calculate expression shift magnitudes of different clusters between conditions
-    #'
-    #' @param cell.groups Named cell group factor with cell names (default=stored vector, self$cell.groups)
-    #' @param sample.per.cell Sample per cell (default=self$sample.per.cell)
-    #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default=NULL, depends on dimensionality)
-    #' @param dist.type character string (default="cross.both")
-    #' @param min.cells.per.sample numeric (default=10)
-    #' @param min.samp.per.type numeric (default=2)
-    #' @param min.gene.frac numeric (default=0.01)
-    #' @param ref.level (default=self$ref.level)
-    #' @param sample.groups (default=self$sample.groups)
-    #' @param n.cores Number of cores (default: stored integer)
-    #' @param name Test name (default="expression.shifts")
-    #' @param n.permutations numeric (default=1000)
-    #' @param genes (default=NULL)
-    #' @param n.pcs numeric Number of principal components (default=NULL)
-    #' @param top.n.genes character vector Vector of top genes to show (default=NULL)
-    #' @param ... extra parameters to estimateExpressionShiftMagnitudes()
-    #' @return List including:
-    #'   - `dist.df`: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update
-    #'   - `p.dist.info`: list of distance matrices per cell type
-    #'   - `sample.groups`: filtered sample groups
-    #'   - `cell.groups`: filtered cell groups
-    #'
-    estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, sample.per.cell=self$sample.per.cell, dist=NULL, dist.type="cross.both",
-                                               min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
-                                               ref.level=self$ref.level, sample.groups=self$sample.groups,
-                                               verbose=self$verbose, n.cores=self$n.cores, name="expression.shifts",
-                                               n.permutations=1000, genes=NULL, n.pcs=NULL, top.n.genes=NULL, ...) {
-      
-      count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
-
-      if (verbose) message("Filtering data... ")
-      shift.inp <- filterExpressionDistanceInput(
-        count.matrices, cell.groups=cell.groups,
-        sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
-        min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type,
-        min.gene.frac=min.gene.frac, genes=genes, verbose=verbose
-      )
-      if (verbose) message("done!\n")
-
-      if (!is.null(n.pcs)) {
-        if (!is.null(top.n.genes) && n.pcs > top.n.genes) {
-          n.pcs <- top.n.genes - 1
-          warning("n.pcs can't be larger than top.n.genes - 1, setting it to ", n.pcs)
-        }
-
-        n.samps.per.type <- shift.inp$cm.per.type %>% sapply(nrow)
-        affected.types <- which(n.samps.per.type <= n.pcs)
-        if (length(affected.types) > 0) {
-          affected.types %<>% names() %>% paste(collapse=", ")
-          n.pcs <- min(n.samps.per.type) - 1
-          warning("Cell types '", affected.types, "' don't have enough samples present. Setting n.pcs to ", n.pcs,
-                  ". Consider increasing min.samp.per.type.")
-        }
-      }
-
-      self$test.results[[name]] <- shift.inp %$%
-        estimateExpressionShiftMagnitudes(
-          cm.per.type, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=self$sample.per.cell,
-          dist=dist, dist.type=dist.type, verbose=verbose, ref.level=ref.level,
-          n.permutations=n.permutations, top.n.genes=top.n.genes, n.pcs=n.pcs, n.cores=n.cores, ...
-        )
-
-      return(invisible(self$test.results[[name]]))
-    },
 
     #' Estimate common expression shift magnitudes
     #'
@@ -322,6 +255,75 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       padjust <- p.adjust(pvalues, method=p.adjust.method)
 
       self$test.results[[name]] <- list(dists.per.type=dists.per.type, pvalues=pvalues, padjust=padjust)
+      return(invisible(self$test.results[[name]]))
+    },
+
+
+    #' @description Calculate expression shift magnitudes of different clusters between conditions
+    #'
+    #' @param top.n.genes character vector Vector of top genes to show (default=NULL)
+    #' @param dist.type character string (default="cross.both")
+    #' @param cell.groups Named cell group factor with cell names (default=self$cell.groups)
+    #' @param sample.per.cell Sample per cell (default=self$sample.per.cell)
+    #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default=NULL, depends on dimensionality)
+    #' @param min.cells.per.sample numeric (default=10)
+    #' @param min.samp.per.type numeric (default=2)
+    #' @param min.gene.frac numeric (default=0.01)
+    #' @param ref.level (default=self$ref.level)
+    #' @param sample.groups (default=stored sample.groups)
+    #' @param n.cores Number of cores (defaultstored integer)
+    #' @param name Test name (default="expression.shifts")
+    #' @param n.permutations numeric (default=1000)
+    #' @param genes (default=NULL)
+    #' @param n.pcs numeric Number of principal components (default=NULL)    
+    #' @param ... extra parameters to estimateExpressionShiftMagnitudes()
+    #' @return List including:
+    #'   `dist.df`: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update
+    #'   `p.dist.info`: list of distance matrices per cell type
+    #'   `sample.groups`: filtered sample groups
+    #'   `cell.groups`: filtered cell groups
+    #'
+    estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups, 
+      sample.per.cell=self$sample.per.cell, dist=NULL, dist.type="cross.both",
+      min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
+      ref.level=self$ref.level, sample.groups=self$sample.groups,
+      verbose=self$verbose, n.cores=self$n.cores, name="expression.shifts", 
+      n.permutations=1000, genes=NULL, n.pcs=NULL, top.n.genes=NULL, ...) {
+      
+      count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
+
+      if (verbose) message("Filtering data... ")
+      shift.inp <- filterExpressionDistanceInput(
+        count.matrices, cell.groups=cell.groups,
+        sample.per.cell=self$sample.per.cell, sample.groups=self$sample.groups,
+        min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type,
+        min.gene.frac=min.gene.frac, genes=genes, verbose=verbose
+      )
+      if (verbose) message("done!\n")
+
+      if (!is.null(n.pcs)) {
+        if (!is.null(top.n.genes) && n.pcs > top.n.genes) {
+          n.pcs <- top.n.genes - 1
+          warning("n.pcs can't be larger than top.n.genes - 1, setting it to ", n.pcs)
+        }
+
+        n.samps.per.type <- shift.inp$cm.per.type %>% sapply(nrow)
+        affected.types <- which(n.samps.per.type <= n.pcs)
+        if (length(affected.types) > 0) {
+          affected.types %<>% names() %>% paste(collapse=", ")
+          n.pcs <- min(n.samps.per.type) - 1
+          warning("Cell types '", affected.types, "' don't have enough samples present. Setting n.pcs to ", n.pcs,
+                  ". Consider increasing min.samp.per.type.")
+        }
+      }
+
+      self$test.results[[name]] <- shift.inp %$%
+        estimateExpressionShiftMagnitudes(
+          cm.per.type, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=self$sample.per.cell,
+          dist=dist, dist.type=dist.type, verbose=verbose, ref.level=ref.level,
+          n.permutations=n.permutations, top.n.genes=top.n.genes, n.pcs=n.pcs, n.cores=n.cores, ...
+        )
+
       return(invisible(self$test.results[[name]]))
     },
 

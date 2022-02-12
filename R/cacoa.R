@@ -3427,7 +3427,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop("'org.db' must be of class 'OrgDb'. Please input an organism database.")
       }
 
-      get_GO_data <- utils::getFromNamespace("GSEA_internal", "clusterProfiler")
+      get_GO_data <- utils::getFromNamespace("get_GO_data", "clusterProfiler")
       self$cache$go.environment <- c("BP", "CC", "MF") %>% sn() %>%
         plapply(function(n) get_GO_data(org.db, n, "ENTREZID") %>%
                   as.list() %>% as.environment(), n.cores=1, progress=verbose)

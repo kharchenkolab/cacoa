@@ -94,11 +94,10 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 #' @param size marker size (default: 0.5)
 #' @param jitter.width width of the point jitter (default: 0.15)
 #' @keywords internal
-plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=1.05, show.significance=FALSE,
+plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=0.05, show.significance=FALSE,
                                      jitter.width=0.15, notch=FALSE, legend.position="right", alpha=0.2, size=0.5,
-                                     palette=NULL, adjust.pvalues=TRUE, plot.theme=theme_get(), label.y.npc=0.92,
-                                     ns.symbol="") {
-  checkPackageInstalled(c("ggpubr"), cran=TRUE)
+                                     palette=NULL, adjust.pvalues=TRUE, plot.theme=theme_get(), pvalue.y=NULL,
+                                     ns.symbol="", p.adjust.method='BH') {
   gg <- ggplot(count.df, aes(x=variable, y=value, by=group, fill=group)) +
     geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
     labs(x=x.lab, y=y.lab) +
@@ -107,19 +106,22 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
     geom_point(position=position_jitterdodge(jitter.width=jitter.width), color="black", size=size, alpha=alpha) +
-    scale_y_continuous(expand=c(0, 0), limits=c(0, max(count.df$value) * y.expand))
+    scale_y_continuous(expand=c(0, 0, y.expand, 0), limits=c(0, max(count.df$value)))
 
   if (show.significance) {
+    suppressWarnings(
+      pval.df <- count.df %>% group_by(variable) %>%
+        summarise(pvalue=wilcox.test(value[group == group[1]], value[group != group[1]])$p.value)
+    )
+
     if (adjust.pvalues) {
-      # willcox test + adjustment
-      gg <- gg +
-      ggpubr::stat_compare_means(aes(group=group, label=pvalueToCode(..p.adj.., ns.symbol=ns.symbol)),
-                                 label.y.npc=label.y.npc)
-    } else { # willcox test
-      gg <- gg +
-      ggpubr::stat_compare_means(aes(group = group), label="p.signif", label.y.npc=label.y.npc,
-                                 symnum.args=c("****", "***", "**", "*", ns.symbol))
+      pval.df$pvalue %<>% p.adjust(p.adjust.method)
     }
+
+    if (is.null(pvalue.y)) pvalue.y <- max(count.df$value)
+
+    pval.df$pvalue %<>% pvalueToCode(ns.symbol=ns.symbol)
+    gg <- gg + geom_text(data=pval.df, mapping=aes(label=pvalue, by=NULL, fill=NULL), y=pvalue.y, color="black")
   }
 
   if (!is.null(palette)) gg <- gg + scale_fill_manual(values=palette)

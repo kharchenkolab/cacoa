@@ -11,9 +11,11 @@ getGenePalette(
 )
 }
 \arguments{
-\item{genes}{type of genes ("up", "down" or "all")}
+\item{genes}{character vector Type of genes (default=c("up", "down" or "all"))}
 
-\item{high}{color for the highest value (default: "gray80")}
+\item{neutral.col}{character string (default="white")}
+
+\item{bidirectional}{boolean (default=FALSE)}
 }
 \value{
 palette function

@@ -5,11 +5,25 @@
 #' @importFrom reshape2 melt
 NULL
 
-#' @keywords internal
+#' Helper function for creating color palettes
+#' Syncs input to ggplot2::theme() params legend.position (i.e. the position of the legends) 
+#' and legend.justification (i.e. the anchor point for positioning legend inside the plot)
+#'
+#' @param position character string to pass into ggplot2::theme(legend.position=position, legend.justification=position)
+#' @return returns ggplot2 theme() such that ggplot2::theme(legend.position=position, legend.justification=position)
+#' @export
 theme_legend_position <- function(position) {
-  theme(legend.position=position, legend.justification=position)
+  ggplot2::theme(legend.position=position, legend.justification=position)
 }
 
+
+#' Helper function for creating color palettes
+#'
+#' @param name character A palette name; please refer to RColorBrewer::brewer.pal()
+#' @param n integer (default=NULL) Number of different colors in the palette, minimum 3, maximum depending on palette. Please refer to RColorBrewer::brewer.pal() for more details
+#' @param rev boolean (default=TRUE) Whether to reverse the palette order 
+#' @return palette function
+#'
 #' @export
 brewerPalette <- function(name, n=NULL, rev=TRUE) {
   checkPackageInstalled("RColorBrewer", cran=TRUE)
@@ -21,20 +35,24 @@ brewerPalette <- function(name, n=NULL, rev=TRUE) {
 
 dark.red.palette <- colorRampPalette(c("gray95", "red", "#5A0000"), space="Lab")
 
-#' @title Plot Number of Cells Regression
+#' Plot number of cells regression
+#' 
 #' @param n the regressed variable
-#' @param n.total number of cells
-#' @param x.lab x axis label (default: "Number of cells").
-#' @param y.lab y axis label (default: "N")
-#' @param legend.position legend position (default: "right")
-#' @param label show cell type labels (default: TRUE)
-#' @param size label text size (default: 4)
-#' @param palette color palette
-#' @param plot.line plot the robust regression (default: TRUE)
-#' @param line.width regression line width (default: 0.5)
+#' @param n.total integer Number of cells
+#' @param x.lab character vector (default="Number of cells") x axis label 
+#' @param y.lab character vector (default="N") y axis label 
+#' @param legend.position character vector (default="right") legend position 
+#' @param label boolean (default=TRUE) Whether to show cell type labels 
+#' @param size integer (default=4) Label text size 
+#' @param palette color palette (default=NULL)
+#' @param plot.line boolean (default=TRUE) Whether to plot the robust regression 
+#' @param line.width numeric (default=0.5) Regression line width 
+#' @return ggplot2 plot of regression
+#'
 #' @keywords internal
 plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", legend.position="right", label=TRUE, size=4,
-                                palette=NULL, plot.line=TRUE, line.width=0.5, plot.theme=theme_get()) {
+                                palette=NULL, plot.line=TRUE, line.width=0.5, plot.theme=ggplot2::theme_get()) {
+  
   p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
 
@@ -67,7 +85,8 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
   return(gg)
 }
 
-#' @title Plot Count Boxplots Per Type
+#' Plot count boxplots per type
+#' 
 #' @param count.df data.frame with columns `group`, `variable` and `value`
 #' @param notch Whether to show notch in the boxplots
 #' @param alpha Transparency level on the data points (default: 0.2)
@@ -75,11 +94,10 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 #' @param size marker size (default: 0.5)
 #' @param jitter.width width of the point jitter (default: 0.15)
 #' @keywords internal
-plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=1.05, show.significance=FALSE,
+plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand=0.05, show.significance=FALSE,
                                      jitter.width=0.15, notch=FALSE, legend.position="right", alpha=0.2, size=0.5,
-                                     palette=NULL, adjust.pvalues=TRUE, plot.theme=theme_get(), label.y.npc=0.92) {
-  
-  checkPackageInstalled(c("ggpubr"), cran=TRUE)
+                                     palette=NULL, adjust.pvalues=TRUE, plot.theme=theme_get(), pvalue.y=NULL,
+                                     ns.symbol="", p.adjust.method='BH') {
   gg <- ggplot(count.df, aes(x=variable, y=value, by=group, fill=group)) +
     geom_boxplot(position=position_dodge(), outlier.shape = NA, notch=notch) +
     labs(x=x.lab, y=y.lab) +
@@ -88,40 +106,56 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
     theme(axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
           legend.title=element_blank()) +
     geom_point(position=position_jitterdodge(jitter.width=jitter.width), color="black", size=size, alpha=alpha) +
-    scale_y_continuous(expand=c(0, 0), limits=c(0, max(count.df$value) * y.expand))
+    scale_y_continuous(expand=c(0, 0, y.expand, 0), limits=c(0, max(count.df$value)))
 
   if (show.significance) {
+    suppressWarnings(
+      pval.df <- count.df %>% group_by(variable) %>%
+        summarise(pvalue=wilcox.test(value[group == group[1]], value[group != group[1]])$p.value)
+    )
+
     if (adjust.pvalues) {
-      # willcox test + adjustment
-      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label="p.signif", label.y.npc=label.y.npc)
-      # TODO
-      # p.adjust.method = "fdr" ?
-    } else { # willcox test
-      gg <- gg + ggpubr::stat_compare_means(aes(group = group), label="p.signif", label.y.npc=label.y.npc)
+      pval.df$pvalue %<>% p.adjust(p.adjust.method)
     }
+
+    if (is.null(pvalue.y)) pvalue.y <- max(count.df$value)
+
+    pval.df$pvalue %<>% pvalueToCode(ns.symbol=ns.symbol)
+    gg <- gg + geom_text(data=pval.df, mapping=aes(label=pvalue, by=NULL, fill=NULL), y=pvalue.y, color="black")
   }
 
   if (!is.null(palette)) gg <- gg + scale_fill_manual(values=palette)
   return(gg)
 }
 
-#' @title Plot heatmap
+#' Plot heatmap
+#'
 #' @param df Data frame with plot data
 #' @param color.per.group Colors per cell group (default=NULL)
 #' @param row.order Forced row order (default=NULL)
 #' @param col.order Forced column order (default=NULL)
 #' @param legend.position Position of legend in plot. See ggplot2::theme (default="right")
+#' @param size.df (default=NULL)
+#' @param size.range (default=c(1, 5))
+#' @param size.legend.title (default="size")
 #' @param legend.key.width (default=unit(8, "pt))
 #' @param legend.title Title on plot (default="-log10(p-value)")
 #' @param x.axis.position Position of x axis (default="top")
 #' @param color.range Range for filling colors
+#' @param plot.theme (default=ggplot2::theme_get())
+#' @param symmetric boolean (default=FALSE)
+#' @param palette (default=NULL)
+#' @param font.size integer (default=8)
+#' @param distance character string (default="manhattan")
+#' @param clust.method character string (default="complete")
 #' @param grid.color Color of the grid. Set to "transparent" to disable the grid. (default: "gray50")
 #' @return A ggplot2 object
+#' 
 #' @export
 plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE, legend.position="right",
                         size.df=NULL, size.range=c(1, 5), size.legend.title="size",
                         legend.key.width=unit(8, "pt"), legend.title="-log10(p-value)", x.axis.position="top",
-                        color.range=NULL, plot.theme=theme_get(), symmetric=FALSE, palette=NULL, font.size=8,
+                        color.range=NULL, plot.theme=ggplot2::theme_get(), symmetric=FALSE, palette=NULL, font.size=8,
                         distance="manhattan", clust.method="complete", grid.color="gray50") {
   if (is.null(color.range)) {
     if (prod(range(df, na.rm=TRUE)) < 0) {
@@ -199,9 +233,12 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE
 }
 
 #' Get Gene Scale
-#' @param genes type of genes ("up", "down" or "all")
-#' @param high color for the highest value (default: "gray80")
+#' 
+#' @param genes character vector Type of genes (default=c("up", "down" or "all")) 
+#' @param neutral.col character string (default="white")
+#' @param bidirectional boolean (default=FALSE)
 #' @return palette function
+#' 
 #' @export
 getGenePalette <- function(genes=c("up", "down", "all"), neutral.col="white", bidirectional=FALSE) {
   genes <- match.arg(genes)
@@ -209,8 +246,9 @@ getGenePalette <- function(genes=c("up", "down", "all"), neutral.col="white", bi
   down.cols <- c("#4393c3", "#053061")
   all.cols <- c("#5aae61", "#00441b")
 
-  if (bidirectional)
+  if (bidirectional){
     return(colorRampPalette(c(rev(down.cols), neutral.col, up.cols)))
+  }
 
   if (genes == "up") {
     sign.cols <- up.cols
@@ -256,20 +294,22 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
   return(quantile(s.means, c(quant, 1 - quant)))
 }
 
-#' @title Plot bar, point or boxplots showing mean/median values per cell type
-#' @description  Generic function for plotting mean or median values per cell type (used for expression shift distances and others)
-#' @param df - data frame containing the results, including $value and $Type slots which will be summarized
-#' @param type - type of a plot "bar" (default), "point" (mean + sd), or "box" for boxplot
-#' @param show.jitter whether to show individual data points (default: FALSE)
+#' Plot bar, point or boxplots showing mean/median values per cell type. 
+#' This is a generic function for plotting mean or median values per cell type 
+#' (used for expression shift distances and others).
+#' 
+#' @param df dataframe containing the results, including $value and $Type slots which will be summarized
+#' @param type character vector (default=c('box', 'point', 'bar')) Type of a plot "bar" (default), "point" (mean + sd), or "box" for boxplot
+#' @param show.jitter boolean (default = FALSE) Whether to show individual data points 
 #' @param jitter.alpha transparency value for the data points (default: 0.05)
-#' @param notch - whether to show notches in the boxplot version (default=TRUE)
+#' @param notch boolean Whether to show notches in the boxplot version (default=TRUE)
 #' @param palette - cell type palette
 #' @return A ggplot2 object
 #' @keywords internal
 plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point', 'bar'), show.jitter=TRUE,
                                          notch=TRUE, jitter.alpha=0.05, palette=NULL, ylab='expression distance',
                                          yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0,
-                                         order.x=TRUE, pvalue.y=NULL, y.max=NULL, y.offset=NULL, ns.symbol="ns") {
+                                         order.x=TRUE, pvalue.y=NULL, y.max=NULL, y.offset=NULL, ns.symbol="") {
   type <- match.arg(type)
   df$Type %<>% as.factor()
   if (!is.null(y.offset)) {
@@ -333,7 +373,7 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
     p <- p +
       geom_jitter(data=odf, aes(x=Type,y=value), color=1, position=position_jitter(0.1), show.legend=FALSE,
                   alpha=jitter.alpha, size=jitter.size)
-  };
+  }
 
   if (!is.null(pvalues)) {
     pval.df <- pvalueToCode(pvalues, ns.symbol=ns.symbol) %>%
@@ -397,8 +437,9 @@ plotCellTypeSizeDep <- function(df, cell.groups, palette=NULL, font.size=4, ylab
 }
 
 # TODO: Improve speed of this function. No need to check BP/MF/CC all the time
+
 #' @keywords internal
-reduceEdges <- function(edges, verbose=TRUE, n.cores = 1) {
+reduceEdges <- function(edges, verbose=TRUE, n.cores=1) {
   edges %>%
     pull(to) %>%
     unique() %>%
@@ -426,13 +467,15 @@ reduceEdges <- function(edges, verbose=TRUE, n.cores = 1) {
 #'
 #' @param fam List of ontology IDs for the chosen family
 #' @param data Data frane if raw ontology data for the chosen cell type
-#' @param plot.type How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) (default: complete)
-#' @param show.ids Whether to show ontology IDs instead of names (default: F)
-#' @param string.length Length of strings for wrapping in order to fit text within boxes (default: 18)
-#' @param legend.label.size Size og legend labels (default: 1)
-#' @param legend.position Position of legend (default: topright)
-#' @param verbose Print messages (default: T)
-#' @param n.cores Number of cores to use (default: 1)
+#' @param plot.type character (default="complete") How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) 
+#' @param show.ids boolean (default=FALSE) Whether to show ontology IDs instead of names 
+#' @param string.length integer (default=18) Length of strings for wrapping in order to fit text within boxes 
+#' @param legend.label.size integer (default=1) Size of legend labels 
+#' @param legend.position character vecotr (default="topright") Position of legend
+#' @param verbose boolean (default=TRUE) Print messages 
+#' @param n.cores integer (default=1) Number of cores to use
+#' @param reduce.edges boolean (default=FALSE) Remove redundant edges in network
+#' @param font.size integer (default=24) Size of the font
 #' @return Rgraphviz object
 #' @keywords internal
 plotOntologyFamily <- function(fam, data, plot.type="complete", show.ids=FALSE, string.length=18, legend.label.size=1,
@@ -728,7 +771,7 @@ plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, m
         gg <- gg + geom_point(size=size)
       }
 
-      gg %<>% sccore:::styleEmbeddingPlot(title=title, show.ticks=show.ticks, show.labels=show.labels, ...)
+      gg %<>% sccore::styleEmbeddingPlot(title=title, show.ticks=show.ticks, show.labels=show.labels, ...)
 
       if (!is.null(font.size)) {
         gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
@@ -736,3 +779,26 @@ plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, m
 
       return(gg)
     }
+
+#' Performs ontology clustering by genes and then shows medoids of the clusters with
+#'   enrichplot::dotplot
+#'
+#' @param ont.res something
+#' @param p.adj numeric Adjusted p-value set (default=0.05)
+#' @param min.genes integer Minimun number of genes (default=1)
+#' @param cut.h numeric (default=0.66)
+#' @param top.n integer Number of enriched terms to display (default=Inf). If Inf, no limit is set.
+#' @param ... additional parameters passed to enrichplot::dotplot()
+#' @return enrichplot::dotplot showing medoids of gene clustering
+#' @export
+clusteredOntologyDotplot <- function(ont.res, p.adj=0.05, min.genes=1, cut.h=0.66, top.n=Inf, ...) {
+  checkPackageInstalled("enrichplot", bioc=TRUE)
+  clusts <- ont.res@result %>% filter(p.adjust < p.adj) %$%
+    setNames(strsplit(geneID, "/"), Description) %>% .[sapply(., length) >= min.genes] %>%
+    estimateClusterPerGO(cut.h=cut.h) %>% {split(names(.), .)} %>%
+    sapply(estimateOntologyClusterName, method='medoid')
+
+  ont.res@result %<>% filter(Description %in% clusts)
+
+  enrichplot::dotplot(ont.res, showCategory=top.n, ...)
+}

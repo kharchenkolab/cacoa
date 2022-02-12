@@ -23,19 +23,23 @@ plotOntologyFamily(
 
 \item{data}{Data frane if raw ontology data for the chosen cell type}
 
-\item{plot.type}{How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) (default: complete)}
+\item{plot.type}{character (default="complete") How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms)}
 
-\item{show.ids}{Whether to show ontology IDs instead of names (default: F)}
+\item{show.ids}{boolean (default=FALSE) Whether to show ontology IDs instead of names}
 
-\item{string.length}{Length of strings for wrapping in order to fit text within boxes (default: 18)}
+\item{string.length}{integer (default=18) Length of strings for wrapping in order to fit text within boxes}
 
-\item{legend.label.size}{Size og legend labels (default: 1)}
+\item{legend.label.size}{integer (default=1) Size of legend labels}
 
-\item{legend.position}{Position of legend (default: topright)}
+\item{legend.position}{character vecotr (default="topright") Position of legend}
 
-\item{verbose}{Print messages (default: T)}
+\item{verbose}{boolean (default=TRUE) Print messages}
 
-\item{n.cores}{Number of cores to use (default: 1)}
+\item{n.cores}{integer (default=1) Number of cores to use}
+
+\item{reduce.edges}{boolean (default=FALSE) Remove redundant edges in network}
+
+\item{font.size}{integer (default=24) Size of the font}
 }
 \value{
 Rgraphviz object

@@ -15,6 +15,8 @@ estimateCellDensityGraph(
 )
 }
 \arguments{
+\item{graph}{input graph}
+
 \item{sample.per.cell}{Named sample factor with cell names (default: stored vector)}
 
 \item{sample.groups}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}

@@ -17,7 +17,7 @@ plotHeatmap(
   legend.title = "-log10(p-value)",
   x.axis.position = "top",
   color.range = NULL,
-  plot.theme = theme_get(),
+  plot.theme = ggplot2::theme_get(),
   symmetric = FALSE,
   palette = NULL,
   font.size = 8,
@@ -37,6 +37,12 @@ plotHeatmap(
 
 \item{legend.position}{Position of legend in plot. See ggplot2::theme (default="right")}
 
+\item{size.df}{(default=NULL)}
+
+\item{size.range}{(default=c(1, 5))}
+
+\item{size.legend.title}{(default="size")}
+
 \item{legend.key.width}{(default=unit(8, "pt))}
 
 \item{legend.title}{Title on plot (default="-log10(p-value)")}
@@ -44,6 +50,18 @@ plotHeatmap(
 \item{x.axis.position}{Position of x axis (default="top")}
 
 \item{color.range}{Range for filling colors}
+
+\item{plot.theme}{(default=ggplot2::theme_get())}
+
+\item{symmetric}{boolean (default=FALSE)}
+
+\item{palette}{(default=NULL)}
+
+\item{font.size}{integer (default=8)}
+
+\item{distance}{character string (default="manhattan")}
+
+\item{clust.method}{character string (default="complete")}
 
 \item{grid.color}{Color of the grid. Set to "transparent" to disable the grid. (default: "gray50")}
 }

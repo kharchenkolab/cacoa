@@ -12,8 +12,10 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ba
     bandwidth <- apply(emb, 2, quantile, c(0.1, 0.9)) %>% diff() %>% {. * bandwidth} %>% .[1,]
   }
 
+  expand_limits_continuous <- utils::getFromNamespace("expand_limits_continuous", "ggplot2")
+
   lims <- emb %>%
-    apply(2, function(x) ggplot2:::expand_limits_continuous(range(x), expansion(mult=expansion.mult))) %>%
+    apply(2, function(x) expand_limits_continuous(range(x), expansion(mult=expansion.mult))) %>%
     as.numeric()
 
   cname <- intersect(names(sample.per.cell), rownames(emb))
@@ -50,6 +52,7 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ba
 
 #' Estimate graph smooth based cell density
 #'
+#' @param graph input graph
 #' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
 #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 #' @param n.cores number of cores
@@ -59,8 +62,8 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
   sig.mat <- unique(sample.per.cell) %>% sapply(function(s) as.numeric(sample.per.cell == s)) %>%
     set_rownames(names(sample.per.cell)) %>% set_colnames(unique(sample.per.cell))
 
-  score.mat <- sccore:::smoothSignalOnGraph(
-    sig.mat, filter=function(...) sccore:::heatFilter(..., beta=beta), graph=graph,
+  score.mat <- sccore::smoothSignalOnGraph(
+    sig.mat, filter=function(...) sccore::heatFilter(..., beta=beta), graph=graph,
     m=m, n.cores=n.cores, progress.chunk=(verbose + 1), progress=verbose,
   ) %>% as.matrix()
 
@@ -99,7 +102,7 @@ getDensityContour <- function(emb, cell.groups, group,  color='black', linetype=
 }
 
 
-#' @description Plot cell density
+#' Plot cell density
 #'
 #' @param bins number of bins for density estimation, should keep consistent with bins in estimateCellDensity
 #' @param palette color palette function. Default: `YlOrRd`
@@ -134,7 +137,8 @@ plotDensityKde <- function(mat, bins, cell.emb, show.grid=TRUE, lims=NULL, show.
   return(p)
 }
 
-#' @description estimate differential cell density
+#' Estimate differential cell density
+#'
 #' @param density.mat estimated cell density matrix with estimateCellDensity
 #' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
 #' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
@@ -206,15 +210,16 @@ diffCellDensityPermutations <- function(density.mat, sample.groups, ref.level, t
 }
 
 #' @keywords internal
-adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smooth=FALSE, graph=NULL, beta=30, n.cores=1, verbose=TRUE) {
+adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smooth=FALSE, graph=NULL, beta=30,
+                                        l.max=NULL, n.cores=1, verbose=TRUE) {
   checkPackageInstalled("matrixStats", details="for adjusting p-values", cran=TRUE)
   if (smooth) {
     if (is.null(graph)) stop("graph has to be provided if smooth is TRUE")
 
-    g.filt <- function(...) heatFilter(..., beta=beta)
-    score %<>% smoothSignalOnGraph(filter=g.filt, graph=graph)
-    scores.shuffled %<>% smoothSignalOnGraph(filter=g.filt, graph=graph, n.cores=n.cores,
-                                             progress=verbose) %>%
+    g.filt <- function(...) sccore::heatFilter(..., beta=beta)
+    score %<>% smoothSignalOnGraph(filter=g.filt, graph=graph, l.max=l.max)
+    scores.shuffled %<>%
+      smoothSignalOnGraph(filter=g.filt, graph=graph, n.cores=n.cores, l.max=l.max, progress=verbose) %>%
       as.matrix()
   }
 
@@ -244,9 +249,15 @@ adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smoot
 }
 
 #' @keywords internal
-findScoreGroupsGraph <- function(scores, min.score, graph) {
+findScoreGroupsGraph <- function(scores, min.score, graph) { # TODO: deprecated?
   graph %>% igraph::induced_subgraph(names(scores)[scores > min.score]) %>%
     igraph::components() %>% .$membership
 }
 
-
+#' @keywords internal
+graphFromGrid <- function(grid.ids, n.bins) {
+  graph <- lapply(grid.ids, function (i) c(i+1, i-1, i+n.bins, i-n.bins)) %>%
+    mapIds(grid.ids) %>% igraph::graph_from_adj_list() %>% igraph::as.undirected()
+  igraph::V(graph)$name <- grid.ids
+  return(graph)
+}

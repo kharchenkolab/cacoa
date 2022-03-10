@@ -352,7 +352,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    ref.level=self$ref.level, target.level=self$target.level, name='de',
                                    test='DESeq2.Wald', resampling.method=NULL, n.resamplings=30, seed.resampling=239,
                                    min.cell.frac=0.05, covariates=NULL, common.genes=FALSE, n.cores=self$n.cores,
-                                   cooks.cutoff=FALSE, independent.filtering=FALSE, min.cell.count=10, max.cell.count=Inf,
+                                   cooks.cutoff=FALSE, independent.filtering=FALSE, min.cell.count=10,
                                    n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, ...) {
       set.seed(seed.resampling)
       if (!is.list(sample.groups)) {
@@ -376,7 +376,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (!is.null(n.cells.subsample) && is.null(resampling.method)) resampling.method <- 'fix.cells'
       s.groups.new <- list(initial=sample.groups)
-      
+      max.cell.count <- Inf
+
       fix.samples <- NULL
       # If resampling is defined, new contrasts will append to s.groups.new
       if (!is.null(resampling.method) && (n.resamplings != 0)) {
@@ -403,11 +404,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       gene.filter <- (expr.fracs > min.cell.frac)
 
       # parallelize the outer loop if subsampling is on
-      outer.multicore <- (length(s.groups.new) >= n.cores) && (n.cores > 1)
-      inner.verbose <- (length(s.groups.new) == 1) || (!outer.multicore && verbose > 1)
+      n.cores.outer <- min(length(s.groups.new), n.cores)
+      n.cores.inner <- max(n.cores %/% length(s.groups.new), 1)
+      verbose.inner <- (verbose & (n.cores.outer == 1))
 
-      outer.multicore <- FALSE
-      inner.verbose <- TRUE
       de.res <- names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
         estimateDEPerCellTypeInner(
           raw.mats=raw.mats, cell.groups=cell.groups, s.groups=s.groups.new[[resampling.name]],
@@ -415,17 +415,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           cooks.cutoff=cooks.cutoff, min.cell.count=min.cell.count, max.cell.count=max.cell.count,
           independent.filtering=independent.filtering, test=test, meta.info=covariates, gene.filter=gene.filter,
           fix.n.samples=(if (resampling.name == 'initial') NULL else fix.samples),
-          n.cores=ifelse(outer.multicore, 1, n.cores),
-          return.matrix=(resampling.name == 'initial'),
-          verbose=(inner.verbose & verbose), ...
+          n.cores=n.cores.inner, verbose=verbose.inner, return.matrix=(resampling.name == 'initial'), ...
         )
-      }, n.cores=ifelse(outer.multicore, n.cores, 1), progress=(!inner.verbose & verbose), mc.preschedule=TRUE)
+      }, n.cores=n.cores.outer, progress=(!verbose.inner & verbose), mc.preschedule=TRUE, mc.allow.recursive=TRUE)
 
-      
-      
+
+
       # if resampling: calculate median and variance on ranks after resampling
-      de.res[[1]] <- if (length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
-      # de.res %<>% appendStatisticsToDE(expr.fracs)
+      de.res <- if (length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
+      de.res %<>% appendStatisticsToDE(expr.fracs)
       self$test.results[[name]] <- de.res
 
       # TODO: add overall p-adjustment
@@ -468,7 +466,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       jaccards.all <- data.frame()
       for(de.name in de.names){
-        print(de.name)
         if(!(de.name %in% names(self$test.results)) || (length(self$test.results[[de.name]]) == 0) ){
           message(paste0('DE by ', de.name, ' was not estimated', collapse = ' '))
           next
@@ -479,7 +476,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           stop('Resampling was not performed')
         }
         jaccards <- estimateStabilityPerCellType(de.res=de.res, top.n.genes=top.n.genes, p.val.cutoff=p.val.cutoff)
-        # print(jaccards)
 
         jacc.medians <- sapply(unique(jaccards$group), function(x) median(jaccards$value[jaccards$group == x]))
         jaccards.tmp <- data.frame(group = de.name, value = jacc.medians,
@@ -544,7 +540,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop('At least one threshold (top.n.genes or p.val.cutoff) should be provided')
       }
 
-      
+
       data.all = data_frame()
       cell.types = levels(self$cell.groups)
       for(cell.type in cell.types) {
@@ -1053,11 +1049,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if(!is.null(palette) && !(show.pairs) ){
         p <- p + scale_color_manual(values=self$cell.groups.palette)
       }
-      
+
       if(!set.fill){
         p <- p + scale_fill_manual(values=c('white'))
       }
-      
+
       return(p)
     },
 
@@ -1152,7 +1148,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                   "Please rerun estimateDEPerCellType() with resampling != NULL")
           rl <- lapply(de.raw, `[[`, 'res')
         } else {
-          warning("Subtypes ", paste(miss.subsamples, collapse=","), " are missed form sampling, ignoring those")
+          if (length(miss.subsamples) > 0) {
+            warning("Subtypes ", paste(miss.subsamples, collapse=","), " are missed form sampling, ignoring those")
+          }
+
           rl <- unlist(subsamples, recursive=FALSE) %>%
             setNames(rep(names(de.raw), sapply(subsamples, length)))
         }

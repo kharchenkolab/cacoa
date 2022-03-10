@@ -203,10 +203,10 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 #' @param meta.info dataframe with possible covariates; for example, sex or age
 #' @param test DE method: deseq2, edgeR, wilcoxon, ttest
 #' @export
-estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, ref.level=NULL, target.level=NULL,
-                                    common.genes=FALSE, cooks.cutoff=FALSE, min.cell.count=10, max.cell.count=Inf,
-                                    independent.filtering=TRUE, n.cores=4, return.matrix=TRUE, fix.n.samples=NULL,
-                                    verbose=TRUE, test='Wald', meta.info=NULL, gene.filter=NULL) {
+estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL, ref.level=NULL, target.level=NULL,
+                                       common.genes=FALSE, cooks.cutoff=FALSE, min.cell.count=10, max.cell.count=Inf,
+                                       independent.filtering=TRUE, n.cores=4, return.matrix=TRUE, fix.n.samples=NULL,
+                                       verbose=TRUE, test='Wald', meta.info=NULL, gene.filter=NULL) {
   # Validate input
   validateDEPerCellTypeParams(raw.mats, cell.groups, s.groups, ref.level)
   tmp <- tolower(strsplit(test, split='\\.')[[1]])
@@ -219,7 +219,6 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
     raw.mats %<>% subsetMatricesWithCommonGenes(s.groups)
   } else {
     gene.union <- lapply(raw.mats, colnames) %>% Reduce(union, .)
-    # raw.mats %<>% plapply(sccore:::extendMatrix, gene.union, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE)
     raw.mats %<>% lapply(sccore:::extendMatrix, gene.union)
   }
 
@@ -247,7 +246,6 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
   # For every cell type get differential expression results
   if (verbose) message("Estimating DE per cell type")
   de.res <- names(cm.bulk.per.type) %>% sn()%>% plapply(function(l) {
-    message(l)
     cm <- cm.bulk.per.type[[l]]
     if (!is.null(gene.filter)) {
       gene.to.remain <- gene.filter %>% {rownames(.)[.[,l]]} %>% intersect(rownames(cm))
@@ -273,15 +271,14 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
       warning("The cluster is not present in both conditions")
       return(NULL)
     }
-    
+
     # Each group should be presented in at least two samples
     n.samples <- sapply(levels(meta.groups), function(s) sum(meta.groups == s))
     if(min(n.samples) == 1){
       warning("Each group should be presented in at least two samples")
       return(NULL)
     }
-    
-    
+
     if (!ref.level %in% levels(meta.groups)) {
       warning("The reference level is absent in this comparison")
       return(NULL)
@@ -295,18 +292,17 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
     } else {
       meta %<>% cbind(meta.info[meta$sample.id, , drop=FALSE])
       meta <- filterDEMetadata(meta)
-      
-      
+
       if(is.null(meta)){
         warning('Covariates are not independent')
         return(NULL)
       }
-      
+
       if(!('group' %in% colnames(meta))) {
         warning('All samples of the same group')
         return(NULL)
       }
-      
+
       design.formula <- c(colnames(meta)[-c(1,2)], 'group') %>%
         paste(collapse=' + ') %>% {paste('~', .)} %>% as.formula()
       message(design.formula)
@@ -326,22 +322,18 @@ estimateDEPerCellTypeInner=function(raw.mats, cell.groups=NULL, s.groups=NULL, r
       res <- estimateDEForTypeLimma(cm, meta=meta, design.formula=design.formula, target.level=target.level)
     }
 
-
-    # res$Gene <- rownames(res)
-
+    res$Gene <- rownames(res)
 
     if (!is.na(res[[1]][1])) {
       res <- addZScores(res) %>% .[order(.$pvalue, decreasing=FALSE),]
     }
 
-
     if (return.matrix)
       return(list(res = res, cm = cm, meta=meta))
 
     return(res)
-  }, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE)  %>%  .[!sapply(., is.null)]
-  # })  %>%  .[!sapply(., is.null)]
-
+  }, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE, mc.allow.recursive=TRUE)  %>%
+    .[!sapply(., is.null)]
 
   if (verbose) {
     dif <- setdiff(levels(cell.groups), names(de.res))
@@ -367,7 +359,7 @@ filterDEMetadata <- function(meta) {
   for(i in 2:ncol(meta)){
     for(j in i:ncol(meta)){
       if(i == j) next
-      if((nrow(unique(meta[,c(i, j)])) == length(unique(meta[,i])))) 
+      if((nrow(unique(meta[,c(i, j)])) == length(unique(meta[,i]))))
         return(NULL)
     }
   }
@@ -480,7 +472,7 @@ summarizeDEResamplingResults <- function(de.list, var.to.sort='pvalue') {
     de.res[[cell.type]]$res$stab.var.rank <- stab.var.rank[genes.init]
 
     # Save subsamples
-    # de.res[[cell.type]]$subsamples <- lapply(de.list[2:length(de.list)], `[[`, cell.type)
+    de.res[[cell.type]]$subsamples <- lapply(de.list[2:length(de.list)], `[[`, cell.type)
   }
 
   return(de.res)

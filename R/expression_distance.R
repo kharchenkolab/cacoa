@@ -7,7 +7,7 @@
 #' @param n.cores number of cores (default=1)
 #' @param verbose (default=FALSE)
 #' @param transposed.matrices (default=FALSE)
-#' @return List of distances per cell type, distance matrices, sample groups, cell types, pvalues, and adjusted p-values. 
+#' @return List of distances per cell type, distance matrices, sample groups, cell types, pvalues, and adjusted p-values.
 #' @export
 estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
                                               dist=NULL, dist.type=c("cross.both", "cross.ref", "var"), verbose=FALSE,
@@ -27,7 +27,7 @@ estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.g
   if (verbose) message("Calculating pairwise distances using dist='", dist, "'...\n", sep="")
 
   n.cores.inner <- max(n.cores %/% length(levels(cell.groups)), 1)
-  res.per.type <- levels(cell.groups) %>% sccore:::sn() %>% plapply(function(ct) {
+  res.per.type <- levels(cell.groups) %>% sccore::sn() %>% plapply(function(ct) {
     cm.norm <- cm.per.type[[ct]]
     dist.mat <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sample.groups, dist=dist, n.pcs=n.pcs,
                                                     top.n.genes=top.n.genes, gene.selection=gene.selection, ...)
@@ -106,20 +106,6 @@ estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, to
 }
 
 #' @keywords internal
-estimatePairwiseExpressionDistances <- function(cm.per.type, sample.per.cell, cell.groups, sample.groups,
-                                                dist='cor', top.n.genes=NULL, n.pcs=NULL, ...) {
-  sample.type.table <- cell.groups %>% table(sample.per.cell[names(.)]) # table of sample types and cells
-
-  ctdm <- levels(cell.groups) %>% sccore:::sn() %>% lapply(function(ct) {
-    estimateExpressionShiftsForCellType(cm.per.type[[ct]], sample.groups=sample.groups, dist=dist,
-                                        top.n.genes=top.n.genes, n.pcs=n.pcs, ...) %>%
-      set_attr('n.cells', sample.type.table[ct, rownames(.)]) # calculate how many cells there are
-  })
-
-  return(ctdm)
-}
-
-#' @keywords internal
 subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df=FALSE) {
   comp.selector <- if (cross.factor) "!=" else "=="
   selection.mask <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], comp.selector);
@@ -185,7 +171,6 @@ joinExpressionShiftDfs <- function(dist.df.per.type, sample.groups) {
 
 #' @keywords internal
 prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, return.dists=TRUE) {
-  
   checkPackageInstalled(c("abind"), cran=TRUE)
   # bring to a common set of cell types
   common.types <- lapply(p.dist.per.type, colnames) %>% unlist() %>% unique()
@@ -284,15 +269,14 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
   # Collapse matrices and extend to the same genes
   cms.filt %<>% lapply(collapseCellsByType, groups=cell.groups, min.cell.count=1)
 
-  cms.filt %<>% lapply(sccore:::extendMatrix, genes) %>% lapply(`[`,,genes, drop=FALSE)
+  cms.filt %<>% lapply(sccore::extendMatrix, genes) %>% lapply(`[`,,genes, drop=FALSE)
 
   # Group matrices by cell type
   cell.groups <- droplevels(cell.groups[cell.names])
 
-  cm.per.type <- levels(cell.groups) %>% sccore:::sn() %>% lapply(function(ct) {
-    lapply(cms.filt, function(x) x[match(ct, rownames(x)),]) %>%
-      do.call(rbind, .) %>% na.omit() %>% {. / pmax(1, rowSums(.))} %>%
-      {log10(. * 1e3 + 1)}
+  cm.per.type <- levels(cell.groups) %>% sccore::sn() %>% lapply(function(ct) {
+    lapply(cms.filt, function(x) if (ct %in% rownames(x)) x[ct,] else NULL) %>%
+      do.call(rbind, .) %>% {. / pmax(1, rowSums(.))} %>% {log10(. * 1e3 + 1)}
   })
 
   return(list(cm.per.type=cm.per.type, cell.groups=cell.groups, sample.groups=sample.groups[names(cms)]))
@@ -301,7 +285,7 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
 ## Common shifts
 
 #' Calculate consensus change direction and distances between samples along this axis
-#' 
+#'
 #' @keywords internal
 consensusShiftDistances <- function(tcm, sample.groups, use.median=FALSE, mean.trim=0, use.cpp=TRUE) {
   sample.groups %<>% .[colnames(tcm)]
@@ -340,7 +324,7 @@ estimateExplainedVariance <- function(cm, sample.groups) {
   spg <- rownames(cm) %>% split(droplevels(as.factor(sample.groups[.])))
   if (length(spg) == 1){
     return(NULL)
-  } 
+  }
 
   sapply(spg, function(spc) matrixStats::colVars(cm[spc,,drop=FALSE]) * (length(spc) - 1)) %>%
     rowSums(na.rm=TRUE) %>%

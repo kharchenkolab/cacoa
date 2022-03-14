@@ -1,12 +1,12 @@
 Package: cacoa
-Title: Case-Control Analysis tools for single-cell RNA-seq
-Version: 0.1.0
+Title: Case-Control Analysis Tools for Single-Cell RNA-Seq
+Version: 0.2.0
 Authors@R: c(person("Peter", "Kharchenko", email = "peter_kharchenko@hms.harvard.edu", role = c("aut", "cre")), person("Viktor","Petukhov", email="viktor.s.petuhov@ya.ru", role="aut"))
-Description: Case-Control Analysis tools for single-cell RNA-seq
+Description: Case-Control Analysis tools for single-cell RNA-seq.
 License: GPL-3
 Encoding: UTF-8
 Depends:
-    R (>= 4.0.0), Matrix
+    R (>= 3.5.0), Matrix
 biocViews:
 Imports:
     ape,
@@ -26,40 +26,55 @@ Imports:
     R6,
     reshape2,
     rlang,
-    roxygen2,
     sccore (>= 1.0.0),
     tibble,
     tidyr,
     tidytree
 Suggests:
     abind,
+    BiocParallel,
     cluster,
     clusterProfiler (>= 3.0.0),
     coda.base,
+    conos,
     DESeq2,
     DOSE,
+    e1071,
+    edgeR,
     EnhancedVolcano,
     enrichplot,
     entropy,
     fabia,
-    ggpubr,
+    ggdendro,
     ggrastr (>= 0.1.7),
     ggtree,
     GOfuncR,
     graph,
     irlba,
     jsonlite,
+    leidenAlg,
+    limma,
     matrixStats (>= 0.60.1),
     N2R,
     pagoda2,
     psych,
     purrr,
+    quadprog,
     RColorBrewer,
     Rgraphviz,
     Rtsne,
+    scales,
+    scran,
+    Seurat,
     SummarizedExperiment,
+    testthat (>= 3.1.0),
     viridis
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
 LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress, sccore
 NeedsCompilation: yes
+SystemRequirements: C++11
+URL: https://github.com/kharchenkolab/cacoa
+BugReports: https://github.com/kharchenkolab/cacoa/issues
+Author: Peter Kharchenko [aut, cre], Viktor Petukhov [aut]
+Maintainer: Peter Kharchenko <peter_kharchenko@hms.harvard.edu>

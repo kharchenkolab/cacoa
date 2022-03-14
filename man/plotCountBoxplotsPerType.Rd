@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot.R
 \name{plotCountBoxplotsPerType}
 \alias{plotCountBoxplotsPerType}
-\title{Plot Count Boxplots Per Type}
+\title{Plot count boxplots per type}
 \usage{
 plotCountBoxplotsPerType(
   count.df,
@@ -18,7 +18,8 @@ plotCountBoxplotsPerType(
   palette = NULL,
   adjust.pvalues = TRUE,
   plot.theme = theme_get(),
-  label.y.npc = 0.92
+  label.y.npc = 0.92,
+  ns.symbol = ""
 )
 }
 \arguments{
@@ -35,6 +36,6 @@ plotCountBoxplotsPerType(
 \item{size}{marker size (default: 0.5)}
 }
 \description{
-Plot Count Boxplots Per Type
+Plot count boxplots per type
 }
 \keyword{internal}

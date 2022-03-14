@@ -1,9 +1,10 @@
 
-#' @description Construct the canonical tree
+#' Construct the canonical tree
 #'
 #' @param cnts Table with cell type counts
 #' @param groups Groups variable for samples
 #' @return phylo tree
+#' @keywords internal
 constructTree <- function(cnts, groups, partition.thresh = 0){
   checkDataGroups(cnts, groups)
   # ---------
@@ -25,7 +26,7 @@ constructTree <- function(cnts, groups, partition.thresh = 0){
     d.tmp <- cnts[, colnames(cnts) %in% unsolved.cells[[id.bal]]]
 
     # -------
-    # Difene the most contrast balance
+    # Define the most contrast balance
     # can.loadings <- getCdaLoadings(d.tmp, d.groups)
     can.loadings <- getLoadings(d.tmp, groups)
 
@@ -61,7 +62,9 @@ constructTree <- function(cnts, groups, partition.thresh = 0){
   return(list(tree = tree, sbp = sbp.cda, dendro = d.cur))
 }
 
-constructTreeUp <- function(freqs, groups){
+
+#' @keywords internal
+constructTreeUp <- function(freqs, groups) {
 
   sbp <- sbpDiff(freqs, groups)
 
@@ -72,16 +75,16 @@ constructTreeUp <- function(freqs, groups){
   return(list(tree = tree, sbp = sbp, dendro = d.cur))
 }
 
+
+#' @keywords internal
 tree2dendro_my <- function(tree){
   h.tmp <- compute.brlen(tree, method="Grafen") %>% as.hclust()
   d.cur <- as.dendrogram(h.tmp)
   return(d.cur)
 }
 
+#' @keywords internal
 constructTreeUpDown <- function(cnts, groups){
-
-  
-  
   cnts[cnts <= 0] <- 0.5
 
   ref.set <- referenceSet(cnts, groups)
@@ -93,8 +96,8 @@ constructTreeUpDown <- function(cnts, groups){
   # Constrtuct sbp from lists
   freqs <- (cnts)/rowSums(cnts)
   freqs.lists <- c()
-  for(i in 1:length(cell.lists)){
-    freqs.lists <- cbind(freqs.lists, apply(freqs[,cell.lists[[i]],drop=F], 1, psych::geometric.mean))
+  for (i in 1:length(cell.lists)) {
+    freqs.lists <- cbind(freqs.lists, apply(freqs[,cell.lists[[i]],drop=FALSE], 1, psych::geometric.mean))
   }
   colnames(freqs.lists) <- paste('tmp', 1:length(cell.lists), sep = '')
 
@@ -102,8 +105,6 @@ constructTreeUpDown <- function(cnts, groups){
   t.list <- constructBestPartitionTree(freqs.lists, groups)
   sbp.list <- t.list$sbp
 
-
-  
   sbp.all <- matrix(ncol = 0, nrow = length(cell.types), dimnames = list(cell.types, c()))
   for(k in 1:ncol(sbp.list)){
     p <- sbp.list[,k]
@@ -144,14 +145,13 @@ constructTreeUpDown <- function(cnts, groups){
 }
 
 
-
-
-#' @description Get tree from balances
+#' Get tree from balances
 #'
 #' @param sbpart A contrast matrix for balances, sequential binary partition
 #' @return phylo tree
 #' @details We use ellipsis because a previous version of this function
 #'          contains additional and insignificant parameters.
+#' @keywords internal
 sbp2tree <- function(sbpart){
   checkSbpWhole(sbpart)
   # ---------
@@ -184,11 +184,12 @@ sbp2tree <- function(sbpart){
 }
 
 
-#' @description Get balances for all inner nodes of the tree
+#' Get balances for all inner nodes of the tree
 #'
 #' @param t A phylo object
 #' @param log.f Logarithms of frequnencies
 #' @return Balances, contrast matrix and names on cell types
+#' @keywords internal
 getNodeBalances <- function(log.f, sbp.my){
 
   # get psi matrix
@@ -207,6 +208,7 @@ getNodeBalances <- function(log.f, sbp.my){
   return(balances)
 }
 
+#' @keywords internal
 hclustSbp <- function(freqs, groups){
   cell.types <- colnames(freqs)
 
@@ -233,6 +235,7 @@ hclustSbp <- function(freqs, groups){
   hclust(dist(mx))
 }
 
+#' @keywords internal
 bestPartition <- function(freqs.tmp, groups){
 
 
@@ -274,11 +277,12 @@ bestPartition <- function(freqs.tmp, groups){
 
 
 
-#' @description Construct the canonical tree
+#' Construct the canonical tree
 #'
 #' @param cnts Table with cell type counts
 #' @param groups Groups variable for samples
 #' @return phylo tree
+#' @keywords internal
 constructBestPartitionTree <- function(cnts, groups, partition.thresh = 0){
   checkDataGroups(cnts, groups)
   # ---------
@@ -335,7 +339,7 @@ constructBestPartitionTree <- function(cnts, groups, partition.thresh = 0){
   return(list(tree = tree, sbp = sbp.cda, dendro = d.cur))
 }
 
-
+#' @keywords internal
 sbpInNodes <- function(tree){
   edges <- tree$edge
   n.nodes <- max(edges)

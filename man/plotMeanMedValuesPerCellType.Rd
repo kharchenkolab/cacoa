@@ -2,7 +2,9 @@
 % Please edit documentation in R/plot.R
 \name{plotMeanMedValuesPerCellType}
 \alias{plotMeanMedValuesPerCellType}
-\title{Plot bar, point or boxplots showing mean/median values per cell type}
+\title{Plot bar, point or boxplots showing mean/median values per cell type.
+This is a generic function for plotting mean or median values per cell type
+(used for expression shift distances and others).}
 \usage{
 plotMeanMedValuesPerCellType(
   df,
@@ -22,23 +24,17 @@ plotMeanMedValuesPerCellType(
   pvalue.y = NULL,
   y.max = NULL,
   y.offset = NULL,
-  ns.symbol = "ns"
+  ns.symbol = ""
 )
 }
 \arguments{
-\item{df}{\itemize{
-\item data frame containing the results, including $value and $Type slots which will be summarized
-}}
+\item{df}{dataframe containing the results, including $value and $Type slots which will be summarized}
 
-\item{type}{\itemize{
-\item type of a plot "bar" (default), "point" (mean + sd), or "box" for boxplot
-}}
+\item{type}{character vector (default=c('box', 'point', 'bar')) Type of a plot "bar" (default), "point" (mean + sd), or "box" for boxplot}
 
-\item{show.jitter}{whether to show individual data points (default: FALSE)}
+\item{show.jitter}{boolean (default = FALSE) Whether to show individual data points}
 
-\item{notch}{\itemize{
-\item whether to show notches in the boxplot version (default=TRUE)
-}}
+\item{notch}{boolean Whether to show notches in the boxplot version (default=TRUE)}
 
 \item{jitter.alpha}{transparency value for the data points (default: 0.05)}
 
@@ -50,6 +46,8 @@ plotMeanMedValuesPerCellType(
 A ggplot2 object
 }
 \description{
-Generic function for plotting mean or median values per cell type (used for expression shift distances and others)
+Plot bar, point or boxplots showing mean/median values per cell type.
+This is a generic function for plotting mean or median values per cell type
+(used for expression shift distances and others).
 }
 \keyword{internal}

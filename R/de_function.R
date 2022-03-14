@@ -95,7 +95,7 @@ saveDEasJSON <- function(de.raw, sample.groups=NULL, saveprefix=NULL,
     if(is.null(gene.metadata$gene.id)) stop("gene.metadata must contain $gene.id field")
   }
 
-  lapply(sccore:::sn(de.raw %>% names()), function(ncc) {
+  lapply(sccore::sn(de.raw %>% names()), function(ncc) {
     if(verbose) print(ncc)
     res.celltype <- de.raw[[ncc]]
     res.table <- res.celltype$res %>% as.data.frame()
@@ -170,7 +170,7 @@ saveDEasJSON <- function(de.raw, sample.groups=NULL, saveprefix=NULL,
 
 #' @keywords internal
 prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'bootstrap', 'fix.cells', 'fix.samples'),
-                                n.resamplings=30, n.biosamples=NULL) {
+                                n.resamplings=30) {
   resampling.method <- match.arg(resampling.method)
 
   if (resampling.method == 'loo') {
@@ -191,17 +191,23 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 #'
 #' @param raw.mats list of counts matrices; column for gene and row for cell
 #' @param cell.groups factor specifying cell types (default=NULL)
-#' @param sample.groups a list of two character vector specifying the app groups to compare (default=NULL)
-#' @param ref.level Reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
-#' @param common.genes Only investigate common genes across cell groups (default=FALSE)
-#' @param cooks.cutoff cooksCutoff for DESeq2 (default=FALSE)
-#' @param min.cell.count (default=10)
-#' @param independent.filtering independentFiltering for DESeq2 (default=FALSE)
-#' @param n.cores Number of cores (default=1)
+#' @param s.groups list of two character vector specifying the app groups to compare (default=NULL)
+#' @param ref.level reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
+#' @param target.level target level in 'sample.groups' (default=NULL)
+#' @param common.genes boolean Only investigate common genes across cell groups (default=FALSE)
+#' @param cooks.cutoff boolean cooksCutoff for DESeq2 (default=FALSE)
+#' @param min.cell.count numeric Minimum cell count (default=10)
+#' @param max.cell.count numeric Maximum cell count (default=Inf). If Inf, there is no limit set.
+#' @param fix.n.samples Number of samples to fix (default=NULL). If greater the the length of the s.groups, an error is thrown.
+#' @param verbose boolean Whether to output verbose messages (default=TRUE)
+#' @param independent.filtering boolean independentFiltering for DESeq2 (default=FALSE)
+#' @param n.cores numeric Number of cores (default=1)
 #' @param return.matrix Return merged matrix of results (default=TRUE)
-#' @param covariates list of covariates to include; for example, cdr, sex or age
 #' @param meta.info dataframe with possible covariates; for example, sex or age
 #' @param test DE method: deseq2, edgeR, wilcoxon, ttest
+#' @param gene.filter (default=NULL)
+#' @return differential expression for each cell type
+#'
 #' @export
 estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL, ref.level=NULL, target.level=NULL,
                                        common.genes=FALSE, cooks.cutoff=FALSE, min.cell.count=10, max.cell.count=Inf,

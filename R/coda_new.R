@@ -1,5 +1,5 @@
 #' Get loadings by different methods
-#' 
+#'
 #' @param cnts Counts of cell typer in samples. Rows - samples, columns - cell types
 #' @param groups Vector with boolean values. TRUE - sample in the case group, FALSE - sample in the control group
 #' @param criteria Method to get loadings
@@ -140,7 +140,7 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
 }
 
 #' This function produces the resampling dataset
-#' 
+#'
 #' @param cnts Counts of cell types in samples. Rows - samples, columns - cell types
 #' @param groups Vector with boolean values. TRUE - sample in the case group, FALSE - sample in the control group
 #' @param n.iter Number of permutations
@@ -155,22 +155,22 @@ produceResampling <- function(cnts, groups, n.perm = 1000, seed = 239) {
   set.seed(seed)
 
   for (i in 1:n.perm) {
-    samples.tmp <- rownames(cnts) %>% split(groups[.]) %>% 
+    samples.tmp <- rownames(cnts) %>% split(groups[.]) %>%
       lapply(sample, replace=TRUE) %>% do.call(c, .)
     # samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = TRUE)
     groups.tmp <- groups[samples.tmp]
-    
+
     # Check that both groups are presented
     # while ((sum(groups.tmp) == 0) || (sum(!groups.tmp) == 0)) {
     #   # Create samples by bootstrap
     #   samples.tmp <- sample(rownames(cnts), nrow(cnts), replace = TRUE)
     #   groups.tmp <- groups[samples.tmp]
     # }
-    
+
     # sample cells
     cnts.resampling <- apply(cnts[samples.tmp,], 1, function(v) {
       if (sum(v) == 0) return(setNames(rep(0, length(v)), names(v)))
-      
+
       sample(names(v), size=sum(v), replace=TRUE, prob = v / sum(v)) %>%
         {c(names(v), .)} %>% table() %>% {. - 1}
     }) %>% t()
@@ -185,14 +185,14 @@ produceResampling <- function(cnts, groups, n.perm = 1000, seed = 239) {
 
 #' @keywords internal
 runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, null.distr=FALSE) {
-  
+
   # Create datasets as
   samples.init <- produceResampling(cnts = cnts, groups = groups, n.perm = n.boot, seed = n.seed)
   loadings <- do.call(cbind, lapply(1:length(samples.init$cnts), function(ib) {
     getLoadings(samples.init$cnts[[ib]], samples.init$groups[[ib]])
   }))
-  
-  
+
+
   # Calculate p-values of confidence interval by bootstrap
   tmp <- referenceSet(cnts, groups, p.thresh = 0.1)
   cell.list <- tmp$cell.list
@@ -205,7 +205,7 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
 
     if (length(cell.list[[i.list]]) == 1) {  # if a list contains only one sample - it cannot be a reference group
       mean.list[i.list] <- 10
-    } 
+    }
   }
 
   # Define a cluster with reference cell type
@@ -222,57 +222,54 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
   }
   ref.cell.type <- cell.list[[id.ref.cluster]]
 
-  
+
   # sorting of cell types and reference level
   cell.types.order <- c()
-  for(i.list in order(-abs(mean.list - mean.list[id.ref.cluster]))){
-    cell.types.tmp <- cell.list[[i.list]]
-    cell.types.tmp <- cell.types.tmp[order(-abs(rowMeans(loadings[cell.types.tmp,, drop=FALSE]) - mean.list[id.ref.cluster])  ) ]
+  for (i.list in order(-abs(mean.list - mean.list[id.ref.cluster]))) {
+    cell.types.tmp <- cell.list[[i.list]] %>%
+      .[order(-abs(rowMeans(loadings[.,, drop=FALSE]) - mean.list[id.ref.cluster]))]
     cell.types.order <- c(cell.types.order, cell.types.tmp)
   }
   loadings <- loadings[cell.types.order,]
   ref.load.level <- mean(loadings[ref.cell.type,])
-  
-  
-  if(!null.distr){
+
+
+  if (!null.distr) {
     tmp <- rowSums(ref.load.level > loadings)
     pval <- (pmin(tmp, ncol(loadings) - tmp) + 1) / (ncol(loadings) + 1) * 2
     names(pval) <- rownames(loadings)
   } else {
-    
-    
+
+
     # samples.perm <- samples.init
     # loadings.perm <- do.call(cbind, lapply(1:n.boot, function(ib) {
     #   groups <- sample(samples.perm$groups[[ib]])
     #   names(groups) <- names(samples.init$groups[[ib]])
     #   getLoadings(samples.init$cnts[[ib]], groups)
     # }))
-    
 
     loadings.perm <- do.call(cbind, plapply(1:n.boot, function(ib) {
       groups.perm <- sample(groups)
       names(groups.perm) <- names(groups)
       samples.perm <- produceResampling(cnts=cnts, groups=groups.perm, n.perm = 100, seed = n.seed + ib)
-      
+
       do.call(cbind, lapply(1:length(samples.perm$cnts), function(ib) {
         getLoadings(samples.perm$cnts[[ib]], samples.perm$groups[[ib]])
       })) %>% rowMeans()
     }, n.cores=60, progress=TRUE, mc.preschedule=TRUE))
-    
-    loadings.stat = rowMeans(loadings) - ref.load.level
-    pval = sapply(names(loadings.stat), function(s) {
-      tmp = sum(loadings.stat[s] > loadings.perm[s,])
+
+    loadings.stat <- rowMeans(loadings) - ref.load.level
+    pval <- sapply(names(loadings.stat), function(s) {
+      tmp <- sum(loadings.stat[s] > loadings.perm[s,])
       p <- (pmin(tmp, ncol(loadings) - tmp) + 1) / (ncol(loadings) + 1) * 2
       return(p)
     })
-  }   
-  
+  }
+
   padj <- p.adjust(pval, method = "fdr")
-  p.names <- names(pval)
-  loadings <- loadings[p.names,]
+  loadings <- loadings[names(pval),]
   return(list(padj=padj,
-              loadings.init=loadings,
-              # loadings.init=loadings.perm,
+              loadings=loadings,
               pval=pval,
               ref.load.level=ref.load.level,
               ref.cell.type=ref.cell.type,

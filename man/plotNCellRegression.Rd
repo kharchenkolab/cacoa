@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot.R
 \name{plotNCellRegression}
 \alias{plotNCellRegression}
-\title{Plot Number of Cells Regression}
+\title{Plot number of cells regression}
 \usage{
 plotNCellRegression(
   n,
@@ -15,31 +15,34 @@ plotNCellRegression(
   palette = NULL,
   plot.line = TRUE,
   line.width = 0.5,
-  plot.theme = theme_get()
+  plot.theme = ggplot2::theme_get()
 )
 }
 \arguments{
 \item{n}{the regressed variable}
 
-\item{n.total}{number of cells}
+\item{n.total}{integer Number of cells}
 
-\item{x.lab}{x axis label (default: "Number of cells").}
+\item{x.lab}{character vector (default="Number of cells") x axis label}
 
-\item{y.lab}{y axis label (default: "N")}
+\item{y.lab}{character vector (default="N") y axis label}
 
-\item{legend.position}{legend position (default: "right")}
+\item{legend.position}{character vector (default="right") legend position}
 
-\item{label}{show cell type labels (default: TRUE)}
+\item{label}{boolean (default=TRUE) Whether to show cell type labels}
 
-\item{size}{label text size (default: 4)}
+\item{size}{integer (default=4) Label text size}
 
-\item{palette}{color palette}
+\item{palette}{color palette (default=NULL)}
 
-\item{plot.line}{plot the robust regression (default: TRUE)}
+\item{plot.line}{boolean (default=TRUE) Whether to plot the robust regression}
 
-\item{line.width}{regression line width (default: 0.5)}
+\item{line.width}{numeric (default=0.5) Regression line width}
+}
+\value{
+ggplot2 plot of regression
 }
 \description{
-Plot Number of Cells Regression
+Plot number of cells regression
 }
 \keyword{internal}

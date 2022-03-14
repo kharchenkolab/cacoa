@@ -76,7 +76,7 @@ extractRawCountMatrices <- function(object, transposed=TRUE) UseMethod("extractR
 
 #' @rdname extractRawCountMatrices
 extractRawCountMatrices.Conos <- function(object, transposed=TRUE) {
-  return(lapply(object$samples, conos:::getRawCountMatrix, transposed=transposed))
+  return(lapply(object$samples, conos::getRawCountMatrix, transposed=transposed))
 }
 
 #' @rdname extractRawCountMatrices
@@ -107,6 +107,7 @@ extractRawCountMatrices.dgCMatrix <- function(object, transposed=TRUE) {
 #'
 #' @param object object from which to extract the cell groups
 #' @param raw boolean If TRUE, return merged "raw" count matrices (default=TRUE)
+#' @param ... additional parameters to be passed to extractJointCountMatrix
 #' @rdname extractJointCountMatrix
 #' @export
 extractJointCountMatrix <- function(object, raw=TRUE, ...) UseMethod("extractJointCountMatrix", object)
@@ -116,6 +117,8 @@ extractJointCountMatrix.Conos <- function(object, raw=TRUE) {
   return(object$getJointCountMatrix(raw=raw))
 }
 
+#' @param transposed boolean If TRUE, return merged transposed count matrices (default=TRUE)
+#' @param sparse boolean If TRUE, return merged the sparse dgCMatrix matrix (default=TRUE)
 #' @rdname extractJointCountMatrix
 extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sparse=TRUE) {
   if (raw) {
@@ -167,7 +170,8 @@ extractOdGenes <- function(object, n.genes=NULL) UseMethod("extractOdGenes", obj
 
 #' @rdname extractOdGenes
 extractOdGenes.Conos <- function(object, n.genes=NULL) {
-  return(conos:::getOdGenesUniformly(object$samples, n.genes))
+  getOdGenesUniformly <- utils::getFromNamespace("getOdGenesUniformly", "conos")
+  return(getOdGenesUniformly(object$samples, n.genes))
 }
 
 #' @rdname extractOdGenes
@@ -254,7 +258,7 @@ extractGeneExpression <- function(object, gene) UseMethod("extractGeneExpression
 
 #' @rdname extractGeneExpression
 extractGeneExpression.Conos <- function(object, gene) {
-  return(conos:::getGeneExpression(object, gene))
+  return(conos::getGeneExpression(object, gene))
 }
 
 #' @rdname extractGeneExpression

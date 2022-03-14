@@ -47,17 +47,23 @@ getDEEntrezIdsSplitted <- function(de.raw, org.db, p.adj=1) {
 enrichGOOpt <- function(gene, org.db, go.environment, keyType="ENTREZID", ont="BP", pvalueCutoff=0.05,
                         pAdjustMethod="BH", universe=NULL, qvalueCutoff=0.2, minGSSize=5, maxGSSize=500,
                         readable=FALSE, pool=FALSE) {
+
+  checkPackageInstalled("DOSE", bioc=TRUE)
+  enricher_internal <- utils::getFromNamespace("enricher_internal", "DOSE")
+
   ont %<>% toupper %>% match.arg(c("BP", "CC", "MF"))
 
-  res <- clusterProfiler:::enricher_internal(gene, pvalueCutoff = pvalueCutoff,
+  res <- enricher_internal(gene, pvalueCutoff = pvalueCutoff,
                                              pAdjustMethod = pAdjustMethod, universe = universe,
                                              qvalueCutoff = qvalueCutoff, minGSSize = minGSSize,
                                              maxGSSize = maxGSSize, USER_DATA = go.environment)
-  if (is.null(res))
+  if (is.null(res)){
     return(res)
+  }
 
   res@keytype <- keyType
-  res@organism <- clusterProfiler:::get_organism(org.db)
+  get_organism <- utils::getFromNamespace("get_organism", "DOSE")
+  res@organism <- get_organism(org.db)
   if (readable) {
     res <- DOSE::setReadable(res, org.db)
   }
@@ -67,7 +73,7 @@ enrichGOOpt <- function(gene, org.db, go.environment, keyType="ENTREZID", ont="B
 
 #' @keywords internal
 estimateEnrichedGO <- function(de.gene.ids, go.environment, ...) {
-  names(go.environment) %>% sccore:::sn() %>%
+  names(go.environment) %>% sccore::sn() %>%
     lapply(function(ont) lapply(de.gene.ids, enrichGOOpt, go.environment=go.environment[[ont]], ont=ont, ...))
 }
 
@@ -75,9 +81,12 @@ estimateEnrichedGO <- function(de.gene.ids, go.environment, ...) {
 enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType="ENTREZID", go.environment, ont="BP", pvalueCutoff=1,
                            pAdjustMethod="BH", minGSSize=5, maxGSSize=500, readable=FALSE, eps=0, exponent=1,
                            seed=FALSE, verbose=FALSE, ...) {
+  
+  checkPackageInstalled("DOSE", bioc=TRUE)
+  GSEA_internal <- utils::getFromNamespace("GSEA_internal", "DOSE")
   ont %<>% toupper %>% match.arg(c("BP", "CC", "MF"))
 
-  res <- DOSE:::GSEA_internal(
+  res <- GSEA_internal(
     gene.ids, pvalueCutoff=pvalueCutoff, pAdjustMethod=pAdjustMethod, minGSSize=minGSSize, maxGSSize=maxGSSize,
     USER_DATA=go.environment, eps=eps, exponent=exponent, seed=seed, verbose=verbose, ...
   )
@@ -96,7 +105,7 @@ enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType="ENTREZID", go.en
 
 #' @keywords internal
 estimateEnrichedGSEGO <- function(go.environment, ...) {
-  names(go.environment) %>% sccore:::sn() %>%
+  names(go.environment) %>% sccore::sn() %>%
     lapply(function(ont) enrichGSEGOOpt(go.environment=go.environment[[ont]], ont=ont, ...))
 }
 
@@ -130,16 +139,19 @@ filterOntologies <- function(ont.list, p.adj) {
   })
 }
 
-#' @title Estimate ontology
-#' @description  Calculate ontologies based on DEs
-#' @param type character string Ontology type, either GO (gene ontology) or DO (disease ontology).
+#' Calculate ontologies based on DEs
+#'
+#' @param de.gene.scores input DE gene scores
+#' @param go.environment GO environment set (Homo sapiens, Mus musculus, etc.)
+#' @param type character string Ontology type, either GO (gene ontology) or DO (disease ontology) (default="GO")
 #' Please see DOSE package for more information.
 #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse.
 #' Input must be of class 'OrgDb'
 #' @param n.top.genes numeric Number of most different genes to take as input. If less are left after filtering
 #' for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)
+#' @param keep.gene.sets boolean Keep gene sets (default=FALSE)
 #' @param verbose boolean Print progress (default=TRUE)
-#' @param qvalue.cutoff numeric Q value cutoff, please see clusterProfiler package for more information (default=0.2)
+#' @param n.cores integer Number of cores (default=1)
 #' @param ... Additional parameters for DO/GO/GSEA functions. In case of GSEA, pass nPerm to call fgseaSimple
 #' instead of fgseaMultilevel
 #' @return A list containing a list of ontologies per type of ontology, and a data frame with merged results
@@ -177,10 +189,12 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
   } else if (type == "GSEA") {
     checkPackageInstalled("BiocParallel", bioc=TRUE)
     if (verbose) message("Estimating enriched ontologies ... \n")
+    get_organism <- utils::getFromNamespace("get_organism", "DOSE")
+
     ont.list <- plapply(de.gene.scores, function(scores) {suppressWarnings(suppressMessages(
       estimateEnrichedGSEGO(
         gene.ids=sort(scores$universe, decreasing=TRUE), org.db=org.db, go.environment=go.environment,
-        organism=clusterProfiler:::get_organism(org.db), BPPARAM=BiocParallel::SerialParam(),
+        organism=get_organism(org.db), BPPARAM=BiocParallel::SerialParam(),
         pvalueCutoff=1, ...
       )
     ))}, progress=verbose, n.cores=n.cores, fail.on.error=TRUE)

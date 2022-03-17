@@ -58,7 +58,7 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ba
 #' @param n.cores number of cores
 #' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
 #' @keywords internal
-estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.cores=1, beta=30, m=50, verbose = TRUE) {
+estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.cores=1, beta=30, m=50, verbose=TRUE) {
   sig.mat <- unique(sample.per.cell) %>% sapply(function(s) as.numeric(sample.per.cell == s)) %>%
     set_rownames(names(sample.per.cell)) %>% set_colnames(unique(sample.per.cell))
 
@@ -217,7 +217,7 @@ adjustZScoresByPermutations <- function(score, scores.shuffled, wins=0.01, smoot
     if (is.null(graph)) stop("graph has to be provided if smooth is TRUE")
 
     g.filt <- function(...) sccore::heatFilter(..., beta=beta)
-    score %<>% smoothSignalOnGraph(filter=g.filt, graph=graph, l.max=l.max)
+    score %<>% smoothSignalOnGraph(filter=g.filt, graph=graph, l.max=l.max, progress=FALSE)
     scores.shuffled %<>%
       smoothSignalOnGraph(filter=g.filt, graph=graph, n.cores=n.cores, l.max=l.max, progress=verbose) %>%
       as.matrix()

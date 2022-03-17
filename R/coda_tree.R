@@ -1,3 +1,5 @@
+#' @import ape
+NULL
 
 #' Construct the canonical tree
 #'
@@ -36,9 +38,6 @@ constructTree <- function(cnts, groups, partition.thresh = 0){
     # Get cell types from opposite sides of the principal balance
     cells.plus <- cells.tmp[can.loadings > partition.thresh]
     cells.minus <- cells.tmp[can.loadings < partition.thresh]
-    #
-    # print(cells.plus)
-    # print(cells.minus)
 
     sbp.cda[cells.minus, id.bal] <- -1
     sbp.cda[cells.plus, id.bal] <- 1
@@ -209,33 +208,6 @@ getNodeBalances <- function(log.f, sbp.my){
 }
 
 #' @keywords internal
-hclustSbp <- function(freqs, groups){
-  cell.types <- colnames(freqs)
-
-  mx <- matrix(0, nrow = length(cell.types), ncol = length(cell.types),
-              dimnames = list(cell.types, cell.types))
-  for(i in 1:length(cell.types)){
-    for(j in 1:length(cell.types)){
-      if (j <= i) next
-
-      ratio <- log(apply(freqs[,cell.types[i],drop=F], 1, psych::geometric.mean )) -
-        log(apply(freqs[,cell.types[j],drop=F], 1, psych::geometric.mean ))
-      # print('---')
-      # print(freqs)
-      # print(ratio)
-      # print(groups)
-      mod <- lm(groups ~ ratio)
-      res <- summary(mod)
-      pval <- res$coefficients[2,4]
-      mx[i, j] <- pval
-      mx[j, i] <- pval
-    }
-  }
-
-  hclust(dist(mx))
-}
-
-#' @keywords internal
 bestPartition <- function(freqs.tmp, groups){
 
 
@@ -363,5 +335,4 @@ sbpInNodes <- function(tree){
   sbp <- t(sbp)
 
   return(sbp)
-
 }

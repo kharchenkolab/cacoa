@@ -282,42 +282,6 @@ filterExpressionDistanceInput <- function(cms, cell.groups, sample.per.cell, sam
   return(list(cm.per.type=cm.per.type, cell.groups=cell.groups, sample.groups=sample.groups[names(cms)]))
 }
 
-## Common shifts
-
-#' Calculate consensus change direction and distances between samples along this axis
-#'
-#' @keywords internal
-consensusShiftDistances <- function(tcm, sample.groups, use.median=FALSE, mean.trim=0, use.cpp=TRUE) {
-  sample.groups %<>% .[colnames(tcm)]
-  if (min(table(sample.groups)) < 1) return(NA); # not enough samples
-  g1 <- which(sample.groups == levels(sample.groups)[1])
-  g2 <- which(sample.groups == levels(sample.groups)[2])
-  if (use.cpp)
-    return(as.numeric(projdiff(tcm, g1 - 1, g2 - 1)))
-
-  dm <- do.call(rbind, lapply(g1, function(n1) {
-    do.call(rbind, lapply(g2, function(n2) {
-      tcm[,n1] - tcm[,n2]
-    }))
-  }))
-
-  if (use.median) {
-    checkPackageInstalled("matrixStats", details="when `use.median=TRUE`", cran=TRUE)
-    dmm <- matrixStats::colMedians(dm)
-  } else {
-    if (mean.trim > 0) {
-      dmm <- apply(dm, 2, mean, trim=mean.trim)
-    } else {
-      dmm <- colMeans(dm)
-    }
-  }
-
-  dmm <- dmm / sqrt(sum(dmm^2)) # normalize
-
-  # project samples and calculate distances
-  return(abs(as.numeric(dm %*% dmm)))
-}
-
 #' @keywords internal
 estimateExplainedVariance <- function(cm, sample.groups) {
   checkPackageInstalled("matrixStats", cran=TRUE)

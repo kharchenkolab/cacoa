@@ -1550,22 +1550,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(res))
     },
 
-    #' Estimate Ga partitions
-    #'
-    #' @param cells.to.remain vector (default=NULL)
-    #' @param cells.to.remove vector (default=NULL)
-    #' @param samples.to.remove vector (default=NULL)
-    #' @param ... additional parameters passed to gaPartition()
-    #' @return estimated Ga partitions
-    estimateGaPartition=function(cells.to.remain=NULL, cells.to.remove=NULL, samples.to.remove=NULL, ...){ # TODO: do we ever use this?
-      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain, samples.to.remove=samples.to.remove)
-      ga.res <- gaPartition(tmp$d.counts, tmp$d.groups, ...)
-
-      self$test.results[['ga.partition']] <- rownames(t(ga.res[1,ga.res[1,] != 0,drop=FALSE]))
-
-      return(invisible(self$test.results[['ga.partition']]))
-    },
-
     #' Plot Loadings
     #'
     #' @param alpha numeric (default=0.01)

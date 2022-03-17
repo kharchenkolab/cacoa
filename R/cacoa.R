@@ -1573,20 +1573,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(p)
     },
 
-    #' Estimate Wilcoxon signed-rank test
-    #'
-    #' @param cell.groups vector (default=NULL)
-    #' @param cells.to.remove vector (default=NULL)
-    #' @param cells.to.remain vector (default=NULL)
-    #' @return p-values
-    estimateWilcoxonTest = function(cell.groups=self$cell.groups, cells.to.remove = NULL, cells.to.remain = NULL) { # TODO: do we ever use this?
-      tmp <- private$extractCodaData(cell.groups=cell.groups, cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain)
-      p.vals <- calcWilcoxonTest(tmp$d.counts, tmp$d.groups)
-      self$test.results[['p.vals.balances']] <- p.vals
-      return(invisible(p.vals))
-    },
-
-
     ### Cluster-free cell density
 
     #' Estimate cell density in giving embedding

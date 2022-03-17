@@ -1,48 +1,3 @@
-#' Perform re-sampling in two ways: fixed total count and bootstrap
-#'
-#' @return Order of inner nodes
-#' @keywords internal
-resampleContrast <- function(d.counts, d.groups, n.cell.counts = 500, n.seed = 239, n.iter = 1000){
-  checkDataGroups(d.counts, d.groups)
-  # --------
-  set.seed(n.seed)
-  rnd.seeds <- unique(round(runif(1.5*n.iter, max = 1000000)))
-
-  cda.loadings <- getCdaLoadings(d.counts, d.groups)
-
-  cda.resamples <- matrix(cda.loadings[colnames(d.counts),], ncol = 1)
-  d.all <- c()
-  n.skip.resampl <- 0
-  for(iter in 1:n.iter){
-    d.resampled <- resampleCounts(d.counts, d.groups = d.groups, n.tot.count = n.cell.counts, n.seed = rnd.seeds[iter])
-    d.all <- rbind(d.all, d.resampled)
-  
-    # print(d.resampled)
-    cda.loadings = NULL
-    tryCatch(expr = {
-        cda.loadings <- getCdaLoadings(d.resampled, d.groups[rownames(d.resampled)], n.seed = rnd.seeds[iter])
-      },error = function(e){})
-
-    if(is.null(cda.loadings)) {
-      n.skip.resampl <- n.skip.resampl + 1
-      next
-    }
-
-    x <- cda.loadings[colnames(d.counts),]
-    # if(length(cda.resamples) > 0){
-    #   if(sum((sign(x) != sign(cda.resamples[,1])) * abs(cda.resamples[,1])) >
-    #      sum((sign(-x) != sign(cda.resamples[,1])) * abs(cda.resamples[,1]))){
-    #     x <- -x
-    #   }
-    # }
-    cda.resamples <- cbind(cda.resamples, x)
-  }
-
-  if(n.skip.resampl > 0) warning(paste('Numer of skipped resamplings:', as.character(n.skip.resampl)))
-  return(list(loadings = cda.resamples, data = d.all))
-}
-
-
 #' Generate one random partition of given length
 #'
 #' @param bal.len length of partiotion
@@ -180,49 +135,6 @@ getCdaLoadings <- function(d.counts, d.groups, n.seed = 239){
   return(cda.loadings)
 }
 
-#' Resampling of cell type counts
-#'
-#' @param d.counts Cell count table
-#' @param n.tot.count Total cell type counts
-#' @param d.groups if provided then resampling controls presence of both groups in a new dataset
-#' @param n.seed Random seed
-#' @param f.bootstrap if to use the bootstrap, dafault (TRUE) means the use of bootstrap
-#' @return Resampled dataset
-#' @keywords internal
-resampleCounts<- function(d.counts, n.tot.count=500, d.groups = NULL, n.seed = 239, f.bootstrap = TRUE){
-
-  if(is.null(d.groups)) {
-    checkData(d.counts)
-  } else {
-    checkDataGroups(d.counts, d.groups)
-  }
-  # ---------
-
-  set.seed(n.seed)
-  
-  if (f.bootstrap) {
-    if (is.null(d.groups)) {
-      sample.names.resampling = sample(1:nrow(d.counts), replace = TRUE)
-    } else {
-      sample.names.resampling = sample(1:nrow(d.counts), replace = TRUE)
-      while(length(unique(d.groups[sample.names.resampling])) == 1) 
-        sample.names.resampling = sample(1:nrow(d.counts), replace = TRUE)
-    }
-  } else {
-    sample.names.resampling = 1:nrow(d.counts)
-  }
-  
-  d.resampled <- c()
-  for(i in sample.names.resampling){
-    tmp <- rmultinom(1:ncol(d.counts), n.tot.count, d.counts[i,]+1)
-    d.resampled <- rbind(d.resampled, t(tmp))
-  }
-  rownames(d.resampled) <- rownames(d.counts)[sample.names.resampling]
-
-  return(d.resampled)
-}
-
-
 #' Remove the strongest group effect from balances
 #'
 #' @param d.used Currect values of balances
@@ -230,7 +142,7 @@ resampleCounts<- function(d.counts, n.tot.count=500, d.groups = NULL, n.seed = 2
 #' @param n.seed Random seed
 #' @param thresh.pc.var percentage of variance which should be characterised by PSc
 #' @return Balances without group effect
-#' @keywords internal 
+#' @keywords internal
 removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
   checkDataGroups(d.used, d.groups)
   # ---------
@@ -273,69 +185,4 @@ removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
               remain = d.used.remain,
               scores = d.scores,
               res = cda))
-}
-
-
-#' Calculate balances based on the contrast defines by two sets of cells
-#'
-#' @param d.counts Cell count matrix
-#' @param cell.set1 Set#1
-#' @param cell.set2 Set#1
-#' @return Balance values
-#' @keywords internal
-calcBalancesOnCellSets <- function(d.counts, cell.set1, cell.set2 = NULL){
-  checkData(d.counts)
-  checkDataAndCells(d.counts, cell.set1)
-  if(is.null(cell.set2)) cell.set2 = setdiff(colnames(d.counts), cell.set1)
-  checkDataAndCells(d.counts, cell.set2)
-  # ---------
-
-  log.freq <- getLogFreq(d.counts)
-  n1 <- length(cell.set1)
-  n2 <- length(cell.set2)
-  if((n1 == 1) && (n2 == 1)) bal <- log.freq[,cell.set1] - log.freq[,cell.set2]
-  if((n1 == 1) && (n2 != 1)) bal <- log.freq[,cell.set1] - rowMeans(log.freq[,cell.set2])
-  if((n1 != 1) && (n2 == 1)) bal <- rowMeans(log.freq[,cell.set1])- log.freq[,cell.set2]
-  if((n1 != 1) && (n2 != 1)) bal <- rowMeans(log.freq[,cell.set1]) - rowMeans(log.freq[,cell.set2])
-
-  normalizing.coef <- sqrt(n1*n2/(n1+n2))
-  return(bal * normalizing.coef)
-}
-
-
-#' @keywords internal
-calcWilcoxonTest <- function(d.counts, d.groups){
-  d.freqs <- d.counts %>% magrittr::divide_by(rowSums(.))
-
-  p.vals.balances <- c()
-  for(cell.set1 in colnames(d.counts)){
-    cell.set2 <- setdiff(colnames(d.counts), cell.set1)
-    # cell.set2 <- 'AST-PP'
-    bal <- calcBalancesOnCellSets(d.counts, cell.set1, cell.set2)
-    x <- bal[d.groups]
-    y <- bal[!d.groups]
-
-    res <- wilcox.test(x, y)
-    p.vals.balances <- c(p.vals.balances, res$p.value)
-  }
-
-  p.vals.freqs <- colnames(d.counts) %>% sapply(function(cell.type) {
-    wilcox.test(d.freqs[d.groups, cell.type], d.freqs[!d.groups, cell.type])$p.value
-  })
-
-  p.vals.res <- cbind(p.vals.balances, p.vals.freqs)
-  rownames(p.vals.res) <- colnames(d.counts)
-
-  return(p.vals.res)
-}
-
-#' @keywords internal
-getCellSignificance <- function(balances, bal.threshold = 0){
-  n.bal <- ncol(balances)
-  n.plus <- rowSums(balances[,2:n.bal] > bal.threshold)
-  n.minus <- rowSums(balances[,2:n.bal] < bal.threshold)
-  perm.frac <- mapply(function(num1, num2) min(num1, num2), n.plus, n.minus) /
-    mapply(function(num1, num2) max(num1, num2), n.plus, n.minus)
-
-  return(perm.frac)
 }

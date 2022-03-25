@@ -33,7 +33,7 @@ To install the package use:
 ``` r
 devtools::install_github("kharchenkolab/cacoa")
 ```
-## Usage
+## Initialization
 
 Cacoa currently supports inputs in several formats (see below). Most of them require the following metadata:
 
@@ -70,6 +70,8 @@ cao <- Cacoa$new(co, sample.groups=sample.groups, cell.groups=cell.groups,
 
 For visualization purpuses, Conos must have cell embedding estimated or the embedding data frame must be provided in the `embedding` parameter. And for cluster-free analysis it should have a joint graph (see the method `Conos$buildGraph()` from [conos](https://CRAN.R-project.org/package=conos) method).
 
-## Example
+## Usage
 
-See [the vignette](http://pklab.med.harvard.edu/viktor/cacoa/ep.html) for an example.
+Cacoa can estimate and visualize various statistics. Most of them have paired functions `cao$estimateX(...)` and `cao$plotX(...)` (for example, `cao$estimateCellLoadings()` and `cao$plotCellLoadings()`). Results of all estimation are stored in `cao$test.results`, and their exact name can be controlled by `name` parameter passed to `cao$estimateX()`. For example, calling `cao$estimateExpressionShiftMagnitudes(name='es')` would save the results in `cao$test.results$es`.
+
+Please, see the documentation for exact functions inside the package. For a demonstration see [the vignette](http://pklab.med.harvard.edu/viktor/cacoa/ep.html). Additionally, the [cacoaAnalysis](https://github.com/kharchenkolab/cacoaAnalysis/) repository contains analysis conducted inside the paper, though the Cacoa version there may be out of date.

@@ -1,0 +1,222 @@
+---
+title: "Getting started with Cacoa"
+author: '[Viktor Petukhov](https://github.com/VPetukhov/)'
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
+  html_notebook:
+    toc: yes
+    toc_depth: '3'
+    toc_float: yes
+    df_print: paged
+---
+
+```{r libs, include=FALSE, message=FALSE}
+library(sccore)
+library(conos)
+library(cacoa)
+library(cowplot)
+library(ggplot2)
+```
+
+## Load data
+
+First, let's load a Conos object and create Cacoa from it:
+
+```{r, message=FALSE, warning=FALSE}
+con <- Conos$new(readRDS("../../cacoaAnalysis/data/PF/con.rds"))
+
+cao <- cacoa::Cacoa$new(
+  con, sample.groups=con$misc$sample_metadata$Diagnosis, 
+  cell.groups=con$misc$cell_metadata$cellType,
+  target.level='IPF', ref.level='Control', n.cores=45, verbose=FALSE
+)
+
+# set default plot parameters
+cao$plot.params <- list(size=0.1, alpha=0.1, font.size=c(2, 3))
+cao$plot.theme <- cao$plot.theme + theme(legend.background=element_blank())
+```
+
+## Cluster-based changes
+
+The fastest way to visualize changes in the dataset is to show, what cell types 
+changed their abundance and expression patterns.
+
+### Estimate cluster-based changes
+
+```{r, message=FALSE, warning=FALSE}
+cao$estimateCellLoadings()
+cao$estimateExpressionShiftMagnitudes()
+```
+
+### Plot compositional changes
+
+```{r, fig.width=5, fig.height=6}
+cao$plotCellLoadings(show.pvals=FALSE)
+```
+
+The red line here shows statistical significance. So we can see that Basal, KRT and 
+SCGB3A2+ cell types are over-represented in IPF, while cell types like AT*, Monocytes
+and other have higher abundance in Control.
+
+### Plot expression changes
+
+```{r, fig.width=6, fig.height=5, warning=FALSE, message=FALSE}
+cao$plotExpressionShiftMagnitudes()
+```
+
+Here, y-axis shows magnitude of changes, while asterisks on top of bars show their significance.
+We can see that AT2 cells show both expression and composition changes.
+
+## Sample structure
+
+Knowing sample metadata we can see, what factors affect sample differences:
+
+```{r}
+# sample_meta is a list or data.frame with metadata per sample
+sample_meta <- con$misc$sample_metadata
+head(as.data.frame(sample_meta))
+```
+
+This function shows warning if metadata significantly affects results:
+
+```{r}
+pvals <- cao$estimateMetadataSeparation(sample.meta=sample_meta)$padjust
+sort(pvals)
+```
+
+Now we can show sample expression structure colored by one of the significant factors:
+
+```{r, fig.width=4, fig.height=4}
+cao$plotSampleDistances(
+  space="expression.shifts",
+  sample.colors=sample_meta$Sample_Source, legend.position=c(0, 1), font.size=2
+)
+```
+
+The same can be done for compostional structure of samples: 
+
+```{r, fig.width=4, fig.height=4}
+cao$plotSampleDistances(
+  space="coda",
+  sample.colors=sample_meta$Sample_Source, legend.position=c(0, 1), font.size=2
+)
+```
+
+## Functional interpretation
+
+Estimate DE and GSEA:
+
+```{r}
+cao$estimateDEPerCellType(independent.filtering=TRUE, test='DESeq2.Wald', verbose=FALSE)
+cao$estimateOntology(type="GSEA", org.db=org.Hs.eg.db::org.Hs.eg.db, verbose=FALSE, n.cores=1)
+```
+
+A quick way to look how many significant genes there are per cell type is to show a panel of volcano plots:
+
+```{r, fig.width=10, fig.height=12, warning=FALSE, message=FALSE}
+cao$plotVolcano(xlim=c(-3, 3), ylim=c(0, 3.5), lf.cutoff=1)
+```
+
+To better visualize GOs, we have a function that collapses ontologies with similar
+enriched genes or similar enrichment pattern:
+
+```{r, fig.width=9, fig.height=12}
+cao$plotOntologyHeatmapCollapsed(
+  name="GSEA", genes="up", n=50, clust.method="ward.D", size.range=c(1, 4)
+)
+```
+
+You can also plot GO terms without collapsing them by enrichment patterns.
+Usually, it takes hundreds of rows, so to make it readable you can focus on the
+process of interest by filtering them by description:
+
+```{r, fig.width=9, fig.height=4}
+cao$plotOntologyHeatmap(
+  name="GSEA", genes="up", description.regex="extracellular|matrix"
+)
+```
+
+## Cluster-free
+
+### Compositional changes
+
+Estimate:
+
+```{r, message=FALSE, warning=FALSE}
+cao$estimateCellDensity(method='graph')
+cao$estimateDiffCellDensity(type='wilcox')
+```
+
+Plot:
+
+```{r, fig.width=8, fig.height=4, message=FALSE, warning=FALSE}
+plot_grid(
+  cao$plotEmbedding(color.by='cell.groups'), 
+  cao$plotDiffCellDensity(legend.position=c(0, 1)), 
+  ncol=2
+)
+```
+
+### Expression changes
+
+Estimate:
+
+```{r}
+cao$estimateClusterFreeExpressionShifts(
+  gene.selection="expression", min.n.between=3, min.n.within=3
+)
+```
+
+Plot:
+
+```{r, fig.width=8, fig.height=4}
+cao$plotClusterFreeExpressionShifts(legend.position=c(0, 1), font.size=2)
+```
+
+## Cluster-free DE
+
+Estimate DE:
+
+```{r}
+cao$estimateClusterFreeDE(
+  n.top.genes=1000, min.expr.frac=0.01, adjust.pvalues=TRUE, smooth=TRUE, 
+  verbose=TRUE
+)
+```
+
+Estimate gene programs:
+
+```{r, warning=FALSE, message=FALSE}
+cao$estimateGenePrograms(method="leiden", z.adj=TRUE, smooth=FALSE)
+```
+
+Plot gene programs:
+
+```{r, fig.width=12, fig.height=12}
+cao$plotGeneProgramScores(
+  legend.position=c(0, 1), plot.na=FALSE, 
+  adj.list=theme(legend.key.width=unit(8, "pt"), legend.key.height=unit(12, "pt"))
+)
+```
+
+Plot genes from one program:
+
+```{r, fig.width=9, fig.height=9}
+plot_grid(plotlist=cao$plotGeneProgramGenes(
+  program.id=4, max.genes=9, plot.na=FALSE, legend.position=c(0, 1)
+), ncol=3)
+```
+
+## Session Info
+
+```{r, echo=FALSE}
+data.frame(value=unlist(sessioninfo::platform_info()))
+tibble::as_tibble(
+  sessioninfo::package_info()
+)[c('package', 'loadedversion', 'date', 'source')]
+```
+

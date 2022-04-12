@@ -8,6 +8,18 @@
 NULL
 
 
+## for magrittr and dplyr functions in the package
+if (getRversion() >= "2.15.1"){
+  utils::globalVariables(c("%||%", ".", "CellFrac", "Cluster", "Condition", "Description", "ENTREZID", 
+  "Freq", "G1", "G2", "Gene", "Group", "ID", "LI", "N", "NCells", 
+  "S1", "S2", "SYMBOL", "Sample", "Sign", "Stability", "Type", "UI",
+  "Var1", "Z", "child_distance", "child_go_id", "cmp", "color", "con.names", "condition", "cont",
+  "distance", "estimate", "eval.points", "fill", "from", "geneID", "group", "ind",
+  "log2FoldChange", "med", "membership", "n.cells", "node", "padj", "parent_distance",
+  "pvalue", "qvalue", "se", "size", "to", "value", "values", "variable", "x", "xend", "y", "yend", "z"))
+}
+
+
 #' @title Cacoa R6 class
 #'
 #' @description The class encompasses etc etc

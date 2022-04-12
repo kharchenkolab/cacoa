@@ -35,8 +35,6 @@ estimateExpressionShiftMagnitudes(
 \item{verbose}{(default=FALSE)}
 
 \item{n.cores}{number of cores (default=1)}
-
-\item{transposed.matrices}{(default=FALSE)}
 }
 \value{
 List of distances per cell type, distance matrices, sample groups, cell types, pvalues, and adjusted p-values.

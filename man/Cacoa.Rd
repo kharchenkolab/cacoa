@@ -45,28 +45,13 @@ The class encompasses etc etc
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-new}{\code{Cacoa$new()}}
-\item \href{#method-estimateCommonExpressionShiftMagnitudes}{\code{Cacoa$estimateCommonExpressionShiftMagnitudes()}}
 \item \href{#method-estimateExpressionShiftMagnitudes}{\code{Cacoa$estimateExpressionShiftMagnitudes()}}
 \item \href{#method-plotExpressionShiftMagnitudes}{\code{Cacoa$plotExpressionShiftMagnitudes()}}
 \item \href{#method-estimatePerCellTypeDE}{\code{Cacoa$estimatePerCellTypeDE()}}
 \item \href{#method-estimateDEPerCellType}{\code{Cacoa$estimateDEPerCellType()}}
 \item \href{#method-estimateDEStabilityPerCellType}{\code{Cacoa$estimateDEStabilityPerCellType()}}
-\item \href{#method-estimateDEStabilityPerTest}{\code{Cacoa$estimateDEStabilityPerTest()}}
 \item \href{#method-estimateDEStabilityPerGene}{\code{Cacoa$estimateDEStabilityPerGene()}}
-\item \href{#method-estimateDEStabilityBetweenTests}{\code{Cacoa$estimateDEStabilityBetweenTests()}}
-\item \href{#method-estimateDEStabilityTrend}{\code{Cacoa$estimateDEStabilityTrend()}}
-\item \href{#method-estimateGOStabilityPerCellTypePermDir}{\code{Cacoa$estimateGOStabilityPerCellTypePermDir()}}
-\item \href{#method-estimateGOStabilityPerCellTypePerm}{\code{Cacoa$estimateGOStabilityPerCellTypePerm()}}
-\item \href{#method-estimateGOStabilityPerCellTypePermGseaDir}{\code{Cacoa$estimateGOStabilityPerCellTypePermGseaDir()}}
-\item \href{#method-estimateGOStabilityPerCellTypePermGsea}{\code{Cacoa$estimateGOStabilityPerCellTypePermGsea()}}
-\item \href{#method-estimateGOStabilityTrend}{\code{Cacoa$estimateGOStabilityTrend()}}
-\item \href{#method-plotGOStabilityPerCellType}{\code{Cacoa$plotGOStabilityPerCellType()}}
-\item \href{#method-plotDEStabilityTrend}{\code{Cacoa$plotDEStabilityTrend()}}
-\item \href{#method-plotDEStabilityFDR}{\code{Cacoa$plotDEStabilityFDR()}}
-\item \href{#method-plotDEStabilityFDR1loo}{\code{Cacoa$plotDEStabilityFDR1loo()}}
-\item \href{#method-plotDEStabilityBetweenTests}{\code{Cacoa$plotDEStabilityBetweenTests()}}
 \item \href{#method-plotDEStabilityPerCellType}{\code{Cacoa$plotDEStabilityPerCellType()}}
-\item \href{#method-plotDEStabilityPerTest}{\code{Cacoa$plotDEStabilityPerTest()}}
 \item \href{#method-plotDEStabilityPerGene}{\code{Cacoa$plotDEStabilityPerGene()}}
 \item \href{#method-plotNumberOfDEGenes}{\code{Cacoa$plotNumberOfDEGenes()}}
 \item \href{#method-plotVolcano}{\code{Cacoa$plotVolcano()}}
@@ -89,9 +74,7 @@ The class encompasses etc etc
 \item \href{#method-plotContrastTree}{\code{Cacoa$plotContrastTree()}}
 \item \href{#method-plotCompositionSimilarity}{\code{Cacoa$plotCompositionSimilarity()}}
 \item \href{#method-estimateCellLoadings}{\code{Cacoa$estimateCellLoadings()}}
-\item \href{#method-estimateGaPartition}{\code{Cacoa$estimateGaPartition()}}
 \item \href{#method-plotCellLoadings}{\code{Cacoa$plotCellLoadings()}}
-\item \href{#method-estimateWilcoxonTest}{\code{Cacoa$estimateWilcoxonTest()}}
 \item \href{#method-estimateCellDensity}{\code{Cacoa$estimateCellDensity()}}
 \item \href{#method-plotCellDensity}{\code{Cacoa$plotCellDensity()}}
 \item \href{#method-plotCellDensityVariation}{\code{Cacoa$plotCellDensityVariation()}}
@@ -176,61 +159,6 @@ Initialize Cacoa class
 }
 \subsection{Returns}{
 a new 'Cacoa' object
-Estimate common expression shift magnitudes
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateCommonExpressionShiftMagnitudes"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateCommonExpressionShiftMagnitudes}{}}}
-\subsection{Method \code{estimateCommonExpressionShiftMagnitudes()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateCommonExpressionShiftMagnitudes(
-  cell.groups = self$cell.groups,
-  name = "common.expression.shifts",
-  min.cells.per.sample = 10,
-  min.samp.per.type = 2,
-  min.gene.frac = 0.01,
-  genes = NULL,
-  n.permutations = 1000,
-  trim = 0.2,
-  p.adjust.method = "BH",
-  verbose = self$verbose,
-  n.cores = self$n.cores,
-  ...
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
-
-\item{\code{name}}{character string Field name where the test results are stored (default="common.expression.shifts")}
-
-\item{\code{min.cells.per.sample}}{numeric (default=10)}
-
-\item{\code{min.samp.per.type}}{numeric (default=2)}
-
-\item{\code{min.gene.frac}}{numeric (default=0.01)}
-
-\item{\code{genes}}{(default=NULL)}
-
-\item{\code{n.permutations}}{numeric (default=1000)}
-
-\item{\code{trim}}{numeric (deafult=0.2)}
-
-\item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values. Please see DOSE package for more information (default="BH")}
-
-\item{\code{verbose}}{boolean Whether to show progress}
-
-\item{\code{n.cores}}{numeric Number of cores for parallelization}
-
-\item{\code{...}}{additional parameters}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-List of expression shift magnitudes. Distributions per type, p-values, and adjusted p-values.
 }
 }
 \if{html}{\out{<hr>}}
@@ -263,7 +191,11 @@ Calculate expression shift magnitudes of different clusters between conditions
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{vector Indicates cell groups with cell names (default: stored vector)}
+\item{\code{cell.groups}}{Named cell group factor with cell names (default=self$cell.groups)}
+
+\item{\code{sample.per.cell}}{Sample per cell (default=self$sample.per.cell)}
+
+\item{\code{dist}}{'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default=NULL, depends on dimensionality)}
 
 \item{\code{dist.type}}{character string (default="cross.both")}
 
@@ -312,13 +244,12 @@ cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
 \subsection{Method \code{plotExpressionShiftMagnitudes()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionShiftMagnitudes(
-  name = NULL,
+  name = "expression.shifts",
   type = "box",
   notch = TRUE,
   show.jitter = TRUE,
   jitter.alpha = 0.05,
   show.pvalues = c("adjusted", "raw", "none"),
-  shift.type = c("normal", "common"),
   ylab = "normalized expression distance",
   ...
 )}\if{html}{\out{</div>}}
@@ -342,8 +273,6 @@ cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
 \item{\code{jitter.alpha}}{numeric Transparency value for the data points (default=0.05)}
 
 \item{\code{show.pvalues}}{character string Which p-values to plot. Accepted values are "none", "raw", or "adjusted". (default=c("adjusted", "raw", "none"))}
-
-\item{\code{shift.type}}{character string Either "normal" or "common". (default=c("normal", "common"))}
 
 \item{\code{ylab}}{character string Label of the y-axis (default="normalized expression distance")}
 
@@ -483,37 +412,6 @@ Estimate DE stability per cell type
 }
 \subsection{Returns}{
 A ggplot2 object
-Estimate DE stability per test
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateDEStabilityPerTest"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateDEStabilityPerTest}{}}}
-\subsection{Method \code{estimateDEStabilityPerTest()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEStabilityPerTest(
-  de.names,
-  name = "jacc.per.test",
-  top.n.genes = NULL,
-  p.val.cutoff = NULL
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{de.names}}{character string Results slot name (default='de')}
-
-\item{\code{name}}{character string (default='de.jaccards')}
-
-\item{\code{top.n.genes}}{numeric Number of top DE genes to return (default=NULL)}
-
-\item{\code{p.val.cutoff}}{numeric The p-value cutoff to apply for returned DE values (default=NULL)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
 Estimate DE stability per gene
 }
 }
@@ -545,378 +443,6 @@ Estimate DE stability per gene
 }
 \subsection{Returns}{
 A ggplot2 object
-Estimate DE stability between tests
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateDEStabilityBetweenTests"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateDEStabilityBetweenTests}{}}}
-\subsection{Method \code{estimateDEStabilityBetweenTests()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEStabilityBetweenTests(
-  de.names,
-  name = "jacc.bw.tests",
-  top.n.genes = NULL,
-  p.val.cutoff = NULL
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{de.names}}{character string Results slot name (default='de')}
-
-\item{\code{name}}{character string (default='jacc.bw.tests')}
-
-\item{\code{top.n.genes}}{numeric Number of top DE genes to return (default=NULL)}
-
-\item{\code{p.val.cutoff}}{numeric The p-value cutoff to apply for returned DE values (default=NULL)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
-Estimate DE stability trend
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateDEStabilityTrend"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateDEStabilityTrend}{}}}
-\subsection{Method \code{estimateDEStabilityTrend()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEStabilityTrend(
-  de.name = "de",
-  name = "de.trend",
-  top.n.genes = c(100, 200, 300),
-  p.val.cutoffs = NULL
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{de.name}}{character string Results slot name (default='de')}
-
-\item{\code{name}}{character string (default='de.trend')}
-
-\item{\code{top.n.genes}}{numeric Number of top DE genes to return (default=c(100, 200, 300))}
-
-\item{\code{p.val.cutoffs}}{numeric The p-value cutoff to apply for returned DE values (default=NULL)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
-Estimate GO stability per cell type permutation directory
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateGOStabilityPerCellTypePermDir"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateGOStabilityPerCellTypePermDir}{}}}
-\subsection{Method \code{estimateGOStabilityPerCellTypePermDir()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGOStabilityPerCellTypePermDir(
-  de.test = "de",
-  name = "go.jaccards",
-  top.n.de = 500,
-  padj.go = 0.05
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{de.test}}{character string (default='de')}
-
-\item{\code{name}}{character string (default='de.trend')}
-
-\item{\code{top.n.de}}{numeric Number of top DE genes to return (default=500)}
-
-\item{\code{padj.go}}{numeric (default=0.05)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
-Estimate GO stability per cell type permutation
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateGOStabilityPerCellTypePerm"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateGOStabilityPerCellTypePerm}{}}}
-\subsection{Method \code{estimateGOStabilityPerCellTypePerm()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGOStabilityPerCellTypePerm(
-  de.test = "de",
-  top.n.de = 500,
-  padj.go = 0.05,
-  name = "go.jaccards"
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{de.test}}{character string (default='de')}
-
-\item{\code{top.n.de}}{numeric Number of top DE genes to return (default=500)}
-
-\item{\code{padj.go}}{numeric (default=0.05)}
-
-\item{\code{name}}{character string (default='de.trend')}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
-Estimate GO stability per cell GSEA directory
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateGOStabilityPerCellTypePermGseaDir"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateGOStabilityPerCellTypePermGseaDir}{}}}
-\subsection{Method \code{estimateGOStabilityPerCellTypePermGseaDir()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGOStabilityPerCellTypePermGseaDir(
-  de.test = "de",
-  padj.go = 0.05,
-  name = "go.jaccards"
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{de.test}}{character string (default='de')}
-
-\item{\code{padj.go}}{numeric (default=0.05)}
-
-\item{\code{name}}{character string (default='de.trend')}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
-Estimate GO stability per cell GSEA directory
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateGOStabilityPerCellTypePermGsea"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateGOStabilityPerCellTypePermGsea}{}}}
-\subsection{Method \code{estimateGOStabilityPerCellTypePermGsea()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGOStabilityPerCellTypePermGsea(
-  de.test = "de",
-  padj.go = 0.05,
-  name = "go.jaccards"
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{de.test}}{character string (default='de')}
-
-\item{\code{padj.go}}{numeric (default=0.05)}
-
-\item{\code{name}}{character string (default='de.trend')}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
-Estimate GO stability trend
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateGOStabilityTrend"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateGOStabilityTrend}{}}}
-\subsection{Method \code{estimateGOStabilityTrend()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGOStabilityTrend(
-  de.name = "go",
-  name = "go.trend",
-  top.n.genes = c(100, 200, 300),
-  p.val.cutoffs = NULL
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{de.name}}{character string (default='de')}
-
-\item{\code{name}}{character string (default='de.trend')}
-
-\item{\code{top.n.genes}}{numeric vector (default=c(100, 200, 300))}
-
-\item{\code{p.val.cutoffs}}{numeric (default=NULL)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
-plot GO stability per cell type
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotGOStabilityPerCellType"></a>}}
-\if{latex}{\out{\hypertarget{method-plotGOStabilityPerCellType}{}}}
-\subsection{Method \code{plotGOStabilityPerCellType()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotGOStabilityPerCellType(
-  name = "go.jaccards",
-  notch = FALSE,
-  show.jitter = TRUE,
-  jitter.alpha = 0.05,
-  show.pairs = FALSE,
-  sort.order = FALSE
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{character string (default='go.jaccards')}
-
-\item{\code{notch}}{boolean Whether to show notches in the boxplot version (default=TRUE)}
-
-\item{\code{show.jitter}}{boolean (default=TRUE)}
-
-\item{\code{jitter.alpha}}{numeric (default=0.05)}
-
-\item{\code{show.pairs}}{boolean (default=FALSE)}
-
-\item{\code{sort.order}}{boolean (default=FALSE)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
-plot DE stability trends
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotDEStabilityTrend"></a>}}
-\if{latex}{\out{\hypertarget{method-plotDEStabilityTrend}{}}}
-\subsection{Method \code{plotDEStabilityTrend()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityTrend(
-  name = "de.trend",
-  notch = FALSE,
-  show.jitter = TRUE,
-  jitter.alpha = 0.05,
-  show.pairs = FALSE,
-  sort.order = FALSE
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{character string (default='de.trend')}
-
-\item{\code{notch}}{boolean (default=FALSE)}
-
-\item{\code{show.jitter}}{boolean (default=TRUE)}
-
-\item{\code{jitter.alpha}}{numeric (default=0.05)}
-
-\item{\code{show.pairs}}{boolean (default=FALSE)}
-
-\item{\code{sort.order}}{boolean (default=FALSE)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
-plot DE stability FDR
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotDEStabilityFDR"></a>}}
-\if{latex}{\out{\hypertarget{method-plotDEStabilityFDR}{}}}
-\subsection{Method \code{plotDEStabilityFDR()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityFDR(
-  de.name = "de",
-  p.adj.cutoffs = c(0.001, 0.005, 0.01, 0.05, 0.1, 0.2),
-  cell.types = NULL,
-  type = "relative"
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{de.name}}{character string (default='de')}
-
-\item{\code{p.adj.cutoffs}}{numeric vector (default=cc(0.001, 0.005, 0.01, 0.05, 0.1, 0.2))}
-
-\item{\code{cell.types}}{(default=NULL)}
-
-\item{\code{type}}{character string (default='relative')}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
-plot DE stability FDR
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotDEStabilityFDR1loo"></a>}}
-\if{latex}{\out{\hypertarget{method-plotDEStabilityFDR1loo}{}}}
-\subsection{Method \code{plotDEStabilityFDR1loo()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityFDR1loo(
-  cell.type,
-  de.name = "de",
-  p.adj.cutoffs = c(0.001, 0.005, 0.01, 0.05, 0.1, 0.2),
-  cell.types = NULL,
-  type = "relative"
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cell.type}}{cell type input}
-
-\item{\code{de.name}}{character string (default='de')}
-
-\item{\code{p.adj.cutoffs}}{numeric vector (default=cc(0.001, 0.005, 0.01, 0.05, 0.1, 0.2))}
-
-\item{\code{cell.types}}{cell types (default=NULL)}
-
-\item{\code{type}}{character string (default='relative')}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
-plot DE stability between tests
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotDEStabilityBetweenTests"></a>}}
-\if{latex}{\out{\hypertarget{method-plotDEStabilityBetweenTests}{}}}
-\subsection{Method \code{plotDEStabilityBetweenTests()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityBetweenTests(name = "jacc.bw.tests", cell.types = NULL)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{character string (default='jacc.bw.tests')}
-
-\item{\code{cell.types}}{(default=NULL)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
 Plot DE stability per cell type
 }
 }
@@ -931,7 +457,9 @@ Plot DE stability per cell type
   show.jitter = TRUE,
   jitter.alpha = 0.05,
   show.pairs = FALSE,
-  sort.order = TRUE
+  sort.order = TRUE,
+  pallete = self$cell.groups.palette,
+  set.fill = TRUE
 )}\if{html}{\out{</div>}}
 }
 
@@ -939,43 +467,6 @@ Plot DE stability per cell type
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{name}}{character string Results slot name (default='de.jaccards')}
-
-\item{\code{notch}}{boolean Whether (default=FALSE)}
-
-\item{\code{show.jitter}}{boolean Whether to show jitter on plots (default=TRUE)}
-
-\item{\code{jitter.alpha}}{numeric Parameter for jitter (default=0.05)}
-
-\item{\code{show.pairs}}{boolwan Whether to show pairs (default=FALSE)}
-
-\item{\code{sort.order}}{whether to show notches in the boxplot version (default=TRUE)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
-Plot DE stability per test
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-plotDEStabilityPerTest"></a>}}
-\if{latex}{\out{\hypertarget{method-plotDEStabilityPerTest}{}}}
-\subsection{Method \code{plotDEStabilityPerTest()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityPerTest(
-  name = "jacc.per.test",
-  notch = FALSE,
-  show.jitter = TRUE,
-  jitter.alpha = 0.5,
-  show.pairs = FALSE,
-  sort.order = FALSE
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{character string Results slot name (default='jacc.per.test')}
 
 \item{\code{notch}}{boolean Whether (default=FALSE)}
 
@@ -2002,37 +1493,6 @@ Estimate cell loadings
 }
 \subsection{Returns}{
 resulting cell loadings
-Estimate Ga partitions
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateGaPartition"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateGaPartition}{}}}
-\subsection{Method \code{estimateGaPartition()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGaPartition(
-  cells.to.remain = NULL,
-  cells.to.remove = NULL,
-  samples.to.remove = NULL,
-  ...
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cells.to.remain}}{vector (default=NULL)}
-
-\item{\code{cells.to.remove}}{vector (default=NULL)}
-
-\item{\code{samples.to.remove}}{vector (default=NULL)}
-
-\item{\code{...}}{additional parameters passed to gaPartition()}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-estimated Ga partitions
 Plot Loadings
 }
 }
@@ -2073,34 +1533,6 @@ Plot Loadings
 }
 \subsection{Returns}{
 A ggplot2 object
-Estimate Wilcoxon signed-rank test
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-estimateWilcoxonTest"></a>}}
-\if{latex}{\out{\hypertarget{method-estimateWilcoxonTest}{}}}
-\subsection{Method \code{estimateWilcoxonTest()}}{
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateWilcoxonTest(
-  cell.groups = self$cell.groups,
-  cells.to.remove = NULL,
-  cells.to.remain = NULL
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cell.groups}}{vector (default=NULL)}
-
-\item{\code{cells.to.remove}}{vector (default=NULL)}
-
-\item{\code{cells.to.remain}}{vector (default=NULL)}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-p-values
 Estimate cell density in giving embedding
 }
 }

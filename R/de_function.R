@@ -225,7 +225,7 @@ estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL
     raw.mats %<>% subsetMatricesWithCommonGenes(s.groups)
   } else {
     gene.union <- lapply(raw.mats, colnames) %>% Reduce(union, .)
-    raw.mats %<>% lapply(sccore:::extendMatrix, gene.union)
+    raw.mats %<>% lapply(sccore::extendMatrix, gene.union)
   }
 
   cm.bulk.per.samp <- raw.mats[unlist(s.groups)] %>% # Only consider samples in s.groups

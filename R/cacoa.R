@@ -1927,7 +1927,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop("Not implemented!")
       }
 
-      dist %<>% parseDistance(ncol(mat), NULL, verbose=FALSE)
+      dist %<>% parseDistance(top.n.genes=ncol(mat), n.pcs=NULL)
       if (dist == 'cor') {
         p.dists <- 1 - cor(t(mat))
       } else if (dist == 'l2') {

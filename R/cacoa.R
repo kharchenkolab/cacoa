@@ -502,8 +502,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param notch boolean Whether (default=FALSE)
     #' @param show.jitter boolean Whether to show jitter on plots (default=TRUE)
     #' @param jitter.alpha numeric Parameter for jitter (default=0.05)
-    #' @param show.pairs boolwan Whether to show pairs (default=FALSE)
+    #' @param show.pairs boolean Whether to show pairs (default=FALSE)
     #' @param sort.order whether to show notches in the boxplot version (default=TRUE)
+    #' @param pallete color palette for the cell.groups (default: stored value)
+    #' @param set.fill boolean Whether to fill the boxes based on cell type (default=TRUE)
     #' @return A ggplot2 object
     plotDEStabilityPerCellType=function(name='de.jaccards', notch=FALSE, show.jitter=TRUE, jitter.alpha = 0.05,
                                         show.pairs = FALSE, sort.order = TRUE, pallete=self$cell.groups.palette,

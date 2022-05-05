@@ -1,4 +1,4 @@
-## [Upcoming]
+## [0.4.0] - 2022-05-May
 
 ### Changed
 

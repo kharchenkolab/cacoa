@@ -456,15 +456,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'
     #' @param de.name character string Results slot name (default='de')
     #' @param top.n.genes numeric Number of top DE genes to return (default=500)
-    #' @param p.adj.cutoff numeric The adjusted p-value cutoff to apply for returned DE values (default=NULL)
+    #' @param p.adj numeric The adjusted p-value cutoff to apply for returned DE values (default=NULL)
     #' @param visualize boolean Whether to visualize results (default=FALSE)
     #' @return A ggplot2 object
-    estimateDEStabilityPerGene=function(de.name, top.n.genes=500, p.adj.cutoff=NULL, visualize=FALSE) {
+    estimateDEStabilityPerGene=function(de.name, top.n.genes=500, p.adj=NULL, visualize=FALSE) {
 
       de.res <- self$test.results[[de.name]]
       for(cell.type in names(de.res$initial)) {
-        if(!is.null(p.adj.cutoff)) {
-          top.n.genes <- sum(de.res$initial[[cell.type]]$res$padj <= p.adj.cutoff)
+        if(!is.null(p.adj)) {
+          top.n.genes <- sum(de.res$initial[[cell.type]]$res$padj <= p.adj)
         }
         genes.tmp <- rownames(de.res$initial[[cell.type]]$res)
         tmp <- rep(0, length(genes.tmp))

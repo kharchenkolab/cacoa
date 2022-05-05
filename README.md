@@ -5,7 +5,8 @@
 
 Case-Control Analysis of scRNA-seq experiments
 
-As the method is not published yet, there is no text description available. To get some idea of how it works you may want to check [the slides](https://slides.com/vpetukhov/cacoa-scs-sept-2021) from the method presentation.
+The package implements methods described in [this pre-print](https://doi.org/10.1101/2022.03.15.484475). 
+To reproduce results from the paper, please see [this repository](https://github.com/kharchenkolab/cacoaAnalysis).
 
 ## Installation
 
@@ -16,15 +17,17 @@ install.packages('devtools')
 devtools::install_github('kharchenkolab/cacoa')
 ```
 
-
 Prior to installing the package, dependencies have to be installed:
 
 ```r
 BiocManager::install(c("clusterProfiler", "DESeq2", "DOSE", "EnhancedVolcano", "enrichplot", "fabia", "GOfuncR", "Rgraphviz"))
 ```
 
-Also make sure to install [sccore](https://github.com/kharchenkolab/sccore) and [conos](https://github.com/kharchenkolab/conos).
+Also make sure to install the latest version of sccore (not the one from CRAN):
 
+``` r
+devtools::install_github("kharchenkolab/sccore", ref="dev")
+```
 
 ## Initialization
 
@@ -80,3 +83,11 @@ For visualization purposes, Conos must have cell embedding estimated or the embe
 Cacoa can estimate and visualize various statistics. Most of them have paired functions `cao$estimateX(...)` and `cao$plotX(...)` (for example, `cao$estimateCellLoadings()` and `cao$plotCellLoadings()`). Results of all estimation are stored in `cao$test.results`, and their exact name can be controlled by `name` parameter passed to `cao$estimateX()`. For example, calling `cao$estimateExpressionShiftMagnitudes(name='es')` would save the results in `cao$test.results$es`.
 
 Please, see the documentation for exact functions inside the package. For a demonstration see [the vignette](http://pklab.med.harvard.edu/viktor/cacoa/walkthrough_short.html) ([code](https://github.com/kharchenkolab/cacoa/blob/main/vignettes/walkthrough_short.Rmd)). Additionally, the [cacoaAnalysis](https://github.com/kharchenkolab/cacoaAnalysis/) repository contains analysis conducted inside the paper, though the Cacoa version there may be out of date.
+
+## Citation
+
+If you find this pipeline useful for your research, please consider citing the pre-pring:
+
+Case-control analysis of single-cell RNA-seq studies
+Viktor Petukhov, Anna Igolkina, Rasmus Rydbirk, Shenglin Mei, Lars Christoffersen, Konstantin Khodosevich, Peter V. Kharchenko
+bioRxiv 2022.03.15.484475; doi: https://doi.org/10.1101/2022.03.15.484475

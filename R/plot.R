@@ -6,7 +6,7 @@
 NULL
 
 #' Helper function for creating color palettes
-#' Syncs input to ggplot2::theme() params legend.position (i.e. the position of the legends) 
+#' Syncs input to ggplot2::theme() params legend.position (i.e. the position of the legends)
 #' and legend.justification (i.e. the anchor point for positioning legend inside the plot)
 #'
 #' @param position character string to pass into ggplot2::theme(legend.position=position, legend.justification=position)
@@ -21,7 +21,7 @@ theme_legend_position <- function(position) {
 #'
 #' @param name character A palette name; please refer to RColorBrewer::brewer.pal()
 #' @param n integer (default=NULL) Number of different colors in the palette, minimum 3, maximum depending on palette. Please refer to RColorBrewer::brewer.pal() for more details
-#' @param rev boolean (default=TRUE) Whether to reverse the palette order 
+#' @param rev boolean (default=TRUE) Whether to reverse the palette order
 #' @return palette function
 #'
 #' @export
@@ -36,23 +36,23 @@ brewerPalette <- function(name, n=NULL, rev=TRUE) {
 dark.red.palette <- colorRampPalette(c("gray95", "red", "#5A0000"), space="Lab")
 
 #' Plot number of cells regression
-#' 
+#'
 #' @param n the regressed variable
 #' @param n.total integer Number of cells
-#' @param x.lab character vector (default="Number of cells") x axis label 
-#' @param y.lab character vector (default="N") y axis label 
-#' @param legend.position character vector (default="right") legend position 
-#' @param label boolean (default=TRUE) Whether to show cell type labels 
-#' @param size integer (default=4) Label text size 
+#' @param x.lab character vector (default="Number of cells") x axis label
+#' @param y.lab character vector (default="N") y axis label
+#' @param legend.position character vector (default="right") legend position
+#' @param label boolean (default=TRUE) Whether to show cell type labels
+#' @param size integer (default=4) Label text size
 #' @param palette color palette (default=NULL)
-#' @param plot.line boolean (default=TRUE) Whether to plot the robust regression 
-#' @param line.width numeric (default=0.5) Regression line width 
+#' @param plot.line boolean (default=TRUE) Whether to plot the robust regression
+#' @param line.width numeric (default=0.5) Regression line width
 #' @return ggplot2 plot of regression
 #'
 #' @keywords internal
 plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", legend.position="right", label=TRUE, size=4,
                                 palette=NULL, plot.line=TRUE, line.width=0.5, plot.theme=ggplot2::theme_get()) {
-  
+
   p.df <- data.frame(N=n) %>% tibble::as_tibble(rownames="Type") %>%
     mutate(NCells=n.total[Type])
 
@@ -86,7 +86,7 @@ plotNCellRegression <- function(n, n.total, x.lab="Number of cells", y.lab="N", 
 }
 
 #' Plot count boxplots per type
-#' 
+#'
 #' @param count.df data.frame with columns `group`, `variable` and `value`
 #' @param notch Whether to show notch in the boxplots
 #' @param alpha Transparency level on the data points (default: 0.2)
@@ -150,7 +150,7 @@ plotCountBoxplotsPerType <- function(count.df, y.lab="count", x.lab="", y.expand
 #' @param clust.method character string (default="complete")
 #' @param grid.color Color of the grid. Set to "transparent" to disable the grid. (default: "gray50")
 #' @return A ggplot2 object
-#' 
+#'
 #' @export
 plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE, legend.position="right",
                         size.df=NULL, size.range=c(1, 5), size.legend.title="size",
@@ -233,12 +233,12 @@ plotHeatmap <- function(df, color.per.group=NULL, row.order=TRUE, col.order=TRUE
 }
 
 #' Get Gene Scale
-#' 
-#' @param genes character vector Type of genes (default=c("up", "down" or "all")) 
+#'
+#' @param genes character vector Type of genes (default=c("up", "down" or "all"))
 #' @param neutral.col character string (default="white")
 #' @param bidirectional boolean (default=FALSE)
 #' @return palette function
-#' 
+#'
 #' @export
 getGenePalette <- function(genes=c("up", "down", "all"), neutral.col="white", bidirectional=FALSE) {
   genes <- match.arg(genes)
@@ -294,13 +294,13 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
   return(quantile(s.means, c(quant, 1 - quant)))
 }
 
-#' Plot bar, point or boxplots showing mean/median values per cell type. 
-#' This is a generic function for plotting mean or median values per cell type 
+#' Plot bar, point or boxplots showing mean/median values per cell type.
+#' This is a generic function for plotting mean or median values per cell type
 #' (used for expression shift distances and others).
-#' 
+#'
 #' @param df dataframe containing the results, including $value and $Type slots which will be summarized
 #' @param type character vector (default=c('box', 'point', 'bar')) Type of a plot "bar" (default), "point" (mean + sd), or "box" for boxplot
-#' @param show.jitter boolean (default = FALSE) Whether to show individual data points 
+#' @param show.jitter boolean (default = FALSE) Whether to show individual data points
 #' @param jitter.alpha transparency value for the data points (default: 0.05)
 #' @param notch boolean Whether to show notches in the boxplot version (default=TRUE)
 #' @param palette - cell type palette
@@ -467,12 +467,12 @@ reduceEdges <- function(edges, verbose=TRUE, n.cores=1) {
 #'
 #' @param fam List of ontology IDs for the chosen family
 #' @param data Data frane if raw ontology data for the chosen cell type
-#' @param plot.type character (default="complete") How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms) 
-#' @param show.ids boolean (default=FALSE) Whether to show ontology IDs instead of names 
-#' @param string.length integer (default=18) Length of strings for wrapping in order to fit text within boxes 
-#' @param legend.label.size integer (default=1) Size of legend labels 
+#' @param plot.type character (default="complete") How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms)
+#' @param show.ids boolean (default=FALSE) Whether to show ontology IDs instead of names
+#' @param string.length integer (default=18) Length of strings for wrapping in order to fit text within boxes
+#' @param legend.label.size integer (default=1) Size of legend labels
 #' @param legend.position character vecotr (default="topright") Position of legend
-#' @param verbose boolean (default=TRUE) Print messages 
+#' @param verbose boolean (default=TRUE) Print messages
 #' @param n.cores integer (default=1) Number of cores to use
 #' @param reduce.edges boolean (default=FALSE) Remove redundant edges in network
 #' @param font.size integer (default=24) Size of the font
@@ -756,7 +756,11 @@ plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, m
       }
 
       if (!is.null(palette)) {
-        gg <- gg + scale_color_manual(values=palette)
+        gg <- gg + if (is.function(palette)) {
+          scale_color_gradientn(colors=palette(100))
+        } else {
+          scale_color_manual(values=palette)
+        }
       }
 
       gg <- gg + plot.theme

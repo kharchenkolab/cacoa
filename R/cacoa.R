@@ -2018,7 +2018,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       p.dists <- self$getSampleDistanceMatrix(space=space, cell.type=cell.type, dist=dist, name=name)
       if (is.null(p.dists)) return(NULL)
 
-      if (is.null(sample.colors) && is.null(palette)) palette <- self$sample.groups.palette
+      if (is.null(sample.colors) && is.null(palette)) {
+        # Has to be in the same order, or ggplot separates shape and color legends into two
+        palette <- self$sample.groups.palette[levels(as.factor(self$sample.groups))]
+      }
       gg <- plotSampleDistanceMatrix(
         p.dists=p.dists, sample.groups=self$sample.groups, n.cells.per.samp=n.cells.per.samp, method=method,
         sample.colors=sample.colors, show.sample.size=show.sample.size, palette=palette, color.title=color.title,

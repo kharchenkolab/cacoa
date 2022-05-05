@@ -2765,6 +2765,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       ont.res %<>% bind_rows(.id='Group')
 
       if (type == "GSEA") {
+        if ((nrow(ont.res) == 0) && !('core_enrichment' %in% colnames(ont.res))) {
+          # Sometimes, empty results from GSEA don't have core_enrichment (don't know when, see issue #21)
+          ont.res$core_enrichment <- character()
+        }
         ont.res %<>% rename(geneID=core_enrichment, qvalue=qvalues)
       }
 

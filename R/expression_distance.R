@@ -6,7 +6,6 @@
 #' @param dist what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values
 #' @param n.cores number of cores (default=1)
 #' @param verbose (default=FALSE)
-#' @param transposed.matrices (default=FALSE)
 #' @return List of distances per cell type, distance matrices, sample groups, cell types, pvalues, and adjusted p-values.
 #' @export
 estimateExpressionChange <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,

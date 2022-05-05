@@ -50,16 +50,20 @@ extractCellGraph.Seurat <- function(object) {
     if (is.null(object@graphs[[graph.name]])){
       stop("Cannot find graph ", graph.name)
     }
-    graph <- object@graphs[[graph.name]]
+    adj.mat <- object@graphs[[graph.name]]
   } else {
     if (length(object@graphs) == 0) {
       stop('No cell graph found in the object')
     }
-    graph <- object@graphs[[1]]
+    adj.mat <- object@graphs[[1]]
   }
 
-  graph %<>% as("dgCMatrix") %>%
-    igraph::graph_from_adjacency_matrix(mode="undirected", weighted=TRUE)
+  adj.mat %<>% as("dgCMatrix")
+  if (!isSymmetric(adj.mat)) {
+    warning("The provided adjacency matrix is not symmetric. Converting it to undirected graph.")
+    adj.mat <- (adj.mat + t(adj.mat)) / 2
+  }
+  graph <- igraph::graph_from_adjacency_matrix(adj.mat, mode="undirected", weighted=TRUE)
   return(graph)
 }
 

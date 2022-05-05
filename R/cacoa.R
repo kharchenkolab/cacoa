@@ -91,7 +91,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return a new 'Cacoa' object
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL,
                         ref.level=NULL, target.level=NULL, sample.groups.palette=NULL,
-                        cell.groups.palette=NULL, embedding=extractEmbedding(data.object),
+                        cell.groups.palette=NULL, embedding=NULL,
                         graph.name=NULL, n.cores=1, verbose=TRUE,
                         plot.theme=ggplot2::theme_bw(), plot.params=NULL) {
 
@@ -195,6 +195,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           rainbow(s=0.9,v=0.9) %>% setNames(levels(cell.groups))
       } else {
         self$cell.groups.palette <- cell.groups.palette
+      }
+
+      if (is.null(embedding)) {
+        try({ # In case extractEmbedding doesn't exist for this type of objects
+          embedding <- extractEmbedding(data.object)
+        }, silent=TRUE)
       }
 
       self$plot.theme <- plot.theme

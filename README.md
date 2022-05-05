@@ -43,14 +43,26 @@ Cacoa currently supports inputs in several formats (see below). Most of them req
 - `ref.level`: id of the condition, corresponding to the reference (i.e. control)
 - `target.level`: id of the condition, corresponding to the target (i.e. case)
 
+Additionally, `embedding` parameter containing a matrix or data.frame with a cell embedding can be provided. Rownames should match to the cell ids. 
+It is used for visualization and some cluster-free analysis.
+
+### No expression data
+
+Cacoa can be ran without any expression data by passing `NULL` instead of a data object:
+
+```r
+cao <- Cacoa$new(NULL, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
+                 ref.level=ref.level, target.level=target.level, embedding=embedding)
+```
+
+In this case, only compositional analyses will be available.
+
 ### Raw or normalized joint count matrix `cm`
 
 ```r
 cao <- Cacoa$new(cm, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
                  ref.level=ref.level, target.level=target.level, embedding=embedding)
 ```
-
-Parameter `embedding` contains a matrix or data.frame with a cell embedding. Rownames should match to the cell ids. It is used for visualization and some cluster-free analysis.
 
 ### Seurat object `so`
 
@@ -68,7 +80,7 @@ cao <- Cacoa$new(co, sample.groups=sample.groups, cell.groups=cell.groups,
                  ref.level=ref.level, target.level=target.level)
 ```
 
-For visualization purpuses, Conos must have cell embedding estimated or the embedding data frame must be provided in the `embedding` parameter. And for cluster-free analysis it should have a joint graph (see the method `Conos$buildGraph()` from [conos](https://CRAN.R-project.org/package=conos) method).
+For visualization purposes, Conos must have cell embedding estimated or the embedding data frame must be provided in the `embedding` parameter. And for cluster-free analysis it should have a joint graph (see the method `Conos$buildGraph()` from [conos](https://CRAN.R-project.org/package=conos) method).
 
 ## Usage
 

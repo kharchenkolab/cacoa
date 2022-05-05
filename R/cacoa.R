@@ -15,6 +15,7 @@ NULL
 #' @param cell.groups vector Indicates cell groups with cell names (default: stored vector)
 #' @param n.cores numeric Number of cores for parallelization
 #' @param verbose boolean Whether to show progress
+#' @param ref.level reference sample group level (default=self$ref.level)
 #' @param name character string Field name where the test results are stored
 #' @param n.top.genes numeric Number of top genes for estimation
 #' @param p.adj numeric Cut-off for adjusted p-values (default=0.05)
@@ -212,21 +213,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Calculate expression shift magnitudes of different clusters between conditions
     #'
     #' @param top.n.genes character vector Vector of top genes to show (default=NULL)
-    #' @param dist.type character string (default="cross.both")
+    #' @param dist.type type of expression distance: 'shift' (linear shift) 'var' (variance change) or 'total' (both) (default="shift")
     #' @param cell.groups Named cell group factor with cell names (default=self$cell.groups)
     #' @param sample.per.cell Sample per cell (default=self$sample.per.cell)
-    #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default=NULL, depends on dimensionality)
+    #' @param dist distance metric: 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default=NULL, depends on dimensionality)
     #' @param min.cells.per.sample numeric (default=10)
-    #' @param min.samp.per.type numeric (default=2)
-    #' @param min.gene.frac numeric (default=0.01)
-    #' @param ref.level (default=self$ref.level)
-    #' @param sample.groups (default=stored sample.groups)
-    #' @param n.cores Number of cores (defaultstored integer)
-    #' @param name Test name (default="expression.shifts")
-    #' @param n.permutations numeric (default=1000)
-    #' @param genes (default=NULL)
-    #' @param n.pcs numeric Number of principal components (default=NULL)
-    #' @param ... extra parameters to estimateExpressionShiftMagnitudes()
+    #' @param min.samp.per.type minimal number of samples per cell type for it to be included (default=2)
+    #' @param min.gene.frac minimal number of cells per cell type expressing a gene for it to be included (default=0.01)
+    #' @param n.permutations number of permutations for estimating normalization coefficient (default=1000)
+    #' @param genes if provided, the expression distance is estimated only based on these genes (default=NULL)
+    #' @param n.pcs Number of principal components for estimating expression distance (default=NULL, no PCA)
+    #' @param ... extra parameters to \link{estimateExpressionChange}
     #' @return List including:
     #'   `dist.df`: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update
     #'   `p.dist.info`: list of distance matrices per cell type
@@ -234,7 +231,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   `cell.groups`: filtered cell groups
     #'
     estimateExpressionShiftMagnitudes=function(cell.groups=self$cell.groups,
-      sample.per.cell=self$sample.per.cell, dist=NULL, dist.type="cross.both",
+      sample.per.cell=self$sample.per.cell, dist=NULL, dist.type="shift",
       min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
       ref.level=self$ref.level, sample.groups=self$sample.groups,
       verbose=self$verbose, n.cores=self$n.cores, name="expression.shifts",
@@ -268,7 +265,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       self$test.results[[name]] <- shift.inp %$%
-        estimateExpressionShiftMagnitudes(
+        estimateExpressionChange(
           cm.per.type, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=self$sample.per.cell,
           dist=dist, dist.type=dist.type, verbose=verbose, ref.level=ref.level,
           n.permutations=n.permutations, top.n.genes=top.n.genes, n.pcs=n.pcs, n.cores=n.cores, ...

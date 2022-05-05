@@ -9,15 +9,15 @@
 #' @param transposed.matrices (default=FALSE)
 #' @return List of distances per cell type, distance matrices, sample groups, cell types, pvalues, and adjusted p-values.
 #' @export
-estimateExpressionShiftMagnitudes <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
-                                              dist=NULL, dist.type=c("cross.both", "cross.ref", "var"), verbose=FALSE,
-                                              ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
-                                              top.n.genes=NULL, gene.selection="wilcox", n.pcs=NULL,
-                                              trim=0.2, n.cores=1, ...) {
+estimateExpressionChange <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
+                                     dist=NULL, dist.type=c("shift", "total", "var"), verbose=FALSE,
+                                     ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
+                                     top.n.genes=NULL, gene.selection="wilcox", n.pcs=NULL,
+                                     trim=0.2, n.cores=1, ...) {
   dist.type <- match.arg(dist.type)
   dist <- parseDistance(dist, top.n.genes=top.n.genes, n.pcs=n.pcs)
 
-  norm.type <- ifelse(dist.type == "cross.both", "both", "ref")
+  norm.type <- ifelse(dist.type == "shift", "both", "ref")
   r.type <- ifelse(dist.type == "var", "target", "cross")
 
   cell.groups %<>% as.factor() %>% droplevels()
@@ -322,7 +322,7 @@ filterGenesForCellType <- function(cm.norm, sample.groups, top.n.genes=500, gene
 }
 
 #' @keywords internal
-parseDistance <- function(dist, top.n.genes, n.pcs, verbose) {
+parseDistance <- function(dist, top.n.genes, n.pcs) {
   n.comps <- min(top.n.genes, n.pcs, Inf)
   if (is.null(dist)) {
     dist <- ifelse(n.comps < 20, 'l1', 'cor')

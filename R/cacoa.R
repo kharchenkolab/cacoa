@@ -99,7 +99,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param n.cores Number of cores for parallelization (default=1)
     #' @param verbose boolean Whether to provide verbose output with diagnostic messages (default=TRUE)
     #' @param plot.theme ggplot2 plot theme (default=ggplot2::theme_bw())
-    #' @param plot.params list with parameters, forwarded to all `plotEmbedding` calls (default=NULL)
+    #' @param plot.params list with parameters, replacing defaults from \link[sccore:embeddingPlot]{embeddingPlot} (default=NULL)
     #'
     #' @return a new 'Cacoa' object
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL,

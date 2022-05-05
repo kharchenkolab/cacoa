@@ -153,7 +153,7 @@ Initialize Cacoa class
 
 \item{\code{plot.theme}}{ggplot2 plot theme (default=ggplot2::theme_bw())}
 
-\item{\code{plot.params}}{list with parameters, forwarded to all \code{plotEmbedding} calls (default=NULL)}
+\item{\code{plot.params}}{list with parameters, replacing defaults from \link[sccore:embeddingPlot]{embeddingPlot} (default=NULL)}
 }
 \if{html}{\out{</div>}}
 }

@@ -11,7 +11,7 @@ getDEEntrezIdsSplitted(de.raw, org.db, p.adj = 1)
 
 \item{org.db}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'}
 
-\item{p.adj.cutoff}{Adj. P cutoff for filtering DE genes (default=0.05)}
+\item{p.adj}{Adj. P cutoff for filtering DE genes (default=0.05)}
 }
 \value{
 A list containing DE ENSEMBL gene IDs, and filtered DE genes

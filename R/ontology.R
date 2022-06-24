@@ -1,6 +1,10 @@
 #' @import dplyr
 NULL
 
+#' Map gene ENTREZ IDs to gene SYMBOLs
+#' @param genes vector containing gene ENTREZ IDs
+#' @param org.db organism db, e.g. org.Hs.eg.db::org.Hs.eg.db
+#' @return
 #' @keywords internal
 mapGeneIds <- function(genes, org.db) {
   suppressWarnings(suppressMessages(tryCatch({
@@ -16,7 +20,7 @@ mapGeneIds <- function(genes, org.db) {
 #' @description  Filter and prepare DE genes for ontology calculations
 #' @param de.raw List with differentially expressed genes per cell group
 #' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse. Input must be of class 'OrgDb'
-#' @param p.adj.cutoff Adj. P cutoff for filtering DE genes (default=0.05)
+#' @param p.adj Adj. P cutoff for filtering DE genes (default=0.05)
 #' @return A list containing DE ENSEMBL gene IDs, and filtered DE genes
 #' @keywords internal
 getDEEntrezIdsSplitted <- function(de.raw, org.db, p.adj=1) {
@@ -43,10 +47,18 @@ getDEEntrezIdsSplitted <- function(de.raw, org.db, p.adj=1) {
   return(de.gene.scores)
 }
 
+#' Enrich gene ontologies using enricher_internal
+#' @param gene a vector of entrez gene IDs
+#' @param org.db organism db, e.g. org.Hs.eg.db::org.Hs.eg.db
+#' @param go.environment GO environment, see DOSE:::enricher_internal, parameter USER_DATA
+#' @param keyType Gene key type (default="ENTREZID")
+#' @param ont type of ontology, one of BP, CC, or MF (default="BP")
+#' @param readable See DOSE:::enricher_internal (default=FALSE)
+#' @return
 #' @keywords internal
 enrichGOOpt <- function(gene, org.db, go.environment, keyType="ENTREZID", ont="BP", pvalueCutoff=0.05,
                         pAdjustMethod="BH", universe=NULL, qvalueCutoff=0.2, minGSSize=5, maxGSSize=500,
-                        readable=FALSE, pool=FALSE) {
+                        readable=FALSE) {
 
   checkPackageInstalled("DOSE", bioc=TRUE)
   enricher_internal <- utils::getFromNamespace("enricher_internal", "DOSE")
@@ -71,12 +83,35 @@ enrichGOOpt <- function(gene, org.db, go.environment, keyType="ENTREZID", ont="B
   if (!is.null(res)) return(res)
 }
 
+#' Estimate enriched GOs
+#' @param de.gene.ids vector containing gene IDs
+#' @param go.environment GO environment, see DOSE:::enricher_internal, parameter USER_DATA
+#' @param ... additional parameters parsed to enrichGOOpt
+#' @return
 #' @keywords internal
 estimateEnrichedGO <- function(de.gene.ids, go.environment, ...) {
   names(go.environment) %>% sccore::sn() %>%
     lapply(function(ont) lapply(de.gene.ids, enrichGOOpt, go.environment=go.environment[[ont]], ont=ont, ...))
 }
 
+#' Estimate enriched GSEA terms using GSEA_internal
+#' @param gene.ids a vector of gene IDs
+#' @param org.db organism db, e.g. org.Hs.eg.db::org.Hs.eg.db
+#' @param organism Organism, e.g. "Hs"
+#' @param keyType (default="ENTREZID")
+#' @param go.environment GO environment, see DOSE:::enricher_internal, parameter USER_DATA
+#' @param ont type of ontology, one of BP, CC, MF
+#' @param pvalueCutoff (default=1)
+#' @param pAdjustMethod (default="BH")
+#' @param minGSSize (default=5)
+#' @param maxGSSize (default=500)
+#' @param readable (default=FALSE)
+#' @param eps (default=0)
+#' @param exponent (default=1)
+#' @param seed (default=FALSE)
+#' @param verbose Print progress (default=FALSE)
+#' @param ... additional parameters parsed to DOSE::GSEA_internal
+#' @return 
 #' @keywords internal
 enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType="ENTREZID", go.environment, ont="BP", pvalueCutoff=1,
                            pAdjustMethod="BH", minGSSize=5, maxGSSize=500, readable=FALSE, eps=0, exponent=1,
@@ -103,12 +138,21 @@ enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType="ENTREZID", go.en
   if (!is.null(res)) return(res)
 }
 
+#' Estimate enriched GSEA ontologies
+#' @param go.environment List with GO environment
+#' @param ... additional parameters passed to enrichGSEGOOpt
+#' @return
 #' @keywords internal
 estimateEnrichedGSEGO <- function(go.environment, ...) {
   names(go.environment) %>% sccore::sn() %>%
     lapply(function(ont) enrichGSEGOOpt(go.environment=go.environment[[ont]], ont=ont, ...))
 }
 
+#' Group ontologies by clusters
+#' @param ont.clust.df Cluster dataframe per ontology
+#' @param field (default="ClusterName")
+#' @param sign.field (default="p.adjust")
+#' @return
 #' @keywords internal
 groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName", sign.field="p.adjust") {
   if (nrow(ont.clust.df) == 0)
@@ -132,6 +176,10 @@ groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName", sign.fie
   return(df)
 }
 
+#' Filter ontologies by adj. P
+#' @param ont.list List of ontology terms
+#' @param p.adj Adj. P cut-off
+#' @return
 #' @keywords internal
 filterOntologies <- function(ont.list, p.adj) {
   ont.list %>% lapply(function(ol) {
@@ -145,8 +193,7 @@ filterOntologies <- function(ont.list, p.adj) {
 #' @param go.environment GO environment set (Homo sapiens, Mus musculus, etc.)
 #' @param type character string Ontology type, either GO (gene ontology) or DO (disease ontology) (default="GO")
 #' Please see DOSE package for more information.
-#' @param org.db Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse.
-#' Input must be of class 'OrgDb'
+#' @param org.db organism db, e.g. org.Hs.eg.db::org.Hs.eg.db
 #' @param n.top.genes numeric Number of most different genes to take as input. If less are left after filtering
 #' for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)
 #' @param keep.gene.sets boolean Keep gene sets (default=FALSE)
@@ -209,6 +256,15 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
   return(ont.list)
 }
 
+#' Filter ontology dataframe
+#' @param ont.df Ontology dataframe
+#' @param p.adj Adj. P cut-off (default=0.05)
+#' @param q.value (default=0.2)
+#' @param min.genes Min. number of significant terms per term (default=1)
+#' @param subtype (default=NULL)
+#' @param cell.subgroups (default=NULL)
+#' @return
+#' @keywords internal
 filterOntologyDf <- function(ont.df, p.adj=0.05, q.value=0.2, min.genes=1, subtype=NULL, cell.subgroups=NULL) {
   if (!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
     stop("'subtype' must be 'BP', 'CC', or 'MF'.")
@@ -238,6 +294,10 @@ filterOntologyDf <- function(ont.df, p.adj=0.05, q.value=0.2, min.genes=1, subty
 #' @param strings Text strings
 #' @param width Max length before inserting line shift
 #' @return Text strings with inserted line shifts
+#' @examples 
+#' wrapped_string <- wrap_strings(c("This is a long text to be wrapped"), 10)
+#' 
+#' @export
 # Source: http://stackoverflow.com/a/7367534/496488
 wrap_strings <- function(strings, width) {
   as.character(sapply(strings, function(s) {
@@ -423,6 +483,10 @@ collapseFamilies <- function(ont.res) {
   }
 }
 
+#' Create list with ontology terms
+#' @param type one of GO, GSEA or DO
+#' @return 
+#' @keywords internal
 getOntologyListLevels <- function(type=c('GO', 'GSEA', 'DO')) {
   type <- match.arg(type)
   list.levels <- c("CellType")
@@ -449,8 +513,6 @@ estimateOntologyFamilies <- function(ont.list, type) {
   return(ont.fam)
 }
 
-### Clustering
-
 #' @title Distance between terms
 #' @description Calculate distance matrix between ontology terms
 #' @param genes.per.go named list of genes per GO
@@ -470,7 +532,10 @@ distanceBetweenTerms <- function(genes.per.go) {
   return(dist(t(genes.per.go.mat), method="binary"))
 }
 
-#' @inheritParams distanceBetweenTerms genes.per.go
+#' Estimate ontology clusters
+#' @param genes.per.go Genes per term
+#' @param cut.h numeric scalar or vector with heights where the tree should be cut.
+#' @return 
 #' @keywords internal
 estimateClusterPerGO <- function(genes.per.go, cut.h) {
   if (length(genes.per.go) == 1)
@@ -479,6 +544,10 @@ estimateClusterPerGO <- function(genes.per.go, cut.h) {
   distanceBetweenTerms(genes.per.go) %>% hclust() %>% cutree(h=cut.h)
 }
 
+#' Cluster individual ontology terms
+#' @param genes.per.go.per.type Genes per term per cell type
+#' @param cut.h numeric scalar or vector with heights where the tree should be cut.
+#' @return 
 #' @keywords internal
 clusterIndividualGOs <- function(genes.per.go.per.type, cut.h) {
   go.clusts.per.type <- genes.per.go.per.type %>%
@@ -494,6 +563,9 @@ clusterIndividualGOs <- function(genes.per.go.per.type, cut.h) {
     return(clust.df)
 }
 
+#' Cluster ontology terms per cell type
+#' @param clust.df Cluster dataframe
+#' @param cut.h numeric scalar or vector with heights where the tree should be cut.
 #' @keywords internal
 clusterGOsPerType <- function(clust.df, cut.h) {
   cl.dists <- as.matrix(clust.df) %>% `mode<-`('integer') %>% t() %>% colwiseBinaryDistance()
@@ -505,6 +577,12 @@ clusterGOsPerType <- function(clust.df, cut.h) {
   return(list(clusts=clusts, hclust=cl.clusts))
 }
 
+#' Estimate names for ontology clusters
+#' @param descriptions Descriptions
+#' @param method One of "medoid" or "consensus"
+#' @param n.words (default=5)
+#' @param exclude.words (default=NULL)
+#' @return 
 #' @keywords internal
 estimateOntologyClusterName <- function(descriptions, method=c("medoid", "consensus"), n.words=5, exclude.words=NULL) {
   method <- match.arg(method)
@@ -528,6 +606,10 @@ estimateOntologyClusterName <- function(descriptions, method=c("medoid", "consen
   return(nm)
 }
 
+#' Estimate ontology cluster names
+#' @param ont.df Ontology dataframe
+#' @param clust.naming One of "medoid", "consensus", or "min.pvalue"
+#' @return
 #' @keywords internal
 estimateOntologyClusterNames <- function(ont.df, clust.naming=c("medoid", "consensus", "min.pvalue")) {
   clust.naming <- match.arg(clust.naming)
@@ -543,6 +625,12 @@ estimateOntologyClusterNames <- function(ont.df, clust.naming=c("medoid", "conse
   return(name.per.clust)
 }
 
+#' Get ontology family children
+#' @param ont.sum Dataframe containing summarized ontology terms
+#' @param fams Ontology families
+#' @param subtype Type of ontology, one of "BP", "CC", "MF"
+#' @param genes Included genes
+#' @return
 #' @keywords internal
 getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {
   fams <- lapply(fams, function(x) {

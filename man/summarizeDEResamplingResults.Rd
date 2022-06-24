@@ -7,7 +7,9 @@
 summarizeDEResamplingResults(de.list, var.to.sort = "pvalue")
 }
 \arguments{
-\item{var.to.sort}{Variable to calculate ranks}
+\item{de.list}{list with DE results. Data frame with DE results are found in the first element}
+
+\item{var.to.sort}{Variable to calculate ranks (default="pvalue")}
 }
 \description{
 Summarize DE Resampling Results

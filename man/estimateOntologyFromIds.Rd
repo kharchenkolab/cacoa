@@ -24,8 +24,7 @@ estimateOntologyFromIds(
 \item{type}{character string Ontology type, either GO (gene ontology) or DO (disease ontology) (default="GO")
 Please see DOSE package for more information.}
 
-\item{org.db}{Organism database, e.g., org.Hs.eg.db for human or org.Ms.eg.db for mouse.
-Input must be of class 'OrgDb'}
+\item{org.db}{organism db, e.g. org.Hs.eg.db::org.Hs.eg.db}
 
 \item{n.top.genes}{numeric Number of most different genes to take as input. If less are left after filtering
 for p.adj.cutoff, additional genes are included. To disable, set n.top.genes=0 (default=1e2)}

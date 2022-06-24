@@ -33,6 +33,10 @@ validateDEPerCellTypeParams <- function(raw.mats, cell.groups, sample.groups, re
   if (class(cell.groups) != "factor") stop('"cell.groups" must be a factor')
 }
 
+#' Subset matrices with common genes
+#' @param cms List with count matrices
+#' @param sample.groups (default=NULL)
+#' @return list with count matrices with common genes
 #' @keywords internal
 subsetMatricesWithCommonGenes <- function(cms, sample.groups=NULL) {
   if (!is.null(sample.groups)) cms <- cms[unlist(sample.groups)]
@@ -41,6 +45,13 @@ subsetMatricesWithCommonGenes <- function(cms, sample.groups=NULL) {
   return(cms)
 }
 
+#' Split strings and extract nth element
+#' @description Function building on base::strsplit to extract nth element of a character string after splitting
+#' 
+#' @param x input character vector
+#' @param split character vector containing a regular expression for splitting
+#' @param n element to extract
+#' @param fixed passed to strsplit
 #' @keywords internal
 strpart <- function(x, split, n, fixed = FALSE) {
   as.character(x) %>% strsplit(split, fixed=fixed) %>% sapply("[", n)
@@ -50,6 +61,9 @@ strpart <- function(x, split, n, fixed = FALSE) {
 #'
 #' @param df Data.frame with the columns "pval", "padj" and "log2FoldChange"
 #' @return Updated data.frame with Z scores
+#' @examples 
+#' df_adj <- addZScores(df)
+#' 
 #' @export
 addZScores <- function(df) {
   df$Z <- -qnorm(df$pval/2)
@@ -168,6 +182,10 @@ saveDEasJSON <- function(de.raw, sample.groups=NULL, saveprefix=NULL,
 }
 
 
+#' Prepare samples for DE analysis
+#' @param sample.groups named list containing sample names
+#' @param resampling.method one of "loo" (leave-one-out, remove one sample per iteration), "bootstrap", "fix.cells" (fixed number of cells per subsample), or "fix.samples" (fixed number of samples per iteration)
+#' @param n.resamplings number of iterations (default=30)
 #' @keywords internal
 prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'bootstrap', 'fix.cells', 'fix.samples'),
                                 n.resamplings=30) {
@@ -351,7 +369,9 @@ estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL
   return(de.res)
 }
 
-
+#' Filter DE metadata
+#' @param meta data frame containing metadata in columns
+#' @return cleaned data frame with metadata
 #' @keywords internal
 filterDEMetadata <- function(meta) {
   # Remove unique columns
@@ -372,6 +392,14 @@ filterDEMetadata <- function(meta) {
   return(meta)
 }
 
+#' Normalize pseudo-bulk matrix
+#' @param cm count matrix
+#' @param meta (default=NULL)
+#' @param design.formula (default=NULL)
+#' @param type (default="totcount")
+#' @return normalized count matrix
+#' @keywords internal
+# Requires availability test for DESeq2 or edgeR
 normalizePseudoBulkMatrix <- function(cm, meta=NULL, design.formula=NULL, type='totcount') {
   if (type == 'deseq2') {
     cnts.norm <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula)  %>%
@@ -386,7 +414,14 @@ normalizePseudoBulkMatrix <- function(cm, meta=NULL, design.formula=NULL, type='
   return(cnts.norm)
 }
 
+#' Estimate pair-wise DEGs
+#' @param cm.norm normalized count matrix
+#' @param meta data frame with meta data
+#' @param target.level target level, e.g., disease group
+#' @param test type of test, either "wilcoxon" or "t-test"
+#' @return data frame containing DEGs using a pair-wise test
 #' @keywords internal
+# Requires availability test for "scran"
 estimateDEForTypePairwiseStat <- function(cm.norm, meta, target.level, test) {
   if (test == 'wilcoxon') {
     res <- scran::pairwiseWilcox(cm.norm, groups = meta$group)$statistics[[1]] %>%
@@ -403,6 +438,16 @@ estimateDEForTypePairwiseStat <- function(cm.norm, meta, target.level, test) {
   return(res)
 }
 
+#' estimate DE using DESeq2
+#' 
+#' @param cm count matrix
+#' @param meta data frame containing meta data
+#' @param design.formula design formula according to 
+#' @param ref.level reference level, e.g. controls
+#' @param target.level target level, e.g. disease
+#' @param test.type test type incorporated in DESeq2, either "Wald" or "LRT"
+#' @param ... additional parameters forwarded to DESeq2
+#' 
 #' @keywords internal
 estimateDEForTypeDESeq <- function(cm, meta, design.formula, ref.level, target.level, test.type, ...) {
   res <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula)
@@ -419,6 +464,12 @@ estimateDEForTypeDESeq <- function(cm, meta, design.formula, ref.level, target.l
   return(res)
 }
 
+#' Estimate DE using edgeR
+#' 
+#' @param cm count matrix
+#' @param meta data frame containing metadata
+#' @param design.formula design formula according to 
+#' 
 #' @keywords internal
 estimateDEForTypeEdgeR <- function(cm, meta, design.formula) {
   design <- model.matrix(design.formula, meta)
@@ -435,6 +486,12 @@ estimateDEForTypeEdgeR <- function(cm, meta, design.formula) {
   return(res)
 }
 
+#' Estimate DE using limma
+#' 
+#' @param cm count matrix
+#' @param meta data frame containing metadata
+#' @param design.formula design formula according to 
+#' @param target.level target level, e.g. disease
 #' @keywords internal
 estimateDEForTypeLimma <- function(cm, meta, design.formula, target.level) {
   mm <- model.matrix(design.formula, meta)
@@ -449,7 +506,9 @@ estimateDEForTypeLimma <- function(cm, meta, design.formula, target.level) {
 
 #' Summarize DE Resampling Results
 #'
-#' @param var.to.sort Variable to calculate ranks
+#' @param de.list list with DE results. Data frame with DE results are found in the first element
+#' @param var.to.sort Variable to calculate ranks (default="pvalue")
+#' 
 #' @keywords internal
 summarizeDEResamplingResults <- function(de.list, var.to.sort='pvalue') {
   de.res <- de.list[[1]]
@@ -484,6 +543,11 @@ summarizeDEResamplingResults <- function(de.list, var.to.sort='pvalue') {
   return(de.res)
 }
 
+#' Append statistics to DE results
+#' 
+#' @param de.list list with DE results
+#' @param expr.frac.per.type 
+#' 
 #' @keywords internal
 appendStatisticsToDE <- function(de.list, expr.frac.per.type) {
   for (n in names(de.list)) {
@@ -495,6 +559,11 @@ appendStatisticsToDE <- function(de.list, expr.frac.per.type) {
   return(de.list)
 }
 
+#' get expression fraction per cell group
+#' 
+#' @param cm sparse count matrix 
+#' @param cell.groups factor containing cell groups with cell names as names
+#' 
 #' @keywords internal
 getExpressionFractionPerGroup <- function(cm, cell.groups) {
   cm@x <- as.numeric(cm@x > 1e-10)

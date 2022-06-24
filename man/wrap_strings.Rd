@@ -17,3 +17,7 @@ Text strings with inserted line shifts
 \description{
 Handy function for wrapping long text strings for usage in plots
 }
+\examples{
+wrapped_string <- wrap_strings(c("This is a long text to be wrapped"), 10)
+
+}

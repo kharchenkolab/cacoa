@@ -8,7 +8,7 @@ plotCountBoxplotsPerType(
   count.df,
   y.lab = "count",
   x.lab = "",
-  y.expand = 1.05,
+  y.expand = 0.05,
   show.significance = FALSE,
   jitter.width = 0.15,
   notch = FALSE,
@@ -18,8 +18,9 @@ plotCountBoxplotsPerType(
   palette = NULL,
   adjust.pvalues = TRUE,
   plot.theme = theme_get(),
-  label.y.npc = 0.92,
-  ns.symbol = ""
+  pvalue.y = NULL,
+  ns.symbol = "",
+  p.adjust.method = "BH"
 )
 }
 \arguments{

@@ -15,3 +15,7 @@ Updated data.frame with Z scores
 \description{
 Add Z scores to DE results
 }
+\examples{
+df_adj <- addZScores(df)
+
+}

@@ -16,6 +16,7 @@ plotContrastTree(
   h.methods = "both",
   font.size = 3,
   label.hjust = 1,
+  show.text = "pvalue.code",
   tree.order = NULL,
   loadings.mean = NULL,
   palette = NULL,

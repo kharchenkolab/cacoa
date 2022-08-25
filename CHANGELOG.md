@@ -3,6 +3,8 @@
 ### Added
 
 - Parameter `assay.name` for Seurat objects in `Cacoa$new` to allow selecting different assays
+- `cao$plotMetadataSeparation` function
+- `sample.subset` parameter for `plotSampleDistances` and `estimateMetadataSeparation`
 
 ### Changed
 

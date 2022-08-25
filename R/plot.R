@@ -304,12 +304,14 @@ estimateMeanCI <- function(arr, quant=0.05, n.samples=500, ...) {
 #' @param jitter.alpha transparency value for the data points (default: 0.05)
 #' @param notch boolean Whether to show notches in the boxplot version (default=TRUE)
 #' @param palette - cell type palette
+#' @param coord.flip flip coordinates of the plot
 #' @return A ggplot2 object
 #' @keywords internal
 plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point', 'bar'), show.jitter=TRUE,
                                          notch=TRUE, jitter.alpha=0.05, palette=NULL, ylab='expression distance',
                                          yline=1, plot.theme=theme_get(), jitter.size=1, line.size=0.75, trim=0,
-                                         order.x=TRUE, pvalue.y=NULL, y.max=NULL, y.offset=NULL, ns.symbol="") {
+                                         order.x=TRUE, pvalue.y=NULL, y.max=NULL, y.offset=NULL, ns.symbol="",
+                                         coord.flip=FALSE) {
   type <- match.arg(type)
   df$Type %<>% as.factor()
   if (!is.null(y.offset)) {
@@ -361,13 +363,20 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
   p <- p +
     plot.theme +
     theme(
-      axis.text.x=element_text(angle=90, vjust=0.5, hjust=1, size=12),
-      axis.text.y=element_text(angle=90, hjust=0.5, size=12),
       panel.grid.major.x=element_blank(), panel.grid.minor=element_blank(),
-      legend.position="none"
+      legend.position="none", axis.text=element_text(size=12)
     ) +
-    guides(fill="none") +
-    labs(x="", y=ylab)
+    guides(fill="none") + labs(y=ylab)
+
+  if (coord.flip) {
+    p <- p + coord_flip() + theme(axis.title.y=element_blank())
+  } else {
+    p <- p + theme(
+      axis.text.x=element_text(angle=90, vjust=0.5, hjust=1),
+      axis.text.y=element_text(angle=90, hjust=0.5),
+      axis.title.x=element_blank()
+    )
+  }
 
   if (show.jitter) {
     p <- p +

@@ -35,6 +35,7 @@ if (getRversion() >= "2.15.1"){
 #' @param gene.selection character string Method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
 #' "expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "z".
 #' @param excluded.genes List of genes to exclude during estimation. For example, a list of mitochondrial genes.
+#' @param sample.subset subset data for analysis only to the given samples
 #' @export Cacoa
 Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
   public = list(
@@ -1892,16 +1893,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
     #'
-    #' @param space (default=c('expression.shifts', 'coda', 'pseudo.bulk'))
+    #' @param space (default='expression.shifts')
     #' @param cell.type (default=NULL)
-    #' @param dist (default=NULL)
+    #' @param dist distance metric between samples for 'coda' space. Ignored otherwise. (default=NULL)
     #' @param ... additional arguments
     #' @return
-    getSampleDistanceMatrix=function(space=c('expression.shifts', 'coda', 'pseudo.bulk'), cell.type=NULL,
-                                     dist=NULL, name=NULL, verbose=self$verbose, ...) {
+    getSampleDistanceMatrix=function(space=c('expression.shifts', 'coda'), cell.type=NULL,
+                                     dist=NULL, name=NULL, verbose=self$verbose, sample.subset=NULL, ...) {
       space <- match.arg(space)
       if ((space != 'pseudo.bulk') && (length(list(...)) > 0)) stop("Unexpected arguments: ", names(list(...)))
-      sample.groups <- self$sample.groups
+
       if (space == 'expression.shifts') {
         if (is.null(name)) name <- 'expression.shifts'
         clust.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
@@ -1918,26 +1919,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (any(is.na(p.dists))) { # NA imputation
           p.dists %<>% ape::additive() %>% `dimnames<-`(dimnames(p.dists))
         }
-
-        return(p.dists)
-      }
-
-      if (space=='coda') {
+      } else if (space=='coda') {
         n.cells.per.samp <- table(self$sample.per.cell)
         mat <- private$extractCodaData() %$% getRndBalances(d.counts) %$% prcomp(norm) %$% as.data.frame(x)
-      } else { # space == 'pseudo.bulk'
-        stop("Not implemented!")
+
+        dist %<>% parseDistance(top.n.genes=ncol(mat), n.pcs=NULL)
+        if (dist == 'cor') {
+          p.dists <- 1 - cor(t(mat))
+        } else if (dist == 'l2') {
+          p.dists <- dist(mat, method="euclidean") %>% as.matrix()
+        } else if (dist == 'l1') {
+          p.dists <- dist(mat, method="manhattan") %>% as.matrix()
+        } else {
+          stop("Unknown distance: ", dist)
+        }
+      } else {
+        stop("Not implemented space: ", space, "!")
       }
 
-      dist %<>% parseDistance(top.n.genes=ncol(mat), n.pcs=NULL)
-      if (dist == 'cor') {
-        p.dists <- 1 - cor(t(mat))
-      } else if (dist == 'l2') {
-        p.dists <- dist(mat, method="euclidean") %>% as.matrix()
-      } else if (dist == 'l1') {
-        p.dists <- dist(mat, method="manhattan") %>% as.matrix()
-      } else {
-        stop("Unknown distance: ", dist)
+      if (!is.null(sample.subset)) {
+        p.dists <- p.dists[sample.subset, sample.subset]
       }
 
       return(p.dists)
@@ -1960,7 +1961,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotSampleDistances=function(space='expression.shifts', method='MDS', dist=NULL, name=NULL, cell.type=NULL,
                                  palette=NULL, show.sample.size=FALSE, sample.colors=NULL, color.title=NULL,
-                                 title=NULL, n.permutations=2000, show.pvalues=FALSE, ...) {
+                                 title=NULL, n.permutations=2000, show.pvalues=FALSE, sample.subset=NULL, ...) {
       if (is.null(cell.type)) {
         n.cells.per.samp <- table(self$sample.per.cell)
       } else {
@@ -1968,7 +1969,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         n.cells.per.samp <- self$sample.per.cell %>% .[self$cell.groups[names(.)] == cell.type] %>% table()
       }
 
-      p.dists <- self$getSampleDistanceMatrix(space=space, cell.type=cell.type, dist=dist, name=name)
+      p.dists <- self$getSampleDistanceMatrix(
+        space=space, cell.type=cell.type, dist=dist, name=name, sample.subset=sample.subset
+      )
       if (is.null(p.dists)) return(NULL)
 
       if (is.null(sample.colors) && is.null(palette)) {
@@ -2000,10 +2003,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param pvalue.cutoff numeric (default=0.05)
     #' @return results
     estimateMetadataSeparation=function(sample.meta, space='expression.shifts', dist=NULL, space.name=NULL,
+                                        sample.subset=NULL,
                                         name='metadata.separation', n.permutations=5000, trim=0.05, k=20,
                                         show.warning=TRUE, verbose=self$verbose, n.cores=self$n.cores,
                                         adjust.pvalues=TRUE, p.adjust.method="BH", pvalue.cutoff=0.05) {
-      p.dists <- self$getSampleDistanceMatrix(space=space, cell.type=NULL, dist=dist, name=space.name)
+      p.dists <- self$getSampleDistanceMatrix(
+        space=space, cell.type=NULL, dist=dist, name=space.name, sample.subset=sample.subset
+      )
       if (is.null(p.dists)) return(NULL)
 
       if (is.data.frame(sample.meta)) {
@@ -2032,11 +2038,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       self$test.results[[name]] <- res
-
-      # gg <- (-log10(pvalues)) %>% {tibble(Type=names(.), value=.)} %>%
-      #   plotMeanMedValuesPerCellType(type="bar", yline=-log10(0.05), palette=palette, ylab="-log10(separation P-value)")
-
       return(invisible(res))
+    },
+
+    #' Plot metadata separation
+    #' @param ... additional parameters forwarded to \link[plotMeanMedValuesPerCellType]{plotMeanMedValuesPerCellType}
+    plotMetadataSeparation=function(name='metadata.separation', pvalue.y=0.93, ...) {
+      res <- private$getResults(name, "estimateMetadataSeparation()")
+      pvals <- if (is.null(res$padjust)) res$pvalues else res$padjust
+      gg <- res$pseudo.r2 %>% {tibble(Type=names(.), value=ifelse(is.na(.), 0, .))} %>%
+        plotMeanMedValuesPerCellType(type="bar", ylab=expression(Pseudo-R^2), jitter.alpha=0, pvalues=pvals,
+                                     pvalue.y=pvalue.y, ...) +
+        scale_y_continuous(expand=c(0, 0)) +
+        scale_fill_manual(values=rep("#2b8cbe", length(pvals)))
+      return(gg)
     },
 
     ### Cluster-free differential expression

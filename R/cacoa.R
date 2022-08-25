@@ -96,6 +96,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param cell.groups.palette Color palette for the cell.groups (default=NULL)
     #' @param embedding embedding 2D embedding to visualize the cells in (default: extracted from `data.object`)
     #' @param graph.name graph name for Seurat object, ignored otherwise (default=NULL)
+    #' @param assay.name assay name for Seurat object, ignored otherwise (default="RNA")
     #' @param n.cores Number of cores for parallelization (default=1)
     #' @param verbose boolean Whether to provide verbose output with diagnostic messages (default=TRUE)
     #' @param plot.theme ggplot2 plot theme (default=ggplot2::theme_bw())
@@ -105,7 +106,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL,
                         ref.level=NULL, target.level=NULL, sample.groups.palette=NULL,
                         cell.groups.palette=NULL, embedding=NULL,
-                        graph.name=NULL, n.cores=1, verbose=TRUE,
+                        graph.name=NULL, assay.name="RNA", n.cores=1, verbose=TRUE,
                         plot.theme=ggplot2::theme_bw(), plot.params=NULL) {
 
       if ('Cacoa' %in% class(data.object)) { # copy constructor
@@ -149,6 +150,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           warning("No graph.name provided. The algorithm will use the first available graph.")
         }
         data.object@misc$graph.name <- graph.name
+        data.object@misc$assay.name <- assay.name
       } else if (('Conos' %in% class(data.object))) {
         if (!is.null(graph.name)) {
           warning("graph.name is not supported for Conos objects")
@@ -1982,22 +1984,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' Estimate metadata separation
+    #' Estimate metadata separation using variance on the sample distance graph
     #'
     #' @param sample.meta sample metadata
-    #' @param space (default="expression shifts")
+    #' @param space sample space used for distance estimation: 'cda' for composition distances or 'expression.shifts'
+    #' for expression distances (default="expression.shifts")
     #' @param dist (default=NULL)
     #' @param space.name (default=NULL)
-    #' @param n.permutations (default=5000)
-    #' @param trim (default=0.05)
+    #' @param n.permutations number permutations for the test (default=5000)
+    #' @param trim trim distance matrix above the given quantile (default=0.05)
+    #' @param k if this parameter is supplied, k-NN graph is used for variance estimation, otherwise
+    #' the function uses a fully-connected graph (default=20)
     #' @param show.warning boolean (default=TRUE)
     #' @param adjust.pvalues boolean (default=TRUE)
     #' @param pvalue.cutoff numeric (default=0.05)
     #' @return results
     estimateMetadataSeparation=function(sample.meta, space='expression.shifts', dist=NULL, space.name=NULL,
-                                        name='metadata.separation', n.permutations=5000, trim=0.05, show.warning=TRUE,
-                                        verbose=self$verbose, n.cores=self$n.cores, adjust.pvalues=TRUE,
-                                        p.adjust.method="BH", pvalue.cutoff=0.05) {
+                                        name='metadata.separation', n.permutations=5000, trim=0.05, k=20,
+                                        show.warning=TRUE, verbose=self$verbose, n.cores=self$n.cores,
+                                        adjust.pvalues=TRUE, p.adjust.method="BH", pvalue.cutoff=0.05) {
       p.dists <- self$getSampleDistanceMatrix(space=space, cell.type=NULL, dist=dist, name=space.name)
       if (is.null(p.dists)) return(NULL)
 
@@ -2007,31 +2012,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         sample.meta %<>% list()
       }
 
-      adj.mat <- p.dists %>% pmin(quantile(., 1 - trim)) %>%
-        {pmax(0, . - quantile(., trim))} %>% {1 - . / max(.)} %>%
-        matrix(ncol=ncol(p.dists))
-      diag(adj.mat) <- 0
+      adj.mat <- adjacencyMatrixFromPaiwiseDists(p.dists, trim=trim, k=k)
+      sep.info <- sample.meta %>% plapply(
+        function(mg) estimateGraphVarianceSignificance(adj.mat, signal=mg[colnames(adj.mat)]),
+        progress=(verbose && (length(sample.meta) > 1)), n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE
+      )
 
-      pvalues <- plapply(sample.meta, function(mg) {
-        mg <- mg[colnames(p.dists)]
-        if (!is.numeric(mg)) {
-          mg <- as.factor(mg)
-          mg[is.na(mg)] <- table(mg) %>% which.max() %>% names()
-          comp.op <- "!="
-        } else {
-          mg[is.na(mg)] <- median(mg, na.rm=TRUE)
-          comp.op <- "-"
-        }
+      pvalues <- sapply(sep.info, `[[`, 'pvalue')
+      pseudo.r2 <- sapply(sep.info, `[[`, 'pr2')
 
-        obs.var <- mg %>% outer(., ., comp.op) %>% {. * . * adj.mat} %>% sum()
-        perm.vars <- sapply(1:n.permutations, function(i) {
-          sample(mg) %>% outer(., ., comp.op) %>% {. * . * adj.mat} %>% sum()
-        })
-
-        (sum(perm.vars <= obs.var) + 1) / (n.permutations + 1)
-      }, progress=(verbose && (length(sample.meta) > 1)), n.cores=n.cores, mc.preschedule=TRUE) %>% unlist()
-
-      res <- list(metadata=sample.meta, pvalues=pvalues)
+      res <- list(metadata=sample.meta, pvalues=pvalues, pseudo.r2=pseudo.r2)
       if (adjust.pvalues) {
         pvalues %<>% p.adjust(method=p.adjust.method)
         res$padjust <- pvalues

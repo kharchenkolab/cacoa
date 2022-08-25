@@ -1,3 +1,13 @@
+## [Upcoming]
+
+### Added
+
+- Parameter `assay.name` for Seurat objects in `Cacoa$new` to allow selecting different assays
+
+### Changed
+
+- Improved algorithm for metadata separation estimation. *The effect should be notisable only on large sample sizes.*
+
 ## [0.4.0] - 2022-05-May
 
 ### Changed

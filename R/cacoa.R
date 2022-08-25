@@ -1961,7 +1961,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return A ggplot2 object
     plotSampleDistances=function(space='expression.shifts', method='MDS', dist=NULL, name=NULL, cell.type=NULL,
                                  palette=NULL, show.sample.size=FALSE, sample.colors=NULL, color.title=NULL,
-                                 title=NULL, n.permutations=2000, show.pvalues=FALSE, sample.subset=NULL, ...) {
+                                 title=NULL, n.permutations=2000, show.pvalues=FALSE, sample.subset=NULL,
+                                 n.cores=self$n.cores, ...) {
       if (is.null(cell.type)) {
         n.cells.per.samp <- table(self$sample.per.cell)
       } else {

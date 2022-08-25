@@ -34,3 +34,17 @@ adjacencyMatrixFromPaiwiseDists <- function(p.dists, trim=0.05, k=NULL) {
 
   return(adj.mat)
 }
+
+#' @keywords internal
+estimateUMAPOnDistances <- function(p.dists, n.neighbors=15, verbose=FALSE, ...) {
+  set.seed(42)
+  idx <- (1:ncol(p.dists)) %>% lapply(function(i) head(order(p.dists[i,]), n.neighbors))
+  dists <- (1:ncol(p.dists)) %>% lapply(function(i) p.dists[i, idx[[i]]])
+
+  idx <- do.call(rbind, idx)
+  dists <- do.call(rbind, dists)
+
+  umap <- uwot::umap(data.frame(x=rep(0, nrow(dists))), nn_method=list(idx=idx, dist=dists), verbose=verbose, ...)
+
+  return(umap)
+}

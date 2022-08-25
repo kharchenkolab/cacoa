@@ -736,10 +736,13 @@ getScaledZGradient <- function(min.z, palette, color.range) {
 plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, method='MDS', sample.colors=NULL,
                                      show.sample.size=TRUE, palette=NULL, font.size=NULL, show.ticks=FALSE, title=NULL,
                                      show.labels=FALSE, size=5, color.title=NULL, perplexity=4, max.iter=1e3,
-                                     plot.theme=theme_get(), ...) {
+                                     plot.theme=theme_get(), n.neighbors=15, ...) {
       if (method == 'tSNE') {
         checkPackageInstalled('Rtsne', cran=TRUE, details='for `method="tSNE"`')
         emb <- Rtsne::Rtsne(p.dists, is_distance=TRUE, perplexity=perplexity, max_iter=max.iter)$Y
+      } else if (method == "UMAP") {
+        checkPackageInstalled('uwot', cran=TRUE, details='for `method="UMAP"`')
+        emb <- estimateUMAPOnDistances(p.dists, n.neighbors=n.neighbors, n_epochs=max.iter)
       } else if (method == 'MDS') {
         emb <- cmdscale(p.dists, eig=TRUE, k=2)$points # k is the number of dim
       } else if (method == 'heatmap') {

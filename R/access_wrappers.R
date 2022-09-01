@@ -159,7 +159,7 @@ extractJointCountMatrix.dgCMatrix <- function(object, raw=TRUE) {
     stop("Cannot extract raw matrix from a normalized dgCMatrix")
   }
 
-  return(t(t(object) / pmax(colSums(object), 0.1)))
+  return(object / pmax(rowSums(object), 0.1))
 }
 
 

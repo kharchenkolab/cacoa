@@ -2183,8 +2183,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       p.dists <- self$getSampleDistanceMatrix(
         space=space, cell.type=NULL, dist=dist, name=space.name, sample.subset=sample.subset
       )
-      if (is.null(p.dists)) return(NULL)
+      # Check whether results are empty
+      if (is.null(p.dists)) {
+        warning("An empty sample distance matrix was returned. Consider changing 'space', 'cell.type', 'name',  or 'sample.subset'.")
+        return(NULL)
+      }
 
+      # Check whether any sample names are present in sample.meta and p.dists
+      if (!any(rownames(sample.meta) %in% rownames(p.dists))) {
+        cat("Printing the first three rownames of sample.meta:\n",head(rownames(sample.meta), 3),"\nPrinting the first three sample names:\n",head(rownames(p.dists), 3),"\n"); stop("The rownames of the sample.meta object doesn't match any sample names.")
+      } 
+      
       if (is.data.frame(sample.meta)) {
         sample.meta %<>% lapply(setNames, rownames(.))
       } else if (!is.list(sample.meta)) {

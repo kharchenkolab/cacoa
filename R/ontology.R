@@ -4,7 +4,6 @@ NULL
 #' Map gene ENTREZ IDs to gene SYMBOLs
 #' @param genes vector containing gene ENTREZ IDs
 #' @param org.db organism db, e.g. org.Hs.eg.db::org.Hs.eg.db
-#' @return
 #' @keywords internal
 mapGeneIds <- function(genes, org.db) {
   suppressWarnings(suppressMessages(tryCatch({
@@ -54,7 +53,6 @@ getDEEntrezIdsSplitted <- function(de.raw, org.db, p.adj=1) {
 #' @param keyType Gene key type (default="ENTREZID")
 #' @param ont type of ontology, one of BP, CC, or MF (default="BP")
 #' @param readable See DOSE:::enricher_internal (default=FALSE)
-#' @return
 #' @keywords internal
 enrichGOOpt <- function(gene, org.db, go.environment, keyType="ENTREZID", ont="BP", pvalueCutoff=0.05,
                         pAdjustMethod="BH", universe=NULL, qvalueCutoff=0.2, minGSSize=5, maxGSSize=500,
@@ -87,7 +85,6 @@ enrichGOOpt <- function(gene, org.db, go.environment, keyType="ENTREZID", ont="B
 #' @param de.gene.ids vector containing gene IDs
 #' @param go.environment GO environment, see DOSE:::enricher_internal, parameter USER_DATA
 #' @param ... additional parameters parsed to enrichGOOpt
-#' @return
 #' @keywords internal
 estimateEnrichedGO <- function(de.gene.ids, go.environment, ...) {
   names(go.environment) %>% sccore::sn() %>%
@@ -111,7 +108,6 @@ estimateEnrichedGO <- function(de.gene.ids, go.environment, ...) {
 #' @param seed (default=FALSE)
 #' @param verbose Print progress (default=FALSE)
 #' @param ... additional parameters parsed to DOSE::GSEA_internal
-#' @return 
 #' @keywords internal
 enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType="ENTREZID", go.environment, ont="BP", pvalueCutoff=1,
                            pAdjustMethod="BH", minGSSize=5, maxGSSize=500, readable=FALSE, eps=0, exponent=1,
@@ -141,7 +137,6 @@ enrichGSEGOOpt <- function(gene.ids, org.db, organism, keyType="ENTREZID", go.en
 #' Estimate enriched GSEA ontologies
 #' @param go.environment List with GO environment
 #' @param ... additional parameters passed to enrichGSEGOOpt
-#' @return
 #' @keywords internal
 estimateEnrichedGSEGO <- function(go.environment, ...) {
   names(go.environment) %>% sccore::sn() %>%
@@ -152,7 +147,6 @@ estimateEnrichedGSEGO <- function(go.environment, ...) {
 #' @param ont.clust.df Cluster dataframe per ontology
 #' @param field (default="ClusterName")
 #' @param sign.field (default="p.adjust")
-#' @return
 #' @keywords internal
 groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName", sign.field="p.adjust") {
   if (nrow(ont.clust.df) == 0)
@@ -179,7 +173,6 @@ groupOntologiesByCluster <- function(ont.clust.df, field="ClusterName", sign.fie
 #' Filter ontologies by adj. P
 #' @param ont.list List of ontology terms
 #' @param p.adj Adj. P cut-off
-#' @return
 #' @keywords internal
 filterOntologies <- function(ont.list, p.adj) {
   ont.list %>% lapply(function(ol) {
@@ -263,7 +256,6 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
 #' @param min.genes Min. number of significant terms per term (default=1)
 #' @param subtype (default=NULL)
 #' @param cell.subgroups (default=NULL)
-#' @return
 #' @keywords internal
 filterOntologyDf <- function(ont.df, p.adj=0.05, q.value=0.2, min.genes=1, subtype=NULL, cell.subgroups=NULL) {
   if (!is.null(subtype) && !all(subtype %in% c("BP", "CC", "MF")))
@@ -485,7 +477,6 @@ collapseFamilies <- function(ont.res) {
 
 #' Create list with ontology terms
 #' @param type one of GO, GSEA or DO
-#' @return 
 #' @keywords internal
 getOntologyListLevels <- function(type=c('GO', 'GSEA', 'DO')) {
   type <- match.arg(type)
@@ -535,7 +526,6 @@ distanceBetweenTerms <- function(genes.per.go) {
 #' Estimate ontology clusters
 #' @param genes.per.go Genes per term
 #' @param cut.h numeric scalar or vector with heights where the tree should be cut.
-#' @return 
 #' @keywords internal
 estimateClusterPerGO <- function(genes.per.go, cut.h) {
   if (length(genes.per.go) == 1)
@@ -547,7 +537,6 @@ estimateClusterPerGO <- function(genes.per.go, cut.h) {
 #' Cluster individual ontology terms
 #' @param genes.per.go.per.type Genes per term per cell type
 #' @param cut.h numeric scalar or vector with heights where the tree should be cut.
-#' @return 
 #' @keywords internal
 clusterIndividualGOs <- function(genes.per.go.per.type, cut.h) {
   go.clusts.per.type <- genes.per.go.per.type %>%
@@ -582,7 +571,6 @@ clusterGOsPerType <- function(clust.df, cut.h) {
 #' @param method One of "medoid" or "consensus"
 #' @param n.words (default=5)
 #' @param exclude.words (default=NULL)
-#' @return 
 #' @keywords internal
 estimateOntologyClusterName <- function(descriptions, method=c("medoid", "consensus"), n.words=5, exclude.words=NULL) {
   method <- match.arg(method)
@@ -609,7 +597,6 @@ estimateOntologyClusterName <- function(descriptions, method=c("medoid", "consen
 #' Estimate ontology cluster names
 #' @param ont.df Ontology dataframe
 #' @param clust.naming One of "medoid", "consensus", or "min.pvalue"
-#' @return
 #' @keywords internal
 estimateOntologyClusterNames <- function(ont.df, clust.naming=c("medoid", "consensus", "min.pvalue")) {
   clust.naming <- match.arg(clust.naming)
@@ -630,7 +617,6 @@ estimateOntologyClusterNames <- function(ont.df, clust.naming=c("medoid", "conse
 #' @param fams Ontology families
 #' @param subtype Type of ontology, one of "BP", "CC", "MF"
 #' @param genes Included genes
-#' @return
 #' @keywords internal
 getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {
   fams <- lapply(fams, function(x) {

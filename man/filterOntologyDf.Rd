@@ -26,9 +26,6 @@ filterOntologyDf(
 
 \item{cell.subgroups}{(default=NULL)}
 }
-\value{
-
-}
 \description{
 Filter ontology dataframe
 }

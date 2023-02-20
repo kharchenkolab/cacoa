@@ -9,9 +9,6 @@ getOntologyListLevels(type = c("GO", "GSEA", "DO"))
 \arguments{
 \item{type}{one of GO, GSEA or DO}
 }
-\value{
-
-}
 \description{
 Create list with ontology terms
 }

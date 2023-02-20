@@ -11,9 +11,6 @@ filterOntologies(ont.list, p.adj)
 
 \item{p.adj}{Adj. P cut-off}
 }
-\value{
-
-}
 \description{
 Filter ontologies by adj. P
 }

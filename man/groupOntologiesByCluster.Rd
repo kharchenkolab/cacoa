@@ -17,9 +17,6 @@ groupOntologiesByCluster(
 
 \item{sign.field}{(default="p.adjust")}
 }
-\value{
-
-}
 \description{
 Group ontologies by clusters
 }

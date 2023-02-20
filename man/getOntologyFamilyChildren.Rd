@@ -15,9 +15,6 @@ getOntologyFamilyChildren(ont.sum, fams, subtype, genes)
 
 \item{genes}{Included genes}
 }
-\value{
-
-}
 \description{
 Get ontology family children
 }

@@ -32,9 +32,6 @@ enrichGOOpt(
 
 \item{readable}{See DOSE:::enricher_internal (default=FALSE)}
 }
-\value{
-
-}
 \description{
 Enrich gene ontologies using enricher_internal
 }

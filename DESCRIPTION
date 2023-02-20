@@ -1,6 +1,6 @@
 Package: cacoa
 Title: Case-Control Analysis Tools for Single-Cell RNA-Seq
-Version: 0.3.0
+Version: 0.4.0
 Authors@R: c(person("Peter", "Kharchenko", email = "peter_kharchenko@hms.harvard.edu", role = c("aut", "cre")), person("Viktor","Petukhov", email="viktor.s.petuhov@ya.ru", role="aut"))
 Description: Case-Control Analysis tools for single-cell RNA-seq.
 License: GPL-3
@@ -70,7 +70,7 @@ Suggests:
     testthat (>= 3.1.0),
     viridis
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.1.2
+RoxygenNote: 7.2.3
 LinkingTo: Rcpp, RcppArmadillo, RcppEigen, RcppProgress, sccore
 NeedsCompilation: yes
 SystemRequirements: C++11

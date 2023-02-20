@@ -14,9 +14,6 @@ estimateOntologyClusterNames(
 
 \item{clust.naming}{One of "medoid", "consensus", or "min.pvalue"}
 }
-\value{
-
-}
 \description{
 Estimate ontology cluster names
 }

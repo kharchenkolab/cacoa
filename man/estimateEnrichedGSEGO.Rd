@@ -11,9 +11,6 @@ estimateEnrichedGSEGO(go.environment, ...)
 
 \item{...}{additional parameters passed to enrichGSEGOOpt}
 }
-\value{
-
-}
 \description{
 Estimate enriched GSEA ontologies
 }

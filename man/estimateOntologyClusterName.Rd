@@ -20,9 +20,6 @@ estimateOntologyClusterName(
 
 \item{exclude.words}{(default=NULL)}
 }
-\value{
-
-}
 \description{
 Estimate names for ontology clusters
 }

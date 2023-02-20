@@ -24,7 +24,8 @@ plotMeanMedValuesPerCellType(
   pvalue.y = NULL,
   y.max = NULL,
   y.offset = NULL,
-  ns.symbol = ""
+  ns.symbol = "",
+  coord.flip = FALSE
 )
 }
 \arguments{
@@ -41,6 +42,8 @@ plotMeanMedValuesPerCellType(
 \item{palette}{\itemize{
 \item cell type palette
 }}
+
+\item{coord.flip}{flip coordinates of the plot}
 }
 \value{
 A ggplot2 object

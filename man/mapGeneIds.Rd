@@ -11,9 +11,6 @@ mapGeneIds(genes, org.db)
 
 \item{org.db}{organism db, e.g. org.Hs.eg.db::org.Hs.eg.db}
 }
-\value{
-
-}
 \description{
 Map gene ENTREZ IDs to gene SYMBOLs
 }

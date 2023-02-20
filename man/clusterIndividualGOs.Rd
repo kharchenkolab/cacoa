@@ -11,9 +11,6 @@ clusterIndividualGOs(genes.per.go.per.type, cut.h)
 
 \item{cut.h}{numeric scalar or vector with heights where the tree should be cut.}
 }
-\value{
-
-}
 \description{
 Cluster individual ontology terms
 }

@@ -13,9 +13,6 @@ estimateEnrichedGO(de.gene.ids, go.environment, ...)
 
 \item{...}{additional parameters parsed to enrichGOOpt}
 }
-\value{
-
-}
 \description{
 Estimate enriched GOs
 }

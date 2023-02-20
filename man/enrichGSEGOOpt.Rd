@@ -56,9 +56,6 @@ enrichGSEGOOpt(
 
 \item{...}{additional parameters parsed to DOSE::GSEA_internal}
 }
-\value{
-
-}
 \description{
 Estimate enriched GSEA terms using GSEA_internal
 }

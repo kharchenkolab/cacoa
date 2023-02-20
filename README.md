@@ -3,12 +3,19 @@
 
 # cacoa
 
-
 Case-Control Analysis of scRNA-seq experiments
 
-As the method is not published yet, there is no text description available. To get some idea of how it works you may want to check [the slides](https://slides.com/vpetukhov/cacoa-scs-sept-2021) from the method presentation.
+The package implements methods described in [this pre-print](https://doi.org/10.1101/2022.03.15.484475). 
+To reproduce results from the paper, please see [this repository](https://github.com/kharchenkolab/cacoaAnalysis).
 
 ## Installation
+
+To install the latest version, use:
+
+```r
+install.packages('devtools')
+devtools::install_github('kharchenkolab/cacoa')
+```
 
 Prior to installing the package, dependencies have to be installed:
 
@@ -22,17 +29,6 @@ Also make sure to install the latest version of sccore (not the one from CRAN):
 devtools::install_github("kharchenkolab/sccore", ref="dev")
 ```
 
-And if you're going to use Conos as a data object, the latest version is also recommended:
-
-``` r
-devtools::install_github("kharchenkolab/conos", ref="dev")
-```
-
-To install the package use:
-
-``` r
-devtools::install_github("kharchenkolab/cacoa")
-```
 ## Initialization
 
 Cacoa currently supports inputs in several formats (see below). Most of them require the following metadata:
@@ -43,14 +39,26 @@ Cacoa currently supports inputs in several formats (see below). Most of them req
 - `ref.level`: id of the condition, corresponding to the reference (i.e. control)
 - `target.level`: id of the condition, corresponding to the target (i.e. case)
 
+Additionally, `embedding` parameter containing a matrix or data.frame with a cell embedding can be provided. Rownames should match to the cell ids. 
+It is used for visualization and some cluster-free analysis.
+
+### No expression data
+
+Cacoa can be ran without any expression data by passing `NULL` instead of a data object:
+
+```r
+cao <- Cacoa$new(NULL, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
+                 ref.level=ref.level, target.level=target.level, embedding=embedding)
+```
+
+In this case, only compositional analyses will be available.
+
 ### Raw or normalized joint count matrix `cm`
 
 ```r
 cao <- Cacoa$new(cm, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
                  ref.level=ref.level, target.level=target.level, embedding=embedding)
 ```
-
-Parameter `embedding` contains a matrix or data.frame with a cell embedding. Rownames should match to the cell ids. It is used for visualization and some cluster-free analysis.
 
 ### Seurat object `so`
 
@@ -68,10 +76,18 @@ cao <- Cacoa$new(co, sample.groups=sample.groups, cell.groups=cell.groups,
                  ref.level=ref.level, target.level=target.level)
 ```
 
-For visualization purpuses, Conos must have cell embedding estimated or the embedding data frame must be provided in the `embedding` parameter. And for cluster-free analysis it should have a joint graph (see the method `Conos$buildGraph()` from [conos](https://CRAN.R-project.org/package=conos) method).
+For visualization purposes, Conos must have cell embedding estimated or the embedding data frame must be provided in the `embedding` parameter. And for cluster-free analysis it should have a joint graph (see the method `Conos$buildGraph()` from [conos](https://CRAN.R-project.org/package=conos) method).
 
 ## Usage
 
 Cacoa can estimate and visualize various statistics. Most of them have paired functions `cao$estimateX(...)` and `cao$plotX(...)` (for example, `cao$estimateCellLoadings()` and `cao$plotCellLoadings()`). Results of all estimation are stored in `cao$test.results`, and their exact name can be controlled by `name` parameter passed to `cao$estimateX()`. For example, calling `cao$estimateExpressionShiftMagnitudes(name='es')` would save the results in `cao$test.results$es`.
 
-Please, see the documentation for exact functions inside the package. For a demonstration see [the vignette](http://pklab.med.harvard.edu/viktor/cacoa/ep.html). Additionally, the [cacoaAnalysis](https://github.com/kharchenkolab/cacoaAnalysis/) repository contains analysis conducted inside the paper, though the Cacoa version there may be out of date.
+Please, see the documentation for exact functions inside the package. For a demonstration see [the vignette](http://pklab.med.harvard.edu/viktor/cacoa/walkthrough_short.html) ([code](https://github.com/kharchenkolab/cacoa/blob/main/vignettes/walkthrough_short.Rmd)). Additionally, the [cacoaAnalysis](https://github.com/kharchenkolab/cacoaAnalysis/) repository contains analysis conducted inside the paper, though the Cacoa version there may be out of date.
+
+## Citation
+
+If you find this pipeline useful for your research, please consider citing the pre-pring:
+
+Case-control analysis of single-cell RNA-seq studies
+Viktor Petukhov, Anna Igolkina, Rasmus Rydbirk, Shenglin Mei, Lars Christoffersen, Konstantin Khodosevich, Peter V. Kharchenko
+bioRxiv 2022.03.15.484475; doi: https://doi.org/10.1101/2022.03.15.484475

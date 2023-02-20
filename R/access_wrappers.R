@@ -50,16 +50,20 @@ extractCellGraph.Seurat <- function(object) {
     if (is.null(object@graphs[[graph.name]])){
       stop("Cannot find graph ", graph.name)
     }
-    graph <- object@graphs[[graph.name]]
+    adj.mat <- object@graphs[[graph.name]]
   } else {
     if (length(object@graphs) == 0) {
       stop('No cell graph found in the object')
     }
-    graph <- object@graphs[[1]]
+    adj.mat <- object@graphs[[1]]
   }
 
-  graph %<>% as("dgCMatrix") %>%
-    igraph::graph_from_adjacency_matrix(mode="undirected", weighted=TRUE)
+  adj.mat %<>% as("dgCMatrix")
+  if (!isSymmetric(adj.mat)) {
+    warning("The provided adjacency matrix is not symmetric. Converting it to undirected graph.")
+    adj.mat <- (adj.mat + t(adj.mat)) / 2
+  }
+  graph <- igraph::graph_from_adjacency_matrix(adj.mat, mode="undirected", weighted=TRUE)
   return(graph)
 }
 
@@ -82,7 +86,7 @@ extractRawCountMatrices.Conos <- function(object, transposed=TRUE) {
 #' @rdname extractRawCountMatrices
 extractRawCountMatrices.Seurat <- function(object, transposed=TRUE) {
   cms <- object$sample.per.cell %>% {split(names(.), .)} %>%
-    lapply(function(cids) object@assays$RNA@counts[,cids])
+    lapply(function(cids) object@assays[[object@misc$assay.name]]@counts[,cids])
   if (transposed) {
     cms %<>% lapply(Matrix::t)
   }
@@ -122,18 +126,18 @@ extractJointCountMatrix.Conos <- function(object, raw=TRUE) {
 #' @rdname extractJointCountMatrix
 extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sparse=TRUE) {
   if (raw) {
-    dat <- object@assays$RNA@counts
+    dat <- object@assays[[object@misc$assay.name]]@counts
     if (transposed){
       dat %<>% Matrix::t()
     }
     return(dat)
   }
 
-  dat <- Seurat::GetAssayData(object, slot='scale.data', assay='RNA')
+  dat <- Seurat::GetAssayData(object, slot='scale.data', assay=object@misc$assay.name)
   dims <- dim(dat)
   dat.na <- all(dims == 1) && all(is.na(x = dat))
   if (all(dims == 0) || dat.na) {
-    dat <- Seurat::GetAssayData(object, slot='data', assay='RNA')
+    dat <- Seurat::GetAssayData(object, slot='data', assay=object@misc$assay.name)
   }
 
   if (transposed){
@@ -155,7 +159,7 @@ extractJointCountMatrix.dgCMatrix <- function(object, raw=TRUE) {
     stop("Cannot extract raw matrix from a normalized dgCMatrix")
   }
 
-  return(t(t(object) / pmax(colSums(object), 0.1)))
+  return(object / pmax(rowSums(object), 0.1))
 }
 
 
@@ -176,11 +180,13 @@ extractOdGenes.Conos <- function(object, n.genes=NULL) {
 
 #' @rdname extractOdGenes
 extractOdGenes.Seurat <- function(object, n.genes=NULL) {
-  if (is.null(object@assays$RNA@meta.features$vst.variance.standardized)){
+  if (is.null(object@assays[[object@misc$assay.name]]@meta.features$vst.variance.standardized)){
     stop("The data object doesn't have gene variance info.",
-         "Please, run FindVariableFeatures(assay='RNA, selection.method='vst') first")
+         "Please, run FindVariableFeatures(assay='",
+         object@misc$assay.name,
+         "', selection.method='vst') first")
   }
-  genes <- object@assays$RNA@meta.features %>%
+  genes <- object@assays[[object@misc$assay.name]]@meta.features %>%
     {rownames(.)[order(.$vst.variance.standardized, decreasing=TRUE)]} %>%
     head(n.genes %||% length(.))
 

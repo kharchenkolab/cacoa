@@ -11,9 +11,6 @@ estimateClusterPerGO(genes.per.go, cut.h)
 
 \item{cut.h}{numeric scalar or vector with heights where the tree should be cut.}
 }
-\value{
-
-}
 \description{
 Estimate ontology clusters
 }

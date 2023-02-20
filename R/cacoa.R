@@ -2935,7 +2935,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           # Sometimes, empty results from GSEA don't have core_enrichment (don't know when, see issue #21)
           ont.res$core_enrichment <- character()
         }
-        ont.res %<>% rename(geneID=core_enrichment, qvalue=qvalues)
+        ont.res %<>% rename(geneID=core_enrichment)
       }
 
       if (readjust.p) {

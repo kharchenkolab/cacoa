@@ -770,7 +770,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         params$show.legend <- !is.null(params$colors)
       }
 
-      rlang::invoke(sccore::embeddingPlot, params)
+      rlang::exec(sccore::embeddingPlot, !!!params)
     },
 
     #' Estimate ontology terms based on DEs

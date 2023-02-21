@@ -1007,8 +1007,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if ((type == "GSEA") && (plot == "bar")) stop("No 'enrichplot' method exists for making barplots of GSEA results.")
 
       if (plot != "dot" && plot != "bar") {
-        stop(paste("Unknown plot type: ", plot, ". The plot parameter must be specified as either 'dot' or 'bar'. Please fix."))
+        stop(paste("Unknown plot type: ", plot, ". The plot parameter must be specified as either 'dot' or 'bar'."))
       }
+      
       # Extract results
       if (!cell.type %in% names(ont.res)) stop("'cell.type' not found in results.")
       ont.res %<>% .[[cell.type]]
@@ -1017,7 +1018,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop("No results found for ", name, ", ", subtype, " for ", cell.type)
       }
 
-      if (type %in% c("GO", "DO")) ont.res %<>% .[[genes]]
+      if (type %in% c("GO", "DO")) {
+        ont.res %<>% .[[genes]]
+      } else {
+        if (genes == "up") ont.res %<>% filter(NES >= 0) else if (genes == "down") ont.res %<>% filter(NES <= 0)
+      } 
       if (is.null(ont.res)){
         stop("No results found for ", genes, " genes for ", name, ", ", subtype, " for ", cell.type)
       }
@@ -1031,11 +1036,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # Allow plotting of terms with p.adj > 0.05
       if (p.adj > 0.05) {
-        ont.res@pvalueCutoff <- 1
-        ont.res@qvalueCutoff <- 1
+        if (type == "GSEA") {
+          ont.res@params$pvalueCutoff <- 1
+        } else {
+          ont.res@pvalueCutoff <- 1
+          ont.res@qvalueCutoff <- 1
+        }
       }
 
-      if (min.genes > 1) {
+      if (min.genes > 1 && type != "GSEA") { # GeneRatio is not provided for GSEA
         idx <- df$GeneRatio %>%
           strsplit("/", fixed=TRUE) %>%
           sapply(`[[`, 1)

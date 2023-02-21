@@ -636,7 +636,7 @@ parseLimitRange <- function(lims, vals) {
   if (!is.character(lims)) return(lims)
   lims[grep("%", lims)] %<>%
     sapply(function(q) {as.numeric(strsplit(q, "%")[[1]]) / 100}) %>%
-    quantile(vals, .)
+    quantile(vals, ., na.rm = TRUE)
   return(as.numeric(lims))
 }
 

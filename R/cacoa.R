@@ -172,7 +172,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (any(c("dgCMatrix", "dgTMatrix", "dgEMatrix", "matrix") %in% class(data.object))) {
-        data.object %<>% as("dgCMatrix") %>% Matrix::t()
+        data.object %<>% as("CsparseMatrix") %>% Matrix::t()
         if (max(abs(round(data.object@x) - data.object@x)) < 1e-10) {
           message("Interpreting data.object as a raw count matrix")
           attr(data.object, "raw") <- TRUE
@@ -3130,12 +3130,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       diag(adj.mat) <- 1
       cell.names <- intersect(rownames(cm), rownames(adj.mat))
 
-      adj.mat %<>% .[cell.names, cell.names, drop=FALSE] %>% as("dgTMatrix")
+      adj.mat %<>% .[cell.names, cell.names, drop=FALSE] %>% as("TsparseMatrix")
 
       if (min.edge.weight > 1e-10) {
         samp.per.cell <- self$sample.per.cell[cell.names]
         adj.mat@x[(samp.per.cell[adj.mat@i + 1] != samp.per.cell[adj.mat@j + 1]) & (adj.mat@x < min.edge.weight)] <- 0.0
-        adj.mat %<>% drop0() %>% as("dgTMatrix")
+        adj.mat %<>% drop0() %>% as("TsparseMatrix")
       }
 
       nns.per.cell <- adj.mat %>% {split(.@j, .@i + 1)} %>%

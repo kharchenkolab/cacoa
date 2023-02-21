@@ -1194,11 +1194,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       ont.sum.raw <- ont.sum
-      ont.sum[abs(ont.sum) > max.log.p] %<>% {max.log.p * sign(.)}
+      ont.sum[abs(ont.sum) > max.log.p] %<>% 
+        {max.log.p * sign(.)}
 
       gos.per.clust <- dist(ont.sum, method=distance) %>%
-        hclust(method=clust.method) %>% cutree(k=n) %>% {split(names(.), .)}
-
+        hclust(method=clust.method) 
+      
+      # Adding check for n to avoid errors
+      max.gpc <- max(gos.per.clust$order)
+      if (max.gpc < n) {
+        warning(paste0("Reducing 'n' to ",max.gpc))
+        n <- max.gpc
+      }
+      
+      gos.per.clust %<>% 
+        cutree(k=n) %>% 
+        {split(names(.), .)}
+      
       clust.names <- sapply(gos.per.clust, function(gos) {
         n.gos <- length(gos)
         if (n.gos == 1) return(paste("1: ", gos))
@@ -1209,12 +1221,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       })
 
       ont.sum <- lapply(gos.per.clust, function(ns) colMeans(ont.sum.raw[ns,,drop=FALSE])) %>%
-        do.call(rbind, .) %>% as.data.frame() %>% set_rownames(clust.names)
-      ont.sum[abs(ont.sum) > max.log.p] %<>% {max.log.p * sign(.)}
+        do.call(rbind, .) %>% 
+        as.data.frame() %>% 
+        set_rownames(clust.names)
+      ont.sum[abs(ont.sum) > max.log.p] %<>% 
+        {max.log.p * sign(.)}
 
       ont.freqs <- gos.per.clust %>%
         lapply(function(gos) colMeans(abs(ont.sum.raw[gos,]) > 1e-5) * 100) %>%
-        do.call(rbind, .) %>% as.data.frame()
+        do.call(rbind, .) %>% 
+        as.data.frame()
 
       gg <- plotHeatmap(
         ont.sum, size.df=ont.freqs, legend.position=legend.position, row.order=row.order, col.order=col.order,

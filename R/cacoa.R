@@ -1347,9 +1347,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       ont.fam.res %<>% .[[cell.type]]
       if (is.null(ont.fam.res)) stop("No results found for cell.type '", cell.type, "'.")
-      # TODO: Test for GSEA/GO. Update description!
-      ont.fam.res %<>% .[[subtype]]
-      if (is.null(ont.fam.res)) stop("No results found for subtype '", subtype, "'.")
+      
+      if (ont.res$type != "DO") {
+        ont.fam.res %<>% .[[subtype]]
+        if (is.null(ont.fam.res)) stop("No results found for subtype '", subtype, "'.")
+      }
 
       if (ont.res$type != "GSEA") {
         ont.fam.res %<>% .[[genes]]

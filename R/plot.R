@@ -521,6 +521,9 @@ plotOntologyFamily <- function(fam, data, plot.type="complete", show.ids=FALSE, 
       .[apply(., 1, function(r) all(unlist(r) %in% sig.parents)),]
   } else if (plot.type != "complete") stop("Unknown plot type: ", plot.type)
 
+  # Check for remaining edges
+  if (nrow(edges) == 0) stop("No significant terms left after filtering. Consider changing 'plot.type' to something less stringent, e.g., 'dense' or 'complete'.")
+  
   # Convert IDs to names
   if(!show.ids) {
     for(id in 1:nrow(nodes)) {
@@ -531,6 +534,9 @@ plotOntologyFamily <- function(fam, data, plot.type="complete", show.ids=FALSE, 
   # Wrap strings for readability
   edges.wrapped <- edges %>%
     apply(2, function(x) wrap_strings(x, string.length))
+  
+  # Check for correct format of edges.wrapped
+  if (!inherits(edges.wrapped, "matrix")) edges.wrapped %<>% rbind()
 
   # Render graph
   p <- igraph::graph_from_data_frame(edges.wrapped) %>%

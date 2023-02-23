@@ -303,7 +303,19 @@ wrap_strings <- function(strings, width) {
 #' @return List of families and ontology data
 #' @keywords internal
 identifyFamilies <- function(ids) {
-  tmp.parent <- GOfuncR::get_parent_nodes(ids$ID) %>%
+  # Check for valid IDs
+  tmp.ids <- ids %>% 
+    pull(ID) %>% 
+    lapply(GOfuncR::get_names) %>% 
+    sapply(pull, go_name) %>% 
+    `names<-`(ids %>% pull(ID)) %>%
+    .[!is.na(.)] %>% 
+    names()
+  
+  if (length(tmp.ids) == 0) return(NA)
+  
+  # Continue with valid IDs
+  tmp.parent <- GOfuncR::get_parent_nodes(tmp.ids) %>% 
     rename(parent_distance = distance) %>%
     filter(parent_distance > 0) %>%
     split(., .$child_go_id) %>%
@@ -381,7 +393,7 @@ identifyFamilies <- function(ids) {
 #' @return List of collapsed families and ontology data
 #' @keywords internal
 collapseFamilies <- function(ont.res) {
-  if(length(ont.res) > 0) {
+  if (inherits(ont.res, "list") && (length(ont.res) > 0)) {
     # Identify overlapping parents (seeds) between families
     olaps <- sapply(ont.res, `[[`, "parents_in_IDs") %>%
       unlist() %>%

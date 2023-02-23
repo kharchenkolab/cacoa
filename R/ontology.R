@@ -638,9 +638,17 @@ estimateOntologyClusterNames <- function(ont.df, clust.naming=c("medoid", "conse
 #' @param subtype Type of ontology, one of "BP", "CC", "MF"
 #' @param genes Included genes
 #' @keywords internal
-getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {
+getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes, type) {
   fams <- lapply(fams, function(x) {
-    x[[subtype]][[genes]]$families %>% unlist() %>% unique() # These are only children IDs
+    if (type == "GO") {
+      tmp <- x[[subtype]][[genes]]$families
+    } else if (type == "GSEA") {
+      tmp <- x[[subtype]]$families
+    } else {
+      tmp <- x[[genes]]$families
+    }
+    
+    tmp %>% unlist() %>% unique() # These are only children IDs
   })
 
   ont.sum %<>% split(., .$Group)

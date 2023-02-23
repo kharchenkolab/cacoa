@@ -3017,7 +3017,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (only.family.children) {
-        ont.df %<>% getOntologyFamilyChildren(fams=fams, subtype=subtype, genes=genes)
+        ont.df %<>% getOntologyFamilyChildren(fams=fams, subtype=subtype, genes=genes, type=self$test.results[[name]]$type)
       }
 
       if (!is.null(description.regex)) ont.df %<>% .[grep(description.regex, .$Description),]

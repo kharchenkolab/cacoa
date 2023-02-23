@@ -254,7 +254,7 @@ extractEmbedding.Seurat <- function(object) {
 
 
 
-#' Extract the gene exrpession from the object
+#' Extract the gene expression from the object
 #'
 #' @param object object from which to extract the cell groups
 #' @param gene character vector of the specific gene names on which to subset

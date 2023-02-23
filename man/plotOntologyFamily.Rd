@@ -21,7 +21,7 @@ plotOntologyFamily(
 \arguments{
 \item{fam}{List of ontology IDs for the chosen family}
 
-\item{data}{Data frane if raw ontology data for the chosen cell type}
+\item{data}{Data frame if raw ontology data for the chosen cell type}
 
 \item{plot.type}{character (default="complete") How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms)}
 
@@ -31,7 +31,7 @@ plotOntologyFamily(
 
 \item{legend.label.size}{integer (default=1) Size of legend labels}
 
-\item{legend.position}{character vecotr (default="topright") Position of legend}
+\item{legend.position}{character vector (default="topright") Position of legend}
 
 \item{verbose}{boolean (default=TRUE) Print messages}
 

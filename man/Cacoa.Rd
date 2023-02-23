@@ -139,7 +139,7 @@ Identify families containing a specific ontology term or ID
 
 cao$estimateDEPerCellType()
 cao$estimateOntology()
-cao$getFamiliesPerGO(go.term = "antigen presentation") # Either go.term og go.id has to be specified 
+cao$getFamiliesPerGO(go.term = "antigen presentation") # Either go.term or go.id has to be specified 
 Bar plot of ontology terms per cell type
 
 
@@ -645,7 +645,7 @@ Calculate expression shift magnitudes of different clusters between conditions
 }
 \subsection{Returns}{
 List including:
-\code{dist.df}: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update
+\code{dist.df}: a table with cluster distances (normalized if within.group.normalization=TRUE), cell type and the number of cells # TODO: update
 \code{p.dist.info}: list of distance matrices per cell type
 \code{sample.groups}: filtered sample groups
 \code{cell.groups}: filtered cell groups
@@ -688,7 +688,7 @@ cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
 
 \item{\code{notch}}{boolean Whether to show notches in the boxplot version (default=TRUE)}
 
-\item{\code{show.jitter}}{boolean Whether to show indivudal data points (default=FALSE)}
+\item{\code{show.jitter}}{boolean Whether to show individual data points (default=FALSE)}
 
 \item{\code{jitter.alpha}}{numeric Transparency value for the data points (default=0.05)}
 
@@ -941,11 +941,11 @@ Plot DE stability per cell type
 
 \item{\code{jitter.alpha}}{numeric Parameter for jitter (default=0.05)}
 
-\item{\code{show.pairs}}{boolwan Whether to show pairs (default=FALSE)}
+\item{\code{show.pairs}}{boolean Whether to show pairs (default=FALSE)}
 
 \item{\code{sort.order}}{boolean Whether to show notches in the boxplot version (default=TRUE)}
 
-\item{\code{pallete}}{plot pallete (default=self$cell.groups.palette)}
+\item{\code{pallete}}{plot palette (default=self$cell.groups.palette)}
 
 \item{\code{set.fill}}{(default=TRUE)}
 }
@@ -1288,9 +1288,9 @@ Estimate ontology families based on ontology results
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{name}}{character Name of ontology results (default="GO")}
 
-\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
+\item{\code{p.adj}}{numeric Cut-off for adjusted p (default=0.05)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1343,7 +1343,7 @@ Data frame
 \if{html}{\out{<div class="r example copy">}}
 \preformatted{cao$estimateDEPerCellType()
 cao$estimateOntology()
-cao$getFamiliesPerGO(go.term = "antigen presentation") # Either go.term og go.id has to be specified 
+cao$getFamiliesPerGO(go.term = "antigen presentation") # Either go.term or go.id has to be specified 
 Bar plot of ontology terms per cell type
 
 }
@@ -1420,9 +1420,9 @@ Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \describe{
 \item{\code{cell.type}}{character string Cell type to plot}
 
-\item{\code{name}}{chracter string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")}
+\item{\code{name}}{character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")}
 
-\item{\code{plot}}{chracter string Type of plot to return (default="dot"). Either "dot" or "bar".}
+\item{\code{plot}}{character string Type of plot to return (default="dot"). Either "dot" or "bar".}
 
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
@@ -1905,7 +1905,7 @@ Plot the cell group sizes or proportions per sample
 \describe{
 \item{\code{cell.groups}}{factor Cell annotations with cell IDs as names (default=self$cell.groups)}
 
-\item{\code{show.significance}}{boolean show statistical significance betwwen sample groups. wilcox.test was used; (\code{*} < 0.05; \verb{**} < 0.01; \verb{***} < 0.001) (default=FALSE)}
+\item{\code{show.significance}}{boolean show statistical significance between sample groups. wilcox.test was used; (\code{*} < 0.05; \verb{**} < 0.01; \verb{***} < 0.001) (default=FALSE)}
 
 \item{\code{filter.empty.cell.types}}{boolean Remove cell types without cells (default=TRUE)}
 
@@ -1951,7 +1951,7 @@ Plot the cell group sizes or proportions per sample
 
 \item{\code{type}}{character string Must be "mad", "sd", "sample.num", or "sample.frac" (default='mad')}
 
-\item{\code{rotate.xticks}}{boolean Turn x labels 90 degrees (deafult=TRUE)}
+\item{\code{rotate.xticks}}{boolean Turn x labels 90 degrees (default=TRUE)}
 
 \item{\code{min.rel.abundance}}{numeric Minimum relative abundance to plot (default=0.05)}
 }
@@ -2402,7 +2402,7 @@ Estimate differential cell density
 \describe{
 \item{\code{type}}{character method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);}
 
-\item{\code{adjust.pvalues}}{boolean Whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='sutract', TRUE for everything else)}
+\item{\code{adjust.pvalues}}{boolean Whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='subtract', TRUE for everything else)}
 
 \item{\code{name}}{character Slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')}
 
@@ -2789,9 +2789,9 @@ Estimate differential expression Z-scores between two conditions per individual 
 
 \item{\code{min.expr.frac}}{minimal fraction of cell expressing a gene for estimating z-scores for it. Default: 0.001.}
 
-\item{\code{min.n.samp.per.cond}}{minimul number of samples per condition for estimating z-scores (default: 2)}
+\item{\code{min.n.samp.per.cond}}{minimal number of samples per condition for estimating z-scores (default: 2)}
 
-\item{\code{min.n.obs.per.samp}}{minimul number of cells per samples for estimating z-scores (default: 2)}
+\item{\code{min.n.obs.per.samp}}{minimal number of cells per samples for estimating z-scores (default: 2)}
 
 \item{\code{robust}}{whether to use median estimates instead of mean. Using median is more robust,
 but greatly increase the number of zeros in the data, leading to bias towards highly-express genes. (Default: FALSE)}
@@ -3120,7 +3120,7 @@ subsampled cells.
 \item \code{scores.approx}: vector of approximate gene program scores, estimated for all cells in the dataset
 \item \code{loadings}: matrix with fabia gene loadings per program
 \item \code{gene.scores}: list of vectors of gene scores per program. Contains only genes, selected for
-the program usin fabia biclustering.
+the program using fabia biclustering.
 \item \code{bi.clusts} fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
 }
 }

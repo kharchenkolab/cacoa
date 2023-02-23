@@ -205,7 +205,7 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
   return(samples)
 }
 
-#' Differential expression using different methods (deseq2, edgeR, wilcoxon, ttest) with various covariates
+#' Differential expression using different methods (DESeq2, edgeR, wilcoxon, ttest) with various covariates
 #'
 #' @param raw.mats list of counts matrices; column for gene and row for cell
 #' @param cell.groups factor specifying cell types (default=NULL)
@@ -222,7 +222,7 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 #' @param n.cores numeric Number of cores (default=1)
 #' @param return.matrix Return merged matrix of results (default=TRUE)
 #' @param meta.info dataframe with possible covariates; for example, sex or age
-#' @param test DE method: deseq2, edgeR, wilcoxon, ttest
+#' @param test DE method: DESeq2, edgeR, wilcoxon, ttest
 #' @param gene.filter (default=NULL)
 #' @return differential expression for each cell type
 #'

@@ -640,7 +640,7 @@ getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {
 #' Approximately equal to the fraction of subtypes for which two GOs should belong to the same cluster.
 #'   Default: 0.5.
 #' @return List containing:
-#'   - `df`: data.frame with information about individual gene ontolodies and columns `Cluster` and `ClusterName`
+#'   - `df`: data.frame with information about individual gene ontologies and columns `Cluster` and `ClusterName`
 #'     for the clustering info
 #'   - `hclust`: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all
 #'     subtypes

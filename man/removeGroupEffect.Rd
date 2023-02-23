@@ -7,11 +7,11 @@
 removeGroupEffect(d.used, d.groups, thresh.pc.var = 0.95)
 }
 \arguments{
-\item{d.used}{Currect values of balances}
+\item{d.used}{Correct values of balances}
 
 \item{d.groups}{if provided then resampling controls presence of both groups in a new dataset}
 
-\item{thresh.pc.var}{percentage of variance which should be characterised by PSc}
+\item{thresh.pc.var}{percentage of variance which should be characterized by PSc}
 
 \item{n.seed}{Random seed}
 }

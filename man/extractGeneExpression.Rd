@@ -5,7 +5,7 @@
 \alias{extractGeneExpression.Conos}
 \alias{extractGeneExpression.Seurat}
 \alias{extractGeneExpression.dgCMatrix}
-\title{Extract the gene exrpession from the object}
+\title{Extract the gene expression from the object}
 \usage{
 extractGeneExpression(object, gene)
 
@@ -21,5 +21,5 @@ extractGeneExpression(object, gene)
 \item{gene}{character vector of the specific gene names on which to subset}
 }
 \description{
-Extract the gene exrpession from the object
+Extract the gene expression from the object
 }

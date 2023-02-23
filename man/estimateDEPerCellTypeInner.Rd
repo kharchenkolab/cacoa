@@ -2,7 +2,7 @@
 % Please edit documentation in R/de_function.R
 \name{estimateDEPerCellTypeInner}
 \alias{estimateDEPerCellTypeInner}
-\title{Differential expression using different methods (deseq2, edgeR, wilcoxon, ttest) with various covariates}
+\title{Differential expression using different methods (DESeq2, edgeR, wilcoxon, ttest) with various covariates}
 \usage{
 estimateDEPerCellTypeInner(
   raw.mats,
@@ -53,7 +53,7 @@ estimateDEPerCellTypeInner(
 
 \item{verbose}{boolean Whether to output verbose messages (default=TRUE)}
 
-\item{test}{DE method: deseq2, edgeR, wilcoxon, ttest}
+\item{test}{DE method: DESeq2, edgeR, wilcoxon, ttest}
 
 \item{meta.info}{dataframe with possible covariates; for example, sex or age}
 
@@ -63,5 +63,5 @@ estimateDEPerCellTypeInner(
 differential expression for each cell type
 }
 \description{
-Differential expression using different methods (deseq2, edgeR, wilcoxon, ttest) with various covariates
+Differential expression using different methods (DESeq2, edgeR, wilcoxon, ttest) with various covariates
 }

@@ -17,7 +17,7 @@ Default: 0.5.}
 \value{
 List containing:
 \itemize{
-\item \code{df}: data.frame with information about individual gene ontolodies and columns \code{Cluster} and \code{ClusterName}
+\item \code{df}: data.frame with information about individual gene ontologies and columns \code{Cluster} and \code{ClusterName}
 for the clustering info
 \item \code{hclust}: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all
 subtypes

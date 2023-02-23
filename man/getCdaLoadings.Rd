@@ -2,7 +2,7 @@
 % Please edit documentation in R/coda_balances.R
 \name{getCdaLoadings}
 \alias{getCdaLoadings}
-\title{Get Loadings from the caconical data analysis}
+\title{Get loadings from the canonical data analysis}
 \usage{
 getCdaLoadings(d.counts, d.groups, n.seed = 239)
 }
@@ -17,6 +17,6 @@ getCdaLoadings(d.counts, d.groups, n.seed = 239)
 Vector with cda loadings
 }
 \description{
-Get Loadings from the caconical data analysis
+Get loadings from the canonical data analysis
 }
 \keyword{internal}

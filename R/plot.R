@@ -475,12 +475,12 @@ reduceEdges <- function(edges, verbose=TRUE, n.cores=1) {
 #' Plot related ontologies in one hierarchical network plot
 #'
 #' @param fam List of ontology IDs for the chosen family
-#' @param data Data frane if raw ontology data for the chosen cell type
+#' @param data Data frame if raw ontology data for the chosen cell type
 #' @param plot.type character (default="complete") How much of the family network should be plotted. Can be "complete" (entire network), "dense" (show 1 parent for each significant term), or "minimal" (only show significant terms)
 #' @param show.ids boolean (default=FALSE) Whether to show ontology IDs instead of names
 #' @param string.length integer (default=18) Length of strings for wrapping in order to fit text within boxes
 #' @param legend.label.size integer (default=1) Size of legend labels
-#' @param legend.position character vecotr (default="topright") Position of legend
+#' @param legend.position character vector (default="topright") Position of legend
 #' @param verbose boolean (default=TRUE) Print messages
 #' @param n.cores integer (default=1) Number of cores to use
 #' @param reduce.edges boolean (default=FALSE) Remove redundant edges in network
@@ -801,7 +801,7 @@ plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, m
 #'
 #' @param ont.res something
 #' @param p.adj numeric Adjusted p-value set (default=0.05)
-#' @param min.genes integer Minimun number of genes (default=1)
+#' @param min.genes integer Minimal number of genes (default=1)
 #' @param cut.h numeric (default=0.66)
 #' @param top.n integer Number of enriched terms to display (default=Inf). If Inf, no limit is set.
 #' @param ... additional parameters passed to enrichplot::dotplot()

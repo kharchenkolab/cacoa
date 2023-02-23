@@ -40,7 +40,7 @@ checkPackageInstalled <- function(pkgs, details='to run this function', install.
 
 #' Iterate over tree (list of lists of lists, etc) for `length(ids)` level,
 #' interpret each element as a data.frame and bind them appending all levels as columns with
-#' colnames correspoinding to `ids`
+#' colnames corresponding to `ids`
 #'
 #' @keywords internal
 rblapply <- function(list, ids, func) {

@@ -252,7 +252,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param n.pcs Number of principal components for estimating expression distance (default=NULL, no PCA)
     #' @param ... extra parameters to \link{estimateExpressionChange}
     #' @return List including:
-    #'   `dist.df`: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update
+    #'   `dist.df`: a table with cluster distances (normalized if within.group.normalization=TRUE), cell type and the number of cells # TODO: update
     #'   `p.dist.info`: list of distance matrices per cell type
     #'   `sample.groups`: filtered sample groups
     #'   `cell.groups`: filtered cell groups
@@ -309,7 +309,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param name character Results slot name (default="expression.shifts")
     #' @param type character type of a plot "bar" or "box" (default="bar")
     #' @param notch boolean Whether to show notches in the boxplot version (default=TRUE)
-    #' @param show.jitter boolean Whether to show indivudal data points (default=FALSE)
+    #' @param show.jitter boolean Whether to show individual data points (default=FALSE)
     #' @param jitter.alpha numeric Transparency value for the data points (default=0.05)
     #' @param show.pvalues character string Which p-values to plot. Accepted values are "none", "raw", or "adjusted". (default=c("adjusted", "raw", "none"))
     #' @param ylab character string Label of the y-axis (default="normalized expression distance")
@@ -538,9 +538,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param notch boolean Whether to show notches on plot (default=FALSE)
     #' @param show.jitter boolean Whether to show jitter on plots (default=TRUE)
     #' @param jitter.alpha numeric Parameter for jitter (default=0.05)
-    #' @param show.pairs boolwan Whether to show pairs (default=FALSE)
+    #' @param show.pairs boolean Whether to show pairs (default=FALSE)
     #' @param sort.order boolean Whether to show notches in the boxplot version (default=TRUE)
-    #' @param pallete plot pallete (default=self$cell.groups.palette)
+    #' @param pallete plot palette (default=self$cell.groups.palette)
     #' @param set.fill (default=TRUE)
     #' @return A ggplot2 object
     #' @examples 
@@ -823,6 +823,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' Estimate ontology families based on ontology results
+    #' @param name character Name of ontology results (default="GO")
+    #' @param p.adj numeric Cut-off for adjusted p (default=0.05)
     #' @return List of families and ontology data per cell type
     #' @examples 
     #' cao$estimateDEPerCellType()
@@ -858,7 +860,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @examples 
     #' cao$estimateDEPerCellType()
     #' cao$estimateOntology()
-    #' cao$getFamiliesPerGO(go.term = "antigen presentation") # Either go.term og go.id has to be specified 
+    #' cao$getFamiliesPerGO(go.term = "antigen presentation") # Either go.term or go.id has to be specified 
     getFamiliesPerGO=function(name="GO", go.term=NULL, go.id=NULL, common=FALSE) {
 
       ont.res <- private$getResults(name, 'estimateOntology()')
@@ -980,8 +982,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
     #'
     #' @param cell.type character string Cell type to plot
-    #' @param name chracter string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
-    #' @param plot chracter string Type of plot to return (default="dot"). Either "dot" or "bar".
+    #' @param name character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
+    #' @param plot character string Type of plot to return (default="dot"). Either "dot" or "bar".
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param subtype character string Ontology type, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")
     #' @param cell.subgroup character Specific cell group to plot
@@ -1450,7 +1452,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'
     #' @param cell.groups factor Cell annotations with cell IDs as names (default=self$cell.groups)
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
-    #' @param show.significance boolean show statistical significance betwwen sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001) (default=FALSE)
+    #' @param show.significance boolean show statistical significance between sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001) (default=FALSE)
     #' @param filter.empty.cell.types boolean Remove cell types without cells (default=TRUE)
     #' @param proportions boolean Plot proportions or absolute numbers (default=TRUE)
     #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
@@ -1495,7 +1497,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'
     #' @param cell.groups character Cell annotations with cell IDs as names(default=self$cell.groups)
     #' @param type character string Must be "mad", "sd", "sample.num", or "sample.frac" (default='mad')
-    #' @param rotate.xticks boolean Turn x labels 90 degrees (deafult=TRUE)
+    #' @param rotate.xticks boolean Turn x labels 90 degrees (default=TRUE)
     #' @param min.rel.abundance numeric Minimum relative abundance to plot (default=0.05)
     #' @return ggplot2 object
     #' @examples 
@@ -1879,7 +1881,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' Estimate differential cell density
     #'
     #' @param type character method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);
-    #' @param adjust.pvalues boolean Whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='sutract', TRUE for everything else)
+    #' @param adjust.pvalues boolean Whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='subtract', TRUE for everything else)
     #' @param name character Slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
     #' @param n.permutations numeric Number of permutations (default=400)
     #' @param smooth boolean Smooth results (default=TRUE)
@@ -2271,8 +2273,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param genes (default=NULL)
     #' @param max.z z-score value to winsorize the estimates for reducing impact of outliers. Default: 20.
     #' @param min.expr.frac minimal fraction of cell expressing a gene for estimating z-scores for it. Default: 0.001.
-    #' @param min.n.samp.per.cond minimul number of samples per condition for estimating z-scores (default: 2)
-    #' @param min.n.obs.per.samp minimul number of cells per samples for estimating z-scores (default: 2)
+    #' @param min.n.samp.per.cond minimal number of samples per condition for estimating z-scores (default: 2)
+    #' @param min.n.obs.per.samp minimal number of cells per samples for estimating z-scores (default: 2)
     #' @param robust whether to use median estimates instead of mean. Using median is more robust,
     #' but greatly increase the number of zeros in the data, leading to bias towards highly-express genes. (Default: FALSE)
     #' @param norm.both boolean (default=TRUE)
@@ -2486,7 +2488,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `scores.approx`: vector of approximate gene program scores, estimated for all cells in the dataset
     #'   - `loadings`: matrix with fabia gene loadings per program
     #'   - `gene.scores`: list of vectors of gene scores per program. Contains only genes, selected for
-    #'     the program usin fabia biclustering.
+    #'     the program using fabia biclustering.
     #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
     #' @examples 
     #' cao$estimateClusterFreeDE()

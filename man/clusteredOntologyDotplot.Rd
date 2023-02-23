@@ -19,7 +19,7 @@ clusteredOntologyDotplot(
 
 \item{p.adj}{numeric Adjusted p-value set (default=0.05)}
 
-\item{min.genes}{integer Minimun number of genes (default=1)}
+\item{min.genes}{integer Minimal number of genes (default=1)}
 
 \item{cut.h}{numeric (default=0.66)}
 

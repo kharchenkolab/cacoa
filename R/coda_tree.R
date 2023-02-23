@@ -186,7 +186,7 @@ sbp2tree <- function(sbpart){
 #' Get balances for all inner nodes of the tree
 #'
 #' @param t A phylo object
-#' @param log.f Logarithms of frequnencies
+#' @param log.f Logarithms of frequencies
 #' @return Balances, contrast matrix and names on cell types
 #' @keywords internal
 getNodeBalances <- function(log.f, sbp.my){

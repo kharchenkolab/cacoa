@@ -39,7 +39,7 @@ Cacoa currently supports inputs in several formats (see below). Most of them req
 - `ref.level`: id of the condition, corresponding to the reference (i.e. control)
 - `target.level`: id of the condition, corresponding to the target (i.e. case)
 
-Additionally, `embedding` parameter containing a matrix or data.frame with a cell embedding can be provided. Rownames should match to the cell ids. 
+Additionally, the `embedding` parameter containing a matrix or data.frame with a cell embedding can be provided. Rownames should match to the cell ids. 
 It is used for visualization and some cluster-free analysis.
 
 ### No expression data
@@ -86,7 +86,7 @@ Please, see the documentation for exact functions inside the package. For a demo
 
 ## Citation
 
-If you find this pipeline useful for your research, please consider citing the pre-pring:
+If you find this pipeline useful for your research, please consider citing the pre-print:
 
 Case-control analysis of single-cell RNA-seq studies
 Viktor Petukhov, Anna Igolkina, Rasmus Rydbirk, Shenglin Mei, Lars Christoffersen, Konstantin Khodosevich, Peter V. Kharchenko

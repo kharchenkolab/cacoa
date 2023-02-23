@@ -507,10 +507,18 @@ getOntologyListLevels <- function(type=c('GO', 'GSEA', 'DO')) {
 estimateOntologyFamilies <- function(ont.list, type) {
   if (type == "GO") {
     ont.fam <- lapply(ont.list, lapply, lapply, identifyFamilies) %>%
-      lapply(lapply, lapply, collapseFamilies)
+      lapply(lapply, lapply, collapseFamilies) %>% 
+      lapply(lapply, lapply, cleanFamilies) %>% # Iteratively clean results to omit NULLs
+      lapply(lapply, cleanFamilies) %>% 
+      lapply(cleanFamilies) %>% 
+      .[sapply(., length) > 0]
   } else {
     ont.fam <- lapply(ont.list, lapply, identifyFamilies) %>%
-      lapply(lapply, collapseFamilies)
+      lapply(lapply, collapseFamilies) %>% 
+      lapply(lapply, cleanFamilies) %>%  # Iteratively clean results to omit NULLs
+      lapply(cleanFamilies) %>% 
+      cleanFamilies() %>% 
+      .[sapply(., length) > 0]
   }
 
   return(ont.fam)
@@ -670,4 +678,9 @@ clusterOntologyDF <- function(ont.df, clust.naming, ind.h=0.66, total.h=0.5) {
 
   ont.df$ClusterName <- name.per.clust[ont.df$Cluster]
   return(list(df=ont.df, clusts=clusts$hclust))
+}
+
+#' @keywords internal
+cleanFamilies <- function(ont.res) {
+  ont.res[!sapply(ont.res, inherits, "NULL")]
 }

@@ -1262,18 +1262,33 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateDEPerCellType()
     #' cao$estimateOntology()
     #' cao$plotOntologySimilarities()
-    plotOntologySimilarities=function(name="GO", genes="up", p.adj=0.05, q.value=0.2, min.genes=1) {
+    plotOntologySimilarities=function(name="GO", subtype="BP", genes="up", p.adj=0.05, only.family.children=FALSE, q.value=0.2, min.genes=1) {
+      if (only.family.children) {
+        fams <- private$getResults(name, 'estimateOntology()')$families
+        if (is.null(fams))
+          stop("No ontology family results found, please run 'estimateOntologyFamilies' first, or set only.family.children=FALSE")
+      }
+      
       ont.res <- private$getOntologyPvalueResults(
-        name=name, genes=genes, p.adj=p.adj, q.value=q.value, min.genes=min.genes
+        name=name, genes=genes, p.adj=p.adj, q.value=q.value, min.genes=min.genes, subtype=subtype
       )
+      
+      if (nrow(ont.res) == 0) {
+        stop("No ontologies found for name=", name, ", subtype=", subtype, " and genes=", genes,". You could also consider relaxing p.adj.")
+      }
+      
       type <- private$getResults(name, 'estimateOntology()')$type
 
       if ((ont.res$Group %>% unique() %>% length()) == 1)
         stop("Only one group present, correlation cannot be performed.")
 
-      if (nrow(ont.res) == 0)
-        stop("No significant ontology terms identified. Try relaxing p.adj.")
-
+      if (only.family.children) {
+        ont.res %<>% getOntologyFamilyChildren(fams=fams, subtype=subtype, genes=genes, type=private$getResults(name, 'estimateOntology()')$type)
+        if (nrow(ont.res) == 0) {
+          stop("No ontology family children found.")
+        }
+      }
+      
       if (type %in% c("GO", "GSEA")) {
         pathway.df <- ont.res[c("Description", "Group", "Type")] %>% rename(Pathway=Description, GO=Type)
       } else if (type=="DO") {
@@ -1297,7 +1312,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         as.matrix()
       path.bin[is.na(path.bin)] <- 0
 
-      # TODO: currently we use binary distance. Probably, checking z-scores would give bitter results.
+      # TODO: currently we use binary distance. Probably, checking z-scores would give better results.
       p.mat <- (1 - (path.bin %>% dist(method="binary") %>% as.matrix)) %>% pmin(0.5)
       cl.tree <- dist(p.mat) %>% hclust()
       clust.order <- cl.tree %$% labels[order]
@@ -3001,10 +3016,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
 
       if (only.family.children) {
-        fams <- self$test.results[[name]]$families
+        fams <- private$getResults(name, 'estimateOntology()')$families
         if (is.null(fams))
-          stop("No ontology family results found, please run 'estimateOntologyFamilies' first",
-               " or set only.family.children=FALSE")
+          stop("No ontology family results found, please run 'estimateOntologyFamilies' first, or set only.family.children=FALSE")
       }
 
       # Extract results

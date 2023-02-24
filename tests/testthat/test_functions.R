@@ -1,6 +1,8 @@
 
 library(cacoa)
 library(testthat)
+library(magrittr)
+library(conos)
 
 # Example panel was made this way:
 #

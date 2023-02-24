@@ -923,43 +923,119 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateDEPerCellType()
     #' cao$estimateOntology()
     #' cao$plotNumOntologyTermsPerType()
-    plotNumOntologyTermsPerType=function(name="GO", genes="up", p.adj=0.05, q.value=0.2, min.genes=1) {
+    plotNumOntologyTermsPerType=function(name="GO", genes="up", p.adj=0.05, q.value=0.2, min.genes=1, families=FALSE) {
       type <- private$getResults(name, 'estimateOntology()')$type
-      if (length(genes) > 1) {
-        ont.res <- genes %>% setNames(., .) %>% lapply(function(g) {
-          private$getOntologyPvalueResults(name=name, gene=g, p.adj=p.adj, q.value=q.value, min.genes=min.genes)
-        })
-
-        classes <- sapply(ont.res[genes], class)
-        if (any(classes == "character")) {
-          message("No significant results found for genes = '",
-                  paste(names(classes[classes == "character"]), collapse=','), "'.")
-          genes <- names(classes[classes == "data.frame"])
-          if (length(genes) == 0) stop("No results to plot.")
-
-          ont.res %<>% .[genes]
+      
+      if (families) {
+        tmp <- private$getResults(name, 'estimateOntology()')$families
+        
+        if (type == "GO") {
+          p.df <- tmp %>% 
+            lapply(lapply, lapply, '[[', "families") %>% 
+            lapply(lapply, lapply, unlist) %>% 
+            lapply(lapply, lapply, unique) %>% 
+            lapply(lapply, sapply, length) %>%
+            lapply(lapply, \(type) data.frame(Direction = names(type), N = unname(type))) %>%
+            lapply(bind_rows, .id = "Type") %>% 
+            bind_rows(.id = "Group") %>% 
+            filter(Direction %in% genes)
+        } else {
+          p.df <- tmp %>% 
+            lapply(lapply, '[[', "families") %>% 
+            lapply(lapply, unlist) %>% 
+            lapply(lapply, unique)
+          
+          # Filter based on 'genes'
+          if (type == "GSEA" && any(genes != "all")) {
+            p.df <- genes %>% 
+              lapply(\(gene) {
+                ont.df <- private$getOntologyPvalueResults(
+                  name=name, genes=gene, p.adj=p.adj, q.value=q.value,
+                  min.genes=min.genes
+                ) %>% 
+                  select(Group, Type, ID) %>% 
+                  split(., .$Group) %>% 
+                  lapply(\(x) split(x, x$Type) %>% 
+                           lapply(pull, ID))
+                
+                # This is really ugly, sorry
+                tmp <- p.df %>%
+                  names() %>%
+                  lapply(\(ct) {
+                    p.df[[ct]] %>%
+                      names() %>%
+                      lapply(\(type) {
+                        p.df[[ct]][[type]] %>%
+                          .[. %in% ont.df[[ct]][[type]]]
+                      }) %>% 
+                      `names<-`(p.df[[ct]] %>% names()) %>%
+                      .[sapply(., length) > 0]
+                  }) %>% 
+                  `names<-`(p.df %>% names()) %>%
+                  .[sapply(., length) > 0]
+                
+                tmp %<>% lapply(sapply, length) %>% 
+                  {lapply(names(.), \(x) data.frame(Group = x, Type = names(.[[x]]), N = unname(.[[x]])))} %>% 
+                  bind_rows() %>% 
+                  mutate(Direction = gene)
+                
+                return(tmp)
+              }) %>%
+              bind_rows()
+          } else {
+            p.df %<>% 
+              lapply(sapply, length) %>% 
+              {lapply(names(.), \(x) data.frame(Group = x, Type = names(.[[x]]), N = unname(.[[x]])))} %>% 
+              bind_rows()
+          }
+          
+          if (type == "DO") {
+            p.df %<>%
+              rename(Direction = Type) %>% 
+              filter(Direction %in% genes)
+          }
         }
-
-        ont.res %<>% names() %>% lapply(function(d) dplyr::mutate(ont.res[[d]], Direction=d)) %>%
-          Reduce(rbind, .)
       } else {
-        ont.res <- private$getOntologyPvalueResults(
-          name=name, genes=genes, p.adj=p.adj, q.value=q.value, min.genes=min.genes
-        ) %>% dplyr::mutate(Direction=genes)
+        if (length(genes) > 1) {
+          ont.res <- genes %>% setNames(., .) %>% lapply(function(g) {
+            private$getOntologyPvalueResults(name=name, gene=g, p.adj=p.adj, q.value=q.value, min.genes=min.genes)
+          })
+          
+          classes <- sapply(ont.res[genes], class)
+          if (any(classes == "character")) {
+            message("No significant results found for genes = '",
+                    paste(names(classes[classes == "character"]), collapse=','), "'.")
+            genes <- names(classes[classes == "data.frame"])
+            if (length(genes) == 0) stop("No results to plot.")
+            
+            ont.res %<>% .[genes]
+          }
+          
+          ont.res %<>% names() %>% 
+            lapply(function(d) dplyr::mutate(ont.res[[d]], Direction=d)) %>%
+            Reduce(rbind, .)
+        } else {
+          ont.res <- private$getOntologyPvalueResults(
+            name=name, genes=genes, p.adj=p.adj, q.value=q.value, min.genes=min.genes
+          ) %>% dplyr::mutate(Direction=genes)
+        }
+        
+        # Prepare data further
+        if (type %in% c("GO", "GSEA")) {
+          p.df <- ont.res %$% table(Group=Group, Type=Type, Direction=Direction) %>% as.data.frame(responseName='N')
+        } else if (type == "DO") {
+          p.df <- ont.res %$% table(Group=Group, Direction=Direction) %>% as.data.frame(responseName='N')
+        } else stop("Unexpected type ", type)
       }
-
-      # Prepare data further
+      
+      # Create plot
       if (type %in% c("GO", "GSEA")) {
-        p.df <- ont.res %$% table(Group=Group, Type=Type, Direction=Direction) %>% as.data.frame(responseName='N')
-
         gg <- ggplot(p.df, aes(x=Group, y=N, fill=Type, group=Group)) +
-            geom_bar(stat="identity")
+          geom_bar(stat="identity")
         if (length(unique(p.df$Direction)) > 1) {
           gg <- gg + facet_grid(~Direction, switch="x")
         }
       } else if (type == "DO") {
-        p.df <- ont.res %$% table(Group=Group, Direction=Direction) %>% as.data.frame(responseName='N')
-
         if (length(unique(p.df$Direction)) > 1) {
           gg <- ggplot(p.df) +
             geom_bar(aes(x=Group, y=N, fill=Direction), stat="identity", position="dodge") +
@@ -968,8 +1044,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           gg <- ggplot(p.df) +
             geom_bar(aes(x=Group, y=N), stat="identity")
         }
-      } else stop("Unexpected type ", type)
-
+      }
+      
+      if (families) type %<>% paste0(.," family")
+      
       gg <- gg +
         scale_y_continuous(expand=c(0, 0, 0.05, 0)) +
         self$plot.theme +
@@ -978,7 +1056,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         labs(x="", y=paste0("No. of ", type, " terms"))
       return(gg)
     },
-
+    
     #' Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
     #'
     #' @param cell.type character string Cell type to plot

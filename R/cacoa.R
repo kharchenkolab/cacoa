@@ -102,7 +102,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param verbose boolean Whether to provide verbose output with diagnostic messages (default=TRUE)
     #' @param plot.theme ggplot2 plot theme (default=ggplot2::theme_bw())
     #' @param plot.params list with parameters, replacing defaults from \link[sccore:embeddingPlot]{embeddingPlot} (default=NULL)
-    #'
     #' @return a new 'Cacoa' object
     #' @examples 
     #' # Is it highly recommended that sample.groups and cell.groups are assigned in the initialization call. Here, "con" is a Conos object.
@@ -239,17 +238,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param top.n.genes character vector Vector of top genes to show (default=NULL)
     #' @param dist.type type of expression distance: 'shift' (linear shift) 'var' (variance change) or 'total' (both) (default="shift")
     #' @param sample.per.cell Sample per cell (default=self$sample.per.cell)
+    #' @param min.cells.per.sample numeric minimum cells per sample (default=10)
     #' @param ref.level character Reference level, e.g. "control" (default=self$ref.level)
     #' @param sample.groups named vector indicating sample groups with sample IDs as names (default: stored sample.groups)
     #' @param n.cores integer Number of cores for parallelization (default: stored integer)
     #' @param name character Test name (default="expression.shifts")
     #' @param dist distance metric: 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default=NULL, depends on dimensionality)
-    #' @param min.cells.per.sample numeric (default=10)
-    #' @param min.samp.per.type minimal number of samples per cell type for it to be included (default=2)
-    #' @param min.gene.frac minimal number of cells per cell type expressing a gene for it to be included (default=0.01)
-    #' @param n.permutations number of permutations for estimating normalization coefficient (default=1000)
-    #' @param genes if provided, the expression distance is estimated only based on these genes (default=NULL)
-    #' @param n.pcs Number of principal components for estimating expression distance (default=NULL, no PCA)
+    #' @param min.samp.per.type numeric minimal number of samples per cell type for it to be included (default=2)
+    #' @param min.gene.frac numeric minimal number of cells per cell type expressing a gene for it to be included (default=0.01)
+    #' @param n.permutations numeric number of permutations for estimating normalization coefficient (default=1000)
+    #' @param genes character if provided, the expression distance is estimated only based on these genes (default=NULL)
+    #' @param n.pcs numeric Number of principal components for estimating expression distance (default=NULL, no PCA)
     #' @param ... extra parameters to \link{estimateExpressionChange}
     #' @return List including:
     #'   `dist.df`: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update

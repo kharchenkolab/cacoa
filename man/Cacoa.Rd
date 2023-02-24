@@ -615,11 +615,11 @@ Calculate expression shift magnitudes of different clusters between conditions
 
 \item{\code{dist.type}}{type of expression distance: 'shift' (linear shift) 'var' (variance change) or 'total' (both) (default="shift")}
 
-\item{\code{min.cells.per.sample}}{numeric (default=10)}
+\item{\code{min.cells.per.sample}}{numeric minimum cells per sample (default=10)}
 
-\item{\code{min.samp.per.type}}{minimal number of samples per cell type for it to be included (default=2)}
+\item{\code{min.samp.per.type}}{numeric minimal number of samples per cell type for it to be included (default=2)}
 
-\item{\code{min.gene.frac}}{minimal number of cells per cell type expressing a gene for it to be included (default=0.01)}
+\item{\code{min.gene.frac}}{numeric minimal number of cells per cell type expressing a gene for it to be included (default=0.01)}
 
 \item{\code{ref.level}}{character Reference level, e.g. "control" (default=self$ref.level)}
 
@@ -631,11 +631,11 @@ Calculate expression shift magnitudes of different clusters between conditions
 
 \item{\code{name}}{character Test name (default="expression.shifts")}
 
-\item{\code{n.permutations}}{number of permutations for estimating normalization coefficient (default=1000)}
+\item{\code{n.permutations}}{numeric number of permutations for estimating normalization coefficient (default=1000)}
 
-\item{\code{genes}}{if provided, the expression distance is estimated only based on these genes (default=NULL)}
+\item{\code{genes}}{character if provided, the expression distance is estimated only based on these genes (default=NULL)}
 
-\item{\code{n.pcs}}{Number of principal components for estimating expression distance (default=NULL, no PCA)}
+\item{\code{n.pcs}}{numeric Number of principal components for estimating expression distance (default=NULL, no PCA)}
 
 \item{\code{top.n.genes}}{character vector Vector of top genes to show (default=NULL)}
 

@@ -918,6 +918,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param p.adj numeric adjusted p-value cutoff (default=0.05)
     #' @param q.value numeric Q value used for filtering (default=0.2)
     #' @param min.genes integer Minimum number of overlapping genes in terms (default=1)
+    #' @param families boolean Plot family terms (default=FALSE)
     #' @return A ggplot2 object
     #' @examples 
     #' cao$estimateDEPerCellType()
@@ -1331,8 +1332,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' Plot correlation matrix for ontology terms between cell types
     #'
     #' @param name character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
+    #' @param subtype character Type of ontology result, must be "BP", "MF", or "CC" (default="BP")
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param p.adj numeric Cut-off for adjusted p-values (default=0.05)
+    #' @param only.family.children boolean Plot similarities for ontology family lonely children (default=FALSE)
     #' @param q.value numeric Q value for filtering (default=0.2)
     #' @param min.genes numeric Minimum number of overlapping genes per term (default=1)
     #' @return A ggplot2 object
@@ -1340,7 +1343,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateDEPerCellType()
     #' cao$estimateOntology()
     #' cao$plotOntologySimilarities()
-    plotOntologySimilarities=function(name="GO", subtype="BP", genes="up", p.adj=0.05, only.family.children=FALSE, q.value=0.2, min.genes=1) {
+    plotOntologySimilarities=function(name="GO", subtype=c("BP","MF","CC"), genes="up", p.adj=0.05, only.family.children=FALSE, q.value=0.2, min.genes=1) {
+      subtype <- match.arg(subtype)
+      
       if (only.family.children) {
         fams <- private$getResults(name, 'estimateOntology()')$families
         if (is.null(fams))

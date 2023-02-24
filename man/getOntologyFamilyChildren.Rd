@@ -4,7 +4,7 @@
 \alias{getOntologyFamilyChildren}
 \title{Get ontology family children}
 \usage{
-getOntologyFamilyChildren(ont.sum, fams, subtype, genes)
+getOntologyFamilyChildren(ont.sum, fams, subtype, genes, type)
 }
 \arguments{
 \item{ont.sum}{Dataframe containing summarized ontology terms}

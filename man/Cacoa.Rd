@@ -1362,7 +1362,8 @@ Bar plot of ontology terms per cell type
   genes = "up",
   p.adj = 0.05,
   q.value = 0.2,
-  min.genes = 1
+  min.genes = 1,
+  families = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -1378,6 +1379,8 @@ Bar plot of ontology terms per cell type
 \item{\code{q.value}}{numeric Q value used for filtering (default=0.2)}
 
 \item{\code{min.genes}}{integer Minimum number of overlapping genes in terms (default=1)}
+
+\item{\code{families}}{boolean Plot family terms (default=FALSE)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1688,8 +1691,10 @@ Plot correlation matrix for ontology terms between cell types
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologySimilarities(
   name = "GO",
+  subtype = c("BP", "MF", "CC"),
   genes = "up",
   p.adj = 0.05,
+  only.family.children = FALSE,
   q.value = 0.2,
   min.genes = 1
 )}\if{html}{\out{</div>}}
@@ -1700,9 +1705,13 @@ Plot correlation matrix for ontology terms between cell types
 \describe{
 \item{\code{name}}{character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")}
 
+\item{\code{subtype}}{character Type of ontology result, must be "BP", "MF", or "CC" (default="BP")}
+
 \item{\code{genes}}{Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")}
 
 \item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
+
+\item{\code{only.family.children}}{boolean Plot similarities for ontology family lonely children (default=FALSE)}
 
 \item{\code{q.value}}{numeric Q value for filtering (default=0.2)}
 

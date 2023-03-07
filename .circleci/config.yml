@@ -29,6 +29,9 @@ jobs:
           name: Install sccore v1.0.0
           command: R -e "install.packages('pbmcapply')" \
                    R -e "install.packages('https://cran.r-project.org/src/contrib/sccore_1.0.0.tar.gz', repos=NULL, type='source')" 
+      - run: 
+          name: Install Conos for tests
+          command: R -e "install.packages('conos')"
       - run:
           name: Build package
           command: R CMD build .

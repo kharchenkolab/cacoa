@@ -31,7 +31,9 @@ jobs:
                    R -e "install.packages('https://cran.r-project.org/src/contrib/sccore_1.0.0.tar.gz', repos=NULL, type='source')" 
       - run: 
           name: Install Conos for tests
-          command: R -e "install.packages('conos', dependencies=TRUE)"
+          command: R -e "install.packages('igraph', dependencies=TRUE)" \
+                   R -e "install.packages('leidenAlg', dependencies=TRUE)" \
+                   R -e "install.packages('conos', dependencies=TRUE)"
       - run:
           name: Build package
           command: R CMD build .

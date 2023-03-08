@@ -2191,7 +2191,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @examples 
     #' cao$getSampleDistanceMatrix()
     getSampleDistanceMatrix=function(space=c('expression.shifts', 'coda', 'pseudo.bulk'), cell.type=NULL,
-                                     dist=NULL, name=NULL, verbose=self$verbose, ...) {
+                                     dist=NULL, name=NULL, verbose=self$verbose, sample.subset=NULL, ...) {
       space <- match.arg(space)
       if ((space != 'pseudo.bulk') && (length(list(...)) > 0)) stop("Unexpected arguments: ", names(list(...)))
 

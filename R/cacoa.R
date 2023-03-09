@@ -2342,7 +2342,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         res$padjust <- pvalues
       }
 
-      if (show.warning && any(pvalues < pvalue.cutoff)){
+      if (show.warning && any(pvalues < pvalue.cutoff, na.rm = TRUE)){
         warning("Significant separation by: ", paste(names(pvalues)[pvalues < pvalue.cutoff], collapse=', '))
       }
 

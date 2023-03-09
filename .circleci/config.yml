@@ -30,10 +30,14 @@ jobs:
           command: R -e "install.packages('pbmcapply')" \
                    R -e "install.packages('https://cran.r-project.org/src/contrib/sccore_1.0.0.tar.gz', repos=NULL, type='source')" 
       - run: 
+          name: Install igraph v1.4.1
+          command: R -e "install.packages('https://cran.r-project.org/src/contrib/igraph_1.4.1.tar.gz', repos=NULL, type='source')"   
+      - run: 
+          name: Install leidenAlg v1.0.5
+          command: R -e "install.packages('https://cran.r-project.org/src/contrib/leidenAlg_1.0.5.tar.gz', repos=NULL, type='source')"
+      - run: 
           name: Install Conos for tests
-          command: R -e "install.packages('igraph', dependencies=TRUE)" \
-                   R -e "install.packages('leidenAlg', dependencies=TRUE)" \
-                   R -e "install.packages('conos', dependencies=TRUE)"
+          command: R -e "install.packages('conos', dependencies=TRUE)"
       - run:
           name: Build package
           command: R CMD build .

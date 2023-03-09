@@ -237,7 +237,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
 
-    #' Estimate expression shift magnitudes
     #' @description Calculate expression shift magnitudes of different clusters between conditions
     #'
     #' @param top.n.genes character vector Vector of top genes to show (default=NULL)
@@ -308,7 +307,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    #' Plot expression shift magnitudes
     #' @description Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
     #'   cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
     #'
@@ -353,14 +351,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... parameters fed to estimateDEPerCellType
     #' @return A list of DE genes
     #' @examples 
-    #' cao$estimatePerCellTypeDE()
+    #' \dontrun{
+    #' cao$estimatePerCellTypeDE() # Deprecated
+    #' }
     estimatePerCellTypeDE=function(...) {
       .Deprecated("cao$estimateDEPerCellType")
       return(self$estimateDEPerCellType(...))
     },
 
-    #' Estimate differential gene expression per cell type between conditions
-    #'
+    #' @description Estimate differential gene expression per cell type between conditions
     #' @param cell.groups factor specifying cell types (default=self$cell.groups)
     #' @param sample.groups 2-factor vector with annotation of groups/condition per sample (default=self$sample.groups)
     #' @param ref.level character Reference level in 'sample.groups', e.g., ctrl, healthy (default=self$ref.level)
@@ -467,8 +466,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    #' Estimate DE stability per cell type
-    #'
+    #' @description Estimate DE stability per cell type
     #' @param de.name character string DE results slot name (default='de')
     #' @param name character string Name for storing results (default='de.jaccards')
     #' @param top.n.genes numeric Number of top DE genes to return (default=NULL)
@@ -497,8 +495,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$test.results[[name]] <- jaccards
     },
 
-    #' Estimate DE stability per gene
-    #'
+    #' @description Estimate DE stability per gene
     #' @param de.name character string DE results slot name (default='de')
     #' @param top.n.genes numeric Number of top DE genes to return (default=500)
     #' @param p.adj.cutoff numeric The adjusted p-value cutoff to apply for returned DE values (default=NULL)
@@ -546,8 +543,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
     },
 
-    #' Plot DE stability per cell type
-    #'
+    #' @description Plot DE stability per cell type
     #' @param name character string DE stability results slot name (default='de.jaccards')
     #' @param notch boolean Whether to show notches on plot (default=FALSE)
     #' @param show.jitter boolean Whether to show jitter on plots (default=TRUE)
@@ -592,8 +588,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(p)
     },
 
-    #' Plot DE stability per gene
-    #'
+    #' @description Plot DE stability per gene
     #' @param name character string DE results slot name (default='de')
     #' @param cell.type character If set only show stability for a specific cell type in DE results (default=NULL)
     #' @param stability.score character string Any of "stab.median.rank", "stab.mean.rank", or "stab.var.rank" (default='stab.median.rank')
@@ -619,8 +614,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(p)
     },
 
-    #' Plot number of significant DE genes
-    #'
+    #' @description Plot number of significant DE genes
     #' @param p.adjust boolean Whether the cutoff should be based on the adjusted P value (default=TRUE)
     #' @param pvalue.cutoff numeric P-value cutoff (default=0.05)
     #' @param show.resampling.results boolean Whether to show uncertainty based on resampling results (default=TRUE)
@@ -669,8 +663,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       )
     },
 
-    #' Make volcano plots
-    #'
+    #' @description Make volcano plots
     #' @param name character string DE results slot name (default='de')
     #' @param cell.types character If set will plot only for selected cell types in DE results (default=NULL)
     #' @param palette plot palette If NULL will use standard palette (default=NULL)
@@ -725,8 +718,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' Save DE results as JSON files
-    #'
+    #' @description Save DE results as JSON files
     #' @param saveprefix character Prefix for created files (default=NULL)
     #' @param dir.name character Name for directory with results (default="JSON")
     #' @param de.raw List of DE results. If NULL will use stored DE results defined by "de.name" (default=NULL)
@@ -760,8 +752,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                    sample.groups=sample.groups, verbose=verbose)
     },
 
-    #' Plot embedding
-    #'
+    #' @description Plot embedding
     #' @param embedding A cell embedding to use (two-column data frame with rownames corresponding to cells) (default: stored embedding object)
     #' @param plot.theme plot theme to use (default: `self$plot.theme`)
     #' @param color.by color cells by 'cell.groups', 'condition' or 'sample'. Overrides `groups` and `palette`. (default: NULL)
@@ -799,8 +790,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       rlang::invoke(sccore::embeddingPlot, params)
     },
 
-    #' Estimate ontology terms based on DEs
-    #'
+    #' @description Estimate ontology terms based on DEs
     #' @param type character Ontology type, either GO (gene ontology) or DO (disease ontology). Please see DOSE package for more information (default="GO")
     #' @param name character If NULL will use `type` to look for ontology results (default=NULL)
     #' @param de.name character string DE results slot name (default='de')
@@ -851,7 +841,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    #' Estimate ontology families based on ontology results
+    #' @description Estimate ontology families based on ontology results
     #' @param name character Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
     #' @param p.adj double Cutoff for adjusted p (default=0.05)
     #' @return List of families and ontology data per cell type
@@ -880,8 +870,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    #' Identify families containing a specific ontology term or ID
-    #'
+    #' @description Identify families containing a specific ontology term or ID
     #' @param name character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
     #' @param go.term character vector with term description(s) (default=NULL)
     #' @param go.id character vector with ID(s) (default=NULL)
@@ -944,8 +933,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(mutate(res, Families=sapply(Families, paste, collapse=", ")))
     },
 
-    #' Bar plot of ontology terms per cell type
-    #'
+    #' @description Bar plot of ontology terms per cell type
     #' @param name character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param p.adj numeric adjusted p-value cutoff (default=0.05)
@@ -1017,8 +1005,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
-    #'
+    #' @description Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
     #' @param cell.type character string Cell type to plot
     #' @param name chracter string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
     #' @param plot chracter string Type of plot to return (default="dot"). Either "dot" or "bar".
@@ -1097,8 +1084,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     },
 
-    #' Plot a heatmap of ontology P values per cell type
-    #'
+    #' @description Plot a heatmap of ontology P values per cell type
     #' @param genes Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all'
     #'   (default="up")
     #' @param subtype character string (default="BP")
@@ -1171,8 +1157,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' Plot a heatmap of ontology p-values per cell type heatmap, collapsed
-    #'
+    #' @description Plot a heatmap of ontology p-values per cell type heatmap, collapsed
     #' @param name character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
     #' @param genes character Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all'
     #'   (default="up")
@@ -1275,8 +1260,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' Plot correlation matrix for ontology terms between cell types
-    #'
+    #' @description Plot correlation matrix for ontology terms between cell types
     #' @param name character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param p.adj numeric Cut-off for adjusted p-values (default=0.05)
@@ -1344,8 +1328,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         geom_hline(aes(yintercept=x), data.frame(x=cumsum(clust.lengths)[clust.lengths > 1] + 0.5))
     },
 
-    #' Plot related ontologies in one hierarchical network plot
-    #'
+    #' @description Plot related ontologies in one hierarchical network plot
     #' @param name character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
     #' @param cell.type character Cell subtype to plot
     #' @param family numeric Family within cell subtype to plot (default=NULL)
@@ -1407,8 +1390,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                          legend.position=legend.position, verbose=verbose, n.cores=n.cores, ...)
     },
 
-    #' Save ontology results as a table
-    #'
+    #' @description Save ontology results as a table
     #' @param file character string File name passed to write.table(). Set to NULL to return the table instead of saving.
     #' @param subtype character string Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)
     #' @param genes character Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)
@@ -1435,8 +1417,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       write.table(res, file=file, sep=sep, row.names=FALSE, ...)
     },
 
-    #' Save family results as a table
-    #'
+    #' @description Save family results as a table
     #' @param file character string File name passed to write.table(). Set to NULL to return the table instead of saving.
     #' @param type character string Type of ontology result, i.e., GO, GSEA, or DO (default='GO')
     #' @param subtype character Type of result to filter by, must be "BP", "MF", or "CC" (default=NULL)
@@ -1486,8 +1467,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       write.table(res, file=file, sep=sep, row.names=FALSE, ...)
     },
 
-    #' Plot the cell group sizes or proportions per sample
-    #'
+    #' @description Plot the cell group sizes or proportions per sample
     #' @param cell.groups factor Cell annotations with cell IDs as names (default=self$cell.groups)
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
     #' @param show.significance boolean show statistical significance betwwen sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001) (default=FALSE)
@@ -1533,8 +1513,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' Plot the cell group sizes or proportions per sample
-    #'
+    #' @description Plot the cell group sizes or proportions per sample
     #' @param cell.groups character Cell annotations with cell IDs as names(default=self$cell.groups)
     #' @param type character string Must be "mad", "sd", "sample.num", or "sample.frac" (default='mad')
     #' @param rotate.xticks boolean Turn x labels 90 degrees (deafult=TRUE)
@@ -1571,8 +1550,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' Plot compositions in CoDA space (PCA or CDA)
-    #'
+    #' @description Plot compositions in CoDA space (PCA or CDA)
     #' @param space character either 'PCA' or 'CDA' (default="CDA")
     #' @param font.size numeric Font size (default=3)
     #' @param cells.to.remain character Specific cell types to keep (default=NULL)
@@ -1610,8 +1588,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg + gg.labs + self$plot.theme)
     },
 
-    #' Plot contrast tree
-    #'
+    #' @description Plot contrast tree
     #' @param cell.groups character Cell annotations with cell IDs as name (default=self$cell.groups)
     #' @param palette plot palette (default=self$sample.groups.palette)
     #' @param name character Results name slot (default='coda')
@@ -1657,8 +1634,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
 
-    #' Plot composition similarity
-    #'
+    #' @description Plot composition similarity
     #' @param cell.groups character Cell annotations with cell IDs as name (default=self$cell.groups)
     #' @param cells.to.remain character Specific cell types to keep (default=NULL)
     #' @param cells.to.remove character Specific cell types to remove (default=NULL)
@@ -1681,8 +1657,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' Estimate cell loadings
-    #'
+    #' @description Estimate cell loadings
     #' @param n.boot numeric Number of boot straps (default=1000)
     #' @param ref.cell.type character Reference cell type (default=NULL)
     #' @param name character Results name slot (default='coda')
@@ -1737,8 +1712,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(res))
     },
 
-    #' Plot Loadings
-    #'
+    #' @description Plot Loadings
     #' @param alpha numeric Transparency (default=0.01)
     #' @param palette plot palette specification for cell types (default: stored $cell.groups.palette)
     #' @param font.size numeric Font size (default=NULL)
@@ -1767,8 +1741,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     ### Cluster-free cell density
 
-    #' Estimate cell density in giving embedding
-    #'
+    #' @description Estimate cell density in giving embedding
     #' @param bins numeric Number of bins for density estimation (default=400)
     #' @param method character string Density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')
     #' @param beta numeric Smoothing strength parameter of the \link[sccore:heatFilter]{heatFilter} for graph based cell density (default=30)
@@ -1815,8 +1788,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(res))
     },
 
-    #' Plot cell density depending on the method that was used for estimating `cao$test.resulst[[name]]`
-    #'
+    #' @description Plot cell density depending on the method that was used for estimating `cao$test.resulst[[name]]`
     #' @param show.grid boolean Whether to show grid (default=TRUE)
     #' @param add.points boolean Add points to cell density figure (default=TRUE)
     #' @param size numeric Point size (default=0.1)
@@ -1882,8 +1854,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(ps)
     },
 
-    #' Plot cell density variation
-    #'
+    #' @description Plot cell density variation
     #' @param type character Must be one of "mad", "sd", "sample.frac" (default='mad')
     #' @param plot.type character Must be one of "hist", "embedding" (default='embedding')
     #' @param name character Results slot name (default='cell.density')
@@ -1940,8 +1911,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' Estimate differential cell density
-    #'
+    #' @description Estimate differential cell density
     #' @param type character method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);
     #' @param adjust.pvalues boolean Whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='sutract', TRUE for everything else)
     #' @param name character Slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
@@ -2006,8 +1976,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    #' Estimate differential cell density
-    #'
+    #' @description Estimate differential cell density
     #' @param type character method to calculate differential cell density; t.test, wilcox or subtract (target subtract ref density);
     #' @param name character Slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
     #' @param size numeric (default=0.2)
@@ -2110,8 +2079,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
 
-    #' Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
-    #'
+    #' @description Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
     #' @param name character Test results to plot (default=expression.shifts)
     #' @param joint boolean Whether to show joint boxplot with the expression distance weighed by the sizes of cell types (default: TRUE), or show distances for each individual cell type
     #' @param palette plot palette (default=self$sample.groups.palette)
@@ -2149,8 +2117,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
-    #'
+    #' @description Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
     #' @param space character One of 'expression.shifts', 'coda', 'pseudo.bulk' (default="expression.shifts")
     #' @param cell.type character Cell type reference for distancing (default=NULL)
     #' @param dist character Must be one of "cor", "l1" (manhattan), "l2" (euclidian) (default=NULL)
@@ -2208,8 +2175,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(p.dists)
     },
 
-    #' Project samples to 2D space with MDS. Plots results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoadings()
-    #'
+    #' @description Project samples to 2D space with MDS. Plots results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoadings()
     #' @param space character string "expression.shifts" Results from cao$estimateExpressionShiftMagnitudes(); CDA- cell composition shifts result from cao$estimateCellLoadings(); sudo.bulk- expression distance of sudo bulk
     #' @param method character string "MDS"
     #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default correlation distance)
@@ -2257,8 +2223,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    #' Estimate metadata separation using variance on the sample distance graph
-    #'
+    #' @description Estimate metadata separation using variance on the sample distance graph
     #' @param sample.meta sample metadata is a list or data.frame with metadata per sample
     #' @param space (default="expression shifts")
     #' @param dist (default=NULL)
@@ -2317,7 +2282,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(res))
     },
 
-    #' Plot metadata separation
+    #' @description Plot metadata separation
     #' @param name character Name for storage in test.results (default="metadata.separation")
     #' @param pvalue.y numeric (default=0.93)
     #' @param ... additional parameters forwarded to \link[plotMeanMedValuesPerCellType]{plotMeanMedValuesPerCellType}
@@ -2338,10 +2303,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg)
     },
 
-    ### Cluster-free differential expression
-
-    #' Estimate differential expression Z-scores between two conditions per individual cell
-    #'
+    #' @description Estimate differential expression Z-scores between two conditions per individual cell
     #' @param n.top.genes (default=Inf)
     #' @param genes (default=NULL)
     #' @param max.z z-score value to winsorize the estimates for reducing impact of outliers. Default: 20.
@@ -2405,8 +2367,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    #' Get most changed genes
-    #'
+    #' @description Get most changed genes
     #' @param n numeric Number of genes to retrieve
     #' @param method character Must be one of "z", "z.adj", "lfc" (default="z")
     #' @param min.z numeric Minimum Z score (default=0.5)
@@ -2446,8 +2407,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(scores)
     },
 
-    #' Estimate Cluster-free Expression Shift
-    #'
+    #' @description Estimate Cluster-free Expression Shift
     #' @param n.top.genes number of top genes for the distance estimation (default: 3000)
     #' @param min.n.between minimal number of pairs between condition for distance estimation (default: 2)
     #' @param min.n.within minimal number of pairs within one condition for distance estimation (default: `min.n.between`)
@@ -2495,8 +2455,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(shifts))
     },
 
-    #' Performs graph smoothing of the cluster-free DE Z-scores
-    #'
+    #' @description Performs graph smoothing of the cluster-free DE Z-scores
     #' @param n.top.genes numeric Number of top ranked genes to include (default=1000)
     #' @param smoothing `beta` parameter of the \link[sccore:heatFilter]{heatFilter}. (default=20)
     #' @param filter graph filter function. (default=NULL)
@@ -2542,9 +2501,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(z.smoothed))
     },
 
-    #' Estimate Gene Programs based on cluster-free Z-scores on a subsample of
-    #' cells using \link[fabia:fabia]{fabia}. # TODO: update it
-    #'
+    #' @description Estimate Gene Programs based on cluster-free Z-scores
     #' @param method character String Method to use (default=c("pam", "leiden", "fabia"))
     #' @param n.top.genes (default=Inf)
     #' @param genes (default=NULL)
@@ -2648,8 +2605,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(self$test.results[[name]]))
     },
 
-    #' Plot gene program scores
-    #'
+    #' @description Plot gene program scores
     #' @param prog.ids (default=NULL)
     #' @param build.panel boolean (default=TRUE)
     #' @param nrow (default=NULL)
@@ -2701,8 +2657,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
 
 
-    #' Plot gene program genes
-    #'
+    #' @description Plot gene program genes
     #' @param program.id program id
     #' @param ordering character vector (default=c("similarity", "loading"))
     #' @param max.genes integer (default=9)
@@ -2730,8 +2685,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(self$plotGeneExpressionComparison(scores=scores, plots=plots, ...))
     },
 
-    #' Plot cluster-free expression shift z-scores
-    #'
+    #' @description Plot cluster-free expression shift z-scores
     #' @param cell.groups Indicates cell groups with cell names. Set to NULL if it shouldn't be shown. (default: stored vector)
     #' @param smooth boolean (default=TRUE)
     #' @param plot.na boolean (default=FALSE)
@@ -2784,8 +2738,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(ggs)
     },
 
-    #' Plot most changed genes
-    #'
+    #' @description Plot most changed genes
     #' @param n.top.genes numeric
     #' @param method character string (default='z')
     #' @param min.z numeric (default=0.5)
@@ -2805,8 +2758,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$plotGeneExpressionComparison(scores=scores, cell.subset=cell.subset, ...)
     },
 
-    #' Plot gene expression comparison
-    #'
+    #' @description Plot gene expression comparison
     #' @param genes (default=NULL)
     #' @param scores (default=NULL)
     #' @param max.expr character string (default="97.5%")
@@ -2922,8 +2874,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(ggs)
     },
 
-    #' Get condition per cell
-    #'
+    #' @description Get condition per cell
     #' @return conditions per cell
     #' @examples 
     #' \dontrun{
@@ -2935,8 +2886,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         as.factor()
     },
 
-    #' Get joint count matrix
-    #'
+    #' @description Get joint count matrix
     #' @param force boolean, if TRUE the joint count matrix will be recalculated even though it already exists in self$cache (default=FALSE)
     #' @param raw boolean, return raw counts (default=TRUE)
     #' @return joint count matrix
@@ -2953,8 +2903,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(self$cache[[cache.name]])
     },
 
-    #' Get GO environment
-    #'
+    #' @description Get GO environment
     #' @param org.db object of class OrgDB from Bioconductor (e.g. org.Hs.eg.db::org.Hs.eg.db)
     #' @param verbose boolean, print progress (default=FALSE)
     #' @param ignore.cache ignore GO environments already in self$cache (default=NULL)

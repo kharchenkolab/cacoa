@@ -62,7 +62,9 @@ strpart <- function(x, split, n, fixed = FALSE) {
 #' @param df Data.frame with the columns "pval", "padj" and "log2FoldChange"
 #' @return Updated data.frame with Z scores
 #' @examples 
+#' \dontrun{
 #' df_adj <- addZScores(df)
+#' }
 #' 
 #' @export
 addZScores <- function(df) {

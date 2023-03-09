@@ -1438,6 +1438,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       #Checks
       checkPackageInstalled(c("GOfuncR", "graph", "Rgraphviz"), bioc=TRUE)
 
+      plot.type <- match.arg(plot.type)
+      
       ont.res <- private$getResults(name, 'estimateOntology()')
       ont.fam.res <- ont.res$families
       if (is.null(ont.fam.res))

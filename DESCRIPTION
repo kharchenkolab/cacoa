@@ -78,3 +78,4 @@ URL: https://github.com/kharchenkolab/cacoa
 BugReports: https://github.com/kharchenkolab/cacoa/issues
 Author: Peter Kharchenko [aut, cre], Viktor Petukhov [aut]
 Maintainer: Peter Kharchenko <peter_kharchenko@hms.harvard.edu>
+LazyData: true

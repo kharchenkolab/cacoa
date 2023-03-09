@@ -2342,6 +2342,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         res$padjust <- pvalues
       }
 
+      if (any(is.na(pvalues))) warning(paste0(paste(names(pvalues)[is.na(pvalues)], sep = "\t")," resulted in NAs when calculating p values. Is the metadata defined for all samples?"))
+      
       if (show.warning && any(pvalues < pvalue.cutoff, na.rm = TRUE)){
         warning("Significant separation by: ", paste(names(pvalues)[pvalues < pvalue.cutoff], collapse=', '))
       }

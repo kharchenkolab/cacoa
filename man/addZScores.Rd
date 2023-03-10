@@ -16,6 +16,8 @@ Updated data.frame with Z scores
 Add Z scores to DE results
 }
 \examples{
+\dontrun{
 df_adj <- addZScores(df)
+}
 
 }

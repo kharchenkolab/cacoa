@@ -1468,7 +1468,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$plotOntologyFamily(name = "GSEA", cell.type = "Neurons") # "cell.type" is a cell type in self$cell.groups used for calculating ontologies
     #' }
     plotOntologyFamily=function(name="GO", cell.type, family=NULL, genes="up", subtype="BP",
-                                plot.type="complete", show.ids=FALSE, string.length=14, legend.label.size=1,
+                                plot.type=c("complete","dense","minimal"), show.ids=FALSE, string.length=14, legend.label.size=1,
                                 legend.position="topright", verbose=self$verbose, n.cores=self$n.cores, ...) {
       #Checks
       checkPackageInstalled(c("GOfuncR", "graph", "Rgraphviz"), bioc=TRUE)

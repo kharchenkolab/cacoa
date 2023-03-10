@@ -10,7 +10,7 @@ getRndSbp(n.cell.types, n.seed = 239)
 \item{n.cell.types}{number of cell types}
 }
 \value{
-list with binary and normalised sbp matrices (partitions are in rows)
+list with binary and normalized sbp matrices (partitions are in rows)
 }
 \description{
 Generate random sbp

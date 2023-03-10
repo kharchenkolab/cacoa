@@ -303,7 +303,19 @@ wrap_strings <- function(strings, width) {
 #' @return List of families and ontology data
 #' @keywords internal
 identifyFamilies <- function(ids) {
-  tmp.parent <- GOfuncR::get_parent_nodes(ids$ID) %>%
+  # Check for valid IDs
+  tmp.ids <- ids %>% 
+    pull(ID) %>% 
+    lapply(GOfuncR::get_names) %>% 
+    sapply(pull, go_name) %>% 
+    `names<-`(ids %>% pull(ID)) %>%
+    .[!is.na(.)] %>% 
+    names()
+  
+  if (length(tmp.ids) == 0) return(NA)
+  
+  # Continue with valid IDs
+  tmp.parent <- GOfuncR::get_parent_nodes(tmp.ids) %>% 
     rename(parent_distance = distance) %>%
     filter(parent_distance > 0) %>%
     split(., .$child_go_id) %>%
@@ -381,7 +393,7 @@ identifyFamilies <- function(ids) {
 #' @return List of collapsed families and ontology data
 #' @keywords internal
 collapseFamilies <- function(ont.res) {
-  if(length(ont.res) > 0) {
+  if (inherits(ont.res, "list") && (length(ont.res) > 0)) {
     # Identify overlapping parents (seeds) between families
     olaps <- sapply(ont.res, `[[`, "parents_in_IDs") %>%
       unlist() %>%
@@ -495,10 +507,15 @@ getOntologyListLevels <- function(type=c('GO', 'GSEA', 'DO')) {
 estimateOntologyFamilies <- function(ont.list, type) {
   if (type == "GO") {
     ont.fam <- lapply(ont.list, lapply, lapply, identifyFamilies) %>%
-      lapply(lapply, lapply, collapseFamilies)
+      lapply(lapply, lapply, collapseFamilies) %>% 
+      lapply(lapply, plyr::compact) %>% 
+      lapply(\(x) x[sapply(x, length) > 0]) %>% 
+      .[sapply(., length) > 0]
   } else {
     ont.fam <- lapply(ont.list, lapply, identifyFamilies) %>%
-      lapply(lapply, collapseFamilies)
+      lapply(lapply, collapseFamilies) %>% 
+      lapply(plyr::compact) %>% 
+      .[sapply(., length) > 0]
   }
 
   return(ont.fam)
@@ -618,9 +635,17 @@ estimateOntologyClusterNames <- function(ont.df, clust.naming=c("medoid", "conse
 #' @param subtype Type of ontology, one of "BP", "CC", "MF"
 #' @param genes Included genes
 #' @keywords internal
-getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {
+getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes, type) {
   fams <- lapply(fams, function(x) {
-    x[[subtype]][[genes]]$families %>% unlist() %>% unique() # These are only children IDs
+    if (type == "GO") {
+      tmp <- x[[subtype]][[genes]]$families
+    } else if (type == "GSEA") {
+      tmp <- x[[subtype]]$families
+    } else {
+      tmp <- x[[genes]]$families
+    }
+    
+    tmp %>% unlist() %>% unique() # These are only children IDs
   })
 
   ont.sum %<>% split(., .$Group)
@@ -640,7 +665,7 @@ getOntologyFamilyChildren <- function(ont.sum, fams, subtype, genes) {
 #' Approximately equal to the fraction of subtypes for which two GOs should belong to the same cluster.
 #'   Default: 0.5.
 #' @return List containing:
-#'   - `df`: data.frame with information about individual gene ontolodies and columns `Cluster` and `ClusterName`
+#'   - `df`: data.frame with information about individual gene ontologies and columns `Cluster` and `ClusterName`
 #'     for the clustering info
 #'   - `hclust`: the object of class \link[stats:hclust]{hclust} with hierarchical clustering of GOs across all
 #'     subtypes

@@ -1,7 +1,7 @@
 #' Generate one random partition of given length
 #'
-#' @param bal.len length of partiotion
-#' @return random partition - verctor with values from {1, -1}
+#' @param bal.len length of partition
+#' @return random partition - vector with values from {1, -1}
 #' @keywords internal
 getRndPartition <- function(bal.len){
   if(bal.len < 2)
@@ -18,7 +18,7 @@ getRndPartition <- function(bal.len){
 #' Generate random sbp
 #'
 #' @param n.cell.types number of cell types
-#' @return list with binary and normalised sbp matrices (partitions are in rows)
+#' @return list with binary and normalized sbp matrices (partitions are in rows)
 #' @keywords internal
 getRndSbp <- function(n.cell.types, n.seed=239){
   if(n.cell.types < 2)
@@ -95,7 +95,7 @@ getLogFreq <- function(d.counts){
 }
 
 
-#' Get Loadings from the caconical data analysis
+#' Get loadings from the canonical data analysis
 #'
 #' @param d.counts Cell count table
 #' @param d.groups Group variable
@@ -137,10 +137,10 @@ getCdaLoadings <- function(d.counts, d.groups, n.seed = 239){
 
 #' Remove the strongest group effect from balances
 #'
-#' @param d.used Currect values of balances
+#' @param d.used Correct values of balances
 #' @param d.groups if provided then resampling controls presence of both groups in a new dataset
 #' @param n.seed Random seed
-#' @param thresh.pc.var percentage of variance which should be characterised by PSc
+#' @param thresh.pc.var percentage of variance which should be characterized by PSc
 #' @return Balances without group effect
 #' @keywords internal
 removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
@@ -170,7 +170,7 @@ removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
   model<-lm(d.working ~ d.groups)
   cda <- candisc::candisc(model)
 
-  cda.rotation <- cda$structure # already normalised
+  cda.rotation <- cda$structure # already normalized
 
   d.scores <- d.working %*% cda.rotation  # Projection values
   d.part <- d.scores %*% t(cda.rotation)  # Projection vectors

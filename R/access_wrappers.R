@@ -58,7 +58,7 @@ extractCellGraph.Seurat <- function(object) {
     adj.mat <- object@graphs[[1]]
   }
 
-  adj.mat %<>% as("dgCMatrix")
+  adj.mat %<>% as("CsparseMatrix")
   if (!isSymmetric(adj.mat)) {
     warning("The provided adjacency matrix is not symmetric. Converting it to undirected graph.")
     adj.mat <- (adj.mat + t(adj.mat)) / 2
@@ -144,7 +144,7 @@ extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sp
     dat %<>% Matrix::t()
   }
   if (is.matrix(dat) && sparse){
-    dat %<>% as("dgCMatrix")
+    dat %<>% as("CsparseMatrix")
   }
   return(dat)
 }
@@ -254,7 +254,7 @@ extractEmbedding.Seurat <- function(object) {
 
 
 
-#' Extract the gene exrpession from the object
+#' Extract the gene expression from the object
 #'
 #' @param object object from which to extract the cell groups
 #' @param gene character vector of the specific gene names on which to subset

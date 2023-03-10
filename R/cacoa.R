@@ -176,7 +176,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (any(c("dgCMatrix", "dgTMatrix", "dgEMatrix", "matrix") %in% class(data.object))) {
-        data.object %<>% as("dgCMatrix") %>% Matrix::t()
+        data.object %<>% as("CsparseMatrix") %>% Matrix::t()
         if (max(abs(round(data.object@x) - data.object@x)) < 1e-10) {
           message("Interpreting data.object as a raw count matrix")
           attr(data.object, "raw") <- TRUE
@@ -255,7 +255,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param n.pcs numeric Number of principal components for estimating expression distance (default=NULL, no PCA)
     #' @param ... extra parameters to \link{estimateExpressionChange}
     #' @return List including:
-    #'   `dist.df`: a table with cluster distances (normalized if within.gorup.normalization=TRUE), cell type and the number of cells # TODO: update
+    #'   `dist.df`: a table with cluster distances (normalized if within.group.normalization=TRUE), cell type and the number of cells # TODO: update
     #'   `p.dist.info`: list of distance matrices per cell type
     #'   `sample.groups`: filtered sample groups
     #'   `cell.groups`: filtered cell groups
@@ -313,7 +313,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param name character Results slot name (default="expression.shifts")
     #' @param type character type of a plot "bar" or "box" (default="bar")
     #' @param notch boolean Whether to show notches in the boxplot version (default=TRUE)
-    #' @param show.jitter boolean Whether to show indivudal data points (default=FALSE)
+    #' @param show.jitter boolean Whether to show individual data points (default=FALSE)
     #' @param jitter.alpha numeric Transparency value for the data points (default=0.05)
     #' @param show.pvalues character string Which p-values to plot. Accepted values are "none", "raw", or "adjusted". (default=c("adjusted", "raw", "none"))
     #' @param ylab character string Label of the y-axis (default="normalized expression distance")
@@ -548,9 +548,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param notch boolean Whether to show notches on plot (default=FALSE)
     #' @param show.jitter boolean Whether to show jitter on plots (default=TRUE)
     #' @param jitter.alpha numeric Parameter for jitter (default=0.05)
-    #' @param show.pairs boolwan Whether to show pairs (default=FALSE)
+    #' @param show.pairs boolean Whether to show pairs (default=FALSE)
     #' @param sort.order boolean Whether to show notches in the boxplot version (default=TRUE)
-    #' @param pallete plot pallete (default=self$cell.groups.palette)
+    #' @param pallete plot palette (default=self$cell.groups.palette)
     #' @param set.fill (default=TRUE)
     #' @return A ggplot2 object
     #' @examples 
@@ -787,7 +787,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         params$show.legend <- !is.null(params$colors)
       }
 
-      rlang::invoke(sccore::embeddingPlot, params)
+      rlang::exec(sccore::embeddingPlot, !!!params)
     },
 
     #' @description Estimate ontology terms based on DEs
@@ -939,53 +939,127 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param p.adj numeric adjusted p-value cutoff (default=0.05)
     #' @param q.value numeric Q value used for filtering (default=0.2)
     #' @param min.genes integer Minimum number of overlapping genes in terms (default=1)
+    #' @param families boolean Plot family terms (default=FALSE)
     #' @return A ggplot2 object
     #' @examples 
     #' \dontrun{
     #' cao$estimateDEPerCellType()
     #' cao$estimateOntology(name = "GSEA")
     #' cao$plotNumOntologyTermsPerType()
-    #' 
-    #' cao$estimateOntologyFamilies(name = "GSEA")
-    #' cao$plotNumOntologyTermsPerType(families = TRUE)
     #' }
-    plotNumOntologyTermsPerType=function(name="GO", genes="up", p.adj=0.05, q.value=0.2, min.genes=1) {
+    plotNumOntologyTermsPerType=function(name="GO", genes="up", p.adj=0.05, q.value=0.2, min.genes=1, families=FALSE) {
       type <- private$getResults(name, 'estimateOntology()')$type
-      if (length(genes) > 1) {
-        ont.res <- genes %>% setNames(., .) %>% lapply(function(g) {
-          private$getOntologyPvalueResults(name=name, gene=g, p.adj=p.adj, q.value=q.value, min.genes=min.genes)
-        })
-
-        classes <- sapply(ont.res[genes], class)
-        if (any(classes == "character")) {
-          message("No significant results found for genes = '",
-                  paste(names(classes[classes == "character"]), collapse=','), "'.")
-          genes <- names(classes[classes == "data.frame"])
-          if (length(genes) == 0) stop("No results to plot.")
-
-          ont.res %<>% .[genes]
+      
+      if (families) {
+        tmp <- private$getResults(name, 'estimateOntology()')$families
+        
+        if (type == "GO") {
+          p.df <- tmp %>% 
+            lapply(lapply, lapply, '[[', "families") %>% 
+            lapply(lapply, lapply, unlist) %>% 
+            lapply(lapply, lapply, unique) %>% 
+            lapply(lapply, sapply, length) %>%
+            lapply(lapply, \(type) data.frame(Direction = names(type), N = unname(type))) %>%
+            lapply(bind_rows, .id = "Type") %>% 
+            bind_rows(.id = "Group") %>% 
+            filter(Direction %in% genes)
+        } else {
+          p.df <- tmp %>% 
+            lapply(lapply, '[[', "families") %>% 
+            lapply(lapply, unlist) %>% 
+            lapply(lapply, unique)
+          
+          # Filter based on 'genes'
+          if (type == "GSEA" && any(genes != "all")) {
+            p.df <- genes %>% 
+              lapply(\(gene) {
+                ont.df <- private$getOntologyPvalueResults(
+                  name=name, genes=gene, p.adj=p.adj, q.value=q.value,
+                  min.genes=min.genes
+                ) %>% 
+                  select(Group, Type, ID) %>% 
+                  split(., .$Group) %>% 
+                  lapply(\(x) split(x, x$Type) %>% 
+                           lapply(pull, ID))
+                
+                # This is really ugly, sorry
+                tmp <- p.df %>%
+                  names() %>%
+                  lapply(\(ct) {
+                    p.df[[ct]] %>%
+                      names() %>%
+                      lapply(\(type) {
+                        p.df[[ct]][[type]] %>%
+                          .[. %in% ont.df[[ct]][[type]]]
+                      }) %>% 
+                      `names<-`(p.df[[ct]] %>% names()) %>%
+                      .[sapply(., length) > 0]
+                  }) %>% 
+                  `names<-`(p.df %>% names()) %>%
+                  .[sapply(., length) > 0]
+                
+                tmp %<>% lapply(sapply, length) %>% 
+                  {lapply(names(.), \(x) data.frame(Group = x, Type = names(.[[x]]), N = unname(.[[x]])))} %>% 
+                  bind_rows() %>% 
+                  mutate(Direction = gene)
+                
+                return(tmp)
+              }) %>%
+              bind_rows()
+          } else {
+            p.df %<>% 
+              lapply(sapply, length) %>% 
+              {lapply(names(.), \(x) data.frame(Group = x, Type = names(.[[x]]), N = unname(.[[x]])))} %>% 
+              bind_rows()
+          }
+          
+          if (type == "DO") {
+            p.df %<>%
+              rename(Direction = Type) %>% 
+              filter(Direction %in% genes)
+          }
         }
-
-        ont.res %<>% names() %>% lapply(function(d) dplyr::mutate(ont.res[[d]], Direction=d)) %>%
-          Reduce(rbind, .)
       } else {
-        ont.res <- private$getOntologyPvalueResults(
-          name=name, genes=genes, p.adj=p.adj, q.value=q.value, min.genes=min.genes
-        ) %>% dplyr::mutate(Direction=genes)
+        if (length(genes) > 1) {
+          ont.res <- genes %>% setNames(., .) %>% lapply(function(g) {
+            private$getOntologyPvalueResults(name=name, gene=g, p.adj=p.adj, q.value=q.value, min.genes=min.genes)
+          })
+          
+          classes <- sapply(ont.res[genes], class)
+          if (any(classes == "character")) {
+            message("No significant results found for genes = '",
+                    paste(names(classes[classes == "character"]), collapse=','), "'.")
+            genes <- names(classes[classes == "data.frame"])
+            if (length(genes) == 0) stop("No results to plot.")
+            
+            ont.res %<>% .[genes]
+          }
+          
+          ont.res %<>% names() %>% 
+            lapply(function(d) dplyr::mutate(ont.res[[d]], Direction=d)) %>%
+            Reduce(rbind, .)
+        } else {
+          ont.res <- private$getOntologyPvalueResults(
+            name=name, genes=genes, p.adj=p.adj, q.value=q.value, min.genes=min.genes
+          ) %>% dplyr::mutate(Direction=genes)
+        }
+        
+        # Prepare data further
+        if (type %in% c("GO", "GSEA")) {
+          p.df <- ont.res %$% table(Group=Group, Type=Type, Direction=Direction) %>% as.data.frame(responseName='N')
+        } else if (type == "DO") {
+          p.df <- ont.res %$% table(Group=Group, Direction=Direction) %>% as.data.frame(responseName='N')
+        } else stop("Unexpected type ", type)
       }
-
-      # Prepare data further
+      
+      # Create plot
       if (type %in% c("GO", "GSEA")) {
-        p.df <- ont.res %$% table(Group=Group, Type=Type, Direction=Direction) %>% as.data.frame(responseName='N')
-
         gg <- ggplot(p.df, aes(x=Group, y=N, fill=Type, group=Group)) +
-            geom_bar(stat="identity")
+          geom_bar(stat="identity")
         if (length(unique(p.df$Direction)) > 1) {
           gg <- gg + facet_grid(~Direction, switch="x")
         }
       } else if (type == "DO") {
-        p.df <- ont.res %$% table(Group=Group, Direction=Direction) %>% as.data.frame(responseName='N')
-
         if (length(unique(p.df$Direction)) > 1) {
           gg <- ggplot(p.df) +
             geom_bar(aes(x=Group, y=N, fill=Direction), stat="identity", position="dodge") +
@@ -994,8 +1068,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           gg <- ggplot(p.df) +
             geom_bar(aes(x=Group, y=N), stat="identity")
         }
-      } else stop("Unexpected type ", type)
-
+      }
+      
+      if (families) type %<>% paste0(.," family")
+      
       gg <- gg +
         scale_y_continuous(expand=c(0, 0, 0.05, 0)) +
         self$plot.theme +
@@ -1007,8 +1083,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
     #' @param cell.type character string Cell type to plot
-    #' @param name chracter string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
-    #' @param plot chracter string Type of plot to return (default="dot"). Either "dot" or "bar".
+    #' @param name character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
+    #' @param plot character string Type of plot to return (default="dot"). Either "dot" or "bar".
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param subtype character string Ontology type, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")
     #' @param cell.subgroup character Specific cell group to plot
@@ -1036,8 +1112,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if ((type == "GSEA") && (plot == "bar")) stop("No 'enrichplot' method exists for making barplots of GSEA results.")
 
       if (plot != "dot" && plot != "bar") {
-        stop(paste("Unknown plot type: ", plot, ". The plot parameter must be specified as either 'dot' or 'bar'. Please fix."))
+        stop(paste("Unknown plot type: ", plot, ". The plot parameter must be specified as either 'dot' or 'bar'."))
       }
+      
       # Extract results
       if (!cell.type %in% names(ont.res)) stop("'cell.type' not found in results.")
       ont.res %<>% .[[cell.type]]
@@ -1046,7 +1123,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop("No results found for ", name, ", ", subtype, " for ", cell.type)
       }
 
-      if (type %in% c("GO", "DO")) ont.res %<>% .[[genes]]
+      if (type %in% c("GO", "DO")) {
+        ont.res %<>% .[[genes]]
+      } else {
+        if (genes == "up") ont.res@result %<>% filter(NES >= 0) else if (genes == "down") ont.res@result %<>% filter(NES <= 0)
+      } 
       if (is.null(ont.res)){
         stop("No results found for ", genes, " genes for ", name, ", ", subtype, " for ", cell.type)
       }
@@ -1060,11 +1141,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # Allow plotting of terms with p.adj > 0.05
       if (p.adj > 0.05) {
-        ont.res@pvalueCutoff <- 1
-        ont.res@qvalueCutoff <- 1
+        if (type == "GSEA") {
+          ont.res@params$pvalueCutoff <- 1
+        } else {
+          ont.res@pvalueCutoff <- 1
+          ont.res@qvalueCutoff <- 1
+        }
       }
 
-      if (min.genes > 1) {
+      if (min.genes > 1 && type != "GSEA") { # GeneRatio is not provided for GSEA
         idx <- df$GeneRatio %>%
           strsplit("/", fixed=TRUE) %>%
           sapply(`[[`, 1)
@@ -1222,11 +1307,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       ont.sum.raw <- ont.sum
-      ont.sum[abs(ont.sum) > max.log.p] %<>% {max.log.p * sign(.)}
+      ont.sum[abs(ont.sum) > max.log.p] %<>% 
+        {max.log.p * sign(.)}
 
       gos.per.clust <- dist(ont.sum, method=distance) %>%
-        hclust(method=clust.method) %>% cutree(k=n) %>% {split(names(.), .)}
-
+        hclust(method=clust.method) 
+      
+      # Adding check for n to avoid errors
+      max.gpc <- max(gos.per.clust$order)
+      if (max.gpc < n) {
+        warning(paste0("Reducing 'n' to ",max.gpc))
+        n <- max.gpc
+      }
+      
+      gos.per.clust %<>% 
+        cutree(k=n) %>% 
+        {split(names(.), .)}
+      
       clust.names <- sapply(gos.per.clust, function(gos) {
         n.gos <- length(gos)
         if (n.gos == 1) return(paste("1: ", gos))
@@ -1237,12 +1334,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       })
 
       ont.sum <- lapply(gos.per.clust, function(ns) colMeans(ont.sum.raw[ns,,drop=FALSE])) %>%
-        do.call(rbind, .) %>% as.data.frame() %>% set_rownames(clust.names)
-      ont.sum[abs(ont.sum) > max.log.p] %<>% {max.log.p * sign(.)}
+        do.call(rbind, .) %>% 
+        as.data.frame() %>% 
+        set_rownames(clust.names)
+      ont.sum[abs(ont.sum) > max.log.p] %<>% 
+        {max.log.p * sign(.)}
 
       ont.freqs <- gos.per.clust %>%
         lapply(function(gos) colMeans(abs(ont.sum.raw[gos,]) > 1e-5) * 100) %>%
-        do.call(rbind, .) %>% as.data.frame()
+        do.call(rbind, .) %>% 
+        as.data.frame()
 
       gg <- plotHeatmap(
         ont.sum, size.df=ont.freqs, legend.position=legend.position, row.order=row.order, col.order=col.order,
@@ -1262,32 +1363,48 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Plot correlation matrix for ontology terms between cell types
     #' @param name character string Type of ontology result: "GO", "GSEA", or "DO" (default="GO")
+    #' @param subtype character Type of ontology result, must be "BP", "MF", or "CC" (default="BP")
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param p.adj numeric Cut-off for adjusted p-values (default=0.05)
+    #' @param only.family.children boolean Plot similarities for ontology family lonely children (default=FALSE)
     #' @param q.value numeric Q value for filtering (default=0.2)
     #' @param min.genes numeric Minimum number of overlapping genes per term (default=1)
     #' @return A ggplot2 object
     #' @examples 
     #' \dontrun{
     #' cao$estimateDEPerCellType()
-    #' cao$estimateOntology(name = "GSEA")
-    #' cao$plotOntologySimilarities(name = "GSEA")
-    #' 
-    #' cao$estimateOntologyFamilies(name = "GSEA")
-    #' plotOntologySimilarities(name = "GSEA", only.family.children = TRUE)
+    #' cao$estimateOntology()
+    #' cao$plotOntologySimilarities()
     #' }
-    plotOntologySimilarities=function(name="GO", genes="up", p.adj=0.05, q.value=0.2, min.genes=1) {
+    plotOntologySimilarities=function(name="GO", subtype=c("BP","MF","CC"), genes="up", p.adj=0.05, only.family.children=FALSE, q.value=0.2, min.genes=1) {
+      subtype <- match.arg(subtype)
+      
+      if (only.family.children) {
+        fams <- private$getResults(name, 'estimateOntology()')$families
+        if (is.null(fams))
+          stop("No ontology family results found, please run 'estimateOntologyFamilies' first, or set only.family.children=FALSE")
+      }
+      
       ont.res <- private$getOntologyPvalueResults(
-        name=name, genes=genes, p.adj=p.adj, q.value=q.value, min.genes=min.genes
+        name=name, genes=genes, p.adj=p.adj, q.value=q.value, min.genes=min.genes, subtype=subtype
       )
+      
+      if (nrow(ont.res) == 0) {
+        stop("No ontologies found for name=", name, ", subtype=", subtype, " and genes=", genes,". You could also consider relaxing p.adj.")
+      }
+      
       type <- private$getResults(name, 'estimateOntology()')$type
 
       if ((ont.res$Group %>% unique() %>% length()) == 1)
         stop("Only one group present, correlation cannot be performed.")
 
-      if (nrow(ont.res) == 0)
-        stop("No significant ontology terms identified. Try relaxing p.adj.")
-
+      if (only.family.children) {
+        ont.res %<>% getOntologyFamilyChildren(fams=fams, subtype=subtype, genes=genes, type=private$getResults(name, 'estimateOntology()')$type)
+        if (nrow(ont.res) == 0) {
+          stop("No ontology family children found.")
+        }
+      }
+      
       if (type %in% c("GO", "GSEA")) {
         pathway.df <- ont.res[c("Description", "Group", "Type")] %>% rename(Pathway=Description, GO=Type)
       } else if (type=="DO") {
@@ -1311,7 +1428,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         as.matrix()
       path.bin[is.na(path.bin)] <- 0
 
-      # TODO: currently we use binary distance. Probably, checking z-scores would give bitter results.
+      # TODO: currently we use binary distance. Probably, checking z-scores would give better results.
       p.mat <- (1 - (path.bin %>% dist(method="binary") %>% as.matrix)) %>% pmin(0.5)
       cl.tree <- dist(p.mat) %>% hclust()
       clust.order <- cl.tree %$% labels[order]
@@ -1351,11 +1468,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$plotOntologyFamily(name = "GSEA", cell.type = "Neurons") # "cell.type" is a cell type in self$cell.groups used for calculating ontologies
     #' }
     plotOntologyFamily=function(name="GO", cell.type, family=NULL, genes="up", subtype="BP",
-                                plot.type="complete", show.ids=FALSE, string.length=14, legend.label.size=1,
+                                plot.type=c("complete","dense","minimal"), show.ids=FALSE, string.length=14, legend.label.size=1,
                                 legend.position="topright", verbose=self$verbose, n.cores=self$n.cores, ...) {
       #Checks
       checkPackageInstalled(c("GOfuncR", "graph", "Rgraphviz"), bioc=TRUE)
 
+      plot.type <- match.arg(plot.type)
+      
       ont.res <- private$getResults(name, 'estimateOntology()')
       ont.fam.res <- ont.res$families
       if (is.null(ont.fam.res))
@@ -1363,9 +1482,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       ont.fam.res %<>% .[[cell.type]]
       if (is.null(ont.fam.res)) stop("No results found for cell.type '", cell.type, "'.")
-      # TODO: Test for GSEA/GO. Update description!
-      ont.fam.res %<>% .[[subtype]]
-      if (is.null(ont.fam.res)) stop("No results found for subtype '", subtype, "'.")
+      
+      if (ont.res$type != "DO") {
+        ont.fam.res %<>% .[[subtype]]
+        if (is.null(ont.fam.res)) stop("No results found for subtype '", subtype, "'.")
+      }
 
       if (ont.res$type != "GSEA") {
         ont.fam.res %<>% .[[genes]]
@@ -1470,7 +1591,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Plot the cell group sizes or proportions per sample
     #' @param cell.groups factor Cell annotations with cell IDs as names (default=self$cell.groups)
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
-    #' @param show.significance boolean show statistical significance betwwen sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001) (default=FALSE)
+    #' @param show.significance boolean show statistical significance between sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001) (default=FALSE)
     #' @param filter.empty.cell.types boolean Remove cell types without cells (default=TRUE)
     #' @param proportions boolean Plot proportions or absolute numbers (default=TRUE)
     #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
@@ -1516,7 +1637,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Plot the cell group sizes or proportions per sample
     #' @param cell.groups character Cell annotations with cell IDs as names(default=self$cell.groups)
     #' @param type character string Must be "mad", "sd", "sample.num", or "sample.frac" (default='mad')
-    #' @param rotate.xticks boolean Turn x labels 90 degrees (deafult=TRUE)
+    #' @param rotate.xticks boolean Turn x labels 90 degrees (default=TRUE)
     #' @param min.rel.abundance numeric Minimum relative abundance to plot (default=0.05)
     #' @return ggplot2 object
     #' @examples 
@@ -1913,7 +2034,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Estimate differential cell density
     #' @param type character method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);
-    #' @param adjust.pvalues boolean Whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='sutract', TRUE for everything else)
+    #' @param adjust.pvalues boolean Whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='subtract', TRUE for everything else)
     #' @param name character Slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
     #' @param n.permutations numeric Number of permutations (default=400)
     #' @param smooth boolean Smooth results (default=TRUE)
@@ -2130,7 +2251,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$getSampleDistanceMatrix()
     #' }
     getSampleDistanceMatrix=function(space=c('expression.shifts', 'coda', 'pseudo.bulk'), cell.type=NULL,
-                                     dist=NULL, name=NULL, verbose=self$verbose, ...) {
+                                     dist=NULL, name=NULL, verbose=self$verbose, sample.subset=NULL, ...) {
       space <- match.arg(space)
       if ((space != 'pseudo.bulk') && (length(list(...)) > 0)) stop("Unexpected arguments: ", names(list(...)))
 
@@ -2251,8 +2372,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       p.dists <- self$getSampleDistanceMatrix(
         space=space, cell.type=NULL, dist=dist, name=space.name, sample.subset=sample.subset
       )
-      if (is.null(p.dists)) return(NULL)
+      # Check whether results are empty
+      if (is.null(p.dists)) {
+        warning("An empty sample distance matrix was returned. Consider changing 'space', 'cell.type', 'name',  or 'sample.subset'.")
+        return(NULL)
+      }
 
+      # Check whether any sample names are present in sample.meta and p.dists
+      if (!any(rownames(sample.meta) %in% rownames(p.dists))) {
+        cat("Printing the first three rownames of sample.meta:\n",head(rownames(sample.meta), 3),"\nPrinting the first three sample names:\n",head(rownames(p.dists), 3),"\n"); stop("The rownames of the sample.meta object doesn't match any sample names.")
+      } 
+      
       if (is.data.frame(sample.meta)) {
         sample.meta %<>% lapply(setNames, rownames(.))
       } else if (!is.list(sample.meta)) {
@@ -2274,7 +2404,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         res$padjust <- pvalues
       }
 
-      if (show.warning && any(pvalues < pvalue.cutoff)){
+      if (any(is.na(pvalues))) warning(paste0(paste(names(pvalues)[is.na(pvalues)], sep = "\t")," resulted in NAs when calculating p values. Is the metadata defined for all samples?"))
+      
+      if (show.warning && any(pvalues < pvalue.cutoff, na.rm = TRUE)){
         warning("Significant separation by: ", paste(names(pvalues)[pvalues < pvalue.cutoff], collapse=', '))
       }
 
@@ -2308,8 +2440,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param genes (default=NULL)
     #' @param max.z z-score value to winsorize the estimates for reducing impact of outliers. Default: 20.
     #' @param min.expr.frac minimal fraction of cell expressing a gene for estimating z-scores for it. Default: 0.001.
-    #' @param min.n.samp.per.cond minimul number of samples per condition for estimating z-scores (default: 2)
-    #' @param min.n.obs.per.samp minimul number of cells per samples for estimating z-scores (default: 2)
+    #' @param min.n.samp.per.cond minimal number of samples per condition for estimating z-scores (default: 2)
+    #' @param min.n.obs.per.samp minimal number of cells per samples for estimating z-scores (default: 2)
     #' @param robust whether to use median estimates instead of mean. Using median is more robust,
     #' but greatly increase the number of zeros in the data, leading to bias towards highly-express genes. (Default: FALSE)
     #' @param norm.both boolean (default=TRUE)
@@ -2526,7 +2658,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   - `scores.approx`: vector of approximate gene program scores, estimated for all cells in the dataset
     #'   - `loadings`: matrix with fabia gene loadings per program
     #'   - `gene.scores`: list of vectors of gene scores per program. Contains only genes, selected for
-    #'     the program usin fabia biclustering.
+    #'     the program using fabia biclustering.
     #'   - `bi.clusts` fabia biclustering information, result of the \link[fabia:extractBic]{fabia::extractBic} call
     #' @examples 
     #' \dontrun{
@@ -3019,7 +3151,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           # Sometimes, empty results from GSEA don't have core_enrichment (don't know when, see issue #21)
           ont.res$core_enrichment <- character()
         }
-        ont.res %<>% rename(geneID=core_enrichment, qvalue=qvalues)
+        ont.res %<>% rename(geneID=core_enrichment)
       }
 
       if (readjust.p) {
@@ -3047,10 +3179,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop("'cell.subgroups' must contain at least two groups. Please use plotOntology instead.")
 
       if (only.family.children) {
-        fams <- self$test.results[[name]]$families
+        fams <- private$getResults(name, 'estimateOntology()')$families
         if (is.null(fams))
-          stop("No ontology family results found, please run 'estimateOntologyFamilies' first",
-               " or set only.family.children=FALSE")
+          stop("No ontology family results found, please run 'estimateOntologyFamilies' first, or set only.family.children=FALSE")
       }
 
       # Extract results
@@ -3065,7 +3196,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (only.family.children) {
-        ont.df %<>% getOntologyFamilyChildren(fams=fams, subtype=subtype, genes=genes)
+        ont.df %<>% getOntologyFamilyChildren(fams=fams, subtype=subtype, genes=genes, type=self$test.results[[name]]$type)
       }
 
       if (!is.null(description.regex)) ont.df %<>% .[grep(description.regex, .$Description),]
@@ -3180,12 +3311,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       diag(adj.mat) <- 1
       cell.names <- intersect(rownames(cm), rownames(adj.mat))
 
-      adj.mat %<>% .[cell.names, cell.names, drop=FALSE] %>% as("dgTMatrix")
+      adj.mat %<>% .[cell.names, cell.names, drop=FALSE] %>% as("TsparseMatrix")
 
       if (min.edge.weight > 1e-10) {
         samp.per.cell <- self$sample.per.cell[cell.names]
         adj.mat@x[(samp.per.cell[adj.mat@i + 1] != samp.per.cell[adj.mat@j + 1]) & (adj.mat@x < min.edge.weight)] <- 0.0
-        adj.mat %<>% drop0() %>% as("dgTMatrix")
+        adj.mat %<>% drop0() %>% as("TsparseMatrix")
       }
 
       nns.per.cell <- adj.mat %>% {split(.@j, .@i + 1)} %>%

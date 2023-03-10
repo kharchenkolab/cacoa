@@ -7,7 +7,7 @@
 getNodeBalances(log.f, sbp.my)
 }
 \arguments{
-\item{log.f}{Logarithms of frequnencies}
+\item{log.f}{Logarithms of frequencies}
 
 \item{t}{A phylo object}
 }

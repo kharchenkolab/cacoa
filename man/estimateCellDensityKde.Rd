@@ -2,7 +2,7 @@
 % Please edit documentation in R/cell_density.R
 \name{estimateCellDensityKde}
 \alias{estimateCellDensityKde}
-\title{Estimate cell density in giving embedding, Density will estimated for indivisual sample}
+\title{Estimate cell density in giving embedding, density will be estimated for individual samples}
 \usage{
 estimateCellDensityKde(
   emb,
@@ -23,6 +23,6 @@ estimateCellDensityKde(
 \item{bins}{number of bins for density estimation, default 400}
 }
 \description{
-Estimate cell density in giving embedding, Density will estimated for indivisual sample
+Estimate cell density in giving embedding, density will be estimated for individual samples
 }
 \keyword{internal}

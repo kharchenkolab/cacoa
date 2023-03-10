@@ -1126,7 +1126,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (type %in% c("GO", "DO")) {
         ont.res %<>% .[[genes]]
       } else {
-        if (genes == "up") ont.res %<>% filter(NES >= 0) else if (genes == "down") ont.res %<>% filter(NES <= 0)
+        if (genes == "up") ont.res@result %<>% filter(NES >= 0) else if (genes == "down") ont.res@result %<>% filter(NES <= 0)
       } 
       if (is.null(ont.res)){
         stop("No results found for ", genes, " genes for ", name, ", ", subtype, " for ", cell.type)

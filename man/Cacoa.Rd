@@ -12,396 +12,506 @@ The class encompasses etc etc
 ## Method `Cacoa$new`
 ## ------------------------------------------------
 
-# Is it highly recommended that sample.groups and cell.groups are assigned in the initialization call. Here, "con" is a Conos object.
+# Is it highly recommended that sample.groups and cell.groups are assigned in the initialization call. 
+# Here, "con" is a Conos object.
+\dontrun{
 sample.groups <- c("control","control","disease","disease")
 names(sample.groups) <- names(con$samples)
-sample.groups <- factor(sample.groups)
-# cell.groups should be a named factor where names are cell names corresponding to cell names in the data object. For Conos objects, they should overlap with rownames(con$embedding)
+}
+# cell.groups should be a named factor where names are cell names corresponding to cell names in the data object. 
+# For Conos objects, they should overlap with rownames(con$embedding)
+\dontrun{
 cell.groups <- my.named.annotation.factor
-cao <- Cacoa$new(con, sample.groups = sample.groups, cell.groups =  ref.level = "control", target.level = "disease")
-Estimate expression shift magnitudes
+cao <- Cacoa$new(data.object = con, sample.groups = sample.groups, cell.groups =  ref.level = "control", target.level = "disease")
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$estimateExpressionShiftMagnitudes`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateExpressionShiftMagnitudes()
-Plot expression shift magnitudes
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotExpressionShiftMagnitudes`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateExpressionShiftMagnitudes()
 cao$plotExpressionShiftMagnitudes()
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$estimatePerCellTypeDE`
 ## ------------------------------------------------
 
-cao$estimatePerCellTypeDE()
-Estimate differential gene expression per cell type between conditions
-
+\dontrun{
+cao$estimatePerCellTypeDE() # Deprecated
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$estimateDEPerCellType`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
-Estimate DE stability per cell type
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$estimateDEStabilityPerCellType`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
 cao$estimateDEStabilityPerCellType()
-Estimate DE stability per gene
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$estimateDEStabilityPerGene`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
 cao$estimateDEStabilityPerGene()
-Plot DE stability per cell type
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotDEStabilityPerCellType`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
 cao$estimateDEStability()
 cao$plotDEStabilityPerCellType)
-Plot DE stability per gene
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotDEStabilityPerGene`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
 cao$estimateDEStabilityPerGene()
 cao$plotDEStabilityPerGene()
-Plot number of significant DE genes
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotNumberOfDEGenes`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
 cao$plotNumberOfDEGenes()
-Make volcano plots
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$saveDEasJSON`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
 cao$saveDEasJSON()
-Plot embedding
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotEmbedding`
 ## ------------------------------------------------
 
+\dontrun{
 cao$plotEmbedding()
-Estimate ontology terms based on DEs
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$estimateOntology`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
-cao$estimateOntology()
-Estimate ontology families based on ontology results
+library(org.Hs.eg.db)
+cao$estimateOntology(type = "GSEA", org.db = org.Hs.eg.db)
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$estimateOntologyFamilies`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$estimateOntologyFamilies()
-Identify families containing a specific ontology term or ID
-
+cao$estimateOntology(name = "GSEA")
+cao$estimateOntologyFamilies(name = "GSEA")
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$getFamiliesPerGO`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$getFamiliesPerGO(go.term = "antigen presentation") # Either go.term og go.id has to be specified 
-Bar plot of ontology terms per cell type
-
+cao$estimateOntology(name = "GSEA")
+cao$estimateOntologyFamilies(name = "GSEA")
+cao$getFamiliesPerGO(name = "GSEA", go.term = "antigen presentation") # Either go.term og go.id has to be specified 
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotNumOntologyTermsPerType`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
-cao$estimateOntology()
+cao$estimateOntology(name = "GSEA")
 cao$plotNumOntologyTermsPerType()
-Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 
+cao$estimateOntologyFamilies(name = "GSEA")
+cao$plotNumOntologyTermsPerType(families = TRUE)
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotOntology`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$plotOntology(cell.type = "Neurons") # "cell.type" is a cell type in self$cell.groups used for calculating ontologies
-Plot a heatmap of ontology P values per cell type
-
+cao$estimateOntology(name = "GSEA")
+cao$plotOntology(name = "GSEA", cell.type = "Neurons") # "cell.type" is a cell type in self$cell.groups used for calculating ontologies
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotOntologyHeatmap`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
-cao$estimateOntology()
+cao$estimateOntology(name = "GSEA")
 cao$plotOntologyHeatmap()
-Plot a heatmap of ontology p-values per cell type heatmap, collapsed
 
+cao$estimateOntologyFamilies(name = "GSEA")
+cao$plotOntologyHeatmap(name = "GSEA", only.family.children = TRUE)
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotOntologyHeatmapCollapsed`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$plotOntologyHeatmapCollapsed()
-Plot correlation matrix for ontology terms between cell types
+cao$estimateOntology(name = "GSEA")
+cao$plotOntologyHeatmapCollapsed(name = "GSEA")
 
+cao$estimateOntologyFamilies(name = "GSEA")
+cao$plotOntologyHeatmapCollapsed(name = "GSEA", only.family.children = TRUE)
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotOntologySimilarities`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$plotOntologySimilarities()
-Plot related ontologies in one hierarchical network plot
+cao$estimateOntology(name = "GSEA")
+cao$plotOntologySimilarities(name = "GSEA")
 
+cao$estimateOntologyFamilies(name = "GSEA")
+plotOntologySimilarities(name = "GSEA", only.family.children = TRUE)
+}
+
+## ------------------------------------------------
+## Method `Cacoa$plotOntologyFamily`
+## ------------------------------------------------
+
+\dontrun{
+cao$estimateDEPerCellType()
+cao$estimateOntology(name = "GSEA")
+cao$estimateOntologyFamilies(name = "GSEA")
+cao$plotOntologyFamily(name = "GSEA", cell.type = "Neurons") # "cell.type" is a cell type in self$cell.groups used for calculating ontologies
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$saveOntologyAsTable`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$saveOntologyAsTable(file = "Ontologies.tsv")
-Save family results as a table
+cao$estimateOntology(name = "GSEA")
+cao$saveOntologyAsTable(name = "GSEA", file = "Ontologies.tsv")
+}
 
+## ------------------------------------------------
+## Method `Cacoa$saveFamiliesAsTable`
+## ------------------------------------------------
+
+\dontrun{
+cao$estimateDEPerCellType()
+cao$estimateOntology(name = "GSEA")
+cao$estimateOntologyFamilies(name = "GSEA")
+cao$saveFamiliesAsTable(name = "GSEA", file = "Families.tsv")
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotCellGroupSizes`
 ## ------------------------------------------------
 
+\dontrun{
 cao$plotCellGroupSizes()
-Plot the cell group sizes or proportions per sample
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotCellGroupAbundanceVariation`
 ## ------------------------------------------------
 
+\dontrun{
 cao$plotCellGroupAbundanceVariation()
-Plot compositions in CoDA space (PCA or CDA)
+}
 
+## ------------------------------------------------
+## Method `Cacoa$plotCodaSpace`
+## ------------------------------------------------
+
+\dontrun{
+cao$estimateCellLoadings()
+cao$plotCodaSpace()
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotContrastTree`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateCellLoadings()
 cao$plotContratsTree()
-Plot composition similarity
+}
 
+## ------------------------------------------------
+## Method `Cacoa$plotCompositionSimilarity`
+## ------------------------------------------------
+
+\dontrun{
+cao$estimateCellLoadings()
+cao$plotCompositionSimilarity()
+}
+
+## ------------------------------------------------
+## Method `Cacoa$estimateCellLoadings`
+## ------------------------------------------------
+
+\dontrun{
+cao$estimateCellLoadings()
+}
+
+## ------------------------------------------------
+## Method `Cacoa$plotCellLoadings`
+## ------------------------------------------------
+
+\dontrun{
+cao$estimateCellLoadings()
+cao$plotCellLoadings()
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$estimateCellDensity`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateCellDensity()
-Plot cell density depending on the method that was used for estimating `cao$test.resulst[[name]]`
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotCellDensity`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateCellDensity()
 cao$plotCellDensity()
-Plot cell density variation
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotCellDensityVariation`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateCellDensity(estimate.variation=TRUE)
 cao$plotCellDensityVariation()
-Estimate differential cell density
+}
 
+## ------------------------------------------------
+## Method `Cacoa$estimateDiffCellDensity`
+## ------------------------------------------------
+
+\dontrun{
+cao$estimateCellDensity()
+cao$estimateDiffCellDensity()
+}
+
+## ------------------------------------------------
+## Method `Cacoa$plotDiffCellDensity`
+## ------------------------------------------------
+
+\dontrun{
+cao$estimateCellDensity()
+cao$estimateDiffCellDensity()
+cao$plotDiffCellDensity()
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotExpressionDistance`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateExpressionShiftMagnitudes()
 cao$plotExpressionDistance()
-Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$getSampleDistanceMatrix`
 ## ------------------------------------------------
 
+\dontrun{
 cao$getSampleDistanceMatrix()
-Project samples to 2D space with MDS. Plots results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoadings()
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotSampleDistances`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateExpressionShiftMagnitudes()
 cao$plotSampleDistances()
-Estimate metadata separation using variance on the sample distance graph
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$estimateMetadataSeparation`
 ## ------------------------------------------------
 
-cao$estimateExpressionShiftMagnitudes
+\dontrun{
+cao$estimateExpressionShiftMagnitudes() # or estimateCellLoadings()
 cao$estimateMetadataSeparation(sample.meta = meta.data) # meta.data is a list or data.frame with metadata per sample
-Plot metadata separation
+}
+
+## ------------------------------------------------
+## Method `Cacoa$plotMetadataSeparation`
+## ------------------------------------------------
+
+\dontrun{
+cao$estimateExpressionShiftMagnitudes() # or estimateCellLoadings()
+cao$estimateMetadataSeparation(sample.meta = meta.data)
+cao$plotMetadataSeparation()
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$estimateClusterFreeDE`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateClusterFreeDE()
-Get most changed genes
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$getMostChangedGenes`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateClusterFreeDE()
 cao$getMostChangedGenes(n = 10) # n can be any number of genes to extract
-Estimate Cluster-free Expression Shift
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$estimateClusterFreeExpressionShifts`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateClusterFreeDE()
 cao$estimateClusterFreeExpressionShifts()
-Performs graph smoothing of the cluster-free DE Z-scores
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$smoothClusterFreeZScores`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateClusterFreeDE()
 cao$smoothClusterFreeZScores()
-Estimate Gene Programs based on cluster-free Z-scores on a subsample of
-cells using \link[fabia:fabia]{fabia}. # TODO: update it
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$estimateGenePrograms`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateClusterFreeDE()
 cao$estimateGenePrograms()
-Plot gene program scores
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotGeneProgramScores`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateClusterFreeDE()
 cao$estimateGenePrograms()
 cao$plotGeneProgramScores()
-Plot gene program genes
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotGeneProgramGenes`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateClusterFreeDE()
 cao$estimateGenePrograms()
 cao$plotGeneProgramGenes(program.id = 1) # program.id is any gene program ID in 1:cao$test.results$gene.programs$n.progs
-Plot cluster-free expression shift z-scores
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotClusterFreeExpressionShifts`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateClusterFreeDE()
 cao$estimateClusterFreeExpressionShifts()
 cao$plotClusterFreeExpressionShifts()
-Plot most changed genes
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotMostChangedGenes`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateClusterFreeDE()
 cao$plotMostChangedGenes(n.top.genes = 10) # n.top.genes is any number of genes to plot
-Plot gene expression comparison
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$plotGeneExpressionComparison`
 ## ------------------------------------------------
 
+\dontrun{
 cao$estimateClusterFreeDE()
 cao$plotGeneExpressionComparison()
-Get condition per cell
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$getConditionPerCell`
 ## ------------------------------------------------
 
+\dontrun{
 cao$getConditionPerCell()
-Get joint count matrix
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$getJointCountMatrix`
 ## ------------------------------------------------
 
+\dontrun{
 cao$getJointCountMatrix()
-Get GO environment
-
+}
 
 ## ------------------------------------------------
 ## Method `Cacoa$getGOEnvironment`
 ## ------------------------------------------------
 
+\dontrun{
 cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
+}
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
@@ -563,14 +673,18 @@ a new 'Cacoa' object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{# Is it highly recommended that sample.groups and cell.groups are assigned in the initialization call. Here, "con" is a Conos object.
+\preformatted{# Is it highly recommended that sample.groups and cell.groups are assigned in the initialization call. 
+# Here, "con" is a Conos object.
+\dontrun{
 sample.groups <- c("control","control","disease","disease")
 names(sample.groups) <- names(con$samples)
-sample.groups <- factor(sample.groups)
-# cell.groups should be a named factor where names are cell names corresponding to cell names in the data object. For Conos objects, they should overlap with rownames(con$embedding)
+}
+# cell.groups should be a named factor where names are cell names corresponding to cell names in the data object. 
+# For Conos objects, they should overlap with rownames(con$embedding)
+\dontrun{
 cell.groups <- my.named.annotation.factor
-cao <- Cacoa$new(con, sample.groups = sample.groups, cell.groups =  ref.level = "control", target.level = "disease")
-Estimate expression shift magnitudes
+cao <- Cacoa$new(data.object = con, sample.groups = sample.groups, cell.groups =  ref.level = "control", target.level = "disease")
+}
 }
 \if{html}{\out{</div>}}
 
@@ -615,11 +729,11 @@ Calculate expression shift magnitudes of different clusters between conditions
 
 \item{\code{dist.type}}{type of expression distance: 'shift' (linear shift) 'var' (variance change) or 'total' (both) (default="shift")}
 
-\item{\code{min.cells.per.sample}}{numeric (default=10)}
+\item{\code{min.cells.per.sample}}{numeric minimum cells per sample (default=10)}
 
-\item{\code{min.samp.per.type}}{minimal number of samples per cell type for it to be included (default=2)}
+\item{\code{min.samp.per.type}}{numeric minimal number of samples per cell type for it to be included (default=2)}
 
-\item{\code{min.gene.frac}}{minimal number of cells per cell type expressing a gene for it to be included (default=0.01)}
+\item{\code{min.gene.frac}}{numeric minimal number of cells per cell type expressing a gene for it to be included (default=0.01)}
 
 \item{\code{ref.level}}{character Reference level, e.g. "control" (default=self$ref.level)}
 
@@ -631,11 +745,11 @@ Calculate expression shift magnitudes of different clusters between conditions
 
 \item{\code{name}}{character Test name (default="expression.shifts")}
 
-\item{\code{n.permutations}}{number of permutations for estimating normalization coefficient (default=1000)}
+\item{\code{n.permutations}}{numeric number of permutations for estimating normalization coefficient (default=1000)}
 
-\item{\code{genes}}{if provided, the expression distance is estimated only based on these genes (default=NULL)}
+\item{\code{genes}}{character if provided, the expression distance is estimated only based on these genes (default=NULL)}
 
-\item{\code{n.pcs}}{Number of principal components for estimating expression distance (default=NULL, no PCA)}
+\item{\code{n.pcs}}{numeric Number of principal components for estimating expression distance (default=NULL, no PCA)}
 
 \item{\code{top.n.genes}}{character vector Vector of top genes to show (default=NULL)}
 
@@ -652,8 +766,9 @@ List including:
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateExpressionShiftMagnitudes()
-Plot expression shift magnitudes
+\preformatted{\dontrun{
+cao$estimateExpressionShiftMagnitudes()
+}
 }
 \if{html}{\out{</div>}}
 
@@ -705,8 +820,10 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateExpressionShiftMagnitudes()
+\preformatted{\dontrun{
+cao$estimateExpressionShiftMagnitudes()
 cao$plotExpressionShiftMagnitudes()
+}
 }
 \if{html}{\out{</div>}}
 
@@ -734,9 +851,9 @@ A list of DE genes
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimatePerCellTypeDE()
-Estimate differential gene expression per cell type between conditions
-
+\preformatted{\dontrun{
+cao$estimatePerCellTypeDE() # Deprecated
+}
 }
 \if{html}{\out{</div>}}
 
@@ -747,6 +864,7 @@ Estimate differential gene expression per cell type between conditions
 \if{html}{\out{<a id="method-Cacoa-estimateDEPerCellType"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateDEPerCellType}{}}}
 \subsection{Method \code{estimateDEPerCellType()}}{
+Estimate differential gene expression per cell type between conditions
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEPerCellType(
   cell.groups = self$cell.groups,
@@ -822,9 +940,9 @@ A list of DE genes
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
-Estimate DE stability per cell type
-
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
+}
 }
 \if{html}{\out{</div>}}
 
@@ -835,6 +953,7 @@ Estimate DE stability per cell type
 \if{html}{\out{<a id="method-Cacoa-estimateDEStabilityPerCellType"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateDEStabilityPerCellType}{}}}
 \subsection{Method \code{estimateDEStabilityPerCellType()}}{
+Estimate DE stability per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEStabilityPerCellType(
   de.name = "de",
@@ -862,10 +981,10 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
 cao$estimateDEStabilityPerCellType()
-Estimate DE stability per gene
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -876,6 +995,7 @@ Estimate DE stability per gene
 \if{html}{\out{<a id="method-Cacoa-estimateDEStabilityPerGene"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateDEStabilityPerGene}{}}}
 \subsection{Method \code{estimateDEStabilityPerGene()}}{
+Estimate DE stability per gene
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEStabilityPerGene(
   de.name = "de",
@@ -903,10 +1023,10 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
 cao$estimateDEStabilityPerGene()
-Plot DE stability per cell type
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -917,6 +1037,7 @@ Plot DE stability per cell type
 \if{html}{\out{<a id="method-Cacoa-plotDEStabilityPerCellType"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotDEStabilityPerCellType}{}}}
 \subsection{Method \code{plotDEStabilityPerCellType()}}{
+Plot DE stability per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityPerCellType(
   name = "de.jaccards",
@@ -956,11 +1077,11 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
 cao$estimateDEStability()
 cao$plotDEStabilityPerCellType)
-Plot DE stability per gene
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -971,6 +1092,7 @@ Plot DE stability per gene
 \if{html}{\out{<a id="method-Cacoa-plotDEStabilityPerGene"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotDEStabilityPerGene}{}}}
 \subsection{Method \code{plotDEStabilityPerGene()}}{
+Plot DE stability per gene
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDEStabilityPerGene(
   name = "de",
@@ -995,11 +1117,11 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
 cao$estimateDEStabilityPerGene()
 cao$plotDEStabilityPerGene()
-Plot number of significant DE genes
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1010,6 +1132,7 @@ Plot number of significant DE genes
 \if{html}{\out{<a id="method-Cacoa-plotNumberOfDEGenes"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotNumberOfDEGenes}{}}}
 \subsection{Method \code{plotNumberOfDEGenes()}}{
+Plot number of significant DE genes
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotNumberOfDEGenes(
   name = "de",
@@ -1052,10 +1175,10 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
 cao$plotNumberOfDEGenes()
-Make volcano plots
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1066,6 +1189,7 @@ Make volcano plots
 \if{html}{\out{<a id="method-Cacoa-plotVolcano"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotVolcano}{}}}
 \subsection{Method \code{plotVolcano()}}{
+Make volcano plots
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotVolcano(
   name = "de",
@@ -1099,15 +1223,17 @@ Make volcano plots
 }
 \subsection{Returns}{
 A ggplot2 object
+\dontrun{
 cao$estimateDEPerCellType()
 cao$plotVolcano()
-Save DE results as JSON files
+}
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-saveDEasJSON"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-saveDEasJSON}{}}}
 \subsection{Method \code{saveDEasJSON()}}{
+Save DE results as JSON files
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveDEasJSON(
   saveprefix = NULL,
@@ -1147,10 +1273,10 @@ saved JSON objects
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
 cao$saveDEasJSON()
-Plot embedding
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1161,6 +1287,7 @@ Plot embedding
 \if{html}{\out{<a id="method-Cacoa-plotEmbedding"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotEmbedding}{}}}
 \subsection{Method \code{plotEmbedding()}}{
+Plot embedding
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotEmbedding(
   embedding = self$embedding,
@@ -1188,9 +1315,9 @@ embedding plot as output by sccore::embeddingPlot
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$plotEmbedding()
-Estimate ontology terms based on DEs
-
+\preformatted{\dontrun{
+cao$plotEmbedding()
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1201,6 +1328,7 @@ Estimate ontology terms based on DEs
 \if{html}{\out{<a id="method-Cacoa-estimateOntology"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateOntology}{}}}
 \subsection{Method \code{estimateOntology()}}{
+Estimate ontology terms based on DEs
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntology(
   type = c("GO", "DO", "GSEA"),
@@ -1268,9 +1396,11 @@ A list containing a list of terms per ontology, and a data frame with merged res
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
-cao$estimateOntology()
-Estimate ontology families based on ontology results
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
+library(org.Hs.eg.db)
+cao$estimateOntology(type = "GSEA", org.db = org.Hs.eg.db)
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1281,6 +1411,7 @@ Estimate ontology families based on ontology results
 \if{html}{\out{<a id="method-Cacoa-estimateOntologyFamilies"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateOntologyFamilies}{}}}
 \subsection{Method \code{estimateOntologyFamilies()}}{
+Estimate ontology families based on ontology results
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateOntologyFamilies(name = "GO", p.adj = 0.05)}\if{html}{\out{</div>}}
 }
@@ -1288,9 +1419,9 @@ Estimate ontology families based on ontology results
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{name}}{character Type of ontology result: "GO", "GSEA", or "DO" (default="GO")}
 
-\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
+\item{\code{p.adj}}{double Cutoff for adjusted p (default=0.05)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1299,11 +1430,11 @@ List of families and ontology data per cell type
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$estimateOntologyFamilies()
-Identify families containing a specific ontology term or ID
-
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
+cao$estimateOntology(name = "GSEA")
+cao$estimateOntologyFamilies(name = "GSEA")
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1314,6 +1445,7 @@ Identify families containing a specific ontology term or ID
 \if{html}{\out{<a id="method-Cacoa-getFamiliesPerGO"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-getFamiliesPerGO}{}}}
 \subsection{Method \code{getFamiliesPerGO()}}{
+Identify families containing a specific ontology term or ID
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getFamiliesPerGO(
   name = "GO",
@@ -1341,11 +1473,12 @@ Data frame
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$getFamiliesPerGO(go.term = "antigen presentation") # Either go.term og go.id has to be specified 
-Bar plot of ontology terms per cell type
-
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
+cao$estimateOntology(name = "GSEA")
+cao$estimateOntologyFamilies(name = "GSEA")
+cao$getFamiliesPerGO(name = "GSEA", go.term = "antigen presentation") # Either go.term og go.id has to be specified 
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1356,6 +1489,7 @@ Bar plot of ontology terms per cell type
 \if{html}{\out{<a id="method-Cacoa-plotNumOntologyTermsPerType"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotNumOntologyTermsPerType}{}}}
 \subsection{Method \code{plotNumOntologyTermsPerType()}}{
+Bar plot of ontology terms per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotNumOntologyTermsPerType(
   name = "GO",
@@ -1386,11 +1520,14 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
-cao$estimateOntology()
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
+cao$estimateOntology(name = "GSEA")
 cao$plotNumOntologyTermsPerType()
-Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 
+cao$estimateOntologyFamilies(name = "GSEA")
+cao$plotNumOntologyTermsPerType(families = TRUE)
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1401,6 +1538,7 @@ Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \if{html}{\out{<a id="method-Cacoa-plotOntology"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotOntology}{}}}
 \subsection{Method \code{plotOntology()}}{
+Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntology(
   cell.type,
@@ -1445,11 +1583,11 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$plotOntology(cell.type = "Neurons") # "cell.type" is a cell type in self$cell.groups used for calculating ontologies
-Plot a heatmap of ontology P values per cell type
-
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
+cao$estimateOntology(name = "GSEA")
+cao$plotOntology(name = "GSEA", cell.type = "Neurons") # "cell.type" is a cell type in self$cell.groups used for calculating ontologies
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1460,6 +1598,7 @@ Plot a heatmap of ontology P values per cell type
 \if{html}{\out{<a id="method-Cacoa-plotOntologyHeatmap"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotOntologyHeatmap}{}}}
 \subsection{Method \code{plotOntologyHeatmap()}}{
+Plot a heatmap of ontology P values per cell type
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyHeatmap(
   name = "GO",
@@ -1552,11 +1691,14 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
-cao$estimateOntology()
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
+cao$estimateOntology(name = "GSEA")
 cao$plotOntologyHeatmap()
-Plot a heatmap of ontology p-values per cell type heatmap, collapsed
 
+cao$estimateOntologyFamilies(name = "GSEA")
+cao$plotOntologyHeatmap(name = "GSEA", only.family.children = TRUE)
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1567,6 +1709,7 @@ Plot a heatmap of ontology p-values per cell type heatmap, collapsed
 \if{html}{\out{<a id="method-Cacoa-plotOntologyHeatmapCollapsed"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotOntologyHeatmapCollapsed}{}}}
 \subsection{Method \code{plotOntologyHeatmapCollapsed()}}{
+Plot a heatmap of ontology p-values per cell type heatmap, collapsed
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyHeatmapCollapsed(
   name = "GO",
@@ -1670,11 +1813,14 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$plotOntologyHeatmapCollapsed()
-Plot correlation matrix for ontology terms between cell types
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
+cao$estimateOntology(name = "GSEA")
+cao$plotOntologyHeatmapCollapsed(name = "GSEA")
 
+cao$estimateOntologyFamilies(name = "GSEA")
+cao$plotOntologyHeatmapCollapsed(name = "GSEA", only.family.children = TRUE)
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1685,6 +1831,7 @@ Plot correlation matrix for ontology terms between cell types
 \if{html}{\out{<a id="method-Cacoa-plotOntologySimilarities"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotOntologySimilarities}{}}}
 \subsection{Method \code{plotOntologySimilarities()}}{
+Plot correlation matrix for ontology terms between cell types
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologySimilarities(
   name = "GO",
@@ -1715,11 +1862,14 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$plotOntologySimilarities()
-Plot related ontologies in one hierarchical network plot
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
+cao$estimateOntology(name = "GSEA")
+cao$plotOntologySimilarities(name = "GSEA")
 
+cao$estimateOntologyFamilies(name = "GSEA")
+plotOntologySimilarities(name = "GSEA", only.family.children = TRUE)
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1730,6 +1880,7 @@ Plot related ontologies in one hierarchical network plot
 \if{html}{\out{<a id="method-Cacoa-plotOntologyFamily"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotOntologyFamily}{}}}
 \subsection{Method \code{plotOntologyFamily()}}{
+Plot related ontologies in one hierarchical network plot
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotOntologyFamily(
   name = "GO",
@@ -1781,17 +1932,26 @@ Plot related ontologies in one hierarchical network plot
 }
 \subsection{Returns}{
 Rgraphviz object
-cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$estimateOntologyFamilies()
-cao$plotOntologyFamily(cell.type = "Neurons") # "cell.type" is a cell type in self$cell.groups used for calculating ontologies
-Save ontology results as a table
 }
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
+cao$estimateOntology(name = "GSEA")
+cao$estimateOntologyFamilies(name = "GSEA")
+cao$plotOntologyFamily(name = "GSEA", cell.type = "Neurons") # "cell.type" is a cell type in self$cell.groups used for calculating ontologies
+}
+}
+\if{html}{\out{</div>}}
+
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-saveOntologyAsTable"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-saveOntologyAsTable}{}}}
 \subsection{Method \code{saveOntologyAsTable()}}{
+Save ontology results as a table
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveOntologyAsTable(
   file,
@@ -1828,11 +1988,11 @@ table for import into text editor
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$saveOntologyAsTable(file = "Ontologies.tsv")
-Save family results as a table
-
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
+cao$estimateOntology(name = "GSEA")
+cao$saveOntologyAsTable(name = "GSEA", file = "Ontologies.tsv")
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1843,6 +2003,7 @@ Save family results as a table
 \if{html}{\out{<a id="method-Cacoa-saveFamiliesAsTable"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-saveFamiliesAsTable}{}}}
 \subsection{Method \code{saveFamiliesAsTable()}}{
+Save family results as a table
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveFamiliesAsTable(
   file,
@@ -1878,17 +2039,26 @@ Save family results as a table
 }
 \subsection{Returns}{
 table for import into text editor
-cao$estimateDEPerCellType()
-cao$estimateOntology()
-cao$estimateOntologyFamilies()
-cao$saveFamiliesAsTable(file = "Families.tsv")
-Plot the cell group sizes or proportions per sample
 }
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
+cao$estimateDEPerCellType()
+cao$estimateOntology(name = "GSEA")
+cao$estimateOntologyFamilies(name = "GSEA")
+cao$saveFamiliesAsTable(name = "GSEA", file = "Families.tsv")
+}
+}
+\if{html}{\out{</div>}}
+
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-plotCellGroupSizes"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotCellGroupSizes}{}}}
 \subsection{Method \code{plotCellGroupSizes()}}{
+Plot the cell group sizes or proportions per sample
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellGroupSizes(
   cell.groups = self$cell.groups,
@@ -1922,9 +2092,9 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$plotCellGroupSizes()
-Plot the cell group sizes or proportions per sample
-
+\preformatted{\dontrun{
+cao$plotCellGroupSizes()
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1935,6 +2105,7 @@ Plot the cell group sizes or proportions per sample
 \if{html}{\out{<a id="method-Cacoa-plotCellGroupAbundanceVariation"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotCellGroupAbundanceVariation}{}}}
 \subsection{Method \code{plotCellGroupAbundanceVariation()}}{
+Plot the cell group sizes or proportions per sample
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellGroupAbundanceVariation(
   cell.groups = self$cell.groups,
@@ -1962,9 +2133,9 @@ ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$plotCellGroupAbundanceVariation()
-Plot compositions in CoDA space (PCA or CDA)
-
+\preformatted{\dontrun{
+cao$plotCellGroupAbundanceVariation()
+}
 }
 \if{html}{\out{</div>}}
 
@@ -1975,6 +2146,7 @@ Plot compositions in CoDA space (PCA or CDA)
 \if{html}{\out{<a id="method-Cacoa-plotCodaSpace"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotCodaSpace}{}}}
 \subsection{Method \code{plotCodaSpace()}}{
+Plot compositions in CoDA space (PCA or CDA)
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCodaSpace(
   space = "CDA",
@@ -2008,15 +2180,24 @@ Plot compositions in CoDA space (PCA or CDA)
 }
 \subsection{Returns}{
 A ggplot2 object
+}
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
 cao$estimateCellLoadings()
 cao$plotCodaSpace()
-Plot contrast tree
 }
+}
+\if{html}{\out{</div>}}
+
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-plotContrastTree"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotContrastTree}{}}}
 \subsection{Method \code{plotContrastTree()}}{
+Plot contrast tree
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotContrastTree(
   cell.groups = self$cell.groups,
@@ -2062,10 +2243,10 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateCellLoadings()
+\preformatted{\dontrun{
+cao$estimateCellLoadings()
 cao$plotContratsTree()
-Plot composition similarity
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -2076,6 +2257,7 @@ Plot composition similarity
 \if{html}{\out{<a id="method-Cacoa-plotCompositionSimilarity"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotCompositionSimilarity}{}}}
 \subsection{Method \code{plotCompositionSimilarity()}}{
+Plot composition similarity
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCompositionSimilarity(
   cell.groups = self$cell.groups,
@@ -2103,15 +2285,24 @@ Plot composition similarity
 }
 \subsection{Returns}{
 A ggplot2 object
+}
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
 cao$estimateCellLoadings()
 cao$plotCompositionSimilarity()
-Estimate cell loadings
 }
+}
+\if{html}{\out{</div>}}
+
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-estimateCellLoadings"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateCellLoadings}{}}}
 \subsection{Method \code{estimateCellLoadings()}}{
+Estimate cell loadings
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateCellLoadings(
   n.boot = 1000,
@@ -2154,14 +2345,23 @@ Estimate cell loadings
 }
 \subsection{Returns}{
 resulting cell loadings
-cao$estimateCellLoadings()
-Plot Loadings
 }
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
+cao$estimateCellLoadings()
+}
+}
+\if{html}{\out{</div>}}
+
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-plotCellLoadings"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotCellLoadings}{}}}
 \subsection{Method \code{plotCellLoadings()}}{
+Plot Loadings
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellLoadings(
   alpha = 0.01,
@@ -2195,15 +2395,24 @@ Plot Loadings
 }
 \subsection{Returns}{
 A ggplot2 object
+}
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
 cao$estimateCellLoadings()
 cao$plotCellLoadings()
-Estimate cell density in giving embedding
 }
+}
+\if{html}{\out{</div>}}
+
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-estimateCellDensity"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateCellDensity}{}}}
 \subsection{Method \code{estimateCellDensity()}}{
+Estimate cell density in giving embedding
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateCellDensity(
   bins = 400,
@@ -2250,9 +2459,9 @@ estimated cell densities
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateCellDensity()
-Plot cell density depending on the method that was used for estimating `cao$test.resulst[[name]]`
-
+\preformatted{\dontrun{
+cao$estimateCellDensity()
+}
 }
 \if{html}{\out{</div>}}
 
@@ -2263,6 +2472,7 @@ Plot cell density depending on the method that was used for estimating `cao$test
 \if{html}{\out{<a id="method-Cacoa-plotCellDensity"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotCellDensity}{}}}
 \subsection{Method \code{plotCellDensity()}}{
+Plot cell density depending on the method that was used for estimating \code{cao$test.resulst[[name]]}
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellDensity(
   show.grid = TRUE,
@@ -2323,10 +2533,10 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateCellDensity()
+\preformatted{\dontrun{
+cao$estimateCellDensity()
 cao$plotCellDensity()
-Plot cell density variation
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -2337,6 +2547,7 @@ Plot cell density variation
 \if{html}{\out{<a id="method-Cacoa-plotCellDensityVariation"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotCellDensityVariation}{}}}
 \subsection{Method \code{plotCellDensityVariation()}}{
+Plot cell density variation
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellDensityVariation(
   type = "mad",
@@ -2370,10 +2581,10 @@ ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateCellDensity(estimate.variation=TRUE)
+\preformatted{\dontrun{
+cao$estimateCellDensity(estimate.variation=TRUE)
 cao$plotCellDensityVariation()
-Estimate differential cell density
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -2384,6 +2595,7 @@ Estimate differential cell density
 \if{html}{\out{<a id="method-Cacoa-estimateDiffCellDensity"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateDiffCellDensity}{}}}
 \subsection{Method \code{estimateDiffCellDensity()}}{
+Estimate differential cell density
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDiffCellDensity(
   type = "permutation",
@@ -2420,15 +2632,24 @@ Estimate differential cell density
 }
 \subsection{Returns}{
 estimated differential cell densities
+}
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
 cao$estimateCellDensity()
 cao$estimateDiffCellDensity()
-Estimate differential cell density
 }
+}
+\if{html}{\out{</div>}}
+
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-plotDiffCellDensity"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotDiffCellDensity}{}}}
 \subsection{Method \code{plotDiffCellDensity()}}{
+Estimate differential cell density
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDiffCellDensity(
   type = NULL,
@@ -2483,16 +2704,25 @@ Estimate differential cell density
 }
 \subsection{Returns}{
 ggplot2 object
+}
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
 cao$estimateCellDensity()
 cao$estimateDiffCellDensity()
 cao$plotDiffCellDensity()
-Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
 }
+}
+\if{html}{\out{</div>}}
+
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-plotExpressionDistance"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotExpressionDistance}{}}}
 \subsection{Method \code{plotExpressionDistance()}}{
+Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionDistance(
   name = "expression.shifts",
@@ -2523,10 +2753,10 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateExpressionShiftMagnitudes()
+\preformatted{\dontrun{
+cao$estimateExpressionShiftMagnitudes()
 cao$plotExpressionDistance()
-Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -2537,6 +2767,7 @@ Plot inter-sample expression distance. The inputs to this function are the resul
 \if{html}{\out{<a id="method-Cacoa-getSampleDistanceMatrix"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-getSampleDistanceMatrix}{}}}
 \subsection{Method \code{getSampleDistanceMatrix()}}{
+Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getSampleDistanceMatrix(
   space = c("expression.shifts", "coda", "pseudo.bulk"),
@@ -2570,9 +2801,9 @@ sample distance matrix
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$getSampleDistanceMatrix()
-Project samples to 2D space with MDS. Plots results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoadings()
-
+\preformatted{\dontrun{
+cao$getSampleDistanceMatrix()
+}
 }
 \if{html}{\out{</div>}}
 
@@ -2583,6 +2814,7 @@ Project samples to 2D space with MDS. Plots results from cao$estimateExpressionS
 \if{html}{\out{<a id="method-Cacoa-plotSampleDistances"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotSampleDistances}{}}}
 \subsection{Method \code{plotSampleDistances()}}{
+Project samples to 2D space with MDS. Plots results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoadings()
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotSampleDistances(
   space = "expression.shifts",
@@ -2643,10 +2875,10 @@ A ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateExpressionShiftMagnitudes()
+\preformatted{\dontrun{
+cao$estimateExpressionShiftMagnitudes()
 cao$plotSampleDistances()
-Estimate metadata separation using variance on the sample distance graph
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -2657,6 +2889,7 @@ Estimate metadata separation using variance on the sample distance graph
 \if{html}{\out{<a id="method-Cacoa-estimateMetadataSeparation"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateMetadataSeparation}{}}}
 \subsection{Method \code{estimateMetadataSeparation()}}{
+Estimate metadata separation using variance on the sample distance graph
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateMetadataSeparation(
   sample.meta,
@@ -2718,9 +2951,10 @@ results
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateExpressionShiftMagnitudes
+\preformatted{\dontrun{
+cao$estimateExpressionShiftMagnitudes() # or estimateCellLoadings()
 cao$estimateMetadataSeparation(sample.meta = meta.data) # meta.data is a list or data.frame with metadata per sample
-Plot metadata separation
+}
 }
 \if{html}{\out{</div>}}
 
@@ -2731,6 +2965,7 @@ Plot metadata separation
 \if{html}{\out{<a id="method-Cacoa-plotMetadataSeparation"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotMetadataSeparation}{}}}
 \subsection{Method \code{plotMetadataSeparation()}}{
+Plot metadata separation
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotMetadataSeparation(
   name = "metadata.separation",
@@ -2746,16 +2981,28 @@ Plot metadata separation
 
 \item{\code{pvalue.y}}{numeric (default=0.93)}
 
-\item{\code{...}}{additional parameters forwarded to \link[plotMeanMedValuesPerCellType]{plotMeanMedValuesPerCellType}
-Estimate differential expression Z-scores between two conditions per individual cell}
+\item{\code{...}}{additional parameters forwarded to \link[plotMeanMedValuesPerCellType]{plotMeanMedValuesPerCellType}}
 }
 \if{html}{\out{</div>}}
 }
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
+cao$estimateExpressionShiftMagnitudes() # or estimateCellLoadings()
+cao$estimateMetadataSeparation(sample.meta = meta.data)
+cao$plotMetadataSeparation()
+}
+}
+\if{html}{\out{</div>}}
+
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-estimateClusterFreeDE"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateClusterFreeDE}{}}}
 \subsection{Method \code{estimateClusterFreeDE()}}{
+Estimate differential expression Z-scores between two conditions per individual cell
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeDE(
   n.top.genes = Inf,
@@ -2833,9 +3080,9 @@ Results are also stored in the \code{cluster.free.de} field.
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateClusterFreeDE()
-Get most changed genes
-
+\preformatted{\dontrun{
+cao$estimateClusterFreeDE()
+}
 }
 \if{html}{\out{</div>}}
 
@@ -2846,6 +3093,7 @@ Get most changed genes
 \if{html}{\out{<a id="method-Cacoa-getMostChangedGenes"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-getMostChangedGenes}{}}}
 \subsection{Method \code{getMostChangedGenes()}}{
+Get most changed genes
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getMostChangedGenes(
   n,
@@ -2888,10 +3136,10 @@ named numeric with scores and gene symbols as names
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateClusterFreeDE()
+\preformatted{\dontrun{
+cao$estimateClusterFreeDE()
 cao$getMostChangedGenes(n = 10) # n can be any number of genes to extract
-Estimate Cluster-free Expression Shift
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -2902,6 +3150,7 @@ Estimate Cluster-free Expression Shift
 \if{html}{\out{<a id="method-Cacoa-estimateClusterFreeExpressionShifts"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateClusterFreeExpressionShifts}{}}}
 \subsection{Method \code{estimateClusterFreeExpressionShifts()}}{
+Estimate Cluster-free Expression Shift
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeExpressionShifts(
   n.top.genes = 3000,
@@ -2971,10 +3220,10 @@ Results are also stored in the \code{cluster.free.expr.shifts} field.
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateClusterFreeDE()
+\preformatted{\dontrun{
+cao$estimateClusterFreeDE()
 cao$estimateClusterFreeExpressionShifts()
-Performs graph smoothing of the cluster-free DE Z-scores
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -2985,6 +3234,7 @@ Performs graph smoothing of the cluster-free DE Z-scores
 \if{html}{\out{<a id="method-Cacoa-smoothClusterFreeZScores"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-smoothClusterFreeZScores}{}}}
 \subsection{Method \code{smoothClusterFreeZScores()}}{
+Performs graph smoothing of the cluster-free DE Z-scores
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$smoothClusterFreeZScores(
   n.top.genes = 1000,
@@ -3032,11 +3282,10 @@ Sparse matrix of smoothed Z-scores. Results are also stored in the \code{cluster
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateClusterFreeDE()
+\preformatted{\dontrun{
+cao$estimateClusterFreeDE()
 cao$smoothClusterFreeZScores()
-Estimate Gene Programs based on cluster-free Z-scores on a subsample of
-cells using \link[fabia:fabia]{fabia}. # TODO: update it
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -3047,6 +3296,7 @@ cells using \link[fabia:fabia]{fabia}. # TODO: update it
 \if{html}{\out{<a id="method-Cacoa-estimateGenePrograms"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateGenePrograms}{}}}
 \subsection{Method \code{estimateGenePrograms()}}{
+Estimate Gene Programs based on cluster-free Z-scores
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateGenePrograms(
   method = c("pam", "leiden", "fabia"),
@@ -3126,10 +3376,10 @@ the program usin fabia biclustering.
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateClusterFreeDE()
+\preformatted{\dontrun{
+cao$estimateClusterFreeDE()
 cao$estimateGenePrograms()
-Plot gene program scores
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -3140,6 +3390,7 @@ Plot gene program scores
 \if{html}{\out{<a id="method-Cacoa-plotGeneProgramScores"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotGeneProgramScores}{}}}
 \subsection{Method \code{plotGeneProgramScores()}}{
+Plot gene program scores
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotGeneProgramScores(
   name = "gene.programs",
@@ -3185,11 +3436,11 @@ gene program scores
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateClusterFreeDE()
+\preformatted{\dontrun{
+cao$estimateClusterFreeDE()
 cao$estimateGenePrograms()
 cao$plotGeneProgramScores()
-Plot gene program genes
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -3200,6 +3451,7 @@ Plot gene program genes
 \if{html}{\out{<a id="method-Cacoa-plotGeneProgramGenes"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotGeneProgramGenes}{}}}
 \subsection{Method \code{plotGeneProgramGenes()}}{
+Plot gene program genes
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotGeneProgramGenes(
   program.id,
@@ -3233,11 +3485,11 @@ plotGeneExpressionComparison
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateClusterFreeDE()
+\preformatted{\dontrun{
+cao$estimateClusterFreeDE()
 cao$estimateGenePrograms()
 cao$plotGeneProgramGenes(program.id = 1) # program.id is any gene program ID in 1:cao$test.results$gene.programs$n.progs
-Plot cluster-free expression shift z-scores
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -3248,6 +3500,7 @@ Plot cluster-free expression shift z-scores
 \if{html}{\out{<a id="method-Cacoa-plotClusterFreeExpressionShifts"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotClusterFreeExpressionShifts}{}}}
 \subsection{Method \code{plotClusterFreeExpressionShifts()}}{
+Plot cluster-free expression shift z-scores
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotClusterFreeExpressionShifts(
   cell.groups = self$cell.groups,
@@ -3299,11 +3552,11 @@ Plot cluster-free expression shift z-scores
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateClusterFreeDE()
+\preformatted{\dontrun{
+cao$estimateClusterFreeDE()
 cao$estimateClusterFreeExpressionShifts()
 cao$plotClusterFreeExpressionShifts()
-Plot most changed genes
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -3314,6 +3567,7 @@ Plot most changed genes
 \if{html}{\out{<a id="method-Cacoa-plotMostChangedGenes"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotMostChangedGenes}{}}}
 \subsection{Method \code{plotMostChangedGenes()}}{
+Plot most changed genes
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotMostChangedGenes(
   n.top.genes,
@@ -3353,10 +3607,10 @@ plot of the most changed genes via plotGeneExpressionComparison()
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateClusterFreeDE()
+\preformatted{\dontrun{
+cao$estimateClusterFreeDE()
 cao$plotMostChangedGenes(n.top.genes = 10) # n.top.genes is any number of genes to plot
-Plot gene expression comparison
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -3367,6 +3621,7 @@ Plot gene expression comparison
 \if{html}{\out{<a id="method-Cacoa-plotGeneExpressionComparison"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotGeneExpressionComparison}{}}}
 \subsection{Method \code{plotGeneExpressionComparison()}}{
+Plot gene expression comparison
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotGeneExpressionComparison(
   genes = NULL,
@@ -3454,10 +3709,10 @@ list
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$estimateClusterFreeDE()
+\preformatted{\dontrun{
+cao$estimateClusterFreeDE()
 cao$plotGeneExpressionComparison()
-Get condition per cell
-
+}
 }
 \if{html}{\out{</div>}}
 
@@ -3468,6 +3723,7 @@ Get condition per cell
 \if{html}{\out{<a id="method-Cacoa-getConditionPerCell"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-getConditionPerCell}{}}}
 \subsection{Method \code{getConditionPerCell()}}{
+Get condition per cell
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getConditionPerCell()}\if{html}{\out{</div>}}
 }
@@ -3477,9 +3733,9 @@ conditions per cell
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$getConditionPerCell()
-Get joint count matrix
-
+\preformatted{\dontrun{
+cao$getConditionPerCell()
+}
 }
 \if{html}{\out{</div>}}
 
@@ -3490,6 +3746,7 @@ Get joint count matrix
 \if{html}{\out{<a id="method-Cacoa-getJointCountMatrix"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-getJointCountMatrix}{}}}
 \subsection{Method \code{getJointCountMatrix()}}{
+Get joint count matrix
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getJointCountMatrix(force = FALSE, raw = TRUE)}\if{html}{\out{</div>}}
 }
@@ -3508,9 +3765,9 @@ joint count matrix
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$getJointCountMatrix()
-Get GO environment
-
+\preformatted{\dontrun{
+cao$getJointCountMatrix()
+}
 }
 \if{html}{\out{</div>}}
 
@@ -3521,6 +3778,7 @@ Get GO environment
 \if{html}{\out{<a id="method-Cacoa-getGOEnvironment"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-getGOEnvironment}{}}}
 \subsection{Method \code{getGOEnvironment()}}{
+Get GO environment
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getGOEnvironment(org.db, verbose = FALSE, ignore.cache = NULL)}\if{html}{\out{</div>}}
 }
@@ -3541,7 +3799,9 @@ GO environment
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
+\preformatted{\dontrun{
+cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
+}
 }
 \if{html}{\out{</div>}}
 

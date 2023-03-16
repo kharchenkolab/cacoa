@@ -468,13 +468,6 @@ constructTreeUp <- function(freqs, groups) {
 
 
 #' @keywords internal
-tree2dendro_my <- function(tree){
-  h.tmp <- compute.brlen(tree, method="Grafen") %>% as.hclust()
-  d.cur <- as.dendrogram(h.tmp)
-  return(d.cur)
-}
-
-#' @keywords internal
 constructTreeUpDown <- function(cnts, groups){
   cnts[cnts <= 0] <- 0.5
   

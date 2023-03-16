@@ -1796,7 +1796,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' }
     estimateCellLoadings=function(n.boot=1000, ref.cell.type=NULL, name='coda', n.seed=239,
                                   cells.to.remove=NULL, cells.to.remain=NULL, samples.to.remove=NULL,
-                                  filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose) {
+                                  filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose, method="lda") {
       checkPackageInstalled(c("coda.base", "psych"), cran=TRUE)
 
       if ((!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))))
@@ -1814,9 +1814,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       cnts <- tmp$d.counts
       groups <- tmp$d.groups
 
-      res <- runCoda(cnts, groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type)
       res$cnts <- cnts
       res$groups <- groups
+      res <- runCoda(cnts, tmp$d.groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type, method=method, n.cores=n.cores, verbose=verbose)
 
       ## Calculate normalized counts
       ref.cell.type <- res$ref.cell.type

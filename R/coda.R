@@ -2,13 +2,13 @@
 #'
 #' @param cnts Counts of cell typer in samples. Rows - samples, columns - cell types
 #' @param groups Vector with boolean values. TRUE - sample in the case group, FALSE - sample in the control group
-#' @param criteria Method to get loadings
+#' @param method Method to get loadings
 #' @param ref.cell.type Reference cell type
 #' @return Updated data frame with Z scores
 #' @keywords internal
-getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
+getLoadings <- function(cnts, groups, method = 'lda', ref.cell.type = NULL) {
   discriminant.methods <- c('lda', 'svm', 'cda', 'cda.std')
-  if(!(criteria %in% discriminant.methods)) stop(paste('The discriminant method', criteria, 'is not supported'))
+  if(!(method %in% discriminant.methods)) stop(paste('The discriminant method', method, 'is not supported'))
   if(!is.null(ref.cell.type) && !(ref.cell.type %in% colnames(cnts)))
      stop(paste('Reference cell type', ref.cell.type, 'is not correct. Correct cell types are:',
                 paste0(colnames(cnts), collapse = ', ') ))
@@ -41,7 +41,7 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
   b.df$groups <- 1*groups
 
   # Optimization
-  if(criteria == 'lda') {
+  if(method == 'lda') {
     if(is.null(ref.cell.type)) {  # pure linear regression which is proportional LDA when number of classes = 2
       res.lm <- lm(groups ~ ., data = b.df)
       w <- res.lm$coefficients[-1]
@@ -73,7 +73,7 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
       # res.lm <- lm(groups ~ ., data = b.df)
       # res.qp$unconstrained.solution[-n.qp] / res.lm$coefficients[-1]
     }
-  } else if(criteria == 'svm') {
+  } else if(method == 'svm') {
     # ---- SVM
     b.model <- e1071::svm(groups~., data = b.df, kernel = "linear", scale = FALSE)
     # Get hyperplane parameters
@@ -81,12 +81,12 @@ getLoadings <- function(cnts, groups, criteria = 'lda', ref.cell.type = NULL) {
     # b.svm <- -b.model$rho # intercept
     # # create new score
     # v <- b %*% w + b.svm
-  } else if(criteria == 'cda') {  # Canonical discriminant analysis
+  } else if(method == 'cda') {  # Canonical discriminant analysis
     model <- lm(b ~ groups)
     cda <- candisc::candisc(model, ndim=1)
     # w <- cda$structure
     w <- cda$coeffs.raw
-  } else if(criteria == 'cda.std') {
+  } else if(method == 'cda.std') {
     b.norm <-  apply(b, 2, function(y) y - mean(y))
 
     # PCA
@@ -184,7 +184,7 @@ produceResampling <- function(cnts, groups, n.perm = 1000, seed = 239) {
 
 
 #' @keywords internal
-runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, null.distr=FALSE) {
+runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, null.distr=FALSE, method="lda", n.cores=1, verbose=TRUE) {
   # Create datasets as
   samples.init <- produceResampling(cnts = cnts, groups = groups, n.perm = n.boot, seed = n.seed)
   loadings <- do.call(cbind, lapply(1:length(samples.init$cnts), function(ib) {
@@ -195,7 +195,6 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
   # Calculate p-values of confidence interval by bootstrap
   tmp <- referenceSet(cnts, groups, p.thresh = 0.1)
   cell.list <- tmp$cell.list
-
 
   mean.list <- c()  # mean value of loadings in a list
   for (i.list in 1:length(cell.list)) {
@@ -255,7 +254,7 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
       do.call(cbind, lapply(1:length(samples.perm$cnts), function(ib) {
         getLoadings(samples.perm$cnts[[ib]], samples.perm$groups[[ib]])
       })) %>% rowMeans()
-    }, n.cores=60, progress=TRUE, mc.preschedule=TRUE))
+    }, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE))
 
     loadings.stat <- rowMeans(loadings) - ref.load.level
     pval <- sapply(names(loadings.stat), function(s) {

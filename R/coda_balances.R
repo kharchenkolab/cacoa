@@ -64,7 +64,6 @@ getRndSbp <- function(n.cell.types, n.seed=239){
 #' @keywords internal
 getRndBalances <- function(d.counts, n.seed=239){
   checkData(d.counts)
-  # ---------
 
   n.cell.types <- ncol(d.counts)
   sbp <- getRndSbp(n.cell.types, n.seed)
@@ -85,7 +84,6 @@ getRndBalances <- function(d.counts, n.seed=239){
 #' @keywords internal
 getLogFreq <- function(d.counts){
   checkData(d.counts)
-  # ---------
 
   data.norm <- d.counts
   data.norm[data.norm == 0] <- 1
@@ -104,7 +102,6 @@ getLogFreq <- function(d.counts){
 #' @keywords internal
 getCdaLoadings <- function(d.counts, d.groups, n.seed = 239){
   checkDataGroups(d.counts, d.groups)
-  # ---------
 
   bal <- getRndBalances(d.counts, n.seed)
 
@@ -130,7 +127,6 @@ getCdaLoadings <- function(d.counts, d.groups, n.seed = 239){
   }
 
   cda.loadings <- pca.loadings[,1:(n.pc-i)]  %*% as.matrix(cda$structure)
-  # cda.loadings <- pca.loadings[,1:(n.pc-i)]  %*% as.matrix(cda$coeffs.raw)
 
   return(cda.loadings)
 }
@@ -145,7 +141,6 @@ getCdaLoadings <- function(d.counts, d.groups, n.seed = 239){
 #' @keywords internal
 removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
   checkDataGroups(d.used, d.groups)
-  # ---------
 
   pca.res <- prcomp(d.used, center = FALSE, scale. = FALSE)
 
@@ -154,11 +149,8 @@ removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
   n.pc.var <- sum(expl.var < thresh.pc.var) + 1
   n.pc.var <- ncol(pca.res$x) - 1
 
-  # d.used.explained <- d.working %*% t(pca.res$rotation[,1:n.pc.var])
-
   for (i in 0:n.pc.var) {
     stop.loop <- TRUE
-    # print(d.groups)
     d.working <- pca.res$x[,1:(n.pc.var - i)] # data to cda
 
     model<-lm(d.working ~ d.groups)

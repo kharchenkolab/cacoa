@@ -1798,6 +1798,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                   cells.to.remove=NULL, cells.to.remain=NULL, samples.to.remove=NULL,
                                   filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose, method="lda") {
       checkPackageInstalled(c("coda.base", "psych"), cran=TRUE)
+      if (method == "svm") checkPackageInstalled("e1071", cran=TRUE)
+      if (method == "cda") checkPackageInstalled("candisc", cran=TRUE)
+      if (method == "lda") checkPackageInstalled("quadprog", cran=TRUE)
 
       if ((!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))))
         stop('Incorrect reference cell type')

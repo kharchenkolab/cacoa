@@ -31,7 +31,6 @@ estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2
 plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, target.level, font.size=3, palette=NULL) {
   group.names <- c(ref.level, target.level)
   rda.plot <- ggplot(df.space, aes(x=S1, y=S2)) +
-    #   geom_text(aes(label=rownames(df_pca) %in% samplegroups$trgt),size=4) +
     geom_hline(yintercept=0, linetype="dotted") +
     geom_vline(xintercept=0, linetype="dotted") +
     geom_point(aes(colour = factor(group.names[d.groups + 1] ))) +
@@ -81,7 +80,6 @@ distTreeOrder <- function(t, tree.order){
   return(s)
 }
 
-
 #' helper function for creating dendograms
 #' @keywords internal
 plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme=theme_get(), label.angle=90,
@@ -103,8 +101,6 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
     if (verbose) message('up and down')
     t.cur <- constructTreeUpDown(d.counts, d.groups)
   }
-
-  # t.cur <- constructBestPartitionTree(d.counts, d.groups)
 
   if (!is.null(loadings.mean) && is.null(tree.order)) {
     tree.order <- names(sort(loadings.mean))
@@ -135,9 +131,7 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
 
   tree <- t.cur$tree
   sbp <- sbpInNodes(tree)
-  # sbp = t.cur$sbp
 
-  # ---------------------------------
   # Positions of the dendrogram
   dend.data <- ggdendro::dendro_data(t.cur$dendro, type = "rectangle")
   types.order <- dend.data$labels$label
@@ -157,7 +151,6 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
   node.pos$id <- tree$edge[,1]  # id of the inner node
   node.pos$to <- tree$edge[,2]
 
-
   # Positions of inner nodes
   innode.pos <- unique(node.pos[,c('x','y','id')])
   rownames(innode.pos) <- innode.pos$id
@@ -169,8 +162,6 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
   }
   innode.pos <- innode.pos[order(innode.pos$id),]
 
-  # ----------------------------------------
-
   # Balances
   balances <- getNodeBalances(log.f, sbp)
   colnames(balances) <- rownames(innode.pos)
@@ -178,11 +169,6 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
   p.val <- c()
   for (i in 1:ncol(balances)) {
     aov.data <- data.frame(balance = balances[,i], group = d.groups)
-    # anova
-    # res <- aov(balance ~ group, data=aov.data)
-    # res <- aov(group ~ balance, data=aov.data)
-    # p.val <- c(p.val,summary(res)[[1]][1,5])
-
     mod <- lm(group ~ balance, data=aov.data)
     res <- summary(mod)
     p.val <- c(p.val, res$coefficients[2,4])

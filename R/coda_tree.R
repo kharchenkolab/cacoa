@@ -9,10 +9,7 @@ NULL
 #' @keywords internal
 constructTree <- function(cnts, groups, partition.thresh = 0){
   checkDataGroups(cnts, groups)
-  # ---------
-
   n.cells <- ncol(cnts)
-
   sbp.cda <- matrix(0, nrow = n.cells, ncol = n.cells-1, dimnames = list(colnames(cnts), c()))
 
   unsolved.cells <- list(rownames(sbp.cda))  # List of cell types to separate
@@ -23,18 +20,13 @@ constructTree <- function(cnts, groups, partition.thresh = 0){
       sbp.cda[unsolved.cells[[id.bal]][2],id.bal] <- -1
       next
     }
-    # ------------------------------------------------
     #  Data for the current subset of cells
     d.tmp <- cnts[, colnames(cnts) %in% unsolved.cells[[id.bal]]]
 
-    # -------
     # Define the most contrast balance
-    # can.loadings <- getCdaLoadings(d.tmp, d.groups)
     can.loadings <- getLoadings(d.tmp, groups)
-
     cells.tmp <- rownames(can.loadings)
 
-    # -------
     # Get cell types from opposite sides of the principal balance
     cells.plus <- cells.tmp[can.loadings > partition.thresh]
     cells.minus <- cells.tmp[can.loadings < partition.thresh]
@@ -49,10 +41,8 @@ constructTree <- function(cnts, groups, partition.thresh = 0){
     if(length(cells.plus) > 1){
       unsolved.cells[[length(unsolved.cells) + 1]] <- cells.plus
     }
-
   }
 
-  # res <- list(sbp = sbp.cda, partiotions = unsolved.cells)
   tree <- sbp2tree(sbp.cda)
   h.tmp <- compute.brlen(tree, method="Grafen") %>% as.hclust()
   d.cur <- as.dendrogram(h.tmp)
@@ -88,9 +78,7 @@ constructTreeUpDown <- function(cnts, groups){
 
   ref.set <- referenceSet(cnts, groups)
   cell.lists <- ref.set$cell.list
-
   cell.types <- colnames(cnts)
-
 
   # Constrtuct sbp from lists
   freqs <- (cnts)/rowSums(cnts)
@@ -99,8 +87,6 @@ constructTreeUpDown <- function(cnts, groups){
     freqs.lists <- cbind(freqs.lists, apply(freqs[,cell.lists[[i]],drop=FALSE], 1, psych::geometric.mean))
   }
   colnames(freqs.lists) <- paste('tmp', 1:length(cell.lists), sep = '')
-
-  # t.list <- constructTree(freqs.lists, groups)
   t.list <- constructBestPartitionTree(freqs.lists, groups)
   sbp.list <- t.list$sbp
 
@@ -125,7 +111,6 @@ constructTreeUpDown <- function(cnts, groups){
     freqs.tmp <- freqs[,cell.lists[[i]], drop = FALSE]
     if(ncol(freqs.tmp) == 1) next
 
-    # tmp <- constructTree(freqs.tmp, groups)
     tmp <- constructBestPartitionTree(freqs.tmp, groups)
     sbp.tmp <- tmp$sbp
 
@@ -133,7 +118,6 @@ constructTreeUpDown <- function(cnts, groups){
     rownames(sbp.add) <- rownames(sbp.all)
     sbp.add[rownames(sbp.tmp),] <- sbp.tmp
     sbp.all <- cbind(sbp.all, sbp.add)
-
   }
 
   tree <- sbp2tree(sbp.all)
@@ -153,7 +137,6 @@ constructTreeUpDown <- function(cnts, groups){
 #' @keywords internal
 sbp2tree <- function(sbpart){
   checkSbpWhole(sbpart)
-  # ---------
 
   n.cells <- nrow(sbpart)
   edges <- c(n.cells+1, n.cells+1)
@@ -241,8 +224,6 @@ bestPartition <- function(freqs.tmp, groups){
 
   sbp.best <- (sbp[p == min(p),] > 0) * 2 - 1
   names(sbp.best) <- colnames(freqs.tmp)
-  # print(sbp.best)
-
 
   return(sbp.best)
 }
@@ -257,10 +238,7 @@ bestPartition <- function(freqs.tmp, groups){
 #' @keywords internal
 constructBestPartitionTree <- function(cnts, groups, partition.thresh = 0){
   checkDataGroups(cnts, groups)
-  # ---------
-
   n.cells <- ncol(cnts)
-
   sbp.cda <- matrix(0, nrow = n.cells, ncol = n.cells-1, dimnames = list(colnames(cnts), c()))
 
   unsolved.cells <- list(rownames(sbp.cda))  # List of cell types to separate
@@ -271,23 +249,17 @@ constructBestPartitionTree <- function(cnts, groups, partition.thresh = 0){
       sbp.cda[unsolved.cells[[id.bal]][2],id.bal] <- -1
       next
     }
-    # ------------------------------------------------
     #  Data for the current subset of cells
     d.tmp <- cnts[, colnames(cnts) %in% unsolved.cells[[id.bal]]]
-
-    # -------
+    
     # Find the best partition
     sbp.best <- bestPartition(d.tmp, groups)
 
-    # -------
     # Get cell types from opposite sides of the principal balance
     cells.tmp <- colnames(d.tmp)
 
     cells.plus <- cells.tmp[sbp.best > 0]
     cells.minus <- cells.tmp[sbp.best < 0]
-    #
-    # print(cells.plus)
-    # print(cells.minus)
 
     sbp.cda[cells.minus, id.bal] <- -1
     sbp.cda[cells.plus, id.bal] <- 1
@@ -302,7 +274,6 @@ constructBestPartitionTree <- function(cnts, groups, partition.thresh = 0){
 
   }
 
-  # res <- list(sbp = sbp.cda, partiotions = unsolved.cells)
   tree <- sbp2tree(sbp.cda)
   h.tmp <- compute.brlen(tree, method="Grafen") %>% as.hclust()
   d.cur <- as.dendrogram(h.tmp)

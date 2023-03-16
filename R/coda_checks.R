@@ -11,7 +11,6 @@ checkData <- function(d.counts){
     stop('Cell count information is missed')
 }
 
-
 #' Check groups
 #' 
 #' @param d.groups Groups variable for samples
@@ -22,7 +21,6 @@ checkGroups <- function(d.groups){
   if(length(d.groups) == 0) 
     stop('Group information is missed')
 }
-
 
 #' Check cell count data and groups
 #' 
@@ -36,7 +34,6 @@ checkDataGroups <- function(d.counts, d.groups){
     stop('Sample size in cell count matrix and in group variable is not the same')
 }
 
-
 #' Check sequential binary partitions(sbp)
 #' 
 #' @param sbp Sbp matrix: each row - partition
@@ -47,7 +44,6 @@ checkSbp <- function(sbp){
   if(nrow(sbp) == 0)
     stop('No partitions are provided')
 }
-
 
 #' Check sequential binary partitions(sbp) for the whole set of balances
 #' 
@@ -61,7 +57,6 @@ checkSbpWhole <- function(sbp){
     stop('Wrong number of balances provided')
 }
 
-
 #' Check the agreement between sbp and cell count table
 #' 
 #' @param d.counts Cell count table
@@ -73,7 +68,6 @@ checkDataSbp <- function(d.counts, sbp){
   if(ncol(sbp) != ncol(d.counts))
     stop('Number of cell types in data and sbp should be equal')
 }
-
 
 #' Check data and list of cells
 #' 
@@ -89,7 +83,6 @@ checkDataAndCells <- function(d.counts, cells){
     stop('Some cell types do not exist in the data')
 }
 
-
 #' Check Tree
 #' 
 #' @param tree phylo tree
@@ -97,9 +90,7 @@ checkDataAndCells <- function(d.counts, cells){
 checkTree <- function(tree){
   if(is.null(tree))
     stop('Tree is not provided')
-  # typeof
 }
-
 
 #' Check agreement between Tree and the Cell count table
 #' 
@@ -111,4 +102,3 @@ checkDataTree <- function(d.counts, tree){
   checkData(d.counts)
   checkDataAndCells(d.counts, tree$tip.label)
 }
-

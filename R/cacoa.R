@@ -1809,25 +1809,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain,
                                      samples.to.remove=samples.to.remove)
 
+      if (ncol(tmp$d.counts) < 3) stop("Cell loadings cannot be estimated for less than 3 cell types.")
+      
       if (filter.empty.cell.types) {
         cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
           (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
-      cnts <- tmp$d.counts
-      groups <- tmp$d.groups
-
-      res$cnts <- cnts
-      res$groups <- groups
-      res <- runCoda(cnts, tmp$d.groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type, method=method, n.cores=n.cores, verbose=verbose)
+      
+      res <- runCoda(tmp$d.counts, tmp$d.groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type, method=method, n.cores=n.cores, verbose=verbose)
+      res$cnts <- tmp$d.counts
+      res$groups <- tmp$d.groups
 
       ## Calculate normalized counts
       ref.cell.type <- res$ref.cell.type
 
-      ref.cnts <- cnts[, ref.cell.type, drop=FALSE]
+      ref.cnts <- tmp$d.counts[, ref.cell.type, drop=FALSE]
       ref.cnts[ref.cnts == 0] <- 0.5
       norm.val <- 1 / nrow(ref.cnts) * rowSums(log(ref.cnts))
-      cnts.nonzero <- cnts
+      cnts.nonzero <- tmp$d.counts
       cnts.nonzero[cnts.nonzero == 0] <- 0.5
       res$norm.cnts <- log(cnts.nonzero) - norm.val
 

@@ -162,8 +162,8 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
     }
     if (id.ref.cluster == -1) stop('Wrong name of reference cell type')
   }
+  
   ref.cell.type <- cell.list[[id.ref.cluster]]
-
 
   # sorting of cell types and reference level
   cell.types.order <- c()
@@ -172,9 +172,11 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
       .[order(-abs(rowMeans(loadings[.,, drop=FALSE]) - mean.list[id.ref.cluster]))]
     cell.types.order <- c(cell.types.order, cell.types.tmp)
   }
+  
   loadings <- loadings[cell.types.order,]
-  ref.load.level <- mean(loadings[ref.cell.type,])
-
+  ref.load.level <- loadings[ref.cell.type,] %>% 
+    unlist() %>% 
+    mean()
 
   if (!null.distr) {
     tmp <- rowSums(ref.load.level > loadings)
@@ -248,6 +250,10 @@ referenceSet <- function(freqs, groups, p.thresh=0.05) {
   id.ref <- which(len.cell.list == max(len.cell.list))
 
   # Make mx.first symmetric
+  if (!exists("mx.first")) {
+    mx.first <- mx
+  }
+  
   for(i in 1:nrow(mx.first)){
     for(j in 1:ncol(mx.first)){
       if (j <= i) next

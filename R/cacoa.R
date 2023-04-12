@@ -5,6 +5,7 @@
 #' @importFrom stats cor cutree dist hclust lm loadings median model.matrix na.omit p.adjust pf prcomp
 #' @importFrom stats qnorm quantile relevel reorder rmultinom runif sd setNames symnum var wilcox.test
 #' @importFrom utils stack
+#' @importFrom sccore checkPackageInstalled
 NULL
 
 

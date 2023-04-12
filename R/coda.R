@@ -1,4 +1,5 @@
 #' @import ape
+#' @importFrom sccore checkPackageInstalled
 NULL
 
 #' Get loadings by different methods

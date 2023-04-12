@@ -1,3 +1,6 @@
+#' @importFrom sccore checkPackageInstalled
+NULL
+
 #' Expression shift magnitudes per cluster between conditions
 #'
 #' @param cm.per.type List of normalized count matrices per cell type

@@ -1,4 +1,5 @@
 #' @import dplyr
+#' @importFrom sccore checkPackageInstalled
 NULL
 
 #' Map gene ENTREZ IDs to gene SYMBOLs

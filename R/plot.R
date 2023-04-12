@@ -4,6 +4,7 @@
 #' @import magrittr
 #' @import ape
 #' @importFrom reshape2 melt
+#' @importFrom sccore checkPackageInstalled
 NULL
 
 #' Helper function for creating color palettes

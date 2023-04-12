@@ -25,7 +25,7 @@ Imports:
     R6,
     reshape2,
     rlang,
-    sccore (>= 1.0.0),
+    sccore (>= 1.0.3),
     tibble,
     tidyr,
     tidytree

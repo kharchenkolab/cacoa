@@ -1,3 +1,6 @@
+#' @importFrom sccore checkPackageInstalled
+NULL
+
 #' Estimate cell density in giving embedding, density will be estimated for individual samples
 #'
 #' @param emb cell embedding matrix

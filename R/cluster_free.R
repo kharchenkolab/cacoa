@@ -1,3 +1,6 @@
+#' @importFrom sccore checkPackageInstalled
+NULL
+
 #' Estimate Gene Programs with FABIA
 #' 
 #' @param n.programs maximal number of gene programs to find (parameter `p` for fabia).

@@ -10,7 +10,6 @@ Depends:
 biocViews:
 Imports:
     ape,
-    candisc,
     cowplot,
     dplyr,
     ggplot2,
@@ -33,6 +32,7 @@ Imports:
 Suggests:
     abind,
     BiocParallel,
+    candisc,
     cluster,
     clusterProfiler (>= 3.0.0),
     coda.base,

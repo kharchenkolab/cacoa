@@ -1796,8 +1796,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' }
     estimateCellLoadings=function(n.boot=1000, ref.cell.type=NULL, name='coda', n.seed=239,
                                   cells.to.remove=NULL, cells.to.remain=NULL, samples.to.remove=NULL,
-                                  filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose) {
+                                  filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose, method="lda") {
       checkPackageInstalled(c("coda.base", "psych"), cran=TRUE)
+      if (method == "svm") checkPackageInstalled("e1071", cran=TRUE)
+      if (method == "cda") checkPackageInstalled("candisc", cran=TRUE)
+      if (method == "lda") checkPackageInstalled("quadprog", cran=TRUE)
 
       if ((!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))))
         stop('Incorrect reference cell type')
@@ -1806,25 +1809,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain,
                                      samples.to.remove=samples.to.remove)
 
+      if (ncol(tmp$d.counts) < 3) stop("Cell loadings cannot be estimated for less than 3 cell types.")
+      
       if (filter.empty.cell.types) {
         cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
           (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
         tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
       }
-      cnts <- tmp$d.counts
-      groups <- tmp$d.groups
-
-      res <- runCoda(cnts, groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type)
-      res$cnts <- cnts
-      res$groups <- groups
+      
+      res <- runCoda(tmp$d.counts, tmp$d.groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type, method=method, n.cores=n.cores, verbose=verbose)
+      res$cnts <- tmp$d.counts
+      res$groups <- tmp$d.groups
 
       ## Calculate normalized counts
       ref.cell.type <- res$ref.cell.type
 
-      ref.cnts <- cnts[, ref.cell.type, drop=FALSE]
+      ref.cnts <- tmp$d.counts[, ref.cell.type, drop=FALSE]
       ref.cnts[ref.cnts == 0] <- 0.5
       norm.val <- 1 / nrow(ref.cnts) * rowSums(log(ref.cnts))
-      cnts.nonzero <- cnts
+      cnts.nonzero <- tmp$d.counts
       cnts.nonzero[cnts.nonzero == 0] <- 0.5
       res$norm.cnts <- log(cnts.nonzero) - norm.val
 

@@ -2808,7 +2808,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateGenePrograms()
     #' cao$plotGeneProgramGenes(program.id = 1) # program.id is any gene program ID in 1:cao$test.results$gene.programs$n.progs
     #' }
-    plotGeneProgramGenes = function(program.id, name="gene.programs", ordering=c("similarity", "loading"), max.genes=9, plots="z.adj", ...) {
+    plotGeneProgramGenes = function(program.id, name="gene.programs", ordering=c("similarity", "loading"), max.genes=9, build.panel=TRUE, ncol=3, plots="z.adj", ...) {
       ordering <- match.arg(ordering)
       gene.progs <- private$getResults(name, "estimateGenePrograms")
       if (gene.progs$method == "fabia")
@@ -2820,7 +2820,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop("Can't find program", program.id)
 
       scores %<>% head(max.genes)
-      return(self$plotGeneExpressionComparison(scores=scores, plots=plots, ...))
+      
+      if (build.panel && max.genes == 2) ncol <- 2
+      return(self$plotGeneExpressionComparison(scores=scores, plots=plots, ncol=ncol, ...))
     },
 
     #' @description Plot cluster-free expression shift z-scores
@@ -2890,10 +2892,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateClusterFreeDE()
     #' cao$plotMostChangedGenes(n.top.genes = 10) # n.top.genes is any number of genes to plot
     #' }
-    plotMostChangedGenes = function(n.top.genes, method="z", min.z=0.5, min.lfc=1, max.score=20, cell.subset=NULL, excluded.genes=NULL, ...) {
+    plotMostChangedGenes = function(n.top.genes, method="z", min.z=0.5, min.lfc=1, max.score=20, cell.subset=NULL, excluded.genes=NULL, ncol = 1, ...) {
       scores <- self$getMostChangedGenes(n.top.genes, method=method, min.z=min.z, min.lfc=min.lfc, max.score=max.score,
                                          cell.subset=cell.subset, excluded.genes=excluded.genes)
-      self$plotGeneExpressionComparison(scores=scores, cell.subset=cell.subset, ...)
+      self$plotGeneExpressionComparison(scores=scores, cell.subset=cell.subset, ncol=ncol, ...)
     },
 
     #' @description Plot gene expression comparison
@@ -2930,7 +2932,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                           min.z=qnorm(0.9), max.z=4, max.z.adj=NULL, max.lfc=3, smoothed=FALSE,
                                           gene.palette=dark.red.palette, z.palette=NULL, z.adj.palette=z.palette,
                                           lfc.palette=NULL, scale.z.palette=TRUE, plot.na=-1, adj.list=NULL,
-                                          build.panel=TRUE, nrow=1, cell.subset=NULL, groups=NULL, subgroups=NULL,
+                                          build.panel=TRUE, nrow=1, ncol=1, cell.subset=NULL, groups=NULL, subgroups=NULL,
                                           keep.limits=NULL, name="cluster.free.de", ...) {
       unexpected.plots <- setdiff(plots, c("z.adj", "z", "lfc", "expression"))
       if (length(unexpected.plots) > 0) stop("Unexpected values in `plots`: ", unexpected.plots)
@@ -3009,6 +3011,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       })
 
       if (length(genes) == 1) return(ggs[[1]])
+      
+      if (build.panel && length(ggs) > 1) ggs <- cowplot::plot_grid(plotlist = ggs, ncol = ncol)
+      
       return(ggs)
     },
 

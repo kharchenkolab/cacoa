@@ -106,12 +106,12 @@ cao$plotNumberOfDEGenes()
 }
 
 ## ------------------------------------------------
-## Method `Cacoa$saveDEasJSON`
+## Method `Cacoa$saveDeAsJson`
 ## ------------------------------------------------
 
 \dontrun{
 cao$estimateDEPerCellType()
-cao$saveDEasJSON()
+cao$saveDeAsJson()
 }
 
 ## ------------------------------------------------
@@ -556,7 +556,7 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item \href{#method-Cacoa-plotDEStabilityPerGene}{\code{Cacoa$plotDEStabilityPerGene()}}
 \item \href{#method-Cacoa-plotNumberOfDEGenes}{\code{Cacoa$plotNumberOfDEGenes()}}
 \item \href{#method-Cacoa-plotVolcano}{\code{Cacoa$plotVolcano()}}
-\item \href{#method-Cacoa-saveDEasJSON}{\code{Cacoa$saveDEasJSON()}}
+\item \href{#method-Cacoa-saveDeAsJson}{\code{Cacoa$saveDeAsJson()}}
 \item \href{#method-Cacoa-plotEmbedding}{\code{Cacoa$plotEmbedding()}}
 \item \href{#method-Cacoa-estimateOntology}{\code{Cacoa$estimateOntology()}}
 \item \href{#method-Cacoa-estimateOntologyFamilies}{\code{Cacoa$estimateOntologyFamilies()}}
@@ -1224,12 +1224,12 @@ cao$plotVolcano()
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Cacoa-saveDEasJSON"></a>}}
-\if{latex}{\out{\hypertarget{method-Cacoa-saveDEasJSON}{}}}
-\subsection{Method \code{saveDEasJSON()}}{
+\if{html}{\out{<a id="method-Cacoa-saveDeAsJson"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-saveDeAsJson}{}}}
+\subsection{Method \code{saveDeAsJson()}}{
 Save DE results as JSON files
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveDEasJSON(
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$saveDeAsJson(
   saveprefix = NULL,
   dir.name = "JSON",
   de.raw = NULL,
@@ -1269,7 +1269,7 @@ saved JSON objects
 \if{html}{\out{<div class="r example copy">}}
 \preformatted{\dontrun{
 cao$estimateDEPerCellType()
-cao$saveDEasJSON()
+cao$saveDeAsJson()
 }
 }
 \if{html}{\out{</div>}}
@@ -1885,7 +1885,7 @@ Plot related ontologies in one hierarchical network plot
   family = NULL,
   genes = "up",
   subtype = "BP",
-  plot.type = "complete",
+  plot.type = c("complete", "dense", "minimal"),
   show.ids = FALSE,
   string.length = 14,
   legend.label.size = 1,
@@ -2311,7 +2311,8 @@ Estimate cell loadings
   samples.to.remove = NULL,
   filter.empty.cell.types = TRUE,
   n.cores = self$n.cores,
-  verbose = self$verbose
+  verbose = self$verbose,
+  method = "lda"
 )}\if{html}{\out{</div>}}
 }
 
@@ -2337,6 +2338,8 @@ Estimate cell loadings
 \item{\code{n.cores}}{integer Number of cores to use for parallelization (default=self$n.cores)}
 
 \item{\code{verbose}}{boolean Print messages (default=self$verbose)}
+
+\item{\code{method}}{character One of 'lda', svm', 'cda', or 'cda.std' (default=lda)}
 }
 \if{html}{\out{</div>}}
 }
@@ -3458,6 +3461,8 @@ Plot gene program genes
   name = "gene.programs",
   ordering = c("similarity", "loading"),
   max.genes = 9,
+  build.panel = TRUE,
+  ncol = 3,
   plots = "z.adj",
   ...
 )}\if{html}{\out{</div>}}
@@ -3473,6 +3478,10 @@ Plot gene program genes
 \item{\code{ordering}}{character vector (default=c("similarity", "loading"))}
 
 \item{\code{max.genes}}{integer (default=9)}
+
+\item{\code{build.panel}}{boolean Plot in a grid (default=TRUE)}
+
+\item{\code{ncol}}{numeric Number of columns for build.panel (default=3)}
 
 \item{\code{plots}}{character string (default="z.adj")}
 
@@ -3577,6 +3586,8 @@ Plot most changed genes
   max.score = 20,
   cell.subset = NULL,
   excluded.genes = NULL,
+  build.panel = TRUE,
+  ncol = 1,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -3596,7 +3607,11 @@ Plot most changed genes
 
 \item{\code{cell.subset}}{(default=NULL)}
 
-\item{\code{excluded.genes}}{List of genes to exclude during estimation. For example, a list of mitochondrial genes.}
+\item{\code{excluded.genes}}{(default=NULL)}
+
+\item{\code{build.panel}}{boolean Plot in grid (default=TRUE)}
+
+\item{\code{ncol}}{numeric Number of columns for build.panel (default=1)}
 
 \item{\code{...}}{additional parameters input to self$plotGeneExpressionComparison()}
 }
@@ -3642,6 +3657,7 @@ Plot gene expression comparison
   adj.list = NULL,
   build.panel = TRUE,
   nrow = 1,
+  ncol = 1,
   cell.subset = NULL,
   groups = NULL,
   subgroups = NULL,
@@ -3688,7 +3704,9 @@ Plot gene expression comparison
 
 \item{\code{build.panel}}{boolean (default=TRUE)}
 
-\item{\code{nrow}}{(default=1)}
+\item{\code{nrow}}{numeric Number of rows for build.panel (default=1)}
+
+\item{\code{ncol}}{numeric Number of columns for build.panel (default = 1)}
 
 \item{\code{cell.subset}}{(default=NULL)}
 

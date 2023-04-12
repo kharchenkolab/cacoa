@@ -4,14 +4,19 @@
 \alias{getLoadings}
 \title{Get loadings by different methods}
 \usage{
-getLoadings(cnts, groups, criteria = "lda", ref.cell.type = NULL)
+getLoadings(
+  cnts,
+  groups,
+  method = c("lda", "svm", "cda", "cda.std"),
+  ref.cell.type = NULL
+)
 }
 \arguments{
 \item{cnts}{Counts of cell typer in samples. Rows - samples, columns - cell types}
 
 \item{groups}{Vector with boolean values. TRUE - sample in the case group, FALSE - sample in the control group}
 
-\item{criteria}{Method to get loadings}
+\item{method}{Method to get loadings}
 
 \item{ref.cell.type}{Reference cell type}
 }

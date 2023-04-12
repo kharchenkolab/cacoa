@@ -1792,6 +1792,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param filter.empty.cell.types boolean Remove cell types without cells (default=TRUE)
     #' @param n.cores integer Number of cores to use for parallelization (default=self$n.cores)
     #' @param verbose boolean Print messages (default=self$verbose)
+    #' @param method character One of 'lda', svm', 'cda', or 'cda.std' (default=lda)
     #' @return resulting cell loadings
     #' @examples 
     #' \dontrun{
@@ -1800,7 +1801,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateCellLoadings=function(n.boot=1000, ref.cell.type=NULL, name='coda', n.seed=239,
                                   cells.to.remove=NULL, cells.to.remain=NULL, samples.to.remove=NULL,
                                   filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose, method="lda") {
+      # Checks
       checkPackageInstalled(c("coda.base", "psych"), cran=TRUE)
+      method <- match.arg(method)
       if (method == "svm") checkPackageInstalled("e1071", cran=TRUE)
       if (method == "cda") checkPackageInstalled("candisc", cran=TRUE)
       if (method == "lda") checkPackageInstalled("quadprog", cran=TRUE)
@@ -2799,6 +2802,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param program.id program id
     #' @param ordering character vector (default=c("similarity", "loading"))
     #' @param max.genes integer (default=9)
+    #' @param build.panel boolean Plot in a grid (default=TRUE)
+    #' @param ncol numeric Number of columns for build.panel (default=3)
     #' @param plots character string (default="z.adj")
     #' @param ... additional parameters passed to plotGeneExpressionComparison()
     #' @return plotGeneExpressionComparison
@@ -2885,6 +2890,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.lfc numeric (default=1)
     #' @param max.score numeric (default=20)
     #' @param cell.subset (default=NULL)
+    #' @param excluded.genes (default=NULL)
+    #' @param build.panel boolean Plot in grid (default=TRUE)
+    #' @param ncol numeric Number of columns for build.panel (default=1)
     #' @param ... additional parameters input to self$plotGeneExpressionComparison()
     #' @return plot of the most changed genes via plotGeneExpressionComparison()
     #' @examples 
@@ -2892,10 +2900,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateClusterFreeDE()
     #' cao$plotMostChangedGenes(n.top.genes = 10) # n.top.genes is any number of genes to plot
     #' }
-    plotMostChangedGenes = function(n.top.genes, method="z", min.z=0.5, min.lfc=1, max.score=20, cell.subset=NULL, excluded.genes=NULL, ncol = 1, ...) {
+    plotMostChangedGenes = function(n.top.genes, method="z", min.z=0.5, min.lfc=1, max.score=20, cell.subset=NULL, excluded.genes=NULL, build.panel=TRUE, ncol = 1, ...) {
       scores <- self$getMostChangedGenes(n.top.genes, method=method, min.z=min.z, min.lfc=min.lfc, max.score=max.score,
                                          cell.subset=cell.subset, excluded.genes=excluded.genes)
-      self$plotGeneExpressionComparison(scores=scores, cell.subset=cell.subset, ncol=ncol, ...)
+      self$plotGeneExpressionComparison(scores=scores, cell.subset=cell.subset, build.panel=build.panel, ncol=ncol, ...)
     },
 
     #' @description Plot gene expression comparison
@@ -2916,7 +2924,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param plot.na (default=-1)
     #' @param adj.list (default=NULL)
     #' @param build.panel boolean (default=TRUE)
-    #' @param nrow (default=1)
+    #' @param nrow numeric Number of rows for build.panel (default=1)
+    #' @param ncol numeric Number of columns for build.panel (default = 1)
     #' @param cell.subset (default=NULL)
     #' @param groups (default=NULL)
     #' @param subgroups (default=NULL)

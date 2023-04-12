@@ -826,6 +826,7 @@ clusteredOntologyDotplot <- function(ont.res, p.adj=0.05, min.genes=1, cut.h=0.6
   enrichplot::dotplot(ont.res, showCategory=top.n, ...)
 }
 
+#' Internal function for estimating CDA space
 #' @keywords internal
 estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2){
   cell.loadings <- c()
@@ -852,6 +853,7 @@ estimateCdaSpace <- function(d.counts, d.groups, thresh.pc.var = 0.95, n.dim = 2
   return(list(red=df.cda, loadings=df.loadings))
 }
 
+#' Internal plotting function to plot CoDA space
 #' @keywords internal
 plotCodaSpaceInner <- function(df.space, df.loadings, d.groups, ref.level, target.level, font.size=3, palette=NULL) {
   group.names <- c(ref.level, target.level)
@@ -1096,6 +1098,8 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
   return(px)
 }
 
+#' Internal plotting function for cell loadings
+#' @keywords internal
 plotCellLoadings <- function(loadings, pval, ref.level, target.level, signif.threshold=0.05, jitter.alpha=0.1,
                              palette=NULL, show.pvals=FALSE, plot.theme=theme_get(), jitter.size=1,
                              ordering=c("pvalue", "loading"), ref.load.level=0, annotation.x=NULL, annotation.y=1) {

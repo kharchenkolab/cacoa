@@ -699,6 +699,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (length(cell.types) == 1) {
         return(plotVolcano(de[[cell.types]], color.var=color.var, palette=palette, plot.theme=self$plot.theme, ...))
+      } else if (length(cell.types) == 2) {
+        n.col <- 2
       }
 
       if (!build.panel) {

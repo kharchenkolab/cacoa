@@ -733,9 +733,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @examples
     #' \dontrun{
     #' cao$estimateDEPerCellType()
-    #' cao$saveDEasJSON()
+    #' cao$saveDeAsJson()
     #' }
-    saveDEasJSON=function(saveprefix=NULL, dir.name="JSON", de.raw=NULL, sample.groups=self$sample.groups, de.name='de',
+    saveDeAsJson=function(saveprefix=NULL, dir.name="JSON", de.raw=NULL, sample.groups=self$sample.groups, de.name='de',
                           ref.level=self$ref.level, gene.metadata=NULL, verbose=self$verbose) {
       if (is.null(de.raw)) {
         de.raw <- private$getResults(de.name, "estimateDEPerCellType")
@@ -751,7 +751,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (is.null(saveprefix)) saveprefix <- ""
 
-      saveDEasJSON(de.raw=de.raw, saveprefix=saveprefix, dir.name=dir.name, gene.metadata=gene.metadata,
+      sccore::saveDeAsJson(de.raw=de.raw, saveprefix=saveprefix, dir.name=dir.name, gene.metadata=gene.metadata,
                    sample.groups=sample.groups, verbose=verbose)
     },
 

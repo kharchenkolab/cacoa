@@ -378,6 +378,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.cell.count numeric minimum number of cells that need to be present in a given cell type in a given sample in order to be taken into account (default=10)
     #' @param n.cells.subsample integer Number of cells to subsample (default=NULL)
     #' @param fix.n.samples Samples to be provided if resampling.method='fix.samples'.
+    #' @param genes.to.omit character Genes to omit from calculations (default = NULL)
     #' @param ... additional parameters
     #' @return A list of DE genes
     #' @examples
@@ -389,7 +390,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    test='DESeq2.Wald', resampling.method=NULL, n.resamplings=30, seed.resampling=239,
                                    min.cell.frac=0.05, covariates=NULL, common.genes=FALSE, n.cores=self$n.cores,
                                    cooks.cutoff=FALSE, independent.filtering=FALSE, min.cell.count=10,
-                                   n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, ...) {
+                                   n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, genes.to.omit = NULL, ...) {
       set.seed(seed.resampling)
       if (!is.list(sample.groups)) {
         sample.groups %<>% {split(names(.), . == ref.level)} %>% setNames(c(target.level, ref.level))
@@ -437,7 +438,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
       expr.fracs <- self$getJointCountMatrix() %>% getExpressionFractionPerGroup(cell.groups)
+      
       gene.filter <- (expr.fracs > min.cell.frac)
+      if (!is.null(genes.to.omit)) {
+        gene.filter[genes.to.omit, ] <- FALSE
+        gene.filter %<>% 
+          apply(2, as.logical) %>% 
+          as.matrix() %>% 
+          `rownames<-`(gene.filter %>% rownames())
+      }
 
       # parallelize the outer loop if subsampling is on
       n.cores.outer <- min(length(s.groups.new), n.cores)

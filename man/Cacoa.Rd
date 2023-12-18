@@ -880,6 +880,7 @@ Estimate differential gene expression per cell type between conditions
   n.cells.subsample = NULL,
   verbose = self$verbose,
   fix.n.samples = NULL,
+  genes.to.omit = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -924,6 +925,8 @@ Estimate differential gene expression per cell type between conditions
 \item{\code{verbose}}{boolean Whether to show progress}
 
 \item{\code{fix.n.samples}}{Samples to be provided if resampling.method='fix.samples'.}
+
+\item{\code{genes.to.omit}}{character Genes to omit from calculations (default = NULL)}
 
 \item{\code{...}}{additional parameters}
 }

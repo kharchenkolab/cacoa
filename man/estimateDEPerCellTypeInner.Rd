@@ -57,7 +57,7 @@ estimateDEPerCellTypeInner(
 
 \item{meta.info}{dataframe with possible covariates; for example, sex or age}
 
-\item{gene.filter}{(default=NULL)}
+\item{gene.filter}{matrix/boolean Genes to omit (rows) per cluster (cols) (default=NULL)}
 }
 \value{
 differential expression for each cell type

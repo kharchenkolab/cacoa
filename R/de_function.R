@@ -119,7 +119,7 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 #' @param return.matrix Return merged matrix of results (default=TRUE)
 #' @param meta.info dataframe with possible covariates; for example, sex or age
 #' @param test DE method: DESeq2, edgeR, wilcoxon, ttest
-#' @param gene.filter (default=NULL)
+#' @param gene.filter matrix/boolean Genes to omit (rows) per cluster (cols) (default=NULL)
 #' @return differential expression for each cell type
 #'
 #' @export

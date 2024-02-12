@@ -255,7 +255,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param genes character if provided, the expression distance is estimated only based on these genes (default=NULL)
     #' @param n.pcs numeric Number of principal components for estimating expression distance (default=NULL, no PCA)
     #' @param meta Metadata table with sample names as rownames, covariates for each sample as columns. Numerical covariates have to be of class numeric, and categorical of class character (default = NULL, no metadata correction)
-    #' @param form which metadata columns to use for covariate correction; if multiple, have to be divided with a "+" symbol (example: if metadata has covariates Cov1, Cov2, Cov3 and we write here "Cov1 + Cov2", it will correct only for first 2) (default = ., all metadata columns are used)
+    #' @param form Which metadata columns to use for covariate correction; if multiple, have to be divided with a "+" symbol. Example: if metadata has covariates Cov1, Cov2, Cov3 and we write here "Cov1 + Cov2", it will correct only for first 2. (default = ., all metadata columns are used)
     #' @param ... extra parameters to \link{estimateExpressionChange}
     #' @return List including:
     #'   `dist.df`: a table with cluster distances (normalized if within.group.normalization=TRUE), cell type and the number of cells # TODO: update

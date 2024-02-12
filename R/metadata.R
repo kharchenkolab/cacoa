@@ -1,5 +1,5 @@
 #' @keywords internal
-estimateGraphVarianceSignificance <- function(adj.mat, signal) {
+estimateGraphVarianceSignificance <- function(adj.mat, signal, n.permutations = 5e3) {
   if (!is.numeric(signal)) {
     signal <- as.factor(signal)
     signal[is.na(signal)] <- table(signal) %>% which.max() %>% names()

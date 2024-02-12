@@ -15,7 +15,7 @@ estimateExpressionChange <- function(cm.per.type, sample.groups, cell.groups, sa
                                      dist=NULL, dist.type=c("shift", "total", "var"), verbose=FALSE,
                                      ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
                                      top.n.genes=NULL, gene.selection="wilcox", n.pcs=NULL,
-                                     trim=0.2, n.cores=1, ...) {
+                                     trim=0.2, n.cores=1, numeta = NULL, charmeta = NULL, form = form, ...){ # added args for cov correction
   dist.type <- match.arg(dist.type)
   dist <- parseDistance(dist, top.n.genes=top.n.genes, n.pcs=n.pcs)
 
@@ -31,8 +31,12 @@ estimateExpressionChange <- function(cm.per.type, sample.groups, cell.groups, sa
   n.cores.inner <- max(n.cores %/% length(levels(cell.groups)), 1)
   res.per.type <- levels(cell.groups) %>% sccore::sn() %>% plapply(function(ct) {
     cm.norm <- cm.per.type[[ct]]
-    dist.mat <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sample.groups, dist=dist, n.pcs=n.pcs,
-                                                    top.n.genes=top.n.genes, gene.selection=gene.selection, ...)
+    dist.mat.glm <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sample.groups, dist=dist, n.pcs=n.pcs,
+                                                        top.n.genes=top.n.genes, gene.selection=gene.selection, 
+                                                        numeta=numeta, charmeta=charmeta, form = form, ...) # added args for cov correction
+    
+    dist.mat <- dist.mat.glm[[1]] # added args for cov correction
+    glmcalc <- dist.mat.glm[[2]] # added args for cov correction
     attr(dist.mat, 'n.cells') <- sample.type.table[ct, rownames(cm.norm)] # calculate how many cells there are
 
     dists <- estimateExpressionShiftsByDistMat(dist.mat, sample.groups, norm.type=norm.type,
@@ -44,36 +48,48 @@ estimateExpressionChange <- function(cm.per.type, sample.groups, cell.groups, sa
         droplevels() %>% {setNames(sample(.), names(.))}
       dm <- dist.mat
       if (!is.null(top.n.genes) && (gene.selection != "od")) {
-        dm <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sg.shuff, dist=dist, n.pcs=n.pcs,
-                                                  top.n.genes=top.n.genes, gene.selection=gene.selection, ...)
+        dm <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sg.shuff, dist=dist, n.pcs=n.pcs, # added args for cov correction
+                                                  top.n.genes=top.n.genes, gene.selection=gene.selection, 
+                                                  numeta=numeta, charmeta=charmeta, form = form, ...)[[1]]
       }
 
-      estimateExpressionShiftsByDistMat(dm, sg.shuff, norm.type=norm.type, return.type=r.type, ref.level=ref.level) %>%
-        mean(trim=trim)
-    }, progress=FALSE, n.cores=n.cores.inner, mc.preschedule=TRUE, fail.on.error=TRUE) %>% unlist()
+      dm <- estimateExpressionShiftsByDistMat(dm, sg.shuff, norm.type=norm.type, return.type=r.type, ref.level=ref.level) %>%
+        mean(trim=trim) # added args for cov correction
+      return(dm)
+    }, progress=TRUE, n.cores=n.cores.inner, mc.preschedule=TRUE, fail.on.error=TRUE) %>% unlist()
 
     pvalue <- (sum(randomized.dists >= obs.diff) + 1) / (sum(!is.na(randomized.dists)) + 1)
+    dists.orig <- dists ###
     dists <- dists - median(randomized.dists, na.rm=TRUE)
 
-    list(dists=dists, dist.mat=dist.mat, pvalue=pvalue)
+    list(dists=dists, dist.mat=dist.mat, pvalue=pvalue, randomized.dists = randomized.dists, 
+         obs.diff = obs.diff, dists.orig = dists.orig, cm.norm = cm.norm, glm.model = glmcalc) ###
   }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, mc.allow.recursive=TRUE, fail.on.error=TRUE)
 
   if (verbose) message("Done!\n")
 
+  randomized.dists <-  lapply(res.per.type, `[[`, "randomized.dists")
   pvalues <- sapply(res.per.type, `[[`, "pvalue")
   dists.per.type <- lapply(res.per.type, `[[`, "dists")
   p.dist.info <- lapply(res.per.type, `[[`, "dist.mat")
+  obs.diff <- lapply(res.per.type, `[[`, "obs.diff") #
+  dists.orig <- lapply(res.per.type, `[[`, "dists.orig") #
+  dist.mat <- lapply(res.per.type, `[[`, "dist.mat") #
+  cm.norm <- lapply(res.per.type, `[[`, "cm.norm") #
+  glm.model <- lapply(res.per.type, `[[`, "glm.model") #
 
   padjust <- p.adjust(pvalues, method=p.adjust.method)
 
   return(list(dists.per.type=dists.per.type, p.dist.info=p.dist.info, sample.groups=sample.groups,
-              cell.groups=cell.groups, pvalues=pvalues, padjust=padjust))
+              cell.groups=cell.groups, pvalues=pvalues, padjust=padjust, randomized.dists = randomized.dists, 
+              obs.diff = obs.diff, dists.orig = dists.orig, cm.norm = cm.norm, dist.mat = dist.mat, glm.model = glm.model)) #
 }
 
 
 #' @keywords internal
 estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, top.n.genes=NULL, n.pcs=NULL,
-                                                gene.selection="wilcox", exclude.genes=NULL) {
+                                                gene.selection="wilcox", exclude.genes=NULL, 
+                                                numeta = NULL, charmeta = NULL, form = form, ...) { # added cov correction args
   if (!is.null(top.n.genes)) {
     sel.genes <- filterGenesForCellType(
       cm.norm, sample.groups=sample.groups, top.n.genes=top.n.genes, gene.selection=gene.selection,
@@ -93,6 +109,7 @@ estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, to
     cm.norm <- as.matrix(cm.norm %*% pcs$v)
   }
 
+#calculating distances
   if (dist == 'cor') {
     dist.mat <- 1 - cor(t(cm.norm))
   } else if (dist == 'l2') {
@@ -104,8 +121,75 @@ estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, to
   }
 
   dist.mat[is.na(dist.mat)] <- 1;
+  modelcalc <- c("No GLM was calculated for this celltype.");
+  
+  ###covariate correction
+  if (!is.null(charmeta) | !is.null(numeta)) {
+    dist.mat <- RunGlm(dist.mat = dist.mat,numeta = numeta, charmeta = charmeta, form = form)
+  } else {
+    dist.mat <- list(dist.mat,modelcalc)
+  }
+  
   return(dist.mat)
 }
+
+
+
+###GLM internal function
+#' @keywords internal
+RunGlm <- function(dist.mat = dist.mat,numeta = numeta, charmeta = charmeta, form = form){
+  
+  dist.mat[upper.tri(dist.mat, diag=TRUE)]  <- NA;
+  
+  numeta <- numeta[rownames(dist.mat),,drop=FALSE] #object with covs which are numeric
+  charmeta <- charmeta[rownames(dist.mat),,drop=FALSE] #object with covs which are char/stirng
+  
+  dist.mat.cov <- rownames(dist.mat) %>% setNames(invisible(lapply(., function(x) { #some transformations of the data for the lm
+    z <- invisible(sapply(colnames(dist.mat), function(y) {
+      
+      vnum <- abs(numeta[x,]-numeta[y,])
+      vchar <- ifelse(charmeta[x,] == charmeta[y,], 0, 1)
+      
+      vmeta <- c(vnum,vchar)
+      rm(vnum)
+      rm(vchar)
+      return(vmeta)
+    })) %>% rbind
+    rownames(z) <- c(colnames(numeta),colnames(charmeta))
+    colnames(z) <- c(rownames(numeta))
+    return(z)
+    gc()
+    
+  }
+  )),.)
+  
+  #dist.mat.cov <-  lapply(dist.mat.cov, function(x) t(x) %>% data.frame)
+  dist.mat.cov <- lapply(dist.mat.cov, function(x) type.convert(as.data.frame(apply(t(x) , 2, unlist), as.is = TRUE)))
+  form0 <- paste("cf ~ ", form) %>% as.formula #edited because of possible problem with lapply and some column vector names
+  
+  dist.mat.cov <- lapply(1:length(dist.mat.cov), function(x) data.frame(cbind(cf = dist.mat[names(dist.mat.cov[x]),],
+                                                                              dist.mat.cov[[x]]))) %>% 
+    setNames(names(dist.mat.cov))
+  
+  dist.mat.cov <- lapply(dist.mat.cov, rownames_to_column, var = "rowname") %>% 
+    rbindlist %>% 
+    na.omit ##
+  dist.mat.cov <- dist.mat.cov[order(match(dist.mat.cov$rowname, dist.mat %>% rownames)), -1] ##
+  modelcalc <- lm(formula = form0, data = dist.mat.cov) #lm
+  dist.mat.cov <- residuals(modelcalc) #get residuals from lm which represent the corrected coefficients
+  modelcalc <- modelcalc
+  
+  #form the new matrix for ES with corrected data
+  mat <- matrix(NA, nrow = nrow(dist.mat), ncol = ncol(dist.mat), dimnames = dimnames(dist.mat));
+  mat[lower.tri(mat)] <- dist.mat.cov;
+  mat <- t(mat);
+  mat[lower.tri(mat)] <- dist.mat.cov;
+  diag(mat) <- 0;
+  dist.mat <- mat;
+  return(list(dist.mat, modelcalc))
+}
+
+
 
 #' @keywords internal
 subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df=FALSE) {

@@ -254,6 +254,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param n.permutations numeric number of permutations for estimating normalization coefficient (default=1000)
     #' @param genes character if provided, the expression distance is estimated only based on these genes (default=NULL)
     #' @param n.pcs numeric Number of principal components for estimating expression distance (default=NULL, no PCA)
+    #' @param meta Metadata table with sample names as rownames, covariates for each sample as columns. Numerical covariates have to be of class numeric, and categorical of class character (default = NULL, no metadata correction)
+    #' @param form which metadata columns to use for covariate correction; if multiple, have to be divided with a "+" symbol (example: if metadata has covariates Cov1, Cov2, Cov3 and we write here "Cov1 + Cov2", it will correct only for first 2) (default = ., all metadata columns are used)
     #' @param ... extra parameters to \link{estimateExpressionChange}
     #' @return List including:
     #'   `dist.df`: a table with cluster distances (normalized if within.group.normalization=TRUE), cell type and the number of cells # TODO: update
@@ -269,7 +271,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
       ref.level=self$ref.level, sample.groups=self$sample.groups,
       verbose=self$verbose, n.cores=self$n.cores, name="expression.shifts",
-      n.permutations=1000, genes=NULL, n.pcs=NULL, top.n.genes=NULL, ...) {
+      n.permutations=1000, genes=NULL, n.pcs=NULL, top.n.genes=NULL, meta = NULL, form = ".", ...) { #added covariate correction args
 
       count.matrices <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
@@ -297,13 +299,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                   ". Consider increasing min.samp.per.type.")
         }
       }
+      
+      numeta <- NULL #added covariate args
+      charmeta <- NULL #added covariate args
+      
+      if(!is.null(meta)){ #added covariate args
+        numeta <- dplyr::select_if(meta, is.numeric)
+        charmeta <- dplyr::select_if(meta,Negate(is.numeric))
+      }
+      
 
       self$test.results[[name]] <- shift.inp %$%
         estimateExpressionChange(
           cm.per.type, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=self$sample.per.cell,
           dist=dist, dist.type=dist.type, verbose=verbose, ref.level=ref.level,
-          n.permutations=n.permutations, top.n.genes=top.n.genes, n.pcs=n.pcs, n.cores=n.cores, ...
-        )
+          n.permutations=n.permutations, top.n.genes=top.n.genes, n.pcs=n.pcs, n.cores=n.cores, 
+          numeta = numeta, charmeta = charmeta, form = form, ...) #added covariate arg
 
       return(invisible(self$test.results[[name]]))
     },
@@ -2409,7 +2420,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       adj.mat <- adjacencyMatrixFromPaiwiseDists(p.dists, trim=trim, k=k)
       sep.info <- sample.meta %>% plapply(
-        function(mg) estimateGraphVarianceSignificance(adj.mat, signal=mg[colnames(adj.mat)]),
+        function(mg) estimateGraphVarianceSignificance(adj.mat, signal=mg[colnames(adj.mat)], n.permutations = n.permutations),
         progress=(verbose && (length(sample.meta) > 1)), n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE
       )
 

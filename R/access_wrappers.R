@@ -86,7 +86,13 @@ extractRawCountMatrices.Conos <- function(object, transposed=TRUE) {
 #' @rdname extractRawCountMatrices
 extractRawCountMatrices.Seurat <- function(object, transposed=TRUE) {
   cms <- object$sample.per.cell %>% {split(names(.), .)} %>%
-    lapply(function(cids) object@assays$RNA@counts[,cids])
+    lapply(function(cids) {
+      selected.cols <- colnames(object) %in% cids
+      obj <- object@assays$RNA@layers$counts[, selected.cols]
+      colnames(obj) <- colnames(object)[selected.cols]
+      rownames(obj) <- rownames(object)
+      obj
+    })
   if (transposed) {
     cms %<>% lapply(Matrix::t)
   }
@@ -126,20 +132,23 @@ extractJointCountMatrix.Conos <- function(object, raw=TRUE) {
 #' @rdname extractJointCountMatrix
 extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sparse=TRUE) {
   if (raw) {
-    dat <- object@assays$RNA@counts
+    dat <- object@assays$RNA@layers$counts
+    colnames(dat) <- colnames(object)
+    rownames(dat) <- rownames(object)
     if (transposed){
       dat %<>% Matrix::t()
     }
     return(dat)
   }
 
-  dat <- Seurat::GetAssayData(object, slot='scale.data', assay='RNA')
+  dat <- Seurat::GetAssayData(object, layer='scale.data', assay='RNA')
   dims <- dim(dat)
   dat.na <- all(dims == 1) && all(is.na(x = dat))
   if (all(dims == 0) || dat.na) {
-    dat <- Seurat::GetAssayData(object, slot='data', assay='RNA')
+    dat <- Seurat::GetAssayData(object, layer='data', assay='RNA')
   }
-
+  colnames(dat) <- colnames(object)
+  rownames(dat) <- rownames(object)
   if (transposed){
     dat %<>% Matrix::t()
   }

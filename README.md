@@ -53,7 +53,7 @@ cao <- Cacoa$new(NULL, sample.groups=sample.groups, cell.groups=cell.groups, sam
 
 In this case, only compositional analyses will be available.
 
-### Raw or normalized joint count matrix `cm`
+### Raw or normalized joined count matrix `cm`
 
 ```r
 cao <- Cacoa$new(cm, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 

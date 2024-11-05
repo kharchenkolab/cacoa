@@ -163,7 +163,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (is.null(graph.name)){
           warning("No graph.name provided. The algorithm will use the first available graph.")
         }
+
         data.object@misc$graph.name <- graph.name
+        is.connected <- extractCellGraph(data.object) %>% igraph::is_connected()
+        if (!is.connected) {
+          warning("The provided graph is not connected. Cluster-free methods will not work. Using NN graph instead of SNN may help.")
+          data.object@misc$graph.name <- NULL
+        }
+
         data.object@misc$assay.name <- assay.name
       } else if (('Conos' %in% class(data.object))) {
         if (!is.null(graph.name)) {

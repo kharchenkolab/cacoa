@@ -125,19 +125,34 @@ extractJointCountMatrix.Conos <- function(object, raw=TRUE) {
 #' @param sparse boolean If TRUE, return merged the sparse dgCMatrix matrix (default=TRUE)
 #' @rdname extractJointCountMatrix
 extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sparse=TRUE) {
+  # TODO: Seurat v5 deprecated `slot` in favor of `layer`
   if (raw) {
-    dat <- object@assays[[object@misc$assay.name]]@counts
+    dat <- object %>% 
+      Seurat::GetAssayData(slot='counts', assay=.@misc$assay.name) %>%
+      as("CsparseMatrix")
     if (transposed){
       dat %<>% Matrix::t()
     }
     return(dat)
   }
 
-  dat <- Seurat::GetAssayData(object, slot='scale.data', assay=object@misc$assay.name)
-  dims <- dim(dat)
-  dat.na <- all(dims == 1) && all(is.na(x = dat))
-  if (all(dims == 0) || dat.na) {
+  slot <- object@misc$data.slot
+  dat <- NULL
+  if (is.null(slot) || slot == 'scale.data') {
+    dat <- Seurat::GetAssayData(object, slot='scale.data', assay=object@misc$assay.name)
+    dims <- dim(dat)
+    dat.na <- all(dims == 1) && all(is.na(x = dat))
+    if (any(dims == 0) || dat.na) {
+      slot <- 'data'
+    }
+  }
+
+  if (slot == 'data') {
     dat <- Seurat::GetAssayData(object, slot='data', assay=object@misc$assay.name)
+  }
+
+  if (is.null(dat) || any(dim(dat) == 0)) {
+    stop("Can't access data slot ", slot)
   }
 
   if (transposed){

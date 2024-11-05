@@ -117,11 +117,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cell.groups <- my.named.annotation.factor
     #' cao <- Cacoa$new(data.object = con, sample.groups = sample.groups, cell.groups =  ref.level = "control", target.level = "disease")
     #' }
-    initialize=function(data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL,
-                        ref.level=NULL, target.level=NULL, sample.groups.palette=NULL,
-                        cell.groups.palette=NULL, embedding=NULL,
-                        graph.name=NULL, assay.name="RNA", n.cores=1, verbose=TRUE,
-                        plot.theme=ggplot2::theme_bw(), plot.params=NULL) {
+    initialize=function(
+      data.object, sample.groups=NULL, cell.groups=NULL, sample.per.cell=NULL,
+      ref.level=NULL, target.level=NULL, sample.groups.palette=NULL,
+      cell.groups.palette=NULL, embedding=NULL, n.cores=1, verbose=TRUE,
+      graph.name=NULL, assay.name="RNA", data.slot='scale.data',
+      plot.theme=ggplot2::theme_bw(), plot.params=NULL
+    ) {
 
       if ('Cacoa' %in% class(data.object)) { # copy constructor
         for (n in ls(data.object)) {
@@ -172,6 +174,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
 
         data.object@misc$assay.name <- assay.name
+        data.object@misc$data.slot <- data.slot
+        if (data.slot == 'scale.data') {
+          warning("Using data.slot='scale.data' is not recommended, as it usually contains only highly-variable genes. Consider using data.slot='data' instead.")
+        }
       } else if (('Conos' %in% class(data.object))) {
         if (!is.null(graph.name)) {
           warning("graph.name is not supported for Conos objects")
@@ -3341,6 +3347,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     ## list with fields 'cm', 'adj.mat', 'is.ref', 'nns.per.cell'
     getClusterFreeDEInput = function(genes, min.edge.weight=0.0) {
       cm <- self$getJointCountMatrix(raw=FALSE)
+      genes <- intersect(genes, colnames(cm))
       is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
 
       adj.mat <- extractCellGraph(self$data.object) %>% igraph::as_adj()

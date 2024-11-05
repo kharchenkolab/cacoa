@@ -23,12 +23,6 @@ Prior to installing the package, dependencies have to be installed:
 BiocManager::install(c("clusterProfiler", "DESeq2", "DOSE", "EnhancedVolcano", "enrichplot", "fabia", "GOfuncR", "Rgraphviz"))
 ```
 
-Also make sure to install the latest version of sccore (not the one from CRAN):
-
-``` r
-devtools::install_github("kharchenkolab/sccore", ref="dev")
-```
-
 ## Initialization
 
 Cacoa currently supports inputs in several formats (see below). Most of them require the following metadata:
@@ -39,7 +33,7 @@ Cacoa currently supports inputs in several formats (see below). Most of them req
 - `ref.level`: id of the condition, corresponding to the reference (i.e. control)
 - `target.level`: id of the condition, corresponding to the target (i.e. case)
 
-Additionally, `embedding` parameter containing a matrix or data.frame with a cell embedding can be provided. Rownames should match to the cell ids. 
+Additionally, the `embedding` parameter containing a matrix or data.frame with a cell embedding can be provided. Rownames should match to the cell ids. 
 It is used for visualization and some cluster-free analysis.
 
 ### No expression data
@@ -47,8 +41,10 @@ It is used for visualization and some cluster-free analysis.
 Cacoa can be ran without any expression data by passing `NULL` instead of a data object:
 
 ```r
-cao <- Cacoa$new(NULL, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
-                 ref.level=ref.level, target.level=target.level, embedding=embedding)
+cao <- Cacoa$new(
+    NULL, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
+    ref.level=ref.level, target.level=target.level, embedding=embedding
+)
 ```
 
 In this case, only compositional analyses will be available.
@@ -56,15 +52,19 @@ In this case, only compositional analyses will be available.
 ### Raw or normalized joined count matrix `cm`
 
 ```r
-cao <- Cacoa$new(cm, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
-                 ref.level=ref.level, target.level=target.level, embedding=embedding)
+cao <- Cacoa$new(
+    cm, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
+    ref.level=ref.level, target.level=target.level, embedding=embedding
+)
 ```
 
 ### Seurat object `so`
 
 ```r
-cao <- Cacoa$new(so, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
-                 ref.level=ref.level, target.level=target.level, graph.name=graph.name)
+cao <- Cacoa$new(
+    so, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
+    ref.level=ref.level, target.level=target.level, graph.name=graph.name, data.slot='data'
+)
 ```
 
 Parameter `graph.name` is required for cluster-free analysis, and must contain a name of joint graph in Seurat object. For that, the Seurat object must have a joint graph estimated (see [FindNeighbors](https://satijalab.org/seurat/reference/findneighbors)). For visualization purposes, Seurat also must have cell embedding estimated or the embedding data frame must be provided in the `embedding` parameter.
@@ -72,8 +72,10 @@ Parameter `graph.name` is required for cluster-free analysis, and must contain a
 ### Conos object `co`
 
 ```r
-cao <- Cacoa$new(co, sample.groups=sample.groups, cell.groups=cell.groups, 
-                 ref.level=ref.level, target.level=target.level)
+cao <- Cacoa$new(
+    co, sample.groups=sample.groups, cell.groups=cell.groups, 
+    ref.level=ref.level, target.level=target.level
+)
 ```
 
 For visualization purposes, Conos must have cell embedding estimated or the embedding data frame must be provided in the `embedding` parameter. And for cluster-free analysis it should have a joint graph (see the method `Conos$buildGraph()` from [conos](https://CRAN.R-project.org/package=conos) method).
@@ -86,7 +88,7 @@ Please, see the documentation for exact functions inside the package. For a demo
 
 ## Citation
 
-If you find this pipeline useful for your research, please consider citing the pre-pring:
+If you find this pipeline useful for your research, please consider citing the pre-print:
 
 Case-control analysis of single-cell RNA-seq studies
 Viktor Petukhov, Anna Igolkina, Rasmus Rydbirk, Shenglin Mei, Lars Christoffersen, Konstantin Khodosevich, Peter V. Kharchenko

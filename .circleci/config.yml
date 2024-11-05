@@ -11,8 +11,8 @@ jobs:
           name: Install system dependencies
           command: sudo apt-get update -y && sudo apt-get install tk zip libcurl4-openssl-dev libssl-dev libxml2-dev libgmp-dev libproj-dev libgdal-dev libglpk-dev -y  
       - run: 
-          name: Install matrixStats v0.61.0 and proj4
-          command: R -e "install.packages('https://cran.rstudio.com/src/contrib/matrixStats_0.61.0.tar.gz', repos=NULL, type='source')"  \
+          name: Install matrixStats v0.63.0 and proj4
+          command: R -e "install.packages('https://cran.rstudio.com/src/contrib/matrixStats_0.63.0.tar.gz', repos=NULL, type='source')"  \
                    R -e "install.packages('proj4', dependencies=TRUE)" 
       - run:
           name: Install EnhancedVolcando
@@ -26,9 +26,18 @@ jobs:
           name: Install package dependencies
           command: R -e "devtools::install_deps(dep = TRUE)" 
       - run: 
-          name: Install sccore v1.0.0
+          name: Install sccore v1.0.3
           command: R -e "install.packages('pbmcapply')" \
-                   R -e "install.packages('https://cran.r-project.org/src/contrib/sccore_1.0.0.tar.gz', repos=NULL, type='source')" 
+                   R -e "install.packages('https://cran.r-project.org/src/contrib/sccore_1.0.3.tar.gz', repos=NULL, type='source')" 
+      - run: 
+          name: Install igraph v1.4.2
+          command: R -e "install.packages('https://cran.r-project.org/src/contrib/igraph_1.4.2.tar.gz', repos=NULL, type='source')"   
+      - run: 
+          name: Install leidenAlg v1.0.5
+          command: R -e "install.packages('https://cran.r-project.org/src/contrib/leidenAlg_1.0.5.tar.gz', repos=NULL, type='source')"
+      - run: 
+          name: Install Conos for tests
+          command: R -e "install.packages('conos', dependencies=TRUE)"
       - run:
           name: Build package
           command: R CMD build .

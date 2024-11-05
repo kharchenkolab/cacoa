@@ -58,7 +58,7 @@ extractCellGraph.Seurat <- function(object) {
     adj.mat <- object@graphs[[1]]
   }
 
-  adj.mat %<>% as("dgCMatrix")
+  adj.mat %<>% as("CsparseMatrix")
   if (!isSymmetric(adj.mat)) {
     warning("The provided adjacency matrix is not symmetric. Converting it to undirected graph.")
     adj.mat <- (adj.mat + t(adj.mat)) / 2
@@ -86,7 +86,7 @@ extractRawCountMatrices.Conos <- function(object, transposed=TRUE) {
 #' @rdname extractRawCountMatrices
 extractRawCountMatrices.Seurat <- function(object, transposed=TRUE) {
   cms <- object$sample.per.cell %>% {split(names(.), .)} %>%
-    lapply(function(cids) object@assays$RNA@counts[,cids])
+    lapply(function(cids) object@assays[[object@misc$assay.name]]@counts[,cids])
   if (transposed) {
     cms %<>% lapply(Matrix::t)
   }
@@ -125,26 +125,41 @@ extractJointCountMatrix.Conos <- function(object, raw=TRUE) {
 #' @param sparse boolean If TRUE, return merged the sparse dgCMatrix matrix (default=TRUE)
 #' @rdname extractJointCountMatrix
 extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sparse=TRUE) {
+  # TODO: Seurat v5 deprecated `slot` in favor of `layer`
   if (raw) {
-    dat <- object@assays$RNA@counts
+    dat <- object %>% 
+      Seurat::GetAssayData(slot='counts', assay=.@misc$assay.name) %>%
+      as("CsparseMatrix")
     if (transposed){
       dat %<>% Matrix::t()
     }
     return(dat)
   }
 
-  dat <- Seurat::GetAssayData(object, slot='scale.data', assay='RNA')
-  dims <- dim(dat)
-  dat.na <- all(dims == 1) && all(is.na(x = dat))
-  if (all(dims == 0) || dat.na) {
-    dat <- Seurat::GetAssayData(object, slot='data', assay='RNA')
+  slot <- object@misc$data.slot
+  dat <- NULL
+  if (is.null(slot) || slot == 'scale.data') {
+    dat <- Seurat::GetAssayData(object, slot='scale.data', assay=object@misc$assay.name)
+    dims <- dim(dat)
+    dat.na <- all(dims == 1) && all(is.na(x = dat))
+    if (any(dims == 0) || dat.na) {
+      slot <- 'data'
+    }
+  }
+
+  if (slot == 'data') {
+    dat <- Seurat::GetAssayData(object, slot='data', assay=object@misc$assay.name)
+  }
+
+  if (is.null(dat) || any(dim(dat) == 0)) {
+    stop("Can't access data slot ", slot)
   }
 
   if (transposed){
     dat %<>% Matrix::t()
   }
   if (is.matrix(dat) && sparse){
-    dat %<>% as("dgCMatrix")
+    dat %<>% as("CsparseMatrix")
   }
   return(dat)
 }
@@ -159,7 +174,7 @@ extractJointCountMatrix.dgCMatrix <- function(object, raw=TRUE) {
     stop("Cannot extract raw matrix from a normalized dgCMatrix")
   }
 
-  return(t(t(object) / pmax(colSums(object), 0.1)))
+  return(object / pmax(rowSums(object), 0.1))
 }
 
 
@@ -180,11 +195,13 @@ extractOdGenes.Conos <- function(object, n.genes=NULL) {
 
 #' @rdname extractOdGenes
 extractOdGenes.Seurat <- function(object, n.genes=NULL) {
-  if (is.null(object@assays$RNA@meta.features$vst.variance.standardized)){
+  if (is.null(object@assays[[object@misc$assay.name]]@meta.features$vst.variance.standardized)){
     stop("The data object doesn't have gene variance info.",
-         "Please, run FindVariableFeatures(assay='RNA, selection.method='vst') first")
+         "Please, run FindVariableFeatures(assay='",
+         object@misc$assay.name,
+         "', selection.method='vst') first")
   }
-  genes <- object@assays$RNA@meta.features %>%
+  genes <- object@assays[[object@misc$assay.name]]@meta.features %>%
     {rownames(.)[order(.$vst.variance.standardized, decreasing=TRUE)]} %>%
     head(n.genes %||% length(.))
 
@@ -252,7 +269,7 @@ extractEmbedding.Seurat <- function(object) {
 
 
 
-#' Extract the gene exrpession from the object
+#' Extract the gene expression from the object
 #'
 #' @param object object from which to extract the cell groups
 #' @param gene character vector of the specific gene names on which to subset

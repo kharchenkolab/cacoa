@@ -1,4 +1,7 @@
-#' Estimate cell density in giving embedding, Density will estimated for indivisual sample
+#' @importFrom sccore checkPackageInstalled
+NULL
+
+#' Estimate cell density in giving embedding, density will be estimated for individual samples
 #'
 #' @param emb cell embedding matrix
 #' @param sample.per.cell  Named sample factor with cell names (default: stored vector)

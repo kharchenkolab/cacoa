@@ -4,13 +4,13 @@
 \alias{rblapply}
 \title{Iterate over tree (list of lists of lists, etc) for \code{length(ids)} level,
 interpret each element as a data.frame and bind them appending all levels as columns with
-colnames correspoinding to \code{ids}}
+colnames corresponding to \code{ids}}
 \usage{
 rblapply(list, ids, func)
 }
 \description{
 Iterate over tree (list of lists of lists, etc) for \code{length(ids)} level,
 interpret each element as a data.frame and bind them appending all levels as columns with
-colnames correspoinding to \code{ids}
+colnames corresponding to \code{ids}
 }
 \keyword{internal}

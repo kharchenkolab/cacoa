@@ -139,7 +139,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       plot.theme=ggplot2::theme_bw(), plot.params=NULL
     ) {
 
-      if ('Cacoa' %in% class(data.object)) { # copy constructor
+      if ('Cacoa' %in% class(data.object)) { 
         for (n in ls(data.object)) {
           if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
         }
@@ -333,13 +333,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   \item \code{return.all.cov}: whether full-coefficient results were returned.
     #'   \item \code{contrast.var}: the contrast variable name.
     #' }
-    #'
-    #' @details
-    #' For each cell type, the method computes sample-sample expression distances,
-    #' optionally normalizes within-group baselines, then fits a linear model on
-    #' pairwise distances using a design matrix derived from \code{formula} and
-    #' \code{sample.meta}. Significance and effect magnitudes are assessed via label
-    #' permutations, and partial R² is reported per model term.
     #'
     #' @examples
     #' \dontrun{

@@ -50,12 +50,7 @@ estimateUMAPOnDistances <- function(p.dists, n.neighbors=15, verbose=FALSE, ...)
 }
 
 #' @keywords internal
-validateDesign <- function(
-  formula,
-  sample.meta = NULL,
-  contrast = NULL,
-  verbose = FALSE
-) {
+validateDesign <- function(formula, sample.meta = NULL, contrast = NULL, verbose = FALSE) {
   if (is.null(formula)) stop("Design formula must be provided.")
 
   # Accept formula or character; ensure "~" present
@@ -70,7 +65,7 @@ validateDesign <- function(
     stop("Design formula must contain a '~' to separate response and predictors.")
   }
 
-  # Demote random effects (lme4-style) to fixed, preserving variables
+  # Demote random effects to fixed, preserving variables
   containsRandomEffects <- grepl("\\([^\\|]*\\|[^\\)]*\\)", formula_str)
   if (containsRandomEffects) {
     rand_eff_vars <- unlist(regmatches(formula_str, gregexpr("(?<=\\|)[^\\)]+", formula_str, perl = TRUE)))
@@ -89,11 +84,10 @@ validateDesign <- function(
     rhs_terms <- rhs_terms[rhs_terms != ""]
     formula_str <- paste("~", paste(rhs_terms, collapse = " + "))
   }
-
   parsedTerms <- terms(stats::as.formula(formula_str))
   termLabels  <- attr(parsedTerms, "term.labels")
 
-  # auto-derive a contrast if none specified (uses first term; last vs first level)
+  # default contrast if none specified (uses first term; last vs first level)
   if (is.null(contrast)) {
     if (length(termLabels) == 0) stop("No terms found in the design formula to use as contrast.")
     if (is.null(sample.meta)) stop("sample.meta must be given to infer a default contrast.")
@@ -110,34 +104,24 @@ validateDesign <- function(
   if (length(contrast) != 3) {
     stop("Contrast must be a vector of length 3: c('variable', 'level1', 'level2').")
   }
-
   if (verbose) {
     if (containsRandomEffects) message("Random effect terms provided will be treated as fixed effect terms.")
     message(sprintf("Final design formula: %s", formula_str))
   }
-
   list("formula" = parsedTerms, "contrast" = contrast)
 }
 
 #' @keywords internal
-buildModelMatrix <- function(
-  sample.meta, formula,
-  contrast = NULL,
-  keep.intercept = FALSE,
-  verbose = FALSE
-) {
-
+buildModelMatrix <- function(sample.meta, formula, contrast = NULL, keep.intercept = FALSE, verbose = FALSE) {
   if (!is.null(formula) || !is.null(contrast)) {
     vd <- validateDesign(formula = formula, sample_meta = sample.meta, contrast = contrast, verbose = verbose)
     formula <- vd$formula
     contrast <- vd$contrast
   }
-
   predictorVars <- all.vars(formula)
   sample.meta   <- sample.meta[, predictorVars, drop = FALSE]
 
-  # Remove zero-variance / single-level covariates
-  valid_vars <- vapply(predictorVars, function(cov) {
+  valid.vars <- vapply(predictorVars, function(cov) { # remove single-level covariates
     x <- sample.meta[[cov]]
     if (is.factor(x) || is.character(x)) {
       length(unique(x)) > 1
@@ -147,18 +131,17 @@ buildModelMatrix <- function(
     }
   }, logical(1))
 
-  if (!all(valid_vars)) {
-    removed_vars <- predictorVars[!valid_vars]
-    warning(sprintf("Removing covariates with only one factor level or zero variance: %s", paste(removed_vars, collapse = ", ")))
-    predictorVars   <- predictorVars[valid_vars]
+  if (!all(valid.vars)) {
+    removed.vars <- predictorVars[!valid.vars]
+    warning(sprintf("Removing covariates with only one factor level or zero variance: %s", paste(removed.vars, collapse = ", ")))
+    predictorVars   <- predictorVars[valid.vars]
     sample.meta     <- sample.meta[, predictorVars, drop = FALSE]
-    intercept_flag  <- attr(terms(formula), "intercept") == 1
-    formula         <- reformulate(predictorVars, intercept = intercept_flag)
+    intercept.flag  <- attr(terms(formula), "intercept") == 1
+    formula         <- reformulate(predictorVars, intercept = intercept.flag)
   }
 
-  # Flag identical columns, warn if correlated
-  if (length(predictorVars) > 1) {
-    to_remove <- character(0)
+  if (length(predictorVars) > 1) { # flag identical columns, warn if correlated
+    to.remove <- character(0)
     for (i in seq_along(predictorVars)) for (j in seq_along(predictorVars)) if (i < j) {
       col1 <- sample.meta[[predictorVars[i]]]
       col2 <- sample.meta[[predictorVars[j]]]
@@ -166,25 +149,24 @@ buildModelMatrix <- function(
       if (is.factor(col2)) col2 <- as.character(col2)
       if (all(col1 == col2, na.rm = TRUE)) {
         warning(sprintf("Covariates '%s' and '%s' are identical. Removing '%s'.", predictorVars[i], predictorVars[j], predictorVars[j]))
-        to_remove <- c(to_remove, predictorVars[j])
+        to.remove <- c(to.remove, predictorVars[j])
       } else if (is.numeric(col1) && is.numeric(col2)) {
-        cor_val <- suppressWarnings(stats::cor(col1, col2, use = "pairwise.complete.obs"))
-        if (!is.na(cor_val) && abs(cor_val) > 0.95) {
-          warning(sprintf("Covariates '%s' and '%s' are highly correlated (cor = %.2f).", predictorVars[i], predictorVars[j], cor_val))
+        cor.val <- suppressWarnings(stats::cor(col1, col2, use = "pairwise.complete.obs"))
+        if (!is.na(cor.val) && abs(cor.val) > 0.95) {
+          warning(sprintf("Covariates '%s' and '%s' are highly correlated (cor = %.2f).", predictorVars[i], predictorVars[j], cor.val))
         }
       }
     }
-    if (length(to_remove)) {
-      to_remove      <- unique(to_remove)
-      sample.meta    <- sample.meta[, !(colnames(sample.meta) %in% to_remove), drop = FALSE]
+    if (length(to.remove)) {
+      to.remove      <- unique(to.remove)
+      sample.meta    <- sample.meta[, !(colnames(sample.meta) %in% to.remove), drop = FALSE]
       predictorVars  <- colnames(sample.meta)
-      intercept_flag <- attr(terms(formula), "intercept") == 1
-      formula        <- reformulate(predictorVars, intercept = intercept_flag)
+      intercept.flag <- attr(terms(formula), "intercept") == 1
+      formula        <- reformulate(predictorVars, intercept = intercept.flag)
     }
   }
-
-  # Coerce non-numeric/non-factor to factor
-  for (cov in predictorVars) {
+  
+  for (cov in predictorVars) { # coerce non-numeric/non-factor to factor
     if (!is.numeric(sample.meta[[cov]]) && !is.factor(sample.meta[[cov]])) {
       if (verbose) message(sprintf("Converting covariate '%s' to factor.", cov))
       lvls <- sort(unique(stats::na.omit(sample.meta[[cov]])))
@@ -192,67 +174,62 @@ buildModelMatrix <- function(
     }
   }
 
-  # Apply requested contrast’s reference/target level on its factor (if present)
-  if (!is.null(contrast)) {
-    contrast_var <- contrast[1]; ref.level <- contrast[2]; target.level <- contrast[3]
-    if (contrast_var %in% colnames(sample.meta)) {
-      unique_levels <- unique(sample.meta[[contrast_var]])
-      if (!ref.level %in% unique_levels || !target.level %in% unique_levels) {
-        stop("ref.level or target.level not found in levels of ", contrast_var)
+  if (!is.null(contrast)) { # apply requested contrast’s reference/target level on its factor
+    contrast.var <- contrast[1]; ref.level <- contrast[2]; target.level <- contrast[3]
+    if (contrast.var %in% colnames(sample.meta)) {
+      unique.levels <- unique(sample.meta[[contrast.var]])
+      if (!ref.level %in% unique.levels || !target.level %in% unique.levels) {
+        stop("ref.level or target.level not found in levels of ", contrast.var)
       }
-      sample.meta[[contrast_var]] <- factor(sample.meta[[contrast_var]], levels = c(ref.level, setdiff(unique_levels, ref.level)))
+      sample.meta[[contrast.var]] <- factor(sample.meta[[contrast.var]], levels = c(ref.level, setdiff(unique.levels, ref.level)))
     }
   }
 
   # Build the model matrix (keep intercept then optionally drop)
   mm <- stats::model.matrix(formula, data = sample.meta)
-  assign_vec  <- attr(mm, "assign")
-  contrasts_a <- attr(mm, "contrasts")
+  assign.vec  <- attr(mm, "assign")
+  contrasts.a <- attr(mm, "contrasts")
 
   if (!keep.intercept && "(Intercept)" %in% colnames(mm)) {
     keep <- colnames(mm) != "(Intercept)"
     mm   <- mm[, keep, drop = FALSE]
-    if (!is.null(assign_vec))  attr(mm, "assign")    <- assign_vec[keep]
-    if (!is.null(contrasts_a)) attr(mm, "contrasts") <- contrasts_a
+    if (!is.null(assign.vec))  attr(mm, "assign")    <- assign.vec[keep]
+    if (!is.null(contrasts.a)) attr(mm, "contrasts") <- contrasts.a
   } else {
-    if (!is.null(assign_vec))  attr(mm, "assign")    <- assign_vec
-    if (!is.null(contrasts_a)) attr(mm, "contrasts") <- contrasts_a
+    if (!is.null(assign.vec))  attr(mm, "assign")    <- assign.vec
+    if (!is.null(contrasts.a)) attr(mm, "contrasts") <- contrasts.a
   }
 
-  # Rank check
-  qr_decomp <- qr(mm)
-  if (qr_decomp$rank < ncol(mm)) {
+  qr.decomp <- qr(mm) # rank check
+  if (qr.decomp$rank < ncol(mm)) {
     warning(sprintf(
       "Model matrix has linear dependencies: rank %d < number of columns %d. Possible confounding or redundant covariates.",
-      qr_decomp$rank, ncol(mm)
+      qr.decomp$rank, ncol(mm)
     ))
   }
-
   dimnames(mm) <- list(rownames(mm), colnames(mm))
   mm
 }
 
 #' @keywords internal
-getSampleGroups <- function(sample_meta, contrast, sample.id = NULL) {
+getSampleGroups <- function(sample.meta, contrast, sample.id = NULL) {
   if (is.null(contrast)) return(NULL)
   var <- contrast[1]; ref <- contrast[2]; alt <- contrast[3]
-
-  if (!var %in% colnames(sample_meta)) {
+  if (!var %in% colnames(sample.meta)) {
     stop(sprintf("Contrast variable '%s' not found in sample metadata.", var))
   }
-
-  rn <- rownames(sample_meta)
+  rn <- rownames(sample.meta)
   if ((is.null(rn) || anyNA(rn)) && !is.null(sample.id)) {
-    if (!sample.id %in% colnames(sample_meta)) {
+    if (!sample.id %in% colnames(sample.meta)) {
       stop(sprintf("`sample.id` column '%s' not found in sample metadata.", sample.id))
     }
-    rn <- as.character(sample_meta[[sample.id]])
+    rn <- as.character(sample.meta[[sample.id]])
   }
   if (is.null(rn) || anyNA(rn)) {
     stop("Sample identifiers are unavailable: set rownames(sample_meta) OR provide a valid `sample.id` column.")
   }
 
-  vals <- as.character(sample_meta[[var]])
+  vals <- as.character(sample.meta[[var]])
   names(vals) <- rn
   vals <- vals[vals %in% c(ref, alt)]
   factor(vals, levels = c(ref, alt))
@@ -276,9 +253,9 @@ buildContrastMatrix <- function(X, formula, contrasts, expand = c("marginal","si
   expand <- match.arg(expand)
   p  <- ncol(X); cn <- colnames(X)
 
-  # ---- helpers -------------------------------------------------------
+  # helpers
   # Main-effect dummy columns for a factor var (exclude interactions)
-  main_level_to_col <- function(var) {
+  mainLevelToCol <- function(var) {
     idx <- grep(paste0("^", var), cn)
     idx <- idx[!grepl(":", cn[idx], fixed = TRUE)]
     lev <- sub(paste0("^", var), "", cn[idx])
@@ -286,25 +263,25 @@ buildContrastMatrix <- function(X, formula, contrasts, expand = c("marginal","si
     setNames(idx[keep], lev[keep])
   }
   # Check if a variable is continuous in X (has a single main column named exactly var)
-  cont_col <- function(var) {
+  contCol <- function(var) {
     j <- which(cn == var)
     if (length(j) == 1L) j else integer(0)
   }
   # Build the regex for an interaction column (order-agnostic)
-  tok  <- function(var, lev) if (missing(lev) || is.null(lev)) var else paste0(var, lev)
-  find_inter_col <- function(t1, t2) {
+  toK  <- function(var, lev) if (missing(lev) || is.null(lev)) var else paste0(var, lev)
+  find.inter.col <- function(t1, t2) {
     which(cn == paste0(t1, ":", t2) | cn == paste0(t2, ":", t1))
   }
   add <- function(v, j, w) { if (length(j)==1 && j>0) v[j] <- v[j] + w; v }
 
   # Parse formula to discover interactions containing each requested var
   tr <- terms(formula)
-  term_labels <- attr(tr, "term.labels")
-  inter_pairs <- strsplit(term_labels[grepl(":", term_labels, fixed = TRUE)], ":", fixed = TRUE)
+  term.labels <- attr(tr, "term.labels")
+  inter.pairs <- strsplit(term.labels[grepl(":", term.labels, fixed = TRUE)], ":", fixed = TRUE)
 
-  partners_for <- function(var) {
-    if (length(inter_pairs) == 0) return(character())
-    unique(unlist(lapply(inter_pairs, function(ab) {
+  partnersFor <- function(var) {
+    if (length(inter.pairs) == 0) return(character())
+    unique(unlist(lapply(inter.pairs, function(ab) {
       if (var %in% ab) setdiff(ab, var) else character()
     })))
   }
@@ -319,84 +296,84 @@ buildContrastMatrix <- function(X, formula, contrasts, expand = c("marginal","si
 
   for (sp in specs) {
     A <- sp$var; ref <- sp$ref; alt <- sp$alt
-    v_main <- numeric(p); names(v_main) <- cn
+    v.main <- numeric(p); names(v.main) <- cn
 
     # ----- main contrast for A (alt vs ref) -----
-    mapA <- main_level_to_col(A)
-    jA_ref <- unname(mapA[ref]); if (length(jA_ref)==0) jA_ref <- NA_integer_
-    jA_alt <- unname(mapA[alt]); if (length(jA_alt)==0) jA_alt <- NA_integer_
-    jA_cont <- cont_col(A)
+    mapA <- mainLevelToCol(A)
+    jA.ref <- unname(mapA[ref]); if (length(jA.ref)==0) jA.ref <- NA_integer_
+    jA.alt <- unname(mapA[alt]); if (length(jA.alt)==0) jA.alt <- NA_integer_
+    jA.cont <- contCol(A)
 
-    if (length(jA_cont) == 1L) {
+    if (length(jA.cont) == 1L) {
       # A is continuous -> "main contrast" is just slope of A
-      v_main <- add(v_main, jA_cont, +1)
-      main_name <- paste0("Slope(", A, ")")
+      v.main <- add(v.main, jA.cont, +1)
+      main.name <- paste0("Slope(", A, ")")
     } else {
       # A is factor
-      if (!is.na(jA_alt) && !is.na(jA_ref)) {
-        v_main <- add(v_main, jA_alt, +1); v_main <- add(v_main, jA_ref, -1)
-      } else if (!is.na(jA_alt) && is.na(jA_ref)) {
-        v_main <- add(v_main, jA_alt, +1)          # ref is baseline (intercept coding)
-      } else if (is.na(jA_alt) && !is.na(jA_ref)) {
-        v_main <- add(v_main, jA_ref, -1)          # alt is baseline
+      if (!is.na(jA.alt) && !is.na(jA.ref)) {
+        v.main <- add(v.main, jA.alt, +1); v.main <- add(v.main, jA.ref, -1)
+      } else if (!is.na(jA.alt) && is.na(jA.ref)) {
+        v.main <- add(v.main, jA.alt, +1)          # ref is baseline (intercept coding)
+      } else if (is.na(jA.alt) && !is.na(jA.ref)) {
+        v.main <- add(v.main, jA.ref, -1)          # alt is baseline
       } else {
         stop("For '", A, "': neither '", ref, "' nor '", alt, "' has a main column in X.")
       }
-      main_name <- paste0(A, alt, "_vs_", ref)
+      main.name <- paste0(A, alt, "_vs_", ref)
     }
 
     # always include the marginal main contrast
-    C <- cbind(C, v_main); cnames <- c(cnames, main_name)
+    C <- cbind(C, v.main); cnames <- c(cnames, main.name)
 
     # ---------- expansions through interactions ----------
     if (expand != "marginal") {
-      partners <- partners_for(A)
+      partners <- partnersFor(A)
       for (B in partners) {
         # continuous partner?
-        jB_cont <- cont_col(B)
-        if (length(jB_cont) == 1L) {
+        jB.cont <- contCol(B)
+        if (length(jB.cont) == 1L) {
           # A × continuous partner is uncommon for "simple effect"; skip by default
           next
         }
 
         # factor partner: simple effects at each non-baseline level of B
-        mapB <- main_level_to_col(B)
+        mapB <- mainLevelToCol(B)
         if (length(mapB) == 0) next  # B not factor-coded in X
 
         # Determine B's non-baseline levels present as columns
         levB <- names(mapB)  # these are the dummy-coded levels (exclude baseline)
         for (b in levB) {
-          v_simple <- v_main  # start from main effect of A
+          v.simple <- v.main  # start from main effect of A
           # add interaction column for A_alt : B_b (or slope(A) : B_b if A is continuous)
-          if (length(jA_cont) == 1L) {
-            jInt <- find_inter_col(tok(A), tok(B, b))
-            if (length(jInt) == 1L) v_simple <- add(v_simple, jInt, +1)
-            simple_name <- paste0(main_name, " | ", B, "=", sub(paste0("^", B), "", b))
+          if (length(jA.cont) == 1L) {
+            jInt <- find.inter.col(toK(A), toK(B, b))
+            if (length(jInt) == 1L) v.simple <- add(v.simple, jInt, +1)
+            simple.name <- paste0(main.name, " | ", B, "=", sub(paste0("^", B), "", b))
           } else {
-            jInt <- find_inter_col(tok(A, alt), tok(B, b))
-            if (length(jInt) == 1L) v_simple <- add(v_simple, jInt, +1)
-            simple_name <- paste0("Simple(", A, " ", alt, "_vs_", ref, " | ",
+            jInt <- find.inter.col(toK(A, alt), toK(B, b))
+            if (length(jInt) == 1L) v.simple <- add(v.simple, jInt, +1)
+            simple.name <- paste0("Simple(", A, " ", alt, "_vs_", ref, " | ",
                                   B, "=", sub(paste0("^", B), "", b), ")")
           }
-          C <- cbind(C, v_simple); cnames <- c(cnames, simple_name)
+          C <- cbind(C, v.simple); cnames <- c(cnames, simple.name)
         }
 
         # Differences of simple effects (pure interaction) when B has exactly 1 dummy (i.e., 2 levels)
         if (expand == "both" && length(levB) == 1L) {
           b <- levB[1]
-          v_diff <- numeric(p); names(v_diff) <- cn
-          if (length(jA_cont) == 1L) {
+          v.diff <- numeric(p); names(v.diff) <- cn
+          if (length(jA.cont) == 1L) {
             # slope(A|B=b) - slope(A|B=baseline) = beta_{A:B_b}
-            jInt <- find_inter_col(tok(A), tok(B, b))
-            if (length(jInt) == 1L) v_diff <- add(v_diff, jInt, +1)
-            diff_name <- paste0("DiffSlope(", A, " | ", B, "=", sub(paste0("^", B), "", b), " vs baseline)")
+            jInt <- find.inter.col(toK(A), toK(B, b))
+            if (length(jInt) == 1L) v.diff <- add(v.diff, jInt, +1)
+            diff.name <- paste0("DiffSlope(", A, " | ", B, "=", sub(paste0("^", B), "", b), " vs baseline)")
           } else {
             # [A_alt vs ref at B=b] - [A_alt vs ref at baseline] = beta_{A_alt:B_b}
-            jInt <- find_inter_col(tok(A, alt), tok(B, b))
-            if (length(jInt) == 1L) v_diff <- add(v_diff, jInt, +1)
-            diff_name <- paste0("Interaction(", A, " ", alt, " × ", B, "=", sub(paste0("^", B), "", b), ")")
+            jInt <- find.inter.col(toK(A, alt), toK(B, b))
+            if (length(jInt) == 1L) v.diff <- add(v.diff, jInt, +1)
+            diff.name <- paste0("Interaction(", A, " ", alt, " × ", B, "=", sub(paste0("^", B), "", b), ")")
           }
-          if (any(v_diff != 0)) { C <- cbind(C, v_diff); cnames <- c(cnames, diff_name) }
+          if (any(v.diff != 0)) { C <- cbind(C, v.diff); cnames <- c(cnames, diff.name) }
         }
       }
     }

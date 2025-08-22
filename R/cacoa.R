@@ -344,32 +344,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   n.permutations = 1000
     #' )
     #' }
-estimateExpressionShiftMagnitudes = function(
-  cell.groups       = self$cell.groups,
-  sample.per.cell   = self$sample.per.cell,
-  formula           = NULL,
-  contrast          = NULL,
-  sample.meta       = self$sample.meta,
-  sample.id         = self$sample.id,      
-  dist              = NULL,
-  dist.type         = "shift",
-  min.cells.per.sample = 10,
-  min.samp.per.type    = 2,
-  min.gene.frac        = 0.01,
-  ref.level         = NULL,
-  target.level      = NULL,
-  verbose           = self$verbose,
-  n.cores           = self$n.cores,
-  name              = "expression.shifts",
-  n.permutations    = 1000,
-  genes             = NULL,
-  n.pcs             = NULL,
-  top.n.genes       = NULL,
-  gene.selection    = "wilcox",
-  return.all.cov    = FALSE
-  ...
-) {
-
+estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, formula = NULL,
+                                             contrast = NULL, sample.meta = self$sample.meta, sample.id = self$sample.id, dist = NULL,
+                                             dist.type = "shift", min.cells.per.sample = 10, min.samp.per.type = 2, min.gene.frac = 0.01,
+                                             verbose = self$verbose, n.cores = self$n.cores, name = "expression.shifts", n.permutations = 1000, 
+                                             genes = NULL, n.pcs = NULL, top.n.genes = NULL, gene.selection = "wilcox", return.all.cov = FALSE, 
+                                             ...) {
 if(!is.null(formula) || !is.null(contrast)) {
     vd <- validateDesign(formula = formula, sample_meta = sample.meta, contrast = contrast, verbose = verbose)
     formula  <- vd$formula
@@ -383,7 +363,6 @@ if(!is.null(formula) || !is.null(contrast)) {
   ref.level <- contrast[2]
   target.level <- contrast[3]
 
- 
   count.matrices <- extractRawCountMatrices(self$data.object, transposed = TRUE)
 
   if (verbose) message("Filtering data... ")
@@ -2176,6 +2155,9 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' @param type character method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);
     #' @param adjust.pvalues boolean Whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='subtract', TRUE for everything else)
     #' @param name character Slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
+    #' @param sample.meta data.frame Sample metadata (default=self$sample.meta)
+    #' @param formula formula Model formula (default=NULL)
+    #' @param contrast character Vector with two elements specifying the reference and target levels (default=NULL)
     #' @param n.permutations numeric Number of permutations (default=400)
     #' @param smooth boolean Smooth results (default=TRUE)
     #' @param verbose boolean Print messages (default=self$verbose)

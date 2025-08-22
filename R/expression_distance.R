@@ -89,8 +89,20 @@ estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, to
       warning("n.pcs is too large. Setting it to maximal allowed value ", min.dim)
     }
 
-    pcs <- svd(cm.norm, nv=n.pcs, nu=0)
-    cm.norm <- as.matrix(cm.norm %*% pcs$v)
+  cm.norm <- getTopPCs(cm.norm, n_pcs = n.pcs)
+  rownames(cm.norm) <- n
+
+  if (any(!is.finite(cm.norm))) {
+    stop("PCA output contains non-finite values (NA/NaN/Inf).")
+  }
+  zero_var_cols <- which(apply(cm.norm, 2, var) < .Machine$double.eps)
+  if (length(zero_var_cols) > 0) {
+    warning("PCA output contains zero-variance components; removing them.")
+    cm.norm <- cm.norm[, -zero_var_cols, drop = FALSE]
+  }
+  if (ncol(cm.norm) == 0) {
+    stop("No valid principal components remain after filtering zero-variance columns.")
+    }
   }
 
   if (dist == 'cor') {
@@ -133,31 +145,294 @@ estimateExpressionShiftsByDistMat <- function(dist.mat, sample.groups, norm.type
     stop("ref.level has to be provided for norm.type='ref' or return.type='target'")
 
   sample.groups %<>% .[rownames(dist.mat)]
-  if (norm.type == "both") {
+    if (norm.type == "both") {
     sg1 <- levels(sample.groups)[1]
     m1 <- outer(sample.groups, sample.groups, function(a, b) (a == sg1) & (b == sg1))
     m2 <- outer(sample.groups, sample.groups, function(a, b) (a != sg1) & (b != sg1))
     diag(m1) <- NA; diag(m2) <- NA
-    norm.const <- (median(dist.mat[m1], na.rm=TRUE) + median(dist.mat[m2], na.rm=TRUE)) / 2
+    norm.const <- (stats::median(dist.mat[m1], na.rm = TRUE) + stats::median(dist.mat[m2], na.rm = TRUE)) / 2
+    dist.mat.norm <- dist.mat - norm.const
+
   } else if (norm.type == "ref") {
-    mr <- outer(sample.groups, sample.groups, function(a, b) (a == ref.level) & (b == ref.level))
-    diag(mr) <- NA
-    norm.const <- median(dist.mat[mr], na.rm=TRUE)
+    if (is.null(ref.level))  ref.level  <- levels(sample.groups)[1]
+    if (is.null(target.level)) { target.level <- setdiff(levels(sample.groups), ref.level)[1] }
+
+    rr <- outer(sample.groups, sample.groups, function(a, b) a == ref.level    & b == ref.level)
+    tt <- outer(sample.groups, sample.groups, function(a, b) a == target.level & b == target.level)
+    diag(rr) <- FALSE
+    diag(tt) <- FALSE
+
+    med <- function(x) stats::median(x, na.rm = TRUE)
+    mR  <- if (any(rr)) med(dist.mat[rr]) else 0
+    # ref group scale (MAD/SD, then to 1)
+    sR <- if (any(rr)) stats::mad(dist.mat[rr], center = 0, constant = 1, na.rm = TRUE) else 0
+    if (!is.finite(sR) || sR <= 0) sR <- stats::sd(dist.mat[rr], na.rm = TRUE)
+    if (!is.finite(sR) || sR <= 0) sR <- 1
+
+    if (any(tt)) { # Target group scale
+    sT <- stats::mad(dist.mat[tt], center = 0, constant = 1, na.rm = TRUE)
+    if (!is.finite(sT) || sT <= 0) sT <- stats::sd(dist.mat[tt], na.rm = TRUE)
+    if (!is.finite(sT) || sT <= 0) sT <- sR
+    } else {
+    sT <- sR
+    }
+    s.vec <- ifelse(sg == ref.level, sR, sT)
+    eps <- 1e-8
+    scale.mat  <- outer(s.vec, s.vec, function(a, b) sqrt(pmax(a, eps) * pmax(b, eps)))
+    center.mat <- matrix(mR, nrow(dist.mat), ncol(dist.mat))
+    dist.mat.norm <- (dist.mat - center.mat) / scale.mat
   } else {
-    norm.const <- 0
+    dist.mat.norm <- dist.mat
   }
 
-  dist.mat <- dist.mat - norm.const
+  samples <- rownames(dist.mat)
+
+  if (!is.null(sample.meta.df)) {
+    if (!is.data.frame(sample.meta.df) || is.null(rownames(sample.meta.df))) {
+      stop("sample.meta.df must be a data.frame with samples as row names.")
+    }
+    sample.meta.df.ct <- sample.meta.df[samples, , drop = FALSE]
+    model.mat <- buildModelMatrix(sample.meta = sample.meta.df.ct, formula = formula, contrast = contrast)
+    # pairwise distances
+    dist.df <- computePairwiseDistances(dist.mat, model.mat, samples)
+
+    # backtrace *_diff columns to original terms (no intercept in model.mat)
+    assign.vec  <- attr(model.mat, "assign")
+    term.labels <- attr(terms(formula), "term.labels")
+    col2term    <- setNames(term.labels[assign.vec], colnames(model.mat))
+    diff.term.map <- setNames(unname(col2term), paste0(names(col2term), "_diff"))
+    used.diff      <- intersect(names(diff.term.map), grep("_diff$", names(dist.df), value = TRUE))
+    diff.term.map  <- diff.term.map[used.diff]
+
+    return(list(dist.df = dist.df, dist.mat.norm = dist.mat.norm, diff.term.map = diff.term.map))
+  }
+
+  # Fallback (no covariates)
   if (return.type == "cross") {
-    dists <- subsetDistanceMatrix(dist.mat, sample.groups=sample.groups, cross.factor=TRUE)
+    dists <- subsetDistanceMatrix(dist.mat.norm, sample.groups = sample.groups, cross.factor = TRUE)
   } else {
-    dists <- dist.mat %>%
+    dists <- dist.mat.norm %>%
       .[(sample.groups[rownames(.)] != ref.level), (sample.groups[colnames(.)] != ref.level)] %>%
       .[upper.tri(.)]
   }
-
-  return(dists)
+  list(dists = dists)
 }
+
+#' @keywords internal
+fitCellTypePairwiseDistances <- function(dist.df, ct=NULL, formula = NULL, contrast = NULL, sample.meta.df = NULL, diff.term.map = NULL, cm.norm, 
+                                         sample.groups, top.n.genes = NULL, gene.selection = "wilcox", norm.type = NULL, r.type = NULL, n.pcs = NULL,
+                                         dist = NULL, ref.level = NULL, target.level = NULL, n.permutations = 1000, n.cores.inner = 1, 
+                                         return.all.cov = FALSE, verbose = TRUE, ...) {
+  # Model formula from *_diff columns generated by computePairwiseDistances 
+  diff.cols <- grep("_diff$", names(dist.df), value = TRUE)
+  if (!length(diff.cols)) stop("No *_diff columns found in dist.df for cell type: ", ct)
+  model.formula <- stats::as.formula(paste("Distance ~", paste(diff.cols, collapse = " + ")))
+
+  # Design matrix & response 
+  tr <- terms(model.formula)
+  X  <- stats::model.matrix(tr, data = dist.df)  # includes intercept
+  y  <- dist.df$Distance
+  fit.obs <- lm_fit(X, y) 
+
+  # normalize shapes & strip intercept in outputs 
+  coef.names <- colnames(X)
+  if (is.null(dim(fit.obs$coefficients))) {
+    fit.obs$coefficients <- matrix(fit.obs$coefficients, ncol = 1,
+                                   dimnames = list(coef.names, "Estimate"))
+  } else rownames(fit.obs$coefficients) <- coef.names
+
+  if (is.null(dim(fit.obs$t_values))) {
+    fit.obs$t_values <- matrix(fit.obs$t_values, ncol = 1,
+                               dimnames = list(coef.names, "t_value"))
+  } else rownames(fit.obs$t_values) <- coef.names
+
+  names(fit.obs$p_values) <- coef.names
+
+  non.intercept <- setdiff(coef.names, "(Intercept)") # remove intercept 
+  fit.obs$coefficients <- fit.obs$coefficients[non.intercept, , drop = FALSE]
+  fit.obs$t_values     <- fit.obs$t_values[non.intercept, , drop = FALSE]
+  fit.obs$p_values     <- fit.obs$p_values[non.intercept]
+  coef.names <- non.intercept
+
+  contrast.var <- contrast[1]
+  cont <- grep(paste0("^", contrast.var, ".*_diff$"), coef.names, value = TRUE)
+  coef.name <- if (length(cont)) cont[1] else coef.names[1]
+
+  obs.stat <- if (!return.all.cov) fit.obs$coefficients[coef.name, ] else fit.obs$coefficients
+
+  # Group columns into terms for R2 
+  non.intercept <- setdiff(colnames(X), "(Intercept)")
+  if (is.null(names(diff.term.map))) { # needed in case of interaction terms
+    stop("diff.term.map must be a named character vector mapping *_diff columns to terms")
+  }
+  diff.term.map <- diff.term.map[non.intercept]
+  groups <- split(match(names(diff.term.map), colnames(X)), diff.term.map)
+  rss.full <- fit.obs$rss
+
+  partial.r2 <- setNames(numeric(length(groups)), names(groups))
+  for (nm in names(groups)) {
+    drop.idx <- groups[[nm]]
+    X.red <- X[, setdiff(seq_len(ncol(X)), drop.idx), drop = FALSE]
+    if (!"(Intercept)" %in% colnames(X.red)) X.red <- cbind("(Intercept)" = 1, X.red)
+    fit.red <- try(lm_fit(X.red, y), silent = TRUE)
+    if (!inherits(fit.red, "try-error")) {
+      rss.red <- fit.red$rss
+      partial.r2[nm] <- pmax(0, (rss.red - rss.full) / pmax(rss.red, .Machine$double.eps))
+    } else {
+      partial.r2[nm] <- NA_real_
+    }
+  }
+  ord <- c(sort(setdiff(names(partial.r2), grep(":", names(partial.r2), value = TRUE))),
+           sort(grep(":", names(partial.r2), value = TRUE)))
+  partial.r2.df <- as.data.frame(t(partial.r2[ord]), check.names = FALSE)
+
+  # Permutations (shuffle labels, recompute distances & refit)
+  samples <- unique(c(dist.df$Sample1, dist.df$Sample2))
+  contrast.var <- contrast[1]
+
+  perm.results <- plapply(seq_len(n.permutations), function(i) {
+    valid.samples <- intersect(samples, rownames(sample.meta.df))
+    if (!length(valid.samples)) return(NULL)
+
+    # 1) shuffle labels (preserve factor levels)
+    sg.shuff <- sample(sample.meta.df[valid.samples, contrast.var])
+    names(sg.shuff) <- valid.samples
+    smp.perm <- sample.meta.df[valid.samples, , drop = FALSE]
+    smp.perm[[contrast.var]] <- factor(sg.shuff, levels = levels(sample.meta.df[[contrast.var]]))
+
+    # 2) recompute distances under permutation
+    dm.perm <- estimateExpressionShiftsForCellType(cm.norm, sample.groups = sg.shuff, dist = dist, n.pcs = n.pcs, top.n.genes = top.n.genes,
+                                                       gene.selection = gene.selection, ...)
+
+    # 3) normalize by same scheme
+    if (norm.type == "both") {
+      sg1 <- levels(sg.shuff)[1]
+      m1 <- outer(sg.shuff, sg.shuff, function(a, b) (a == sg1) & (b == sg1))
+      m2 <- outer(sg.shuff, sg.shuff, function(a, b) (a != sg1) & (b != sg1))
+      diag(m1) <- NA; diag(m2) <- NA
+      norm.const <- (stats::median(dm.perm[m1], na.rm = TRUE) + stats::median(dm.perm[m2], na.rm = TRUE)) / 2
+      dm.perm.norm <- dm.perm - norm.const
+    } else if (norm.type == "ref") { # TODO: check normalization method
+    if (is.null(ref.level))  ref.level  <- levels(sample.groups)[1]
+    if (is.null(target.level)) { target.level <- setdiff(levels(sample.groups), ref.level)[1] }
+
+    rr <- outer(sample.groups, sample.groups, function(a, b) a == ref.level    & b == ref.level)
+    tt <- outer(sample.groups, sample.groups, function(a, b) a == target.level & b == target.level)
+    diag(rr) <- FALSE
+    diag(tt) <- FALSE
+
+    med <- function(x) stats::median(x, na.rm = TRUE)
+    mR  <- if (any(rr)) med(dm.perm[rr]) else 0
+    # ref group scale (MAD/SD, then to 1)
+    sR <- if (any(rr)) stats::mad(dm.perm[rr], center = 0, constant = 1, na.rm = TRUE) else 0
+    if (!is.finite(sR) || sR <= 0) sR <- stats::sd(dm.perm[rr], na.rm = TRUE)
+    if (!is.finite(sR) || sR <= 0) sR <- 1
+
+    if (any(tt)) { # Target group scale
+    sT <- stats::mad(dm.perm[tt], center = 0, constant = 1, na.rm = TRUE)
+    if (!is.finite(sT) || sT <= 0) sT <- stats::sd(dm.perm[tt], na.rm = TRUE)
+    if (!is.finite(sT) || sT <= 0) sT <- sR
+    } else {
+    sT <- sR
+    }
+    s.vec <- ifelse(sg == ref.level, sR, sT)
+    eps <- 1e-8
+    scale.mat  <- outer(s.vec, s.vec, function(a, b) sqrt(pmax(a, eps) * pmax(b, eps)))
+    center.mat <- matrix(mR, nrow(dm.perm), ncol(dm.perm))
+    dm.perm.norm <- (dm.perm - center.mat) / scale.mat
+  } else {
+    dm.perm.norm <- dm.perm
+  }
+    
+    # 4) pairwise design + fit
+    model.mat.perm <- buildModelMatrix(sample.meta = smp.perm, formula = formula, contrast = contrast)
+    dist.df.perm <- computePairwiseDistances(dm.perm.norm, model.mat.perm, valid.samples)
+
+    tt.perm <- terms(model.formula)
+    X.perm  <- stats::model.matrix(tt.perm, data = dist.df.perm)
+    y.perm  <- dist.df.perm$Distance
+    fit.perm <- try(lm_fit(X.perm, y.perm), silent = TRUE)
+    if (inherits(fit.perm, "try-error")) {
+      return(list(coef = setNames(rep(NA_real_, length(coef.names)), coef.names),
+                  r2   = setNames(rep(NA_real_, length(groups)), names(groups))))
+    }
+    # Remove intercept
+    non.intercept.perm <- setdiff(colnames(X.perm), "(Intercept)")
+    coef.mat.perm <- fit.perm$coefficients[non.intercept.perm, , drop = FALSE]
+    if (is.null(dim(coef.mat.perm)))
+      coef.mat.perm <- matrix(coef.mat.perm, ncol = 1,
+                               dimnames = list(non.intercept.perm, "Estimate"))
+    # Align group indices using observed column names
+    rss.full.p <- fit.perm$rss
+    Xn <- colnames(X.perm)
+    groups.perm <- lapply(groups, function(idx) match(colnames(X)[idx], Xn))
+    groups.perm <- lapply(groups.perm, function(v) v[!is.na(v)])
+
+    r2.perm <- setNames(numeric(length(groups.perm)), names(groups.perm))
+    for (nm in names(groups.perm)) {
+      idx.drop <- groups.perm[[nm]]
+      if (!length(idx.drop)) { r2.perm[nm] <- NA_real_; next }
+      Xr <- X.perm[, setdiff(seq_len(ncol(X.perm)), idx.drop), drop = FALSE]
+      if (!"(Intercept)" %in% colnames(Xr)) Xr <- cbind("(Intercept)" = 1, Xr)
+      fr <- try(lm_fit(Xr, y.perm), silent = TRUE)
+      if (inherits(fr, "try-error")) {
+        r2.perm[nm] <- NA_real_
+      } else {
+        rssr <- fr$rss
+        r2.perm[nm] <- pmax(0, (rssr - rss.full.p) / pmax(rssr, .Machine$double.eps))
+      }
+    }
+
+    list(
+      coef = setNames(as.vector(coef.mat.perm[, 1]), rownames(coef.mat.perm)),
+      r2   = r2.perm
+    )
+  }, n.cores = n.cores.inner, progress = verbose, fail.on.error = FALSE)
+
+  perm.results <- perm.results[!vapply(perm.results, is.null, FALSE)]
+  # Combine permutation results
+  if (!return.all.cov) {
+    perm.coefs <- unlist(lapply(perm.results, function(x) x$coef[coef.name]), use.names = FALSE)
+    expected.stat <- mean(perm.coefs, na.rm = TRUE)
+    centered.coefficients <- obs.stat - expected.stat
+    pvalue <- (sum(abs(perm.coefs) >= abs(centered.coefficients), na.rm = TRUE) + 1) /
+              (sum(!is.na(perm.coefs)) + 1)
+    names(pvalue) <- coef.name
+    perm.stats <- perm.coefs
+  } else {
+    # matrix (#perms x #coefs)
+    perm.coef.mat <- do.call(rbind, lapply(perm.results, `[[`, "coef"))
+    miss <- setdiff(coef.names, colnames(perm.coef.mat))
+    if (length(miss)) perm.coef.mat[, miss] <- NA_real_
+    perm.coef.mat <- perm.coef.mat[, coef.names, drop = FALSE]
+
+    expected.stat <- colMeans(perm.coef.mat, na.rm = TRUE)
+    centered.coefficients <- obs.stat - expected.stat
+
+    pvalue <- sapply(seq_along(coef.names), function(j) {
+      (sum(abs(perm.coef.mat[, j]) >= abs(centered.coefficients[j, 1]), na.rm = TRUE) + 1) /
+      (sum(!is.na(perm.coef.mat[, j])) + 1)
+    })
+    names(pvalue) <- coef.names
+    perm.stats <- perm.coef.mat
+  }
+
+  # Partial R² permutation aggregation
+  perm.r2.mat <- do.call(rbind, lapply(perm.results, `[[`, "r2"))
+  miss.r2 <- setdiff(names(groups), colnames(perm.r2.mat))
+  if (length(miss.r2)) perm.r2.mat[, miss.r2] <- NA_real_
+  perm.r2.mat <- perm.r2.mat[, names(groups), drop = FALSE]
+
+  partial.r2.perm.mean <- colMeans(perm.r2.mat, na.rm = TRUE)
+  partial.r2.pvalue <- sapply(names(groups), function(nm) {
+    (sum(perm.r2.mat[, nm] >= partial.r2[nm], na.rm = TRUE) + 1) /
+    (sum(!is.na(perm.r2.mat[, nm])) + 1)
+  })
+
+  list(model = fit.obs, pvalue = pvalue, obs.stat = obs.stat, coefficients = centered.coefficients, perm.stats = perm.stats,
+       expected.stat = expected.stat, partial.r2.df = partial.r2.df, partial.r2.perm.mean = partial.r2.perm.mean, partial.r2.pvalue = partial.r2.pvalue)
+}
+
 
 #' @keywords internal
 joinExpressionShiftDfs <- function(dist.df.per.type, sample.groups) {

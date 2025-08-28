@@ -167,11 +167,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
 
       if (is.null(design)) stop("Design formula must be provided")
-      vd <- validateDesign(formula = design, sample_meta = sample.metadata, contrast = contrast) 
+      vd <- validateDesign(formula = design, sample.meta = sample.metadata, contrast = contrast) 
       self$formula <- vd$formula
       self$contrast <- vd$contrast
 
-      self$model.matrix <- buildModelMatrix(sample_meta = sample.metadata, formula = self$formula, contrast = self$contrast, keep.intercept = FALSE)
+      self$model.matrix <- buildModelMatrix(sample.meta = sample.metadata, formula = self$formula, contrast = self$contrast, keep.intercept = FALSE)
 
       self$sample.groups <- getSampleGroups(sample.metadata, self$contrast, sample.id)
 

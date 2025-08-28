@@ -167,11 +167,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
 
       if (is.null(design)) stop("Design formula must be provided")
-      vd <- validateDesign(formula = design, sample_meta = sample.metadata, contrast = contrast) 
+
+      vd <- validateDesign(formula = design, sample.meta = sample.metadata, contrast = contrast) 
       self$formula <- vd$formula
       self$contrast <- vd$contrast
 
-      self$model.matrix <- buildModelMatrix(sample_meta = sample.metadata, formula = self$formula, contrast = self$contrast, keep.intercept = FALSE)
+      self$model.matrix <- buildModelMatrix(sample.meta = sample.metadata, formula = self$formula, contrast = self$contrast, keep.intercept = FALSE)
+
 
       self$sample.groups <- getSampleGroups(sample.metadata, self$contrast, sample.id)
 
@@ -351,7 +353,9 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
                                              genes = NULL, n.pcs = NULL, top.n.genes = NULL, gene.selection = "wilcox", return.all.cov = FALSE, 
                                              ...) {
 if(!is.null(formula) || !is.null(contrast)) {
-    vd <- validateDesign(formula = formula, sample_meta = sample.meta, contrast = contrast, verbose = verbose)
+
+    vd <- validateDesign(formula = formula, sample.meta = sample.meta, contrast = contrast, verbose = verbose)
+
     formula  <- vd$formula
     contrast <- vd$contrast
     sample.groups <- getSampleGroups(sample.meta, contrast = contrast, sample.id = sample.id)
@@ -2194,6 +2198,7 @@ if(!is.null(formula) || !is.null(contrast)) {
         contrast <- vd$contrast
         sample.groups <- getSampleGroups(sample.meta, contrast, sample.id=self$sample.id)
         X <- buildModelMatrix(sample.meta, formula = formula, contrast = contrast, keep.intercept = FALSE)
+
       } else {
         formula <- self$formula
         contrast <- self$contrast
@@ -2207,9 +2212,10 @@ if(!is.null(formula) || !is.null(contrast)) {
 
       if(!adjust.pvalues){
         score <- perm.res %>% .$score
-        res <- list(raw=score)
+        res <- list(raw=score, formula = formula, contrast = contrast)
       } else {
-        res <- list(raw=perm.res$score, adj=perm.res$Z_adj)
+        res <- list(raw=perm.res$score, adj=perm.res$Z_adj, formula = formula, contrast = contrast)
+
       }
 
       self$test.results[[name]]$diff[[type]] <- res
@@ -2253,7 +2259,7 @@ if(!is.null(formula) || !is.null(contrast)) {
       }
       private$checkCellEmbedding()
       dens.res <- private$getResults(name, 'estimateCellDensity')
-
+      
       if (is.null(type)) {
         type <- if (length(dens.res$diff) == 0) 'permutation' else names(dens.res$diff)[1]
       }
@@ -2266,24 +2272,26 @@ if(!is.null(formula) || !is.null(contrast)) {
         scores <- dens.res$diff[[type]]
       }
 
+      cov.idx <- grep(paste0(scores$contrast[1], scores$contrast[3]), rownames(scores[[1]]))
+
       if (is.null(adjust.pvalues)) {
         if (!is.null(scores$adj)) {
-          scores <- scores$adj
+          scores <- scores$adj[cov.idx,]
           adjust.pvalues <- TRUE
         } else {
-          scores <- scores$raw
+          scores <- scores$raw[cov.idx,]
           adjust.pvalues <- FALSE
         }
       } else if (adjust.pvalues) {
-        if (is.null(scores$adj)) {
+        if (is.null(scores$adj[cov.idx,])) {
           warning("Adjusted scores are not estimated. Using raw scores. ",
                   "Please, run estimateCellDensity with adjust.pvalues=TRUE")
-          scores <- scores$raw
+          scores <- scores$raw[cov.idx,]
         } else {
-          scores <- scores$adj
+          scores <- scores$adj[cov.idx,]
         }
       } else {
-        scores <- scores$raw
+        scores <- scores$raw[cov.idx,]
       }
 
       if (dens.res$method == 'graph') {

@@ -25,3 +25,41 @@ arma::rowvec projdiff(const arma::mat & mat, const arma::ivec & g1, const arma::
 
 }
 
+// fit linear model for density differences
+struct fit_density_lm_result {
+  arma::mat  KP;
+  arma::mat  KPge;
+  arma::cube KP_perm;
+  int        n_randomizations;
+};
+
+inline fit_density_lm_result fit_density_lm_impl(const arma::mat& M,
+                                                 const arma::mat& P,
+                                                 int n_randomizations) {
+  arma::mat K  = arma::solve(M.t() * M, M.t());
+  arma::mat KP = K * P;
+
+  arma::mat  KPge(KP.n_rows, KP.n_cols, arma::fill::zeros);
+  arma::cube KP_perm(KP.n_rows, KP.n_cols, n_randomizations);
+
+  for (int r = 0; r < n_randomizations; ++r) {
+    arma::mat P_prime = P.rows(arma::randperm(P.n_rows));
+    arma::mat KP_prime = K * P_prime;
+    KP_perm.slice(r) = KP_prime;
+    KPge += arma::conv_to<arma::mat>::from(KP_prime >= KP);
+  }
+  return {KP, KPge, KP_perm, n_randomizations};
+}
+
+// [[Rcpp::export]]
+Rcpp::List fit_density_lm(const arma::mat& M,
+                          const arma::mat& P,
+                          int n_randomizations) {
+  auto res = fit_density_lm_impl(M, P, n_randomizations);
+  return Rcpp::List::create(
+    Rcpp::Named("KP") = res.KP,
+    Rcpp::Named("KPge") = res.KPge,
+    Rcpp::Named("KP_perm") = res.KP_perm,
+    Rcpp::Named("n_randomizations") = res.n_randomizations
+  );
+}

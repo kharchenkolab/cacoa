@@ -4,70 +4,125 @@ NULL
 #' Expression shift magnitudes per cluster between conditions
 #'
 #' @param cm.per.type List of normalized count matrices per cell type
+#' @param sample.meta Data frame with sample-level covariates, row names are sample IDs
+#' @param sample.per.cell Named vector with cell names indicating sample/condition
+#' @param formula Formula specifying the model to fit
+#' @param contrast Character vector of length 3 specifying the contrast to test: c("condition_variable", "reference_level", "target_level")
 #' @param sample.groups Named factor with cell names indicating condition/sample, e.g., ctrl/disease
 #' @param cell.groups Named clustering/annotation factor with cell names
 #' @param dist what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values
+#' @param return.all.cov Logical indicating whether to return results for all covariates or only contrast variable (default=FALSE)
 #' @param n.cores number of cores (default=1)
 #' @param verbose (default=FALSE)
 #' @return List of distances per cell type, distance matrices, sample groups, cell types, pvalues, and adjusted p-values.
 #' @export
-estimateExpressionChange <- function(cm.per.type, sample.groups, cell.groups, sample.per.cell,
-                                     dist=NULL, dist.type=c("shift", "total", "var"), verbose=FALSE,
-                                     ref.level=NULL, n.permutations=1000, p.adjust.method="BH",
-                                     top.n.genes=NULL, gene.selection="wilcox", n.pcs=NULL,
-                                     trim=0.2, n.cores=1, ...) {
+estimateExpressionChange <- function(cm.per.type, sample.groups, cell.groups, 
+                                     sample.meta, sample.per.cell, sample.id = NULL, 
+                                     formula = NULL, contrast = NULL, dist = "cor", dist.type = c("shift", "total", "var"), 
+                                     ref.level = NULL, target.level = NULL, gene.selection = "wilcox", 
+                                     n.permutations = 1000, return.all.cov = FALSE, p.adjust.method = "BH", trim = 0.2, 
+                                     top.n.genes = NULL, n.pcs = NULL, n.cores = 1, verbose = TRUE, ...) {
   dist.type <- match.arg(dist.type)
-  dist <- parseDistance(dist, top.n.genes=top.n.genes, n.pcs=n.pcs)
-
+  dist <- parseDistance(dist, top.n.genes = top.n.genes, n.pcs = n.pcs)
   norm.type <- ifelse(dist.type == "shift", "both", "ref")
-  r.type <- ifelse(dist.type == "var", "target", "cross")
+  #r.type    <- ifelse(dist.type == "var", "target", "cross")
 
-  cell.groups %<>% as.factor() %>% droplevels()
+  cell.groups <- droplevels(factor(cell.groups))
+  sample.type.table <- table(cell.groups, sample.per.cell[names(cell.groups)])
 
-  sample.type.table <- cell.groups %>% table(sample.per.cell[names(.)]) # table of sample types and cells
+  contrast.var <- contrast[1]
+  ref.level    <- contrast[2]
+  target.level <- contrast[3]
 
-  if (verbose) message("Calculating pairwise distances using dist='", dist, "'...\n", sep="")
+  covariates <- all.vars(formula)
+  sample.meta.df <- sample.meta[, covariates, drop = FALSE]
+  sample.meta.df[[contrast.var]] <- factor(sample.meta.df[[contrast.var]])
+  if (ncol(sample.meta.df) == 0) stop("Covariate frame is empty after selecting terms from the formula.")
 
-  n.cores.inner <- max(n.cores %/% length(levels(cell.groups)), 1)
-  res.per.type <- levels(cell.groups) %>% sccore::sn() %>% plapply(function(ct) {
-    cm.norm <- cm.per.type[[ct]]
-    dist.mat <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sample.groups, dist=dist, n.pcs=n.pcs,
-                                                    top.n.genes=top.n.genes, gene.selection=gene.selection, ...)
-    attr(dist.mat, 'n.cells') <- sample.type.table[ct, rownames(cm.norm)] # calculate how many cells there are
+  if (verbose) message("Fitting LM with formula: ", deparse(formula))
 
-    dists <- estimateExpressionShiftsByDistMat(dist.mat, sample.groups, norm.type=norm.type,
-                                               return.type=r.type, ref.level=ref.level)
-    obs.diff <- mean(dists, trim=trim)
+  n.cores.inner <- max(floor(n.cores / max(1L, length(levels(cell.groups)))), 1)
 
-    randomized.dists <- plapply(1:n.permutations, function(i) {
-      sg.shuff <- sample.groups[rownames(cm.norm)] %>% as.factor() %>%
-        droplevels() %>% {setNames(sample(.), names(.))}
-      dm <- dist.mat
-      if (!is.null(top.n.genes) && (gene.selection != "od")) {
-        dm <- estimateExpressionShiftsForCellType(cm.norm, sample.groups=sg.shuff, dist=dist, n.pcs=n.pcs,
-                                                  top.n.genes=top.n.genes, gene.selection=gene.selection, ...)
-      }
+  res.per.type <- levels(cell.groups) %>%
+                          sccore::sn() %>%
+                            plapply(function(ct) {
+                              if (verbose) message("Processing cell type '", ct, "'...")
+                                cm.norm <- cm.per.type[[ct]]
+                                # distances per sample
+                                dist.mat <- estimateExpressionShiftsForCellType(cm.norm, sample.groups = sample.groups, dist = dist, n.pcs = n.pcs,
+                                                                                top.n.genes = top.n.genes, gene.selection = gene.selection, ...)
+                                attr(dist.mat, "n.cells") <- sample.type.table[ct, rownames(cm.norm)]
 
-      estimateExpressionShiftsByDistMat(dm, sg.shuff, norm.type=norm.type, return.type=r.type, ref.level=ref.level) %>%
-        mean(trim=trim)
-    }, progress=FALSE, n.cores=n.cores.inner, mc.preschedule=TRUE, fail.on.error=TRUE) %>% unlist()
+                                d <- estimateExpressionShiftsByDistMat(dist.mat = dist.mat, sample.groups = sample.groups, sample.meta.df = sample.meta.df, 
+                                                                       formula = formula, contrast = contrast, norm.type = norm.type, 
+                                                                       return.type = ifelse(dist.type == "var", "target", "cross"),
+                                                                       ref.level = ref.level, target.level = target.level, verbose = verbose)
 
-    pvalue <- (sum(randomized.dists >= obs.diff) + 1) / (sum(!is.na(randomized.dists)) + 1)
-    dists <- dists - median(randomized.dists, na.rm=TRUE)
+                                fit <- fitCellTypePairwiseDistances(dist.df = d$dist.df, ct = ct, formula = formula, contrast = contrast, sample.meta.df = sample.meta.df, 
+                                                                    diff.term.map = d$diff.term.map %||% NULL, cm.norm = cm.norm, sample.groups = sample.groups, 
+                                                                    top.n.genes = top.n.genes, norm.type = norm.type, r.type = ifelse(dist.type == "var", "target", "cross"), 
+                                                                    n.pcs = n.pcs, dist = dist, ref.level = ref.level, target.level = target.level, return.all.cov = return.all.cov, 
+                                                                    n.permutations = n.permutations, n.cores.inner = n.cores.inner, verbose = verbose, ...)
 
-    list(dists=dists, dist.mat=dist.mat, pvalue=pvalue)
-  }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, mc.allow.recursive=TRUE, fail.on.error=TRUE)
+                                list(fit = fit, dist.mat = d$dist.mat.norm, dists = d$dist.df$Distance)
+                            }, progress = verbose, n.cores = n.cores, mc.preschedule = TRUE, mc.allow.recursive = TRUE, fail.on.error = TRUE)
 
   if (verbose) message("Done!\n")
 
-  pvalues <- sapply(res.per.type, `[[`, "pvalue")
-  dists.per.type <- lapply(res.per.type, `[[`, "dists")
-  p.dist.info <- lapply(res.per.type, `[[`, "dist.mat")
+  fits           <- lapply(res.per.type, `[[`, "fit")
+  p.dist.info    <- lapply(res.per.type, function(x) x$dist.mat)
+  dists.per.type <- lapply(res.per.type, function(x) x$dists)
 
-  padjust <- p.adjust(pvalues, method=p.adjust.method)
+  if (!return.all.cov) {
+    coefs.per.type <- do.call(rbind, lapply(fits, `[[`, "coefficients"))[, 1]
+    names(coefs.per.type) <- gsub("_diff$", "", names(coefs.per.type))
+    pvalue <- sapply(fits, `[[`, "pvalue")
+    names(pvalue) <- gsub("_diff$", "", names(pvalue))
+    obs.stat <- do.call(rbind, lapply(fits, `[[`, "obs.stat"))[, 1]
+    names(obs.stat) <- gsub("_diff$", "", names(obs.stat))
+    exp.stat <- sapply(fits, `[[`, "expected.stat")
+    names(exp.stat) <- gsub("_diff$", "", names(exp.stat))
+    padjust <- stats::p.adjust(pvalue, method = p.adjust.method)
+    names(padjust) <- gsub("_diff$", "", names(padjust))
+    perm.stats <- lapply(fits, `[[`, "perm.stats")
+    partial.r2.df <- lapply(fits, `[[`, "partial.r2.df")
+    partial.r2.perm.mean <- lapply(fits, `[[`, "partial.r2.perm.mean")
+    partial.r2.pvalue <- lapply(fits, `[[`, "partial.r2.pvalue")
+  } else {
+    coefs.per.type <- lapply(fits, `[[`, "coefficients")
+    all.coefs <- unique(unlist(lapply(coefs.per.type, rownames)))
+    coefs.per.type <- do.call(rbind, lapply(names(coefs.per.type), function(nm) {
+      x <- coefs.per.type[[nm]]
+      coefs <- setNames(rep(NA_real_, length(all.coefs)), all.coefs)
+      coefs[rownames(x)] <- as.vector(x)
+      data.frame(t(coefs), row.names = nm, check.names = FALSE)
+    }))
+    colnames(coefs.per.type) <- gsub("_diff$", "", colnames(coefs.per.type))
+    pvalue <- do.call(rbind, lapply(fits, `[[`, "pvalue"))
+    colnames(pvalue) <- gsub("_diff$", "", colnames(pvalue))
+    obs.stat <- lapply(fits, `[[`, "obs.stat")
+    all.obs <- unique(unlist(lapply(obs.stat, rownames)))
+    obs.stat <- do.call(rbind, lapply(names(obs.stat), function(nm) {
+      x <- obs.stat[[nm]]
+      obs <- setNames(rep(NA_real_, length(all.obs)), all.obs)
+      obs[rownames(x)] <- as.vector(x)
+      data.frame(t(obs), row.names = nm, check.names = FALSE)
+    }))
+    colnames(obs.stat) <- gsub("_diff$", "", colnames(obs.stat))
+    exp.stat <- do.call(rbind, lapply(fits, `[[`, "expected.stat"))
+    colnames(exp.stat) <- gsub("_diff$", "", colnames(exp.stat))
+    padjust <- apply(pvalue, 2, function(x) stats::p.adjust(x, method = p.adjust.method))
+    colnames(padjust) <- gsub("_diff$", "", colnames(padjust))
+    perm.stats <- lapply(fits, `[[`, "perm.stats")
+    partial.r2.df <- lapply(fits, `[[`, "partial.r2.df")
+    partial.r2.perm.mean <- lapply(fits, `[[`, "partial.r2.perm.mean")
+    partial.r2.pvalue <- lapply(fits, `[[`, "partial.r2.pvalue")
+  }
 
-  return(list(dists.per.type=dists.per.type, p.dist.info=p.dist.info, sample.groups=sample.groups,
-              cell.groups=cell.groups, pvalues=pvalues, padjust=padjust))
+  list(dists.per.type = dists.per.type, p.dist.info = p.dist.info, sample.groups = sample.groups, coefs.per.type = coefs.per.type, 
+       partial.r2.df = partial.r2.df, obs.stat = obs.stat, exp.stat = exp.stat, cell.groups = cell.groups, pvalues = pvalue, 
+       padjust = padjust, perm.stat = perm.stats, partial.r2.perm.mean = partial.r2.perm.mean, partial.r2.pvalue = partial.r2.pvalue, 
+       return.all.cov = return.all.cov, contrast = contrast, formula = formula)
 }
 
 
@@ -136,8 +191,8 @@ subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df
 }
 
 #' @keywords internal
-estimateExpressionShiftsByDistMat <- function(dist.mat, sample.groups, norm.type=c("both", "ref", "none"),
-                                              ref.level=NULL, return.type=c("cross", "target")) {
+estimateExpressionShiftsByDistMat <- function(dist.mat, sample.groups, formula, sample.meta.df = NULL, contrast = NULL, norm.type = c("both", "ref", "none"),
+                                              ref.level = NULL, target.level = NULL, return.type = c("cross", "target"), verbose = FALSE) {
   norm.type <- match.arg(norm.type)
   return.type <- match.arg(return.type)
 
@@ -257,7 +312,6 @@ fitCellTypePairwiseDistances <- function(dist.df, ct=NULL, formula = NULL, contr
   contrast.var <- contrast[1]
   cont <- grep(paste0("^", contrast.var, ".*_diff$"), coef.names, value = TRUE)
   coef.name <- if (length(cont)) cont[1] else coef.names[1]
-
   obs.stat <- if (!return.all.cov) fit.obs$coefficients[coef.name, ] else fit.obs$coefficients
 
   # Group columns into terms for R2 
@@ -345,8 +399,8 @@ fitCellTypePairwiseDistances <- function(dist.df, ct=NULL, formula = NULL, contr
   }
     
     # 4) pairwise design + fit
-    model.mat.perm <- buildModelMatrix(sample.meta = smp.perm, formula = formula, contrast = contrast)
-    dist.df.perm <- computePairwiseDistances(dm.perm.norm, model.mat.perm, valid.samples)
+      model.mat.perm <- buildModelMatrix(sample.meta = smp.perm, formula = formula, contrast = contrast)
+      dist.df.perm <- computePairwiseDistances(dm.perm.norm, model.mat.perm, valid.samples)
 
     tt.perm <- terms(model.formula)
     X.perm  <- stats::model.matrix(tt.perm, data = dist.df.perm)
@@ -358,6 +412,10 @@ fitCellTypePairwiseDistances <- function(dist.df, ct=NULL, formula = NULL, contr
     }
     # Remove intercept
     non.intercept.perm <- setdiff(colnames(X.perm), "(Intercept)")
+    if (is.null(dim(fit.perm$coefficients))) {
+    fit.perm$coefficients <- matrix(fit.perm$coefficients, ncol = 1,
+                                   dimnames = list(colnames(X.perm), "Estimate"))
+     } else rownames(fit.perm$coefficients) <- colnames(X.perm)
     coef.mat.perm <- fit.perm$coefficients[non.intercept.perm, , drop = FALSE]
     if (is.null(dim(coef.mat.perm)))
       coef.mat.perm <- matrix(coef.mat.perm, ncol = 1,
@@ -388,6 +446,7 @@ fitCellTypePairwiseDistances <- function(dist.df, ct=NULL, formula = NULL, contr
       r2   = r2.perm
     )
   }, n.cores = n.cores.inner, progress = verbose, fail.on.error = FALSE)
+  
 
   perm.results <- perm.results[!vapply(perm.results, is.null, FALSE)]
   # Combine permutation results
@@ -397,7 +456,7 @@ fitCellTypePairwiseDistances <- function(dist.df, ct=NULL, formula = NULL, contr
     centered.coefficients <- obs.stat - expected.stat
     pvalue <- (sum(abs(perm.coefs) >= abs(centered.coefficients), na.rm = TRUE) + 1) /
               (sum(!is.na(perm.coefs)) + 1)
-    names(pvalue) <- coef.name
+    #names(pvalue) <- coef.name
     perm.stats <- perm.coefs
   } else {
     # matrix (#perms x #coefs)

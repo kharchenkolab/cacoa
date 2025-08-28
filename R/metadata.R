@@ -114,7 +114,9 @@ validateDesign <- function(formula, sample.meta = NULL, contrast = NULL, verbose
 #' @keywords internal
 buildModelMatrix <- function(sample.meta, formula, contrast = NULL, keep.intercept = FALSE, verbose = FALSE) {
   if (!is.null(formula) || !is.null(contrast)) {
+
     vd <- validateDesign(formula = formula, sample.meta = sample.meta, contrast = contrast, verbose = verbose)
+
     formula <- vd$formula
     contrast <- vd$contrast
   }

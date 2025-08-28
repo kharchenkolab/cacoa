@@ -273,6 +273,7 @@ estimateExpressionShiftsByDistMat <- function(dist.mat, sample.groups, formula, 
   list(dists = dists)
 }
 
+
 #' @keywords internal
 fitCellTypePairwiseDistances <- function(dist.df, ct=NULL, formula = NULL, contrast = NULL, sample.meta.df = NULL, diff.term.map = NULL, cm.norm, 
                                          sample.groups, top.n.genes = NULL, gene.selection = "wilcox", norm.type = NULL, r.type = NULL, n.pcs = NULL,

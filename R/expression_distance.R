@@ -144,8 +144,7 @@ estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, to
       warning("n.pcs is too large. Setting it to maximal allowed value ", min.dim)
     }
 
-  cm.norm <- getTopPCs(cm.norm, n_pcs = n.pcs)
-  rownames(cm.norm) <- n
+  cm.norm <- getTopPCs(cm.norm, n.pcs = n.pcs)
 
   if (any(!is.finite(cm.norm))) {
     stop("PCA output contains non-finite values (NA/NaN/Inf).")
@@ -686,12 +685,15 @@ parseDistance <- function(dist, top.n.genes, n.pcs) {
 }
 
 #' @keywords internal
-getTopPCs <- function(cm.norm, n_pcs) {
+getTopPCs <- function(cm.norm, n.pcs) {
+  samp.names <- rownames(cm.norm)
   if (!is.matrix(cm.norm)) {
     cm.norm <- as.matrix(cm.norm)
   }
   if (!is.numeric(cm.norm)) {
     stop("Input matrix must be numeric.")
   }
-  pca_project(cm.norm, n_pcs)
+  cm.norm.p <- pca_project(cm.norm, n.pcs)
+  rownames(cm.norm.p) <- samp.names
+  return(cm.norm.p)
 }

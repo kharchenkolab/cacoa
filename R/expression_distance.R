@@ -114,6 +114,7 @@ estimateExpressionChange <- function(cm.per.type, sample.groups, cell.groups,
     padjust <- apply(pvalue, 2, function(x) stats::p.adjust(x, method = p.adjust.method))
     colnames(padjust) <- gsub("_diff$", "", colnames(padjust))
     perm.stats <- lapply(fits, `[[`, "perm.stats")
+
     partial.r2.df <- do.call(rbind,lapply(fits, `[[`, "partial.r2.df"))
     partial.r2.perm.mean <- lapply(fits, `[[`, "partial.r2.perm.mean")
     partial.r2.pvalue <- do.call(rbind, lapply(fits, `[[`, "partial.r2.pvalue"))
@@ -270,6 +271,7 @@ estimateExpressionShiftsByDistMat <- function(dist.mat, sample.groups, formula, 
   }
   list(dists = dists)
 }
+
 
 #' @keywords internal
 fitCellTypePairwiseDistances <- function(dist.df, ct=NULL, formula = NULL, contrast = NULL, sample.meta.df = NULL, diff.term.map = NULL, cm.norm, 
@@ -480,7 +482,6 @@ fitCellTypePairwiseDistances <- function(dist.df, ct=NULL, formula = NULL, contr
   miss.r2 <- setdiff(names(groups), colnames(perm.r2.mat))
   if (length(miss.r2)) perm.r2.mat[, miss.r2] <- NA_real_
   perm.r2.mat <- perm.r2.mat[, names(groups), drop = FALSE]
-
   partial.r2.perm.mean <- colMeans(perm.r2.mat, na.rm = TRUE)
   partial.r2.pvalue <- sapply(names(groups), function(nm) {
     (sum(perm.r2.mat[, nm] >= partial.r2[nm], na.rm = TRUE) + 1) /

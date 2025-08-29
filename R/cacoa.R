@@ -167,6 +167,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
 
       if (is.null(design)) stop("Design formula must be provided")
+
       vd <- validateDesign(formula = design, sample.meta = sample.metadata, contrast = contrast) 
       self$formula <- vd$formula
       self$contrast <- vd$contrast
@@ -351,7 +352,9 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
                                              genes = NULL, n.pcs = NULL, top.n.genes = NULL, gene.selection = "wilcox", return.all.cov = FALSE, 
                                              ...) {
 if(!is.null(formula) || !is.null(contrast)) {
+
     vd <- validateDesign(formula = formula, sample.meta = sample.meta, contrast = contrast, verbose = verbose)
+
     formula  <- vd$formula
     contrast <- vd$contrast
     sample.groups <- getSampleGroups(sample.meta, contrast = contrast, sample.id = sample.id)
@@ -2194,6 +2197,7 @@ if(!is.null(formula) || !is.null(contrast)) {
         contrast <- vd$contrast
         sample.groups <- getSampleGroups(sample.meta, contrast, sample.id=self$sample.id)
         X <- buildModelMatrix(sample.meta, formula = formula, contrast = contrast, keep.intercept = FALSE)
+
       } else {
         formula <- self$formula
         contrast <- self$contrast
@@ -2210,6 +2214,7 @@ if(!is.null(formula) || !is.null(contrast)) {
         res <- list(raw=score, formula = formula, contrast = contrast)
       } else {
         res <- list(raw=perm.res$score, adj=perm.res$Z_adj, formula = formula, contrast = contrast)
+
       }
 
       self$test.results[[name]]$diff[[type]] <- res

@@ -135,7 +135,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     initialize=function(
       data.object, sample.metadata=NULL, sample.id=NULL, design=NULL, contrast=NULL, cell.groups=NULL, sample.per.cell=NULL, sample.groups.palette=NULL,
       cell.groups.palette=NULL, embedding=NULL, n.cores=1, verbose=TRUE,
-      graph.name=NULL, assay.name="RNA", data.slot='scale.data',
+      graph.name=NULL, assay.name="RNA", data.layer='scale.data',
       plot.theme=ggplot2::theme_bw(), plot.params=NULL
     ) {
 
@@ -200,9 +200,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
 
         data.object@misc$assay.name <- assay.name
-        data.object@misc$data.slot <- data.slot
-        if (data.slot == 'scale.data') {
-          warning("Using data.slot='scale.data' is not recommended, as it usually contains only highly-variable genes. Consider using data.slot='data' instead.")
+        data.object@misc$data.layer <- data.layer
+        if (data.layer == 'scale.data') {
+          warning("Using data.layer='scale.data' is not recommended, as it usually contains only highly-variable genes. Consider using data.layer='data' instead.")
         }
       } else if (('Conos' %in% class(data.object))) {
         if (!is.null(graph.name)) {

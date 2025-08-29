@@ -86,7 +86,7 @@ extractRawCountMatrices.Conos <- function(object, transposed=TRUE) {
 #' @rdname extractRawCountMatrices
 extractRawCountMatrices.Seurat <- function(object, transposed=TRUE) {
   cms <- object$sample.per.cell %>% {split(names(.), .)} %>%
-    lapply(function(cids) object@assays[[object@misc$assay.name]]@counts[,cids])
+    lapply(function(cids) object[[object@misc$assay.name]]$counts[, colnames(object) %in% cids])
   if (transposed) {
     cms %<>% lapply(Matrix::t)
   }
@@ -125,10 +125,9 @@ extractJointCountMatrix.Conos <- function(object, raw=TRUE) {
 #' @param sparse boolean If TRUE, return merged the sparse dgCMatrix matrix (default=TRUE)
 #' @rdname extractJointCountMatrix
 extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sparse=TRUE) {
-  # TODO: Seurat v5 deprecated `slot` in favor of `layer`
   if (raw) {
     dat <- object %>% 
-      Seurat::GetAssayData(slot='counts', assay=.@misc$assay.name) %>%
+      Seurat::GetAssayData(layer='counts', assay=.@misc$assay.name) %>%
       as("CsparseMatrix")
     if (transposed){
       dat %<>% Matrix::t()
@@ -136,23 +135,23 @@ extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sp
     return(dat)
   }
 
-  slot <- object@misc$data.slot
+  layer <- object@misc$data.layer
   dat <- NULL
-  if (is.null(slot) || slot == 'scale.data') {
-    dat <- Seurat::GetAssayData(object, slot='scale.data', assay=object@misc$assay.name)
+  if (is.null(layer) || layer == 'scale.data') {
+    dat <- Seurat::GetAssayData(object, layer='scale.data', assay=object@misc$assay.name)
     dims <- dim(dat)
     dat.na <- all(dims == 1) && all(is.na(x = dat))
     if (any(dims == 0) || dat.na) {
-      slot <- 'data'
+      layer <- 'data'
     }
   }
 
-  if (slot == 'data') {
-    dat <- Seurat::GetAssayData(object, slot='data', assay=object@misc$assay.name)
+  if (layer == 'data') {
+    dat <- Seurat::GetAssayData(object, layer='data', assay=object@misc$assay.name)
   }
 
   if (is.null(dat) || any(dim(dat) == 0)) {
-    stop("Can't access data slot ", slot)
+    stop("Can't access data layer ", layer)
   }
 
   if (transposed){

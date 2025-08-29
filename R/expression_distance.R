@@ -317,6 +317,7 @@ fitCellTypePairwiseDistances <- function(dist.df, ct=NULL, formula = NULL, contr
   if (is.null(names(diff.term.map))) { # needed in case of interaction terms
     stop("diff.term.map must be a named character vector mapping *_diff columns to terms")
   }
+  names(diff.term.map) <- make.names(names(diff.term.map)) # needed if there are spaces or special characters
   diff.term.map <- diff.term.map[non.intercept]
   groups <- split(match(names(diff.term.map), colnames(X)), diff.term.map)
   rss.full <- fit.obs$rss

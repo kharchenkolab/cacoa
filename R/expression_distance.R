@@ -114,9 +114,9 @@ estimateExpressionChange <- function(cm.per.type, sample.groups, cell.groups,
     padjust <- apply(pvalue, 2, function(x) stats::p.adjust(x, method = p.adjust.method))
     colnames(padjust) <- gsub("_diff$", "", colnames(padjust))
     perm.stats <- lapply(fits, `[[`, "perm.stats")
-    partial.r2.df <- lapply(fits, `[[`, "partial.r2.df")
+    partial.r2.df <- do.call(rbind,lapply(fits, `[[`, "partial.r2.df"))
     partial.r2.perm.mean <- lapply(fits, `[[`, "partial.r2.perm.mean")
-    partial.r2.pvalue <- lapply(fits, `[[`, "partial.r2.pvalue")
+    partial.r2.pvalue <- do.call(rbind, lapply(fits, `[[`, "partial.r2.pvalue"))
   }
 
   list(dists.per.type = dists.per.type, p.dist.info = p.dist.info, sample.groups = sample.groups, coefs.per.type = coefs.per.type, 
@@ -256,8 +256,6 @@ estimateExpressionShiftsByDistMat <- function(dist.mat, sample.groups, formula, 
     term.labels <- attr(terms(formula), "term.labels")
     col2term    <- setNames(term.labels[assign.vec], colnames(model.mat))
     diff.term.map <- setNames(unname(col2term), paste0(names(col2term), "_diff"))
-    used.diff      <- intersect(names(diff.term.map), grep("_diff$", names(dist.df), value = TRUE))
-    diff.term.map  <- diff.term.map[used.diff]
 
     return(list(dist.df = dist.df, dist.mat.norm = dist.mat.norm, diff.term.map = diff.term.map))
   }

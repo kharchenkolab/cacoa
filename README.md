@@ -23,15 +23,16 @@ Prior to installing the package, dependencies have to be installed:
 BiocManager::install(c("clusterProfiler", "DESeq2", "DOSE", "EnhancedVolcano", "enrichplot", "fabia", "GOfuncR", "Rgraphviz"))
 ```
 
-## Initialization
+## Initialization (development branch only)
 
 Cacoa currently supports inputs in several formats (see below). Most of them require the following metadata:
 
-- `sample.groups`: vector with condition labels per sample named with sample ids
+- `sample.meta`: data frame with information of covariates per sample (e.g. condition, sex, age, batch, etc.)
+- `sample.id`: character of column holding unique sample identifiers 
 - `cell.groups`: cell type annotation vector named by cell ids
 - `sample.per.cell`: vector with sample labels per cell named with cell ids
-- `ref.level`: id of the condition, corresponding to the reference (i.e. control)
-- `target.level`: id of the condition, corresponding to the target (i.e. case)
+- `design`: string of the design formula for the analysis (e.g. "~ condition + batch")
+- `contrast`: character vector c(var, ref, alt), (e.g. c("condition","control","treated"))
 
 Additionally, the `embedding` parameter containing a matrix or data.frame with a cell embedding can be provided. Rownames should match to the cell ids. 
 It is used for visualization and some cluster-free analysis.
@@ -42,8 +43,7 @@ Cacoa can be ran without any expression data by passing `NULL` instead of a data
 
 ```r
 cao <- Cacoa$new(
-    NULL, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
-    ref.level=ref.level, target.level=target.level, embedding=embedding
+    NULL, sample.metadata=sample.metadata, sample.id=sample.id, cell.groups=cell.groups, sample.per.cell=sample.per.cell, desgin=design, contrast=contrast, embedding=embedding
 )
 ```
 
@@ -53,8 +53,7 @@ In this case, only compositional analyses will be available.
 
 ```r
 cao <- Cacoa$new(
-    cm, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
-    ref.level=ref.level, target.level=target.level, embedding=embedding
+    cm, sample.metadata=sample.metadata, sample.id=sample.id, cell.groups=cell.groups, sample.per.cell=sample.per.cell, desgin=design, contrast=contrast, embedding=embedding
 )
 ```
 
@@ -62,8 +61,7 @@ cao <- Cacoa$new(
 
 ```r
 cao <- Cacoa$new(
-    so, sample.groups=sample.groups, cell.groups=cell.groups, sample.per.cell=sample.per.cell, 
-    ref.level=ref.level, target.level=target.level, graph.name=graph.name, data.slot='data'
+    so, sample.metadata=sample.metadata, sample.id=sample.id, cell.groups=cell.groups, sample.per.cell=sample.per.cell, desgin=design, contrast=contrast, graph.name=graph.name, data.layer='data'
 )
 ```
 
@@ -73,8 +71,8 @@ Parameter `graph.name` is required for cluster-free analysis, and must contain a
 
 ```r
 cao <- Cacoa$new(
-    co, sample.groups=sample.groups, cell.groups=cell.groups, 
-    ref.level=ref.level, target.level=target.level
+    co, sample.metadata=sample.metadata, sample.id=sample.id, cell.groups=cell.groups, 
+    desgin=design, contrast=contrast
 )
 ```
 

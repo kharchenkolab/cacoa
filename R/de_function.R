@@ -106,8 +106,6 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 #' @param raw.mats list of counts matrices; column for gene and row for cell
 #' @param cell.groups factor specifying cell types (default=NULL)
 #' @param s.groups list of two character vector specifying the app groups to compare (default=NULL)
-#' @param ref.level reference level in 'sample.groups', e.g., ctrl, healthy, wt (default=NULL)
-#' @param target.level target level in 'sample.groups' (default=NULL)
 #' @param common.genes boolean Only investigate common genes across cell groups (default=FALSE)
 #' @param cooks.cutoff boolean cooksCutoff for DESeq2 (default=FALSE)
 #' @param min.cell.count numeric Minimum cell count (default=10)
@@ -117,16 +115,18 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 #' @param independent.filtering boolean independentFiltering for DESeq2 (default=FALSE)
 #' @param n.cores numeric Number of cores (default=1)
 #' @param return.matrix Return merged matrix of results (default=TRUE)
-#' @param meta.info dataframe with possible covariates; for example, sex or age
+#' @param sample.meta dataframe with sample metadata (default=NULL)
+#' @param formula design formula (default=NULL)
+#' @param contrast character vector of length 3 specifying the comparison. e.g c("group", "control", "treatment")
 #' @param test DE method: DESeq2, edgeR, wilcoxon, ttest
 #' @param gene.filter matrix/boolean Genes to omit (rows) per cluster (cols) (default=NULL)
 #' @return differential expression for each cell type
 #'
 #' @export
-estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL, ref.level=NULL, target.level=NULL,
+estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL, sample.meta=NULL, formula=NULL, contrast=NULL, 
                                        common.genes=FALSE, cooks.cutoff=FALSE, min.cell.count=10, max.cell.count=Inf,
                                        independent.filtering=TRUE, n.cores=4, return.matrix=TRUE, fix.n.samples=NULL,
-                                       verbose=TRUE, test='Wald', meta.info=NULL, gene.filter=NULL) {
+                                       verbose=TRUE, test='Wald', gene.filter=NULL) {
   # Validate input
   validateDEPerCellTypeParams(raw.mats, cell.groups, s.groups, ref.level)
   tmp <- tolower(strsplit(test, split='\\.')[[1]])
@@ -182,77 +182,66 @@ estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL
       cm <- cm[, unlist(cur.s.groups), drop=FALSE]
     }
 
-    ## Generate metadata
-    meta.groups <- colnames(cm) %>% lapply(function(y) {
-      names(cur.s.groups)[sapply(cur.s.groups, function(x) any(x %in% y))]
-    }) %>% unlist() %>% as.factor()
-
-    if (length(levels(meta.groups)) < 2) {
-      warning("The cluster is not present in both conditions")
-      return(NULL)
-    }
-
-    # Each group should be presented in at least two samples
-    n.samples <- sapply(levels(meta.groups), function(s) sum(meta.groups == s))
-    if(min(n.samples) == 1){
-      warning("Each group should be presented in at least two samples")
-      return(NULL)
-    }
-
-    if (!ref.level %in% levels(meta.groups)) {
-      warning("The reference level is absent in this comparison")
-      return(NULL)
-    }
-
-    meta <- data.frame(sample.id=colnames(cm), group=relevel(meta.groups, ref=ref.level))
-
-    ## External covariates
-    if (is.null(meta.info)) {
-      design.formula <- as.formula('~ group')
+    # Metadata checks 
+    if (is.null(sample.meta)) {
+      warning("No sample metadata provided.")
     } else {
-      meta %<>% cbind(meta.info[meta$sample.id, , drop=FALSE])
-      meta <- filterDEMetadata(meta)
+      meta <- sample.meta[colnames(cm), , drop = FALSE]
+      meta <- cbind(sample.id = colnames(cm), meta)
 
-      if(is.null(meta)){
-        warning('Covariates are not independent')
+      if (!(contrast[1] %in% colnames(meta))) {
+        warning(sprintf("Comparison variable '%s' is not in sample.meta.", contrast[1]))
         return(NULL)
       }
 
-      if(!('group' %in% colnames(meta))) {
-        warning('All samples of the same group')
+      meta[[contrast[1]]] <- factor(meta[[contrast[1]]])
+      if (!contrast[2] %in% levels(meta[[contrast[1]]])) {
+        warning("The reference level is absent in this comparison")
         return(NULL)
       }
-
-      design.formula <- c(colnames(meta)[-c(1,2)], 'group') %>%
-        paste(collapse=' + ') %>% {paste('~', .)} %>% as.formula()
-      message(design.formula)
+      meta[[contrast[1]]] <- relevel(meta[[contrast[1]]], ref = contrast[2])
     }
+
+    if (verbose) {
+      if (!all(colnames(cm) == meta$sample.id)) {
+        message("Reordering metadata to match counts matrix columns")
+        meta <- meta[match(colnames(cm), meta$sample.id), , drop = FALSE]
+      }
+      stopifnot(all(colnames(cm) == meta$sample.id))
+    }
+
+    # Sample size filtering 
+    n.samples <- table(meta[[contrast[1]]])
+    if (any(n.samples < 2)) {
+      warning("Each group must be present in at least two samples — skipping cell type: ", l)
+      return(NULL)
+    }
+    # DE Testing 
+    if (verbose) message("Running DE for cell type: ", l)
 
     if (test %in% c('wilcoxon', 't-test')) {
-      cm <- normalizePseudoBulkMatrix(cm, meta=meta, design.formula=design.formula, type=test.type)
-      res <- estimateDEForTypePairwiseStat(cm, meta=meta, target.level=target.level, test=test)
+      cm <- normalizePseudoBulkMatrix(cm, meta = meta, design.formula = design.formula, type = test.type)
+      res <- estimateDEForTypePairwiseStat(cm, meta = meta, target.level = target.level, test = test)
     } else if (test == 'deseq2') {
-      res <- estimateDEForTypeDESeq(
-        cm, meta=meta, design.formula=design.formula, ref.level=ref.level, target.level=target.level,
-        test.type=test.type, cooksCutoff=cooks.cutoff, independentFiltering=independent.filtering
+      res <- estimateDEForTypeDESeq(cm, meta, formula = formula, contrast = contrast, test.type = test.type#,
+        #cooksCutoff = cooks.cutoff, independentFiltering = independent.filtering
       )
     } else if (test == 'edger') {
-      res <- estimateDEForTypeEdgeR(cm, meta=meta, design.formula=design.formula)
+      res <- estimateDEForTypeEdgeR(cm, meta, formula = formula, contrast = contrast)
     } else if (test == 'limma-voom') {
-      res <- estimateDEForTypeLimma(cm, meta=meta, design.formula=design.formula, target.level=target.level)
+      res <- estimateDEForTypeLimma(cm, meta, formula = formula, contrast = contrast)
     }
 
     res$Gene <- rownames(res)
 
-    if (!is.na(res[[1]][1])) {
-      res <- addZScores(res) %>% .[order(.$pvalue, decreasing=FALSE),]
+    if (!is.null(res) && !is.na(res[[1]][1])) {
+      res <- addZScores(res) %>% .[order(.$pvalue, decreasing = FALSE), ]
     }
 
-    if (return.matrix)
-      return(list(res = res, cm = cm, meta=meta))
+    if (return.matrix) return(list(res = res, cm = cm, meta = meta))
 
     return(res)
-  }, n.cores=n.cores, progress=verbose, mc.preschedule=TRUE, mc.allow.recursive=TRUE)  %>%
+  }, n.cores = n.cores, progress = verbose, mc.preschedule = TRUE, mc.allow.recursive = TRUE) %>%
     .[!sapply(., is.null)]
 
   if (verbose) {
@@ -338,65 +327,83 @@ estimateDEForTypePairwiseStat <- function(cm.norm, meta, target.level, test) {
 #' 
 #' @param cm count matrix
 #' @param meta data frame containing meta data
-#' @param design.formula design formula according to 
-#' @param ref.level reference level, e.g. controls
-#' @param target.level target level, e.g. disease
+#' @param formula design formula according to 
+#' @param contrast character vector of length 3 specifying the comparison. e.g c("group", "control", "treatment")
 #' @param test.type test type incorporated in DESeq2, either "Wald" or "LRT"
 #' @param ... additional parameters forwarded to DESeq2
 #' 
 #' @keywords internal
-estimateDEForTypeDESeq <- function(cm, meta, design.formula, ref.level, target.level, test.type, ...) {
-  res <- DESeq2::DESeqDataSetFromMatrix(cm, meta, design=design.formula)
+estimateDEForTypeDESeq <- function(cm, sample.meta, formula, contrast, test.type, ...) {
+  dds <- DESeq2::DESeqDataSetFromMatrix(cm, sample.meta, design = formula)
   if (test.type == 'wald') {
-      res %<>% DESeq2::DESeq(quiet=TRUE, test='Wald')
-  } else {
-    res %<>% DESeq2::DESeq(quiet=TRUE, test='LRT', reduced = ~ 1)
-  }
-
-  res %<>% DESeq2::results(contrast=c('group', target.level, ref.level), ...) %>% as.data.frame()
+      dds <- DESeq2::DESeq(dds, quiet = TRUE, test = 'Wald')
+      # Get coefficient name for the comparison
+      coef.name <- paste0(contrast[1], "_", contrast[3], "_vs_", contrast[2])
+      if (!coef.name %in% DESeq2::resultsNames(dds)) {
+          stop(paste("Coefficient", coef.name, "not found in DESeq2 model coefficients. Available coefficients are:", paste(DESeq2::resultsNames(dds), collapse=", ")))
+      }
+      res <- DESeq2::lfcShrink(dds, coef = coef.name, type = "apeglm", ...)
+    } else {
+        dds <- DESeq2::DESeq(dds, quiet = TRUE, test = 'LRT', reduced = ~1)
+        res <- DESeq2::results(dds, contrast = list(coef.name), ...)  # No lfcShrink for LRT
+    }
+  res <- as.data.frame(res) 
 
   res$padj[is.na(res$padj)] <- 1
-
+  
   return(res)
 }
 
 #' Estimate DE using edgeR
-#' 
+#'
 #' @param cm count matrix
-#' @param meta data frame containing metadata
-#' @param design.formula design formula according to 
-#' 
+#' @param sample.meta data frame containing metadata
+#' @param formula design formula
+#' @param contrast character vector of length 3 specifying the comparison. e.g c("group", "control", "treatment")
+#'
 #' @keywords internal
-estimateDEForTypeEdgeR <- function(cm, meta, design.formula) {
-  design <- model.matrix(design.formula, meta)
-
-  qlf <- edgeR::DGEList(cm, group = meta$group) %>%
-    edgeR::calcNormFactors() %>%
-    edgeR::estimateDisp(design = design) %>%
-    edgeR::glmQLFit(design = design) %>%
-    edgeR::glmQLFTest(coef=ncol(design))
-
-  res <- qlf$table %>% .[order(.$PValue),] %>% set_colnames(c("log2FoldChange", "logCPM", "stat", "pvalue"))
-  res$padj <- p.adjust(res$pvalue, method="BH")
-
+estimateDEForTypeEdgeR <- function(cm, sample.meta, formula, contrast) {
+  design <- model.matrix(formula, sample.meta)
+  coef.names <- colnames(design)
+  contrast.name <- paste0(contrast[1], contrast[3]) # "comparison_varTargetLevel"
+  if (!(contrast.name %in% coef.names)) {
+    stop("Contrast '", contrast.name, "' not found in design matrix columns. Check design formula and factor levels.")
+  }
+  coef.index <- which(coef.names == contrast.name)
+  dge <- edgeR::DGEList(counts = cm)
+  dge <- edgeR::calcNormFactors(dge)
+  dge <- edgeR::estimateDisp(dge, design = design)
+  fit <- edgeR::glmQLFit(dge, design = design)
+  qlf <- edgeR::glmQLFTest(fit, coef = coef.index)
+  res <- qlf$table %>% 
+    .[order(.$PValue), ] %>% 
+    setNames(c("log2FoldChange", "logCPM", "stat", "pvalue"))
+  
+  res$padj <- p.adjust(res$pvalue, method = "BH")
+  
   return(res)
 }
 
-#' Estimate DE using limma
-#' 
+#' Estimate DE using limma-voom
+#'
 #' @param cm count matrix
-#' @param meta data frame containing metadata
-#' @param design.formula design formula according to 
-#' @param target.level target level, e.g. disease
+#' @param sample.meta data frame containing metadata
+#' @param formula design formula according to limma conventions
+#' @param contrast character vector of length 3 specifying the comparison. e.g c("group", "control", "treatment")
 #' @keywords internal
-estimateDEForTypeLimma <- function(cm, meta, design.formula, target.level) {
-  mm <- model.matrix(design.formula, meta)
+estimateDEForTypeLimma <- function(cm, sample.meta, formula, contrast) {
+  mm <- model.matrix(formula, sample.meta)
   fit <- limma::voom(cm, mm, plot = FALSE) %>% limma::lmFit(mm)
-
-  contr <- limma::makeContrasts(paste0('group', target.level), levels=colnames(coef(fit)))
-  res <- limma::contrasts.fit(fit, contr) %>% limma::eBayes() %>% limma::topTable(sort.by="P", n=Inf) %>%
-    set_colnames(c('log2FoldChange', 'AveExpr', 'stat', 'pvalue', 'padj', 'B'))
-
+  contrast_name <- paste0(contrast[1], contrast[3]) # comparison_varTargetLevel
+  if (!contrast_name %in% colnames(coef(fit))) {
+    stop("Contrast ", contrast_name, " not found in model coefficients. Check design formula and levels.")
+  }
+  contr <- limma::makeContrasts(contrasts = contrast_name, levels = colnames(coef(fit)))
+  res <- limma::contrasts.fit(fit, contr) %>%
+    limma::eBayes() %>%
+    limma::topTable(sort.by = "P", n = Inf) %>%
+    setNames(c('log2FoldChange', 'AveExpr', 'stat', 'pvalue', 'padj', 'B'))
+  
   return(res)
 }
 
@@ -466,4 +473,32 @@ getExpressionFractionPerGroup <- function(cm, cell.groups) {
   fracs <- collapseCellsByType(cm, cell.groups, min.cell.count=0) %>%
     {. / as.vector(table(cell.groups)[rownames(.)])} %>% Matrix::t()
   return(fracs)
+}
+
+#' filter genes by expression per celltype not globally
+#' 
+#' @param counts sparse count matrix 
+#' @param cell.groups factor containing cell groups with cell names as names
+#' @param threshold minimum fraction of expressing cells per cell type (default=0.05)
+#
+#' @keywords internal
+getPerCellTypeGeneFilter <- function(counts, cell.groups, threshold = 0.05) {
+  counts@x <- as.numeric(counts@x > 1)
+  cell.types <- unique(cell.groups)
+  cell.type.indicator <- Matrix(0, nrow = length(cell.groups), ncol = length(cell.types),
+                               dimnames = list(names(cell.groups), cell.types))
+  row.inds <- match(names(cell.groups), rownames(cell.type.indicator))
+  col.inds <- match(cell.groups, colnames(cell.type.indicator))
+  cell.type.indicator[cbind(row.inds, col.inds)] <- 1
+  
+  counts.per.type <- counts %*% cell.type.indicator
+  n.cells <- colSums(cell.type.indicator)
+  expr.frac <- sweep(counts.per.type, 2, n.cells, FUN = "/")
+  filters <- expr.frac > threshold
+  
+  filters.list <- lapply(seq_len(ncol(filters)), function(i) {
+    setNames(as.vector(filters[, i]), rownames(counts))
+  })
+  names(filters.list) <- colnames(filters)
+  return(filters.list)
 }

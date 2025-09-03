@@ -460,20 +460,22 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' @description Estimate differential gene expression per cell type between conditions
     #' @param cell.groups factor specifying cell types (default=self$cell.groups)
     #' @param sample.groups 2-factor vector with annotation of groups/condition per sample (default=self$sample.groups)
-    #' @param ref.level character Reference level in 'sample.groups', e.g., ctrl, healthy (default=self$ref.level)
-    #' @param target.level character Target level in 'sample.groups', e.g., case, diseased (default=self$target.level)
+    #' @param sample.meta data.frame Sample-level metadata (rows = samples, columns = covariates) (default=self$sample.meta)
+    #' @param formula formula|character Design formula specifying covariates to model (default=NULL)
+    #' @param contrast character length-3 Contrast triplet c(var, ref, target) indicating the grouping variable and the two levels to compare (default=NULL)
     #' @param name character string Slot in which to save the results (default='de')
     #' @param test character string Which DESeq2 test to use. The available options are "LRT", "Wald". (default="DESeq2.Wald")
     #' @param resampling.method character which resampling method should be used "loo" for leave-one-out or "bootstrap", (default=NULL, i.e. no resampling)
     #' @param n.resamplings numeric Number of resamplings to perform (default=30)
     #' @param seed.resampling numeric Seed to use for resamplings, input to set.seed() (default=239)
     #' @param min.cell.frac numeric Minimum fraction of cells to use to perform DE (default=0.05)
-    #' @param covariates (default=NULL)
     #' @param common.genes boolean Whether to investigate common genes across cell groups (default=FALSE)
+    #' @param n.cores integer Number of cores for parallelization (default=self$n.cores)
     #' @param cooks.cutoff boolean cooksCutoff for DESeq2 (default=FALSE)
     #' @param independent.filtering boolean independentFiltering parameter for DESeq2 (default=FALSE)
     #' @param min.cell.count numeric minimum number of cells that need to be present in a given cell type in a given sample in order to be taken into account (default=10)
     #' @param n.cells.subsample integer Number of cells to subsample (default=NULL)
+    #' @param verbose boolean Whether to provide verbose output with diagnostic messages (default=self$verbose)
     #' @param fix.n.samples Samples to be provided if resampling.method='fix.samples'.
     #' @param genes.to.omit character Genes to omit from calculations (default = NULL)
     #' @param ... additional parameters
@@ -482,15 +484,25 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' \dontrun{
     #' cao$estimateDEPerCellType()
     #' }
-    estimateDEPerCellType=function(cell.groups=self$cell.groups, sample.groups=self$sample.groups,
-                                   ref.level=self$ref.level, target.level=self$target.level, name='de',
-                                   test='DESeq2.Wald', resampling.method=NULL, n.resamplings=30, seed.resampling=239,
-                                   min.cell.frac=0.05, covariates=NULL, common.genes=FALSE, n.cores=self$n.cores,
-                                   cooks.cutoff=FALSE, independent.filtering=FALSE, min.cell.count=10,
+    estimateDEPerCellType=function(cell.groups=self$cell.groups, sample.groups=self$sample.groups, sample.meta=self$sample.meta, 
+                                   formula=NULL, contrast=NULL, name='de', test='DESeq2.Wald', resampling.method=NULL, 
+                                   n.resamplings=30, seed.resampling=239, min.cell.frac=0.05, common.genes=FALSE, 
+                                   n.cores=self$n.cores, cooks.cutoff=FALSE, independent.filtering=FALSE, min.cell.count=10,
                                    n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, genes.to.omit = NULL, ...) {
       set.seed(seed.resampling)
+      if(!is.null(formula) || !is.null(contrast)) {
+         # Validate design
+         vd <- validateDesign(formula = formula, sample.meta = sample.meta, contrast = contrast, verbose = verbose)
+         formula  <- vd$formula
+         contrast <- vd$contrast
+         sample.groups <- getSampleGroups(sample.meta, contrast = contrast, sample.id = sample.id)
+      } else {
+         formula <- self$formula
+         contrast <- self$contrast
+         sample.groups <- self$sample.groups
+      }
       if (!is.list(sample.groups)) {
-        sample.groups %<>% {split(names(.), . == ref.level)} %>% setNames(c(target.level, ref.level))
+        sample.groups %<>% {split(names(.), . == contrast[2])} %>% setNames(c(contrast[3], contrast[2]))
       }
 
       possible.tests <- c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR',
@@ -532,11 +544,11 @@ if(!is.null(formula) || !is.null(contrast)) {
         max.cell.count <- min.cell.count <- n.cells.subsample
       }
 
-      raw.mats <- extractRawCountMatrices(self$data.object, transposed=TRUE)
+      gene.filter <- getPerCellTypeGeneFilter(t(self$getJointCountMatrix(raw=TRUE)), cell.groups, threshold=min.cell.frac)
+      gene.filter.df <- do.call(cbind, gene.filter) 
+      if (is.null(rownames(gene.filter.df))) { rownames(gene.filter.df) <- names(gene.filter[[1]])}
+      gene.filter <- as.data.frame(gene.filter.df)
 
-      expr.fracs <- self$getJointCountMatrix() %>% getExpressionFractionPerGroup(cell.groups)
-
-      gene.filter <- (expr.fracs > min.cell.frac)
       if (!is.null(genes.to.omit)) {
         gene.filter[genes.to.omit, ] <- FALSE
         gene.filter %<>%
@@ -553,19 +565,18 @@ if(!is.null(formula) || !is.null(contrast)) {
       de.res <- names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
         estimateDEPerCellTypeInner(
           raw.mats=raw.mats, cell.groups=cell.groups, s.groups=s.groups.new[[resampling.name]],
-          ref.level=ref.level, target.level=target.level, common.genes=common.genes,
+          common.genes=common.genes, sample.meta=sample.meta, formula=formula, contrast=contrast, 
           cooks.cutoff=cooks.cutoff, min.cell.count=min.cell.count, max.cell.count=max.cell.count,
-          independent.filtering=independent.filtering, test=test, meta.info=covariates, gene.filter=gene.filter,
+          independent.filtering=independent.filtering, test=test,  gene.filter=gene.filter,
           fix.n.samples=(if (resampling.name == 'initial') NULL else fix.samples),
           n.cores=n.cores.inner, verbose=verbose.inner, return.matrix=(resampling.name == 'initial'), ...
         )
       }, n.cores=n.cores.outer, progress=(!verbose.inner & verbose), mc.preschedule=TRUE, mc.allow.recursive=TRUE)
 
-
-
       # if resampling: calculate median and variance on ranks after resampling
-      de.res <- if (length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
-      de.res %<>% appendStatisticsToDE(expr.fracs)
+      de.res <- if(length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
+      de.res %<>% appendStatisticsToDE(expr.fracs[, names(de.res)])
+      
       self$test.results[[name]] <- de.res
 
       # TODO: add overall p-adjustment

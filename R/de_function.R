@@ -128,7 +128,7 @@ estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL
                                        independent.filtering=TRUE, n.cores=4, return.matrix=TRUE, fix.n.samples=NULL,
                                        verbose=TRUE, test='Wald', gene.filter=NULL) {
   # Validate input
-  validateDEPerCellTypeParams(raw.mats, cell.groups, s.groups, ref.level)
+  validateDEPerCellTypeParams(raw.mats, cell.groups, s.groups, contrast[2])
   tmp <- tolower(strsplit(test, split='\\.')[[1]])
   test <- tmp[1]
   test.type <- ifelse(is.na(tmp[2]), '', tmp[2])
@@ -190,7 +190,7 @@ estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL
       meta <- cbind(sample.id = colnames(cm), meta)
 
       if (!(contrast[1] %in% colnames(meta))) {
-        warning(sprintf("Comparison variable '%s' is not in sample.meta.", contrast[1]))
+        warning(sprintf("Contrast variable '%s' is not in sample.meta.", contrast[1]))
         return(NULL)
       }
 
@@ -216,20 +216,37 @@ estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL
       warning("Each group must be present in at least two samples — skipping cell type: ", l)
       return(NULL)
     }
+
+    terms.in.formula <- all.vars(stats::terms(formula))
+    terms.in.formula <- setdiff(terms.in.formula, "sample.id")
+    for (v in terms.in.formula) {
+      if (is.character(meta[[v]]) || is.logical(meta[[v]])) {
+        meta[[v]] <- factor(meta[[v]])
+      }
+    }
+    valid.terms <- Filter(function(v) {
+      x <- meta[[v]]
+      if (is.factor(x)) nlevels(droplevels(x)) >= 2 else TRUE
+    }, terms.in.formula)
+    if (length(valid.terms) == 0L && verbose) message("All design terms collapsed to a single level in celltype ", l)
+    if (length(valid.terms) < length(terms.in.formula) && verbose) {
+      message("Some design terms collapsed to a single level in celltype ", l)
+    }
+    formula.inner <- stats::reformulate(valid.terms)
+
     # DE Testing 
     if (verbose) message("Running DE for cell type: ", l)
 
     if (test %in% c('wilcoxon', 't-test')) {
-      cm <- normalizePseudoBulkMatrix(cm, meta = meta, design.formula = design.formula, type = test.type)
-      res <- estimateDEForTypePairwiseStat(cm, meta = meta, target.level = target.level, test = test)
+      cm <- normalizePseudoBulkMatrix(cm, meta = meta, design.formula = formula.inner, type = test.type)
+      res <- estimateDEForTypePairwiseStat(cm, meta = meta, target.level = contrast[3], test = test)
     } else if (test == 'deseq2') {
-      res <- estimateDEForTypeDESeq(cm, meta, formula = formula, contrast = contrast, test.type = test.type#,
-        #cooksCutoff = cooks.cutoff, independentFiltering = independent.filtering
-      )
+      res <- estimateDEForTypeDESeq(cm, meta, formula = formula.inner, contrast = contrast, test.type = test.type,
+                                    cooksCutoff = cooks.cutoff, independentFiltering = independent.filtering)
     } else if (test == 'edger') {
-      res <- estimateDEForTypeEdgeR(cm, meta, formula = formula, contrast = contrast)
+      res <- estimateDEForTypeEdgeR(cm, meta, formula = formula.inner, contrast = contrast)
     } else if (test == 'limma-voom') {
-      res <- estimateDEForTypeLimma(cm, meta, formula = formula, contrast = contrast)
+      res <- estimateDEForTypeLimma(cm, meta, formula = formula.inner, contrast = contrast)
     }
 
     res$Gene <- rownames(res)
@@ -333,19 +350,23 @@ estimateDEForTypePairwiseStat <- function(cm.norm, meta, target.level, test) {
 #' @param ... additional parameters forwarded to DESeq2
 #' 
 #' @keywords internal
-estimateDEForTypeDESeq <- function(cm, sample.meta, formula, contrast, test.type, ...) {
+estimateDEForTypeDESeq <- function(cm, sample.meta, formula, contrast, test.type, cooks.cutoff=FALSE, independent.filtering=TRUE, ...) {
   dds <- DESeq2::DESeqDataSetFromMatrix(cm, sample.meta, design = formula)
   if (test.type == 'wald') {
       dds <- DESeq2::DESeq(dds, quiet = TRUE, test = 'Wald')
       # Get coefficient name for the comparison
       coef.name <- paste0(contrast[1], "_", contrast[3], "_vs_", contrast[2])
       if (!coef.name %in% DESeq2::resultsNames(dds)) {
-          stop(paste("Coefficient", coef.name, "not found in DESeq2 model coefficients. Available coefficients are:", paste(DESeq2::resultsNames(dds), collapse=", ")))
+          stop(paste("Coefficient", coef.name, "not found in DESeq2 model coefficients. Available coefficients are:", 
+               paste(DESeq2::resultsNames(dds), collapse=", ")))
       }
-      res <- DESeq2::lfcShrink(dds, coef = coef.name, type = "apeglm", ...)
+      res0 <- DESeq2::results(dds, name = coef.name, cooksCutoff = cooks.cutoff,
+                              independentFiltering = independent.filtering)
+      res <- DESeq2::lfcShrink(dds, coef = coef.name, res = res0, type = "apeglm")
     } else {
         dds <- DESeq2::DESeq(dds, quiet = TRUE, test = 'LRT', reduced = ~1)
-        res <- DESeq2::results(dds, contrast = list(coef.name), ...)  # No lfcShrink for LRT
+        res <- DESeq2::results(dds, contrast = list(coef.name), cooksCutoff = cooks.cutoff,
+                               independentFiltering = independent.filtering)  # No lfcShrink for LRT
     }
   res <- as.data.frame(res) 
 

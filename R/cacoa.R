@@ -543,7 +543,10 @@ if(!is.null(formula) || !is.null(contrast)) {
         if (verbose) message('Number of cell counts is fixed to ', n.cells.subsample)
         max.cell.count <- min.cell.count <- n.cells.subsample
       }
+      raw.mats <- extractRawCountMatrices(self$data.object, transposed=TRUE)
 
+      expr.fracs <- self$getJointCountMatrix() %>% getExpressionFractionPerGroup(cell.groups)
+      
       gene.filter <- getPerCellTypeGeneFilter(t(self$getJointCountMatrix(raw=TRUE)), cell.groups, threshold=min.cell.frac)
       gene.filter.df <- do.call(cbind, gene.filter) 
       if (is.null(rownames(gene.filter.df))) { rownames(gene.filter.df) <- names(gene.filter[[1]])}

@@ -216,7 +216,7 @@ estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL
       warning("Each group must be present in at least two samples — skipping cell type: ", l)
       return(NULL)
     }
-
+    # drop formula terms with insufficient samples
     terms.in.formula <- all.vars(stats::terms(formula))
     terms.in.formula <- setdiff(terms.in.formula, "sample.id")
     for (v in terms.in.formula) {
@@ -233,21 +233,42 @@ estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL
       message("Some design terms collapsed to a single level in celltype ", l)
     }
     formula.inner <- stats::reformulate(valid.terms)
-
+    
+    # saturated-design check (skip this cell type if no residual df)
+    mm <- stats::model.matrix(formula.inner, data = meta)
+    if (ncol(mm) > 0) {
+      keep.cols <- apply(mm, 2, function(x) stats::var(as.numeric(x)) > 0)
+    if (!all(keep.cols)) mm <- mm[, keep.cols, drop = FALSE]
+    }
+    n.samples <- nrow(mm)
+    model.rank <- if (ncol(mm) > 0) qr(mm)$rank else 0L
+    if (model.rank >= n.samples && verbose) {
+      warning("Design is saturated for cell type: ", l,
+          " (", model.rank, " coefficients vs ", n.samples, " samples) — skipping.")
+      return(NULL)
+    }
+    
     # DE Testing 
     if (verbose) message("Running DE for cell type: ", l)
-
-    if (test %in% c('wilcoxon', 't-test')) {
-      cm <- normalizePseudoBulkMatrix(cm, meta = meta, design.formula = formula.inner, type = test.type)
-      res <- estimateDEForTypePairwiseStat(cm, meta = meta, target.level = contrast[3], test = test)
-    } else if (test == 'deseq2') {
-      res <- estimateDEForTypeDESeq(cm, meta, formula = formula.inner, contrast = contrast, test.type = test.type,
+    res <- tryCatch({
+     if (test %in% c('wilcoxon', 't-test')) {
+       cm <- normalizePseudoBulkMatrix(cm, meta = meta, design.formula = formula.inner, type = test.type)
+       estimateDEForTypePairwiseStat(cm, meta = meta, target.level = contrast[3], test = test)
+     } else if (test == 'deseq2') {
+       estimateDEForTypeDESeq(cm, meta, formula = formula.inner, contrast = contrast, test.type = test.type,
                                     cooksCutoff = cooks.cutoff, independentFiltering = independent.filtering)
-    } else if (test == 'edger') {
-      res <- estimateDEForTypeEdgeR(cm, meta, formula = formula.inner, contrast = contrast)
-    } else if (test == 'limma-voom') {
-      res <- estimateDEForTypeLimma(cm, meta, formula = formula.inner, contrast = contrast)
-    }
+     } else if (test == 'edger') {
+       estimateDEForTypeEdgeR(cm, meta, formula = formula.inner, contrast = contrast)
+     } else if (test == 'limma-voom') {
+       estimateDEForTypeLimma(cm, meta, formula = formula.inner, contrast = contrast)
+     } else {
+     stop("Unknown test: ", test)
+     }
+     }, error = function(e) {
+       warning("DE failed for cell type ", l, ": ", conditionMessage(e))
+       NULL
+    })
+    if (is.null(res)) return(NULL)
 
     res$Gene <- rownames(res)
 

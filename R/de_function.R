@@ -255,7 +255,7 @@ estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL
       res <- addZScores(res) %>% .[order(.$pvalue, decreasing = FALSE), ]
     }
 
-    if (return.matrix) return(list(res = res, cm = cm, meta = meta))
+    if (return.matrix) return(list(res = res, cm = cm, meta = meta, design = formula.inner, contrast = contrast))
 
     return(res)
   }, n.cores = n.cores, progress = verbose, mc.preschedule = TRUE, mc.allow.recursive = TRUE) %>%

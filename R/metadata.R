@@ -55,166 +55,121 @@ validateDesign <- function(formula, sample.meta = NULL, contrast = NULL, verbose
 
   # Accept formula or character; ensure "~" present
   if (inherits(formula, "formula")) {
-    formula_str <- paste(deparse(formula), collapse = "")
+    formula.str <- paste(deparse(formula), collapse = "")
   } else if (is.character(formula)) {
-    formula_str <- formula
+    formula.str <- formula
   } else {
     stop("Design formula must be a string or formula object.")
   }
-  if (!grepl("~", formula_str)) {
+  if (!grepl("~", formula.str)) {
     stop("Design formula must contain a '~' to separate response and predictors.")
   }
 
   # Demote random effects to fixed, preserving variables
-  containsRandomEffects <- grepl("\\([^\\|]*\\|[^\\)]*\\)", formula_str)
+  containsRandomEffects <- grepl("\\([^\\|]*\\|[^\\)]*\\)", formula.str)
   if (containsRandomEffects) {
-    rand_eff_vars <- unlist(regmatches(formula_str, gregexpr("(?<=\\|)[^\\)]+", formula_str, perl = TRUE)))
-    rand_eff_vars <- trimws(rand_eff_vars)
+    rand.eff.vars <- unlist(regmatches(formula.str, gregexpr("(?<=\\|)[^\\)]+", formula.str, perl = TRUE)))
+    rand.eff.vars <- trimws(rand.eff.vars)
     warning(sprintf(
       "Random effects (terms with '|') are not supported in this workflow. The variable(s) '%s' will be treated as fixed effects.",
-      paste(rand_eff_vars, collapse = ", ")
+      paste(rand.eff.vars, collapse = ", ")
     ))
-    formula_str <- gsub("\\([^\\|]*\\|[^\\)]*\\)", "", formula_str)
-    rhs <- gsub("~", "", formula_str)
+    formula.str <- gsub("\\([^\\|]*\\|[^\\)]*\\)", "", formula.str)
+    rhs <- gsub("~", "", formula.str)
     rhs <- gsub("\\++", "+", rhs)
     rhs <- gsub("^\\s*\\+|\\+\\s*$", "", rhs)
     rhs <- trimws(rhs)
-    rhs_terms <- trimws(unlist(strsplit(rhs, "\\+")))
-    rhs_terms <- unique(c(rhs_terms, rand_eff_vars))
-    rhs_terms <- rhs_terms[rhs_terms != ""]
-    formula_str <- paste("~", paste(rhs_terms, collapse = " + "))
+    rhs.terms <- trimws(unlist(strsplit(rhs, "\\+")))
+    rhs.terms <- unique(c(rhs.terms, rand.eff.vars))
+    rhs.terms <- rhs.terms[rhs.terms != ""]
+    formula.str <- paste("~", paste(rhs.terms, collapse = " + "))
   }
-  parsedTerms <- terms(stats::as.formula(formula_str))
+  parsedTerms <- terms(stats::as.formula(formula.str))
   termLabels  <- attr(parsedTerms, "term.labels")
 
   # default contrast if none specified (uses first term; last vs first level)
   if (is.null(contrast)) {
     if (length(termLabels) == 0) stop("No terms found in the design formula to use as contrast.")
     if (is.null(sample.meta)) stop("sample.meta must be given to infer a default contrast.")
-    contrast_var <- termLabels[1]
-    if (!contrast_var %in% colnames(sample.meta)) {
-      stop(sprintf("Contrast variable '%s' not found in sample metadata.", contrast_var))
+    contrast.var <- termLabels[1]
+    if (!contrast.var %in% colnames(sample.meta)) {
+      stop(sprintf("Contrast variable '%s' not found in sample metadata.", contrast.var))
     }
-    levels_contrast <- levels(factor(sample.meta[[contrast_var]]))
-    if (length(levels_contrast) < 2) {
-      stop(sprintf("Contrast variable '%s' must have at least two levels.", contrast_var))
+    levels.contrast <- levels(factor(sample.meta[[contrast.var]]))
+    if (length(levels.contrast) < 2) {
+      stop(sprintf("Contrast variable '%s' must have at least two levels.", contrast.var))
     }
-    contrast <- c(contrast_var, levels_contrast[1], levels_contrast[length(levels_contrast)])
+    contrast <- c(contrast.var, levels.contrast[length(levels.contrast)], levels.contrast[1]) # var,alt,ref
   }
   if (length(contrast) != 3) {
     stop("Contrast must be a vector of length 3: c('variable', 'level1', 'level2').")
   }
   if (verbose) {
     if (containsRandomEffects) message("Random effect terms provided will be treated as fixed effect terms.")
-    message(sprintf("Final design formula: %s", formula_str))
+    message(sprintf("Final design formula: %s", formula.str))
   }
   list("formula" = parsedTerms, "contrast" = contrast)
 }
 
 #' @keywords internal
-buildModelMatrix <- function(sample.meta, formula, contrast = NULL, keep.intercept = FALSE, verbose = FALSE) {
-  if (!is.null(formula) || !is.null(contrast)) {
-    vd <- validateDesign(formula = formula, sample.meta = sample.meta, contrast = contrast, verbose = verbose)
-    formula <- vd$formula
-    contrast <- vd$contrast
-  }
-  predictorVars <- all.vars(formula)
-  sample.meta   <- sample.meta[, predictorVars, drop = FALSE]
+subsetMetadata <- function(sample.meta,
+                           formula,                      # validateDesign() output OR formula OR character
+                           drop.unused.levels = TRUE,
+                           extra = NULL,
+                           include.contrast = TRUE) {
 
-  valid.vars <- vapply(predictorVars, function(cov) { # remove single-level covariates
-    x <- sample.meta[[cov]]
-    if (is.factor(x) || is.character(x)) {
-      length(unique(x)) > 1
-    } else {
-      vx <- stats::var(x, na.rm = TRUE)
-      !is.na(vx) && vx > 0
-    }
-  }, logical(1))
+  stopifnot(is.data.frame(sample.meta))
 
-  if (!all(valid.vars)) {
-    removed.vars <- predictorVars[!valid.vars]
-    warning(sprintf("Removing covariates with only one factor level or zero variance: %s", paste(removed.vars, collapse = ", ")))
-    predictorVars   <- predictorVars[valid.vars]
-    sample.meta     <- sample.meta[, predictorVars, drop = FALSE]
-    intercept.flag  <- attr(terms(formula), "intercept") == 1
-    formula         <- reformulate(predictorVars, intercept = intercept.flag)
-  }
-
-  if (length(predictorVars) > 1) { # flag identical columns, warn if correlated
-    to.remove <- character(0)
-    for (i in seq_along(predictorVars)) for (j in seq_along(predictorVars)) if (i < j) {
-      col1 <- sample.meta[[predictorVars[i]]]
-      col2 <- sample.meta[[predictorVars[j]]]
-      if (is.factor(col1)) col1 <- as.character(col1)
-      if (is.factor(col2)) col2 <- as.character(col2)
-      if (all(col1 == col2, na.rm = TRUE)) {
-        warning(sprintf("Covariates '%s' and '%s' are identical. Removing '%s'.", predictorVars[i], predictorVars[j], predictorVars[j]))
-        to.remove <- c(to.remove, predictorVars[j])
-      } else if (is.numeric(col1) && is.numeric(col2)) {
-        cor.val <- suppressWarnings(stats::cor(col1, col2, use = "pairwise.complete.obs"))
-        if (!is.na(cor.val) && abs(cor.val) > 0.95) {
-          warning(sprintf("Covariates '%s' and '%s' are highly correlated (cor = %.2f).", predictorVars[i], predictorVars[j], cor.val))
-        }
-      }
-    }
-    if (length(to.remove)) {
-      to.remove      <- unique(to.remove)
-      sample.meta    <- sample.meta[, !(colnames(sample.meta) %in% to.remove), drop = FALSE]
-      predictorVars  <- colnames(sample.meta)
-      intercept.flag <- attr(terms(formula), "intercept") == 1
-      formula        <- reformulate(predictorVars, intercept = intercept.flag)
-    }
-  }
-  
-  for (cov in predictorVars) { # coerce non-numeric/non-factor to factor
-    if (!is.numeric(sample.meta[[cov]]) && !is.factor(sample.meta[[cov]])) {
-      if (verbose) message(sprintf("Converting covariate '%s' to factor.", cov))
-      lvls <- sort(unique(stats::na.omit(sample.meta[[cov]])))
-      sample.meta[[cov]] <- factor(sample.meta[[cov]], levels = lvls)
-    }
-  }
-
-  if (!is.null(contrast)) { # apply requested contrast’s reference/target level on its factor
-    contrast.var <- contrast[1]; ref.level <- contrast[2]; target.level <- contrast[3]
-    if (contrast.var %in% colnames(sample.meta)) {
-      unique.levels <- unique(sample.meta[[contrast.var]])
-      if (!ref.level %in% unique.levels || !target.level %in% unique.levels) {
-        stop("ref.level or target.level not found in levels of ", contrast.var)
-      }
-      sample.meta[[contrast.var]] <- factor(sample.meta[[contrast.var]], levels = c(ref.level, setdiff(unique.levels, ref.level)))
-    }
-  }
-
-  # Build the model matrix (keep intercept then optionally drop)
-  mm <- stats::model.matrix(formula, data = sample.meta)
-  assign.vec  <- attr(mm, "assign")
-  contrasts.a <- attr(mm, "contrasts")
-
-  if (!keep.intercept && "(Intercept)" %in% colnames(mm)) {
-    keep <- colnames(mm) != "(Intercept)"
-    mm   <- mm[, keep, drop = FALSE]
-    if (!is.null(assign.vec))  attr(mm, "assign")    <- assign.vec[keep]
-    if (!is.null(contrasts.a)) attr(mm, "contrasts") <- contrasts.a
+  # Extract a formula and (optionally) contrast from `design`
+  if (is.list(formula) && !is.null(formula$formula)) {
+    # validateDesign() returns a terms object in $formula
+    terms.obj <- formula$formula
+    fml <- formula(terms.obj)
+    contrast  <- formula$contrast
+  } else if (inherits(formula, "formula")) {
+    fml <- formula
+    contrast <- NULL
+  } else if (is.character(formula)) {
+    fml <- stats::as.formula(formula)
+    contrast <- NULL
   } else {
-    if (!is.null(assign.vec))  attr(mm, "assign")    <- assign.vec
-    if (!is.null(contrasts.a)) attr(mm, "contrasts") <- contrasts.a
+    stop("`design` must be: the list returned by validateDesign(), or a formula/character formula.")
   }
 
-  qr.decomp <- qr(mm) # rank check
-  if (qr.decomp$rank < ncol(mm)) {
-    warning(sprintf(
-      "Model matrix has linear dependencies: rank %d < number of columns %d. Possible confounding or redundant covariates.",
-      qr.decomp$rank, ncol(mm)
-    ))
+  # Expand the formula using the data so '.' is resolved and term structure is known
+  # The factors matrix rows = variables used; columns = term labels
+  tt <- terms(fml, data = sample.meta)
+
+  fac <- attr(tt, "factors")
+  rhs.vars <- if (is.null(fac)) character(0) else rownames(fac)
+
+  # Optionally ensure contrast variable is included
+  if (include.contrast && !is.null(contrast) && length(contrast) >= 1) {
+    rhs.vars <- union(rhs.vars, contrast[1])
   }
-  dimnames(mm) <- list(rownames(mm), colnames(mm))
-  mm
+
+  # Add any extras
+  if (!is.null(extra) && length(extra)) rhs.vars <- union(rhs.vars, extra)
+
+  # Sanity checks and subsetting
+  miss <- setdiff(rhs.vars, names(sample.meta))
+  if (length(miss)) stop("Missing columns in 'meta': ", paste(miss, collapse = ", "))
+
+  out <- sample.meta[, rhs.vars, drop = FALSE]
+  rownames(out) <- rownames(sample.meta)
+
+  if (drop.unused.levels) {
+    for (nm in names(out)) {
+      if (is.factor(out[[nm]])) out[[nm]] <- droplevels(out[[nm]])
+    }
+  }
+  out
 }
 
 #' @keywords internal
 getSampleGroups <- function(sample.meta, contrast, sample.id = NULL) {
   if (is.null(contrast)) return(NULL)
-  var <- contrast[1]; ref <- contrast[2]; alt <- contrast[3]
+  var <- contrast[1]; alt <- contrast[2]; ref <- contrast[3]
   if (!var %in% colnames(sample.meta)) {
     stop(sprintf("Contrast variable '%s' not found in sample metadata.", var))
   }
@@ -234,6 +189,311 @@ getSampleGroups <- function(sample.meta, contrast, sample.id = NULL) {
   vals <- vals[vals %in% c(ref, alt)]
   factor(vals, levels = c(ref, alt))
 }
+
+
+#' Prepare full/core/nuisance model matrices, a contrast vector, core row mask, and blocks
+#' 
+#' Defaults:
+#' - Core X: only the factor levels that appear in the contrast (subset cell-means);
+#'           numeric core variables get one column.
+#' - Nuisance Z: all other columns in `meta`, with an intercept (good for FL).
+#' - Blocks: interaction of nuisance *factor* variables (continuous ignored).
+#' 
+#' # Ensures the planned contrast sits entirely in X (zero on Z / intercept).
+# - If the contrasted factor has ≥1 non-participating level present:
+#     X: one column per participating level; Z: complement dummies (minus one baseline) + intercept.
+# - If only the contrasted levels exist:
+#     X: single contrast regressor g = sum_j w_j * 1_{level j}  (weights must sum to zero); Z as-is.
+#' 
+#' @param meta data.frame of per-sample covariates (factors or numeric)
+#' @param contrast list(var, weights) OR named numeric like c("var=Level"=1)
+#' @param core character vector of core variable names (default: contrasted var only)
+#' @param nuisance character vector of nuisance variable names (default: all others)
+#' @param block.vars optional character vector to override block definition
+#' @param na.action NA handler passed to model.matrix (default stats::na.pass)
+#' @return list(F, X, Z, contrast.coef, core.rows, blocks)
+#'   F, X, Z - full, core, and nuisance model matrices
+#'   qrZ - QR of Z (for residualization based on Z)
+#'   contrast.F - linear combination implementing desired contrast on the
+#'      current coefficient order relative to F. i.e. to get contrast value:
+#'      crossprod(coef(fit), contrast.coef)
+#'   contrast.X - same thing, but for X
+#'   core.rows - logical vector specifying a subset of rows which are needed
+#'      to fit the core coefficients (for optimizing FL)
+#'   blocks - factor on rows specifying blocks in which randomization should be
+#'      performed (if not using FL)
+# helper used here; keep if not already in scope
+# helper for "var=level" names
+#' @keywords internal
+buildDesignMatrices <- function(sample.meta, # data.frame of covariates (subsetted to the terms in the design)
+               contrast,              # list(var,weights) or named "var=level"
+               nuisance   = NULL,     # default: all other columns
+               core.extra = NULL,     # optional other core variables
+               block.vars = NULL,
+               na.action  = stats::na.pass) {
+  stopifnot(is.data.frame(sample.meta))
+
+  ctr <- parseContrast(contrast, sample.meta)
+  if (is.null(nuisance)) nuisance <- setdiff(names(sample.meta), c(ctr$var, core.extra))
+  if (is.null(core.extra)) core.extra <- character(0)
+
+  rn <- rownames(sample.meta); if (is.null(rn)) rn <- as.character(seq_len(nrow(sample.meta)))
+
+  # keep only nuisance vars that actually vary (avoids 1-level factor error)
+  nuisance.eff <- filterNuisance(sample.meta, nuisance)
+
+  # ---- Z (with intercept iff any effective nuisance) ----
+  Z <- NULL
+  if (length(nuisance.eff)) {
+  form.Z <- as.formula(paste("~ 1 +", paste(nuisance.eff, collapse = " + ")))
+  Z <- model.matrix(form.Z, data = sample.meta, na.action = na.action)
+  rownames(Z) <- rn
+  }
+  
+  # ---- X for extra core vars (not the contrasted factor) ----
+  X <- NULL
+  if (length(core.extra)) {
+  X.list <- lapply(core.extra, function(v) {
+    x <- sample.meta[[v]]
+    if (is.factor(x) || is.character(x)) {
+    f  <- factor(x)
+    mm <- model.matrix(~ 0 + f, na.action = na.action)
+    colnames(mm) <- lvlKey(v, levels(f))
+    mm
+    } else {
+    mm <- matrix(x, ncol = 1); colnames(mm) <- v; mm
+    }
+  })
+  X.list <- Filter(function(m) ncol(m) > 0, X.list)
+  if (length(X.list)) X <- do.call(cbind, X.list)
+  if (!is.null(X)) rownames(X) <- rn
+  }
+  
+  # ---- Handle contrasted variable ----
+  if (ctr$type == "factor") {
+  g <- ctr$var
+  f <- factor(sample.meta[[g]])
+  L <- levels(f)
+  mm.G <- model.matrix(~ 0 + f, na.action = na.action)
+  colnames(mm.G) <- lvlKey(g, L); rownames(mm.G) <- rn
+  
+  keep <- intersect(L, names(ctr$weights))     # levels in contrast
+  comp <- setdiff(L, keep)                     # non-participating levels
+  if (!length(keep)) stop("Contrast references no existing levels of '", g, "'.")
+  
+  if (length(comp) >= 1) {
+    # Keep all contrasted dummies in X; complement (minus one baseline) in Z
+    base <- comp[1]
+    X.g   <- mm.G[, lvlKey(g, keep), drop = FALSE]
+    Z.g   <- mm.G[, lvlKey(g, setdiff(comp, base)), drop = FALSE]
+
+    # Ensure an n×1 intercept in Z (if Z is NULL or lacks one)
+    
+    if (is.null(Z)) {
+    Z <- makeIntercept(nrow(sample.meta), rn)
+    } else if (!("(Intercept)" %in% colnames(Z))) {
+    Z <- cbind(makeIntercept(nrow(sample.meta), rn), Z)
+    }
+    if (!is.null(Z.g)) Z <- cbind(Z, Z.g)
+    rownames(Z) <- rn
+    
+    X <- if (is.null(X)) X.g else cbind(X, X.g)
+    
+    # contrasts (zero on Z)
+    contrast.X <- setNames(numeric(ncol(X)), colnames(X))
+    contrast.X[lvlKey(g, names(ctr$weights))] <- as.numeric(ctr$weights)
+
+    nm.F <- concatNamesXZ(X, Z)
+    contrast.F <- setNames(numeric(length(nm.F)), nm.F)
+    contrast.F[names(contrast.X)] <- contrast.X
+    
+  } else {
+    # Only the contrasted levels exist → single contrast regressor (weights must sum to 0)
+    w <- as.numeric(ctr$weights)
+    if (abs(sum(w)) > 1e-12)
+    stop("Only contrasted levels present: contrast weights must sum to zero.")
+    g.col <- as.numeric(mm.G[, lvlKey(g, names(ctr$weights)), drop = FALSE] %*% matrix(w, ncol = 1))
+    X.g <- matrix(g.col, ncol = 1); colnames(X.g) <- paste0(g, ".contrast"); rownames(X.g) <- rn
+    X  <- if (is.null(X)) X.g else cbind(X, X.g)
+    
+    contrast.X <- setNames(numeric(ncol(X)), colnames(X)); contrast.X[colnames(X.g)] <- 1
+
+    nm.F <- concatNamesXZ(X, Z)
+    contrast.F <- setNames(numeric(length(nm.F)), nm.F)
+    contrast.F[colnames(X.g)] <- 1
+  }
+  
+  } else {  # numeric contrasted variable
+  v <- ctr$var
+  x.v <- matrix(meta[[v]], ncol = 1); colnames(x.v) <- v; rownames(x.v) <- rn
+  X  <- if (is.null(X)) x.v else cbind(X, x.v)
+  
+  contrast.X <- setNames(numeric(ncol(X)), colnames(X)); contrast.X[v] <- as.numeric(ctr$weights[1])
+
+  nm.F <- concatNamesXZ(X, Z)
+  contrast.F <- setNames(numeric(length(nm.F)), nm.F)
+  contrast.F[v] <- contrast.X[v]
+  }
+  
+  # ---- Full design with X first ----
+  F <- if (!is.null(Z)) cbind(X, Z) else X
+  rownames(F) <- rn
+  
+  # Pre-compute qrZ once (NULL if Z is NULL) for FL residualization
+  qr.Z <- if (!is.null(Z)) qr(as.matrix(Z)) else NULL
+  
+  # Masks / blocks
+  core.rows <- if (!is.null(Z) && ctr$type == "factor") {
+  z <- sample.meta[[ctr$var]] %in% names(ctr$weights); z[is.na(z)] <- FALSE; z
+  } else NULL
+  blocks <- makeBlocks(sample.meta, nuisance = nuisance.eff, block.vars = block.vars)
+
+  list(F = F, X = X, Z = Z, qr.Z = qr.Z,
+     contrast.F = contrast.F,   # over colnames(F)
+     contrast.X = contrast.X,   # over colnames(X)
+     core.rows = core.rows, blocks = blocks)
+}
+
+#' @keywords internal
+#' Parse a contrast specification
+#'
+#' Accepts:
+#' 1) list(var="<name>", weights = named numeric),
+#' 2) named numeric like c("var=LevelA" = -1, "var=LevelB" = +1),
+#' 3) character triplet for simple two-level factor contrasts:
+#'    - unnamed: c(var, alt, ref)
+#'    - or named: c(var="...", alt="...", ref="...")  (alt gets +1, ref gets -1)
+#'
+#' @param contrast list / named numeric / length-3 character vector
+#' @param meta data.frame of covariates (to infer factor vs numeric)
+#' @return list(var=<name>, weights=<named numeric by LEVEL>, type="factor"/"numeric")
+#' @keywords internal
+parseContrast <- function(contrast, meta) {
+  ## --- character triplet c(var, alt, ref) or named triplet ---
+  if (is.character(contrast) && length(contrast) == 3L) {
+    nm <- names(contrast)
+    
+    # allow var name aliases when named
+    if (!is.null(nm)) {
+      var.key <- if ("var" %in% nm) "var" else if ("factor" %in% nm) "factor" else if ("f" %in% nm) "f" else NULL
+      if (!is.null(var.key) && all(c("alt","ref") %in% nm)) {
+        var <- contrast[[var.key]]
+        alt <- contrast[["alt"]]
+        ref <- contrast[["ref"]]
+      } else {
+        # fall back to positional if names are partial/missing
+        var <- contrast[[1]]; alt <- contrast[[2]]; ref <- contrast[[3]]
+      }
+    } else {
+      # purely positional: (var, alt, ref)
+      var <- contrast[[1]]; alt <- contrast[[2]]; ref <- contrast[[3]]
+    }
+    
+    if (!(var %in% names(meta)))
+      stop("Variable '", var, "' not found in 'meta'.")
+    
+    # Triplet is for factor/character variables only
+    is.fac <- is.factor(meta[[var]]) || is.character(meta[[var]])
+    if (!is.fac)
+      stop("Triplet contrasts are only supported for factor/character variables. ",
+           "Use list(var=..., weights=...) for numeric contrasts.")
+    
+    if (identical(alt, ref))
+      stop("Triplet contrast has identical alt and ref levels.")
+    
+    levs <- levels(droplevels(factor(meta[[var]])))
+    miss <- setdiff(c(alt, ref), levs)
+    if (length(miss))
+      stop("Levels not found in meta[['", var, "']]: ", paste(miss, collapse = ", "))
+    
+    w <- setNames(c(+1, -1), c(alt, ref))  # alt = +1, ref = -1
+    return(list(var = var, weights = w, type = "factor"))
+  }
+  
+  ## --- list(var=..., weights=...) ---
+  if (is.list(contrast) && length(contrast$var) == 1 && !is.null(contrast$weights)) {
+    var <- contrast$var
+    stopifnot(var %in% names(meta))
+    type <- if (is.factor(meta[[var]]) || is.character(meta[[var]])) "factor" else "numeric"
+    return(list(var = var, weights = contrast$weights, type = type))
+  }
+  
+  ## --- named numeric like c("var=LevelA"=-1,"var=LevelB"=+1) ---
+  if (is.numeric(contrast) && !is.null(names(contrast))) {
+    parts <- strsplit(names(contrast), "=", fixed = TRUE)
+    vars  <- vapply(parts, `[`, character(1), 1)
+    lvls  <- vapply(parts, function(z) if (length(z) >= 2) z[2] else NA_character_, character(1))
+    if (length(unique(vars)) != 1) stop("Contrast must reference a single variable.")
+    var <- unique(vars)
+    if (!(var %in% names(meta))) stop("Variable '", var, "' not found in 'meta'.")
+    type <- if (is.factor(meta[[var]]) || is.character(meta[[var]])) "factor" else "numeric"
+    w <- tapply(contrast, lvls, sum)  # collapse duplicates if any
+    return(list(var = var, weights = w, type = type))
+  }
+  
+  stop("Unsupported 'contrast' format. Use:\n",
+       " - list(var=..., weights=...), or\n",
+       " - named numeric like c('var=LevelA'=-1,'var=LevelB'=+1), or\n",
+       " - character triplet c(var, alt, ref) (or named: var=.., alt=.., ref=..).")
+}
+
+#' Add an intercept column
+#' @keywords internal
+makeIntercept <- function(n, rn) {
+    M <- matrix(1, nrow = n, ncol = 1); colnames(M) <- "(Intercept)"; rownames(M) <- rn; M
+    }
+
+
+#' Build a canonical column name "var=level" for factor level columns
+#' @param var character scalar, variable name
+#' @param lvl character/atomic scalar, level
+#' @return character scalar like "batch=A"
+#' @keywords internal
+lvlKey <- function(var, lvl) paste0(var, "=", as.character(lvl))
+
+#' Check for non-varying nuisance terms
+#' @keywords internal
+filterNuisance <- function(meta, nuisance.names) {
+  if (!length(nuisance.names)) return(character(0))
+  keep <- vapply(nuisance.names, function(v) {
+    x <- meta[[v]]
+    if (is.factor(x) || is.character(x)) length(levels(droplevels(factor(x)))) >= 2L
+    else if (is.numeric(x)) length(unique(x[!is.na(x)])) >= 2L
+    else FALSE
+  }, logical(1))
+  nuisance.names[keep]
+}
+
+#' Safe concat of X/Z column names (works when Z is NULL, and even if X were NULL)
+#' @keywords internal
+concatNamesXZ <- function(X, Z) {
+  c(if (!is.null(X)) colnames(X) else character(0),
+    if (!is.null(Z)) colnames(Z) else character(0))
+} 
+
+#' Build blocking factor for restricted permutations
+#' 
+#' Default: interact all *factor* nuisance variables (continuous nuisances ignored).
+#' You can override by passing a character vector of block_vars (only those used).
+#' 
+#' @param meta data.frame
+#' @param nuisance character vector of nuisance variable names
+#' @param block_vars optional character vector to override default
+#' @return factor with one level per block (or single 'all' level if no factor nuisances)
+#' @keywords internal
+makeBlocks <- function(meta, nuisance, block.vars = NULL) {
+  if (!is.null(block.vars) && length(block.vars)) {
+    return(interaction(lapply(meta[block.vars], as.factor), drop = TRUE, lex.order = TRUE))
+  }
+  fac.nuis <- if (length(nuisance)) {
+    nuisance[vapply(meta[nuisance], function(x) is.factor(x) || is.character(x), logical(1))]
+  } else character(0)
+  if (length(fac.nuis)) interaction(lapply(meta[fac.nuis], as.factor), drop = TRUE, lex.order = TRUE)
+  else factor(rep("all", nrow(meta)))
+}
+
+
+
 
 # Build a p×K contrast matrix from:
 #   - X: model matrix used for fitting (preferably with intercept kept)

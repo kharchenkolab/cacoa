@@ -126,5 +126,3 @@ estimateStabilityPerCellType <- function(de.res, top.n.genes, p.val.cutoff) {
 
   return(data.all)
 }
-
-

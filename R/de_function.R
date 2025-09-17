@@ -195,11 +195,11 @@ estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL
       }
 
       meta[[contrast[1]]] <- factor(meta[[contrast[1]]])
-      if (!contrast[2] %in% levels(meta[[contrast[1]]])) {
+      if (!contrast[3] %in% levels(meta[[contrast[1]]])) {
         warning("The reference level is absent in this comparison")
         return(NULL)
       }
-      meta[[contrast[1]]] <- relevel(meta[[contrast[1]]], ref = contrast[2])
+      meta[[contrast[1]]] <- relevel(meta[[contrast[1]]], ref = contrast[3])
     }
 
     if (verbose) {
@@ -253,7 +253,7 @@ estimateDEPerCellTypeInner <- function(raw.mats, cell.groups=NULL, s.groups=NULL
     res <- tryCatch({
      if (test %in% c('wilcoxon', 't-test')) {
        cm <- normalizePseudoBulkMatrix(cm, meta = meta, design.formula = formula.inner, type = test.type)
-       estimateDEForTypePairwiseStat(cm, meta = meta, target.level = contrast[3], test = test)
+       estimateDEForTypePairwiseStat(cm, meta = meta, target.level = contrast[2], test = test)
      } else if (test == 'deseq2') {
        estimateDEForTypeDESeq(cm, meta, formula = formula.inner, contrast = contrast, test.type = test.type,
                                     cooksCutoff = cooks.cutoff, independentFiltering = independent.filtering)
@@ -376,7 +376,7 @@ estimateDEForTypeDESeq <- function(cm, sample.meta, formula, contrast, test.type
   if (test.type == 'wald') {
       dds <- DESeq2::DESeq(dds, quiet = TRUE, test = 'Wald')
       # Get coefficient name for the comparison
-      coef.name <- paste0(contrast[1], "_", contrast[3], "_vs_", contrast[2])
+      coef.name <- paste0(contrast[1], "_", contrast[2], "_vs_", contrast[3])
       if (!coef.name %in% DESeq2::resultsNames(dds)) {
           stop(paste("Coefficient", coef.name, "not found in DESeq2 model coefficients. Available coefficients are:", 
                paste(DESeq2::resultsNames(dds), collapse=", ")))
@@ -407,7 +407,7 @@ estimateDEForTypeDESeq <- function(cm, sample.meta, formula, contrast, test.type
 estimateDEForTypeEdgeR <- function(cm, sample.meta, formula, contrast) {
   design <- model.matrix(formula, sample.meta)
   coef.names <- colnames(design)
-  contrast.name <- paste0(contrast[1], contrast[3]) # "comparison_varTargetLevel"
+  contrast.name <- paste0(contrast[1], contrast[2]) # "comparison_varTargetLevel"
   if (!(contrast.name %in% coef.names)) {
     stop("Contrast '", contrast.name, "' not found in design matrix columns. Check design formula and factor levels.")
   }
@@ -436,7 +436,7 @@ estimateDEForTypeEdgeR <- function(cm, sample.meta, formula, contrast) {
 estimateDEForTypeLimma <- function(cm, sample.meta, formula, contrast) {
   mm <- model.matrix(formula, sample.meta)
   fit <- limma::voom(cm, mm, plot = FALSE) %>% limma::lmFit(mm)
-  contrast_name <- paste0(contrast[1], contrast[3]) # comparison_varTargetLevel
+  contrast_name <- paste0(contrast[1], contrast[2]) # comparison_varTargetLevel
   if (!contrast_name %in% colnames(coef(fit))) {
     stop("Contrast ", contrast_name, " not found in model coefficients. Check design formula and levels.")
   }

@@ -1,6 +1,9 @@
 // [[Rcpp::depends(RcppArmadillo)]]
 
 #include <RcppArmadillo.h>
+#include <limits>
+using namespace arma;
+using namespace Rcpp;
 
 
 
@@ -61,5 +64,125 @@ Rcpp::List fit_density_lm(const arma::mat& M,
     Rcpp::Named("KPge") = res.KPge,
     Rcpp::Named("KP_perm") = res.KP_perm,
     Rcpp::Named("n_randomizations") = res.n_randomizations
+  );
+}
+
+
+
+// permute row indices within blocks (0..L-1); length 0 => one big block
+static inline uvec permute_within_blocks(const uvec& blocks, uword n) {
+  if (blocks.n_elem == 0) {
+    uvec idx = regspace<uvec>(0, n - 1);
+    return shuffle(idx);
+  }
+  uvec out(n);
+  uvec levs = unique(blocks);
+  for (uword k = 0; k < levs.n_elem; ++k) {
+    uword lev = levs[k];
+    uvec where = find(blocks == lev);
+    uvec shuffled = shuffle(where);
+    out.elem(where) = shuffled;
+  }
+  return out;
+}
+
+// ---------------- FULL model: Y is n x p, F is n x q ----------------
+// [[Rcpp::export]]
+List perm_full_contrast_mat(const arma::mat& F,                // n x q
+                            const arma::mat& Y,                // n x p
+                            const arma::vec& contrastF,        // length q (aligned to cols(F))
+                            const arma::uvec& blocks,          // length n (0-based) or length 0
+                            const int B) {
+  const uword n = F.n_rows, q = F.n_cols, p = Y.n_cols;
+  if (Y.n_rows != n) stop("Y and F must have same nrow.");
+
+  // precompute normal-equation pieces once
+  mat XtX = F.t() * F;            // q x q
+  mat XtX_inv = inv_sympd(XtX);   // robust SPD inverse; falls back if not SPD
+  // If XtX might be singular/non-SPD, use pinv(XtX) instead:
+  // mat XtX_inv = pinv(XtX);
+
+  mat XtY = F.t() * Y;            // q x p
+  mat Beta = XtX_inv * XtY;       // q x p
+
+  // observed stats: c' * Beta  (1 x p) -> vector length p
+  rowvec cF = contrastF.t();      // 1 x q
+  rowvec s_obs_row = cF * Beta;   // 1 x p
+  vec stat_obs = s_obs_row.t();   // p
+
+  // permutations
+  mat stats_perm(B, p, fill::none);
+  stats_perm.fill(datum::nan);
+
+  for (int b = 0; b < B; ++b) {
+    uvec idx = permute_within_blocks(blocks, n);
+    mat Yb = Y.rows(idx);                   // permute rows across all columns
+    mat Beta_b = XtX_inv * (F.t() * Yb);    // q x p
+    stats_perm.row(b) = (cF * Beta_b);      // 1 x p
+  }
+
+  // p-values per column (two-sided, +1 correction)
+  vec pval(p, fill::value(datum::nan));
+  for (uword j = 0; j < p; ++j) {
+    vec col = stats_perm.col(j);
+    uvec ok = find_finite(col);
+    if (ok.n_elem == 0 || !std::isfinite(stat_obs[j])) continue;
+    vec sp = col.elem(ok);
+    uword ge = accu(abs(sp) >= std::abs(stat_obs[j]));
+    pval[j] = (1.0 + (double)ge) / (1.0 + (double)sp.n_elem);
+  }
+
+  return List::create(
+    _["stat_obs"]   = stat_obs,    // length p
+    _["stats_perm"] = stats_perm,  // B x p
+    _["pval"]       = pval
+  );
+}
+
+// ------------- Freedman–Lane: Xr is n x qx, Yr is n x p (already residualized in R) -------------
+// [[Rcpp::export]]
+List perm_FL_contrast_mat(const arma::mat& Xr,                 // n x qx
+                          const arma::mat& Yr,                 // n x p
+                          const arma::vec& contrastX,          // length qx (aligned to cols(Xr))
+                          const arma::uvec& blocks,            // length n (0-based) or length 0
+                          const int B) {
+  const uword n = Xr.n_rows, qx = Xr.n_cols, p = Yr.n_cols;
+  if (Yr.n_rows != n) stop("Yr and Xr must have same nrow.");
+
+  mat XtX = Xr.t() * Xr;            // qx x qx
+  mat XtX_inv = inv_sympd(XtX);
+  // Or: mat XtX_inv = pinv(XtX);
+
+  mat XtY = Xr.t() * Yr;            // qx x p
+  mat Beta = XtX_inv * XtY;         // qx x p
+
+  rowvec cX = contrastX.t();        // 1 x qx
+  rowvec s_obs_row = cX * Beta;     // 1 x p
+  vec stat_obs = s_obs_row.t();     // p
+
+  mat stats_perm(B, p, fill::none);
+  stats_perm.fill(datum::nan);
+
+  for (int b = 0; b < B; ++b) {
+    uvec idx = permute_within_blocks(blocks, n);
+    mat Yb = Yr.rows(idx);
+    mat Beta_b = XtX_inv * (Xr.t() * Yb);
+    stats_perm.row(b) = (cX * Beta_b);
+  }
+
+  vec pval(p, fill::value(datum::nan));
+  for (uword j = 0; j < p; ++j) {
+    vec col = stats_perm.col(j);
+    uvec ok = find_finite(col);
+    if (ok.n_elem == 0 || !std::isfinite(stat_obs[j])) continue;
+    vec sp = col.elem(ok);
+    uword ge = accu(abs(sp) >= std::abs(stat_obs[j]));
+    pval[j] = (1.0 + (double)ge) / (1.0 + (double)sp.n_elem);
+  }
+
+  return List::create(
+    _["stat_obs"]   = stat_obs,
+    _["stats_perm"] = stats_perm,
+    _["pval"]       = pval
   );
 }

@@ -461,17 +461,16 @@ select_minimal_meta <- function(meta, formula, drop_unused_levels = TRUE, extra 
 # - core.rows: logical length n; if NULL, all rows are treated as core
 # Returns indices both for the full data and for the core subset (relative to F[core.rows, ])
 .permutation_groups <- function(blocks, core.rows = NULL) {
-  stopifnot(is.factor(blocks), length(blocks) >= 1L)
+  stopifnot("blocks is not a factor"=is.factor(blocks), "no randomization blocks found"=length(blocks) >= 1L)
   n <- length(blocks)
   
   # Full-data groups: indices are 1..n
-  groups_full <- split(seq_len(n), droplevels(blocks), drop = TRUE)
-  
-  # Core-subset groups: indices relative to 1..sum(core.rows)
-  if (is.null(core.rows)) {
-    groups_core <- split(seq_len(n), droplevels(blocks), drop = TRUE)
+  if(is.null(core.rows)) {
+    core.rows <- rep(TRUE,n)
+    groups_core <- groups_full <- split(seq_len(n), droplevels(blocks), drop = TRUE)
   } else {
-    stopifnot(is.logical(core.rows), length(core.rows) == n)
+    stopifnot("core.rows is not logi"=is.logical(core.rows), "core.rows length mismatch"=length(core.rows) == n)
+    groups_full <- split(seq_len(n)[core.rows], droplevels(blocks[core.rows]), drop = TRUE)
     core_idx    <- which(core.rows)
     blocks_core <- droplevels(blocks[core.rows])
     # map full index -> position in core subset

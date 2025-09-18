@@ -456,136 +456,147 @@ select_minimal_meta <- function(meta, formula, drop_unused_levels = TRUE, extra 
   else factor(rep("all", nrow(meta)))
 }
 
-# Split rows into permutation groups (no filtering!)
-# - blocks: factor of length n (usually from interaction of nuisance factors)
-# - core.rows: logical length n; if NULL, treat all rows as core
-# Returns indices both for the full data and for the core subset (relative to 1..sum(core.rows))
+# Split rows into permutation groups (freeze-only policy). No filtering here.
+# - blocks: factor length n (interaction of nuisance factors)
+# - core.rows: logical length n; if NULL, all rows are treated as core
+# Returns indices both for the full data and for the core subset (relative to F[core.rows, ])
 .permutation_groups <- function(blocks, core.rows = NULL) {
   stopifnot(is.factor(blocks), length(blocks) >= 1L)
   n <- length(blocks)
   
   # Full-data groups: indices are 1..n
-  full_groups <- split(seq_len(n), droplevels(blocks), drop = TRUE)
+  groups_full <- split(seq_len(n), droplevels(blocks), drop = TRUE)
   
-  # Core-subset groups: indices relative to 1..n_core (order = which(core.rows))
+  # Core-subset groups: indices relative to 1..sum(core.rows)
   if (is.null(core.rows)) {
-    # all rows are core; keep parallel structure but relative to 1..n
-    core_groups <- split(seq_len(n), droplevels(blocks), drop = TRUE)
+    groups_core <- split(seq_len(n), droplevels(blocks), drop = TRUE)
   } else {
     stopifnot(is.logical(core.rows), length(core.rows) == n)
-    core_idx      <- which(core.rows)
-    blocks_core   <- droplevels(blocks[core.rows])
-    # map full row index -> position in core subset (1..n_core)
-    pos_in_core   <- integer(n); pos_in_core[core_idx] <- seq_along(core_idx)
-    # build groups in the core index space
-    core_groups   <- lapply(split(core_idx, blocks_core, drop = TRUE),
-                            function(ids_full) pos_in_core[ids_full])
+    core_idx    <- which(core.rows)
+    blocks_core <- droplevels(blocks[core.rows])
+    # map full index -> position in core subset
+    pos_in_core <- integer(n); pos_in_core[core_idx] <- seq_along(core_idx)
+    groups_core <- lapply(split(core_idx, blocks_core, drop = TRUE),
+                          function(ids_full) pos_in_core[ids_full])
   }
   
-  list(full = full_groups, core = core_groups)
+  list(full = groups_full, core = groups_core)
 }
 
-# Diagnose model matrices and permutation feasibility (freeze-only policy).
-# Prints warnings/information; returns all metrics & messages.
+
+# Diagnose model matrices and permutation feasibility (freeze-only).
+# Prints only warnings/hints; returns all metrics & messages.
 .diagnose_design <- function(F = NULL, X = NULL, Z = NULL, qrZ = NULL,
                              meta = NULL, blocks = NULL, core.rows = NULL, ctr = NULL,
+                             block_factors = NULL,      # names of factor vars used to make 'blocks'
                              verbose = TRUE,
                              thresholds = list(
                                alias_tol     = 1e-8,
-                               kappa_warn    = 1e3,
-                               kappa_bad     = 1e5,
-                               vif_warn      = 10,
-                               vif_bad       = 30,
-                               min_core_size = 2L,     # "movable" if >= 2
-                               show_top      = 10,     # how many problematic blocks to print
+                               kappa_warn    = 1e3,    # warn if >= this (and stronger wording if >>)
+                               vif_warn      = 10,     # warn if any VIF >= this
+                               min_core_size = 2L,     # movable if >= 2
+                               show_top      = 10,     # how many problematic blocks to list
                                min_eff_perm  = 100     # warn if effective permutations < this
                              )) {
-  # ---------- local helpers ----------
+  # ---------- tiny helpers ----------
   .emit <- function(lines) { if (verbose && length(lines)) for (ln in lines) message(ln); invisible(NULL) }
   .qr_rank_diag <- function(M, name="F") {
     if (is.null(M) || !is.matrix(M) || !ncol(M)) {
-      return(list(name=name, rank=0L, p=0L, indep=character(0), dep=character(0), kappa=NA_real_))
+      return(list(name=name, rank=0L, p=0L, dep=character(0), kappa=NA_real_))
     }
-    q  <- qr(M, LAPACK = TRUE)
-    p  <- ncol(M); r <- q$rank; piv <- q$pivot
-    indep <- colnames(M)[piv[seq_len(r)]]
-    dep   <- if (r < p) colnames(M)[piv[(r+1):p]] else character(0)
+    q  <- qr(M, LAPACK = TRUE); p <- ncol(M); r <- q$rank
+    dep <- if (r < p) colnames(M)[q$pivot[(r+1):p]] else character(0)
     s <- svd(M, nu=0, nv=0)$d
     k <- if (length(s)) (max(s) / max(1e-12, min(s))) else NA_real_
-    list(name=name, rank=r, p=p, indep=indep, dep=dep, kappa=k)
+    list(name=name, rank=r, p=p, dep=dep, kappa=k)
   }
   .alias_X_by_Z <- function(X, Z, qrZ=NULL, tol=1e-8) {
-    if (is.null(X) || !is.matrix(X) || !ncol(X)) return(list(ratio=numeric(0), aliased=character(0), X_r=X))
-    if (is.null(Z)) {
-      ratio <- setNames(rep(1, ncol(X)), colnames(X)); return(list(ratio=ratio, aliased=character(0), X_r=X))
-    }
+    if (is.null(X) || !is.matrix(X) || !ncol(X)) return(list(aliased=character(0), X_r=X))
+    if (is.null(Z)) return(list(aliased=character(0), X_r=X))
     if (is.null(qrZ)) qrZ <- qr(as.matrix(Z))
     Xr <- qr.resid(qrZ, as.matrix(X))
     rn <- sqrt(colSums(Xr^2)); xn <- sqrt(colSums(as.matrix(X)^2)) + 1e-15
-    ratio <- setNames(as.numeric(rn / xn), colnames(X))
-    list(ratio=ratio, aliased=names(ratio)[ratio < tol], X_r=Xr)
+    aliased <- colnames(X)[rn / xn < tol]
+    list(aliased = aliased, X_r = Xr)
   }
   .pinv_sym <- function(A, eps=1e-8) {
     ev <- eigen(A, symmetric=TRUE); d <- ev$values; V <- ev$vectors
-    cutoff <- eps * max(1, d[1]); di <- ifelse(d > cutoff, 1/d, 0)
+    di <- ifelse(d > eps * max(1, d[1]), 1/d, 0)
     V %*% (diag(di, nrow=length(di))) %*% t(V)
   }
   .vif <- function(Xr) {
-    if (is.null(Xr) || !is.matrix(Xr) || ncol(Xr) <= 1) return(setNames(numeric(0), character(0)))
+    if (is.null(Xr) || !is.matrix(Xr) || ncol(Xr) <= 1) return(numeric(0))
     Xc <- scale(Xr, center=TRUE, scale=TRUE); R <- stats::cor(Xc)
     VIF <- tryCatch(diag(solve(R)), error=function(e) diag(.pinv_sym(R)))
     setNames(as.numeric(VIF), colnames(Xr))
   }
-  .nullspace_summary <- function(M, max_rel=2, tol=1e-8, top=5) {
-    if (is.null(M) || !is.matrix(M) || !ncol(M)) return(list())
-    s <- svd(M); d <- s$d; r <- sum(d > tol * max(1, d[1])); if (r >= ncol(M)) return(list())
-    V  <- s$v[, (r+1):ncol(M), drop=FALSE]; nm <- colnames(M)
-    kmax <- min(ncol(V), max_rel); rel <- vector("list", kmax)
-    for (k in seq_len(kmax)) {
-      v <- V[,k]; o <- order(abs(v), decreasing=TRUE); ii <- seq_len(min(top, length(o)))
-      rel[[k]] <- data.frame(term=nm[o][ii], coef=v[o][ii], row.names=NULL)
-    }
-    rel
-  }
-  .perm_diag_from_groups <- function(meta, blocks, core.rows, ctr, groups) {
-    # Build a per-block data.frame with size/variation summaries (core view)
-    labs <- names(groups); if (is.null(labs)) labs <- as.character(seq_along(groups))
-    n_core <- vapply(groups, length, integer(1))
-    # Variation of contrast inside each block (core rows)
-    if (!is.null(ctr) && !is.null(meta)) {
-      if (ctr$type == "factor") {
-        lev_keep <- names(ctr$weights)
-        comp <- lapply(groups, function(gidx) {
-          # gidx are positions relative to core subset; map to meta row indices:
-          if (is.null(core.rows) || all(core.rows)) {
-            ids <- gidx
-          } else {
-            ids <- which(core.rows)[gidx]
-          }
-          v <- as.character(meta[[ctr$var]][ids])
-          v <- v[v %in% lev_keep]
-          tab <- sort(table(v), decreasing = TRUE)
-          list(n_levels = length(unique(v)), comp = tab)
-        })
-        n_levels <- vapply(comp, `[[`, integer(1), "n_levels")
-        comp_str <- vapply(comp, function(x) {
-          if (length(x$comp) == 0) return("")
-          paste(sprintf("%s:%d", names(x$comp), as.integer(x$comp)), collapse = ",")
-        }, character(1))
-        data.frame(block = labs, n_core = n_core, n_levels = n_levels, composition = comp_str,
-                   stringsAsFactors = FALSE)
-      } else {
-        uniq <- vapply(groups, function(gidx) {
-          if (is.null(core.rows) || all(core.rows)) ids <- gidx else ids <- which(core.rows)[gidx]
-          length(unique(meta[[ctr$var]][ids]))
-        }, integer(1))
-        data.frame(block = labs, n_core = n_core, n_levels = uniq, composition = "",
-                   stringsAsFactors = FALSE)
+  
+  .perm_core_summary <- function(meta, blocks, core.rows, ctr, groups_core, block_factors, show_top) {
+    labs   <- names(groups_core); if (is.null(labs)) labs <- as.character(seq_along(groups_core))
+    n_core <- vapply(groups_core, length, integer(1))
+    
+    # Variation of contrast within each core-block
+    has_ctr <- !is.null(ctr) && !is.null(meta) && (ctr$var %in% names(meta))
+    if (has_ctr && ctr$type == "factor") {
+      keep <- names(ctr$weights)
+      n_levels <- integer(length(groups_core))
+      comp_str <- character(length(groups_core))
+      for (i in seq_along(groups_core)) {
+        gidx <- groups_core[[i]]
+        ids  <- if (is.null(core.rows) || all(core.rows)) gidx else which(core.rows)[gidx]
+        v    <- as.character(meta[[ctr$var]][ids]); v <- v[v %in% keep]
+        tab  <- sort(table(v), decreasing = TRUE)
+        n_levels[i] <- length(tab)
+        comp_str[i] <- if (length(tab)) paste(sprintf("%s:%d", names(tab), as.integer(tab)), collapse=",") else ""
       }
+    } else if (has_ctr && ctr$type == "numeric") {
+      n_levels <- vapply(groups_core, function(gidx) {
+        ids <- if (is.null(core.rows) || all(core.rows)) gidx else which(core.rows)[gidx]
+        length(unique(meta[[ctr$var]][ids]))
+      }, integer(1))
+      comp_str <- rep("", length(groups_core))
     } else {
-      data.frame(block = labs, n_core = n_core, n_levels = NA_integer_, composition = "",
-                 stringsAsFactors = FALSE)
+      n_levels <- rep(NA_integer_, length(groups_core))
+      comp_str <- rep("", length(groups_core))
     }
+    
+    df <- data.frame(block = labs, n_core = n_core, n_levels = n_levels,
+                     composition = comp_str, stringsAsFactors = FALSE)
+    
+    # Identify problematic blocks
+    too_small <- df$n_core < 2L
+    no_var    <- !is.na(df$n_levels) & (df$n_levels < 2L)
+    prob_idx  <- which(too_small | no_var)
+    
+    # Decode block factor combinations if requested
+    comb_df <- NULL
+    if (length(prob_idx) && !is.null(block_factors) && length(block_factors) &&
+        all(block_factors %in% names(meta))) {
+      # pick any representative row in the *full* data for each block
+      for (i in prob_idx) {
+        rows_full <- which(blocks == levels(blocks)[match(df$block[i], levels(blocks))])
+        if (length(rows_full)) {
+          vals <- vapply(block_factors, function(v) as.character(meta[[v]][rows_full[1]]), character(1))
+          comb_df <- rbind(comb_df,
+                           data.frame(block = df$block[i],
+                                      n_core = df$n_core[i],
+                                      n_levels = df$n_levels[i],
+                                      composition = df$composition[i],
+                                      combo = paste(paste0(block_factors, "=", vals), collapse = ", "),
+                                      stringsAsFactors = FALSE))
+        }
+      }
+      # keep at most show_top
+      if (!is.null(comb_df)) {
+        ord <- order(comb_df$n_core, comb_df$n_levels)
+        comb_df <- comb_df[ord, , drop = FALSE]
+        comb_df <- head(comb_df, show_top)
+      }
+    }
+    
+    list(summary = df,
+         prob_idx = prob_idx,
+         comb_df  = comb_df)
   }
   
   # ---------- normalize inputs ----------
@@ -596,116 +607,128 @@ select_minimal_meta <- function(meta, formula, drop_unused_levels = TRUE, extra 
     F <- if (!is.null(X) && !is.null(Z)) cbind(X, Z) else if (!is.null(X)) X else Z
   } else F <- as.matrix(F)
   
-  # ---------- core model diagnostics ----------
+  # ---------- model diagnostics ----------
   msgs <- character(0)
-  dF  <- .qr_rank_diag(F, name="F")
+  dF  <- .qr_rank_diag(F, name = "F")
   aXZ <- .alias_X_by_Z(X, Z, qrZ = qrZ, tol = thresholds$alias_tol)
-  dXr <- .qr_rank_diag(aXZ$X_r, name="X_r = M_Z X")
+  dXr <- .qr_rank_diag(aXZ$X_r, name = "M_Z X")
   vif <- .vif(aXZ$X_r)
-  nsF  <- .nullspace_summary(F)
-  nsXr <- .nullspace_summary(aXZ$X_r)
   
-  # Messages: rank/conditioning
   if (dF$rank < dF$p) {
-    msgs <- c(msgs, sprintf("[WARN] Design is rank-deficient: rank(F)=%d < %d.", dF$rank, dF$p))
-    if (length(dF$dep)) msgs <- c(msgs, paste0("       Dependent columns: ", paste(dF$dep, collapse=", ")))
+    msgs <- c(msgs, sprintf("[WARN] Design is rank-deficient: rank(F)=%d < %d. Dependent columns: %s",
+                            dF$rank, dF$p, paste(dF$dep, collapse = ", ")))
   }
-  if (is.finite(dF$kappa) && dF$kappa >= thresholds$kappa_bad)
-    msgs <- c(msgs, sprintf("[WARN] F severely ill-conditioned (kappa=%.2e).", dF$kappa))
-  else if (is.finite(dF$kappa) && dF$kappa >= thresholds$kappa_warn)
-    msgs <- c(msgs, sprintf("[INFO] F ill-conditioned (kappa=%.2e).", dF$kappa))
-  
+  if (is.finite(dF$kappa) && dF$kappa >= thresholds$kappa_warn) {
+    msgs <- c(msgs, sprintf("[WARN] F ill-conditioned (kappa=%.2e). Estimates may be unstable.", dF$kappa))
+  }
   if (!is.null(X)) {
-    if (length(aXZ$aliased))
-      msgs <- c(msgs, paste0("[WARN] Core columns aliased by Z: ", paste(aXZ$aliased, collapse=", "),
-                             ". Effects not estimable after adjusting for Z."))
-    if (dXr$rank < dXr$p) {
-      msgs <- c(msgs, sprintf("[WARN] Core after Z is rank-deficient: rank(M_Z X)=%d < %d.", dXr$rank, dXr$p))
-      if (length(dXr$dep))
-        msgs <- c(msgs, paste0("       Dependent core columns: ", paste(dXr$dep, collapse=", ")))
+    if (length(aXZ$aliased)) {
+      msgs <- c(msgs, paste0("[WARN] Core columns aliased by Z (not estimable after adjustment): ",
+                             paste(aXZ$aliased, collapse = ", ")))
     }
-    if (is.finite(dXr$kappa) && dXr$kappa >= thresholds$kappa_bad)
-      msgs <- c(msgs, sprintf("[WARN] M_Z X severely ill-conditioned (kappa=%.2e).", dXr$kappa))
-    else if (is.finite(dXr$kappa) && dXr$kappa >= thresholds$kappa_warn)
-      msgs <- c(msgs, sprintf("[INFO] M_Z X ill-conditioned (kappa=%.2e).", dXr$kappa))
+    if (dXr$rank < dXr$p) {
+      msgs <- c(msgs, sprintf("[WARN] Core after Z is rank-deficient: rank(M_Z X)=%d < %d. Dependent core columns: %s",
+                              dXr$rank, dXr$p, paste(dXr$dep, collapse = ", ")))
+    }
     if (length(vif)) {
-      big <- vif[vif >= thresholds$vif_bad]
-      mid <- vif[vif >= thresholds$vif_warn & vif < thresholds$vif_bad]
-      if (length(big))
-        msgs <- c(msgs, paste0("[WARN] Very high VIFs in core (after Z): ",
-                               paste(sprintf("%s=%.1f", names(big), big), collapse=", "),
+      bad <- vif[vif >= thresholds$vif_warn]
+      if (length(bad)) {
+        msgs <- c(msgs, paste0("[WARN] High VIFs in core after Z: ",
+                               paste(sprintf("%s=%.1f", names(bad), bad), collapse = ", "),
                                ". Consider collapsing levels or using a single contrast regressor."))
-      if (!length(big) && length(mid))
-        msgs <- c(msgs, paste0("[INFO] Elevated VIFs in core (after Z): ",
-                               paste(sprintf("%s=%.1f", names(mid), mid), collapse=", "), "."))
+      }
     }
   }
   
   # ---------- permutation diagnostics (freeze policy) ----------
-  perm <- NULL; perm_core_df <- NULL; eff_perm_log <- NA_real_
+  perm <- NULL
   if (!is.null(blocks)) {
-    stopifnot(is.factor(blocks), length(blocks) == nrow(F))
-    # Build groups (no filtering)
-    pg <- .permutation_groups(blocks, core.rows = if (is.null(core.rows)) rep(TRUE, nrow(F)) else core.rows)
+    stopifnot(is.factor(blocks), nrow(F) == length(blocks))
+    # groups must be built outside; but if not provided, recreate core groups here:
+    groups_core <- .permutation_groups(blocks, if (is.null(core.rows)) rep(TRUE, nrow(F)) else core.rows)$core
     
-    # Diagnose core groups
-    perm_core_df <- .perm_diag_from_groups(meta, blocks, core.rows, ctr, pg$core)
-    # Effective permutations ~ product over blocks of n_core! (log scale sum)
-    movable <- perm_core_df$n_core[perm_core_df$n_core >= thresholds$min_core_size]
+    ps <- .perm_core_summary(meta, blocks, core.rows, ctr, groups_core,
+                             block_factors = block_factors,
+                             show_top = thresholds$show_top)
+    # Effective permutations (consider only blocks with size >= 2)
+    movable <- ps$summary$n_core[ps$summary$n_core >= thresholds$min_core_size]
     eff_perm_log <- if (length(movable)) sum(lfactorial(movable)) else 0
     
-    # Messages about sizes/variation
-    n_blocks     <- nrow(perm_core_df)
-    n_movable    <- sum(perm_core_df$n_core >= thresholds$min_core_size)
-    n_freeze_sz  <- sum(perm_core_df$n_core < thresholds$min_core_size)
-    n_freeze_var <- if (is.na(perm_core_df$n_levels[1])) NA_integer_
-    else sum(perm_core_df$n_levels < 2L)
+    # Warn only when there is a problem
+    too_small <- sum(ps$summary$n_core < thresholds$min_core_size)
+    no_var    <- sum(!is.na(ps$summary$n_levels) & ps$summary$n_levels < 2L)
     
-    msgs <- c(msgs,
-              sprintf("[PERM] Blocks (core view): total=%d, movable(>=%d)=%d, frozen(size<%d)=%d%s",
-                      n_blocks, thresholds$min_core_size, n_movable, thresholds$min_core_size, n_freeze_sz,
-                      if (!is.na(n_freeze_var)) paste0(", no-variation=", n_freeze_var) else ""))
-    
-    if (!is.na(eff_perm_log) && exp(min(eff_perm_log, 50)) < thresholds$min_eff_perm) {
-      msgs <- c(msgs, sprintf("[PERM][WARN] Very few effective permutations (~exp(%.1f)). "
-                              "Test may be conservative; consider merging blocks or dropping a blocking factor.",
-                              eff_perm_log))
+    if (too_small > 0 || no_var > 0 || exp(min(eff_perm_log, 50)) < thresholds$min_eff_perm) {
+      if (too_small > 0)
+        msgs <- c(msgs, sprintf("[PERM][WARN] %d block(s) have < %d core rows; those rows will be frozen (no permutation).",
+                                too_small, thresholds$min_core_size))
+      if (no_var > 0)
+        msgs <- c(msgs, sprintf("[PERM][WARN] %d block(s) show no within-block variation in the contrasted variable; those rows will be frozen.",
+                                no_var))
+      if (exp(min(eff_perm_log, 50)) < thresholds$min_eff_perm)
+        msgs <- c(msgs, sprintf("[PERM][WARN] Effective number of permutations is very small (~exp(%.1f)). Consider relaxing blocks (drop/merge a blocking factor) or a wild bootstrap.",
+                                eff_perm_log))
+      
+      # List problematic blocks with combinations if available
+      if (length(ps$prob_idx)) {
+        msgs <- c(msgs, "[PERM] Problematic blocks (examples):")
+        if (!is.null(ps$comb_df)) {
+          apply(ps$comb_df, 1, function(row) {
+            msgs <<- c(msgs, sprintf("       %s: n_core=%s; levels=%s%s; combo: %s",
+                                     row[["block"]], row[["n_core"]], row[["n_levels"]],
+                                     ifelse(nchar(row[["composition"]])>0,
+                                            paste0(" [", row[["composition"]], "]"), ""),
+                                     row[["combo"]]))
+          })
+        } else {
+          show <- ps$summary[ps$prob_idx, , drop = FALSE]
+          ord  <- order(show$n_core, show$n_levels)
+          show <- head(show[ord, , drop = FALSE], thresholds$show_top)
+          apply(show, 1, function(row) {
+            msgs <<- c(msgs, sprintf("       %s: n_core=%s; levels=%s%s",
+                                     row[["block"]], row[["n_core"]], row[["n_levels"]],
+                                     ifelse(nchar(row[["composition"]])>0,
+                                            paste0(" [", row[["composition"]], "]"), "")))
+          })
+        }
+      }
+      
+      # Aggregate which factor levels dominate problematic blocks (to guide dropping)
+      if (!is.null(block_factors) && length(block_factors) &&
+          all(block_factors %in% names(meta)) && length(ps$prob_idx)) {
+        msgs <- c(msgs, "[PERM] Factor levels most often appearing in problematic blocks:")
+        prob_blocks <- ps$summary$block[ps$prob_idx]
+        # For each block, pick a representative row to read factor levels
+        rep_row <- vapply(prob_blocks, function(b) which(blocks == b)[1], integer(1))
+        for (v in block_factors) {
+          levs <- as.character(meta[[v]][rep_row])
+          tab  <- sort(table(levs), decreasing = TRUE)
+          topK <- head(tab, 5)
+          msgs <- c(msgs, paste0("       ", v, ": ",
+                                 paste(sprintf("%s (%d)", names(topK), as.integer(topK)), collapse = ", ")))
+        }
+      }
     }
     
-    # List problematic blocks (small or monomorphic)
-    prob <- perm_core_df[(perm_core_df$n_core < thresholds$min_core_size) |
-                           (!is.na(perm_core_df$n_levels) & perm_core_df$n_levels < 2L), , drop = FALSE]
-    if (nrow(prob)) {
-      show <- head(prob[order(prob$n_core, prob$n_levels), ], thresholds$show_top)
-      msgs <- c(msgs, "[PERM] Small/monomorphic core blocks (label: n_core; levels):")
-      lab <- paste0("       ", show$block, ": ", show$n_core, "; ",
-                    ifelse(is.na(show$n_levels), "-", paste0("levels=", show$n_levels)), 
-                    ifelse(nchar(show$composition) > 0, paste0(" [", show$composition, "]"), ""))
-      msgs <- c(msgs, lab)
-    }
-    
-    perm <- list(groups_full = pg$full, groups_core = pg$core,
-                 core_summary = perm_core_df, eff_perm_log = eff_perm_log)
+    perm <- list(groups_core = groups_core,
+                 core_summary = ps$summary,
+                 eff_perm_log = eff_perm_log)
   } else {
-    msgs <- c(msgs, "[PERM] No 'blocks' provided; blocked permutation diagnostics skipped.")
+    # no blocks → no permutation diagnostics
   }
   
   .emit(msgs)
   
   list(
-    # model structure
     full_rank    = dF,
     core_after_Z = dXr,
-    alias_ratio  = aXZ$ratio,
     aliased_by_Z = aXZ$aliased,
     vif          = vif,
-    null_F       = nsF,
-    null_Xr      = nsXr,
-    # permutation diagnostics
     perm         = perm,
     messages     = msgs
   )
 }
+
 
 
 

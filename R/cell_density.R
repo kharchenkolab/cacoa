@@ -173,10 +173,21 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
 #' Estimate differential cell density with permutation testing
 #'
 #' @param density.mat estimated cell density matrix with estimateCellDensity
-#' @param X model matrix used for fitting (preferably with intercept kept)
+#' @param sample.meta sample metadata data.frame
+#' @param contrast contrast matrix for the design
+#' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+#' @param ref.level Reference sample group, e.g., ctrl, healthy, or untreated. (default: stored value)
+#' @param target.level target/disease level for sample.group vector
+#' @param type method to calculate differential cell density of each bin;
+#' @param block.id block variable for permutation test
 #' @keywords internal
-diffCellDensityPermutations <- function(density.mat, X, sample.groups, ref.level, target.level, type='permutation',
-                                        verbose=TRUE, smooth=FALSE, graph=NULL, l.max=NULL, beta=30, n.permutations=200, n.cores=1) {
+diffCellDensityPermutations <- function(density.mat, sample.meta, contrast, sample.groups,
+                                        type='permutation', block.id = NULL, verbose=TRUE, perm.method=c("full", "freedman-lane"), n.permutations=200, 
+                                        n.cores=1) {
+  perm.method <- match.arg(perm.method)
+  ref.level <- contrast[3]
+  target.level <- contrast[2]
+
   if (type %in% c('subtract', 't.test', 'wilcox')) { # no covariate implementation
     nt <- names(sample.groups[sample.groups == target.level]) 
    nr <- names(sample.groups[sample.groups == ref.level]) 
@@ -191,53 +202,87 @@ diffCellDensityPermutations <- function(density.mat, X, sample.groups, ref.level
     return(list(score=score, permut.scores=permut.scores))
   }
 
-  # linear model
-  res.diff <- fit_density_lm(X, t(density.mat), n.permutations)
-    rownames(res.diff$KP) <- colnames(X)
-    rownames(res.diff$KPge) <- colnames(X)
-    dimnames(res.diff$KP_perm)[[1]] <- colnames(X) # coef, bins, permutations
+  if(type =='permutation'){
+    res.diff <- list()
+    dm <- buildDesignMatrices(sample.meta,contrast = contrast, block.vars = block.id)
+    # Y must be n x p with the same row order as dm$F
+    Y <- t(density.mat)
+    # Blocks as 0-based ints
+    blk.full <- if (is.null(dm$blocks)) integer(0) else as.integer(dm$blocks) - 1L
+    if (perm.method == "full") {
+    ## -------- FULL path: use ALL rows --------
+    F.use   <- dm$F
+    Y.use   <- Y
+    blk.use <- blk.full
 
-    intercept.idx <- which(rownames(res.diff$KP) == "(Intercept)") # remove intercept from output
-    if (length(intercept.idx) > 0) {
-        res.diff$KP <- res.diff$KP[-intercept.idx, , drop = FALSE]
-        res.diff$KPge <- res.diff$KPge[-intercept.idx, , drop = FALSE]
-        res.diff$KP_perm <- res.diff$KP_perm[-intercept.idx, , , drop = FALSE]
-    }
+    # Align contrast to F cols
+    cF <- dm$contrast.F[colnames(F.use)]; cF[is.na(cF)] <- 0
 
-    colnames(res.diff$KP) <- rownames(density.mat)
-    colnames(res.diff$KPge) <- rownames(density.mat)
-    dimnames(res.diff$KP_perm)[[2]] <- rownames(density.mat)
+  # Sanity checks
+  stopifnot(nrow(F.use) == nrow(Y.use))
+  stopifnot(length(cF) == ncol(F.use))
+  stopifnot(length(blk.use) %in% c(0L, nrow(F.use)))
 
-    coef.names <- rownames(res.diff$KP)
-    res.diff$Z <- qnorm((res.diff$KPge + 1) / (res.diff$n_randomizations + 1))
+  res <- perm_full_contrast_mat(F.use, Y.use, cF, blk.use, B = 9999L) # res$stat_obs: length p; res$stats_perm: B x p
 
-    n.coefs <- length(coef.names)
-    n.bins <- ncol(res.diff$KP)
-    adjusted.scores <- matrix(NA_real_, nrow = n.coefs, ncol = n.bins,
-                                                        dimnames = list(coef.names, colnames(res.diff$KP)))
-    score.c <- matrix(NA_real_, nrow = n.coefs, ncol = n.bins,
-                                        dimnames = list(coef.names, colnames(res.diff$KP)))
-    for (i in seq_len(n.coefs)) {
-        coef <- coef.names[i]
-        score <- res.diff$KP[coef, ]
-        scores.shuffled <- aperm(res.diff$KP_perm[coef, , , drop = FALSE], c(2, 3, 1))[, , 1, drop = FALSE]
-        scores.shuffled <- matrix(scores.shuffled, nrow = n.bins, ncol = dim(res.diff$KP_perm)[3], byrow = FALSE)
-        rownames(scores.shuffled) <- colnames(res.diff$KP)
-        score.c[i, ] <- score - rowMeans(scores.shuffled, na.rm = TRUE) 
-        adjusted.scores[i, ] <- adjustZScoresByPermutations(
-            score = score.c[i, ],
-            scores.shuffled = scores.shuffled,
-            smooth = smooth,
-            graph = graph,
-            n.cores = n.cores,
-            verbose = verbose,
-            l.max = l.max,
-            beta = beta
-        )
-    }
-    res.diff$Z_adj <- adjusted.scores
-    res.diff$score <- score.c
-    return(res.diff)
+  # Names for bins (columns of Y)
+  bin.names <- colnames(Y.use)
+  stopifnot(length(res$stat_obs) == length(bin.names))
+  names(res$stat_obs) <- bin.names
+  colnames(res$stats_perm) <- bin.names
+  
+  score.c <- as.numeric(res$stat_obs - colMeans(res$stats_perm, na.rm = TRUE)) # center by permutation mean
+  names(score.c) <- bin.names
+
+  # permutation p-values and signed Z
+  B.eff <- colSums(is.finite(res$stats_perm))
+  ge    <- colSums(sweep(abs(res$stats_perm), 2, abs(res$stat_obs), FUN = ">="), na.rm = TRUE)
+  pval  <- (1 + ge) / (1 + B.eff)
+  Z.perm <- qnorm(1 - pval/2) * sign(res$stat_obs)
+
+ } else if (perm.method == "freedman-lane") {
+  ## -------- FREEDMAN-LANE path: use RESIDUALS --------  
+  rz <- residualizeForFL(Y, dm$qr.Z, dm$X)   # returns list(y.r = n x p, X.r = n x qx)
+
+  rows.use <- if (!is.null(dm$core.rows)) which(dm$core.rows) else seq_len(nrow(dm$F))
+
+  Xr.use   <- rz$X.r[rows.use, , drop = FALSE]
+  Yr.use   <- rz$y.r[rows.use, , drop = FALSE]
+  blk.useR <- if (length(blk.full)) blk.full[rows.use] else integer(0)
+
+  # Align contrast to X_r cols
+  cX <- dm$contrast.X[colnames(Xr.use)]; cX[is.na(cX)] <- 0
+
+  # Sanity checks
+  stopifnot(nrow(Xr.use) == nrow(Yr.use))
+  stopifnot(length(cX) == ncol(Xr.use))
+  stopifnot(length(blk.useR) %in% c(0L, nrow(Xr.use)))
+
+  res <- perm_FL_contrast_mat(Xr.use, Yr.use, cX, blk.useR, B = 9999L)
+  
+  # Bin names from the residualized response (columns = bins)
+  bin.names <- colnames(Yr.use)
+  stopifnot(length(res$stat_obs) == length(bin.names))
+  names(res$stat_obs)      <- bin.names
+  colnames(res$stats_perm) <- bin.names
+
+  # Center observed contrast score by permutation mean (per bin)
+  score.c <- as.numeric(res$stat_obs - colMeans(res$stats_perm, na.rm = TRUE))
+  names(score.c) <- bin.names
+
+  # Two-sided permutation p-values (+1 correction), then signed Z
+  B.eff <- colSums(is.finite(res$stats_perm))
+  ge    <- colSums(sweep(abs(res$stats_perm), 2, abs(res$stat_obs), FUN = ">="), na.rm = TRUE)
+  pval  <- (1 + ge) / (1 + B.eff)
+  Z.perm <- qnorm(1 - pval/2) * sign(res$stat_obs)
+
+ } else {
+  stop("Unknown perm.method: ", perm.method)
+ }
+
+ return(list(score=score.c, permut.scores = t(res$stats_perm), Z=Z.perm, 
+            stat.obs=res$stat_obs, stats.perm=res$stats_perm))
+ }
 }
 
 #' @keywords internal

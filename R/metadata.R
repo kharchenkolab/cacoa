@@ -62,6 +62,7 @@ validateDesign <- function(formula, sample.meta = NULL, contrast = NULL, verbose
     stop("Design formula must be a string or formula object.")
   }
   if (!grepl("~", formula.str)) {
+
     stop("Design formula must contain a '~' to separate response and predictors.")
   }
 
@@ -170,6 +171,7 @@ subsetMetadata <- function(sample.meta,
 getSampleGroups <- function(sample.meta, contrast, sample.id = NULL) {
   if (is.null(contrast)) return(NULL)
   var <- contrast[1]; alt <- contrast[2]; ref <- contrast[3]
+
   if (!var %in% colnames(sample.meta)) {
     stop(sprintf("Contrast variable '%s' not found in sample metadata.", var))
   }
@@ -491,8 +493,6 @@ makeBlocks <- function(meta, nuisance, block.vars = NULL) {
   if (length(fac.nuis)) interaction(lapply(meta[fac.nuis], as.factor), drop = TRUE, lex.order = TRUE)
   else factor(rep("all", nrow(meta)))
 }
-
-
 
 
 # Build a p×K contrast matrix from:

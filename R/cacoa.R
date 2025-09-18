@@ -85,6 +85,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field sample.id Character of column name containing sample IDs in sample.metadata
     sample.id = NULL,
 
+
     #' @field block.id Character of column name containing variable name to restrict permutations to
     block.id = NULL,
 
@@ -156,7 +157,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.null(sample.metadata)) stop("sample.metadata must be provided")
       if (!is.data.frame(sample.metadata)) stop("sample.metadata must be a data.frame")
 
+
       # check sample IDs
+
       samp.names <- rownames(sample.metadata)
       if ((is.null(samp.names) || anyNA(samp.names)) && !is.null(sample.id)) {
           if (!sample.id %in% colnames(sample.metadata)) {
@@ -173,6 +176,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
 
       if (is.null(design)) stop("Design formula must be provided")
+
       vd <- validateDesign(formula = design, sample.meta = sample.metadata, contrast = contrast) 
       self$formula <- vd$formula
       self$contrast <- vd$contrast
@@ -185,6 +189,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$sample.id <- sample.id
       self$ref.level <- self$contrast[3]
       self$target.level <- self$contrast[2]
+
       self$n.cores <- n.cores
       self$verbose <- verbose
 

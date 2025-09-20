@@ -97,19 +97,27 @@ static inline void tally_perm(double obs, double perm, int alt,
 }
 
 // Robust scale via MAD (median absolute deviation)
-static inline double robust_scale_mad(const arma::vec& r) {
-  if (r.n_elem == 0) return 0.0;
-  double med = arma::median(r);
-  arma::vec a = arma::abs(r - med);
-  double mad = arma::median(a);
+// Median absolute deviation with NA/NaN/Inf safety.
+// Returns a strictly positive scale (fallback to RMS + tiny eps if needed).
+static inline double robust_scale_mad_safe(const arma::vec& r) {
+  arma::uvec idx = arma::find_finite(r);
+  if (idx.n_elem == 0) return 1e-8;                // nothing finite → tiny scale
+  
+  arma::vec rf = r.elem(idx);
+  double med = arma::median(rf);                    // finite by construction
+  
+  arma::vec af = arma::abs(rf - med);
+  double mad = (af.n_elem > 0) ? arma::median(af) : 0.0;
+  
   double s = 1.4826 * mad;
   if (!(s > 0.0)) {
-    // fallback: RMS + tiny epsilon to avoid division by zero
-    s = std::sqrt(arma::mean(arma::square(r))) + 1e-12;
+    // fallback: RMS of finite residuals + tiny epsilon
+    s = std::sqrt(arma::mean(arma::square(rf))) + 1e-12;
     if (!(s > 0.0)) s = 1e-8;
   }
   return s;
 }
+
 
 // One Huber IRLS fit: returns beta
 // - Uses MAD scale each iteration

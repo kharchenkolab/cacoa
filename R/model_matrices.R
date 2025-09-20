@@ -313,16 +313,28 @@ select_minimal_meta <- function(meta, formula, drop_unused_levels = TRUE, extra 
 .lvl_key <- function(var, lvl) paste0(var, "=", as.character(lvl))
 
 # check for non-varying nuisance terms
-.filter_effective_nuisance <- function(meta, nuisance_names) {
+.filter_effective_nuisance <- function(meta, nuisance_names, warn = TRUE) {
   if (!length(nuisance_names)) return(character(0))
+  
   keep <- vapply(nuisance_names, function(v) {
     x <- meta[[v]]
-    if (is.factor(x) || is.character(x)) length(levels(droplevels(factor(x)))) >= 2L
-    else if (is.numeric(x)) length(unique(x[!is.na(x)])) >= 2L
-    else FALSE
+    if (is.factor(x) || is.character(x)) {
+      length(levels(droplevels(factor(x)))) >= 2L
+    } else if (is.numeric(x)) {
+      length(unique(x[!is.na(x)])) >= 2L
+    } else {
+      FALSE  # unsupported type or not present
+    }
   }, logical(1))
+  
+  dropped <- nuisance_names[!keep]
+  if (warn && length(dropped)) {
+    warning("[WARN] Dropping nuisance covariates with insufficient variation (<2 observed levels) or unsupported type: ", paste(dropped, collapse = ", "), call. = FALSE)
+  }
+  
   nuisance_names[keep]
 }
+
 
 # safe concat of X/Z column names (works when Z is NULL, and even if X were NULL)
 .concat_names_XZ <- function(X, Z) {
@@ -659,18 +671,18 @@ select_minimal_meta <- function(meta, formula, drop_unused_levels = TRUE, extra 
     
     if (too_small > 0 || no_var > 0 || exp(min(eff_perm_log, 50)) < thresholds$min_eff_perm) {
       if (too_small > 0)
-        msgs <- c(msgs, sprintf("[PERM][WARN] %d block(s) have < %d core rows; those rows will be frozen (no permutation).",
+        msgs <- c(msgs, sprintf("[WARN] %d block(s) have < %d core rows; those rows will be frozen (no permutation).",
                                 too_small, thresholds$min_core_size))
       if (no_var > 0)
-        msgs <- c(msgs, sprintf("[PERM][WARN] %d block(s) show no within-block variation in the contrasted variable; those rows will be frozen.",
+        msgs <- c(msgs, sprintf("[WARN] %d block(s) show no within-block variation in the contrasted variable; those rows will be frozen.",
                                 no_var))
       if (exp(min(eff_perm_log, 50)) < thresholds$min_eff_perm)
-        msgs <- c(msgs, sprintf("[PERM][WARN] Effective number of permutations is very small (~exp(%.1f)). Consider relaxing blocks (drop/merge a blocking factor) or a wild bootstrap.",
+        msgs <- c(msgs, sprintf("[WARN] Effective number of permutations is very small (~exp(%.1f)). Consider relaxing blocks (drop/merge a blocking factor) or a wild bootstrap.",
                                 eff_perm_log))
       
       # List problematic blocks with combinations if available
       if (length(ps$prob_idx)) {
-        msgs <- c(msgs, "[PERM] Problematic blocks (examples):")
+        msgs <- c(msgs, " Problematic blocks (examples):")
         if (!is.null(ps$comb_df)) {
           apply(ps$comb_df, 1, function(row) {
             msgs <<- c(msgs, sprintf("       %s: n_core=%s; levels=%s%s; combo: %s",
@@ -695,7 +707,7 @@ select_minimal_meta <- function(meta, formula, drop_unused_levels = TRUE, extra 
       # Aggregate which factor levels dominate problematic blocks (to guide dropping)
       if (!is.null(block_factors) && length(block_factors) &&
           all(block_factors %in% names(meta)) && length(ps$prob_idx)) {
-        msgs <- c(msgs, "[PERM] Factor levels most often appearing in problematic blocks:")
+        msgs <- c(msgs, " Factor levels most often appearing in problematic blocks:")
         prob_blocks <- ps$summary$block[ps$prob_idx]
         # For each block, pick a representative row to read factor levels
         rep_row <- vapply(prob_blocks, function(b) which(blocks == b)[1], integer(1))

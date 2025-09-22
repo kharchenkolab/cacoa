@@ -335,19 +335,43 @@ static inline void tally_perm(double obs, double perm, int alt, int& ge, int& le
   else if (alt == 1) { if (perm >= obs) ge++; }
   else { if (perm <= obs) le++; }
 }
+// Replace the old helper with this version
 static inline double z_from_p(double p, int alt, double obs, double med_perm) {
-  // p already has add-one smoothing and lies in (0,1)
-  if (!(p > 0.0) || !(p < 1.0)) return NA_REAL;
-  if (alt == 0) {
-    double sgn = (obs >= med_perm) ? 1.0 : -1.0;
+  // Handle boundary / invalid p explicitly
+  if (!std::isfinite(p)) return NA_REAL;
+  
+  // If add-one p-value hits the upper boundary (no evidence in the tested tail),
+  // return 0 instead of NA/Inf.
+  if (p >= 1.0) return 0.0;
+  
+  // With add-one, p should never be 0, but guard anyway:
+  if (p <= 0.0) {
+    // Map to a very large finite z with the correct direction.
+    // (Users almost never hit this with add-one.)
+    const double p_eff = 1e-16;
+    if (alt == 0) {
+      double zmag = R::qnorm(1.0 - p_eff/2.0, 0.0, 1.0, 1, 0);
+      double sgn  = (obs >= med_perm) ? 1.0 : -1.0;
+      return sgn * zmag;
+    } else if (alt == 1) {
+      return R::qnorm(1.0 - p_eff, 0.0, 1.0, 1, 0);
+    } else {
+      return -R::qnorm(1.0 - p_eff, 0.0, 1.0, 1, 0);
+    }
+  }
+  
+  // Regular case: 0 < p < 1
+  if (alt == 0) { // two-sided: sign by location vs permutation median
     double zmag = R::qnorm(1.0 - p/2.0, 0.0, 1.0, 1, 0);
+    double sgn  = (obs >= med_perm) ? 1.0 : -1.0;
     return sgn * zmag;
-  } else if (alt == 1) {
-    return R::qnorm(1.0 - p, 0.0, 1.0, 1, 0);  // upper-tail
-  } else {
-    return -R::qnorm(1.0 - p, 0.0, 1.0, 1, 0); // lower-tail
+  } else if (alt == 1) { // greater: upper-tail
+    return R::qnorm(1.0 - p, 0.0, 1.0, 1, 0);
+  } else {               // less: lower-tail
+    return -R::qnorm(1.0 - p, 0.0, 1.0, 1, 0);
   }
 }
+
 
 /*** =========================== Main entry =============================== ***/
 

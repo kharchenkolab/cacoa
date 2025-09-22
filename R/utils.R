@@ -19,18 +19,6 @@ rblapply <- function(list, ids, func) {
   return(bind_rows(lapply(list, rblapply, tail(ids, -1), func), .id=ids[1]))
 }
 
-
-# Residualize for Freedman-Lane (no add-back)
-# Uses qrZ computed once. If qrZ is NULL, returns inputs unchanged.
-#' @keywords internal
-residualizeForFL <- function(y, qrZ, X) {
-  X <- as.matrix(X)
-  if (is.null(qrZ)) return(list(y.r = y, X.r = X))
-  y.r <- qr.resid(qrZ, y)
-  X.r <- qr.resid(qrZ, X)
-  list(y.r = y.r, X.r = X.r)
-}
-
 # block randomization 
 #' @keywords internal
 permuteWithinBlocks <- function(v, blocks) {

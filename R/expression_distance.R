@@ -12,8 +12,9 @@ NULL
 #' @param cell.groups Named clustering/annotation factor with cell names
 #' @param dist what distance measure to use: 'JS' - Jensen-Shannon divergence (default), 'cor' - Pearson's linear correlation on log transformed values
 #' @param dist.type one of "shift" (default), "total", or "var"
-#' @param perm.method permutation method: "freedman-lane" (default) or "full"
-#' @param block.id Optional column in `sample.meta` specifying blocks for restricted randomizations
+#' @param perm.method permutation method: "freedman-lane" (default) or "block"
+#' @param block.id Optional column in `sample.meta` specifying blocks for restricted randomizations if perm.method="block"
+
 #' @param n.cores number of cores (default=1)
 #' @param verbose (default=FALSE)
 #' @return List of distances per cell type, distance matrices, sample groups, cell types, pvalues, and adjusted p-values.
@@ -21,7 +22,7 @@ NULL
 estimateExpressionChange <- function(cm.per.type, sample.meta, cell.groups, sample.groups, sample.id = NULL,
                                      sample.per.cell, formula = NULL, contrast = NULL, block.id = NULL,
                                      dist = "cor", dist.type = c("shift", "total", "var"), 
-                                     gene.selection = "wilcox", perm.method = c("freedman-lane", "full"), 
+                                     gene.selection = "wilcox", perm.method = c("freedman-lane", "block"), 
                                      n.permutations = 1000, p.adjust.method = "BH", trim = 0.2, 
                                      top.n.genes = NULL, n.pcs = NULL, n.cores = 1, verbose = TRUE, ...) {
   dist.type <- match.arg(dist.type)
@@ -56,6 +57,9 @@ estimateExpressionChange <- function(cm.per.type, sample.meta, cell.groups, samp
                                  formula = formula, sample.id = sample.id, contrast = contrast)
                                 attr(dist.mat, "n.cells") <- sample.type.table[ct, rownames(cm.norm)]
 
+                                dists = subsetDistanceMatrix(dist.mat, sample.groups, cross.factor=TRUE, build.df=FALSE)
+                                cross.rows <- which(outer(rownames(dist.mat), rownames(dist.mat), function(a,b) sample.groups[a] != sample.groups[b]))
+
                                 # model matrices and pairwise distances
                                 sample.meta.df.ct <- sample.meta.df[rownames(dist.mat), , drop = FALSE]
                                 px <- buildPairDesignMatrices(sample.meta = sample.meta.df.ct,
@@ -66,14 +70,14 @@ estimateExpressionChange <- function(cm.per.type, sample.meta, cell.groups, samp
 
                                 # Linear models and Permutations
                                 res <- performLMPermutations(y=y, x=px, n.permutations=n.permutations, perm.method=perm.method, 
-                                                             block=TRUE, core.only=TRUE)
+                                                             block=TRUE, core.only=TRUE, cross.rows= cross.rows)
 
                                 # R^2 for each term
                                 groups <- makeGroupsPair(px$model$F)
                                 r2.df <- estimateR2PerTerm(px$model$F, y, groups)
                                 r2.df <- r2.df[-grepl("Intercept", r2.df$term), ]
 
-                                list(res = res, dist.mat = dist.mat, dists = res$yadj, r2 = r2.df)
+                                list(res = res, dist.mat = dist.mat, dists = res$yadj, r2 = r2.df, model.diag=px$model.diag)
                  }, progress = verbose, n.cores = n.cores.inner, mc.preschedule = TRUE, mc.allow.recursive = TRUE, fail.on.error = TRUE)
 
   if (verbose) message("Done!\n")
@@ -81,7 +85,8 @@ estimateExpressionChange <- function(cm.per.type, sample.meta, cell.groups, samp
   summary <- summarizeLMResults(res.per.type, adj.method=p.adjust.method)
 
   list(results= summary$results, pvalues= summary$pvalues, padjust= summary$padjust, perm.method = perm.method, dist.type = dist.type, dists.per.type = summary$dists.per.type, 
-       p.dist.info = summary$p.dist.info, r2 = summary$r2, cell.groups=cell.groups)
+       p.dist.info = summary$p.dist.info, r2 = summary$r2, cell.groups=cell.groups, model.diagnostics = lapply(res.per.type, `[[`, "model.diag"))
+
 }
 
 
@@ -103,7 +108,6 @@ estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, to
       n.pcs <- min.dim
       warning("n.pcs is too large. Setting it to maximal allowed value ", min.dim)
     }
-
 
   cm.norm <- getTopPCs(cm.norm, n.pcs = n.pcs)
 
@@ -135,7 +139,7 @@ estimateExpressionShiftsForCellType <- function(cm.norm, sample.groups, dist, to
 }
 
 #' @keywords internal
-performLMPermutations <- function(y, x, n.permutations = 1000, perm.method = "freedman-lane", block = TRUE, core.only = TRUE, ids = NULL) {
+performLMPermutations <- function(y, x, n.permutations = 1000, perm.method = "freedman-lane", block = TRUE, core.only = TRUE, ids = NULL, cross.rows = NULL) {
   # blocks
   rows <- rep(TRUE, nrow(x$model$F))
   blocks.use <- NULL
@@ -149,17 +153,20 @@ performLMPermutations <- function(y, x, n.permutations = 1000, perm.method = "fr
   adj <- list()
 
   # fitting within permutation loops
-  if (perm.method == "full") {
+  if (perm.method == "block") {
     fit.full <- lm.fit(x$model$F, y[rows])
     betaF <- fit.full$coefficients; betaF[!is.finite(betaF)] <- 0
     stat.obs <- filterContrastFit(betaF, x$model$contrast.F)
 
+    # add fit for yhat values. 
+
     yhat.full <- as.numeric(x$model$F %*% betaF)  # fitted values in full space: distances with nuisance effects removed
     y.resid <- y[rows] - yhat.full # unexplained (full space) for qc/model check
-    yadj <- yhat.full # still has contrast non-participating signal + random noise
+    yadj <- yhat.full[cross.rows] # still has contrast non-participating signal + random noise
 
     for (b in seq_len(B)) {
-      fit.perm <- lm.fit(x = x$model$F, y = permuteWithinBlocks(y, blocks.use))
+      y.perm <- permuteWithinBlocks(y, blocks.use)
+      fit.perm <- lm.fit(x = x$model$F, y = y.perm)
       stats.perm[b] <- filterContrastFit(fit.perm$coefficients, x$model$contrast.F)
     }
     stats.perm <- stats.perm[is.finite(stats.perm)]
@@ -175,13 +182,13 @@ performLMPermutations <- function(y, x, n.permutations = 1000, perm.method = "fr
     X.r.use <- rz$X.r[rows, , drop = FALSE]
     y.r.use <- rz$y.r[rows]
 
-    yadj <- y.r.use # distances with all nuisance effects removed; still contain the contrast signal and random noise
+    yadj <- y.r.use[cross.rows] # distances with all nuisance effects removed; still contain the contrast signal and random noise
     y.resid <- y.r.use - as.numeric(X.r.use %*% fit.core$coefficients)  # unexplained (FL space) for qc/model check
 
     for (b in seq_len(B)) {
-      y.perm <- permuteWithinBlocks(y.r.use, blocks.use)
+      y.perm <- sample(y.r.use)
       fit.perm <- lm.fit(X.r.use, y.perm)
-      stats.perm[b] <- as.numeric(crossprod(fit.perm$coefficients, x$model$contrast.X))
+      stats.perm[b] <- filterContrastFit(fit.perm$coefficients, x$model$contrast.X)
     }
 
     stats.perm <- stats.perm[is.finite(stats.perm)]
@@ -224,292 +231,93 @@ subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df
 }
 
 
-###################### Pair Metadata functions #########################
 
-# Prepare pair-level design for modeling lower-tri distances
-#
-# Builds per-pair metadata (factor pairs "AA","AB",...; numeric diffs |xi-xj|),
-# constructs a pair-level contrast from a sample-level triplet (var, alt, ref)
-# according to dist.type, and calls `prepare_design()` to produce F, X, Z, qrZ,
-# contrast vectors, core.rows, and blocks. Returns the (i,j) index table so you
-# can vectorize ANY distance matrix later in the same order.
-#
-# @param meta data.frame of per-sample covariates; row order defines sample order
-# @param triplet character triplet c(var, alt, ref) (or named var/alt/ref)
-# @param dist.type one of "shift","total","var" (pair-level contrast form)
-# @param block.vars optional character vector to override permutation blocks
-# @param na.action NA handler for model.matrix
-# @return list with:
-#   - pairs: data.frame of (i,j) indices (1-based) in lower-tri order
-#   - pair.meta: data.frame of per-pair covariates
-#   - prep: design list from buildDesignMatrices() (F, X, Z, qrZ, contrast.F/.X, ...)
+###################### Additional fitting functions #########################
+
+## Compute unique R^2 for each term/group in a linear model
+# - F: full model matrix (n x p)
+# - y: numeric response vector (length n)
+# - groups: list of character vectors, each naming columns of F that form a term/group. compute using .makeGroupsPair() or similar.
 #' @keywords internal
+estimateR2PerTerm <- function(F, y, groups = NULL) {
+    stopifnot(is.matrix(F) || is.data.frame(F))
+    F <- as.matrix(F)
+    y <- as.numeric(y)
+    has.intercept <- "(Intercept)" %in% colnames(F)
+    
+    # Total Sum of Squares (center if intercept, else uncentered)
+    TSS <- if (has.intercept) sum((y - mean(y))^2) else sum(y^2)
+    if (TSS <= 0) stop("TSS is zero; cannot compute R^2.")
 
-buildPairDesignMatrices <- function(sample.meta, triplet,
-                                dist.type = c("shift","total","var"),
-                                block.vars = NULL,
-                                na.action = stats::na.pass) {
-  stopifnot(is.data.frame(sample.meta))
-  dist.type <- match.arg(dist.type)
-  
-  # 1) Indices for lower triangle, derived from nrow(meta)
-  n   <- nrow(sample.meta)
-  idx <- lowerTriIndices(n)
+    # Full model SSE and rank (for reference)
+    SSE.full <- getSSE(F, y)
+    R2.full  <- 1 - SSE.full / TSS
+    rank.full <- qr(F)$rank
 
-  # 2) Pair-level metadata from sample-level meta
-  pair.meta <- pairifyMeta(sample.meta, idx)
-
-  # 3) Triplet (var, alt, ref) → pair-level contrast weights over AA/AB/BB
-  tr <- parseTriplet(triplet)                # var, alt, ref
-  if (!(tr$var %in% names(sample.meta)))
-    stop("Triplet 'var' not found in meta: ", tr$var)
-
-  f.levels <- levels(factor(sample.meta[[tr$var]]))
-  if (!all(c(tr$ref, tr$alt) %in% f.levels))
-    stop("alt/ref levels not found in meta[['", tr$var, "']]: ",
-         tr$alt, ", ", tr$ref)
-
-  weights <- pairContrastWeights(tr$ref, tr$alt, dist.type, level.order = f.levels)
-
-  # 4) Build pair-level variable name for the contrasted factor (e.g., "group_pair")
-  pair.var <- paste0(tr$var, "_pair")
-  if (!(pair.var %in% names(pair.meta)))
-    stop("Pair variable not found in pair_meta: ", pair.var,
-         " (did '", tr$var, "' exist and was it factor-like?)")
-
-  # 5) Call buildDesignMatrices() on pair-level metadata
-  prep <- buildDesignMatrices(
-    sample.meta       = pair.meta,
-    contrast   = list(var = pair.var, weights = weights),
-    #nuisance   = setdiff(names(pair.meta), pair.var),  # core is implicitly pair.var
-    core.extra = NULL,
-    block.vars = block.vars,
-    na.action  = na.action
-  )
-
-  list(pairs = idx, pair.meta = pair.meta, model = prep)
+    # Default groups = each column as its own term
+    if (is.null(groups)) {
+        groups <- as.list(colnames(F))
+        names(groups) <- colnames(F)
+    } else {
+        # sanity: drop any names not present
+        groups <- lapply(groups, function(v) intersect(v, colnames(F)))
+        ok <- lengths(groups) > 0
+        if (!all(ok)) warning("Some groups had no matching columns in F and were dropped.")
+        groups <- groups[ok]
+    }
+    
+    # Compute unique R^2 by refitting without each group's columns
+    out <- lapply(names(groups), function(g) {
+        cols.g <- groups[[g]]
+        cols.other <- setdiff(colnames(F), cols.g)
+        if (!length(cols.other)) {
+            # Removing the only columns leaves empty model: SSE_other = TSS (if no intercept),
+            # or SSE w.r.t intercept-only. Handle gracefully:
+            F.other <- matrix(1, nrow(F), 1); colnames(F.other) <- "(Intercept*)"
+            SSE.other <- if (has.intercept) sum((y - mean(y))^2) else sum(y^2)
+            rank.other <- 1L
+        } else {
+            F.other <- F[, cols.other, drop = FALSE]
+            SSE.other <- getSSE(F.other, y)
+            rank.other <- qr(F.other)$rank
+        }
+        R2.unique <- max(0, (SSE.other - SSE.full) / TSS)  # clip tiny negatives from numeric noise
+        data.frame(term = g,
+                   #k = length(cols.g),
+                   #rank.minus = rank.other,
+                   R2.unique = R2.unique,
+                   R2.full = R2.full,
+                   stringsAsFactors = FALSE)
+    })
+    do.call(rbind, out)
 }
 
-#' Return lower-triangular (row, col) index pairs for an n x n matrix
-#' @param n integer number of samples
-#' @return data.frame with columns i, j (1-based), in row-major lower-tri order
+# Fit and get sum of squares (SSE) robustly (treat NAs in coef as 0 via lm.fit behavior)
 #' @keywords internal
-lowerTriIndices <- function(n) {
-  ij <- which(lower.tri(matrix(NA_real_, n, n)), arr.ind = TRUE)
-  data.frame(i = ij[,1], j = ij[,2])
-}
-
-#' Build pair-level metadata from sample-level metadata in lower-tri order
-#' @param meta data.frame of per-sample covariates (rows correspond to d's order)
-#' @param idx data.frame with columns i, j (lower-tri indices)
-#' @return data.frame of per-pair covariates
-#' @keywords internal
-pairifyMeta <- function(meta, idx) {
-  stopifnot(is.data.frame(meta), all(c("i","j") %in% names(idx)))
-  n <- nrow(meta)
-  stopifnot(all(idx$i >= 1 & idx$i <= n & idx$j >= 1 & idx$j <= n & idx$i > idx$j))
-  
-  out <- list()
-  for (v in names(meta)) {
-    x <- meta[[v]]
-    if (is.factor(x) || is.character(x) || is.logical(x)) {
-      f <- factor(x)
-      out[[paste0(v, "_pair")]] <- factor(pairCodeFactor(f, idx$i, idx$j))
-    } else if (is.numeric(x)) {
-      out[[paste0(v, "_diff")]] <- pairDiffNumeric(x, idx$i, idx$j)
-    } else {
-      # unsupported type → coerce to factor then pair-code
-      f <- factor(as.character(x))
-      out[[paste0(v, "_pair")]] <- factor(pairCodeFactor(f, idx$i, idx$j))
-    }
-
-estimateExpressionShiftsByDistMat <- function(dist.mat, sample.groups, formula, sample.meta.df = NULL, contrast = NULL, norm.type = c("both", "ref", "none"),
-                                              ref.level = NULL, target.level = NULL, return.type = c("cross", "target"), verbose = FALSE) {
-  norm.type <- match.arg(norm.type)
-  return.type <- match.arg(return.type)
-
-  if (((norm.type == "ref") || (return.type == "target")) && is.null(ref.level))
-    stop("ref.level has to be provided for norm.type='ref' or return.type='target'")
-
-  sample.groups %<>% .[rownames(dist.mat)]
-    if (norm.type == "both") {
-    sg1 <- levels(sample.groups)[1]
-    m1 <- outer(sample.groups, sample.groups, function(a, b) (a == sg1) & (b == sg1))
-    m2 <- outer(sample.groups, sample.groups, function(a, b) (a != sg1) & (b != sg1))
-    diag(m1) <- NA; diag(m2) <- NA
-    norm.const <- (stats::median(dist.mat[m1], na.rm = TRUE) + stats::median(dist.mat[m2], na.rm = TRUE)) / 2
-    dist.mat.norm <- dist.mat - norm.const
-
-  } else if (norm.type == "ref") {
-    if (is.null(ref.level))  ref.level  <- levels(sample.groups)[1]
-    if (is.null(target.level)) { target.level <- setdiff(levels(sample.groups), ref.level)[1] }
-
-    rr <- outer(sample.groups, sample.groups, function(a, b) a == ref.level    & b == ref.level)
-    tt <- outer(sample.groups, sample.groups, function(a, b) a == target.level & b == target.level)
-    diag(rr) <- FALSE
-    diag(tt) <- FALSE
-
-    med <- function(x) stats::median(x, na.rm = TRUE)
-    mR  <- if (any(rr)) med(dist.mat[rr]) else 0
-    # ref group scale (MAD/SD, then to 1)
-    sR <- if (any(rr)) stats::mad(dist.mat[rr], center = 0, constant = 1, na.rm = TRUE) else 0
-    if (!is.finite(sR) || sR <= 0) sR <- stats::sd(dist.mat[rr], na.rm = TRUE)
-    if (!is.finite(sR) || sR <= 0) sR <- 1
-
-    if (any(tt)) { # Target group scale
-    sT <- stats::mad(dist.mat[tt], center = 0, constant = 1, na.rm = TRUE)
-    if (!is.finite(sT) || sT <= 0) sT <- stats::sd(dist.mat[tt], na.rm = TRUE)
-    if (!is.finite(sT) || sT <= 0) sT <- sR
-    } else {
-    sT <- sR
-    }
-    s.vec <- ifelse(sg == ref.level, sR, sT)
-    eps <- 1e-8
-    scale.mat  <- outer(s.vec, s.vec, function(a, b) sqrt(pmax(a, eps) * pmax(b, eps)))
-    center.mat <- matrix(mR, nrow(dist.mat), ncol(dist.mat))
-    dist.mat.norm <- (dist.mat - center.mat) / scale.mat
-  } else {
-    dist.mat.norm <- dist.mat
-  }
-
-  samples <- rownames(dist.mat)
-
-  if (!is.null(sample.meta.df)) {
-    if (!is.data.frame(sample.meta.df) || is.null(rownames(sample.meta.df))) {
-      stop("sample.meta.df must be a data.frame with samples as row names.")
-    }
-    sample.meta.df.ct <- sample.meta.df[samples, , drop = FALSE]
-    model.mat <- buildModelMatrix(sample.meta = sample.meta.df.ct, formula = formula, contrast = contrast)
-    # pairwise distances
-    dist.df <- computePairwiseDistances(dist.mat, model.mat, samples)
-
-    # backtrace *_diff columns to original terms (no intercept in model.mat)
-    assign.vec  <- attr(model.mat, "assign")
-    term.labels <- attr(terms(formula), "term.labels")
-    col2term    <- setNames(term.labels[assign.vec], colnames(model.mat))
-    diff.term.map <- setNames(unname(col2term), paste0(names(col2term), "_diff"))
-
-    return(list(dist.df = dist.df, dist.mat.norm = dist.mat.norm, diff.term.map = diff.term.map))
+getSSE <- function(X, y) {
+    fit <- lm.fit(X, y)
+    bhat <- fit$coefficients; bhat[!is.finite(bhat)] <- 0
+    res  <- y - as.numeric(X %*% bhat)
+    sum(res^2)
   }
   as.data.frame(out, stringsAsFactors = TRUE)
 }
 
-#' Symmetric pair-code for a factor: "AA", "AB", "BB" (AB ≡ BA)
-#' Uses the factor's level order to define A<B for concatenation.
-#' @param f factor vector (length n)
-#' @param i integer indices for first sample in each pair
-#' @param j integer indices for second sample in each pair
-#' @return character vector of codes ("AA","AB",...)
-#' @keywords internal
-pairCodeFactor <- function(f, i, j) {
-  lev <- levels(f); fi <- as.integer(f[i]); fj <- as.integer(f[j])
-  check.na <- is.na(fi) | is.na(fj)
-  lo <- pmin(fi, fj); hi <- pmax(fi, fj)
-  code <- paste0(lev[lo], lev[hi])
-  code[check.na] <- NA_character_
-  code
-}
+###################### Expression distance helper functions #########################
 
-#' Symmetric numeric pair difference |x_i - x_j|
-#' @param x numeric vector (length n)
-#' @param i, j integer index vectors
-#' @return numeric vector of absolute differences
+# Vectorize the lower triangle of a square matrix using a precomputed index order
+# If pairs is NULL, use standard lower.tri order for that matrix.
 #' @keywords internal
-pairDiffNumeric <- function(x, i, j) {
-  xi <- x[i]; xj <- x[j]
-  out <- abs(xi - xj)
-  out
-}
-
-#' Parse a sample-level "triplet" contrast specification
-#' @param triplet list(var="<factor>", ref="<A>", alt="<B>")
-#' @return list(var, ref, alt)
-#' @keywords internal
-parseTriplet <- function(triplet) {
-  stopifnot(length(triplet)==3)
-  triplet <- as.list(triplet)
-  names(triplet) <- c('var','alt','ref')
-  if (triplet$ref == triplet$alt) stop("ref and alt must be different.")
-  list(var = as.character(triplet$var),
-       alt = as.character(triplet$alt),
-       ref = as.character(triplet$ref))
-}
-
-# Translate (ref, alt) + dist.type into pair-level contrast weights
-# - level.order: optional character vector giving the factor's level order
-#   (used to decide the label for the cross pair, e.g., "AB" vs "BA")
-# - Returns a named numeric vector, e.g. c("AA"=-0.5, "AB"=1, "BB"=-0.5)
-#' @keywords internal
-pairContrastWeights <- function(ref, alt, type = c("shift","total","var"), level.order = NULL) {
-  type <- match.arg(type)
-  
-  # Cross label uses factor-level order if provided; otherwise alphabetical
-  two <- c(ref, alt)
-  if (!is.null(level.order)) {
-    ord <- two[order(match(two, level.order))]
+vectorizeLowerTri <- function(d, pairs = NULL) {
+  stopifnot(is.matrix(d), nrow(d) == ncol(d))
+  if (is.null(pairs)) {
+    ij <- which(lower.tri(d), arr.ind = TRUE)
+    return(d[cbind(ij[,1], ij[,2])])
   } else {
-    ord <- sort(two)  # fallback: alphabetical
+    stopifnot(all(c("i","j") %in% names(pairs)),
+              nrow(d) >= max(pairs$i, pairs$j))
+    return(d[cbind(pairs$i, pairs$j)])
   }
-  AB <- paste0(ord[1], ord[2])
-  
-  AA <- paste0(ref, ref)
-  BB <- paste0(alt, alt)
-  
-  if (type == "shift") {
-    w <- c(-0.5, 1, -0.5)
-    names(w) <- c(AA, AB, BB)
-    return(w)
-  } else if (type == "total") {
-    w <- c(-1, 1)
-    names(w) <- c(AA, AB)
-    return(w)
-  } else { # type == "var"
-    w <- c(-1, 1)
-    names(w) <- c(AA, BB)
-    return(w)
-  }
-}
-
-## Generic grouping for pair-level design matrices
-## - collapses all "Var_pair*" columns into one group per Var
-## - maps "Var_pair_contrast" to Var
-## - keeps "(Intercept)" if present
-## - anything else stays as-is (unless include.other=TRUE, then grouped under "Other")
-#' @keywords internal
-makeGroupsPair <- function(M, include.other = FALSE) {
-  stopifnot(!is.null(colnames(M)))
-  cn <- colnames(M)
-  groups <- list()
-  if ("(Intercept)" %in% cn) {
-    groups$Intercept <- "(Intercept)"
-  }
-  # Handle all _pair terms
-  pair.terms <- grep("_pair", cn, value = TRUE)
-  if (length(pair.terms)) {
-    # Extract the variable name before "_pair"
-    varnames <- sub("_pair.*$", "", pair.terms)
-    for (v in unique(varnames)) {
-      cols <- pair.terms[varnames == v]
-      # if there's a collapsed contrast, rename group nicely
-      if (any(grepl("_pair_contrast$", cols))) {
-        groups[[v]] <- cols[grepl("_pair_contrast$", cols)]
-      } else {
-        groups[[v]] <- cols
-      }
-    }
-  }
-
-  # Leftovers (e.g. numeric pair variables not matching _pair)
-  used <- unlist(groups, use.names = FALSE)
-  leftovers <- setdiff(cn, used)
-  if (length(leftovers)) {
-    if (include.other) {
-      groups$Other <- leftovers
-    } else {
-      for (lf in leftovers) groups[[lf]] <- lf
-    }
-  }
-  groups
 }
 ###################### Additional fitting functions #########################
 
@@ -790,22 +598,6 @@ fitCellTypePairwiseDistances <- function(dist.df, ct=NULL, formula = NULL, contr
 
 ###################### Expression distance helper functions #########################
 
-# Vectorize the lower triangle of a square matrix using a precomputed index order
-# If pairs is NULL, use standard lower.tri order for that matrix.
-#' @keywords internal
-vectorizeLowerTri <- function(d, pairs = NULL) {
-  stopifnot(is.matrix(d), nrow(d) == ncol(d))
-  if (is.null(pairs)) {
-    ij <- which(lower.tri(d), arr.ind = TRUE)
-    return(d[cbind(ij[,1], ij[,2])])
-  } else {
-    stopifnot(all(c("i","j") %in% names(pairs)),
-              nrow(d) >= max(pairs$i, pairs$j))
-    return(d[cbind(pairs$i, pairs$j)])
-  }
-}
-
-
 #' @keywords internal
 joinExpressionShiftDfs <- function(dist.df.per.type, sample.groups) {
   dist.df.per.type %<>% .[!sapply(., is.null)]
@@ -1026,7 +818,6 @@ parseDistance <- function(dist, top.n.genes, n.pcs) {
 }
 
 #' @keywords internal
-
 getTopPCs <- function(cm.norm, n.pcs) {
   samp.names <- rownames(cm.norm)
 
@@ -1039,5 +830,4 @@ getTopPCs <- function(cm.norm, n.pcs) {
   cm.norm.p <- pca_project(cm.norm, n.pcs)
   rownames(cm.norm.p) <- samp.names
   return(cm.norm.p)
-
 }

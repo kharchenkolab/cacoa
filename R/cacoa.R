@@ -157,6 +157,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.data.frame(sample.metadata)) stop("sample.metadata must be a data.frame")
 
       # check sample IDs
+
       samp.names <- rownames(sample.metadata)
       if ((is.null(samp.names) || anyNA(samp.names)) && !is.null(sample.id)) {
           if (!sample.id %in% colnames(sample.metadata)) {
@@ -173,6 +174,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
 
       if (is.null(design)) stop("Design formula must be provided")
+
       vd <- validateDesign(formula = design, sample.meta = sample.metadata, contrast = contrast) 
       self$formula <- vd$formula
       self$contrast <- vd$contrast
@@ -181,6 +183,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       self$sample.meta <- subsetMetadata(sample.metadata, self$formula)
       self$model.matrices <- buildDesignMatrices(sample.meta = self$sample.meta, contrast = self$contrast, block.vars = self$block.id)
+
 
       self$sample.id <- sample.id
       self$ref.level <- self$contrast[3]
@@ -284,6 +287,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' Calculate expression shift magnitudes of different cell clusters between conditions,
     #' using pairwise sample-sample distances within each cell type and a linear-model
     #' framework that can account for covariates via a design formula and contrast.
+
     #'
     #' @param cell.groups factor/character Named vector of cell-group labels per cell
     #'   (default = `self$cell.groups`).

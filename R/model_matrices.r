@@ -171,7 +171,7 @@ buildDesignMatrices <- function(sample.meta, # data.frame of covariates (subsett
   
   # Run diagnostics & warnings (includes permutation diagnostics)
   diag <- diagnoseDesign(F = F, X = X, Z = Z, qrZ = qrZ,
-                           meta = meta, blocks = blocks, core.rows = core.rows, ctr = ctr,
+                           meta = sample.meta, blocks = blocks, core.rows = core.rows, ctr = ctr,
                            verbose = TRUE)
 
   list(F = F, X = X, Z = Z, qrZ = qrZ,

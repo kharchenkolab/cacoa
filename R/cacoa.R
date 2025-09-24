@@ -130,7 +130,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' sample.metadata <- data.frame(condition=c("control","control","disease","disease"), batch=c("batch1","batch1","batch2","batch2"), sample=names(con$samples))
     #' sample.id <- "sample"
     #' design <- "~ condition + batch"
-    #' contrast <- c("condition","control","disease")
+    #' contrast <- c("condition","disease", "control")
     #' }
     #' # cell.groups should be a named factor where names are cell names corresponding to cell names in the data object.
     #' # For Conos objects, they should overlap with rownames(con$embedding)
@@ -2178,7 +2178,7 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' cao$estimateDiffCellDensity()
     #' }
     estimateDiffCellDensity=function(type='permutation', adjust.pvalues=NULL, name='cell.density', sample.meta=self$sample.meta, 
-                                     formula=NULL, contrast=NULL, block.id=self$block.id, perm.method=c("full", "freedman-lane"),
+                                     formula=NULL, contrast=NULL, block.id=self$block.id, perm.method=c("block", "freedman-lane"),
                                      n.permutations=400, smooth=TRUE, verbose=self$verbose, n.cores=self$n.cores, ...){
       perm.method <- match.arg(perm.method)
       dens.res <- private$getResults(name, 'estimateCellDensity')
@@ -2214,10 +2214,10 @@ if(!is.null(formula) || !is.null(contrast)) {
                                       n.permutations=n.permutations, n.cores=n.cores, block.id= block.id, perm.method=perm.method)
 
       if(!adjust.pvalues){
-        score <- perm.res %>% .$score
+        score <- perm.res %>% .$z.score
         res <- list(raw=score, formula = formula, contrast = contrast, perm.method=perm.method)
       } else {
-        res <- list(raw=perm.res$score, adj=perm.res %$% adjustZScoresByPermutations(
+        res <- list(raw=perm.res$z.score, adj=perm.res %$% adjustZScoresByPermutations(
             score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores, verbose=verbose,
             l.max=l.max, ...), formula = formula, contrast = contrast, perm.method=perm.method)
       }
@@ -2276,26 +2276,25 @@ if(!is.null(formula) || !is.null(contrast)) {
         scores <- dens.res$diff[[type]]
       }
 
-      cov.idx <- grep(paste0(scores$contrast[1], scores$contrast[3]), rownames(scores[[1]]))
 
       if (is.null(adjust.pvalues)) {
         if (!is.null(scores$adj)) {
-          scores <- scores$adj[cov.idx,]
+          scores <- scores$adj
           adjust.pvalues <- TRUE
         } else {
-          scores <- scores$raw[cov.idx,]
+          scores <- scores$raw
           adjust.pvalues <- FALSE
         }
       } else if (adjust.pvalues) {
-        if (is.null(scores$adj[cov.idx,])) {
+        if (is.null(scores$adj)) {
           warning("Adjusted scores are not estimated. Using raw scores. ",
                   "Please, run estimateCellDensity with adjust.pvalues=TRUE")
-          scores <- scores$raw[cov.idx,]
+          scores <- scores$raw
         } else {
-          scores <- scores$adj[cov.idx,]
+          scores <- scores$adj
         }
       } else {
-        scores <- scores$raw[cov.idx,]
+        scores <- scores$raw
       }
 
       if (dens.res$method == 'graph') {

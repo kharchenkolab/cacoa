@@ -171,7 +171,7 @@ buildDesignMatrices <- function(sample.meta, # data.frame of covariates (subsett
   
   # Run diagnostics & warnings (includes permutation diagnostics)
   diag <- diagnoseDesign(F = F, X = X, Z = Z, qrZ = qrZ,
-                           meta = meta, blocks = blocks, core.rows = core.rows, ctr = ctr,
+                           meta = sample.meta, blocks = blocks, core.rows = core.rows, ctr = ctr,
                            verbose = TRUE)
 
   list(F = F, X = X, Z = Z, qrZ = qrZ,
@@ -183,7 +183,7 @@ buildDesignMatrices <- function(sample.meta, # data.frame of covariates (subsett
      model.diag = diag)
 }
 
-# Residualize for Freedman-Lane (no add-back)
+# Residualize for Freedman-Lane (no add-back) OLD
 # Uses qrZ computed once. If qrZ is NULL, returns inputs unchanged.
 #' @keywords internal
 residualizeForFL <- function(y, qrZ, X) {
@@ -663,7 +663,7 @@ buildPairDesignMatrices <- function(sample.meta, triplet,
   # 5) Call buildDesignMatrices() on pair-level metadata
   prep <- buildDesignMatrices(
     sample.meta       = pair.meta,
-    contrast   = list(var = pair.var, weights = weights),
+    contrast   = list(var = pair.var, weights = weights), 
     #nuisance   = setdiff(names(pair.meta), pair.var),  # core is implicitly pair.var
     core.extra = NULL,
     block.vars = block.vars,

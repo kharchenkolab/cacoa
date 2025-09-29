@@ -130,7 +130,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' sample.metadata <- data.frame(condition=c("control","control","disease","disease"), batch=c("batch1","batch1","batch2","batch2"), sample=names(con$samples))
     #' sample.id <- "sample"
     #' design <- "~ condition + batch"
-    #' contrast <- c("condition","control","disease")
+    #' contrast <- c("condition","disease", "control")
     #' }
     #' # cell.groups should be a named factor where names are cell names corresponding to cell names in the data object.
     #' # For Conos objects, they should overlap with rownames(con$embedding)
@@ -347,11 +347,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' )
     #' }
 estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, formula = NULL,
-                                             contrast = NULL, sample.meta = self$sample.meta, perm.method=c("freedman-lane", "full"), 
+                                             contrast = NULL, sample.meta = self$sample.meta, perm.method=c("freedman-lane", "block"), 
                                              sample.id = self$sample.id, dist = NULL, dist.type = "shift", min.cells.per.sample = 10, 
                                              min.samp.per.type = 2, min.gene.frac = 0.01, genes = NULL, n.pcs = NULL, top.n.genes = NULL,
                                              verbose = self$verbose, n.cores = self$n.cores, name = "expression.shifts", n.permutations = 1000, 
-                                             gene.selection = "wilcox", block.id= self$block.id, ...) {
+                                             gene.selection = "wilcox", block.id= self$block.id, robust.method = c("none", "huber", "winsor"),
+                                             na.mode = "drop", return.residuals = FALSE, return.sampled.stats = FALSE, ...) {
+  perm.method <- match.arg(perm.method)
+  robust.method <- match.arg(robust.method)
+
 if(!is.null(formula) || !is.null(contrast)) {
     vd <- validateDesign(formula = formula, sample.meta = sample.meta, contrast = contrast, verbose = verbose)
     formula  <- vd$formula
@@ -369,7 +373,8 @@ if(!is.null(formula) || !is.null(contrast)) {
   shift.inp <- filterExpressionDistanceInput(count.matrices, cell.groups = cell.groups, sample.per.cell = sample.per.cell,
                                              sample.groups = sample.groups, min.cells.per.sample = min.cells.per.sample,
                                              min.samp.per.type = min.samp.per.type, min.gene.frac = min.gene.frac,
-                                             genes = genes, verbose = verbose)
+                                             genes = genes, verbose = verbose) 
+  ## TODO: only filterGenesperCellType within filterExpressionDistanceInput uses sample.groups, remove after fixing gene.selection methods.
   if (verbose) message("done!\n")
 
   if (!is.null(n.pcs)) {
@@ -390,11 +395,13 @@ if(!is.null(formula) || !is.null(contrast)) {
   self$test.results[[name]] <- shift.inp %$% 
                                   estimateExpressionChange(cm.per.type, sample.groups = sample.groups, cell.groups = cell.groups, 
                                                               sample.meta = sample.meta, sample.per.cell = sample.per.cell, 
-                                                              formula = formula, contrast = contrast, block.id= block.id,
+                                                              formula = formula, contrast = contrast, n.pcs = n.pcs, 
+                                                              robust.method = robust.method, na.mode = na.mode, block.id= block.id,
+                                                              return.residuals = return.residuals, return.sampled.stats = return.sampled.stats,
                                                               dist = dist %||% "cor", dist.type = dist.type, sample.id = sample.id,
-                                                              gene.selection = gene.selection, perm.method= perm.method,
+                                                              gene.selection = gene.selection, perm.method= perm.method, 
                                                               n.permutations = n.permutations, top.n.genes = top.n.genes, 
-                                                              n.pcs = n.pcs, n.cores = n.cores, verbose = verbose, ...)
+                                                              n.cores = n.cores, verbose = verbose, ...)
 
   return(invisible(self$test.results[[name]]))
 },
@@ -2178,7 +2185,7 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' cao$estimateDiffCellDensity()
     #' }
     estimateDiffCellDensity=function(type='permutation', adjust.pvalues=NULL, name='cell.density', sample.meta=self$sample.meta, 
-                                     formula=NULL, contrast=NULL, block.id=self$block.id, perm.method=c("full", "freedman-lane"),
+                                     formula=NULL, contrast=NULL, block.id=self$block.id, perm.method=c("block", "freedman-lane"),
                                      n.permutations=400, smooth=TRUE, verbose=self$verbose, n.cores=self$n.cores, ...){
       perm.method <- match.arg(perm.method)
       dens.res <- private$getResults(name, 'estimateCellDensity')
@@ -2214,10 +2221,10 @@ if(!is.null(formula) || !is.null(contrast)) {
                                       n.permutations=n.permutations, n.cores=n.cores, block.id= block.id, perm.method=perm.method)
 
       if(!adjust.pvalues){
-        score <- perm.res %>% .$score
+        score <- perm.res %>% .$z.score
         res <- list(raw=score, formula = formula, contrast = contrast, perm.method=perm.method)
       } else {
-        res <- list(raw=perm.res$score, adj=perm.res %$% adjustZScoresByPermutations(
+        res <- list(raw=perm.res$z.score, adj=perm.res %$% adjustZScoresByPermutations(
             score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores, verbose=verbose,
             l.max=l.max, ...), formula = formula, contrast = contrast, perm.method=perm.method)
       }
@@ -2276,26 +2283,25 @@ if(!is.null(formula) || !is.null(contrast)) {
         scores <- dens.res$diff[[type]]
       }
 
-      cov.idx <- grep(paste0(scores$contrast[1], scores$contrast[3]), rownames(scores[[1]]))
 
       if (is.null(adjust.pvalues)) {
         if (!is.null(scores$adj)) {
-          scores <- scores$adj[cov.idx,]
+          scores <- scores$adj
           adjust.pvalues <- TRUE
         } else {
-          scores <- scores$raw[cov.idx,]
+          scores <- scores$raw
           adjust.pvalues <- FALSE
         }
       } else if (adjust.pvalues) {
-        if (is.null(scores$adj[cov.idx,])) {
+        if (is.null(scores$adj)) {
           warning("Adjusted scores are not estimated. Using raw scores. ",
                   "Please, run estimateCellDensity with adjust.pvalues=TRUE")
-          scores <- scores$raw[cov.idx,]
+          scores <- scores$raw
         } else {
-          scores <- scores$adj[cov.idx,]
+          scores <- scores$adj
         }
       } else {
-        scores <- scores$raw[cov.idx,]
+        scores <- scores$raw
       }
 
       if (dens.res$method == 'graph') {

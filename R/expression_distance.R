@@ -164,26 +164,6 @@ subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df
   return(na.omit(dist.mat[selection.mask]))
 }
 
-
-###################### Expression distance helper functions #########################
-
-# Vectorize the lower triangle of a square matrix using a precomputed index order
-# If pairs is NULL, use standard lower.tri order for that matrix.
-#' @keywords internal
-vectorizeLowerTri <- function(d, pairs = NULL) {
-  stopifnot(is.matrix(d), nrow(d) == ncol(d))
-  if (is.null(pairs)) {
-    ij <- which(lower.tri(d), arr.ind = TRUE)
-    return(d[cbind(ij[,1], ij[,2])])
-  } else {
-    stopifnot(all(c("i","j") %in% names(pairs)),
-              nrow(d) >= max(pairs$i, pairs$j))
-    return(d[cbind(pairs$i, pairs$j)])
-  }
-}
-
-###################### Expression distance helper functions #########################
-
 #' @keywords internal
 joinExpressionShiftDfs <- function(dist.df.per.type, sample.groups) {
   dist.df.per.type %<>% .[!sapply(., is.null)]

@@ -183,7 +183,7 @@ buildDesignMatrices <- function(sample.meta, # data.frame of covariates (subsett
      model.diag = diag)
 }
 
-# Residualize for Freedman-Lane (no add-back)
+# Residualize for Freedman-Lane (no add-back) OLD
 # Uses qrZ computed once. If qrZ is NULL, returns inputs unchanged.
 #' @keywords internal
 residualizeForFL <- function(y, qrZ, X) {
@@ -192,26 +192,6 @@ residualizeForFL <- function(y, qrZ, X) {
   y.r <- qr.resid(qrZ, y)
   X.r <- qr.resid(qrZ, X)
   list(y.r = y.r, X.r = X.r)
-}
-
-# Mask-aware: handles NA by recomputing qr(Z) on the kept rows.
-# y: vector or matrix (rows = rows_core); keep: logical rows_core-length
-residualizeForFLMasked <- function(y, X, Z, keep) {
-  y <- as.matrix(y); X <- as.matrix(X)
-  if (!any(keep)) return(list(y.r = y[0, , drop = FALSE],
-                              X.r = X[0, , drop = FALSE],
-                              qrZ = NULL))
-  if (is.null(Z) || ncol(Z) == 0L) {
-    return(list(y.r = y[keep, , drop = FALSE],
-                X.r = X[keep, , drop = FALSE],
-                qrZ = NULL))
-  }
-  qrZ_sub <- qr(as.matrix(Z[keep, , drop = FALSE]), LAPACK = TRUE)
-  list(
-    y.r = qr.resid(qrZ_sub, y[keep, , drop = FALSE]),
-    X.r = qr.resid(qrZ_sub, X[keep, , drop = FALSE]),
-    qrZ = qrZ_sub
-  )
 }
 
 

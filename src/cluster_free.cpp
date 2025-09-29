@@ -766,3 +766,28 @@ std::vector<std::vector<int>> mapIds(std::vector<std::vector<int>> ids_vec, std:
 
     return res_ids;
 }
+
+using Eigen::MappedSparseMatrix;
+
+// [[Rcpp::export]]
+Rcpp::List estimateCellExpressionShift_export(
+    SEXP cm,
+    Rcpp::IntegerVector sample_per_cell,
+    Rcpp::IntegerVector nn_ids,
+    std::size_t min_n_obs_per_samp,
+    std::string dist = "cosine",
+    bool log_vecs = true) {
+
+  MappedSparseMatrix<double> cm_map = Rcpp::as<MappedSparseMatrix<double>>(cm);
+
+  std::vector<int> sample_vec(sample_per_cell.begin(), sample_per_cell.end());
+  std::vector<int> nn_vec(nn_ids.begin(), nn_ids.end());
+
+  CFShiftResult res = estimateCellExpressionShift(
+      cm_map, sample_vec, nn_vec, min_n_obs_per_samp, dist, log_vecs);
+
+  return Rcpp::List::create(
+      Rcpp::Named("dists")  = Rcpp::wrap(res.dists),
+      Rcpp::Named("s1_ids") = Rcpp::wrap(res.s1_ids),  // 0-based
+      Rcpp::Named("s2_ids") = Rcpp::wrap(res.s2_ids)); // 0-based
+}

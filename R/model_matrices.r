@@ -194,6 +194,26 @@ residualizeForFL <- function(y, qrZ, X) {
   list(y.r = y.r, X.r = X.r)
 }
 
+# Mask-aware: handles NA by recomputing qr(Z) on the kept rows.
+# y: vector or matrix (rows = rows_core); keep: logical rows_core-length
+residualizeForFLMasked <- function(y, X, Z, keep) {
+  y <- as.matrix(y); X <- as.matrix(X)
+  if (!any(keep)) return(list(y.r = y[0, , drop = FALSE],
+                              X.r = X[0, , drop = FALSE],
+                              qrZ = NULL))
+  if (is.null(Z) || ncol(Z) == 0L) {
+    return(list(y.r = y[keep, , drop = FALSE],
+                X.r = X[keep, , drop = FALSE],
+                qrZ = NULL))
+  }
+  qrZ_sub <- qr(as.matrix(Z[keep, , drop = FALSE]), LAPACK = TRUE)
+  list(
+    y.r = qr.resid(qrZ_sub, y[keep, , drop = FALSE]),
+    X.r = qr.resid(qrZ_sub, X[keep, , drop = FALSE]),
+    qrZ = qrZ_sub
+  )
+}
+
 
 # Split rows into permutation groups (freeze-only policy). No filtering here.
 # - blocks: factor length n (interaction of nuisance factors)
@@ -663,7 +683,7 @@ buildPairDesignMatrices <- function(sample.meta, triplet,
   # 5) Call buildDesignMatrices() on pair-level metadata
   prep <- buildDesignMatrices(
     sample.meta       = pair.meta,
-    contrast   = list(var = pair.var, weights = weights),
+    contrast   = list(var = pair.var, weights = weights), 
     #nuisance   = setdiff(names(pair.meta), pair.var),  # core is implicitly pair.var
     core.extra = NULL,
     block.vars = block.vars,

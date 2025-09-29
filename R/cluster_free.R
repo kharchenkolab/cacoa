@@ -80,3 +80,156 @@ geneProgramInfoByCluster <- function(clusters, z.scores, min.score=0.05, verbose
   return(list(program.scores=program.scores, genes.per.clust=genes.per.clust, clusters=clusters,
               sim.scores=sim.scores, loading.scores=loading.scores, n.progs=nrow(program.scores)))
 }
+
+
+#' Estimate cluster-free shifts using linear model and permutations
+#' @param cm gene-by-Cell count matrix (dgCMatrix or Matrix), genes x cells
+#' @param sample.per.cell Vector of sample IDs for each cell
+#' @param nns.per.cell List of nearest neighbors for each cell
+#' @param sample.meta Data frame of sample-level metadata
+#' @keywords internal
+estimateClusterFreeShiftsLM <- function(cm, sample.per.cell, nns.per.cell,
+                 sample.meta, contrast, dist = "cor", log.vecs = TRUE,
+                 min.n.obs.per.samp = 2L, dist.type = "shift",
+                 n.cores = 1,
+                 x, n.permutations = 999,
+                 perm.method = c("freedman-lane", "block"),
+                 robust.method = c("none","huber", "winsor"),
+                 na.mode = c("drop", "impute_weak"),
+                 return.sampled.stats = FALSE,
+                 return.residuals = FALSE,
+                 adj.method = "BH",
+                 verbose = FALSE) {
+  perm.method <- match.arg(perm.method)
+  robust.method <- match.arg(robust.method)
+  na.mode <- match.arg(na.mode)
+
+  Y.res <- getResponsePairMatrix(cm, sample.per.cell, nns.per.cell,
+                                dist = dist, log.vecs = log.vecs,
+                                min.n.obs.per.samp = min.n.obs.per.samp,
+                                n.cores = n.cores)
+  Y <- Y.res$Y
+  samples <- Y.res$samples
+  pairs.ij <- Y.res$pairs.ij
+
+  stopifnot(all(rownames(sample.meta) %in% samples))
+  sample.meta <- sample.meta[samples, , drop = FALSE]
+  x <- buildPairDesignMatrices(sample.meta, triplet=contrast, dist.type = "shift")$model
+  
+  res <- performLMPermutations(
+    x, Y, n.permutations = n.permutations,
+    perm.method = perm.method,
+    robust.method = robust.method,
+    na.mode = na.mode,
+    return.sampled.stats = return.sampled.stats,
+    return.residuals = return.residuals,
+    verbose = verbose
+  )
+  names(res$z.score) <- names(res$stat.obs) <- colnames(Y)
+  res
+}
+
+#' Function for computing response pair matrix Y for pairwise sample distances across a set of neighborhoods
+#' @param cm gene-by-Cell count matrix (dgCMatrix or Matrix), t(count.matrices)
+#' @param sample.per.cell Vector of sample IDs for each cell
+#' @param nns.per.cell List of nearest neighbors for each cell
+#' @param dist Distance metric to use (default: "cor")
+#' @param log.vecs Whether to log-transform expression vectors (default: TRUE)
+#' @param min.n.obs.per.samp Minimum number of observations per sample (default: 1)
+#' @examples 
+#' \dontrun{
+#'  b <- getResponsePairMatrix(cm, sample_per_cell, nns.per.cell,
+#'  dist = "cor", log.vecs = TRUE, min.n.obs.per.samp = 3L, n.cores = 5)
+#' }
+#' @keywords internal
+getResponsePairMatrix <- function(cm, sample.per.cell, nns.per.cell,
+                 dist = "cor", log.vecs = TRUE,
+                 min.n.obs.per.samp = 1L,
+                 n.cores = 1) {
+  stopifnot(inherits(cm, "dgCMatrix") || inherits(cm, "Matrix"))
+
+  # samples & sample ids (0..n-1) once
+  samples <- levels(factor(sample.per.cell))
+  n <- length(samples)
+  spc   <- factor(sample.per.cell, levels = samples)
+  samp.0 <- as.integer(spc) - 1L
+  
+  # precompute lower-tri bookkeeping
+  pairs.ij <- lowerTriIJ(n)
+  n.pairs  <- nrow(pairs.ij)
+  # prefix term T[i] = (i-1)*(i-2)/2 used in lt index; length n
+  T.pref <- ((seq_len(n) - 1L) * (seq_len(n) - 2L)) %/% 2L
+  
+  # global -> local col map (use match; faster than named lookup)
+  global.ids <- getGlobalCellIds(colnames(cm))
+  if (anyNA(global.ids)) stop("Couldn't parse global IDs from cm colnames.")
+  # to 1-based local
+  map.to.local.1 <- function(ids.global.0) match(ids.global.0, global.ids)
+  # to 0-based local
+  map.to.local.0 <- function(ids.global.0) {
+  pos.1 <- map.to.local.1(ids.global.0)
+  pos.1 <- pos.1[!is.na(pos.1)]
+  as.integer(pos.1 - 1L)
+  }
+  
+  # worker per neighborhood
+  per.nb <- function(ids.global.0) {
+  ids.local.0 <- map.to.local.0(as.integer(ids.global.0))
+  if (!length(ids.local.0)) return(rep(NA_real_, n.pairs))
+  
+  res <- estimateCellExpressionShift_export( 
+    cm,
+    as.integer(samp.0),                 # 0..n-1 samples
+    as.integer(ids.local.0),            # 0-based local cells
+    min.n.obs.per.samp = as.integer(min.n.obs.per.samp),
+    dist = dist, log.vecs = log.vecs
+  )
+  
+  # normalize possible field names from Rcpp
+  d  <- res[["dists"]]; if (is.null(d))  d  <- res[["dist"]]
+  s.1 <- res[["s1.ids"]]; if (is.null(s.1)) s.1 <- res[["s1"]]
+  s.2 <- res[["s2.ids"]]; if (is.null(s.2)) s.2 <- res[["s2"]]
+  if (is.null(d) || is.null(s.1) || is.null(s.2)) return(rep(NA_real_, n.pairs))
+  
+  keep <- is.finite(d)
+  if (!any(keep)) return(rep(NA_real_, n.pairs))
+  
+  # back to 1-based sample indices and enforce lower-tri (i>j)
+  i <- as.integer(s.1[keep]) + 1L
+  j <- as.integer(s.2[keep]) + 1L
+  i.L <- pmax(i, j); j.L <- pmin(i, j)
+  
+  # compute positions vectorized: pos = T.pref[i.L] + j.L
+  pos <- T.pref[i.L] + j.L
+  
+  y.k <- rep(NA_real_, n.pairs)
+  # write all distances at once (duplicates are rare; last wins)
+  y.k[pos] <- as.numeric(d[keep])
+  y.k
+  }
+  
+  Y.cols <- sccore::plapply(nns.per.cell, per.nb, n.cores = n.cores, progress = TRUE, mc.preschedule = FALSE, 
+                            mc.allow.recursive = TRUE, fail.on.error = FALSE)
+  
+  Y <- do.call(cbind, Y.cols)
+  nbhd.names <- names(nns.per.cell)
+  if (is.null(nbhd.names) || any(!nzchar(nbhd.names))) {
+  nbhd.names <- paste0("cell.", seq_along(nns.per.cell))
+  }
+  colnames(Y) <- nbhd.names
+  rownames(Y) <- paste0("(", pairs.ij$i, ",", pairs.ij$j, ")")
+  list(Y = Y, samples = samples, pairs.ij = pairs.ij)
+}
+
+# helpers
+# trailing digits in "cell.123" → 123
+getGlobalCellIds <- function(cn) as.integer(sub("^.*?(\\d+)$", "\\1", cn))
+  
+# fixed lower-tri row order (i>j). We keep it for rownames only.
+lowerTriIJ <- function(n) {
+  ij <- which(lower.tri(matrix(NA_real_, n, n)), arr.ind = TRUE)
+  data.frame(i = ij[,1], j = ij[,2])
+  }
+  
+# vectorized lower-tri index: for i>j, pos = (i-1)*(i-2)/2 + j  (1-based)
+.lt.index <- function(i, j) ((i - 1L) * (i - 2L)) %/% 2L + j

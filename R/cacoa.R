@@ -347,11 +347,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' )
     #' }
 estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, formula = NULL,
-                                             contrast = NULL, sample.meta = self$sample.meta, perm.method=c("freedman-lane", "full"), 
+                                             contrast = NULL, sample.meta = self$sample.meta, perm.method=c("freedman-lane", "block"), 
                                              sample.id = self$sample.id, dist = NULL, dist.type = "shift", min.cells.per.sample = 10, 
                                              min.samp.per.type = 2, min.gene.frac = 0.01, genes = NULL, n.pcs = NULL, top.n.genes = NULL,
                                              verbose = self$verbose, n.cores = self$n.cores, name = "expression.shifts", n.permutations = 1000, 
-                                             gene.selection = "wilcox", block.id= self$block.id, ...) {
+                                             gene.selection = "wilcox", block.id= self$block.id, robust.method = c("none", "huber", "winsor"),
+                                             na.mode = "drop", return.residuals = FALSE, return.sampled.stats = FALSE, ...) {
+  perm.method <- match.arg(perm.method)
+  robust.method <- match.arg(robust.method)
+
 if(!is.null(formula) || !is.null(contrast)) {
     vd <- validateDesign(formula = formula, sample.meta = sample.meta, contrast = contrast, verbose = verbose)
     formula  <- vd$formula
@@ -369,7 +373,8 @@ if(!is.null(formula) || !is.null(contrast)) {
   shift.inp <- filterExpressionDistanceInput(count.matrices, cell.groups = cell.groups, sample.per.cell = sample.per.cell,
                                              sample.groups = sample.groups, min.cells.per.sample = min.cells.per.sample,
                                              min.samp.per.type = min.samp.per.type, min.gene.frac = min.gene.frac,
-                                             genes = genes, verbose = verbose)
+                                             genes = genes, verbose = verbose) 
+  ## TODO: only filterGenesperCellType within filterExpressionDistanceInput uses sample.groups, remove after fixing gene.selection methods.
   if (verbose) message("done!\n")
 
   if (!is.null(n.pcs)) {
@@ -390,11 +395,13 @@ if(!is.null(formula) || !is.null(contrast)) {
   self$test.results[[name]] <- shift.inp %$% 
                                   estimateExpressionChange(cm.per.type, sample.groups = sample.groups, cell.groups = cell.groups, 
                                                               sample.meta = sample.meta, sample.per.cell = sample.per.cell, 
-                                                              formula = formula, contrast = contrast, block.id= block.id,
+                                                              formula = formula, contrast = contrast, n.pcs = n.pcs, 
+                                                              robust.method = robust.method, na.mode = na.mode, block.id= block.id,
+                                                              return.residuals = return.residuals, return.sampled.stats = return.sampled.stats,
                                                               dist = dist %||% "cor", dist.type = dist.type, sample.id = sample.id,
-                                                              gene.selection = gene.selection, perm.method= perm.method,
+                                                              gene.selection = gene.selection, perm.method= perm.method, 
                                                               n.permutations = n.permutations, top.n.genes = top.n.genes, 
-                                                              n.pcs = n.pcs, n.cores = n.cores, verbose = verbose, ...)
+                                                              n.cores = n.cores, verbose = verbose, ...)
 
   return(invisible(self$test.results[[name]]))
 },

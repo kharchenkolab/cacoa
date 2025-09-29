@@ -1048,7 +1048,6 @@ Rcpp::List cpp_fl(const arma::mat& X,
 
   const arma::uword n = X.n_rows, m = Y.n_cols;
 
-  // core mask -> indices (build via std::vector, then convert)
   arma::uvec core_idx;
   if (core_rows_opt.isNotNull()) {
     Rcpp::LogicalVector cr(core_rows_opt);
@@ -1064,6 +1063,7 @@ Rcpp::List cpp_fl(const arma::mat& X,
   // map full row index -> core position (or -1 if not a core row)
   std::vector<int> pos_in_core(n, -1);
   for (arma::uword i=0; i<n_core; ++i) pos_in_core[ core_idx[i] ] = (int)i;
+
 
   // residualize X on FULL Z once 
   arma::mat Xr_full = (Z.n_elem == 0) ? X : residualize_unweighted(X, Z);
@@ -1138,6 +1138,7 @@ Rcpp::List cpp_fl(const arma::mat& X,
   }
 
   // precompute row indices for submat writes
+
   arma::uvec all_resid_rows;
   if (return_residuals) all_resid_rows = arma::regspace<arma::uvec>(0, n_core-1);
   arma::uvec all_stat_rows;

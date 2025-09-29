@@ -142,7 +142,7 @@ performLMPermutations <- function(x, y,
   Y = Y,
   contrast = x$contrast.X,
   core_rows_opt = if (is.null(x$core.rows)) NULL else x$core.rows,  # logical
-  perm_groups_core_opt = x$perm.groups.core,                        # 1-based core space
+  perm_groups_core_opt = NULL,                        # 1-based core space
   n_randomizations = n.permutations,
   alternative = "two-sided",
   return_residuals = TRUE,

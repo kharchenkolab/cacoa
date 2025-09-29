@@ -826,3 +826,15 @@ makeGroupsPair <- function(M, include.other = FALSE) {
   }
   groups
 }
+
+vectorizeLowerTri <- function(d, pairs = NULL) {
+  stopifnot(is.matrix(d), nrow(d) == ncol(d))
+  if (is.null(pairs)) {
+    ij <- which(lower.tri(d), arr.ind = TRUE)
+    return(d[cbind(ij[,1], ij[,2])])
+  } else {
+    stopifnot(all(c("i","j") %in% names(pairs)),
+              nrow(d) >= max(pairs$i, pairs$j))
+    return(d[cbind(pairs$i, pairs$j)])
+  }
+}

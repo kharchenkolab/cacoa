@@ -188,6 +188,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$sample.id <- sample.id
       self$ref.level <- self$contrast[3]
       self$target.level <- self$contrast[2]
+      self$full.meta <- sample.metadata
       self$n.cores <- n.cores
       self$verbose <- verbose
 
@@ -356,7 +357,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
   perm.method <- match.arg(perm.method)
   robust.method <- match.arg(robust.method)
 
-if(!is.null(formula) || !is.null(contrast)) {
+  if(!is.null(formula) || !is.null(contrast)) {
     vd <- validateDesign(formula = formula, sample.meta = sample.meta, contrast = contrast, verbose = verbose)
     formula  <- vd$formula
     contrast <- vd$contrast
@@ -2702,24 +2703,35 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' cao$estimateClusterFreeExpressionShifts()
     #' }
     estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="z", name="cluster.free.expr.shifts",
-                                                 min.n.between=2, min.n.within=max(min.n.between, 1),
-                                                 min.expr.frac=0.0, min.n.obs.per.samp=3, normalize.both=FALSE,
-                                                 dist="cor", log.vectors=(dist != "js"), wins=0.025, genes=NULL,
-                                                 n.permutations=500, verbose=self$verbose, n.cores=self$n.cores,
-                                                 min.edge.weight=0.0, ...) {
-      if (normalize.both)
-        warning("Setting normalize.both=TRUE likely leads to wrong results for cluster-free shifts")
+                                                 min.n.between=2, min.n.within=max(min.n.between, 1), dist.type="shift",
+                                                 min.expr.frac=0.0, min.n.obs.per.samp=3, perm.method="freedman-lane", 
+                                                 alternative="two-sided", adjust=TRUE, smooth=TRUE, robust.method="none",
+                                                 na.mode="drop", dist="cor", log.vectors=(dist != "js"), wins=0.025, 
+                                                 n.permutations=999, verbose=self$verbose, n.cores=self$n.cores, genes=NULL,
+                                                 min.edge.weight=0.0, contrast=NULL, formula=NULL, ...) {
+      
+        if(!is.null(formula) || !is.null(contrast)) {
+        sample.meta <- subsetMetadata(self$full.meta, vd$formula)
+        vd <- validateDesign(formula = formula, sample.meta = sample.meta, contrast = contrast, verbose = verbose)
+        x.Pair<- buildPairDesignMatrices(sample.meta, triplet=vd$contrast, dist.type = dist.type)
+        } else {
+        x.Pair<- buildPairDesignMatrices(self$sample.meta, triplet=self$contrast, dist.type = dist.type)
+        }
+        
+
+      ## TODO add warnings here for perm.method post diagnostics
 
       if (is.null(genes)) {
         genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, min.expr.frac=min.expr.frac)
       }
 
-      inp <- private$getClusterFreeDEInput(genes, min.edge.weight=min.edge.weight)
-      shifts <- inp %$% estimateClusterFreeExpressionShiftsC(
-        t(cm), self$sample.per.cell[rownames(cm)], nn_ids=nns.per.cell, is_ref=is.ref, min_n_between=min.n.between,
-        min_n_within=min.n.within, min_n_obs_per_samp=min.n.obs.per.samp, norm_all=normalize.both, verbose=verbose,
-        n_cores=n.cores, dist=dist, log_vecs=log.vectors, wins=wins, n_permutations=n.permutations, ...
-      )
+      inp <- private$getClusterFreeDEInput(genes, raw=TRUE, min.edge.weight=min.edge.weight)
+      shifts <- inp %$% estimateClusterFreeExpressionShiftsLM(
+                        cm = t(cm), sample.per.cell=self$sample.per.cell[rownames(cm)], nns.per.cell = nns.per.cell, 
+                        x = x.Pair, min.n.obs.per.samp=min.n.obs.per.samp, dist=dist, log.vecs=log.vectors,
+                        perm.method = perm.method, robust.method = robust.method, na.mode = na.mode, wins=wins,
+                        alternative = alternative, adjust = adjust, smooth = smooth, n.cores=n.cores, 
+                        n.permutations=n.permutations, verbose=verbose, ...)
       self$test.results[[name]] <- shifts
 
       return(invisible(shifts))
@@ -2978,28 +2990,47 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' cao$estimateClusterFreeExpressionShifts()
     #' cao$plotClusterFreeExpressionShifts()
     #' }
-    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=TRUE, plot.na=FALSE,
+    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=TRUE, plot.na=FALSE, adjusted=TRUE,
                                                name="cluster.free.expr.shifts", scale.z.palette=TRUE, min.z=qnorm(0.9),
                                                color.range=c("0", "97.5%"), alpha=0.2, font.size=c(3, 5), adj.list=NULL,
-                                               palette=brewerPalette("YlOrRd", rev=FALSE), build.panel=TRUE, ...) {
+                                               pal.seq=brewerPalette("YlOrRd",rev=FALSE), pal.div=brewerPalette("RdBu",rev=TRUE), 
+                                               build.panel=TRUE, ...) {
       shifts <- private$getResults(name, "estimateClusterFreeExpressionShifts")
       private$checkCellEmbedding()
-      z.scores <- shifts$z_scores
-      shifts <- if (smooth) shifts$shifts_smoothed else shifts$shifts
+      z.scores <- if (adjusted) shifts$z.adj else shifts$z.scores
+      shifts <- if (smooth) shifts$shifts.smoothed else shifts$shifts
 
       shifts %<>% na.omit()
       color.range %<>% parseLimitRange(shifts)
       shifts %<>% pmax(color.range[1]) %>% pmin(color.range[2])
 
       ggs <- mapply(function(cls, lt) {
-        self$plotEmbedding(colors=cls, plot.na=plot.na, alpha=alpha, palette=palette, legend.title=lt, ...) +
+        self$plotEmbedding(colors=cls, plot.na=plot.na, alpha=alpha, palette=pal.seq, legend.title=lt, ...) +
           theme(legend.background = element_blank())
-      }, list(shifts, z.scores), c("Distance", "Z-score"), SIMPLIFY=FALSE)
+      }, list(shifts, z.scores), c("Effect Size", "Z-score"), SIMPLIFY=FALSE)
+
 
       if (scale.z.palette) {
-        ggs[[2]]$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
-        max.score <- max(z.scores, na.rm=TRUE)
-        ggs[[2]] <- ggs[[2]] + getScaledZGradient(min.z=min.z, palette=palette, color.range=max.score)
+       # remove existing color scales from the z panel
+       ggs[[2]]$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
+
+      has.pos <- any(z.scores > 0, na.rm = TRUE)
+      has.neg <- any(z.scores < 0, na.rm = TRUE)
+
+      # Decide the range to pass to getScaledZGradient():
+      # - two-sided: symmetric [-M, M]
+      # - one-sided (all negative): [min(z), 0]
+      # - one-sided (all nonnegative): scalar M (i.e., [0, M] per your helper)
+      if (has.pos && has.neg) {
+        lim <- max(abs(z.scores), na.rm = TRUE)
+        cr <- c(-lim, lim)
+      } else if (!has.pos && has.neg) {
+        cr <- c(min(z.scores, na.rm = TRUE), 0)
+      } else {
+        cr <- max(z.scores, na.rm = TRUE)
+      }
+
+        ggs[[2]] <- ggs[[2]] + getScaledZGradient(min.z = min.z, palette = pal.div, color.range = cr)
       }
 
       if (!is.null(cell.groups)) {
@@ -3452,8 +3483,8 @@ if(!is.null(formula) || !is.null(contrast)) {
     ## genes
     ## min.edge.weight numeric (default=0.6)
     ## list with fields 'cm', 'adj.mat', 'is.ref', 'nns.per.cell'
-    getClusterFreeDEInput = function(genes, min.edge.weight=0.0) {
-      cm <- self$getJointCountMatrix(raw=FALSE)
+    getClusterFreeDEInput = function(genes, raw=FALSE, min.edge.weight=0.0) {
+      cm <- self$getJointCountMatrix(raw=raw)
       genes <- intersect(genes, colnames(cm))
       is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
 

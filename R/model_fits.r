@@ -19,12 +19,10 @@
 #'   - `"impute.weak"`: rows with `NA` are **kept**; nuisance residualization uses
 #'     weighted LS (tiny weight on missing rows) to get Xr (falls back to NAs), and the fitter treats missing rows with
 #'     a tiny weights similarly (observed rows are the ones permuted).
-#' @param core.only Logical. For `"freedman-lane"`, fit is restricted to `x$core.rows` if `TRUE`.
-#'   Ignored for `"block"`.
 #' @param cross.rows Optional integer/logical index to subset residual rows to cross-group sample pairs 
 #'   for visualization **after** fitting.
 #'   Indices are with respect to the rows actually used: all rows for `"block"`,
-#'   or `which(x$core.rows)` when `perm.method = "freedman-lane"` and `core.only = TRUE`.
+#'   or `which(x$core.rows)` when `perm.method = "freedman-lane"` 
 #' @param return.residuals Logical; return residual matrix.
 #' @param return.sampled.stats Logical; return the matrix of sampled permutation statistics.
 #'
@@ -39,7 +37,7 @@
 #'    - for `NA` columns with `na.mode = "drop"`, groups by identical row mask and refits on that subset,
 #'    - for `na.mode = "impute.weak"`, performs weighted residualization and preserves `NA` flags so the fitter
 #'      can apply tiny-weight handling and permute only observed rows,
-#' 3) then restricts to `x$core.rows` if `core.only = TRUE`, remapping `x$perm.groups.core` accordingly.
+#' 3) then restricts to `x$core.rows`, remapping `x$perm.groups.core` accordingly.
 #' 4) fits and randomizes each column using `fit_and_randomize()`.
 #'
 #' Column names from `colnames(y)` are propagated to `stat.obs`, `pval`, `z.score`,
@@ -54,7 +52,7 @@
 #'     Columns are named by `colnames(y)`; rows are `"perm1"`, `"perm2"`, ….
 #'   \item `y.resid` — if requested, residual matrix:
 #'     - `"block"`: `n × m` (all rows);
-#'     - `"freedman-lane"`: `|core rows| × m` if `core.only = TRUE`, otherwise `n × m`.
+#'     - `"freedman-lane"`: `|core rows| × m`, otherwise `n × m`.
 #'     Row names reflect the used rows; `cross.rows` may further subset rows.
 #' }
 #'
@@ -80,7 +78,7 @@
 #' # Freedman–Lane on core rows with weak imputation
 #' out.fl <- performLMPermutations(
 #'   x, Y, n.permutations = 999, perm.method = "freedman-lane",
-#'   core.only = TRUE, na.mode = "impute_weak", return.residuals = TRUE
+#'   na.mode = "impute_weak", return.residuals = TRUE
 #' )
 #' }
 #' @keywords internal
@@ -88,15 +86,17 @@ performLMPermutations <- function(x, y,
                   n.permutations = 1000,
                   perm.method = c("block","freedman-lane"),
                   robust.method = c("none", "huber", "winsor"),
-                  na.mode = c("drop", "impute_weak"),
-                  core.only = TRUE,
+                  na.mode = c("drop", "impute_weak"), na.center = c("mean","median"),
+                  alternative = c("two-sided","greater","less"),
                   cross.rows = NULL,
                   return.residuals = FALSE,
-                  return.sampled.stats = TRUE) {
+                  return.sampled.stats = TRUE, n.cores=1) {
 
   robust.method <- match.arg(robust.method)
   perm.method   <- match.arg(perm.method)
   na.mode       <- match.arg(na.mode)
+  alternative   <- match.arg(alternative)
+  na.center     <- match.arg(na.center)
   # response vector/matrix
   if (is.numeric(y) && !is.matrix(y)) {
   Y <- matrix(y, ncol = 1L)
@@ -124,33 +124,31 @@ performLMPermutations <- function(x, y,
       contrast = x$contrast.F,
       perm_groups = x$perm.groups.full,
       n_randomizations = n.permutations,
-      alternative = "two-sided",
+      alternative = alternative,
       return_residuals = return.residuals,
       return_sampled_fits = FALSE,
       return_sampled_stats = return.sampled.stats,
       robust = robust.method, huber_k = 1.345, huber_maxit = 8, huber_tol = 1e-6,
-      na_mode = na.mode, na_weight = 1e-4, na_center = "mean",
-      illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = 1
+      na_mode = na.mode, na_weight = 1e-4, na_center = na.center,
+      illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores
     )
   } else if (perm.method == "freedman-lane") {
   # ------------------------------------------------------------
   # FREEDMAN–LANE: NA-aware, per-column residualization
   # ------------------------------------------------------------
-  fit <- cpp_fl(
+  fit <- fl_fwl_cpp(
   X = x$X,
   Z = if (is.null(x$Z)) matrix(0,0,0) else x$Z,
   Y = Y,
   contrast = x$contrast.X,
-  core_rows_opt = if (is.null(x$core.rows)) NULL else x$core.rows,  # logical
-  perm_groups_core_opt = NULL,                        # 1-based core space
+  core_rows = if (is.null(x$core.rows)) NULL else x$core.rows,  # logical 
   n_randomizations = n.permutations,
-  alternative = "two-sided",
-  return_residuals = TRUE,
-  return_sampled_stats = TRUE,
+  alternative = alternative,
   robust = robust.method,
   huber_k = 1.345, huber_maxit = 8, huber_tol = 1e-6,
-  na_mode = na.mode, na_weight = 1e-4, na_center = "mean",
-  illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = 1)
+  na_mode = na.mode, na_weight = 1e-4, na_center = na.center,
+  illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores, return_residuals = return.residuals,
+  return_sampled_fits=FALSE, return_sampled_stats = return.sampled.stats)
   } else {
     stop("Unknown permutation method: ", perm.method)
   }
@@ -182,7 +180,7 @@ performLMPermutations <- function(x, y,
     colnames(y.resid) <- y.names
     # set rownames depending on method 
     rn.all <- rownames(Y); if (is.null(rn.all)) rn.all <- as.character(seq_len(nrow(Y)))
-    used.idx <- if (perm.method == "freedman-lane" && core.only && !is.null(x$core.rows)) {
+    used.idx <- if (perm.method == "freedman-lane" && !is.null(x$core.rows)) {
       which(x$core.rows)
     } else {
       seq_len(nrow(Y))

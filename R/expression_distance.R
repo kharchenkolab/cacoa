@@ -158,8 +158,6 @@ RunGlm <- function(dist.mat = dist.mat,numeta = numeta, charmeta = charmeta, for
     rownames(z) <- c(colnames(numeta),colnames(charmeta))
     colnames(z) <- c(rownames(numeta))
     return(z)
-    gc()
-    
   }
   )),.)
   

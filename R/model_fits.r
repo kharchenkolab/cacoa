@@ -30,16 +30,7 @@
 #' **Block**: calls the underlying C++ `fit_and_randomize()` on the full design `F`,
 #' shuffling within `x$perm.groups.full`.
 #'
-#' **Freedman–Lane**: calls C++ helper `cpp_fl()` which:
-#' 1) residualizes `X` against `Z` on the **full** data once,
-#' 2) handles `NA` per response column:
-#'    - batches no-`NA` columns together,
-#'    - for `NA` columns with `na.mode = "drop"`, groups by identical row mask and refits on that subset,
-#'    - for `na.mode = "impute.weak"`, performs weighted residualization and preserves `NA` flags so the fitter
-#'      can apply tiny-weight handling and permute only observed rows,
-#' 3) then restricts to `x$core.rows`, remapping `x$perm.groups.core` accordingly.
-#' 4) fits and randomizes each column using `fit_and_randomize()`.
-#'
+#' **Freedman–Lane**: calls C++ helper `fl_fwl_cpp()`
 #' Column names from `colnames(y)` are propagated to `stat.obs`, `pval`, `z.score`,
 #' and (when requested) to permutation statistics and residual matrices.
 #'
@@ -50,10 +41,11 @@
 #'   \item `z.score` — numeric length-`m` vector of z-like scores derived from permutation p.
 #'   \item `stats.perm` — if requested, a matrix `n.permutations × m` (when available), otherwise a list.
 #'     Columns are named by `colnames(y)`; rows are `"perm1"`, `"perm2"`, ….
-#'   \item `y.resid` — if requested, residual matrix:
+#'   \item `residual` — if requested, residual matrix:
 #'     - `"block"`: `n × m` (all rows);
 #'     - `"freedman-lane"`: `|core rows| × m`, otherwise `n × m`.
 #'     Row names reflect the used rows; `cross.rows` may further subset rows.
+#'   \item `y.resid` — for `"freedman-lane"`, the `|core rows| × m` matrix of residualized responses (if requested).
 #' }
 #'
 #' @section Notes:

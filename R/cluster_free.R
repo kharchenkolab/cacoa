@@ -83,153 +83,93 @@ geneProgramInfoByCluster <- function(clusters, z.scores, min.score=0.05, verbose
 
 
 #' Estimate cluster-free shifts using linear model and permutations
-#' @param cm gene-by-Cell count matrix (dgCMatrix or Matrix), genes x cells
-#' @param sample.per.cell Vector of sample IDs for each cell
-#' @param nns.per.cell List of nearest neighbors for each cell
-#' @param sample.meta Data frame of sample-level metadata
+#' @param cm            dgCMatrix (genes x cells)
+#' @param sample.per.cell vector/factor of sample IDs for each cell (length = ncol(cm))
+#' @param nns.per.cell  list of integer neighbor indices per cell (same length as ncol(cm))
+#' @param x             output of buildDesignPairMatrices (must include $X, $Z, $contrast, $pairs)
+#' @param dist,log.vecs, min.n.obs.per.samp as before
+#' @param perm.method   "freedman-lane" or "block"
+#' @param robust.method "none","huber","winsor"
+#' @param na.mode       "drop" or "impute_weak"
+#' @param alternative   "two-sided","greater","less"
+#' @param smooth        logical; if TRUE, median-smooth effect sizes (and optionally z)
+#' @param wins          winsorization fraction for permutation adjustment (e.g., 0.01)
+#' @param return.sampled.stats  set TRUE if you want permutation-adjusted z's
+#' @param return.residuals      pass-through to cpp
+#' @param verbose              logical
 #' @keywords internal
-estimateClusterFreeShiftsLM <- function(cm, sample.per.cell, nns.per.cell,
-                 sample.meta, contrast, dist = "cor", log.vecs = TRUE,
-                 min.n.obs.per.samp = 2L, dist.type = "shift",
-                 n.cores = 1,
-                 x, n.permutations = 999,
-                 perm.method = c("freedman-lane", "block"),
-                 robust.method = c("none","huber", "winsor"),
-                 na.mode = c("drop", "impute_weak"),
-                 return.sampled.stats = FALSE,
-                 return.residuals = FALSE,
-                 adj.method = "BH",
-                 verbose = FALSE) {
-  perm.method <- match.arg(perm.method)
+estimateClusterFreeExpressionShiftsLM <- function(cm, sample.per.cell, nns.per.cell, x, dist = "cor", log.vecs = TRUE,
+                                                  min.n.obs.per.samp = 2L, n.cores = 1, perm.method = c("freedman-lane","block"), 
+                                                  robust.method = c("none","huber","winsor"),n.permutations = 999,  adjust= TRUE,
+                                                  na.mode = c("drop","impute_weak"), alternative = c("two-sided","greater","less"),
+                                                  smooth = FALSE, wins = 0.025, return.sampled.stats = TRUE, 
+                                                  return.residuals = FALSE, verbose = FALSE) {
+  perm.method   <- match.arg(perm.method)
   robust.method <- match.arg(robust.method)
-  na.mode <- match.arg(na.mode)
+  na.mode       <- match.arg(na.mode)
+  alternative   <- match.arg(alternative)
 
-  Y.res <- getResponsePairMatrix(cm, sample.per.cell, nns.per.cell,
-                                dist = dist, log.vecs = log.vecs,
-                                min.n.obs.per.samp = min.n.obs.per.samp,
-                                n.cores = n.cores)
-  Y <- Y.res$Y
-  samples <- Y.res$samples
-  pairs.ij <- Y.res$pairs.ij
-
-  stopifnot(all(rownames(sample.meta) %in% samples))
-  sample.meta <- sample.meta[samples, , drop = FALSE]
-  x <- buildPairDesignMatrices(sample.meta, triplet=contrast, dist.type = "shift")$model
+  if (adjust) return.sampled.stats <- TRUE
   
-  res <- performLMPermutations(
-    x, Y, n.permutations = n.permutations,
-    perm.method = perm.method,
-    robust.method = robust.method,
-    na.mode = na.mode,
-    return.sampled.stats = return.sampled.stats,
-    return.residuals = return.residuals,
-    verbose = verbose
+  spc <- sample.per.cell
+  if (is.factor(spc)) spc <- as.integer(spc) else spc <- as.integer(as.factor(spc))
+  spc <- spc[match(colnames(cm), names(sample.per.cell))]
+  stopifnot(length(spc) == ncol(cm))
+
+  # neighbors as integers
+  nn.list <- lapply(nns.per.cell, function(v) as.integer(v))
+
+  # Pairs must correspond to the order of rows in x$X:
+  stopifnot(!is.null(x$pairs))
+  pairs.mat <- as.matrix(x$pairs)
+  stopifnot(ncol(pairs.mat) == 2L)
+  storage.mode(pairs.mat) <- "integer"
+
+  ## ---- response matrix (pairwise distances per neighborhood) ----
+  Y <- estimateExpressionShiftsPairsLM(cm = cm, sample_per_cell = spc, nn_ids = nn.list, pairs_mat = pairs.mat,
+                                       min_n_obs_per_samp= min.n.obs.per.samp, dist = dist, log_vecs = log.vecs)
+  if (!is.null(names(nn.list))) colnames(Y) <- names(nn.list)
+  #na.cols <- which(colSums(is.na(Y)) > 0)
+
+  ## ---- fit & permutations ----
+  res <- performLMPermutations(x = x$model, y = Y, n.permutations = n.permutations, perm.method = perm.method,
+                               robust.method = robust.method, na.mode = na.mode, alternative = alternative,
+                               return.sampled.stats = return.sampled.stats, return.residuals = return.residuals,
+                               n.cores = n.cores)
+
+  valid <- is.finite(res$stat.obs) & apply(res$stats.perm, 2, function(col) {
+                                           all(is.finite(col)) && sd(col) > 0
+                                          })
+  non.zero.ids <- which(valid)
+  non.zero.ids.c <- as.integer(non.zero.ids - 1L)
+
+  ## new cpp function; uses old functions internally; edit fit_an_randomize to return min/max instead
+  z.adj <- adjustedZScoresMaxStat(T_obs = res$stat.obs, T_perm = res$stats.perm,   # rows=perms, cols=tests
+                                  alt = if (alternative == "two-sided") 0 else if (alternative == "greater") 1 else 2,
+                                  wins = wins, smooth = smooth, nn_ids = nn.list, non_zero_ids = non.zero.ids.c)
+  ## ---- effect-size shifts (center by permutation mean) ----
+  shifts <- res$stat.obs
+  if (!is.null(res$stats.perm)) {
+    shifts <- res$stat.obs - colMeans(res$stats.perm, na.rm = TRUE)
+  }
+  ## optional effect size smoothing
+  shifts.smoothed <- if (smooth) applyMedianFilterES(res$stat.obs, nn_ids = nn.list,
+                                           non_zero_ids = which(is.finite(res$stat.obs))) else NULL
+  
+  if (!is.null(colnames(Y))) {
+    names(shifts)     <- colnames(Y)
+    names(shifts.smoothed)   <- colnames(Y)
+    names(z.adj) <- names(res$z.score)   <- colnames(Y)
+  }
+
+  list(
+    stat            = res$stat.obs,
+    p.value         = res$pval,
+    z.scores        = res$z.score,
+    z.adj           = if (adjust) z.adj else NULL,
+    shifts          = shifts,
+    shifts.smoothed = shifts.smoothed,
+    sampled.stats   = if (!is.null(res$sampled_stats)) res$sampled_stats else NULL,
+    residuals       = if (!is.null(res$residuals)) res$residuals else NULL
   )
-  names(res$z.score) <- names(res$stat.obs) <- colnames(Y)
-  res
 }
-
-#' Function for computing response pair matrix Y for pairwise sample distances across a set of neighborhoods
-#' @param cm gene-by-Cell count matrix (dgCMatrix or Matrix), t(count.matrices)
-#' @param sample.per.cell Vector of sample IDs for each cell
-#' @param nns.per.cell List of nearest neighbors for each cell
-#' @param dist Distance metric to use (default: "cor")
-#' @param log.vecs Whether to log-transform expression vectors (default: TRUE)
-#' @param min.n.obs.per.samp Minimum number of observations per sample (default: 1)
-#' @examples 
-#' \dontrun{
-#'  b <- getResponsePairMatrix(cm, sample_per_cell, nns.per.cell,
-#'  dist = "cor", log.vecs = TRUE, min.n.obs.per.samp = 3L, n.cores = 5)
-#' }
-#' @keywords internal
-getResponsePairMatrix <- function(cm, sample.per.cell, nns.per.cell,
-                 dist = "cor", log.vecs = TRUE,
-                 min.n.obs.per.samp = 1L,
-                 n.cores = 1) {
-  stopifnot(inherits(cm, "dgCMatrix") || inherits(cm, "Matrix"))
-
-  # samples & sample ids (0..n-1) once
-  samples <- levels(factor(sample.per.cell))
-  n <- length(samples)
-  spc   <- factor(sample.per.cell, levels = samples)
-  samp.0 <- as.integer(spc) - 1L
-  
-  # precompute lower-tri bookkeeping
-  pairs.ij <- lowerTriIJ(n)
-  n.pairs  <- nrow(pairs.ij)
-  # prefix term T[i] = (i-1)*(i-2)/2 used in lt index; length n
-  T.pref <- ((seq_len(n) - 1L) * (seq_len(n) - 2L)) %/% 2L
-  
-  # global -> local col map (use match; faster than named lookup)
-  global.ids <- getGlobalCellIds(colnames(cm))
-  if (anyNA(global.ids)) stop("Couldn't parse global IDs from cm colnames.")
-  # to 1-based local
-  map.to.local.1 <- function(ids.global.0) match(ids.global.0, global.ids)
-  # to 0-based local
-  map.to.local.0 <- function(ids.global.0) {
-  pos.1 <- map.to.local.1(ids.global.0)
-  pos.1 <- pos.1[!is.na(pos.1)]
-  as.integer(pos.1 - 1L)
-  }
-  
-  # worker per neighborhood
-  per.nb <- function(ids.global.0) {
-  ids.local.0 <- map.to.local.0(as.integer(ids.global.0))
-  if (!length(ids.local.0)) return(rep(NA_real_, n.pairs))
-  
-  res <- estimateCellExpressionShift_export( 
-    cm,
-    as.integer(samp.0),                 # 0..n-1 samples
-    as.integer(ids.local.0),            # 0-based local cells
-    min.n.obs.per.samp = as.integer(min.n.obs.per.samp),
-    dist = dist, log.vecs = log.vecs
-  )
-  
-  # normalize possible field names from Rcpp
-  d  <- res[["dists"]]; if (is.null(d))  d  <- res[["dist"]]
-  s.1 <- res[["s1.ids"]]; if (is.null(s.1)) s.1 <- res[["s1"]]
-  s.2 <- res[["s2.ids"]]; if (is.null(s.2)) s.2 <- res[["s2"]]
-  if (is.null(d) || is.null(s.1) || is.null(s.2)) return(rep(NA_real_, n.pairs))
-  
-  keep <- is.finite(d)
-  if (!any(keep)) return(rep(NA_real_, n.pairs))
-  
-  # back to 1-based sample indices and enforce lower-tri (i>j)
-  i <- as.integer(s.1[keep]) + 1L
-  j <- as.integer(s.2[keep]) + 1L
-  i.L <- pmax(i, j); j.L <- pmin(i, j)
-  
-  # compute positions vectorized: pos = T.pref[i.L] + j.L
-  pos <- T.pref[i.L] + j.L
-  
-  y.k <- rep(NA_real_, n.pairs)
-  # write all distances at once (duplicates are rare; last wins)
-  y.k[pos] <- as.numeric(d[keep])
-  y.k
-  }
-  
-  Y.cols <- sccore::plapply(nns.per.cell, per.nb, n.cores = n.cores, progress = TRUE, mc.preschedule = FALSE, 
-                            mc.allow.recursive = TRUE, fail.on.error = FALSE)
-  
-  Y <- do.call(cbind, Y.cols)
-  nbhd.names <- names(nns.per.cell)
-  if (is.null(nbhd.names) || any(!nzchar(nbhd.names))) {
-  nbhd.names <- paste0("cell.", seq_along(nns.per.cell))
-  }
-  colnames(Y) <- nbhd.names
-  rownames(Y) <- paste0("(", pairs.ij$i, ",", pairs.ij$j, ")")
-  list(Y = Y, samples = samples, pairs.ij = pairs.ij)
-}
-
-# helpers
-# trailing digits in "cell.123" → 123
-getGlobalCellIds <- function(cn) as.integer(sub("^.*?(\\d+)$", "\\1", cn))
-  
-# fixed lower-tri row order (i>j). We keep it for rownames only.
-lowerTriIJ <- function(n) {
-  ij <- which(lower.tri(matrix(NA_real_, n, n)), arr.ind = TRUE)
-  data.frame(i = ij[,1], j = ij[,2])
-  }
-  
-# vectorized lower-tri index: for i>j, pos = (i-1)*(i-2)/2 + j  (1-based)
-.lt.index <- function(i, j) ((i - 1L) * (i - 2L)) %/% 2L + j

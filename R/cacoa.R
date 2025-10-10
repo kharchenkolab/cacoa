@@ -58,6 +58,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field sample.metadata Data frame with annotation of covariates per sample (default=NULL)
     sample.meta = NULL,
 
+    #' @field full.meta Full sample metadata (default=NULL)
+    full.meta = NULL,
+
     #' @field cell.groups Named factor with cell names with cluster per cell (default=NULL)
     cell.groups = NULL,
 
@@ -188,6 +191,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$sample.id <- sample.id
       self$ref.level <- self$contrast[3]
       self$target.level <- self$contrast[2]
+      self$full.meta <- sample.metadata
       self$n.cores <- n.cores
       self$verbose <- verbose
 
@@ -322,7 +326,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   (default = `NULL`, i.e. no PCA).
     #' @param top.n.genes integer Optional number of top genes to use (default = `NULL`).
     #' @param gene.selection character Gene selection method passed to the distance routine
-    #'   (e.g., `"wilcox"`; default = `"wilcox"`).
+    #'   (e.g., `"wilcox"`; default = `"deseq2"`).
+    #' @param cov.plot.keys character Optional covariates to visualize alongside the shifts
     #' @param ... Additional parameters forwarded to \code{estimateExpressionChange_lm()}
     #'   and lower-level distance functions.
     #'
@@ -347,34 +352,35 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' )
     #' }
 estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, formula = NULL,
-                                             contrast = NULL, sample.meta = self$sample.meta, perm.method=c("freedman-lane", "block"), 
+                                             contrast = NULL, sample.meta = self$sample.meta, perm.method="freedman-lane", 
                                              sample.id = self$sample.id, dist = NULL, dist.type = "shift", min.cells.per.sample = 10, 
                                              min.samp.per.type = 2, min.gene.frac = 0.01, genes = NULL, n.pcs = NULL, top.n.genes = NULL,
                                              verbose = self$verbose, n.cores = self$n.cores, name = "expression.shifts", n.permutations = 1000, 
-                                             gene.selection = "wilcox", block.id= self$block.id, robust.method = c("none", "huber", "winsor"),
-                                             na.mode = "drop", return.residuals = FALSE, return.sampled.stats = FALSE, ...) {
-  perm.method <- match.arg(perm.method)
-  robust.method <- match.arg(robust.method)
-
-if(!is.null(formula) || !is.null(contrast)) {
-    vd <- validateDesign(formula = formula, sample.meta = sample.meta, contrast = contrast, verbose = verbose)
-    formula  <- vd$formula
-    contrast <- vd$contrast
-    sample.groups <- getSampleGroups(sample.meta, contrast = contrast, sample.id = sample.id)
-  } else {
-    formula <- self$formula
-    contrast <- self$contrast
-    sample.groups <- self$sample.groups
-  }
+                                             gene.selection = "deseq2", block.id= self$block.id, robust.method = "none",
+                                             na.mode = "drop", alternative = "two-sided", return.residuals = TRUE, return.sampled.stats = FALSE,
+                                             return.sampled.fits = FALSE,  cov.plot.keys = NULL, ...) {
+  
+  if(!is.null(formula) || !is.null(contrast)) {
+      vd <- validateDesign(formula = formula, sample.meta = self$full.meta, contrast = contrast, verbose = verbose)
+      sample.meta <- subsetMetadata(self$full.meta, vd$formula)
+      formula <- vd$formula; contrast <- vd$contrast
+      block.vars <- ifelse(!is.null(block.id), paste0(block.id, "_pair"), NULL)
+      x.Pair<- buildPairDesignMatrices(sample.meta, triplet=vd$contrast, dist.type = dist.type, block.vars = block.vars)
+    } else {
+      sample.meta <- self$sample.meta
+      formula <- self$formula; contrast <- self$contrast
+      block.vars <- ifelse(!is.null(self$block.id), paste0(self$block.id, "_pair"), NULL)
+      x.Pair<- buildPairDesignMatrices(sample.meta, triplet=self$contrast, dist.type = dist.type, block.vars = block.vars)
+    }
 
   count.matrices <- extractRawCountMatrices(self$data.object, transposed = TRUE)
 
   if (verbose) message("Filtering data... ")
   shift.inp <- filterExpressionDistanceInput(count.matrices, cell.groups = cell.groups, sample.per.cell = sample.per.cell,
-                                             sample.groups = sample.groups, min.cells.per.sample = min.cells.per.sample,
-                                             min.samp.per.type = min.samp.per.type, min.gene.frac = min.gene.frac,
-                                             genes = genes, verbose = verbose) 
-  ## TODO: only filterGenesperCellType within filterExpressionDistanceInput uses sample.groups, remove after fixing gene.selection methods.
+                                             sample.meta = sample.meta, sample.id=sample.id, min.cells.per.sample = min.cells.per.sample,
+                                             min.samp.per.type = min.samp.per.type, min.gene.frac = min.gene.frac, keep.all = TRUE,
+                                             genes = genes, gene.selection = gene.selection, verbose = verbose) 
+  
   if (verbose) message("done!\n")
 
   if (!is.null(n.pcs)) {
@@ -382,27 +388,40 @@ if(!is.null(formula) || !is.null(contrast)) {
       n.pcs <- top.n.genes - 1
       warning("n.pcs can't be larger than top.n.genes - 1, setting it to ", n.pcs)
     }
-    n.samps.per.type <- sapply(shift.inp$cm.per.type, nrow)
-    affected.types <- which(n.samps.per.type <= n.pcs)
-    if (length(affected.types) > 0) {
-      n.pcs <- min(n.samps.per.type) - 1
-      warning("Some cell types have too few samples. Setting n.pcs to ", n.pcs,
-              ". Consider increasing min.samp.per.type.")
+
+    n.samps.per.type.eff <- sapply(shift.inp$cm.per.type, function(m) {
+    sum(rowSums(!is.na(m)) > 0) })
+
+  min.eff <- min(n.samps.per.type.eff)
+
+  if (min.eff <= 1) {
+    # With ≤1 usable sample for some type, PCA isn't defined → skip PCA globally
+      n.pcs <- NULL
+      warning("Some cell types have ≤1 usable sample after keeping all samples; skipping PCA (n.pcs <- NULL).")
+    } else if (n.pcs >= min.eff) {
+      n.pcs <- min.eff - 1
+      warning(
+        "Some cell types have too few usable samples (min = ", min.eff,
+        "). Setting n.pcs to ", n.pcs,
+        ". If this is too small, consider relaxing filtering or not using PCA.")
     }
   }
 
   # LM-based estimation
-  self$test.results[[name]] <- shift.inp %$% 
-                                  estimateExpressionChange(cm.per.type, sample.groups = sample.groups, cell.groups = cell.groups, 
+  if (verbose) message("Fitting LM with formula: ", deparse(formula))
+  out <- shift.inp %$% estimateExpressionChange(cm.per.type, cell.groups = cell.groups, design.mat=x.Pair,
                                                               sample.meta = sample.meta, sample.per.cell = sample.per.cell, 
-                                                              formula = formula, contrast = contrast, n.pcs = n.pcs, 
-                                                              robust.method = robust.method, na.mode = na.mode, block.id= block.id,
+                                                              formula = formula,contrast = contrast, n.pcs = n.pcs, 
+                                                              robust.method = robust.method, na.mode = na.mode, alternative = alternative,
                                                               return.residuals = return.residuals, return.sampled.stats = return.sampled.stats,
                                                               dist = dist %||% "cor", dist.type = dist.type, sample.id = sample.id,
-                                                              gene.selection = gene.selection, perm.method= perm.method, 
-                                                              n.permutations = n.permutations, top.n.genes = top.n.genes, 
+                                                              gene.selection = gene.selection, cm.raw.per.type = cm.raw.per.type, perm.method= perm.method, 
+                                                              n.permutations = n.permutations, top.n.genes = top.n.genes,
                                                               n.cores = n.cores, verbose = verbose, ...)
-
+  out$dists.adj <- out %$% extractPairwiseShifts(res, p.dist, design.mat = x.Pair, contrast = contrast, dist.type = dist.type,
+                                                 sample.meta = sample.meta, sample.id = sample.id, cov.plot.keys = cov.plot.keys, 
+                                                 perm.method = perm.method, block.vars = block.vars, ...)
+  self$test.results[[name]] <- out
   return(invisible(self$test.results[[name]]))
 },
 
@@ -416,6 +435,11 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' @param jitter.alpha numeric Transparency value for the data points (default=0.05)
     #' @param show.pvalues character string Which p-values to plot. Accepted values are "none", "raw", or "adjusted". (default=c("adjusted", "raw", "none"))
     #' @param ylab character string Label of the y-axis (default="normalized expression distance")
+    #' @param color.by.covariate boolean Whether to color points by covariate (default=FALSE)
+    #' @param jitter.size numeric Size of the jitter points (default=1)
+    #' @param celltype.levels character Optional ordering of cell types (default=NULL)
+    #' @param panel character Which panel to use: "covariate" (default), "block", or "background". 
+    #' @param order.direction character Order cell types by increasing or decreasing distance ("increasing", "decreasing"; default="increasing")
     #' @param ... additional arguments
     #' @return A ggplot2 object
     #' @examples
@@ -423,27 +447,26 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' cao$estimateExpressionShiftMagnitudes()
     #' cao$plotExpressionShiftMagnitudes()
     #' }
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch=TRUE, show.jitter=TRUE,
-                                           jitter.alpha=0.05, show.pvalues=c("adjusted", "raw", "none"),
-                                           ylab='normalized expression distance', ...) {
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch=TRUE, show.jitter=TRUE, color.by.covariate=FALSE, 
+                                           jitter.alpha=0.05, jitter.size=1, show.pvalues=c("adjusted", "raw", "none"), celltype.levels=NULL,
+                                           panel = c("covariate", "block", "background"), order.direction = "increasing",
+                                           ylab='Model-adjusted distances', ...) {
       show.pvalues <- match.arg(show.pvalues)
+      panel <- match.arg(panel)
 
       res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
-      df <- names(res$dists.per.type) %>%
-        lapply(function(n) data.frame(value=res$dists.per.type[[n]], Type=n)) %>%
-        do.call(rbind, .) %>% na.omit()
+      df <- res$dists.adj
 
       if (show.pvalues == "adjusted") {
-        pvalues <- res$padjust
+        pvalues <- res$results$padjust %>% setNames(res$results$celltype)
       } else if (show.pvalues == "raw") {
-        pvalues <- res$pvalues
+        pvalues <- res$results$pvalue %>% setNames(res$results$celltype)
       } else {
         pvalues <- NULL
       }
 
-      plotMeanMedValuesPerCellType(df, pvalues=pvalues, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
-        palette=self$cell.groups.palette, ylab=ylab, plot.theme=self$plot.theme, yline=0.0, ...
-      )
+      plotPairwiseShiftsPerCellType(df, pvalues=pvalues, panel=panel, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
+        palette=self$cell.groups.palette, ylab=ylab, plot.theme=self$plot.theme, yline=0.0, ...)
     },
 
     #' @description Alias for estimateDEPerCellType
@@ -2168,7 +2191,7 @@ if(!is.null(formula) || !is.null(contrast)) {
 
     #' @description Estimate differential cell density
     #' @param type character method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);
-    #' @param adjust.pvalues boolean Whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='subtract', TRUE for everything else)
+    #' @param adjust boolean Whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='subtract', TRUE for everything else)
     #' @param name character Slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
     #' @param sample.meta data.frame Sample metadata (default=self$sample.meta)
     #' @param formula formula Model formula (default=NULL)
@@ -2184,15 +2207,15 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' cao$estimateCellDensity()
     #' cao$estimateDiffCellDensity()
     #' }
-    estimateDiffCellDensity=function(type='permutation', adjust.pvalues=NULL, name='cell.density', sample.meta=self$sample.meta, 
-                                     formula=NULL, contrast=NULL, block.id=self$block.id, perm.method=c("block", "freedman-lane"),
-                                     n.permutations=400, smooth=TRUE, verbose=self$verbose, n.cores=self$n.cores, ...){
-      perm.method <- match.arg(perm.method)
+    estimateDiffCellDensity=function(type='permutation', adjust=NULL, name='cell.density', sample.meta=self$sample.meta, 
+                                     formula=NULL, contrast=NULL, block.id=self$block.id, perm.method="freedman-lane",
+                                     robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=TRUE,
+                                     n.permutations=999, smooth=TRUE, verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
-      if (is.null(adjust.pvalues)) adjust.pvalues <- (type != 'subtract') # NULL can be forwarded here
+      if (is.null(adjust)) adjust <- (type != 'subtract') # NULL can be forwarded here
       density.mat <- dens.res$density.mat
       if (dens.res$method == 'kde'){
-        if (adjust.pvalues) {
+        if (adjust) {
           # For p-value adjustment matrix filtration can result in disconnected grid and break estimating l.max
           l.max <- rownames(density.mat) %>% as.integer() %>% graphFromGrid(n.bins=dens.res$bins) %>%
             igraph::laplacian_matrix(sparse=TRUE) %>% irlba::partial_eigen(n=1) %>% .$values
@@ -2200,33 +2223,38 @@ if(!is.null(formula) || !is.null(contrast)) {
 
         density.mat <- density.mat[dens.res$density.emb$counts > 0,]
         graph <- rownames(density.mat) %>% as.integer() %>% graphFromGrid(n.bins=dens.res$bins)
-      } else if (adjust.pvalues && smooth) {
+      } else if (adjust && smooth) {
         graph <- extractCellGraph(self$data.object)
         l.max <- NULL
       }
 
-      if (!is.null(formula) || !is.null(contrast)) {
-        vd <- validateDesign(formula = formula, sample.meta = sample.meta, contrast = contrast)
+      if(!is.null(formula) || !is.null(contrast)) {
+        vd <- validateDesign(formula = formula, sample.meta = self$full.meta, contrast = contrast, verbose = verbose)
+        sample.meta <- subsetMetadata(self$full.meta, vd$formula)
         formula <- vd$formula
         contrast <- vd$contrast
         sample.groups <- getSampleGroups(sample.meta, contrast, sample.id=self$sample.id)
-      } else {
+        } else {
         formula <- self$formula
         contrast <- self$contrast
+        sample.meta <- self$sample.meta
         sample.groups <- self$sample.groups
-      }
+        }
 
       perm.res <- density.mat %>%
-          diffCellDensityPermutations(sample.meta = sample.meta, sample.groups = sample.groups, contrast= contrast, type=type, verbose=verbose,
-                                      n.permutations=n.permutations, n.cores=n.cores, block.id= block.id, perm.method=perm.method)
+          diffCellDensityPermutations(sample.meta = sample.meta, sample.groups = sample.groups, contrast= contrast, 
+                                      type=type, block.id= block.id, perm.method=perm.method, robust.method = robust.method,
+                                      na.mode = na.mode, alternative = alternative, n.permutations=n.permutations,
+                                      return.residuals=return.residuals, return.sampled.stats=return.sampled.stats,
+                                      n.cores=n.cores, verbose=verbose)
 
-      if(!adjust.pvalues){
+      if(!adjust){
         score <- perm.res %>% .$z.score
-        res <- list(raw=score, formula = formula, contrast = contrast, perm.method=perm.method)
+        res <- list(raw=score, formula = formula, contrast = contrast, perm.method=perm.method, robust = robust.method)
       } else {
         res <- list(raw=perm.res$z.score, adj=perm.res %$% adjustZScoresByPermutations(
-            score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores, verbose=verbose,
-            l.max=l.max, ...), formula = formula, contrast = contrast, perm.method=perm.method)
+                    score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores, verbose=verbose,
+                    l.max=l.max, ...), formula = formula, contrast = contrast, perm.method=perm.method, robust = robust.method)
       }
 
       self$test.results[[name]]$diff[[type]] <- res
@@ -2239,14 +2267,14 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' @param name character Slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
     #' @param size numeric (default=0.2)
     #' @param palette color palette, default is c('blue','white','red')
-    #' @param adjust.pvalues boolean Adjust P values (default=NULL)
+    #' @param adjust boolean Adjust P values (default=NULL)
     #' @param contours character Specify cell types for contour, multiple cell types are also supported (default: NULL)
     #' @param contour.color character color for contour line (default: 'black')
     #' @param contour.conf character confidence interval of contour (default: '10%')
     #' @param plot.na boolean Plot NAs (default=FALSE)
     #' @param color.range numeric, e.g. c(0,90) (default=NULL)
     #' @param mid.color character Color code for medium value in color range (default='gray95')
-    #' @param scale.z.palette boolean Scale plot palette for Z scores (default=adjust.pvalues)
+    #' @param scale.z.palette boolean Scale plot palette for Z scores (default=adjust)
     #' @param min.z numeric Minimum Z score to plot (default=qnorm(0.9))
     #' @param ... additional parameters
     #' @return ggplot2 object
@@ -2257,9 +2285,9 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' cao$plotDiffCellDensity()
     #' }
     plotDiffCellDensity=function(type=NULL, name='cell.density', size=0.2, palette=NULL,
-                                 adjust.pvalues=NULL, contours=NULL, contour.color='black', contour.conf='10%',
+                                 adjust=NULL, contours=NULL, contour.color='black', contour.conf='10%',
                                  plot.na=FALSE, color.range=NULL, mid.color='gray95',
-                                 scale.z.palette=adjust.pvalues, min.z=qnorm(0.9), ...) {
+                                 scale.z.palette=adjust, min.z=qnorm(0.9), ...) {
       if (is.null(palette)) {
         if (is.null(self$sample.groups.palette)) {
           palette <- c('blue', mid.color, 'red')
@@ -2278,24 +2306,23 @@ if(!is.null(formula) || !is.null(contrast)) {
       if (is.null(scores)) {
         warning("Can't find results for name, '", name, "' and type '", type,
                 "'. Running estimateDiffCellDensity with default parameters.")
-        self$estimateDiffCellDensity(type=type, name=name, adjust.pvalues=adjust.pvalues)
+        self$estimateDiffCellDensity(type=type, name=name, adjust=adjust)
         dens.res <- self$test.results[[name]]
         scores <- dens.res$diff[[type]]
       }
 
-
-      if (is.null(adjust.pvalues)) {
+      if (is.null(adjust)) {
         if (!is.null(scores$adj)) {
           scores <- scores$adj
-          adjust.pvalues <- TRUE
+          adjust <- TRUE
         } else {
           scores <- scores$raw
-          adjust.pvalues <- FALSE
+          adjust <- FALSE
         }
-      } else if (adjust.pvalues) {
+      } else if (adjust) {
         if (is.null(scores$adj)) {
           warning("Adjusted scores are not estimated. Using raw scores. ",
-                  "Please, run estimateCellDensity with adjust.pvalues=TRUE")
+                  "Please, run estimateDiffCellDensity with adjust=TRUE")
           scores <- scores$raw
         } else {
           scores <- scores$adj
@@ -2322,7 +2349,7 @@ if(!is.null(formula) || !is.null(contrast)) {
         scores %<>% pmin(color.range[2]) %>% pmax(color.range[1])
       }
 
-      leg.title <- if (type == 'subtract') 'Prop. change' else {if (adjust.pvalues) 'Z adj.' else 'Z-score'}
+      leg.title <- if (type == 'subtract') 'Prop. change' else {if (adjust) 'Z adj.' else 'Z-score'}
       gg <- self$plotEmbedding(density.emb, colors=scores, size=size, legend.title=leg.title, palette=palette,
                                midpoint=0, plot.na=plot.na, color.range=color.range, ...)
 
@@ -2702,24 +2729,36 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' cao$estimateClusterFreeExpressionShifts()
     #' }
     estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="z", name="cluster.free.expr.shifts",
-                                                 min.n.between=2, min.n.within=max(min.n.between, 1),
-                                                 min.expr.frac=0.0, min.n.obs.per.samp=3, normalize.both=FALSE,
-                                                 dist="cor", log.vectors=(dist != "js"), wins=0.025, genes=NULL,
-                                                 n.permutations=500, verbose=self$verbose, n.cores=self$n.cores,
-                                                 min.edge.weight=0.0, ...) {
-      if (normalize.both)
-        warning("Setting normalize.both=TRUE likely leads to wrong results for cluster-free shifts")
+                                                 min.n.between=2, min.n.within=max(min.n.between, 1), dist.type="shift",
+                                                 min.expr.frac=0.0, min.n.obs.per.samp=3, perm.method="freedman-lane", 
+                                                 alternative="two-sided", adjust=TRUE, smooth=TRUE, robust.method="none",
+                                                 na.mode="drop", dist="cor", log.vectors=(dist != "js"), wins=0.025, 
+                                                 n.permutations=999, verbose=self$verbose, n.cores=self$n.cores, genes=NULL,
+                                                 min.edge.weight=0.0, contrast=NULL, formula=NULL, ...) {
+      
+        if(!is.null(formula) || !is.null(contrast)) {
+        vd <- validateDesign(formula = formula, sample.meta = self$full.meta, contrast = contrast, verbose = verbose)
+        sample.meta <- subsetMetadata(self$full.meta, vd$formula)
+        x.Pair<- buildPairDesignMatrices(sample.meta, triplet=vd$contrast, dist.type = dist.type)
+        } else {
+        x.Pair<- buildPairDesignMatrices(self$sample.meta, triplet=self$contrast, dist.type = dist.type)
+        }
+        
+
+      ## TODO add warnings here for perm.method post diagnostics
 
       if (is.null(genes)) {
         genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, min.expr.frac=min.expr.frac)
+        ## TODO add DESeq2-based gene selection after clusterfree DE is implemented
       }
 
-      inp <- private$getClusterFreeDEInput(genes, min.edge.weight=min.edge.weight)
-      shifts <- inp %$% estimateClusterFreeExpressionShiftsC(
-        t(cm), self$sample.per.cell[rownames(cm)], nn_ids=nns.per.cell, is_ref=is.ref, min_n_between=min.n.between,
-        min_n_within=min.n.within, min_n_obs_per_samp=min.n.obs.per.samp, norm_all=normalize.both, verbose=verbose,
-        n_cores=n.cores, dist=dist, log_vecs=log.vectors, wins=wins, n_permutations=n.permutations, ...
-      )
+      inp <- private$getClusterFreeDEInput(genes, raw=TRUE, min.edge.weight=min.edge.weight)
+      shifts <- inp %$% estimateClusterFreeExpressionShiftsLM(
+                        cm = t(cm), sample.per.cell=self$sample.per.cell[rownames(cm)], nns.per.cell = nns.per.cell, 
+                        x = x.Pair, min.n.obs.per.samp=min.n.obs.per.samp, dist=dist, log.vecs=log.vectors, 
+                        perm.method = perm.method, robust.method = robust.method, na.mode = na.mode, wins=wins,
+                        alternative = alternative, adjust = adjust, smooth = smooth, n.cores=n.cores, 
+                        n.permutations=n.permutations, verbose=verbose, ...)
       self$test.results[[name]] <- shifts
 
       return(invisible(shifts))
@@ -2978,28 +3017,47 @@ if(!is.null(formula) || !is.null(contrast)) {
     #' cao$estimateClusterFreeExpressionShifts()
     #' cao$plotClusterFreeExpressionShifts()
     #' }
-    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=TRUE, plot.na=FALSE,
+    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=TRUE, plot.na=FALSE, adjusted=TRUE,
                                                name="cluster.free.expr.shifts", scale.z.palette=TRUE, min.z=qnorm(0.9),
                                                color.range=c("0", "97.5%"), alpha=0.2, font.size=c(3, 5), adj.list=NULL,
-                                               palette=brewerPalette("YlOrRd", rev=FALSE), build.panel=TRUE, ...) {
+                                               pal.seq=brewerPalette("YlOrRd",rev=FALSE), pal.div=brewerPalette("RdBu",rev=TRUE), 
+                                               build.panel=TRUE, ...) {
       shifts <- private$getResults(name, "estimateClusterFreeExpressionShifts")
       private$checkCellEmbedding()
-      z.scores <- shifts$z_scores
-      shifts <- if (smooth) shifts$shifts_smoothed else shifts$shifts
+      z.scores <- if (adjusted) shifts$z.adj else shifts$z.score
+      shifts <- if (smooth) shifts$shifts.smoothed else shifts$shifts
 
       shifts %<>% na.omit()
       color.range %<>% parseLimitRange(shifts)
       shifts %<>% pmax(color.range[1]) %>% pmin(color.range[2])
 
       ggs <- mapply(function(cls, lt) {
-        self$plotEmbedding(colors=cls, plot.na=plot.na, alpha=alpha, palette=palette, legend.title=lt, ...) +
+        self$plotEmbedding(colors=cls, plot.na=plot.na, alpha=alpha, palette=pal.seq, legend.title=lt, ...) +
           theme(legend.background = element_blank())
-      }, list(shifts, z.scores), c("Distance", "Z-score"), SIMPLIFY=FALSE)
+      }, list(shifts, z.scores), c("Effect Size", "Z-score"), SIMPLIFY=FALSE)
+
 
       if (scale.z.palette) {
-        ggs[[2]]$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
-        max.score <- max(z.scores, na.rm=TRUE)
-        ggs[[2]] <- ggs[[2]] + getScaledZGradient(min.z=min.z, palette=palette, color.range=max.score)
+       # remove existing color scales from the z panel
+       ggs[[2]]$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
+
+      has.pos <- any(z.scores > 0, na.rm = TRUE)
+      has.neg <- any(z.scores < 0, na.rm = TRUE)
+
+      # Decide the range to pass to getScaledZGradient():
+      # - two-sided: symmetric [-M, M]
+      # - one-sided (all negative): [min(z), 0]
+      # - one-sided (all nonnegative): scalar M (i.e., [0, M] per your helper)
+      if (has.pos && has.neg) {
+        lim <- max(abs(z.scores), na.rm = TRUE)
+        cr <- c(-lim, lim)
+      } else if (!has.pos && has.neg) {
+        cr <- c(min(z.scores, na.rm = TRUE), 0)
+      } else {
+        cr <- max(z.scores, na.rm = TRUE)
+      }
+
+        ggs[[2]] <- ggs[[2]] + getScaledZGradient(min.z = min.z, palette = pal.div, color.range = cr)
       }
 
       if (!is.null(cell.groups)) {
@@ -3452,8 +3510,8 @@ if(!is.null(formula) || !is.null(contrast)) {
     ## genes
     ## min.edge.weight numeric (default=0.6)
     ## list with fields 'cm', 'adj.mat', 'is.ref', 'nns.per.cell'
-    getClusterFreeDEInput = function(genes, min.edge.weight=0.0) {
-      cm <- self$getJointCountMatrix(raw=FALSE)
+    getClusterFreeDEInput = function(genes, raw=FALSE, min.edge.weight=0.0) {
+      cm <- self$getJointCountMatrix(raw=raw)
       genes <- intersect(genes, colnames(cm))
       is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
 

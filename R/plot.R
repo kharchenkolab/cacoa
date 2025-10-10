@@ -400,6 +400,269 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
   return(p)
 }
 
+#' Plot pairwise expression shifts
+#' This is a generic function for plotting pairwise expression shifts
+#' (used for expression shift distances - cluster-based)
+#' @param x output of extractPairwiseShifts() after running estimateExpressionShiftMagnitude()
+#' @param panel character c('covariate'(default), 'blocks', 'background') Type of a panel to plot
+#' @param type character c('box' (default),'point') Type of plot to create
+#' @param show.jitter boolean (default=TRUE) Whether to show individual data points
+#' @param color.by.covariate boolean (default=FALSE) Whether to color points by covariate pattern
+#' @param point.palette color palette for the points (default=NULL)
+#' @param jitter.alpha transparency value for the data points (default: 0.08)
+#' @param jitter.size marker size for the data points (default: 1.1)
+#' @param notch boolean Whether to show notches in the boxplot version (default=TRUE)
+#' @param trim numeric (default=0) Trim value for mean and CI calculation
+#' @param palette - cell type palette
+#' @param order.x boolean (default=TRUE) Whether to order the x axis by mean/median values
+#' @param order.direction character vector (default=c('increasing', 'decreasing')) Direction of ordering
+#' @param celltype.levels character vector (default=NULL) Forced cell type order
+#' @param ylab character vector (default=expression(hat(y)[AB] - mean(hat(y)[AA]))) y axis label
+#' @param yline numeric (default=0) y line to plot
+#' @param coord.flip flip coordinates of the covariate plot
+#' @param plot.theme (default=ggplot2::theme_bw()) Plot theme
+#' @param line.size numeric (default=0.75) Line size for error bars
+#' @param pvalues named numeric vector (default=NULL) p-values per cell type to plot
+#' @param ns.symbol character string (default="") Symbol to use for non-significant p-values
+#' @param pvalue.y numeric (default=NULL) y position for the p-values
+#' @param pvalue.size numeric (default=3.2) Font size for the p-values
+#' @return A ggplot2 object
+#' @keywords internal
+plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", show.jitter = TRUE, notch = TRUE, 
+                                          color.by.covariate = FALSE, point.palette = NULL, jitter.alpha = 0.08,
+                                          jitter.size  = 1.1, trim = 0, palette = NULL, order.x = TRUE, yline = NULL,
+                                          order.direction = "increasing", celltype.levels = NULL, pvalues = NULL,                      
+                                          ylab = expression(hat(y)[cross] - mean(hat(y)[ref])), coord.flip = FALSE,
+                                          plot.theme = theme_bw(), line.size = 0.75, ns.symbol = "", pvalue.y = NULL,
+                                          pvalue.size = 3.2) {
+  # Main plot - covariate panel 
+  if (panel == "covariate") {
+    stopifnot(!is.null(x$df.shifts))
+    df.v <- x$df.shifts |>
+      dplyr::rename(Type = celltype, value = shifts)
+
+    have.cov <- (!is.null(x$df.cov.keys) &&
+                 "pattern_coded" %in% names(x$df.cov.keys) &&
+                 color.by.covariate)
+
+    if (have.cov) {
+      df.p <- x$df.cov.keys |>
+        dplyr::rename(Type = celltype, value = shifts) |>
+        dplyr::select(Type, pair, value, pattern_coded)
+    } else {
+      df.p <- df.v; df.p$pattern_coded <- NULL
+    }
+
+      conf.ints <- split(df.v$value, df.v$Type) |>
+        lapply(estimateMeanCI, trim = trim)
+      df.sum <- df.v |>
+        dplyr::group_by(Type) |>
+        dplyr::summarise(mean = mean(value, trim = trim),
+                         med  = stats::median(value), .groups = "drop") |>
+        dplyr::mutate(
+          LI = as.numeric(sapply(Type, function(ct) conf.ints[[ct]][1])),
+          UI = as.numeric(sapply(Type, function(ct) conf.ints[[ct]][2]))
+        )
+
+    if (!is.null(celltype.levels)) {
+      ord <- intersect(celltype.levels, unique(df.v$Type))
+    } else if (order.x) {
+      inc <- (order.direction == "increasing")
+      key <- if (type == "box") df.sum$med else df.sum$mean
+      ord <- df.sum$Type[order(key, decreasing = !inc)]
+    } else ord <- unique(df.v$Type)
+
+    df.v$Type   <- factor(df.v$Type, levels = ord)
+    df.sum$Type <- factor(df.sum$Type, levels = ord)
+    df.p$Type   <- factor(df.p$Type, levels = ord)
+
+    base <- if (!is.na(yline) && !is.null(yline))
+      ggplot2::geom_hline(yintercept = yline, linetype = 2, colour = "grey50") else NULL
+
+    # main layer
+    if (type == "box") {
+      if (have.cov) {
+        p <- ggplot2::ggplot(df.v, ggplot2::aes(Type, value)) +
+             ggplot2::geom_boxplot(
+               notch = notch, outlier.shape = NA,
+               fill = "grey90", colour = "grey30", alpha = 0.9)
+      } else {
+        p <- ggplot2::ggplot(df.v, ggplot2::aes(Type, value, fill = Type)) +
+             ggplot2::geom_boxplot(notch = notch, outlier.shape = NA)
+      }
+      } else if (type == "point") {
+      p <- ggplot2::ggplot(df.sum, ggplot2::aes(Type, mean, colour = Type)) +
+        ggplot2::geom_point(size = 3) +
+        ggplot2::geom_errorbar(ggplot2::aes(ymin = LI, ymax = UI), width = 0.2, size = line.size)
+      if (!is.null(palette)) p <- p + ggplot2::scale_color_manual(values = palette)
+    }
+
+    # jitter points
+    if (show.jitter) {
+      if (have.cov) {
+        jitter.alpha <- max(1, jitter.alpha)
+        jitter.size  <- max(1, jitter.size)
+        df.p$pattern_coded <- as.factor(df.p$pattern_coded)
+        lev <- levels(df.p$pattern_coded)
+        if (is.null(point.palette)) {
+           cov.palette <- makeNamedPalette(sort(unique(df.p$pattern_coded)))
+         } else {
+            cov.palette <- point.palette[lev]
+         }
+        p <- p + ggplot2::geom_jitter(
+          data = df.p,
+          ggplot2::aes(Type, value, colour = pattern_coded),
+          alpha = jitter.alpha, size = jitter.size,
+          position = ggplot2::position_jitter(width = 0.12, height = 0)
+         ) + ggplot2::labs(colour = "pattern") + 
+         ggplot2::scale_colour_manual(values = cov.palette, breaks = lev, name = "Covariate")
+      } else {
+          p <- p + ggplot2::geom_jitter(
+            data = df.p,
+            ggplot2::aes(Type, value),
+            colour = "black",
+            alpha = jitter.alpha, size = jitter.size,
+            position = ggplot2::position_jitter(width = 0.12, height = 0)
+          )
+      }
+    }
+
+    if (!is.null(pvalues)) {
+      if (is.null(names(pvalues))) names(pvalues) <- as.character(df.sum$Type)
+      pv.df <- data.frame(Type = names(pvalues), p = as.numeric(pvalues), stringsAsFactors = FALSE)
+      pv.df <- pv.df[pv.df$Type %in% ord, , drop = FALSE]
+      pv.df$Type <- factor(pv.df$Type, levels = ord)
+
+      codes <- pvalueToCode(stats::setNames(pv.df$p, as.character(pv.df$Type)), ns.symbol)
+      pval.df <- data.frame(Type = factor(names(codes), levels = ord),
+                            pvalue = unname(codes))
+      if (is.null(pvalue.y)) pvalue.y <- max(df.v$value, na.rm = TRUE)
+      p <- p + ggplot2::geom_text(data = pval.df,
+                                  ggplot2::aes(x = Type, label = pvalue),
+                                  y = pvalue.y, colour = "black", size = pvalue.size)
+    }
+
+    p <- p + base + plot.theme +
+      ggplot2::theme(panel.grid.major.x = ggplot2::element_blank(),
+                     panel.grid.minor   = ggplot2::element_blank(),
+                     legend.title       = ggplot2::element_text(size = 10),
+                     axis.title.x       = ggplot2::element_blank()) +
+      ggplot2::guides(fill = "none") +
+      ggplot2::labs(y = ylab, x = NULL)
+
+    if (coord.flip) p <- p + ggplot2::coord_flip()
+    if (!is.null(palette) && !have.cov) p <- p + ggplot2::scale_fill_manual(values = palette)
+    if (have.cov) p <- p + ggplot2::scale_fill_manual(values = rep("gray70", length(unique(df.p$Type))))
+    return(p)
+  }
+
+  # Blocks panel
+  if (panel == "block") {
+    if (is.null(x$df.blocks)) stop("df.blocks not present (supply block.vars in extractor).")
+    dfb <- x$df.blocks
+
+    if (!is.null(celltype.levels)) {
+      ord <- intersect(celltype.levels, unique(dfb$celltype))
+    } else {
+      dir <- (order.direction == "increasing")
+      tmp <- dfb |>
+        dplyr::group_by(celltype) |>
+        dplyr::summarise(mu = mean(shifts, na.rm = TRUE), .groups = "drop")
+      ord <- tmp$celltype[order(tmp$mu, decreasing = !dir)]
+    }
+    dfb$celltype <- factor(dfb$celltype, levels = ord)
+
+    p <- ggplot2::ggplot(dfb, ggplot2::aes(celltype, shifts)) +
+      ggplot2::geom_hline(yintercept = yline, linetype = "dashed") +
+      ggplot2::geom_boxplot(ggplot2::aes(group = celltype), width = 0.18, outlier.shape = NA,
+                            fill = "white", colour = "grey25") +
+      ggplot2::geom_jitter(ggplot2::aes(colour = block),
+                           width = 0.15, height = 0, alpha = 0.85, size = 1.6) +
+      #ggplot2::coord_flip() +
+      ggplot2::labs(x = NULL,
+                    y = expression(mean[block](hat(y)[cross]) - mean[block](hat(y)[ref])),
+                    colour = "block",
+                    title = "Block-wise centered shifts") +
+      plot.theme
+      if (is.null(point.palette)) {
+         block.palette <- makeNamedPalette(sort(unique(dfb$block)))
+      }
+      p <- p + ggplot2::scale_colour_manual(values = block.palette, name = "Blocks")
+
+    if (!is.null(pvalues)) {
+      if (is.null(names(pvalues))) names(pvalues) <- as.character(ord)
+      pv.df <- data.frame(celltype = names(pvalues), p = as.numeric(pvalues), stringsAsFactors = FALSE)
+      pv.df <- pv.df[pv.df$celltype %in% ord, , drop = FALSE]
+      pv.df$celltype <- factor(pv.df$celltype, levels = ord)
+
+      codes <- pvalueToCode(stats::setNames(pv.df$p, as.character(pv.df$celltype)), ns.symbol)
+      pval.df <- data.frame(celltype = factor(names(codes), levels = ord),
+                            pvalue = unname(codes))
+      if (is.null(pvalue.y)) pvalue.y <- max(dfb$shifts, na.rm = TRUE)
+      p <- p + ggplot2::geom_text(data = pval.df,
+                                  ggplot2::aes(x = celltype, label = pvalue),
+                                  y = pvalue.y, colour = "black", size = pvalue.size)
+    }
+    return(p)
+  }
+
+  # background distribution panel
+  if (panel == "background") {
+    if (is.null(x$df.perm)) stop("background distribution not available 
+              (set return.sampled.stats=TRUE in estimator and re-run estimateExpressionShiftMagnitudes).")
+    dfp <- x$df.perm
+    ob  <- x$df.perm.obs
+
+    if (!is.null(celltype.levels)) {
+      ord <- intersect(celltype.levels, unique(dfp$celltype))
+    } else if (!is.null(ob)) {
+      inc <- (order.direction == "increasing")
+      ord <- ob$celltype[order(ob$obs, decreasing = !inc)]
+    } else {
+      inc <- (order.direction == "increasing")
+      tmp <- dfp |>
+        dplyr::group_by(celltype) |>
+        dplyr::summarise(mu = median(perm_stat, na.rm = TRUE), .groups = "drop")
+      ord <- tmp$celltype[order(tmp$mu, decreasing = !inc)]
+    }
+
+    dfp$celltype <- factor(dfp$celltype, levels = ord)
+    if (!is.null(ob)) ob$celltype <- factor(ob$celltype, levels = ord)
+
+    p <- ggplot2::ggplot() +
+      ggplot2::geom_hline(yintercept = 0, linetype = "dashed") +
+      ggplot2::geom_violin(
+        data = dfp,
+        ggplot2::aes(celltype, perm_stat, group = celltype),
+        fill = "grey92", colour = "grey35", width = 0.9, trim = FALSE
+      ) +
+      ggplot2::geom_boxplot(
+        data = dfp,
+        ggplot2::aes(celltype, perm_stat, group = celltype),
+        width = 0.14, outlier.shape = NA, fill = "white", colour = "grey20"
+      ) +
+      #ggplot2::coord_flip() +
+      ggplot2::geom_jitter(
+        data = dfp,
+        ggplot2::aes(celltype, perm_stat),
+        width = 0.16, height = 0,
+        alpha = jitter.alpha, size = jitter.size, colour = "grey50"
+      ) +
+      ggplot2::labs(x = NULL, y = "Test statistic",
+                    title = "Permutation background with observed statistic") +
+      plot.theme
+    if (!is.null(ob)) {
+      p <- p + ggplot2::geom_crossbar(
+        data = ob,
+        ggplot2::aes(x = celltype, y = obs, ymin = obs, ymax = obs),
+        width = 0.6, colour = "red", fill = NA, linewidth = 0.6
+      )
+    }
+    return(p)
+  }
+}
+
+
 #' Show a scatter plot of cell-type values vs. number of cells per cell type
 #'
 #' @param df a data frame with $value and $Type columns, just like plotMeanValuesPerCellType
@@ -1172,3 +1435,19 @@ plotCellLoadings <- function(loadings, pval, ref.level, target.level, signif.thr
   return(p)
   
 }
+
+makeNamedPalette <- function(levels) {
+    vals <- makeHCLPal(length(levels))
+    stats::setNames(vals, levels)
+}
+
+makeHCLPal <- function(n) {
+    base <- c("#0072B2","#E69F00","#009E73","#D55E00","#CC79A7","#56B4E9","#F0E442")
+    if (n <= length(base)) base[seq_len(n)] else {
+        extra_n <- n - length(base)
+        extra <- grDevices::hcl(h = seq(15, 375, length.out = extra_n + 1)[-1], c = 100, l = 55)
+        c(base, extra)
+    }
+}
+
+

@@ -19,12 +19,10 @@
 #'   - `"impute.weak"`: rows with `NA` are **kept**; nuisance residualization uses
 #'     weighted LS (tiny weight on missing rows) to get Xr (falls back to NAs), and the fitter treats missing rows with
 #'     a tiny weights similarly (observed rows are the ones permuted).
-#' @param core.only Logical. For `"freedman-lane"`, fit is restricted to `x$core.rows` if `TRUE`.
-#'   Ignored for `"block"`.
 #' @param cross.rows Optional integer/logical index to subset residual rows to cross-group sample pairs 
 #'   for visualization **after** fitting.
 #'   Indices are with respect to the rows actually used: all rows for `"block"`,
-#'   or `which(x$core.rows)` when `perm.method = "freedman-lane"` and `core.only = TRUE`.
+#'   or `which(x$core.rows)` when `perm.method = "freedman-lane"` 
 #' @param return.residuals Logical; return residual matrix.
 #' @param return.sampled.stats Logical; return the matrix of sampled permutation statistics.
 #'
@@ -32,16 +30,7 @@
 #' **Block**: calls the underlying C++ `fit_and_randomize()` on the full design `F`,
 #' shuffling within `x$perm.groups.full`.
 #'
-#' **Freedman–Lane**: calls C++ helper `cpp_fl()` which:
-#' 1) residualizes `X` against `Z` on the **full** data once,
-#' 2) handles `NA` per response column:
-#'    - batches no-`NA` columns together,
-#'    - for `NA` columns with `na.mode = "drop"`, groups by identical row mask and refits on that subset,
-#'    - for `na.mode = "impute.weak"`, performs weighted residualization and preserves `NA` flags so the fitter
-#'      can apply tiny-weight handling and permute only observed rows,
-#' 3) then restricts to `x$core.rows` if `core.only = TRUE`, remapping `x$perm.groups.core` accordingly.
-#' 4) fits and randomizes each column using `fit_and_randomize()`.
-#'
+#' **Freedman–Lane**: calls C++ helper `fl_fwl_cpp()`
 #' Column names from `colnames(y)` are propagated to `stat.obs`, `pval`, `z.score`,
 #' and (when requested) to permutation statistics and residual matrices.
 #'
@@ -52,10 +41,11 @@
 #'   \item `z.score` — numeric length-`m` vector of z-like scores derived from permutation p.
 #'   \item `stats.perm` — if requested, a matrix `n.permutations × m` (when available), otherwise a list.
 #'     Columns are named by `colnames(y)`; rows are `"perm1"`, `"perm2"`, ….
-#'   \item `y.resid` — if requested, residual matrix:
+#'   \item `residual` — if requested, residual matrix:
 #'     - `"block"`: `n × m` (all rows);
-#'     - `"freedman-lane"`: `|core rows| × m` if `core.only = TRUE`, otherwise `n × m`.
+#'     - `"freedman-lane"`: `|core rows| × m`, otherwise `n × m`.
 #'     Row names reflect the used rows; `cross.rows` may further subset rows.
+#'   \item `y.resid` — for `"freedman-lane"`, the `|core rows| × m` matrix of residualized responses (if requested).
 #' }
 #'
 #' @section Notes:
@@ -80,23 +70,28 @@
 #' # Freedman–Lane on core rows with weak imputation
 #' out.fl <- performLMPermutations(
 #'   x, Y, n.permutations = 999, perm.method = "freedman-lane",
-#'   core.only = TRUE, na.mode = "impute_weak", return.residuals = TRUE
+#'   na.mode = "impute_weak", return.residuals = TRUE
 #' )
 #' }
 #' @keywords internal
 performLMPermutations <- function(x, y,
-                  n.permutations = 1000,
                   perm.method = c("block","freedman-lane"),
                   robust.method = c("none", "huber", "winsor"),
-                  na.mode = c("drop", "impute_weak"),
-                  core.only = TRUE,
+                  na.mode = c("drop", "impute_weak"), na.center = c("mean","median"),
+                  alternative = c("two-sided","greater","less"),
                   cross.rows = NULL,
-                  return.residuals = FALSE,
-                  return.sampled.stats = TRUE) {
+                  return.residuals = TRUE,
+                  return.sampled.stats = TRUE,
+                  return.sampled.fits = FALSE,
+                  return.y.resid = TRUE,
+                  n.permutations = 1000,
+                  n.cores=1) {
 
   robust.method <- match.arg(robust.method)
   perm.method   <- match.arg(perm.method)
   na.mode       <- match.arg(na.mode)
+  alternative   <- match.arg(alternative)
+  na.center     <- match.arg(na.center)
   # response vector/matrix
   if (is.numeric(y) && !is.matrix(y)) {
   Y <- matrix(y, ncol = 1L)
@@ -124,38 +119,38 @@ performLMPermutations <- function(x, y,
       contrast = x$contrast.F,
       perm_groups = x$perm.groups.full,
       n_randomizations = n.permutations,
-      alternative = "two-sided",
+      alternative = alternative,
       return_residuals = return.residuals,
-      return_sampled_fits = FALSE,
+      return_sampled_fits = return.sampled.fits,
       return_sampled_stats = return.sampled.stats,
       robust = robust.method, huber_k = 1.345, huber_maxit = 8, huber_tol = 1e-6,
-      na_mode = na.mode, na_weight = 1e-4, na_center = "mean",
-      illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = 1
+      na_mode = na.mode, na_weight = 1e-4, na_center = na.center,
+      illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores
     )
   } else if (perm.method == "freedman-lane") {
   # ------------------------------------------------------------
   # FREEDMAN–LANE: NA-aware, per-column residualization
   # ------------------------------------------------------------
-  fit <- cpp_fl(
+  fit <- fl_fwl_cpp(
   X = x$X,
   Z = if (is.null(x$Z)) matrix(0,0,0) else x$Z,
   Y = Y,
   contrast = x$contrast.X,
-  core_rows_opt = if (is.null(x$core.rows)) NULL else x$core.rows,  # logical
-  perm_groups_core_opt = NULL,                        # 1-based core space
+  core_rows = if (is.null(x$core.rows)) NULL else x$core.rows,  # logical 
   n_randomizations = n.permutations,
-  alternative = "two-sided",
-  return_residuals = TRUE,
-  return_sampled_stats = TRUE,
+  alternative = alternative,
   robust = robust.method,
   huber_k = 1.345, huber_maxit = 8, huber_tol = 1e-6,
-  na_mode = na.mode, na_weight = 1e-4, na_center = "mean",
-  illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = 1)
+  na_mode = na.mode, na_weight = 1e-4, na_center = na.center,
+  illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores, return_residuals = return.residuals,
+  return_sampled_fits=return.sampled.fits, return_sampled_stats = return.sampled.stats)
+  y.resid <- if(return.y.resid) fit$partial_core else NULL
   } else {
     stop("Unknown permutation method: ", perm.method)
   }
    
   # extract and format results
+  coef <- as.numeric(fit$coef)
   stat <- as.numeric(fit$stat)
   z    <- as.numeric(if (!is.null(fit$z.score)) fit$z.score else fit$z_score)
   p    <- as.numeric(if (!is.null(fit$p.value)) fit$p.value else fit$p_value)
@@ -163,7 +158,7 @@ performLMPermutations <- function(x, y,
 
   stats.perm <- NULL
   if (return.sampled.stats) {
-    S <- if (!is.null(fit$sampled.stats)) fit$sampled.stats else fit$sampled_stats
+    S <- fit$sampled_stats
     if (!is.null(S)) {
       if (is.matrix(S) && nrow(S) == n.permutations) {
         colnames(S) <- y.names
@@ -176,89 +171,187 @@ performLMPermutations <- function(x, y,
     }
   }
   #block: residuals are for all rows. freedman-lane: residuals are for core rows only (i.e., which(x$core.rows)).
-  y.resid <- NULL
+  residuals <- NULL
   if (return.residuals && !is.null(fit$residuals)) {
-    y.resid <- fit$residuals
-    colnames(y.resid) <- y.names
-    # set rownames depending on method 
+    residuals <- fit$residuals
+    colnames(residuals) <- y.names
+    # set rownames depending on method
     rn.all <- rownames(Y); if (is.null(rn.all)) rn.all <- as.character(seq_len(nrow(Y)))
-    used.idx <- if (perm.method == "freedman-lane" && core.only && !is.null(x$core.rows)) {
+    used.idx <- if (perm.method == "freedman-lane" && !is.null(x$core.rows)) {
       which(x$core.rows)
     } else {
       seq_len(nrow(Y))
     }
-    rownames(y.resid) <- rn.all[used.idx]
-
-    # optional cross.rows slice (indices relative to the used set)
-    #if (!is.null(cross.rows)) y.resid <- y.resid[cross.rows, , drop = FALSE]
+    rownames(residuals) <- rn.all[used.idx]
   }
-
+  
   list(
+    y.resid    = if(perm.method == "freedman-lane") y.resid else NULL,
+    coef       = coef,
     stat.obs   = stat,
     stats.perm = stats.perm,
     pval       = p,
     z.score    = z,
-    y.resid    = y.resid
+    residuals  = residuals
   )
 }
 
 ## Compute unique R^2 for each term/group in a linear model
 # - F: full model matrix (n x p)
-# - y: numeric response vector (length n)
-# - groups: list of character vectors, each naming columns of F that form a term/group. compute using .makeGroupsPair() or similar.
+# - y: numeric response vector (length n) OR matrix Y (n x K) with columns = cell types
+# - groups: list of character vectors, each naming columns of F that form a term/group.
+# - idx, sample.meta, sample.id, pair.sep: optional helpers to align Y->F row order when y is a matrix.
+#   If provided, expected rownames of Y are built as paste(sample.meta[[sample.id]][idx$i], sample.meta[[sample.id]][idx$j], sep=pair.sep)
+#   If not provided, function assumes Y is already in the same row order as F.
 #' @keywords internal
-estimateR2PerTerm <- function(F, y, groups = NULL) {
-    stopifnot(is.matrix(F) || is.data.frame(F))
-    F <- as.matrix(F)
+estimateR2PerTerm <- function(F, y, groups = NULL,
+                              idx = NULL,           # data.frame(i,j) for design order
+                              pairs.Y = NULL,       # OPTIONAL: data.frame(i,j) giving Y row order
+                              pair.sep = "__", verbose=FALSE) {
+  stopifnot(is.matrix(F) || is.data.frame(F))
+  F <- as.matrix(F)
+
+  # --- original scalar-y path (unchanged math) ---
+  if (is.vector(y) || (is.numeric(y) && is.null(dim(y)))) {
     y <- as.numeric(y)
     has.intercept <- "(Intercept)" %in% colnames(F)
-    
-    # Total Sum of Squares (center if intercept, else uncentered)
     TSS <- if (has.intercept) sum((y - mean(y))^2) else sum(y^2)
     if (TSS <= 0) stop("TSS is zero; cannot compute R^2.")
 
-    # Full model SSE and rank (for reference)
-    SSE.full <- getSSE(F, y)
-    R2.full  <- 1 - SSE.full / TSS
-    rank.full <- qr(F)$rank
+    SSE.full  <- getSSE(F, y)
+    R2.full   <- 1 - SSE.full / TSS
+    groups2   <- sanitizeGroups(groups, F)
 
-    # Default groups = each column as its own term
-    if (is.null(groups)) {
-        groups <- as.list(colnames(F))
-        names(groups) <- colnames(F)
-    } else {
-        # sanity: drop any names not present
-        groups <- lapply(groups, function(v) intersect(v, colnames(F)))
-        ok <- lengths(groups) > 0
-        if (!all(ok)) warning("Some groups had no matching columns in F and were dropped.")
-        groups <- groups[ok]
-    }
-    
-    # Compute unique R^2 by refitting without each group's columns
-    out <- lapply(names(groups), function(g) {
-        cols.g <- groups[[g]]
-        cols.other <- setdiff(colnames(F), cols.g)
-        if (!length(cols.other)) {
-            # Removing the only columns leaves empty model: SSE_other = TSS (if no intercept),
-            # or SSE w.r.t intercept-only. Handle gracefully:
-            F.other <- matrix(1, nrow(F), 1); colnames(F.other) <- "(Intercept*)"
-            SSE.other <- if (has.intercept) sum((y - mean(y))^2) else sum(y^2)
-            rank.other <- 1L
-        } else {
-            F.other <- F[, cols.other, drop = FALSE]
-            SSE.other <- getSSE(F.other, y)
-            rank.other <- qr(F.other)$rank
-        }
-        R2.unique <- max(0, (SSE.other - SSE.full) / TSS)  # clip tiny negatives from numeric noise
-        data.frame(term = g,
-                   #k = length(cols.g),
-                   #rank.minus = rank.other,
-                   R2.unique = R2.unique,
-                   R2.full = R2.full,
-                   stringsAsFactors = FALSE)
+    out <- lapply(names(groups2), function(g) {
+      cols.g     <- groups2[[g]]
+      cols.other <- setdiff(colnames(F), cols.g)
+      if (!length(cols.other)) {
+        SSE.other <- if (has.intercept) sum((y - mean(y))^2) else sum(y^2)
+      } else {
+        SSE.other <- getSSE(F[, cols.other, drop = FALSE], y)
+      }
+      R2.unique <- max(0, (SSE.other - SSE.full) / TSS)
+      data.frame(term = g, R2.unique = R2.unique, R2.full = R2.full,
+                 stringsAsFactors = FALSE)
     })
-    do.call(rbind, out)
+    df <- do.call(rbind, out)
+    # Drop intercept 
+    df <- df[df$term != "Intercept", , drop = FALSE]
+    rownames(df) <- NULL
+    return(df)
+  }
+
+  # --- matrix-Y path (pairs x celltypes) ---
+  stopifnot(is.matrix(y) || is.data.frame(y))
+  Y <- as.matrix(y)
+
+  # 1) Align Y to idx by indices
+  if (!is.null(idx)) {
+    stopifnot(is.data.frame(idx), all(c("i","j") %in% names(idx)))
+    key.idx <- paste(idx$i, idx$j, sep=":")
+
+    if (!is.null(pairs.Y)) {
+      stopifnot(is.data.frame(pairs.Y), all(c("i","j") %in% names(pairs.Y)))
+      key.y  <- paste(pairs.Y$i, pairs.Y$j, sep=":")
+      map <- match(key.idx, key.y)
+      if (anyNA(map)) stop("pairs.Y does not cover all rows in idx; cannot align Y.")
+      Y <- Y[map, , drop = FALSE]
+    } else if (!is.null(rownames(Y))) {
+      # try to parse numeric i,j from rownames(Y)
+      rn <- rownames(Y)
+      # split on any non-digit (e.g., "__", "___", ":", ",", "-")
+      ij <- lapply(strsplit(rn, "[^0-9]+"), function(v) as.integer(v[nzchar(v)]))
+      ok <- vapply(ij, function(v) length(v) >= 2L && all(is.finite(v[1:2])), logical(1))
+      if (all(ok)) {
+        iY <- vapply(ij, function(v) v[1], integer(1))
+        jY <- vapply(ij, function(v) v[2], integer(1))
+        key.y <- paste(iY, jY, sep=":")
+        map <- match(key.idx, key.y)
+        if (anyNA(map)) {
+          if (nrow(Y) != nrow(F)) stop("Failed to align Y by parsing rownames; and nrow(Y) != nrow(F).")
+          if (verbose) warning("Could not fully align Y by parsed rownames; assuming Y already in F/idx order.")
+        } else {
+          Y <- Y[map, , drop = FALSE]
+        }
+      } else {
+        if (nrow(Y) != nrow(F)) stop("Y rownames not parseable and nrow(Y) != nrow(F).")
+        if (verbose) warning("Y rownames not parseable to (i,j); assuming Y already in F/idx order.")
+      }
+    } else {
+      if (nrow(Y) != nrow(F)) stop("Y has no rownames and no pairs.Y; nrow(Y) must equal nrow(F).")
+      # assume already aligned
+    }
+  } else {
+    # No idx given: require Y already aligned to F
+    if (nrow(Y) != nrow(F))
+      stop("idx not provided; ensure Y has same row order and nrow as F.")
+  }
+
+  groups2 <- sanitizeGroups(groups, F)
+  has.intercept <- "(Intercept)" %in% colnames(F)
+
+  # 2) Fit per cell type (drop NA rows per column)
+  ct.names <- colnames(Y)
+  res <- lapply(ct.names, function(ct) {
+    y.ct <- Y[, ct]
+    keep <- which(is.finite(y.ct))
+    if (length(keep) < 2L) {
+      return(data.frame(term = names(groups2), celltype = ct,
+                        R2.unique = NA_real_, R2.full = NA_real_,
+                        stringsAsFactors = FALSE))
+    }
+    F.sub <- F[keep, , drop = FALSE]
+    y.sub <- y.ct[keep]
+
+    TSS <- if (has.intercept) sum((y.sub - mean(y.sub))^2) else sum(y.sub^2)
+    if (TSS <= 0) {
+      return(data.frame(term = names(groups2), celltype = ct,
+                        R2.unique = NA_real_, R2.full = NA_real_,
+                        stringsAsFactors = FALSE))
+    }
+
+    SSE.full <- getSSE(F.sub, y.sub)
+    R2.full  <- 1 - SSE.full / TSS
+
+    out.ct <- lapply(names(groups2), function(g) {
+      cols.g     <- groups2[[g]]
+      cols.other <- setdiff(colnames(F.sub), cols.g)
+      if (!length(cols.other)) {
+        SSE.other <- if (has.intercept) sum((y.sub - mean(y.sub))^2) else sum(y.sub^2)
+      } else {
+        SSE.other <- getSSE(F.sub[, cols.other, drop = FALSE], y.sub)
+      }
+      R2.unique <- max(0, (SSE.other - SSE.full) / TSS)
+      data.frame(term = g, celltype = ct,
+                 R2.unique = R2.unique, R2.full = R2.full,
+                 stringsAsFactors = FALSE)
+    })
+    do.call(rbind, out.ct)
+  })
+
+  df <- do.call(rbind, res)
+  # Drop intercept
+  df <- df[df$term != "Intercept", , drop = FALSE]
+  rownames(df) <- NULL
+  df
 }
+
+# helper to sanitize groups against F
+sanitizeGroups <- function(groups, F) {
+    if (is.null(groups)) {
+      g <- as.list(colnames(F))
+      names(g) <- colnames(F)
+      return(g)
+    } else {
+      g2 <- lapply(groups, function(v) intersect(v, colnames(F)))
+      ok <- lengths(g2) > 0
+      if (!all(ok)) warning("Some groups had no matching columns in F and were dropped.")
+      g2 <- g2[ok]
+      if (!length(g2)) stop("No valid groups after intersecting with F's columns.")
+      return(g2)
+    }
+  }
+
 
 # Fit and get sum of squares (SSE) 
 #' @keywords internal
@@ -268,48 +361,3 @@ getSSE <- function(X, y) {
     res  <- y - as.numeric(X %*% bhat)
     sum(res^2)
 }
-
-# Summarize a list of LM permutation test results (from performLMPermutations)
-# into a data.frame with p-values, adjusted p-values, z-scores, and observed
-# statistics, plus lists of p-value distribution info, distance matrices per type,
-# and R^2 values per type.
-# If residuals were returned, also include a list of residual matrices per type.
-# If permutation stats were returned, also include a list of permutation stats matrices per type.
-#' @param res.list List of results from performLMPermutations(), named by cell type
-#' @param adj.method Method for p-value adjustment (default: "BH")
-#' @section Notes:
-#' * Written only for cluster-based so far. 
-#' @keywords internal
-summarizeLMResults <- function(res.list, adj.method="BH") {
-    ct   <- names(res.list)
-    eff  <- sapply(res.list, \(x) unname(x$res$stat.obs[1]))
-    pvalues <- sapply(res.list, \(x) x$res$pval)
-    zscores <- sapply(res.list, \(x) x$res$z.score)
-    if(!is.null(res.list[[1]]$res$y.resid)) { residuals <- sapply(res.list, \(x) x$res$y.resid, simplify=FALSE) }
-    out  <- data.frame(celltype=ct, obs.stat=eff, pvalue=pvalues, zscore=zscores, stringsAsFactors=FALSE)
-    padjust <- p.adjust(pvalues, method=adj.method)
-    out$p.adj <- padjust
-    out <- out[order(out$obs.stat, decreasing=TRUE), ]
-    p.dist.info    <- lapply(res.list, function(x) x$dist.mat)
-    dists.per.type <- lapply(res.list, function(x) x$dists)
-    r2 <- lapply(res.list, function(x) x$r2)
-    #if(!is.null(res.list[[1]]$res$y.resid)) { 
-    #  residuals <- lapply(res.list, function(x) x$res$y.resid)
-    #}
-    if(!is.null(res.list[[1]]$res$stats.perm)) { 
-      stats.perm <- lapply(res.list, function(x) x$res$stats.perm)
-    }
-    ret <- list(
-      results = out,
-      p.dist.info = p.dist.info,
-      dists.per.type = dists.per.type,
-      r2 = r2,
-      pvalues = pvalues,
-      padjust = padjust,
-      zscores = zscores
-    )
-    if (exists("residuals")) ret$residuals <- residuals
-    if (exists("stats.perm")) ret$stats.perm <- stats.perm
-    ret
-}
-

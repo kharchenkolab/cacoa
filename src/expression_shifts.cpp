@@ -270,7 +270,7 @@ arma::mat estimateExpressionShiftsPairsLM(
   if (pairs.n_rows > 0) {
     int pmin = pairs.min();
     int pmax = pairs.max();
-    if (pmin >= 1 || pmax >= n_samples) pairs -= 1; // looks 1-based
+    if (pmin >= 1 || pmax >= n_samples) pairs -= 1; //  1-based
     if (pairs.min() < 0 || pairs.max() >= n_samples)
       Rcpp::stop("pairs_mat has indices outside [0, %d) after normalization.", n_samples);
   }
@@ -673,4 +673,58 @@ std::vector<double> adjustedZScoresMaxStat(
         );
     }
     return z_adj;
+}
+
+
+/* P-value processing */
+
+// [[Rcpp::export]]
+std::vector<std::vector<int>> mapIds(std::vector<std::vector<int>> ids_vec, std::vector<int> id_map) {
+    std::map<int, int> id_map_c;
+    for (int i = 0; i < id_map.size(); ++i) {
+        id_map_c.emplace(id_map[i], i + 1);
+    }
+
+    std::vector<std::vector<int>> res_ids;
+    for (auto const &ids : ids_vec) {
+        std::vector<int> mapped;
+        for (int id : ids) {
+            auto iter = id_map_c.find(id);
+            if (iter != id_map_c.end()) {
+                mapped.emplace_back(iter->second);
+            }
+        }
+
+        res_ids.emplace_back(mapped);
+    }
+
+    return res_ids;
+}
+
+/* PCA */
+
+// [[Rcpp::export]]
+arma::mat pca_project(const arma::mat& cm_norm, int n_pcs) {
+  int n_rows = cm_norm.n_rows;
+  int n_cols = cm_norm.n_cols;
+  int min_dim = std::min(n_rows, n_cols) - 1;
+  
+  if (n_pcs > min_dim) {
+    Rcpp::Rcout << "Warning: n_pcs is too large. Setting it to maximal allowed value " << min_dim << std::endl;
+    n_pcs = min_dim;
+  }
+  
+  arma::mat U;
+  arma::vec s;
+  arma::mat V;
+  
+  bool status = arma::svd_econ(U, s, V, cm_norm, "right");
+  if (!status) {
+    Rcpp::stop("SVD failed.");
+  }
+  
+  arma::mat pcs = V.cols(0, n_pcs - 1);
+  arma::mat projected = cm_norm * pcs;
+  
+  return projected;
 }

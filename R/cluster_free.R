@@ -98,22 +98,12 @@ geneProgramInfoByCluster <- function(clusters, z.scores, min.score=0.05, verbose
 #' @param return.residuals      pass-through to cpp
 #' @param verbose              logical
 #' @keywords internal
-estimateClusterFreeExpressionShiftsLM <- function(
-  cm, sample.per.cell, nns.per.cell,
-  x,
-  dist = "cor", log.vecs = TRUE,
-  min.n.obs.per.samp = 2L,
-  n.cores = 1, 
-  n.permutations = 999,
-  perm.method = c("freedman-lane","block"),
-  robust.method = c("none","huber","winsor"),
-  na.mode = c("drop","impute_weak"),
-  alternative = c("two-sided","greater","less"),
-  adjust= TRUE,smooth = FALSE, wins = 0.025,
-  return.sampled.stats = TRUE,
-  return.residuals = FALSE,
-  verbose = FALSE
-) {
+estimateClusterFreeExpressionShiftsLM <- function(cm, sample.per.cell, nns.per.cell, x, dist = "cor", log.vecs = TRUE,
+                                                  min.n.obs.per.samp = 2L, n.cores = 1, perm.method = c("freedman-lane","block"), 
+                                                  robust.method = c("none","huber","winsor"),n.permutations = 999,  adjust= TRUE,
+                                                  na.mode = c("drop","impute_weak"), alternative = c("two-sided","greater","less"),
+                                                  smooth = FALSE, wins = 0.025, return.sampled.stats = TRUE, 
+                                                  return.residuals = FALSE, verbose = FALSE) {
   perm.method   <- match.arg(perm.method)
   robust.method <- match.arg(robust.method)
   na.mode       <- match.arg(na.mode)
@@ -136,31 +126,16 @@ estimateClusterFreeExpressionShiftsLM <- function(
   storage.mode(pairs.mat) <- "integer"
 
   ## ---- response matrix (pairwise distances per neighborhood) ----
-  Y <- estimateExpressionShiftsPairsLM(
-    cm                = cm,
-    sample_per_cell   = spc,
-    nn_ids            = nn.list,
-    pairs_mat         = pairs.mat,
-    min_n_obs_per_samp= min.n.obs.per.samp,
-    dist              = dist,
-    log_vecs          = log.vecs
-  )
+  Y <- estimateExpressionShiftsPairsLM(cm = cm, sample_per_cell = spc, nn_ids = nn.list, pairs_mat = pairs.mat,
+                                       min_n_obs_per_samp= min.n.obs.per.samp, dist = dist, log_vecs = log.vecs)
   if (!is.null(names(nn.list))) colnames(Y) <- names(nn.list)
   #na.cols <- which(colSums(is.na(Y)) > 0)
 
   ## ---- fit & permutations ----
-  res <- performLMPermutations(
-    x                   = x$model,
-    y                   = Y,
-    n.permutations      = n.permutations,
-    perm.method         = perm.method,  
-    robust.method       = robust.method,
-    na.mode             = na.mode,
-    alternative         = alternative,
-    return.sampled.stats= return.sampled.stats,
-    return.residuals    = return.residuals,
-    n.cores             = n.cores
-  )
+  res <- performLMPermutations(x = x$model, y = Y, n.permutations = n.permutations, perm.method = perm.method,
+                               robust.method = robust.method, na.mode = na.mode, alternative = alternative,
+                               return.sampled.stats = return.sampled.stats, return.residuals = return.residuals,
+                               n.cores = n.cores)
 
   valid <- is.finite(res$stat.obs) & apply(res$stats.perm, 2, function(col) {
                                            all(is.finite(col)) && sd(col) > 0
@@ -168,15 +143,10 @@ estimateClusterFreeExpressionShiftsLM <- function(
   non.zero.ids <- which(valid)
   non.zero.ids.c <- as.integer(non.zero.ids - 1L)
 
-  z.adj <- adjustedZScoresMaxStat( ## new cpp function; uses old functions internally
-    T_obs        = res$stat.obs,
-    T_perm       = res$stats.perm,   # rows=perms, cols=tests
-    alt          = if (alternative == "two-sided") 0 else if (alternative == "greater") 1 else 2,
-    wins         = wins,
-    smooth       = smooth,
-    nn_ids       = nn.list,
-    non_zero_ids = non.zero.ids.c
-  )
+  ## new cpp function; uses old functions internally; edit fit_an_randomize to return min/max instead
+  z.adj <- adjustedZScoresMaxStat(T_obs = res$stat.obs, T_perm = res$stats.perm,   # rows=perms, cols=tests
+                                  alt = if (alternative == "two-sided") 0 else if (alternative == "greater") 1 else 2,
+                                  wins = wins, smooth = smooth, nn_ids = nn.list, non_zero_ids = non.zero.ids.c)
   ## ---- effect-size shifts (center by permutation mean) ----
   shifts <- res$stat.obs
   if (!is.null(res$stats.perm)) {
@@ -189,13 +159,13 @@ estimateClusterFreeExpressionShiftsLM <- function(
   if (!is.null(colnames(Y))) {
     names(shifts)     <- colnames(Y)
     names(shifts.smoothed)   <- colnames(Y)
-    names(z.adj)   <- colnames(Y)
+    names(z.adj) <- names(res$z.score)   <- colnames(Y)
   }
 
   list(
     stat            = res$stat.obs,
     p.value         = res$pval,
-    z.score         = res$z.score,
+    z.scores        = res$z.score,
     z.adj           = if (adjust) z.adj else NULL,
     shifts          = shifts,
     shifts.smoothed = shifts.smoothed,

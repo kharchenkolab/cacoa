@@ -182,9 +182,14 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
 #' @param block.id block variable for permutation test
 #' @keywords internal
 diffCellDensityPermutations <- function(density.mat, sample.meta, contrast, sample.groups,
-                                        type='permutation', block.id = NULL, verbose=TRUE, perm.method=c("full", "freedman-lane"), n.permutations=200, 
-                                        n.cores=1) {
+                                        type='permutation', block.id = NULL, perm.method=c("block", "freedman-lane"), 
+                                        n.permutations=999, robust.method=c("none","huber","winsor"), na.mode=c("drop", "impute_weak"),
+                                        alternative=c("two-sided","greater","less"), return.residuals=FALSE, return.sampled.stats=TRUE,
+                                        n.cores=1, verbose=TRUE, ...) {
   perm.method <- match.arg(perm.method)
+  robust.method <- match.arg(robust.method)
+  na.mode <- match.arg(na.mode)
+  alternative <- match.arg(alternative)
   ref.level <- contrast[3]
   target.level <- contrast[2]
 
@@ -203,85 +208,32 @@ diffCellDensityPermutations <- function(density.mat, sample.meta, contrast, samp
   }
 
   if(type =='permutation'){
+    if (is.null(sample.meta) || is.null(contrast)) {
+      stop("Both 'sample.meta' and 'contrast' must be provided for testing with type='permutation'.")
+    }
     res.diff <- list()
     dm <- buildDesignMatrices(sample.meta,contrast = contrast, block.vars = block.id)
-    # Y must be n x p with the same row order as dm$F
     Y <- t(density.mat)
-    # Blocks as 0-based ints
-    blk.full <- if (is.null(dm$blocks)) integer(0) else as.integer(dm$blocks) - 1L
-    if (perm.method == "full") {
-    ## -------- FULL path: use ALL rows --------
-    F.use   <- dm$F
-    Y.use   <- Y
-    blk.use <- blk.full
+    ## ---- fit & permutations ----
+    res <- performLMPermutations(
+    x                   = dm,
+    y                   = Y,
+    n.permutations      = n.permutations,
+    perm.method         = perm.method,
+    robust.method       = robust.method,
+    na.mode             = na.mode,
+    alternative         = alternative,
+    return.sampled.stats= return.sampled.stats,
+    return.residuals    = return.residuals,
+    n.cores             = n.cores
+  )
+  # center by permutation mean
+  score.c <- as.numeric(res$stat.obs - colMeans(res$stats.perm, na.rm = TRUE)) 
+  names(score.c) <- colnames(Y)
+  z.score <- res$z.score
+  names(z.score) <- colnames(Y)
 
-    # Align contrast to F cols
-    cF <- dm$contrast.F[colnames(F.use)]; cF[is.na(cF)] <- 0
-
-  # Sanity checks
-  stopifnot(nrow(F.use) == nrow(Y.use))
-  stopifnot(length(cF) == ncol(F.use))
-  stopifnot(length(blk.use) %in% c(0L, nrow(F.use)))
-
-  res <- perm_full_contrast_mat(F.use, Y.use, cF, blk.use, B = 9999L) # res$stat_obs: length p; res$stats_perm: B x p
-
-  # Names for bins (columns of Y)
-  bin.names <- colnames(Y.use)
-  stopifnot(length(res$stat_obs) == length(bin.names))
-  names(res$stat_obs) <- bin.names
-  colnames(res$stats_perm) <- bin.names
-  
-  score.c <- as.numeric(res$stat_obs - colMeans(res$stats_perm, na.rm = TRUE)) # center by permutation mean
-  names(score.c) <- bin.names
-
-  # permutation p-values and signed Z
-  B.eff <- colSums(is.finite(res$stats_perm))
-  ge    <- colSums(sweep(abs(res$stats_perm), 2, abs(res$stat_obs), FUN = ">="), na.rm = TRUE)
-  pval  <- (1 + ge) / (1 + B.eff)
-  Z.perm <- qnorm(1 - pval/2) * sign(res$stat_obs)
-
- } else if (perm.method == "freedman-lane") {
-  ## -------- FREEDMAN-LANE path: use RESIDUALS --------  
-  rz <- residualizeForFL(Y, dm$qr.Z, dm$X)   # returns list(y.r = n x p, X.r = n x qx)
-
-  rows.use <- if (!is.null(dm$core.rows)) which(dm$core.rows) else seq_len(nrow(dm$F))
-
-  Xr.use   <- rz$X.r[rows.use, , drop = FALSE]
-  Yr.use   <- rz$y.r[rows.use, , drop = FALSE]
-  blk.useR <- if (length(blk.full)) blk.full[rows.use] else integer(0)
-
-  # Align contrast to X_r cols
-  cX <- dm$contrast.X[colnames(Xr.use)]; cX[is.na(cX)] <- 0
-
-  # Sanity checks
-  stopifnot(nrow(Xr.use) == nrow(Yr.use))
-  stopifnot(length(cX) == ncol(Xr.use))
-  stopifnot(length(blk.useR) %in% c(0L, nrow(Xr.use)))
-
-  res <- perm_FL_contrast_mat(Xr.use, Yr.use, cX, blk.useR, B = 9999L)
-  
-  # Bin names from the residualized response (columns = bins)
-  bin.names <- colnames(Yr.use)
-  stopifnot(length(res$stat_obs) == length(bin.names))
-  names(res$stat_obs)      <- bin.names
-  colnames(res$stats_perm) <- bin.names
-
-  # Center observed contrast score by permutation mean (per bin)
-  score.c <- as.numeric(res$stat_obs - colMeans(res$stats_perm, na.rm = TRUE))
-  names(score.c) <- bin.names
-
-  # Two-sided permutation p-values (+1 correction), then signed Z
-  B.eff <- colSums(is.finite(res$stats_perm))
-  ge    <- colSums(sweep(abs(res$stats_perm), 2, abs(res$stat_obs), FUN = ">="), na.rm = TRUE)
-  pval  <- (1 + ge) / (1 + B.eff)
-  Z.perm <- qnorm(1 - pval/2) * sign(res$stat_obs)
-
- } else {
-  stop("Unknown perm.method: ", perm.method)
- }
-
- return(list(score=score.c, permut.scores = t(res$stats_perm), Z=Z.perm, 
-            stat.obs=res$stat_obs, stats.perm=res$stats_perm))
+ return(list(score=score.c, permut.scores = t(res$stats.perm), z.score=z.score))
  }
 }
 

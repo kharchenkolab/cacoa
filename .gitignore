@@ -10,3 +10,4 @@ cacoa*.tar.gz
 *.so
 *.a
 cmake-build*
+src/fit_and_randomize.cpp

@@ -926,18 +926,21 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
   const bool use_impute = (na_mode == "impute_weak");
   if (!use_drop && !use_impute) stop("na_mode must be 'drop' or 'impute_weak'.");
   
+  // core rows (0-based indices in [0,n))
   arma::uvec idx_core = parse_core_rows(core_rows, n);
   const arma::uword nc = idx_core.n_elem;
   if (nc < p + 1) stop("Not enough core rows (|core_rows| < p+1).");
   
+  // map global row -> position within core (or -1 if not in core)
   std::vector<int> pos_in_core((size_t)n, -1);
   for (arma::uword t = 0; t < nc; ++t) pos_in_core[(size_t)idx_core[t]] = (int)t;
   
   const arma::uword m = Y.n_cols;
   
+  // Group Y columns by identical NA mask over **all n rows**
   struct GInfo {
     std::vector<arma::uword> cols;
-    std::vector<unsigned char> mask_all;
+    std::vector<unsigned char> mask_all; // length n; 1=finite, 0=NA
   };
   std::unordered_map<std::uint64_t, GInfo> groups;
   groups.reserve((size_t)std::max<arma::uword>(8u, m / 8u));
@@ -956,6 +959,7 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
     }
   }
   
+  // Allocate outputs (core-row space for residuals)
   arma::mat Coef(p, m);   Coef.fill(arma::datum::nan);
   arma::vec Stat(m);      Stat.fill(arma::datum::nan);
   arma::vec Zscore(m);    Zscore.fill(arma::datum::nan);
@@ -967,6 +971,7 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
   std::vector<arma::mat> SampledFits; if (return_sampled_fits) SampledFits.resize(m);
   arma::mat SampledStats; if (return_sampled_stats && n_randomizations > 0) { SampledStats.set_size(n_randomizations, m); SampledStats.fill(arma::datum::nan); }
   
+  // Process NA-pattern groups
   for (auto & kv : groups) {
     const GInfo& g = kv.second;
     const std::vector<unsigned char>& mask = g.mask_all;
@@ -976,15 +981,16 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
     for (size_t a = 0; a < J.size(); ++a) Jv[a] = J[a];
     
     if (use_drop) {
+      // ---- 1) finite rows (over ALL rows), residualize there ----
       std::vector<arma::uword> pos_fin; pos_fin.reserve(n);
       for (arma::uword i = 0; i < n; ++i) if (mask[i]) pos_fin.push_back(i);
       arma::uword n_fin = (arma::uword)pos_fin.size();
-      if (n_fin < p + 1) continue;
+      if (n_fin < p + 1) continue; // nowhere to fit even before core filtering
       
-      arma::uvec sel_fin = arma::uvec(pos_fin);
+      arma::uvec sel_fin = arma::uvec(pos_fin); // indices in [0,n)
       arma::mat Xf = X.rows(sel_fin);
       arma::mat Zf = (Z.n_cols > 0) ? Z.rows(sel_fin) : arma::mat(n_fin, 0);
-      arma::mat Yf = Y.submat(sel_fin, Jv);
+      arma::mat Yf = Y.submat(sel_fin, Jv);  // n_fin x |J|
       
       arma::mat Xr_fin, Yr_fin;
       if (Zf.n_cols > 0) {
@@ -996,8 +1002,10 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
         Xr_fin = Xf; Yr_fin = Yf;
       }
       
+      // ---- 2) now apply core_rows: intersect(sel_fin, idx_core) ----
       std::vector<arma::uword> pos_corefin; pos_corefin.reserve(n_fin);
       std::vector<arma::uword> pos_corefin_corepos; pos_corefin_corepos.reserve(n_fin);
+      // map global->position in sel_fin
       std::vector<int> pos_in_fin((size_t)n, -1);
       for (arma::uword r = 0; r < n_fin; ++r) pos_in_fin[(size_t)sel_fin[r]] = (int)r;
       
@@ -1005,20 +1013,21 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
         arma::uword i_glob = sel_fin[r];
         int pc = pos_in_core[(size_t)i_glob];
         if (pc >= 0) {
-          pos_corefin.push_back(r);
-          pos_corefin_corepos.push_back((arma::uword)pc);
+          pos_corefin.push_back(r); // row index in Xr_fin / Yr_fin
+          pos_corefin_corepos.push_back((arma::uword)pc); // row index in Resid (0..nc-1)
         }
       }
-      if (pos_corefin.size() < (size_t)(p + 1)) continue;
+      if (pos_corefin.size() < (size_t)(p + 1)) continue; // not enough rows to fit on core
       
-      arma::uvec sel_corefin = arma::uvec(pos_corefin);
-      arma::uvec sel_corepos = arma::uvec(pos_corefin_corepos);
+      arma::uvec sel_corefin = arma::uvec(pos_corefin); // rows in Xr_fin/Yr_fin
+      arma::uvec sel_corepos = arma::uvec(pos_corefin_corepos); // rows in Resid
       
       arma::mat Xr = Xr_fin.rows(sel_corefin);
       arma::mat Yr = Yr_fin.rows(sel_corefin);
       
-      if (is_ill_conditioned(Xr, illcond_rcond)) continue;
+      if (is_ill_conditioned_mat(Xr, illcond_rcond)) continue;
       
+      // Engine on residualized subset; permutations are full (perm_groups=NULL)
       Rcpp::List ans = fit_and_randomize(
         Xr, Yr, contrast,
         R_NilValue, n_randomizations, alternative,
@@ -1028,10 +1037,10 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
         illcond_rcond, pinv_tol, n_cores
       );
       
-      arma::mat B = ans["coef"];
-      arma::vec s = ans["stat"];
-      arma::vec z = ans["z_score"];
-      arma::vec pv = ans["p_value"];
+      arma::mat B = ans["coef"]; // p x |J|
+      arma::vec s = ans["stat"]; // |J|
+      arma::vec z = ans["z_score"]; // |J|
+      arma::vec pv = ans["p_value"]; // |J|
       for (size_t a = 0; a < J.size(); ++a) {
         arma::uword j = J[a];
         Coef.col(j) = B.col(a);
@@ -1041,7 +1050,7 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
       }
       if (return_residuals) {
         arma::mat Rg = ans["residuals"];                      // |core∩finite| x |J|
-        Resid.submat(sel_corepos, Jv) = Rg;
+        Resid.submat(sel_corepos, Jv) = Rg; // write back at core positions
         // --- added ---
         PartialCore.submat(sel_corepos, Jv) = Yr;
         arma::mat Fg = Yr - Rg;
@@ -1057,11 +1066,11 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
         for (size_t a = 0; a < J.size(); ++a) SampledFits[J[a]] = Rcpp::as<arma::mat>(L[a]);
       }
       if (return_sampled_stats && n_randomizations > 0) {
-        arma::mat SS = ans["sampled_stats"];
+        arma::mat SS = ans["sampled_stats"]; // n_perm x |J|
         SampledStats.cols(Jv) = SS;
       }
       
-    } else {
+    } else { // -------- impute_weak: residualize on ALL rows, then apply core_rows --------
       arma::vec w(n); w.fill(na_weight);
       for (arma::uword i = 0; i < n; ++i) if (mask[i]) w[i] = 1.0;
       arma::vec sqrtw = arma::sqrt(w);
@@ -1121,7 +1130,7 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
       }
       if (return_residuals) {
         arma::mat Rg = ans["residuals"];            // nc x |J|
-        Resid.cols(Jv) = Rg;
+        Resid.cols(Jv) = Rg;                        // directly into core space
         // --- added ---
         PartialCore.cols(Jv) = Yr;
         arma::mat Fg = Yr - Rg;

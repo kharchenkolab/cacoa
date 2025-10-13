@@ -682,7 +682,7 @@ extractPairwiseShifts <- function(res, p.dist, design.mat, dist.type, perm.metho
       df.perm.obs <- data.frame(celltype = ct, obs = as.numeric(stat.obs), stringsAsFactors = FALSE)
     }
   }
-  out <- list(df.shifts = df.shifts, df.cov.keys = df.cov.keys)
+  out <- list(df.shifts = df.shifts, df.cov.keys = df.cov.keys, dist.type = dist.type)
   if (!is.null(df.blocks))    out$df.blocks    <- df.blocks
   if (!is.null(df.perm))      out$df.perm      <- df.perm
   if (!is.null(df.perm.obs))  out$df.perm.obs  <- df.perm.obs

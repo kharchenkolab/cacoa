@@ -638,6 +638,11 @@ buildPairDesignMatrices <- function(sample.meta, triplet,
   # 1) Indices for lower triangle, derived from nrow(meta)
   n   <- nrow(sample.meta)
   idx <- lowerTriIndices(n)
+  # Get sample names for each pair from indices
+  pair.names <- data.frame(
+    sample.pairs = paste0(rownames(sample.meta)[idx$i], "__", rownames(sample.meta)[idx$j]),
+    stringsAsFactors = FALSE
+  )
 
   # 2) Pair-level metadata from sample-level meta
   pair.meta <- pairifyMeta(sample.meta, idx)
@@ -670,7 +675,7 @@ buildPairDesignMatrices <- function(sample.meta, triplet,
     na.action  = na.action
   )
 
-  list(pairs = idx, pair.meta = pair.meta, model = prep, model.diag = prep$model.diag)
+  list(pairs = idx, pair.names = pair.names, pair.meta = pair.meta, model = prep, model.diag = prep$model.diag)
 }
 
 #' Return lower-triangular (row, col) index pairs for an n x n matrix

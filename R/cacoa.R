@@ -406,7 +406,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
   }
 
   # LM-based estimation
-  if (verbose) message("Fitting LM with formula: ", deparse(formula)) # TODO: extract meaningful formula from the pair.model? 
+  if (verbose) message("Fitting LM with formula: ", deparse(pair.model$pair_formula_used))
   browser()
   out <- shift.inp %$% estimateExpressionChange(cm.per.type, cell.groups = cell.groups, design.mat=pair.model,
                                                               sample.meta = sample.meta, sample.per.cell = sample.per.cell, 

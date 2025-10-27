@@ -506,34 +506,75 @@ buildPairDesignMatrices <- function(sample.meta,
     cs <- sampleDesign$contrast_spec
     if (is.null(cs)) stop("sampleDesign lacks $contrast_spec.")
     
-    # single-factor {var, alt, ref}
+    # extract {var, alt, ref} from simple/marginal/triple
     if (is.character(cs) && length(cs) == 3) {
       tgt <- list(var = cs[[1]], alt = cs[[2]], ref = cs[[3]])
-    } else if (identical(cs$type, "simple") && !grepl(":", cs$term, fixed = TRUE)) {
+    } else if (is.list(cs) &&
+               identical(cs$type, "simple") &&
+               !grepl(":", cs$term, fixed = TRUE)) {
       tgt <- list(var = cs$term, alt = cs$num, ref = cs$den)
-    } else if (identical(cs$type, "marginal")) {
+    } else if (is.list(cs) && identical(cs$type, "marginal")) {
       tgt <- list(var = cs$term, alt = cs$num, ref = cs$den)
     } else {
       stop("Cannot synthesize default pair contrast from sampleDesign$contrast_spec.")
     }
     
-    # sanity on levels
     if (!tgt$var %in% names(sample.meta))
       stop("Target factor '", tgt$var, "' not found in metadata.", call. = FALSE)
+    
     f.levels <- levels(factor(sample.meta[[tgt$var]]))
     miss <- setdiff(c(tgt$ref, tgt$alt), f.levels)
     if (length(miss))
       stop("ALT/REF levels not found for factor '", tgt$var, "': ",
            paste(miss, collapse = ", "), call. = FALSE)
     
-    explicitCoef <- buildDefaultPairedCoef(
-      pair_meta = pair.meta,
-      var       = tgt$var,
-      ref       = tgt$ref,
-      alt       = tgt$alt,
-      dist.type = dist.type
-    )
+    pair_fac <- paste0(tgt$var, "_pair")
+    if (!pair_fac %in% names(pair.meta))
+      stop("Internal error: '", pair_fac, "' not found in pair.meta.", call. = FALSE)
+    
+    levs <- levels(pair.meta[[pair_fac]])
+    
+    # Build canonical labels for ref-ref, alt-alt, and mixed(ref,alt)
+    lab_refref <- paste0(tgt$ref, "_and_", tgt$ref)
+    lab_altalt <- paste0(tgt$alt, "_and_", tgt$alt)
+    lab_mixed  <- paste0(sort(c(tgt$ref, tgt$alt)), collapse = "_and_")
+    
+    # Set weights for each of these labels depending on dist.type
+    w_refref <- 0
+    w_altalt <- 0
+    w_mixed  <- 0
+    
+    if (dist.type == "shift") {
+      # mixed − 0.5(ref_ref + alt_alt)
+      w_refref <- -0.5
+      w_altalt <- -0.5
+      w_mixed  <-  1
+    } else if (dist.type == "total") {
+      # mixed − ref_ref
+      w_refref <- -1
+      w_altalt <-  0
+      w_mixed  <-  1
+    } else if (dist.type == "var") {
+      # alt_alt − ref_ref
+      w_refref <- -1
+      w_altalt <-  1
+      w_mixed  <-  0
+    }
+    
+    # Start with a fully named 0-vector over *all* levels (so Z can soak up "other")
+    coef_names <- paste0(pair_fac, levs)
+    explicitCoef <- setNames(numeric(length(coef_names)), coef_names)
+    
+    # Assign the weights we just computed
+    # (only if those levels actually exist in this dataset)
+    if (lab_refref %in% levs)
+      explicitCoef[paste0(pair_fac, lab_refref)] <- w_refref
+    if (lab_altalt %in% levs)
+      explicitCoef[paste0(pair_fac, lab_altalt)] <- w_altalt
+    if (lab_mixed %in% levs)
+      explicitCoef[paste0(pair_fac, lab_mixed)]  <- w_mixed
   }
+  
   
   ## 8) Pick the pair formula
   pairFormulaUsed <- pairFormula %||% buildDefaultPairFormula(pair.meta)
@@ -561,7 +602,7 @@ buildPairDesignMatrices <- function(sample.meta,
   out$dist_type         <- dist.type
   
   if (verbosity %in% c("info")) {
-    fac_cols <- names(pair.meta)[grepl("_pair_$", names(pair.meta))]
+    fac_cols <- names(pair.meta)[grepl("_pair$", names(pair.meta))]
     num_cols <- names(pair.meta)[grepl("^pair_[A-Za-z0-9_]+_(mean|diff)$", names(pair.meta))]
     message(sprintf("Paired design: factor(s)=%s; numeric=%s; formula=%s",
                     if (length(fac_cols)) paste(sub("_pair_$","",fac_cols), collapse=", ") else "(none)",
@@ -1545,25 +1586,32 @@ extractPairNumericVarsFromFormula <- function(pairFormula, data) {
 # - factorVars: character vector of sample-level factor/character variables to pairify
 # - focusVar: optional factor used later to seed default "shift/total/var" contrast
 # - numericVars: character vector of sample-level numerics to mirror into pair_<var>_{mean,diff}
-pairifyMeta <- function(meta, pairsIdx, factorVars = character(0), focusVar = NULL, numericVars = character(0)) {
+pairifyMeta <- function(meta,
+                        pairsIdx,
+                        factorVars = character(0),
+                        focusVar = NULL,
+                        numericVars = character(0)) {
   stopifnot(is.data.frame(meta))
   n <- nrow(meta); if (!n) stop("Empty metadata.")
-  if (is.null(pairsIdx) || ncol(pairsIdx) != 2L) stop("pairsIdx must be 2-column (i,j).")
+  if (is.null(pairsIdx) || ncol(pairsIdx) != 2L)
+    stop("pairsIdx must be 2-column (i,j).")
   i <- as.integer(pairsIdx[,1]); j <- as.integer(pairsIdx[,2])
-  if (any(i < 1 | i > n | j < 1 | j > n)) stop("pairsIdx out of bounds.")
+  if (any(i < 1 | i > n | j < 1 | j > n))
+    stop("pairsIdx out of bounds.")
   n_pairs <- length(i)
   
   cols <- list()
   friendly_map <- character(0)
   
-  # Helper: label unordered pair of levels "A" and "B" as "A_and_B" (A<=B in factor level order)
+  # helper: stable unordered label "A_and_B" with A,B ordered by factor level index
   join_levels <- function(levs, a, b) {
     ia <- match(a, levs); ib <- match(b, levs)
-    if (is.na(ia) || is.na(ib)) stop("Unknown levels in pairifyMeta.")
+    if (is.na(ia) || is.na(ib))
+      stop("Unknown level when forming pair labels.")
     if (ia <= ib) paste0(a, "_and_", b) else paste0(b, "_and_", a)
   }
   
-  # Pairify each requested factor variable
+  # ---- pairify categorical variables
   if (length(factorVars)) {
     for (v in factorVars) {
       if (!v %in% names(meta))
@@ -1571,21 +1619,25 @@ pairifyMeta <- function(meta, pairsIdx, factorVars = character(0), focusVar = NU
       raw <- meta[[v]]
       if (!(is.factor(raw) || is.character(raw)))
         stop("Variable '", v, "' must be factor/character to be pairified as factor.")
-      f <- factor(raw)  # drop unused at sample level
-      L <- levels(f)
-      fi <- as.character(f[i]); fj <- as.character(f[j])
-      lev_lbl <- mapply(function(a,b) join_levels(L, a, b), fi, fj, SIMPLIFY = TRUE, USE.NAMES = FALSE)
       
-      # Build complete ordered-with-repetition grid of levels for consistent factor levels
+      f <- factor(raw)           # drop unused levels at sample level
+      L <- levels(f)
+      
+      fi <- as.character(f[i])
+      fj <- as.character(f[j])
+      lev_lbl <- mapply(function(a,b) join_levels(L, a, b),
+                        fi, fj,
+                        SIMPLIFY = TRUE, USE.NAMES = FALSE)
+      
+      # build all possible unordered-with-replacement combos of levels
       all_pairs <- unique(c(outer(L, L, Vectorize(function(a,b) join_levels(L,a,b)))))
-      # Name the factor column with a trailing underscore to produce nice design names:
-      # e.g., model.matrix(~0+Group_pair_) → Group_pair_Group1_and_Group2
-      fac_name <- paste0(v, "_pair_")
+      
+      fac_name <- paste0(v, "_pair")  # <-- no trailing underscore now
       cols[[fac_name]] <- factor(lev_lbl, levels = all_pairs)
     }
   }
   
-  # Numeric pair summaries
+  # ---- mirror numeric variables (mean + diff)
   if (length(numericVars)) {
     for (v in numericVars) {
       if (!v %in% names(meta))
@@ -1593,12 +1645,18 @@ pairifyMeta <- function(meta, pairsIdx, factorVars = character(0), focusVar = NU
       x <- meta[[v]]
       if (!(is.numeric(x) && !is.matrix(x)))
         stop("Variable '", v, "' must be numeric for pair mirrors.")
-      xi <- as.numeric(x[i]); xj <- as.numeric(x[j])
+      
+      xi <- as.numeric(x[i])
+      xj <- as.numeric(x[j])
+      
       base_safe <- paste0("pair_", makeSafeVar(v))
       nm_mean   <- paste0(base_safe, "_mean")
       nm_diff   <- paste0(base_safe, "_diff")
+      
       cols[[nm_mean]] <- 0.5 * (xi + xj)
-      cols[[nm_diff]] <- (xi - xj)           # order: i - j
+      cols[[nm_diff]] <- (xi - xj)  # oriented i - j
+      
+      # record friendly aliases for explicit contrasts
       friendly_map[nm_mean] <- paste0("pair[", v, "]_mean")
       friendly_map[nm_diff] <- paste0("pair[", v, "]_diff")
     }
@@ -1609,10 +1667,12 @@ pairifyMeta <- function(meta, pairsIdx, factorVars = character(0), focusVar = NU
   } else {
     data.frame(row.names = seq_len(n_pairs))[ , 0]
   }
+  
   rownames(out) <- paste0("pair_", i, "_", j)
   attr(out, "friendly_map") <- friendly_map
   out
 }
+
 
 # Extract the focus variable from coefficient names in an explicit pairContrast.
 # Works with colnames like "Group_pair_Group1_and_Group2".
@@ -1636,70 +1696,78 @@ extractFocusVarFromNamedContrast <- function(pc_names) {
 
 # Map user-friendly coefficient names to real pair.meta column names.
 # - Accepts:
-#   * factor cell columns like "Group_pair_Group1_and_Group2"
-#   * numeric columns like "pair_age_diff"
+#   * factor cell columns like "Group_pairGroup1_and_Group2"
+#   * numeric columns like "pairdage_diff"
 #   * friendly aliases like "pair[age]_diff"
-normalizeExplicitPairCoefNames <- function(coefvec, pair_meta) {
+normalizeExplicitPairCoefNames <- function(coefvec, pair_meta, focusVar = NULL) {
   stopifnot(is.numeric(coefvec), !is.null(names(coefvec)))
   nm_in <- names(coefvec)
   
   friendly_map <- attr(pair_meta, "friendly_map")
   if (is.null(friendly_map)) friendly_map <- character(0)
   
-  # all legit direct column names
-  direct_ok <- colnames(pair_meta)
+  # all columns that actually exist in pair.meta
+  safe_numeric <- colnames(pair_meta)
   
-  # all legit factor cell columns:
-  # for each *_pair_ factor column, model.matrix(~0+that_factor) will create
-  # columns "thatFactor<level>", e.g. "Group_pair_Group1_and_Group2"
-  fact_cols <- direct_ok[grepl("_pair_$", direct_ok)]
-  fact_expect <- unlist(lapply(fact_cols, function(fc) {
-    paste0(fc, levels(pair_meta[[fc]]))
-  }), use.names = FALSE)
+  # expected factor-expanded coefficient names
+  # For each pair factor column like 'Group_pair', model.matrix(~0+Group_pair)
+  # will generate columns like 'Group_pairGroup1_and_Group2'.
+  # We don't know the full expansion unless we look at levels().
+  fact_expect <- character(0)
+  fact_cols <- colnames(pair_meta)[grepl("_pair$", colnames(pair_meta))]
+  if (length(fact_cols)) {
+    fact_expect <- unlist(lapply(fact_cols, function(fc) {
+      paste0(fc, levels(pair_meta[[fc]]))
+    }))
+  }
   
-  safe_out <- character(length(nm_in))
+  out_names <- character(length(nm_in))
   for (k in seq_along(nm_in)) {
     nm <- nm_in[k]
     
-    # 1. Already a real column name in pair_meta?
-    if (nm %in% direct_ok || nm %in% fact_expect) {
-      safe_out[k] <- nm
+    # case 1: already matches an expanded factor coef or a numeric pair term in pair.meta
+    if (nm %in% fact_expect || nm %in% safe_numeric) {
+      out_names[k] <- nm
       next
     }
     
-    # 2. Friendly alias from numeric mirroring? (pair[age]_diff -> pair_age_diff)
+    # case 2: friendly numeric alias like "pair[age]_diff"
     hit <- names(friendly_map)[friendly_map == nm]
     if (length(hit) == 1L) {
-      safe_out[k] <- hit
+      out_names[k] <- hit
       next
     }
     
-    # 3. Looks already like a mirrored numeric term ("pair_age_diff")?
+    # case 3: already safe numeric-style name
     if (grepl("^pair_[A-Za-z0-9_]+_(mean|diff)$", nm)) {
-      safe_out[k] <- nm
+      out_names[k] <- nm
       next
     }
     
     stop("Unknown coefficient in explicit pairContrast: '", nm,
-         "'. Available examples: ",
-         paste(utils::head(c(fact_expect, names(friendly_map)), 6), collapse = ", "),
-         if ((length(fact_expect) + length(friendly_map)) > 6) ", …" else "")
+         "'. Available examples include factor columns like {",
+         paste(head(fact_expect, 6), collapse=", "),
+         "} or numeric mirrors like {",
+         paste(head(names(friendly_map), 6), collapse=", "),
+         "}.")
   }
   
-  stats::setNames(unclass(coefvec), safe_out)
+  stats::setNames(unclass(coefvec), out_names)
 }
+
 
 # Build a coefficient vector from an explicit "cells" spec:
 # cells is like c("Group1_and_Group1"= -0.5, "Group1_and_Group2"=1, ...)
 # Returns a named numeric over the *design columns* for that pair factor.
 buildCoefFromCells <- function(pair_meta, var, cells) {
-  pair_fac <- paste0(var, "_pair_")
+  # var is e.g. "Group"
+  pair_fac <- paste0(var, "_pair")
   if (!pair_fac %in% names(pair_meta))
     stop("Pair metadata lacks '", pair_fac, "'.")
   
   levs <- levels(pair_meta[[pair_fac]])
   
-  # sanity check the requested cells
+  # Validate provided cells
   bad <- setdiff(names(cells), levs)
   if (length(bad)) {
     stop("Unknown cells in explicit pair contrast: ",
@@ -1707,74 +1775,32 @@ buildCoefFromCells <- function(pair_meta, var, cells) {
          ". Available cells: ", paste(levs, collapse = ", "))
   }
   
-  # model.matrix(~0+pair_fac) will generate columns paste0(pair_fac, lev)
-  coef_names <- paste0(pair_fac, levs)
+  coef_names <- paste0(pair_fac, levs)   # e.g. "Group_pairGroup1_and_Group1"
   res <- setNames(numeric(length(coef_names)), coef_names)
   
-  for (lab in names(cells)) {
-    res[paste0(pair_fac, lab)] <- res[paste0(pair_fac, lab)] + as.numeric(cells[[lab]])
+  for (nm in names(cells)) {
+    target_col <- paste0(pair_fac, nm)
+    res[target_col] <- res[target_col] + as.numeric(cells[[nm]])
   }
-  
   res
 }
 
-# Build the default paired-contrast coefficient vector (SHIFT / TOTAL / VAR)
-# using ref (denominator) vs alt (numerator) for a single factor.
-# Returns a named numeric vector over design columns ("Group_pair_Group1_and_Group2", etc.).
-buildDefaultPairedCoef <- function(pair_meta, var, ref, alt, dist.type) {
-  pair_fac <- paste0(var, "_pair_")
-  if (!pair_fac %in% names(pair_meta))
-    stop("Pair metadata lacks '", pair_fac, "'.")
-  
-  levs <- levels(pair_meta[[pair_fac]])
-  
-  # Base coefficient vector: all zeros
-  coef_names <- paste0(pair_fac, levs)
-  coef_vec   <- setNames(numeric(length(coef_names)), coef_names)
-  
-  same_ref <- paste0(ref, "_and_", ref)
-  same_alt <- paste0(alt, "_and_", alt)
-  mixed    <- paste0(sort(c(ref, alt)), collapse = "_and_")
-  
-  w <- numeric(0)
-  if (dist.type == "shift") {
-    w[same_ref] <- -0.5
-    w[same_alt] <- -0.5
-    w[mixed]    <-  1
-  } else if (dist.type == "total") {
-    w[same_ref] <- -1
-    w[same_alt] <-  0
-    w[mixed]    <-  1
-  } else if (dist.type == "var") {
-    w[same_ref] <- -1
-    w[same_alt] <-  1
-    w[mixed]    <-  0
-  } else {
-    stop("Unsupported dist.type '", dist.type, "'.")
-  }
-  
-  # project those weights into the coef_vec using the prefixed column names
-  for (lab in names(w)) {
-    colname <- paste0(pair_fac, lab)
-    if (colname %in% names(coef_vec)) {
-      coef_vec[colname] <- coef_vec[colname] + w[[lab]]
-    }
-    # if that lab isn't present in levs, we just silently skip it
-  }
-  
-  coef_vec
-}
 
 # Build a default pair-level formula if the user didn't supply one.
-# Same as you already have, just keep it.
 buildDefaultPairFormula <- function(pair.meta) {
   stopifnot(is.data.frame(pair.meta))
   cols <- names(pair.meta)
-  pair_factors <- cols[grepl("_pair_$", cols)]
+  
+  # factor columns created by pairifyMeta()
+  pair_factors <- cols[grepl("_pair$", cols)]
+  # numeric mirror columns (pair_<num>_(mean|diff))
   pair_numeric <- cols[grepl("^pair_[A-Za-z0-9_]+_(mean|diff)$", cols)]
+  
   rhs_terms <- c(pair_factors, pair_numeric)
   if (!length(rhs_terms)) return(~ 1)
+  
   has_fac <- length(pair_factors) > 0
   rhs <- paste(rhs_terms, collapse = " + ")
   as.formula(paste("~", if (has_fac) paste("0 +", rhs) else rhs))
 }
+

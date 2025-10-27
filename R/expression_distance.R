@@ -352,31 +352,229 @@ prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, 
   return(xmd2)
 }
 
-#' @keywords internal
-filterCellTypesByNSamples <- function(cell.groups, sample.per.cell, sample.groups,
-                                      min.cells.per.sample, min.samp.per.type, verbose=TRUE) {
-  freq.table <- table(Type=cell.groups, Sample=sample.per.cell) %>% as.data.frame() %>%
-    mutate(Condition=sample.groups[as.character(Sample)]) %>%
-    filter(Freq >= min.cells.per.sample)
-
-  if (length(unique(freq.table$Condition)) != 2)
-    stop("'sample.groups' must be a 2-level factor describing which samples are being contrasted")
-
-  removed.types <- freq.table %>% split(.$Type) %>% sapply(function(df) {
-    df %$% split(Sample, Condition) %>% sapply(length) %>% {any(. < min.samp.per.type)}
-  }) %>% which() %>% names()
-
-  if (verbose && (length(removed.types) > 0)) {
-    message("Excluding cell types ", paste(removed.types, collapse=", "), " that don't have enough samples\n")
+#' Filter cell types for paired analysis using paired design coverage
+#'
+#' This replaces the old `filterCellTypesByNSamples()` logic in a *paired*
+#' differential analysis context.
+#'
+#' It keeps only those cell types that:
+#'   1. Have enough cells per sample (`min.cells.per.sample`) AND
+#'   2. Are observed in at least `min.samp.per.type` *distinct samples* that
+#'      actually participate in the paired contrast of interest.
+#'
+#' How "participate in the paired contrast" is determined:
+#'   - We look at `pairDesign$model$core.rows`, which is a logical vector
+#'     (length = number of pair rows in the paired design) telling us which
+#'     *pairs of samples (i,j)* contribute to the core contrast `X`.
+#'   - We then mark any sample that appears in at least one such "core" pair
+#'     as a "usable" sample.
+#'
+#' Steps performed internally:
+#'   1. Extract the set of usable samples (based on core pairs).
+#'   2. Build a table of how many single cells of each `cell.type` each `sample.id`
+#'      contributed (`Freq`).
+#'   3. Keep only those (Type,Sample) combos where:
+#'        - `Freq >= min.cells.per.sample`, and
+#'        - `Sample` is among usable samples.
+#'   4. For each Type, count how many distinct usable samples survive. If this
+#'      count is at least `min.samp.per.type`, we keep that Type.
+#'
+#' The output can be fed into downstream preprocessing to drop unsupported
+#' cell types before building per-type matrices.
+#'
+#' @param cell.groups factor/character vector of length = total cells, giving
+#'        the cell type (cluster / annotation) for each cell.
+#' @param sample.per.cell character or factor vector of same length as
+#'        `cell.groups`, giving which biological sample each cell came from.
+#' @param pairDesign result of `buildPairDesignMatrices()`. We assume:
+#'        - `pairDesign$pairs`: integer matrix (n_pairs x 2), each row is the
+#'          indices `(i,j)` of the two samples in that pair, 1-based and
+#'          referring to rows of the original `sample.meta`.
+#'        - `pairDesign$model$core.rows`: logical vector of length n_pairs;
+#'          TRUE where that pair contributes to the tested contrast (i.e. has
+#'          non-negligible X signal after contrast splitting).
+#' @param sample.ids character vector of length `nrow(sample.meta)` in the same
+#'        row order that was given to `buildPairDesignMatrices()`. So if
+#'        `sample.meta` had rownames, you usually pass `rownames(sample.meta)`.
+#'        These IDs must match the values used in `sample.per.cell`.
+#' @param min.cells.per.sample integer. Minimum number of cells of a given type
+#'        that must appear in a given sample for that (Type,Sample) combo to count.
+#' @param min.samp.per.type integer. Minimum number of *distinct usable samples*
+#'        in which a type must appear (above the per-sample threshold) in order
+#'        for that type to be kept.
+#' @param use.core.rows logical (default TRUE). If TRUE, only pairs with
+#'        `core.rows==TRUE` are used to establish which samples are "usable".
+#'        If FALSE, *all* pairs in `pairDesign$pairs` are considered usable.
+#' @param verbose logical. If TRUE, emit messages about dropped cell types.
+#'
+#' @return A list with:
+#'   - `freq.table`: data.frame with columns
+#'        `Type`, `Sample`, `Freq`, `Usable`
+#'     after applying the per-sample coverage threshold.
+#'   - `kept.types`: character vector of cell types that survive filtering.
+#'   - `kept.by.sample`: named list. For each surviving sample ID, a unique
+#'        character vector of the kept types that sample supports.
+#'
+#' Typical usage:
+#' \preformatted{
+#' out <- filterCellTypesByCoveragePairs(
+#'   cell.groups         = cell.groups,
+#'   sample.per.cell     = sample.per.cell,
+#'   pairDesign          = pairDesign,
+#'   sample.ids          = rownames(sample.meta),
+#'   min.cells.per.sample= 10,
+#'   min.samp.per.type   = 2,
+#'   use.core.rows       = TRUE,
+#'   verbose             = TRUE
+#' )
+#'
+#' ## Keep only out$kept.types when building per-type expression matrices.
+#' }
+#'
+#' Rationale:
+#'   - We no longer assume a 2-condition factor like "Condition".
+#'   - We only keep types with enough replication across biologically distinct
+#'     samples that actually drive the paired contrast (i.e. show up in core pairs).
+#'
+#' @export
+filterCellTypesByCoveragePairs <- function(
+    cell.groups,
+    sample.per.cell,
+    pairDesign,
+    sample.ids,
+    min.cells.per.sample,
+    min.samp.per.type,
+    use.core.rows = TRUE,
+    verbose = TRUE
+) {
+  # ---- basic checks ----
+  if (length(cell.groups) != length(sample.per.cell)) {
+    stop("cell.groups and sample.per.cell must have the same length (one entry per cell).")
   }
-
-  freq.table %<>% filter(!(Type %in% removed.types))
-  return(freq.table)
+  if (!is.list(pairDesign) ||
+      is.null(pairDesign$pairs) ||
+      is.null(pairDesign$model)) {
+    stop("pairDesign must be the full list returned by buildPairDesignMatrices() ",
+         "and must include $pairs and $model.")
+  }
+  pairs_mat <- pairDesign$pairs
+  if (!(is.matrix(pairs_mat) && ncol(pairs_mat) == 2L)) {
+    stop("pairDesign$pairs must be an n_pairs x 2 integer matrix of sample indices.")
+  }
+  n_pairs <- nrow(pairs_mat)
+  core.rows <- pairDesign$model$core.rows
+  if (!is.null(core.rows) && length(core.rows) != n_pairs) {
+    stop("pairDesign$model$core.rows length does not match nrow(pairDesign$pairs).")
+  }
+  if (length(sample.ids) < max(pairs_mat)) {
+    stop("sample.ids does not cover all indices mentioned in pairDesign$pairs.")
+  }
+  
+  # ---- 1. determine usable samples from the paired design ----
+  if (!n_pairs) {
+    if (verbose) {
+      message("No pairs in pairDesign$pairs; returning empty filter result.")
+    }
+    return(list(
+      freq.table     = data.frame(Type=character(0), Sample=character(0),
+                                  Freq=integer(0), Usable=logical(0),
+                                  stringsAsFactors = FALSE),
+      kept.types     = character(0),
+      kept.by.sample = list()
+    ))
+  }
+  
+  if (use.core.rows && !is.null(core.rows)) {
+    keep_pair_rows <- which(core.rows)
+  } else {
+    keep_pair_rows <- seq_len(n_pairs)
+  }
+  
+  if (!length(keep_pair_rows)) {
+    if (verbose) {
+      message("No informative pairs (core.rows is empty TRUE set); all types dropped.")
+    }
+    return(list(
+      freq.table     = data.frame(Type=character(0), Sample=character(0),
+                                  Freq=integer(0), Usable=logical(0),
+                                  stringsAsFactors = FALSE),
+      kept.types     = character(0),
+      kept.by.sample = list()
+    ))
+  }
+  
+  sample_idx_used <- unique(as.integer(pairs_mat[keep_pair_rows, , drop = FALSE]))
+  usable.samples  <- unique(sample.ids[sample_idx_used])
+  
+  # ---- 2. build per-(Type,Sample) cell counts ----
+  # coerce to plain factors/chars
+  cell.types.vec     <- droplevels(factor(cell.groups))
+  sample.per.cell.vec<- as.character(sample.per.cell)
+  
+  # table(Type, Sample)
+  freq.table <- table(Type = cell.types.vec,
+                      Sample = sample.per.cell.vec)
+  freq.table <- as.data.frame(freq.table, stringsAsFactors = FALSE)
+  
+  # ---- 3. enforce per-sample minimum coverage and "sample is usable" ----
+  # keep only Type/Sample combos with enough cells
+  freq.table <- freq.table[freq.table$Freq >= min.cells.per.sample, , drop = FALSE]
+  if (!nrow(freq.table)) {
+    if (verbose) {
+      message("No (Type,Sample) pairs pass min.cells.per.sample in paired context.")
+    }
+    return(list(
+      freq.table     = transform(freq.table, Usable = logical(0)),
+      kept.types     = character(0),
+      kept.by.sample = list()
+    ))
+  }
+  
+  # mark which Sample entries are actually usable for the contrast
+  freq.table$Usable <- freq.table$Sample %in% usable.samples
+  
+  # ---- 4. count usable samples per Type ----
+  type.sample.split <- split(freq.table$Sample[freq.table$Usable],
+                             freq.table$Type[freq.table$Usable])
+  usable.counts <- vapply(type.sample.split,
+                          function(sv) length(unique(sv)),
+                          integer(1))
+  
+  kept.types <- names(usable.counts)[usable.counts >= min.samp.per.type]
+  kept.types <- kept.types[!is.na(kept.types)]
+  
+  # produce kept.by.sample for convenience
+  keep_mask <- freq.table$Usable & freq.table$Type %in% kept.types
+  kept.by.sample <- split(freq.table$Type[keep_mask],
+                          freq.table$Sample[keep_mask])
+  kept.by.sample <- lapply(kept.by.sample, function(v) unique(as.character(v)))
+  
+  # ---- 5. messaging ----
+  if (verbose) {
+    removed.types <- setdiff(levels(cell.types.vec), kept.types)
+    if (length(removed.types)) {
+      message(
+        "Excluding cell types in paired context: ",
+        paste(removed.types, collapse = ", "),
+        " (not enough distinct usable samples with >= ",
+        min.cells.per.sample, " cells)"
+      )
+    }
+  }
+  
+  # ---- 6. return ----
+  list(
+    freq.table     = freq.table,
+    kept.types     = kept.types,
+    kept.by.sample = kept.by.sample
+  )
 }
+
+
 
 #' @keywords internal
 filterExpressionDistanceInput <- function(
-  cms, cell.groups, sample.per.cell, sample.meta, sample.id, keep.all=FALSE,
+  cms, cell.groups, sample.per.cell, pair.model, sample.ids, keep.all=FALSE,
   min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
   genes=NULL, verbose=FALSE,
   gene.selection=c("wilcox","var","od","deseq2")
@@ -387,12 +585,8 @@ filterExpressionDistanceInput <- function(
   all.samples <- names(cms)
 
   if (!keep.all) {
-    sample.groups <- getSampleGroups(sample.meta, sample.id=sample.id)
     cell.names <- lapply(cms, rownames) %>% unlist()
-    freq.table <- filterCellTypesByNSamples(
-      cell.groups[cell.names], sample.per.cell[cell.names], sample.groups=sample.groups,
-      min.cells.per.sample=min.cells.per.sample, min.samp.per.type=min.samp.per.type, verbose=verbose
-    )
+    freq.table <- filterCellTypesByCoveragePairs(cell.groups[cell.names], samples.per.cell[cell.names], pair.model, sample.ids, min.cells.per.sample, min.samp.per.type, verbose=verbose)
     filt.types.per.samp <- freq.table %$% split(Type, Sample)
     cms.filt <- names(filt.types.per.samp) %>% sn() %>% lapply(function(n) {
       cms[[n]] %>% .[cell.groups[rownames(.)] %in% filt.types.per.samp[[n]], , drop=FALSE]
@@ -472,8 +666,7 @@ filterExpressionDistanceInput <- function(
 
   return(list(
     cm.per.type      = cm.per.type,       # normalized (use everywhere downstream)
-    cm.raw.per.type  = cm.raw.per.type,   # raw (use only for DESeq2 gene selection)
-    cell.groups      = cell.groups
+    cm.raw.per.type  = cm.raw.per.type   # raw (use only for gene selection)
   ))
 }
 

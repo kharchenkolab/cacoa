@@ -109,17 +109,18 @@
 #' # out <- buildDesignMatrices(~ group*batch + age, data=df, contrast=ctr, buildBlocks=TRUE)
 #'
 #' @export
-buildDesignMatrices <- function(data, contrast, formula = NULL,
-                                na.action = stats::na.pass,
+buildDesignMatrices <- function(data, contrast, 
+                                formula = NULL,
                                 numericRef = "auto",
                                 numericRefRows = NULL,
                                 tol = 1e-12,
+                                na.action = stats::na.pass,
                                 tolRow = sqrt(.Machine$double.eps),
                                 validate = TRUE,
                                 verbosity = c("none","warn","info","debug"),
                                 computeQrZ = TRUE,
                                 blockVars = NULL,
-                                buildBlocks = FALSE) {
+                                buildBlocks = TRUE) {
   verbosity <- match.arg(verbosity)
   
   # Default formula
@@ -154,9 +155,9 @@ buildDesignMatrices <- function(data, contrast, formula = NULL,
   qrZ <- if (computeQrZ && !is.null(Z)) qr(as.matrix(Z)) else NULL
   
   # Optional blocks & permutation groups
+  spec <- try(normalizeContrastSpec(contrast), silent = TRUE)
   blocks <- NULL; perm.groups <- NULL
   if (buildBlocks) {
-    spec <- try(normalizeContrastSpec(contrast), silent = TRUE)
     nuis.fac <- deriveNuisanceFactors(formula_used, data,
                                       contrastSpec = if (!inherits(spec, "try-error")) spec else NULL,
                                       explicit = blockVars)
@@ -169,7 +170,6 @@ buildDesignMatrices <- function(data, contrast, formula = NULL,
   # Diagnostics
   diag <- NULL
   if (validate) {
-    spec <- try(normalizeContrastSpec(contrast), silent = TRUE)
     diag <- diagnoseDesign(F = F, X = X, Z = Z, qrZ = qrZ,
                            meta = data, blocks = blocks, core.rows = sp$core.rows,
                            contrastSpec = if (!inherits(spec, "try-error")) spec else NULL,
@@ -182,8 +182,6 @@ buildDesignMatrices <- function(data, contrast, formula = NULL,
                      numericRefUsed = attr(cF, "numeric_ref_used") %||% list(),
                      tol = tol, verbosity = verbosity)
   
-  spec_out <- try(normalizeContrastSpec(contrast), silent = TRUE)
-  
   list(
     F = F, X = X, Z = Z,
     contrast.F = sp$contrast.F,
@@ -195,7 +193,7 @@ buildDesignMatrices <- function(data, contrast, formula = NULL,
     diagnostics = diag,
     numeric_ref_used = attr(cF, "numeric_ref_used") %||% list(),
     formula_used = formula_used,
-    contrast_spec = if (!inherits(spec_out, "try-error")) spec_out else NULL,
+    contrast_spec = if (!inherits(spec, "try-error")) spec else NULL,
     baselines_used = baselines
   )
 }
@@ -751,6 +749,7 @@ buildFullDesign <- function(formula, data, na.action = stats::na.pass,
   rhs <- if (inherits(formula, "formula")) formula else as.formula(formula)
   mf  <- stats::model.frame(rhs, data, na.action = na.action)
   
+  # 1. Apply requested baselines (relevel)
   if (length(baselines)) {
     for (v in names(baselines)) {
       if (!is.null(mf[[v]]) && (is.factor(mf[[v]]) || is.character(mf[[v]]))) {
@@ -762,13 +761,30 @@ buildFullDesign <- function(formula, data, na.action = stats::na.pass,
     }
   }
   
-  trm <- stats::terms(rhs, data = data)
+  # 2. Force any remaining character columns to factors NOW.
+  #    This makes the representation consistent with how model.matrix
+  #    will treat them anyway, and guarantees that:
+  #    - attr(F, "xlevels") has entries for them
+  #    - .oneRowFromFormula() will treat them as factors
+  #    - contrasts.arg will not be applied to a non-factor down the line
+  for (v in names(mf)) {
+    if (is.character(mf[[v]])) {
+      mf[[v]] <- droplevels(factor(mf[[v]]))
+    }
+  }
+  
+  trm <- stats::terms(rhs, data = mf)   # NOTE: use mf, not the original data,
+  # so terms() sees factors with baselines
   F   <- stats::model.matrix(trm, mf, contrasts.arg = contrasts.arg)
-  attr(F, "terms")   <- trm
-  attr(F, "xlevels") <- lapply(mf, function(x) if (is.factor(x)) levels(x) else NULL)
+  
+  # Attach metadata so downstream builders (.oneRowFromFormula, etc.) can reconstruct rows
+  attr(F, "terms")     <- trm
+  attr(F, "xlevels")   <- lapply(mf, function(x) if (is.factor(x)) levels(x) else NULL)
   attr(F, "contrasts") <- attr(F, "contrasts")
+  
   F
 }
+
 
 resolveNumericRef <- function(F, data, contrast, numericRef = "auto", numericRefRows = NULL, tol = 1e-6) {
   if (is.list(numericRef)) return(numericRef)

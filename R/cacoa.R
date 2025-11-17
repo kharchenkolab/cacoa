@@ -111,8 +111,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'
     #' @param data.object Object used to initialize the Cacoa class. Either a raw or normalized count matrix, Conos object, or Seurat object.
     #' @param sample.metadata data.frame; rows = samples, columns = covariates. Row names must be sample IDs.
-    #' @param design character or formula (e.g. "~ condition + batch"). 
-    #' @param contrast character vector c(var, ref, alt), e.g. c("condition","control","treated"). If not specified, the first term of the design formula will be used e.g. c(<first_term>, <level_1>, <level_n>).
+    #' @param formula character or formula (e.g. "~ condition + batch"). 
+    #' @param contrast specification (see buildDesignMatrices documentation).
+    #' @param numeric.ref reference points for numeric covariates in the contrast specification. `"auto"` or named list of numeric anchors (e.g., `list(age=35)`).
+    #' @param block.vars optional list of covariates in sample.metadata on which to form randomizaton blocks
     #' @param sample.id character scalar naming the column in `sample.metadata` that contains sample IDs.
     #' @param cell.groups vector Indicates cell groups with cell names (default: extracted from `data.object`)
     #' @param sample.per.cell vector Sample name per cell (default: extracted from `data.object`)
@@ -132,17 +134,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' \dontrun{
     #' sample.metadata <- data.frame(condition=c("control","control","disease","disease"), batch=c("batch1","batch1","batch2","batch2"), sample=names(con$samples))
     #' sample.id <- "sample"
-    #' design <- "~ condition + batch"
+    #' formula <- "~ condition + batch"
     #' contrast <- c("condition","disease", "control")
     #' }
     #' # cell.groups should be a named factor where names are cell names corresponding to cell names in the data object.
     #' # For Conos objects, they should overlap with rownames(con$embedding)
     #' \dontrun{
     #' cell.groups <- my.named.annotation.factor
-    #' cao <- Cacoa$new(data.object = con, sample.metadata = sample.metadata, sample.id=sample.id, design = design, contrast = contrast, cell.groups = cell.groups)
+    #' cao <- Cacoa$new(data.object = con, sample.metadata = sample.metadata, sample.id=sample.id, formula = formula, contrast = contrast, cell.groups = cell.groups)
     #' }
     initialize=function(
-      data.object, sample.metadata=NULL, sample.id=NULL, design=NULL, contrast=NULL, block.id=NULL, cell.groups=NULL, sample.per.cell=NULL, sample.groups.palette=NULL,
+      data.object, sample.metadata=NULL, sample.id=NULL, formula=NULL, contrast=NULL, numericRef = numeric.ref, block.vars=NULL, cell.groups=NULL, sample.per.cell=NULL, sample.groups.palette=NULL,
       cell.groups.palette=NULL, embedding=NULL, n.cores=1, verbose=TRUE,
       graph.name=NULL, assay.name="RNA", data.layer='scale.data',
       plot.theme=ggplot2::theme_bw(), plot.params=NULL
@@ -176,24 +178,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           stop("sample identifiers are unavailable: set rownames(sample.metadata) OR provide a valid `sample.id` column.")
         }
 
-      if (is.null(design)) stop("Design formula must be provided")
-
-      vd <- validateDesign(formula = design, sample.meta = sample.metadata, contrast = contrast) 
-      self$formula <- vd$formula
-      self$contrast <- vd$contrast
-      self$sample.groups <- getSampleGroups(sample.metadata, self$contrast, sample.id)
-      self$block.id <- block.id
-
-      self$sample.meta <- subsetMetadata(sample.metadata, self$formula)
-      self$model.matrices <- buildDesignMatrices(sample.meta = self$sample.meta, contrast = self$contrast, block.vars = self$block.id)
-
-
-      self$sample.id <- sample.id
-      self$ref.level <- self$contrast[3]
-      self$target.level <- self$contrast[2]
-      self$full.meta <- sample.metadata
+      
+      self$model <- buildDesignMatrices(data = sample.metadata, contrast = contrast, formula=formula, blockVars = block.vars)
+      #self$sample.meta <- subsetMetadata(sample.metadata,formula) # seems like that would already be done at the buildDesignMatrices stage, however we don't return a "clean" metadata
+      
+      # remember default model arguments
+      self$contrast <- contrast
+      self$contrast <- contrast
+      self$block.vars <- block.vars
+      
+      self$sample.meta <- self$full.meta <- sample.metadata
       self$n.cores <- n.cores
       self$verbose <- verbose
+      
+      # interpret different types of data objects
 
       if ("Seurat" %in% class(data.object)) {
         if (is.null(sample.metadata) || is.null(sample.per.cell)){
@@ -352,7 +350,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' )
     #' }
 estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, formula = NULL,
-                                             contrast = NULL, sample.meta = self$sample.meta, perm.method="freedman-lane", 
+                                             contrast = NULL, pairContrast = NULL, pairFormula = NULL, block.vars = NULL, sample.metadata = self$sample.meta, perm.method="freedman-lane", 
                                              sample.id = self$sample.id, dist = NULL, dist.type = "shift", min.cells.per.sample = 10, 
                                              min.samp.per.type = 2, min.gene.frac = 0.01, genes = NULL, n.pcs = NULL, top.n.genes = NULL,
                                              verbose = self$verbose, n.cores = self$n.cores, name = "expression.shifts", n.permutations = 1000, 
@@ -360,24 +358,24 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
                                              na.mode = "drop", alternative = "two-sided", return.residuals = TRUE, return.sampled.stats = FALSE,
                                              return.sampled.fits = FALSE,  cov.plot.keys = NULL, ...) {
   
-  if(!is.null(formula) || !is.null(contrast)) {
-      vd <- validateDesign(formula = formula, sample.meta = self$full.meta, contrast = contrast, verbose = verbose)
-      sample.meta <- subsetMetadata(self$full.meta, vd$formula)
-      formula <- vd$formula; contrast <- vd$contrast
-      block.vars <- ifelse(!is.null(block.id), paste0(block.id, "_pair"), NULL)
-      x.Pair<- buildPairDesignMatrices(sample.meta, triplet=vd$contrast, dist.type = dist.type, block.vars = block.vars)
-    } else {
-      sample.meta <- self$sample.meta
-      formula <- self$formula; contrast <- self$contrast
-      block.vars <- ifelse(!is.null(self$block.id), paste0(self$block.id, "_pair"), NULL)
-      x.Pair<- buildPairDesignMatrices(sample.meta, triplet=self$contrast, dist.type = dist.type, block.vars = block.vars)
-    }
-
+  if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
+    sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+  } else {
+    sample.model <- self$model
+  }
+  # build paired model
+  pair.model <- buildPairDesignMatrices(sample.metadata,
+                                        sample.model,
+                                        dist.type = dist.type,
+                                        pairContrast = pairContrast,
+                                        pairFormula  = pairFormula,
+                                        verbosity = if(verbose) 'info' else 'warn')
+  
   count.matrices <- extractRawCountMatrices(self$data.object, transposed = TRUE)
 
   if (verbose) message("Filtering data... ")
   shift.inp <- filterExpressionDistanceInput(count.matrices, cell.groups = cell.groups, sample.per.cell = sample.per.cell,
-                                             sample.meta = sample.meta, sample.id=sample.id, min.cells.per.sample = min.cells.per.sample,
+                                             pair.model = pair.model, sample.ids = rownames(sample.metadata), min.cells.per.sample = min.cells.per.sample,
                                              min.samp.per.type = min.samp.per.type, min.gene.frac = min.gene.frac, keep.all = TRUE,
                                              genes = genes, gene.selection = gene.selection, verbose = verbose) 
   
@@ -408,8 +406,9 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
   }
 
   # LM-based estimation
-  if (verbose) message("Fitting LM with formula: ", deparse(formula))
-  out <- shift.inp %$% estimateExpressionChange(cm.per.type, cell.groups = cell.groups, design.mat=x.Pair,
+  if (verbose) message("Fitting LM with formula: ", deparse(pair.model$pair_formula_used))
+  browser()
+  out <- shift.inp %$% estimateExpressionChange(cm.per.type, cell.groups = cell.groups, design.mat=pair.model,
                                                               sample.meta = sample.meta, sample.per.cell = sample.per.cell, 
                                                               formula = formula,contrast = contrast, n.pcs = n.pcs, 
                                                               robust.method = robust.method, na.mode = na.mode, alternative = alternative,
@@ -418,7 +417,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
                                                               gene.selection = gene.selection, cm.raw.per.type = cm.raw.per.type, perm.method= perm.method, 
                                                               n.permutations = n.permutations, top.n.genes = top.n.genes,
                                                               n.cores = n.cores, verbose = verbose, ...)
-  out$dists.adj <- out %$% extractPairwiseShifts(res, p.dist, design.mat = x.Pair, contrast = contrast, dist.type = dist.type,
+  out$dists.adj <- out %$% extractPairwiseShifts(res, p.dist, design.mat = pair.model, contrast = contrast, dist.type = dist.type,
                                                  sample.meta = sample.meta, sample.id = sample.id, cov.plot.keys = cov.plot.keys, 
                                                  perm.method = perm.method, block.vars = block.vars, ...)
   self$test.results[[name]] <- out

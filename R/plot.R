@@ -432,7 +432,7 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
                                           color.by.covariate = FALSE, point.palette = NULL, jitter.alpha = 0.08,
                                           jitter.size  = 1.1, trim = 0, palette = NULL, order.x = TRUE, yline = NULL,
                                           order.direction = "increasing", celltype.levels = NULL, pvalues = NULL,                      
-                                          ylab = "Centered pairwise effect (contrast)", coord.flip = FALSE,
+                                          ylab = expression(hat(y)[cross] - mean(hat(y)[ref])), coord.flip = FALSE,
                                           plot.theme = theme_bw(), line.size = 0.75, ns.symbol = "", pvalue.y = NULL,
                                           pvalue.size = 3.2) {
   # Main plot - covariate panel 
@@ -440,12 +440,6 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
     stopifnot(!is.null(x$df.shifts))
     df.v <- x$df.shifts |>
       dplyr::rename(Type = celltype, value = shifts)
-
-    if(x$dist.type == "total"){
-      ylab <- expression(hat(y)[cross] - mean(hat(y)[ref]))
-    } else if (x$dist.type == "shift") {
-      ylab = expression(hat(y)[cross] - frac(hat(y)[ref] + hat(y)[alt], 2))
-    }
 
     have.cov <- (!is.null(x$df.cov.keys) &&
                  "pattern_coded" %in% names(x$df.cov.keys) &&
@@ -567,12 +561,6 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
     if (is.null(x$df.blocks)) stop("df.blocks not present (supply block.vars in extractor).")
     dfb <- x$df.blocks
 
-    if(x$dist.type == "total"){
-      ylab <- expression(mean[block](hat(y)[cross]) - mean[block](hat(y)[ref]))
-    } else if (x$dist.type == "shift") {
-      ylab = expression(mean[block](hat(y)[cross]) - mean[block](frac(hat(y)[ref] + hat(y)[alt], 2)))
-    }
-
     if (!is.null(celltype.levels)) {
       ord <- intersect(celltype.levels, unique(dfb$celltype))
     } else {
@@ -592,7 +580,7 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
                            width = 0.15, height = 0, alpha = 0.85, size = 1.6) +
       #ggplot2::coord_flip() +
       ggplot2::labs(x = NULL,
-                    y = ylab,
+                    y = expression(mean[block](hat(y)[cross]) - mean[block](hat(y)[ref])),
                     colour = "block",
                     title = "Block-wise centered shifts") +
       plot.theme
@@ -672,104 +660,6 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
     }
     return(p)
   }
-}
-
-plotResidualsPerCelltype <- function(res, design.mat, cell.groups, palette=NULL, font.size=4, ylab='Residual variance', yline=0, cross = FALSE,
-                                     plot.theme=theme_bw(), jitter.size = 1, jitter.alpha = 0.5, color.by.cov = FALSE, cov.plot.keys = NULL,
-                                     plot.per.celltype = FALSE, cont.palette = rev(RColorBrewer::brewer.pal(11, "Spectral"))) {
-  df <- as.data.frame(res$residuals)
-  df$sample <- rownames(df)
-
-  if(color.by.cov){
-  if(is.null(cov.plot.keys)) stop("cov.plot.keys must be specified when color.by.cov = TRUE")
-  if(is.null(p.dist) || is.null(design.mat)) stop("p.dist and design.mat must be provided when color.by.cov = TRUE")
-  # get covariate patterns from pair.meta
-  rownames(design.mat$pair.meta) <- design.mat$pair.names$sample.pairs
-  pm <- design.mat$pair.meta[ , , drop = FALSE]
-  pattern.keys <- grep(cov.plot.keys, colnames(pm), value = TRUE)
-  keys.class <- sapply(pattern.keys, function(k) {
-    if (is.factor(pm[[k]]) || is.character(pm[[k]])) "categorical" else "continuous"
-  })
-  keys <- intersect(pattern.keys, colnames(pm))
-  if (!length(keys)) warning("No key columns found in pair.meta. Check cov.plot.keys specified.")
-  patt.coded <- if (length(keys)) do.call(paste, c(pm[, keys, drop = FALSE], sep = " | ")) else rep("(no key cols in pair.meta)", nrow(pm))
-  df$pattern_coded <- if (is.factor(pm[[cov.plot.keys]])) as.factor(patt.coded[match(df$sample, rownames(pm))]) else patt.coded[match(df$sample, rownames(pm))]
-  long <- df %>% tidyr::pivot_longer(cols = c(-sample, -pattern_coded), names_to = "CellType", values_to = "Residuals")
-  } else {
-    long <- df %>% tidyr::pivot_longer(cols = -sample, names_to = "CellType", values_to = "Residuals")
-  }
-
-  long$CellType <- as.factor(long$CellType)
-  if(keys.class == "categorical") long$pattern_coded <- as.factor(long$pattern_coded) else long$pattern_coded <- as.numeric(long$pattern_coded)
-  
-  # base plot
-  p <- ggplot(long, aes(CellType, Residuals)) +
-    geom_violin(fill = "grey90", color = NA, scale = "width", width = 0.9) +
-    geom_hline(yintercept = yline, linetype = "dashed") + ylab(ylab) + theme_bw() + 
-    plot.theme + theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-  if(color.by.cov) {
-    if(is.null(palette)) palette <- makeNamedPalette(sort(unique(long$pattern_coded)))
-    if (keys.class == "categorical") {
-      legend <- names(keys.class)
-      p <- p + geom_point(aes(color=pattern_coded), position = position_jitter(width = 0.15), size = jitter.size, alpha = jitter.alpha) +
-           labs(color=legend) + scale_colour_manual(values = palette) + plot.theme +
-           theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
-    } else {
-      legend <- paste0("\u0394",names(keys.class))
-      p <- p + geom_point(aes(color=pattern_coded), position = position_jitter(width = 0.15), size = jitter.size, alpha = jitter.alpha) +
-           labs(color=legend) + scale_colour_gradientn(colors = cont.palette) + plot.theme +
-           theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank())
-    }
-  } else {
-    p <- p + geom_point(position = position_jitter(width = 0.15), size = jitter.size, alpha = jitter.alpha)
-  }
-
-  if(plot.per.celltype) {
-    ct.dfs <- lapply(levels(long$CellType), function(ct) {
-      subset(long, CellType == ct)
-    })
-    names(ct.dfs) <- levels(long$CellType)
-
-    if(color.by.cov) {
-      p <- cowplot::plot_grid(plotlist = lapply(names(ct.dfs), function(ct) {
-      df.ct <- ct.dfs[[ct]]
-      x <- ifelse(keys.class == "categorical", 1, df.ct$pattern_coded)
-      if (color.by.cov) {
-        if (keys.class == "categorical") {
-          if(is.null(palette)) palette <- makeNamedPalette(sort(unique(df.ct$pattern_coded)))
-          p <- ggplot(df.ct, aes(x=x, y=Residuals)) + geom_hline(yintercept = yline, linetype = "dashed") + ylab(ylab) + theme_bw() +
-               geom_point(aes(color=pattern_coded), position = position_jitter(width = 0.15), size = jitter.size, alpha = jitter.alpha) +
-               labs(color=legend) + xlab(names(keys.class)) + scale_colour_manual(values = palette) + plot.theme + 
-               theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank()) +
-               ggtitle(ct)
-        } else {
-          p <- ggplot(df.ct, aes(x=x, y=Residuals)) + geom_hline(yintercept = yline, linetype = "dashed") + ylab(ylab) + theme_bw() +
-               geom_point(aes(color=pattern_coded), position = position_jitter(width = 0.15), size = jitter.size, alpha = jitter.alpha) +
-               labs(color=legend) + xlab(names(keys.class)) + scale_colour_gradientn(colors = cont.palette) + plot.theme + 
-               theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank()) +
-              ggtitle(ct)
-        }
-      } else {
-      p <- ggplot(df.ct, aes(x=x, y=Residuals)) + geom_point(position = position_jitter(width = 0.15), size = jitter.size, alpha = jitter.alpha)
-      }
-      return(p)
-    }), ncol=4, align="v" )
-    return(p)
-    } else {
-      p <- cowplot::plot_grid(plotlist = lapply(names(ct.dfs), function(ct) {
-        p <- ggplot(ct.dfs[[ct]], aes(x=x, y=Residuals)) +
-          geom_violin(fill = "grey90", color = NA, scale = "width", width = 0.9) +
-          geom_point(position = position_jitter(width = 0.15), size = jitter.size, alpha = jitter.alpha) +
-          geom_hline(yintercept = yline, linetype = "dashed") + ylabs(y=ylab) + theme_bw() + 
-          plot.theme + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank()) +
-          ggtitle(ct)
-      return(p)
-      }), ncol=4, align="v" )
-     return(p)
-    }
-}
-  return(p)
 }
 
 

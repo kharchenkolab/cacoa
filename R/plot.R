@@ -407,7 +407,6 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
 #' @param panel character c('covariate'(default), 'blocks', 'background') Type of a panel to plot
 #' @param type character c('box' (default),'point') Type of plot to create
 #' @param show.jitter boolean (default=TRUE) Whether to show individual data points
-#' @param color.by.covariate boolean (default=FALSE) Whether to color points by covariate pattern.
 #' @param point.palette color palette for the points (default=NULL)
 #' @param jitter.alpha transparency value for the data points (default: 0.08)
 #' @param jitter.size marker size for the data points (default: 1.1)
@@ -687,12 +686,12 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
 #' Categorical and continuous covariates are supported.
 #' @param res output of performLMPermutations()
 #' @param design.mat pairwise design matrices used for fitting the linear model
+#' @param sample.ids character vector (default=NULL) Sample IDs corresponding to the rows of the design.mat$pairs
 #' @param cell.groups character vector defining cell type per sample
 #' @param plot.per.celltype boolean (default=FALSE) Whether to plot separate panels per cell type
 #' @param palette color palette for the points (default=NULL)
 #' @param font.size integer (default=4) Font size for the plot
 #' @param ylab character vector (default=NULL) y axis label
-#' @param color.by.covariate boolean (default=FALSE) Whether to color points by covariate pattern.
 #' @param cov.plot.keys character vector (default=NULL) Covariate name(s) to use for coloring
 #' Requires that same covariate information is specified when running estimateExpressionShiftMagnitude()
 #' @param cont.palette color palette for continuous covariates (default=rev(RColorBrewer::brewer.pal(11, "Spectral")))

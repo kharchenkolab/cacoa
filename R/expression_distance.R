@@ -61,11 +61,67 @@ estimateExpressionChange <- function(cm.per.type, cell.groups, pair.model, sampl
   out
 }
 
-#' Estimate expression-based pairwise distances for all cell types
-#' @param cm.norm List of normalized count matrices per cell type
-#' @param dist what distance measure to use: 'cor' - Pearson's correlation, 'l2' - Euclidean distance, 'l1' - Manhattan distance
+#' Estimate pairwise expression distances for all cell types in a paired design
+#'
+#' This function computes **sample–sample distance matrices** within each cell type
+#' and then vectorizes them into a common pairwise layout defined by
+#' `buildPairDesignMatrices()`. For every cell type, it:
+#' \enumerate{
+#'   \item Takes its normalized count matrix (`samples × genes`);
+#'   \item Computes a square distance matrix over samples using the chosen metric
+#'         (`"cor"`, `"l2"`, or `"l1"`);
+#'   \item Extracts the distances for the global pairs in \code{pair.model$pairs},
+#'         mapping via \code{sample.ids}.
+#' }
+#' Steps performed internally:
+#'
+#'   1. Validate inputs:
+#'        - `cm.norm` must be a list of sample × gene matrices (one per cell type).
+#'        - `pair.model$pairs` must be an N×2 matrix of global sample indices.
+#'        - `sample.ids` must be long enough to index all pairs.
+#'   2. Construct human-readable pair names of the form
+#'        `"SampleA__SampleB"` for every `(i, j)` in `pair.model$pairs`.
+#'   3. Allocate the output matrix `Y` with:
+#'        - one row per global sample pair,
+#'        - one column per cell type.
+#'   4. For each cell type:
+#'        - Extract its normalized expression matrix (samples × genes).
+#'        - Compute a full sample–sample distance matrix using the selected
+#'          measure (`"cor"`, `"l2"`, or `"l1"`).
+#'        - Ensure row names of the distance matrix correspond to sample IDs.
+#'   5. Map global pairs to local distances:
+#'        - Convert global sample indices to sample IDs using `sample.ids`.
+#'        - Match these IDs to the distance-matrix row names.
+#'        - For each pair `(i, j)`:
+#'             • If **both samples are present** in this cell type, extract `D[i, j]`.  
+#'             • If **either sample is missing** (the type does not occur in that sample),
+#'               store `NA`.  
+#'             • If the distance measure cannot be computed due to missing genes or
+#'               incomplete rows, the resulting distance is also `NA`.
+#'   6. Fill the appropriate column of `Y` with these mapped distances for
+#'      the current cell type.
+#' 
+#'  NOTE: Any gene filtering or PCA steps have been removed from this function; 
+#
+# The result is a matrix \code{Y} of size \code{n_pairs × n_celltypes}, where each
+# entry is the distance between the two samples in that pair for a given cell type.
+# Pairs involving a sample that is absent from a particular cell type are returned
+# as \code{NA}, preserving the global pair layout for downstream modelling.
+#
+# @param cm.norm List of normalized count matrices per cell type
+# @param dist what distance measure to use: 'cor' - Pearson's correlation, 'l2' - Euclidean distance, 'l1' - Manhattan distance
 #' @param pair.model result of buildPairDesignMatrices()
 #' @param sample.ids global sample IDs in the same order as rows of sample.metadata
+#' @return A list with a single component:
+#' \describe{
+#'   \item{\code{Y}}{Numeric matrix of size \code{nrow(pair.model$pairs) × length(cm.norm)}.
+#'     Rows correspond to global sample pairs; columns correspond to cell types
+#'     (names taken from \code{names(cm.norm)}). Entries are distances for the
+#'     requested metric, or \code{NA} if a given pair cannot be formed for that
+#'     cell type (e.g. one or both samples are missing).}
+#' }
+#'
+#' @seealso \code{\link{buildPairDesignMatrices}} for constructing the pair design
 #' @keywords internal
 estimateExpressionShiftsForCellType <- function( cm.norm, dist, pair.model, sample.ids) {
     # ---- basic checks ----
@@ -174,6 +230,13 @@ estimateExpressionShiftsForCellType <- function( cm.norm, dist, pair.model, samp
     
 }
 
+#' Map a square distance matrix to a global pairwise layout
+#'
+#' This helper takes a sample–sample distance matrix \code{D} defined over a
+#' subset of samples (e.g. those present for a given cell type) and extracts
+#' distances for a set of **global pairs** specified by integer indices.
+#' It returns a numeric vector of distances for those pairs, inserting NA if 
+#' either member of the pair cannot be matched to a row in \code{D}.
 #' @keywords internal
 vectorizeLowerTri <- function(D, pairs, sample.ids, row.ids = rownames(D)) {
     # D: square distance matrix over *local* rows
@@ -477,6 +540,92 @@ filterCellTypesByCoveragePairs <- function(cell.groups, sample.per.cell, pairDes
 
 
 
+#' Prepare per-cell-type expression matrices for pairwise distance estimation
+#'
+#' This function filters cells, samples, and genes, then builds per-cell-type
+#' sample × gene matrices that are normalized and aligned across samples. It is
+#' the main preprocessing step before computing pairwise expression distances.
+#'
+#' Steps performed internally:
+#'
+#'   1. (Optional) Filter cell types and samples using the paired design:
+#'        - If `keep.all = FALSE`, call `filterCellTypesByCoveragePairs()` to:
+#'            * restrict to samples that participate in informative pairs
+#'              (via `pair.model`), and
+#'            * keep only cell types that appear in at least
+#'              `min.cells.per.sample` cells per sample and in at least
+#'              `min.samp.per.type` samples.
+#'        - The original list `cms` is subset to `cms.filt`, with each sample
+#'          retaining only the kept cell types.
+#'        - If `keep.all = TRUE`, no cell-type filtering is done and
+#'          `cms.filt <- cms`.
+#'   2. Collect all cell names from the filtered matrices and drop unused
+#'      levels in `cell.groups` accordingly.
+#'   3. (Optional) Filter genes across samples:
+#'        - If `genes` is `NULL`, for each sample matrix in `cms.filt`:
+#'            * binarize counts to presence/absence (`> 1`),
+#'            * compute per-gene mean across cells, and
+#'            * keep genes with mean > `min.gene.frac`.
+#'        - A consensus gene set is formed by keeping genes that pass this
+#'          threshold in a sufficient fraction of samples.
+#'   4. Collapse counts by cell type and align genes:
+#'        - For each sample, call `collapseCellsByType()` to obtain a cell-type
+#'          × gene matrix (one row per cell type present in that sample).
+#'        - Use `sccore::extendMatrix()` to ensure that all sample matrices
+#'          have the same gene set (columns), and reorder columns to match
+#'          the final `genes` vector.
+#'   5. Build per-cell-type normalized matrices:
+#'        - For each cell type `ct` in `all.types`:
+#'            * For each sample in `cms.filt`:
+#'                - If the sample matrix is valid and contains `ct`, extract the
+#'                  corresponding row (cell-type profile).
+#'                - If the sample is valid but `ct` is missing, create a
+#'                  1 × genes row filled with `NA` for that cell type.
+#'                - If a sample entry is `NULL` or has no columns, it is skipped.
+#'            * Bind all non-NULL rows into a single matrix: samples × genes.
+#'            * Normalize each sample (row) by its total count:
+#'                - compute row sums (ignoring `NA`),
+#'                - divide by `pmax(1, row sum)` to avoid division by zero,
+#'                - apply log-transform: `log10(norm * 1e3 + 1)`.
+#'            * Assign row names to the matrix using the names of valid samples
+#'              in `cms.filt`.
+#'        - This produces one normalized matrix per cell type; samples that lack
+#'          a given cell type will have `NA` values in that cell type’s matrix.
+#'   6. Return a list containing:
+#'        - `cm.per.type`: a named list (one entry per cell type), where each
+#'          element is a samples × genes normalized matrix suitable for
+#'          downstream distance estimation.
+#'
+#' @param cms List of per-sample count matrices (rows = cells, columns = genes).
+#' @param cell.groups Factor or character vector giving the cell type for each
+#'   cell (names must match cell row names in `cms`).
+#' @param sample.per.cell Factor or character vector giving the sample ID for
+#'   each cell (same length/order as `cell.groups`).
+#' @param pair.model Output of `buildPairDesignMatrices()`, used to determine
+#'   which samples participate in informative pairs.
+#' @param sample.ids Character vector of global sample IDs, in the same order as
+#'   the sample metadata used to build `pair.model`.
+#' @param keep.all Logical; if `TRUE`, skip the paired design–based filtering of
+#'   cell types and samples and keep all input cells.
+#' @param min.cells.per.sample Minimum number of cells per (cell type, sample)
+#'   combination to consider that combination usable.
+#' @param min.samp.per.type Minimum number of samples that must pass the
+#'   per-sample cell-count filter for a cell type to be retained.
+#' @param min.gene.frac Minimum mean (after binarization) required for a gene
+#'   to be kept when computing the consensus gene set.
+#' @param genes Optional character vector of genes to keep. If supplied, the
+#'   automatic gene filtering step is skipped and matrices are extended to this
+#'   gene set.
+#' @param verbose Logical; if `TRUE`, print progress and filtering messages.
+#'
+#' @return A list with one component:
+#'   \describe{
+#'     \item{cm.per.type}{Named list of normalized sample × gene matrices, one
+#'       per cell type. Rows are samples; columns are genes. Entries can be `NA`
+#'       when a given sample does not contain that cell type or when normalization
+#'       encounters missing values.}
+#'   }
+#'
 #' @keywords internal
 filterExpressionDistanceInput <- function(
   cms, cell.groups, sample.per.cell, pair.model, sample.ids, keep.all=FALSE,
@@ -489,7 +638,7 @@ filterExpressionDistanceInput <- function(
   if (!keep.all) {
     cell.names <- lapply(cms, rownames) %>% unlist()
     freq.table <- filterCellTypesByCoveragePairs(cell.groups[cell.names], sample.per.cell[cell.names], pair.model, sample.ids, min.cells.per.sample, min.samp.per.type, verbose=verbose)
-    filt.types.per.samp <- freq.table$kept.by.sample #freq.table %$% split(Type, Sample)
+    filt.types.per.samp <- freq.table$kept.by.sample # Changes made here
     cms.filt <- names(filt.types.per.samp) %>% sn() %>% lapply(function(n) {
       cms[[n]] %>% .[cell.groups[rownames(.)] %in% filt.types.per.samp[[n]], , drop=FALSE]
     })
@@ -500,7 +649,7 @@ filterExpressionDistanceInput <- function(
 
   cell.names <- lapply(cms.filt, rownames) %>% unlist()
 
-  # ---- Gene filtering across samples ----
+  # ---- Gene filtering across samples ---- (KEPT this gene filtering)
   if (is.null(genes)) {
     genes <- lapply(cms.filt, function(cm) {
       cm@x <- 1 * (cm@x > 1)
@@ -629,25 +778,122 @@ makeGroupsPair <- function(M, include.other = FALSE) {
 
 
 
-#' Extract Partial or Fitted Expression Shifts for Visualization. "partial" corresponds to the distance explained
-#'   by the contrast of interest only (i.e., after regressing out nuisance covariates).
-#' @param p.dist Output of \code{estimateExpressionShiftsForCellType} function for pairwise distances.
-#' @param res Output of \code{performLMPermutations} function.
-#' @param design.mat Output of \code{buildDesignMatrix} function. (or pairwise design matrices)
-#' @param block.vars Optional character vector of column names in \code{design.mat$pair.meta}
-#'   to use for block-wise summary of shifts (e.g., batch or other grouping variable).
-#'   If provided, the function will compute mean shifts within each block and
-#'   return an additional data frame with this summary.
-#' @return A list with two data frames:
-#'   \item{pair.covariates}{Data frame suitable for plotting shifts with covariate patterns.}
-#'   \item{df.blocks}{(optional) Data frame with block-wise summary of shifts.}
-#'   \item{df.perm}{(optional) Data frame with permutation statistics for background distribution.}
-#' @details This function extracts expression shifts from the results of
-#'   \code{performLMPermutations} and prepares data frames for visualization.
-#'   It computes partial shifts (explained by the contrast of interest only), centers them
-#'   by the mean of ref-ref (AA) pairs and/or alt-alt (BB) pairs, and codes covariate patterns
-#'   for plotting. If \code{block.vars} is provided, it also computes mean shifts
-#'   within each block defined by the specified variables.
+#' Extract contrast-specific pairwise expression shifts for plotting
+#'
+#' This function takes the output of the linear model/permutation fit and the
+#' pairwise distance matrix, and constructs contrast-specific **expression
+#' shifts** for each pair and cell type for core sample-pair rows (cross-group). 
+#' It supports both block permutations and Freedman–Lane residualization and 
+#' returns tidy data frames suitable for
+#' visualization and permutation-background plots. 
+#' It handles factor and numeric variables separately for centering across cell types.
+#' 
+#' Factor-based contrasts (e.g., Group_pair) are centered by decomposing the contrast into 
+#' positive- and negative-weight factor levels. For each cell type, the model computes a 
+#' weighted average of the fitted values across all negative-weight levels to form a baseline, 
+#' and expression shifts are defined as the fitted value for each positive-weight pair minus 
+#' this baseline. For continuous (numeric) contrasts (e.g., pair_age_diff, pair_age_mean), 
+#' centering is performed around a scalar reference value x0. The reference is chosen in the 
+#' following order: (1) an explicit numeric anchor provided by numeric_ref_used (via x0.override), 
+#' (2) automatic heuristics—pair_*_diff contrasts are centered at 0 (no difference), while pair_*_mean 
+#' contrasts are centered at the mean or provided reference of the underlying variable, and
+#' (3) if no numeric baseline is available, a fallback factor-based centering approach uses a factor 
+#' contrast to compute a weighted average of the numeric variable (as before). 
+#' Continuous shifts are therefore slopes of fitted values with respect to the variable, 
+#' evaluated at the centered predictor x-x0. 
+#'
+#' Steps performed internally:
+#'   1. Choose the appropriate design and fitted values:
+#'        - If `perm.method = "block"`:
+#'            * Call `extractFitsBlock()` to obtain partial fits and full fits
+#'              based on the full design `F`.
+#'            * Use `design.mat$contrast.F` and `design.mat$F`.
+#'        - If `perm.method = "freedman-lane"`:
+#'            * Call `extractFitsFL()` to obtain partial fits based on the core
+#'              design `X` and residualized response.
+#'            * Use `design.mat$contrast.X` and `design.mat$X`.
+#'   2. Reconstruct the coefficient matrix:
+#'        - If `res$coef` is provided and has the expected length, reshape it
+#'          into a matrix with:
+#'            * rows = columns of `F` or `X` (depending on `perm.method`),
+#'            * columns = cell types (columns of `p.dist$Y`).
+#'        - This matrix (`coef.mat`) is later used for continuous contrasts.
+#'   3. Parse the contrast:
+#'        - Use `getContrastInfo()` to classify the contrast as:
+#'            * **factor-like** (e.g., weights over pair-factor levels), or
+#'            * **continuous** (e.g., a numeric pair covariate).
+#'        - For continuous contrasts, attempt to:
+#'            * infer a numeric baseline `x0.override` from the paired variable
+#'              name (e.g. `pair_age_diff` → baseline 0),
+#'            * or from `design.mat$numeric_ref_used` when available,
+#'            * otherwise fall back to factor-based centering rules.
+#'   4. Call `extractContrastDeltas()`:
+#'        - Pass in:
+#'            * `partial.fit` (contrast-specific fitted values),
+#'            * `pair.meta` (pair-level metadata from `design.mat`),
+#'            * the parsed contrast vector,
+#'            * optional `block.vars` (for block-level summaries),
+#'            * `coef.mat` (for continuous contrasts),
+#'            * `center.contrast` and/or `x0.override` (for centering).
+#'        - Receive pairwise shifts (and optional block summaries) per cell type.
+#'   5. Tidy the pairwise shifts:
+#'        - Convert the `delta$shifts` matrix (pairs × cell types) into a long
+#'          data frame with columns:
+#'            * `pair` (rownames),
+#'            * `celltype`,
+#'            * `shifts` (numeric).
+#'        - Filter out non-finite values (`NA`, `NaN`, `Inf`).
+#'   6. Process permutation statistics (if present):
+#'        - If `res$stats.perm` is not `NULL`, reshape it into a long data frame
+#'          of permutation statistics per cell type.
+#'        - If `res$stat.obs` is not `NULL`, store the observed statistic per
+#'          cell type in a small data frame.
+#'   7. Subset covariates and return:
+#'        - Align `design.mat$pair.meta` rows to the shifts matrix using
+#'          `rownames(delta$shifts)` and store as `pair.covariates` (used for cov.plot.keys).
+#'        - Return a list containing:
+#'            * `df.shifts` — per-pair, per-celltype shifts,
+#'            * `pair.covariates` — aligned pair-level metadata,
+#'            * `dist.type` — inferred centering type or `"continuous"`,
+#'            * `contrast` — the contrast vector,
+#'            * optionally `df.blocks`, `df.perm`, `df.perm.obs`, and `x.center`.
+#'
+#' NA handling:
+#'   - Any non-finite values in the shifts or permutation statistics are
+#'     removed from the returned data frames.
+#'   - Rows in `pair.meta` that cannot be aligned to `yhat.all` will cause
+#'     an error upstream in `extractContrastDeltas()`.
+#'
+#' @param res Output from the permutation/linear model fitting function
+#'   (`performLMPermutations()`), containing coefficients, residuals,
+#'   and optional permutation statistics.
+#' @param p.dist Output of `estimateExpressionShiftsForCellType()`, containing
+#'   the pairwise distance matrix `Y`.
+#' @param design.mat Paired design object, typically the result of
+#'   `buildPairDesignMatrices()`, containing `F`, `X`, `pair.meta`,
+#'   `contrast.F`, `contrast.X`, and optionally `numeric_ref_used`.
+#' @param perm.method Character; either `"freedman-lane"` or `"block"`,
+#'   specifying which fitted values to extract and which contrast space
+#'   (F vs X) to work in.
+#' @param block.vars Optional character vector of column names in
+#'   `design.mat$pair.meta` to define blocks for summarizing shifts.
+#'
+#' @return A list with components:
+#'   \describe{
+#'     \item{df.shifts}{Long-format data frame of per-pair, per-celltype
+#'       contrast-specific shifts.}
+#'     \item{pair.covariates}{Pair-level metadata aligned to `df.shifts`.}
+#'     \item{dist.type}{Character string describing the centering mode
+#'       (`"shift"`, `"total"`, `"var"`, `"custom"`, or `"continuous"`).}
+#'     \item{contrast}{The contrast vector used.}
+#'     \item{df.blocks}{(Optional) block-wise summary of shifts, if
+#'       `block.vars` was supplied.}
+#'     \item{df.perm}{(Optional) permutation statistics in long format.}
+#'     \item{df.perm.obs}{(Optional) observed test statistics per cell type.}
+#'     \item{x.center}{(Optional) scalar numeric baseline used for continuous
+#'       contrasts.}
+#'   }
+#'
 #' @keywords internal
 extractPairwiseShifts <- function(res, p.dist, design.mat,
                                   perm.method = c("freedman-lane", "block"),
@@ -691,9 +937,9 @@ extractPairwiseShifts <- function(res, p.dist, design.mat,
     
     ci <- getContrastInfo(contrast.vec)
     center.contrast <- ci$center
-    x0.override <- NULL   # <- new: numeric baseline for continuous contrasts
+    x0.override <- NULL   # new: numeric baseline for continuous contrasts
     
-    ## --- continuous contrasts: pick x0 using numeric_ref_used when possible ---
+    ## --- continuous contrasts: pick x0 using numeric_ref_used when possible --- # //TODO discuss for numeric contrasts
     if (ci$kind == "continuous") {
         var <- ci$var  # e.g. "pair_age_diff" or "pair_age_mean"
         
@@ -743,7 +989,7 @@ extractPairwiseShifts <- function(res, p.dist, design.mat,
         block.vars      = block.vars,
         coef.mat        = coef.mat,
         center.contrast = center.contrast,
-        x0.override     = x0.override       # <- NEW
+        x0.override     = x0.override       
     )
     
     df.shifts <- as.data.frame(delta$shifts) |>
@@ -785,7 +1031,94 @@ extractPairwiseShifts <- function(res, p.dist, design.mat,
 }
 
 
-#' Extract Contrast-Specific Expression Shifts
+#' Extract contrast-specific shifts from fitted values
+#'
+#' Given contrast-specific fitted values per pair and cell type, this function
+#' computes **expression shifts** for:
+#'   - factor-like contrasts (e.g., AB vs AA/BB composition; set by dist.type), and
+#'   - continuous contrasts (e.g., a paired numeric covariate),
+#' using an appropriate centering rule. Optionally, it also computes
+#' block-level summaries.
+#'
+#' Steps performed internally:
+#'   1. Align fitted values to pair metadata:
+#'        - Check that both `yhat.all` and `pair.meta` have row names.
+#'        - Match `rownames(yhat.all)` to `rownames(pair.meta)` and subset
+#'          `pair.meta` to the same order.
+#'        - Error if any rows cannot be aligned.
+#'   2. Parse the contrast:
+#'        - Use `getContrastInfo(contrast.vec)` to determine:
+#'            * `kind = "factor"` — weights over factor levels stored in
+#'              `ci$w`, with `ci$var` naming the factor column in `pair.meta`.
+#'            * `kind = "continuous"` — a single numeric variable `ci$var`.
+#'   3. Factor contrast path (`kind == "factor"`):
+#'        - Identify positive-weight and negative-weight levels of
+#'          `pair.meta[[ci$var]]`.
+#'        - For each negative level, compute the column-wise mean fitted value.
+#'        - Build a weighted negative baseline as a weighted sum of these
+#'          means (with weights `-ci$w[neg]`), normalized by the sum of
+#'          positive weights.
+#'        - For rows belonging to positive levels, compute shifts as:
+#'            * fitted value − baseline (per pair, per cell type).
+#'        - If `block.vars` is supplied:
+#'            * group pairs by the specified block columns in `pair.meta`,
+#'            * recompute baselines within each block, and
+#'            * compute block-wise mean shifts for each cell type.
+#'   4. Continuous contrast path (`kind == "continuous"`):
+#'        - Extract the numeric predictor `x` from `pair.meta[[ci$var]]`.
+#'        - Ensure `coef.mat` contains a row for `ci$var`, giving a slope per
+#'          cell type.
+#'        - Choose a scalar baseline `x0`:
+#'            * if `x0.override` is provided, use it directly;
+#'            * otherwise, apply heuristics for `pair_<var>_(mean|diff)`:
+#'                - `*_diff` → baseline 0,
+#'                - `*_mean` → mean(x), unless overridden;
+#'            * if still unresolved, use a factor-based centering rule via
+#'              `center.contrast` and `contrastCenterX0()`.
+#'        - Compute centered predictor values: `x.c = x - x0`.
+#'        - Multiply `x.c` by the slopes in `coef.mat[var, ]` to obtain
+#'          pairwise shifts per cell type.
+#'        - If `block.vars` is supplied, compute block-wise mean shifts by
+#'          averaging over pairs within each block.
+#'   5. Return a list with:
+#'        - `shifts`: matrix of pairwise shifts (pairs × cell types),
+#'        - `delta.block`: optional block-wise summary data frame,
+#'        - `inferred`: `"shift"`, `"total"`, `"var"`, `"custom"`, or `"continuous"`,
+#'        - `x.center`: scalar `x0` used for continuous contrasts (if applicable).
+#' NA handling:
+#'   - Means and baselines are computed with `na.rm = TRUE`, so missing
+#'     fitted values do not break the computation but may propagate as
+#'     `NA` where no valid observations remain.
+#'   - If a factor level contains no valid rows, its contribution to the
+#'     baseline is set to an `NA` vector, which may lead to `NA` shifts.
+#'
+#' @param yhat.all Matrix of fitted values (pairs × cell types) corresponding
+#'   to the contrast of interest (e.g. partial fits from `extractFitsBlock()`
+#'   or `extractFitsFL()`).
+#' @param pair.meta Data frame of pair-level metadata, with row names matching
+#'   those of `yhat.all`.
+#' @param contrast.vec Named numeric contrast vector, as produced by the
+#'   design constructors (factor or continuous type).
+#' @param block.vars Optional character vector of column names in `pair.meta`
+#'   used to define blocks for summary statistics.
+#' @param tol Numeric tolerance used when inferring centering type.
+#' @param coef.mat Optional numeric matrix of coefficients with:
+#'   rows = term names, columns = cell types. Required for continuous contrasts
+#'   (must contain a row named `ci$var`).
+#' @param center.contrast Optional factor-like contrast used for centering
+#'   continuous predictors when `x0.override` is not provided.
+#' @param x0.override Optional scalar numeric baseline for continuous
+#'   contrasts; if provided, overrides all other centering rules.
+#'
+#' @return A list with components:
+#'   \describe{
+#'     \item{shifts}{Matrix of pairwise shifts (pairs × cell types).}
+#'     \item{delta.block}{(Optional) data frame of block-wise shifts.}
+#'     \item{inferred}{Character string describing the centering or contrast
+#'       type.}
+#'     \item{x.center}{(For continuous contrasts) scalar baseline `x0` used.}
+#'   }
+#'
 #' @keywords internal
 extractContrastDeltas <- function(yhat.all, pair.meta, contrast.vec,
                                   block.vars = NULL, tol = 1e-8,
@@ -957,7 +1290,58 @@ extractContrastDeltas <- function(yhat.all, pair.meta, contrast.vec,
 }
 
 
-
+#' Extract fitted values for block permutation models
+#'
+#' This helper reconstructs fitted values and partial fits for block-based
+#' permutation models, working in the **full model space** `F`. It separates:
+#'   - full fitted values under the complete model,
+#'   - partial fitted values for the core design `X`,
+#'   - partial fitted values plus residual noise.
+#'
+#' Steps performed internally:
+#'   1. Extract design matrices:
+#'        - Convert `design.model$F` and `design.model$X` to matrices.
+#'   2. Build the coefficient matrix:
+#'        - Reshape `res$coef` (a flat numeric vector) into a matrix `B.F`
+#'          with:
+#'            * rows = columns of `F`,
+#'            * columns = cell types (matching `p.dist$Y`).
+#'   3. Compute fitted values under the full model:
+#'        - `y.fitted.all = F %*% B.F`, giving fitted values for every pair
+#'          and cell type under the full design.
+#'   4. Compute partial fits for the core design:
+#'        - Identify columns of `X` that exist in `B.F`.
+#'        - Compute `partial.fit.all = X %*% beta_X`, where `beta_X` are the
+#'          corresponding rows of `B.F`.
+#'   5. Add residual noise:
+#'        - Combine partial fits with the residuals from the full model:
+#'            * `partial.all = partial.fit.all + res$residuals`.
+#'   6. Drop pairs with all-NA responses:
+#'        - Use `p.dist$Y` to identify rows (pairs) where all cell-type
+#'          distances are `NA`.
+#'        - Remove those rows from:
+#'            * `y.fitted.all`,
+#'            * `partial.fit.all`,
+#'            * `partial.all`.
+#'   7. Return a list with:
+#'        - `partial.fit` — core-only fit (`X * beta_X`),
+#'        - `partial` — core fit plus noise (`X * beta_X + e`),
+#'        - `fitted` — full-model fit (`F * beta_F`).
+#' @param res Result object from the block permutation/LM fit, containing
+#'   coefficients (`coef`) and residuals (`residuals`).
+#' @param p.dist Output of `estimateExpressionShiftsForCellType()`, used to
+#'   identify rows with all-NA responses.
+#' @param design.model Design object (typically `pair.model` or similar)
+#'   containing matrices `F` and `X`.
+#'
+#' @return A list with:
+#'   \describe{
+#'     \item{partial.fit}{Matrix of core-only fitted values (`X * beta_X`).}
+#'     \item{partial}{Matrix of fitted values plus residual noise.}
+#'     \item{fitted}{Matrix of full-model fitted values (`F * beta_F`).}
+#'   }
+#'
+#' @keywords internal
 extractFitsBlock <- function(res, p.dist, design.model) {
   F <- as.matrix(design.model$F)
   X <- as.matrix(design.model$X)
@@ -985,7 +1369,48 @@ extractFitsBlock <- function(res, p.dist, design.model) {
        fitted      = y.fitted.all)     # F * beta
 }
 
-
+#' Extract partial fitted values for Freedman–Lane permutation models
+#'
+#' This helper reconstructs partial fitted values for the core design `X`
+#' under a Freedman–Lane permutation scheme. It places residualized responses
+#' back into the full pair index space, filling non-core rows with `NA` and
+#' dropping pairs with all-NA responses.
+#'
+#' Steps performed internally:
+#'   1. Extract core design and dimensions:
+#'        - Convert `design.model$X` to a matrix.
+#'        - Record row names of `X` (pairs) and column names of `p.dist$Y`
+#'          (cell types).
+#'   2. Initialize an all-NA matrix:
+#'        - Allocate `y.r` as an `nrow(X) × ncol(p.dist$Y)` matrix filled
+#'          with `NA`, with row/column names from `X` and `p.dist$Y`.
+#'   3. Insert residualized values on core rows:
+#'        - Determine core rows:
+#'            * if `design.model$core.rows` is `NULL`, use all rows;
+#'            * otherwise, use `which(design.model$core.rows)`.
+#'        - Check that `res$y.resid` has the same number of rows as the
+#'          selected core indices and the same number of columns as `p.dist$Y`.
+#'        - Assign `y.r[idx, ] <- res$y.resid`, leaving non-core rows as `NA`.
+#'   4. Drop pairs with all-NA responses:
+#'        - Use `p.dist$Y` to identify rows where all cell-type distances are
+#'          `NA`.
+#'        - Remove those rows from `y.r`.
+#'   5. Return the partial fitted matrix:
+#'        - The returned matrix has:
+#'            * rows = effective pairs used in the model,
+#'            * columns = cell types,
+#'            * `NA` in positions that were never modeled (non-core pairs).
+#' @param res Result object from a Freedman–Lane permutation fit, expected to
+#'   contain a matrix `y.resid` of residualized responses for core rows.
+#' @param p.dist Output from `estimateExpressionShiftsForCellType()`, used to
+#'   determine which pairs have all-NA responses.
+#' @param design.model Design object (typically `pair.model` or similar)
+#'   containing `X` and `core.rows`.
+#'
+#' @return A numeric matrix of partial fitted values (`X * beta_X`) aligned to
+#'   the core rows and filtered to remove all-NA pairs.
+#'
+#' @keywords internal
 extractFitsFL <- function(res, p.dist, design.model) {
     X    <- as.matrix(design.model$X)
     core <- design.model$core.rows  # logical length n, or NULL

@@ -298,12 +298,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   (default = `self$sample.per.cell`).
     #' @param formula formula|character Design formula specifying covariates to model
     #'   (default = `self$formula`).
-    #' @param contrast character length-3 Contrast triplet `c(var, alt, ref)` indicating the
-    #'   grouping variable and the two levels to compare (default = `self$contrast`).
+    #' @param contrast character or list specifying the contrast (default = `self$contrast`).
     #' @param sample.meta data.frame Sample-level metadata (rows = samples, columns = covariates)
     #'   used to build the design matrix (default = `self$sample.meta`).
-    #' @param sample.id character Optional column in `sample.meta` containing sample IDs;
-    #'   used only to derive row names if they are not set (default = `self$sample.id`).
+    #' @param sample.ids character vector containing sample IDs (default = `self$sample.ids`).
     #' @param dist character Distance metric for expression shifts: `"cor"` (1 − correlation),
     #'   `"l1"` (Manhattan), or `"l2"` (Euclidean). If `NULL`, a sensible default is chosen
     #'   based on dimensionality (default = `NULL`).
@@ -313,20 +311,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.samp.per.type integer Minimum samples per cell type (default = 2).
     #' @param min.gene.frac numeric Minimum fraction of cells per type expressing a gene
     #'   for the gene to be kept (default = 0.01).
-    #' @param perm.method character Permutation method: `"freedman-lane"` (default) or `"full"`.
-    #' @param block.id character Optional column in `sample.meta` specifying blocks for restricted randomization
+    #' @param perm.method character Permutation method: `"freedman-lane"` (default) or `"block"`.
+    #' @param block.vars character Optional column in `sample.meta` specifying blocks for restricted randomization
     #' @param verbose logical Print progress messages (default = `self$verbose`).
     #' @param n.cores integer Number of CPU cores (default = `self$n.cores`).
     #' @param name character Results slot name (default = `"expression.shifts"`).
     #' @param n.permutations integer Number of permutations used to estimate the
     #'   null distribution for coefficients and partial R² (default = 1000).
     #' @param genes character Optional subset of genes to use (default = `NULL`).
-    #' @param n.pcs integer Number of principal components for distance computation
-    #'   (default = `NULL`, i.e. no PCA).
-    #' @param top.n.genes integer Optional number of top genes to use (default = `NULL`).
-    #' @param gene.selection character Gene selection method passed to the distance routine
-    #'   (e.g., `"wilcox"`; default = `"deseq2"`).
-    #' @param cov.plot.keys character Optional covariates to visualize alongside the shifts
+    #' @param robust.method character Robust regression method: `"none"` (default), `"huber"`, or `"winsor"`.
+    #' @param pairContrast character or list specifying the paired contrast (default = `NULL`).
+    #' @param pairFormula formula|character Design formula for paired model (default = `NULL`).
     #' @param ... Additional parameters forwarded to \code{estimateExpressionChange_lm()}
     #'   and lower-level distance functions.
     #'
@@ -409,7 +404,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' @param jitter.alpha numeric Transparency value for the data points (default=0.05)
     #' @param show.pvalues character string Which p-values to plot. Accepted values are "none", "raw", or "adjusted". (default=c("adjusted", "raw", "none"))
     #' @param ylab character string Label of the y-axis (default="normalized expression distance")
-    #' @param color.by.covariate boolean Whether to color points by covariate (default=FALSE)
+    #' @param cov.plot.keys character covariates to color data points by (default=NULL)
     #' @param jitter.size numeric Size of the jitter points (default=1)
     #' @param celltype.levels character Optional ordering of cell types (default=NULL)
     #' @param panel character Which panel to use: "covariate" (default), "block", or "background". 
@@ -445,7 +440,6 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
 
     #' @description Plot residuals from cao$estimateExpressionShiftMagnitudes() 
     #' @param name character Results slot name (default="expression.shifts")
-    #' @param color.by.covariate boolean Whether to color points by covariate (default=FALSE)
     #' @param cov.plot.keys character covariates to color data points by (default=NULL)
     #' @param jitter.alpha numeric Transparency value for the data points (default=0.05)
     #' @param jitter.size numeric Size of the jitter points (default=1)

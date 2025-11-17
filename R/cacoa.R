@@ -86,10 +86,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     target.level = NULL,
 
     #' @field sample.id Character of column name containing sample IDs in sample.metadata
-    sample.id = NULL,
+    sample.ids = NULL,
 
-    #' @field block.id Character of column name containing variable name to restrict permutations to
-    block.id = NULL,
+    #' @field block.vars Character of column name containing variable name to restrict permutations to
+    block.vars = NULL,
 
     #' @field method for permutation testing (default=NULL)
     perm.method = NULL,
@@ -115,7 +115,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param contrast specification (see buildDesignMatrices documentation).
     #' @param numeric.ref reference points for numeric covariates in the contrast specification. `"auto"` or named list of numeric anchors (e.g., `list(age=35)`).
     #' @param block.vars optional list of covariates in sample.metadata on which to form randomizaton blocks
-    #' @param sample.id character scalar naming the column in `sample.metadata` that contains sample IDs.
+    #' @param sample.ids character scalar naming the column in `sample.metadata` that contains sample IDs.
     #' @param cell.groups vector Indicates cell groups with cell names (default: extracted from `data.object`)
     #' @param sample.per.cell vector Sample name per cell (default: extracted from `data.object`)
     #' @param sample.groups.palette Color palette for the sample.groups (default=NULL)
@@ -144,7 +144,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao <- Cacoa$new(data.object = con, sample.metadata = sample.metadata, sample.id=sample.id, formula = formula, contrast = contrast, cell.groups = cell.groups)
     #' }
     initialize=function(
-      data.object, sample.metadata=NULL, sample.id=NULL, formula=NULL, contrast=NULL, numericRef = numeric.ref, block.vars=NULL, cell.groups=NULL, sample.per.cell=NULL, sample.groups.palette=NULL,
+      data.object, sample.metadata=NULL, sample.ids=NULL, formula=NULL, contrast=NULL, numericRef = numeric.ref, block.vars=NULL, cell.groups=NULL, sample.per.cell=NULL, sample.groups.palette=NULL,
       cell.groups.palette=NULL, embedding=NULL, n.cores=1, verbose=TRUE,
       graph.name=NULL, assay.name="RNA", data.layer='scale.data',
       plot.theme=ggplot2::theme_bw(), plot.params=NULL
@@ -164,11 +164,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # check sample IDs
 
       samp.names <- rownames(sample.metadata)
-      if ((is.null(samp.names) || anyNA(samp.names)) && !is.null(sample.id)) {
-          if (!sample.id %in% colnames(sample.metadata)) {
-            stop(sprintf("`sample.id` column '%s' not found in sample metadata.", sample.id))
+      if ((is.null(samp.names) || anyNA(samp.names)) && !is.null(sample.ids)) {
+          if (!sample.ids %in% colnames(sample.metadata)) {
+            stop(sprintf("`sample.ids` column '%s' not found in sample metadata.", sample.ids))
           }
-          samp.names <- as.character(sample.metadata[[sample.id]])
+          samp.names <- as.character(sample.metadata[[sample.ids]])
           if (any(duplicated(samp.names))) {
             stop("duplicate sample identifiers found in sample.metadata. Please ensure all sample IDs are unique.")
           }
@@ -188,6 +188,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$block.vars <- block.vars
       
       self$sample.meta <- self$full.meta <- sample.metadata
+      self$sample.ids <- samp.names
       self$n.cores <- n.cores
       self$verbose <- verbose
       
@@ -297,12 +298,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   (default = `self$sample.per.cell`).
     #' @param formula formula|character Design formula specifying covariates to model
     #'   (default = `self$formula`).
-    #' @param contrast character length-3 Contrast triplet `c(var, alt, ref)` indicating the
-    #'   grouping variable and the two levels to compare (default = `self$contrast`).
+    #' @param contrast character or list specifying the contrast (default = `self$contrast`).
     #' @param sample.meta data.frame Sample-level metadata (rows = samples, columns = covariates)
     #'   used to build the design matrix (default = `self$sample.meta`).
-    #' @param sample.id character Optional column in `sample.meta` containing sample IDs;
-    #'   used only to derive row names if they are not set (default = `self$sample.id`).
+    #' @param sample.ids character vector containing sample IDs (default = `self$sample.ids`).
     #' @param dist character Distance metric for expression shifts: `"cor"` (1 − correlation),
     #'   `"l1"` (Manhattan), or `"l2"` (Euclidean). If `NULL`, a sensible default is chosen
     #'   based on dimensionality (default = `NULL`).
@@ -312,20 +311,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.samp.per.type integer Minimum samples per cell type (default = 2).
     #' @param min.gene.frac numeric Minimum fraction of cells per type expressing a gene
     #'   for the gene to be kept (default = 0.01).
-    #' @param perm.method character Permutation method: `"freedman-lane"` (default) or `"full"`.
-    #' @param block.id character Optional column in `sample.meta` specifying blocks for restricted randomization
+    #' @param perm.method character Permutation method: `"freedman-lane"` (default) or `"block"`.
+    #' @param block.vars character Optional column in `sample.meta` specifying blocks for restricted randomization
     #' @param verbose logical Print progress messages (default = `self$verbose`).
     #' @param n.cores integer Number of CPU cores (default = `self$n.cores`).
     #' @param name character Results slot name (default = `"expression.shifts"`).
     #' @param n.permutations integer Number of permutations used to estimate the
     #'   null distribution for coefficients and partial R² (default = 1000).
     #' @param genes character Optional subset of genes to use (default = `NULL`).
-    #' @param n.pcs integer Number of principal components for distance computation
-    #'   (default = `NULL`, i.e. no PCA).
-    #' @param top.n.genes integer Optional number of top genes to use (default = `NULL`).
-    #' @param gene.selection character Gene selection method passed to the distance routine
-    #'   (e.g., `"wilcox"`; default = `"deseq2"`).
-    #' @param cov.plot.keys character Optional covariates to visualize alongside the shifts
+    #' @param robust.method character Robust regression method: `"none"` (default), `"huber"`, or `"winsor"`.
+    #' @param pairContrast character or list specifying the paired contrast (default = `NULL`).
+    #' @param pairFormula formula|character Design formula for paired model (default = `NULL`).
     #' @param ... Additional parameters forwarded to \code{estimateExpressionChange_lm()}
     #'   and lower-level distance functions.
     #'
@@ -350,13 +346,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' )
     #' }
 estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, formula = NULL,
-                                             contrast = NULL, pairContrast = NULL, pairFormula = NULL, block.vars = NULL, sample.metadata = self$sample.meta, perm.method="freedman-lane", 
-                                             sample.id = self$sample.id, dist = NULL, dist.type = "shift", min.cells.per.sample = 10, 
-                                             min.samp.per.type = 2, min.gene.frac = 0.01, genes = NULL, n.pcs = NULL, top.n.genes = NULL,
-                                             verbose = self$verbose, n.cores = self$n.cores, name = "expression.shifts", n.permutations = 1000, 
-                                             gene.selection = "deseq2", block.id= self$block.id, robust.method = "none",
+                                             contrast = NULL, pairContrast = NULL, pairFormula = NULL, block.vars = self$block.vars, sample.metadata = self$sample.meta,  
+                                             sample.ids = self$sample.ids, dist = NULL, dist.type = "shift", min.cells.per.sample = 10, 
+                                             min.samp.per.type = 2, min.gene.frac = 0.01, genes = NULL, perm.method="freedman-lane", robust.method = "none",
                                              na.mode = "drop", alternative = "two-sided", return.residuals = TRUE, return.sampled.stats = FALSE,
-                                             return.sampled.fits = FALSE,  cov.plot.keys = NULL, ...) {
+                                             name = "expression.shifts", n.permutations = 1000, return.sampled.fits = FALSE,
+                                             verbose = self$verbose, n.cores = self$n.cores, ...) {
   
   if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
     sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
@@ -364,68 +359,43 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     sample.model <- self$model
   }
   # build paired model
-  pair.model <- buildPairDesignMatrices(sample.metadata,
-                                        sample.model,
-                                        dist.type = dist.type,
-                                        pairContrast = pairContrast,
-                                        pairFormula  = pairFormula,
-                                        verbosity = if(verbose) 'info' else 'warn')
+  pair.model <- buildPairDesignMatrices(sample.metadata, sample.model, dist.type = dist.type, pairContrast = pairContrast,
+                                        pairFormula  = pairFormula, verbosity = if(verbose) 'info' else 'warn')
   
   count.matrices <- extractRawCountMatrices(self$data.object, transposed = TRUE)
 
   if (verbose) message("Filtering data... ")
   shift.inp <- filterExpressionDistanceInput(count.matrices, cell.groups = cell.groups, sample.per.cell = sample.per.cell,
                                              pair.model = pair.model, sample.ids = rownames(sample.metadata), min.cells.per.sample = min.cells.per.sample,
-                                             min.samp.per.type = min.samp.per.type, min.gene.frac = min.gene.frac, keep.all = TRUE,
-                                             genes = genes, gene.selection = gene.selection, verbose = verbose) 
+                                             min.samp.per.type = min.samp.per.type, min.gene.frac = min.gene.frac, genes = genes, verbose = verbose, ...) 
   
   if (verbose) message("done!\n")
 
-  if (!is.null(n.pcs)) {
-    if (!is.null(top.n.genes) && n.pcs > top.n.genes) {
-      n.pcs <- top.n.genes - 1
-      warning("n.pcs can't be larger than top.n.genes - 1, setting it to ", n.pcs)
-    }
-
-    n.samps.per.type.eff <- sapply(shift.inp$cm.per.type, function(m) {
-    sum(rowSums(!is.na(m)) > 0) })
-
+  n.samps.per.type.eff <- sapply(shift.inp$cm.per.type, function(m) {
+  sum(rowSums(!is.na(m)) > 0) })
   min.eff <- min(n.samps.per.type.eff)
-
   if (min.eff <= 1) {
-    # With ≤1 usable sample for some type, PCA isn't defined → skip PCA globally
-      n.pcs <- NULL
-      warning("Some cell types have ≤1 usable sample after keeping all samples; skipping PCA (n.pcs <- NULL).")
-    } else if (n.pcs >= min.eff) {
-      n.pcs <- min.eff - 1
-      warning(
-        "Some cell types have too few usable samples (min = ", min.eff,
-        "). Setting n.pcs to ", n.pcs,
-        ". If this is too small, consider relaxing filtering or not using PCA.")
-    }
-  }
+      warning("Some cell types have ≤1 usable sample after keeping all samples")
+  } 
 
   # LM-based estimation
   if (verbose) message("Fitting LM with formula: ", deparse(pair.model$pair_formula_used))
-  browser()
-  out <- shift.inp %$% estimateExpressionChange(cm.per.type, cell.groups = cell.groups, design.mat=pair.model,
-                                                              sample.meta = sample.meta, sample.per.cell = sample.per.cell, 
-                                                              formula = formula,contrast = contrast, n.pcs = n.pcs, 
+  #browser()
+  out <- shift.inp %$% estimateExpressionChange(cm.per.type, cell.groups = cell.groups, pair.model=pair.model,
+                                                              sample.per.cell = sample.per.cell, perm.method= perm.method,
                                                               robust.method = robust.method, na.mode = na.mode, alternative = alternative,
                                                               return.residuals = return.residuals, return.sampled.stats = return.sampled.stats,
-                                                              dist = dist %||% "cor", dist.type = dist.type, sample.id = sample.id,
-                                                              gene.selection = gene.selection, cm.raw.per.type = cm.raw.per.type, perm.method= perm.method, 
-                                                              n.permutations = n.permutations, top.n.genes = top.n.genes,
-                                                              n.cores = n.cores, verbose = verbose, ...)
-  out$dists.adj <- out %$% extractPairwiseShifts(res, p.dist, design.mat = pair.model, contrast = contrast, dist.type = dist.type,
-                                                 sample.meta = sample.meta, sample.id = sample.id, cov.plot.keys = cov.plot.keys, 
-                                                 perm.method = perm.method, block.vars = block.vars, ...)
+                                                              dist = dist %||% "cor", dist.type = dist.type, sample.ids = sample.ids,
+                                                              n.permutations = n.permutations, n.cores = n.cores, verbose = verbose, ...)
+
+  out$dists.adj <- out %$% extractPairwiseShifts(res, p.dist, design.mat = pair.model, perm.method = perm.method,
+                                                 block.vars = if (!is.null(block.vars)) paste0(block.vars, "_pair") else NULL, ...)
+  out$dists.adj$changed.contrast <- if(!is.null(formula) || !is.null(contrast)) TRUE else FALSE # for plot labels
   self$test.results[[name]] <- out
   return(invisible(self$test.results[[name]]))
 },
 
-    #' @description Plot results from cao$estimateExpressionShiftMagnitudes() (shift.type="normal") or
-    #'   cao$estimateCommonExpressionShiftMagnitudes() (shift.type="common")
+    #' @description Plot results from cao$estimateExpressionShiftMagnitudes() 
     #'
     #' @param name character Results slot name (default="expression.shifts")
     #' @param type character type of a plot "bar" or "box" (default="bar")
@@ -434,7 +404,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' @param jitter.alpha numeric Transparency value for the data points (default=0.05)
     #' @param show.pvalues character string Which p-values to plot. Accepted values are "none", "raw", or "adjusted". (default=c("adjusted", "raw", "none"))
     #' @param ylab character string Label of the y-axis (default="normalized expression distance")
-    #' @param color.by.covariate boolean Whether to color points by covariate (default=FALSE)
+    #' @param cov.plot.keys character covariates to color data points by (default=NULL)
     #' @param jitter.size numeric Size of the jitter points (default=1)
     #' @param celltype.levels character Optional ordering of cell types (default=NULL)
     #' @param panel character Which panel to use: "covariate" (default), "block", or "background". 
@@ -446,10 +416,10 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' cao$estimateExpressionShiftMagnitudes()
     #' cao$plotExpressionShiftMagnitudes()
     #' }
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch=TRUE, show.jitter=TRUE, color.by.covariate=FALSE, 
+    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch=TRUE, show.jitter=TRUE, cov.plot.keys = NULL,
                                            jitter.alpha=0.05, jitter.size=1, show.pvalues=c("adjusted", "raw", "none"), celltype.levels=NULL,
                                            panel = c("covariate", "block", "background"), order.direction = "increasing",
-                                           ylab='Model-adjusted distances', ...) {
+                                           ylab='Centered Pairwise Shifts', ...) {
       show.pvalues <- match.arg(show.pvalues)
       panel <- match.arg(panel)
 
@@ -464,8 +434,31 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
         pvalues <- NULL
       }
 
-      plotPairwiseShiftsPerCellType(df, pvalues=pvalues, panel=panel, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
+      plotPairwiseShiftsPerCellType(df, pvalues=pvalues, panel=panel, cov.plot.keys=cov.plot.keys, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
         palette=self$cell.groups.palette, ylab=ylab, plot.theme=self$plot.theme, yline=0.0, ...)
+    },
+
+    #' @description Plot residuals from cao$estimateExpressionShiftMagnitudes() 
+    #' @param name character Results slot name (default="expression.shifts")
+    #' @param cov.plot.keys character covariates to color data points by (default=NULL)
+    #' @param jitter.alpha numeric Transparency value for the data points (default=0.05)
+    #' @param jitter.size numeric Size of the jitter points (default=1)
+    #' @param yline numeric Horizontal line to draw (default=0.0)
+    #' @param plot.per.celltype boolean Whether to plot per cell type (default=FALSE)
+    #' @param cont.palette character vector Color palette for continuous covariates 
+    #' @param ylab character string Label of the y-axis (default="Residual Variance")
+    #' @param ... additional arguments
+    #' @return A ggplot2 object
+    plotExpressionShiftResiduals=function(name="expression.shifts", cov.plot.keys = NULL,
+                                           jitter.alpha=0.8, jitter.size=1, yline=0.0, plot.per.celltype = FALSE, palette=NULL,
+                                           ylab='Residual Variance', cont.palette = rev(RColorBrewer::brewer.pal(11, "Spectral")), ...) {
+
+      res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
+
+      res %$% plotResidualsPerCelltype(res, design.mat, self$sample.ids, palette=palette, plot.theme=self$plot.theme, 
+                                       cov.plot.keys = cov.plot.keys, jitter.alpha=jitter.alpha, 
+                                       jitter.size=jitter.size, plot.per.celltype=plot.per.celltype, yline=yline, cont.palette=cont.palette,
+                                       ylab=ylab, ...)
     },
 
     #' @description Alias for estimateDEPerCellType

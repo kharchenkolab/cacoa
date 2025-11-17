@@ -11,3 +11,4 @@ cacoa*.tar.gz
 *.a
 cmake-build*
 src/fit_and_randomize.cpp
+.DS_Store

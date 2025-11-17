@@ -19,16 +19,14 @@ NULL
 #' @param verbose (default=FALSE)
 #' @return List of distances per cell type, distance matrices, sample groups, cell types, pvalues, and adjusted p-values.
 #' @export
-estimateExpressionChange <- function(cm.per.type, sample.meta, cell.groups, design.mat, sample.per.cell,
-                                     top.n.genes = NULL, cm.raw.per.type = NULL, n.pcs = NULL, sample.id = NULL, formula = NULL, 
-                                     dist = "cor", dist.type = c("shift", "total", "var"), contrast = NULL,
+estimateExpressionChange <- function(cm.per.type, cell.groups, pair.model, sample.per.cell,
+                                     sample.ids = NULL, dist = "cor", dist.type = c("shift", "total", "var"), 
                                      perm.method = c("freedman-lane", "block"), robust.method = c("none", "huber", "winsor"),
-                                     gene.selection = "deseq2", na.mode = c("drop", "impute_weak"), alternative = c("two-sided", "greater", "less"),
+                                     na.mode = c("drop", "impute_weak"), alternative = c("two-sided", "greater", "less"),
                                      n.permutations = 1000, p.adjust.method = "BH", trim = 0.2, return.residuals = FALSE, 
                                      return.sampled.stats = TRUE, return.sampled.fits = FALSE, 
                                      n.cores = 1, verbose = TRUE, ...) {
   dist.type <- match.arg(dist.type)
-  dist <- parseDistance(dist, top.n.genes = top.n.genes, n.pcs = n.pcs)
   perm.method <- match.arg(perm.method)
   robust.method <- match.arg(robust.method)
   na.mode <- match.arg(na.mode)
@@ -38,17 +36,15 @@ estimateExpressionChange <- function(cm.per.type, sample.meta, cell.groups, desi
   #n.cores.inner <- max(floor(n.cores / max(1L, length(levels(cell.groups)))), 1)
 
   # Pairwise Distances
-  p.dist <- estimateExpressionShiftsForCellType(cm.per.type, dist = dist, top.n.genes = top.n.genes, cm.raw = cm.raw.per.type,
-                                                gene.selection = gene.selection, n.pcs = n.pcs, meta = sample.meta,
-                                                sample.id = sample.id, formula=formula, contrast = contrast, cross.only=TRUE, 
-                                                core.rows=which(design.mat$model$core.rows), ...)
+  p.dist <- estimateExpressionShiftsForCellType(cm.per.type, dist = dist, pair.model = pair.model, sample.ids = sample.ids)
+
   # Fitting and randomization
-  res <- performLMPermutations(y=p.dist$Y, x=design.mat$model, n.permutations=n.permutations, perm.method=perm.method, 
-                               robust.method = robust.method, na.mode = na.mode, cross.rows= cross.rows, alternative = alternative,
+  res <- performLMPermutations(y=p.dist$Y, x=pair.model, n.permutations=n.permutations, perm.method=perm.method, 
+                               robust.method = robust.method, na.mode = na.mode, alternative = alternative,
                                return.residuals = return.residuals,return.sampled.stats = return.sampled.stats,
                                return.sampled.fits = return.sampled.fits, n.cores = n.cores, ...)
   # R2 estimation
-  r2 <- estimateR2PerTerm(design.mat$model$F, p.dist$Y, groups = makeGroupsPair(design.mat$model$F), idx = design.mat$pairs)
+  r2 <- estimateR2PerTerm(pair.model$F, p.dist$Y, groups = makeGroupsPair(pair.model$F))
 
   #model.diagnostics <- lapply(res.per.type, `[[`, "model.diag") // TODO
 
@@ -60,235 +56,151 @@ estimateExpressionChange <- function(cm.per.type, sample.meta, cell.groups, desi
   summary <- summary[order(summary$obs.stat, decreasing=TRUE), ]
 
   out <- list(results= summary, res = res, perm.method = perm.method, robust.method= robust.method,
-              dist.type = dist.type, dists.per.type = p.dist$dists, p.dist = p.dist, r2 = r2, sample.table = sample.type.table
+              dist.type = dist.type, p.dist = p.dist, r2 = r2, sample.table = sample.type.table, design.mat = pair.model
               )
   out
 }
 
+#' Estimate expression-based pairwise distances for all cell types
+#' @param cm.norm List of normalized count matrices per cell type
+#' @param dist what distance measure to use: 'cor' - Pearson's correlation, 'l2' - Euclidean distance, 'l1' - Manhattan distance
+#' @param pair.model result of buildPairDesignMatrices()
+#' @param sample.ids global sample IDs in the same order as rows of sample.metadata
 #' @keywords internal
-estimateExpressionShiftsForCellType <- function(
-  cm.norm, dist, top.n.genes=NULL, cm.raw=NULL, n.pcs=NULL,
-  gene.selection="wilcox", exclude.genes=NULL, meta = NULL, 
-  formula = NULL, sample.id = NULL, contrast = NULL,
-  core.rows = NULL, cross.only = FALSE # keep only alt/ref cross pairs if TRUE
-) {
-  if (is.list(cm.norm)) {
-    stopifnot(is.data.frame(meta))
-    n <- nrow(meta)
-    idx <- lowerTriIndices(n)
-    samp.names <- if (!is.null(sample.id) && sample.id %in% names(meta)) {
-      as.character(meta[[sample.id]])
-    } else if (!is.null(rownames(meta)) && all(nzchar(rownames(meta)))) {
-      rownames(meta)
-    } else {
-      NULL
-    }
-    pair.names <- if (!is.null(samp.names)) {
-      paste(samp.names[idx$i], samp.names[idx$j], sep="__")
-    } else {
-      paste(idx$i, idx$j, sep="__")
-    }
-
+estimateExpressionShiftsForCellType <- function( cm.norm, dist, pair.model, sample.ids) {
+    # ---- basic checks ----
+    if (!is.list(cm.norm))
+        stop("cm.norm must be a list of count matrices per cell type.")
+    if (missing(pair.model) || is.null(pair.model$pairs))
+        stop("pair.model (from buildPairDesignMatrices) with $pairs is required.")
+    if (missing(sample.ids))
+        stop("sample.ids must be provided and must align with rows of sample.metadata.")
+    
+    idx <- pair.model$pairs
+    if (!(is.matrix(idx) && ncol(idx) == 2L))
+        stop("pair.model$pairs must be an n_pairs x 2 matrix of sample indices (i,j).")
+    
+    if (length(sample.ids) < max(idx))
+        stop("sample.ids length is smaller than max(pair.model$pairs).")
+    
+    # pair names for rows of Y / dists (for printing)
+    pair.names <- paste(sample.ids[idx[, "i"]], sample.ids[idx[, "j"]], sep = "__")
+    
+    # cell type names
     ctnames <- names(cm.norm)
     if (is.null(ctnames)) ctnames <- paste0("CT", seq_along(cm.norm))
-
-    # Reorder rows to match meta row order 
-    rn <- rownames(meta)
-    for (k in seq_along(cm.norm)) {
-      if (!is.null(rownames(cm.norm[[k]])) && !is.null(rn) &&
-          setequal(rownames(cm.norm[[k]]), rn)) {
-        cm.norm[[k]] <- cm.norm[[k]][rn, , drop=FALSE]
-      }
-    }
-
-    # Optional: keep only cross-group (alt/ref) pairs
-    keep.rows <- rep(TRUE, nrow(idx))
-    if (cross.only) {
-      tr <- parseTriplet(contrast) 
-      g  <- factor(meta[[tr$var]])
-      gi <- as.character(g[idx$i]); gj <- as.character(g[idx$j])
-      keep.rows <- ( (gi == tr$ref & gj == tr$alt) | (gi == tr$alt & gj == tr$ref) )
-    }
-
-    # Allocate Y: rows = sample pairs (design order), cols = cell types
+    
+    # ---- allocate Y: rows = pairs, cols = cell types ----
     Y <- matrix(NA_real_, nrow = nrow(idx), ncol = length(cm.norm),
                 dimnames = list(pair.names, ctnames))
-
+    
+    # ---- loop over cell types ----
     for (t in seq_along(cm.norm)) {
-      X <- cm.norm[[t]]
-
-      # (1) Optional gene selection
-      if (!is.null(top.n.genes)) {
-        if(gene.selection == "deseq2"){
-          if (is.null(formula) || is.null(cm.raw)) {
-          stop("Design formula and raw counts must be provided for gene.selection='deseq2'")
+        X <- cm.norm[[t]]    # samples x genes for this type (subset of samples)
+        Xp <- X              # removed any PCA / gene selection
+        
+        # ensure rownames are sample IDs; needed for mapping
+        if (is.null(rownames(Xp))) {
+            stop("cm.norm[[", t, "]] has no rownames; cannot map to sample.ids.")
         }
-        X.use <- cm.raw[[t]]  # use raw counts for DESeq2
-        } else {
-          X.use <- X
-        }
-        sel.genes <- filterGenesForCellType(
-          X.use, top.n.genes=top.n.genes, gene.selection=gene.selection,
-          exclude.genes=exclude.genes, meta=meta, formula=formula,
-          sample.id=sample.id, contrast=contrast
-        )
-        X <- X[, sel.genes, drop=FALSE]
-      }
-
-      # (2) PCA (skip if any NA to preserve NA semantics)
-      Xp <- X
-      if (!is.null(n.pcs) && !anyNA(X)) {
-        min.dim <- min(dim(X)) - 1
-        if (n.pcs > min.dim) {
-          n.pcs <- min.dim
-          warning("n.pcs is too large for type '", ctnames[t], "'. Setting to ", min.dim)
-        }
-        Xp <- getTopPCs(X, n.pcs = n.pcs)
-
-        if (any(!is.finite(Xp))) stop("PCA output contains non-finite values (NA/NaN/Inf).")
-        zero.var.cols <- which(apply(Xp, 2, var) < .Machine$double.eps)
-        if (length(zero.var.cols) > 0) {
-          warning("PCA output has zero-variance components for '", ctnames[t], "'; removing.")
-          Xp <- Xp[, -zero.var.cols, drop = FALSE]
-        }
-        if (ncol(Xp) == 0) stop("No valid principal components remain after filtering zero-variance columns.")
-      } else if (!is.null(n.pcs) && anyNA(X)) {
-        warning("Type '", ctnames[t], "': data contain NA; skipping PCA to preserve NA-pair semantics.")
-      }
-
-      # (3) Distances — produce a square *base* matrix D
-      D <- NULL
-      if (dist == 'cor') {
-        Xc <- as.matrix(Xp)                 # ensure base matrix
-        n_rows <- nrow(Xc)
-        if (is.null(n_rows) || n_rows < 2L) {
-          D <- matrix(0, n_rows, n_rows, dimnames = list(rownames(Xc), rownames(Xc)))
-        } else {
-          R <- stats::cor(t(Xc), use = "pairwise.complete.obs", method = "pearson")
-          D <- 1 - R
-        }
-      } else if (dist %in% c('l2','l1')) {
-        Xd <- as.matrix(Xp)                 # ensure base matrix
-        n_rows <- nrow(Xd)
-        if (n_rows < 2L) {
-          D <- matrix(0, n_rows, n_rows, dimnames = list(rownames(Xd), rownames(Xd)))
-        } else if (anyNA(Xd)) {
-          D <- matrix(NA_real_, n_rows, n_rows, dimnames = list(rownames(Xd), rownames(Xd)))
-          diag(D) <- 0
-          for (i in seq_len(n_rows-1L)) {
-            xi <- Xd[i,]
-            for (j in (i+1L):n_rows) {
-              xj <- Xd[j,]
-              if (anyNA(xi) || anyNA(xj)) {
-                d <- NA_real_
-              } else if (dist == 'l2') {
-                d <- sqrt(sum((xi - xj)^2))
-              } else {
-                d <- sum(abs(xi - xj))
-              }
-              D[i,j] <- D[j,i] <- d
+        
+        # (1) Distances — square matrix D over *local* rows of this type
+        D <- NULL
+        if (dist == "cor") {
+            Xc <- as.matrix(Xp)
+            n_rows <- nrow(Xc)
+            if (is.null(n_rows) || n_rows < 2L) {
+                D <- matrix(0, n_rows, n_rows,
+                            dimnames = list(rownames(Xc), rownames(Xc)))
+            } else {
+                R <- stats::cor(t(Xc), use = "pairwise.complete.obs", method = "pearson")
+                D <- 1 - R
+                if (is.null(rownames(R))) {
+                    rownames(D) <- colnames(D) <- rownames(Xc)
+                }
             }
-          }
+        } else if (dist %in% c("l2", "l1")) {
+            Xd <- as.matrix(Xp)
+            n_rows <- nrow(Xd)
+            if (n_rows < 2L) {
+                D <- matrix(0, n_rows, n_rows,
+                            dimnames = list(rownames(Xd), rownames(Xd)))
+            } else if (anyNA(Xd)) {
+                D <- matrix(NA_real_, n_rows, n_rows,
+                            dimnames = list(rownames(Xd), rownames(Xd)))
+                diag(D) <- 0
+                for (i in seq_len(n_rows - 1L)) {
+                    xi <- Xd[i, ]
+                    for (j in (i + 1L):n_rows) {
+                        xj <- Xd[j, ]
+                        if (anyNA(xi) || anyNA(xj)) {
+                            d <- NA_real_
+                        } else if (dist == "l2") {
+                            d <- sqrt(sum((xi - xj)^2))
+                        } else {
+                            d <- sum(abs(xi - xj))
+                        }
+                        D[i, j] <- D[j, i] <- d
+                    }
+                }
+            } else {
+                method <- if (dist == "l2") "euclidean" else "manhattan"
+                D <- as.matrix(stats::dist(Xd, method = method))
+                if (is.null(rownames(D)) && !is.null(rownames(Xd))) {
+                    rownames(D) <- colnames(D) <- rownames(Xd)
+                }
+            }
         } else {
-          method <- if (dist == 'l2') "euclidean" else "manhattan"
-          D <- as.matrix(stats::dist(Xd, method = method))
-          # set dimnames if lost
-          if (is.null(rownames(D)) && !is.null(rownames(Xd))) {
-            rownames(D) <- colnames(D) <- rownames(Xd)
-          }
+            stop("Unknown distance: ", dist)
         }
-      } else {
-        stop("Unknown distance: ", dist)
-      }
-
-      # Harden: ensure D is a square base matrix
-      if (!is.matrix(D)) D <- as.matrix(D)
-      dimD <- dim(D)
-      if (length(dimD) != 2L || dimD[1] != dimD[2]) {
-        stop("Distance is not a square matrix for cell type '", ctnames[t], "': got ", paste(dimD, collapse = "x"))
-      }
-
-      # (4) Vectorize using the same pair order as the design (idx)
-      Y[, t] <- vectorizeLowerTri(D, pairs = idx)
+        
+        # ensure D is square and has rownames
+        if (!is.matrix(D)) D <- as.matrix(D)
+        dimD <- dim(D)
+        if (length(dimD) != 2L || dimD[1] != dimD[2]) {
+            stop("Distance is not a square matrix for cell type '", ctnames[t],
+                 "': got ", paste(dimD, collapse = "x"))
+        }
+        if (is.null(rownames(D))) {
+            stop("Distance matrix D for cell type '", ctnames[t],
+                 "' has no rownames; cannot map to sample.ids.")
+        }
+        
+        # (2) Vectorize using global pairs, mapping to local D indices via sample IDs
+        Y[, t] <- vectorizeLowerTri(D, pairs = idx, sample.ids = sample.ids, row.ids = rownames(D))
     }
     
-    # rows to show in dists (visualization)
-    if (is.null(core.rows)) {
-      core.rows <- seq_len(nrow(idx))
-    } else {
-      core.rows <- as.integer(core.rows)
-      stopifnot(all(core.rows >= 1L & core.rows <= nrow(idx)))
-    }
-    rows.use <- if (cross.only) keep.rows else core.rows
-    dists <- Y[rows.use, , drop = FALSE]
-
-    return(list(Y = Y, dists = dists))
-
-  } else {
-    # ---- single-matrix path (unchanged, but coerce for cor) ----
-    if (!is.null(top.n.genes)) {
-      if(gene.selection == "deseq2"){
-        if(is.null(formula) || is.null(cm.raw)) {
-          stop("Design formula and raw counts must be provided for gene.selection='deseq2'")
-        }
-        X.use <- cm.raw  # use raw counts for DESeq2
-      } else {
-        X.use <- cm.norm
-      }
-      sel.genes <- filterGenesForCellType(
-        X.use, top.n.genes=top.n.genes, gene.selection=gene.selection,
-        exclude.genes=exclude.genes, meta= meta, formula = formula,
-        sample.id = sample.id, contrast = contrast
-      )
-      cm.norm <- cm.norm[,sel.genes,drop=FALSE]
-    }
-    if (!is.null(n.pcs)) {
-      min.dim <- min(dim(cm.norm)) - 1
-      if (n.pcs > min.dim) {
-        n.pcs <- min.dim
-        warning("n.pcs is too large. Setting it to maximal allowed value ", min.dim)
-      }
-      cm.norm <- getTopPCs(cm.norm, n.pcs = n.pcs)
-
-      if (any(!is.finite(cm.norm))) {
-        stop("PCA output contains non-finite values (NA/NaN/Inf).")
-      }
-      zero.var.cols <- which(apply(cm.norm, 2, var) < .Machine$double.eps)
-      if (length(zero.var.cols) > 0) {
-        warning("PCA output contains zero-variance components; removing them.")
-        cm.norm <- cm.norm[, -zero.var.cols, drop = FALSE]
-      }
-      if (ncol(cm.norm) == 0) {
-        stop("No valid principal components remain after filtering zero-variance columns.")
-      }
-    }
-    if (dist == 'cor') {
-      dist.mat <- 1 - stats::cor(t(as.matrix(cm.norm)), use = "pairwise.complete.obs")
-    } else if (dist == 'l2') {
-      dist.mat <- as.matrix(stats::dist(cm.norm, method="euclidean"))
-    } else if (dist == 'l1') {
-      dist.mat <- as.matrix(stats::dist(cm.norm, method="manhattan"))
-    } else {
-      stop("Unknown distance: ", dist)
-    }
-    return(dist.mat)
-  }
+    list(Y = Y)        # all pairs x cell types (NA where sample missing in type)
+    
 }
 
 #' @keywords internal
-subsetDistanceMatrix <- function(dist.mat, sample.groups, cross.factor, build.df=FALSE) {
-  comp.selector <- if (cross.factor) "!=" else "=="
-  selection.mask <- outer(sample.groups[rownames(dist.mat)], sample.groups[colnames(dist.mat)], comp.selector);
-  diag(dist.mat) <- NA;
-  if (!build.df)
-    return(na.omit(dist.mat[selection.mask]))
-
-  dist.mat[!selection.mask] <- NA;
-
-  if(all(is.na(dist.mat))) return(NULL);
-  dist.df <- reshape2::melt(dist.mat) %>% na.omit()
-  return(dist.df);
-  return(na.omit(dist.mat[selection.mask]))
+vectorizeLowerTri <- function(D, pairs, sample.ids, row.ids = rownames(D)) {
+    # D: square distance matrix over *local* rows
+    # pairs: n_pairs x 2 integer matrix with columns i,j (global sample indices)
+    # sample.ids: length n_global, IDs in the same order as rows of sample.meta
+    # row.ids: IDs corresponding to rows of D (subset of sample.ids)
+    
+    if (is.null(row.ids)) {
+        stop("Distance matrix D must have rownames (sample IDs) to map pairs correctly.")
+    }
+    
+    # Map global sample indices -> local row indices in D
+    # global k -> sample.ids[k] -> match in row.ids
+    global2local <- match(sample.ids, row.ids)  # length n_global, can be NA
+    
+    vapply(seq_len(nrow(pairs)), function(k) {
+        gi <- pairs[k, 1]
+        gj <- pairs[k, 2]
+        li <- global2local[gi]
+        lj <- global2local[gj]
+        
+        if (is.na(li) || is.na(lj)) {
+            NA_real_              # this pair involves a sample missing in this cell type
+        } else {
+            D[li, lj]
+        }
+    }, numeric(1))
 }
 
 #' @keywords internal
@@ -437,41 +349,34 @@ prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, 
 #'     samples that actually drive the paired contrast (i.e. show up in core pairs).
 #'
 #' @export
-filterCellTypesByCoveragePairs <- function(
-    cell.groups,
-    sample.per.cell,
-    pairDesign,
-    sample.ids,
-    min.cells.per.sample,
-    min.samp.per.type,
-    use.core.rows = TRUE,
-    verbose = TRUE
-) {
+filterCellTypesByCoveragePairs <- function(cell.groups, sample.per.cell, pairDesign, sample.ids,
+                                           min.cells.per.sample, min.samp.per.type, use.core.rows = TRUE,
+                                           verbose = TRUE) {
   # ---- basic checks ----
   if (length(cell.groups) != length(sample.per.cell)) {
     stop("cell.groups and sample.per.cell must have the same length (one entry per cell).")
   }
   if (!is.list(pairDesign) ||
       is.null(pairDesign$pairs) ||
-      is.null(pairDesign$model)) {
+      is.null(pairDesign$core.rows)) {
     stop("pairDesign must be the full list returned by buildPairDesignMatrices() ",
-         "and must include $pairs and $model.")
+         "and must include $pairs and $core.rows.")
   }
-  pairs_mat <- pairDesign$pairs
-  if (!(is.matrix(pairs_mat) && ncol(pairs_mat) == 2L)) {
+  pairs.mat <- pairDesign$pairs
+  if (!(is.matrix(pairs.mat) && ncol(pairs.mat) == 2L)) {
     stop("pairDesign$pairs must be an n_pairs x 2 integer matrix of sample indices.")
   }
-  n_pairs <- nrow(pairs_mat)
-  core.rows <- pairDesign$model$core.rows
-  if (!is.null(core.rows) && length(core.rows) != n_pairs) {
-    stop("pairDesign$model$core.rows length does not match nrow(pairDesign$pairs).")
+  n.pairs <- nrow(pairs.mat)
+  core.rows <- pairDesign$core.rows
+  if (!is.null(core.rows) && length(core.rows) != n.pairs) {
+    stop("pairDesign$core.rows length does not match nrow(pairDesign$pairs).")
   }
-  if (length(sample.ids) < max(pairs_mat)) {
+  if (length(sample.ids) < max(pairs.mat)) {
     stop("sample.ids does not cover all indices mentioned in pairDesign$pairs.")
   }
   
   # ---- 1. determine usable samples from the paired design ----
-  if (!n_pairs) {
+  if (!n.pairs) {
     if (verbose) {
       message("No pairs in pairDesign$pairs; returning empty filter result.")
     }
@@ -485,12 +390,12 @@ filterCellTypesByCoveragePairs <- function(
   }
   
   if (use.core.rows && !is.null(core.rows)) {
-    keep_pair_rows <- which(core.rows)
+    keep.pair.rows <- which(core.rows)
   } else {
-    keep_pair_rows <- seq_len(n_pairs)
+    keep.pair.rows <- seq_len(n.pairs)
   }
   
-  if (!length(keep_pair_rows)) {
+  if (!length(keep.pair.rows)) {
     if (verbose) {
       message("No informative pairs (core.rows is empty TRUE set); all types dropped.")
     }
@@ -503,8 +408,8 @@ filterCellTypesByCoveragePairs <- function(
     ))
   }
   
-  sample_idx_used <- unique(as.integer(pairs_mat[keep_pair_rows, , drop = FALSE]))
-  usable.samples  <- unique(sample.ids[sample_idx_used])
+  sample.idx.used <- unique(as.integer(pairs.mat[keep.pair.rows, , drop = FALSE]))
+  usable.samples  <- unique(sample.ids[sample.idx.used])
   
   # ---- 2. build per-(Type,Sample) cell counts ----
   # coerce to plain factors/chars
@@ -544,9 +449,9 @@ filterCellTypesByCoveragePairs <- function(
   kept.types <- kept.types[!is.na(kept.types)]
   
   # produce kept.by.sample for convenience
-  keep_mask <- freq.table$Usable & freq.table$Type %in% kept.types
-  kept.by.sample <- split(freq.table$Type[keep_mask],
-                          freq.table$Sample[keep_mask])
+  keep.mask <- freq.table$Usable & freq.table$Type %in% kept.types
+  kept.by.sample <- split(freq.table$Type[keep.mask],
+                          freq.table$Sample[keep.mask])
   kept.by.sample <- lapply(kept.by.sample, function(v) unique(as.character(v)))
   
   # ---- 5. messaging ----
@@ -576,18 +481,15 @@ filterCellTypesByCoveragePairs <- function(
 filterExpressionDistanceInput <- function(
   cms, cell.groups, sample.per.cell, pair.model, sample.ids, keep.all=FALSE,
   min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
-  genes=NULL, verbose=FALSE,
-  gene.selection=c("wilcox","var","od","deseq2")
+  genes=NULL, verbose=FALSE
 ) {
-  gene.selection <- match.arg(gene.selection)
-
   stopifnot(is.list(cms), length(cms) > 0)
   all.samples <- names(cms)
 
   if (!keep.all) {
     cell.names <- lapply(cms, rownames) %>% unlist()
-    freq.table <- filterCellTypesByCoveragePairs(cell.groups[cell.names], samples.per.cell[cell.names], pair.model, sample.ids, min.cells.per.sample, min.samp.per.type, verbose=verbose)
-    filt.types.per.samp <- freq.table %$% split(Type, Sample)
+    freq.table <- filterCellTypesByCoveragePairs(cell.groups[cell.names], sample.per.cell[cell.names], pair.model, sample.ids, min.cells.per.sample, min.samp.per.type, verbose=verbose)
+    filt.types.per.samp <- freq.table$kept.by.sample #freq.table %$% split(Type, Sample)
     cms.filt <- names(filt.types.per.samp) %>% sn() %>% lapply(function(n) {
       cms[[n]] %>% .[cell.groups[rownames(.)] %in% filt.types.per.samp[[n]], , drop=FALSE]
     })
@@ -611,43 +513,20 @@ filterExpressionDistanceInput <- function(
   cms.filt %<>% lapply(collapseCellsByType, groups=cell.groups, min.cell.count=1)
   cms.filt %<>% lapply(sccore::extendMatrix, genes) %>% lapply(`[`, , genes, drop=FALSE)
 
-  # ---- Build per-cell-type matrices (always make RAW + NORM) ----
+  # ---- Build per-cell-type matrices (kept NORM only) ----
   cell.groups <- droplevels(cell.groups[cell.names])
   all.types <- levels(cell.groups)
 
   cms.filt <- cms.filt[all.samples]
 
-  cm.raw.per.type <- sccore::sn(all.types) %>% lapply(function(ct) {
-    # missing -> zero row (sparse)
-    rows_raw <- lapply(cms.filt, function(x) {
-      if (ct %in% rownames(x)) {
-        x[ct, , drop=FALSE]
-      } else {
-        Matrix::Matrix(0, nrow=1, ncol=ncol(x),
-                       dimnames=list(ct, colnames(x)), sparse=TRUE)  # keep 'double' slot
-      }
-    })
-    mat_raw <- do.call(rbind, rows_raw)                # samples x genes
-    # ensure integer-valued while keeping dgCMatrix 'double' storage
-    if (inherits(mat_raw, "dgCMatrix")) {
-      if (!all(abs(mat_raw@x - round(mat_raw@x)) < 1e-8)) {
-        stop("Counts for DESeq2 are not whole numbers; ensure cms are raw counts.")
-      }
-      mat_raw@x <- round(mat_raw@x)
-    } else {
-      if (!all(abs(mat_raw - round(mat_raw)) < 1e-8, na.rm = TRUE)) {
-        stop("Counts for DESeq2 are not whole numbers; ensure cms are raw counts.")
-      }
-      mat_raw <- round(mat_raw)
-    }
-    rownames(mat_raw) <- names(cms.filt)
-    mat_raw
-  })
-  names(cm.raw.per.type) <- all.types
-
   cm.per.type <- sccore::sn(all.types) %>% lapply(function(ct) {
     # norm: row present -> take it; missing -> NA row (as before)
-    rows_norm <- lapply(cms.filt, function(x) {
+    rows.norm <- lapply(cms.filt, function(x) {
+      # skip NULL/non-matrix entries
+      if (is.null(x) || is.null(ncol(x))) {
+        return(NULL)
+      }
+
       if (ct %in% rownames(x)) {
         x[ct, , drop=FALSE]
       } else {
@@ -655,19 +534,18 @@ filterExpressionDistanceInput <- function(
         as(m, "dgCMatrix")
       }
     })
-    mat <- do.call(rbind, rows_norm)                   # samples x genes
+    rows.norm <- Filter(Negate(is.null), rows.norm)
+    mat <- do.call(rbind, rows.norm)                   # samples x genes
     denom <- pmax(1, rowSums(mat, na.rm=TRUE))
     mat <- mat / denom
     mat <- log10(mat * 1e3 + 1)
-    rownames(mat) <- names(cms.filt)
+    # set rownames only for the non-NULL entries
+    valid <- !vapply(cms.filt, function(x) is.null(x) || is.null(ncol(x)), logical(1))
+    rownames(mat) <- names(cms.filt)[valid]
     mat
   })
   names(cm.per.type) <- all.types
-
-  return(list(
-    cm.per.type      = cm.per.type,       # normalized (use everywhere downstream)
-    cm.raw.per.type  = cm.raw.per.type   # raw (use only for gene selection)
-  ))
+  return(list("cm.per.type" = cm.per.type))       # normalized (use everywhere downstream)
 }
 
 
@@ -685,134 +563,83 @@ estimateExplainedVariance <- function(cm, sample.groups) {
     setNames(colnames(cm))
 }
 
-#' @keywords internal
-filterGenesForCellType <- function(cm.norm, meta, top.n.genes=500, gene.selection=c("wilcox", "var", "od", "deseq2"),
-                                   exclude.genes=NULL, formula = NULL, sample.id = NULL, contrast = NULL) {
-  gene.selection <- match.arg(gene.selection)
-  sample.groups <- getSampleGroups(meta, contrast = contrast, sample.id = sample.id)
 
-  if (gene.selection == "var") {
-    sel.genes <- estimateExplainedVariance(cm.norm, sample.groups=sample.groups) %>%
-      sort(decreasing=TRUE) %>% names()
-  } else if (gene.selection == "wilcox") {
-    spg <- rownames(cm.norm) %>% split(sample.groups[.])
-    test.res <- matrixTests::col_wilcoxon_twosample(cm.norm[spg[[1]],,drop=FALSE], cm.norm[spg[[2]],,drop=FALSE], exact=FALSE)$pvalue
-    sel.genes <- test.res %>% setNames(colnames(cm.norm)) %>% sort() %>% names()
-  } else if (gene.selection == "deseq2") {
-    checkPackageInstalled("DESeq2", details="for gene.selection='deseq2'", cran=TRUE)
-    # Sample size filtering 
-    n.samples <- table(meta[[contrast[1]]])
-    if (any(n.samples < 2)) {
-      stop("Each group must be present in at least two samples. Change gene.selection method or filter cell types with too few samples.")
-    }
-
-    # align samples 
-    if (is.null(rownames(meta))) stop("meta must have rownames as sample IDs.")
-    common <- intersect(rownames(meta), rownames(cm.norm))
-    if (length(common) < 2L) stop("Too few overlapping samples between meta and counts.")
-    #cm.norm  <- cm.norm[common, , drop=FALSE]
-    meta <- meta    [common, , drop=FALSE]
+## Generic grouping for pair-level design matrices, used in R2 estimation per variable across cell types (updated for new pair design)
+## - collapses all "<var>_pair*" columns into one group per <var>
+##   (and prefers any "<var>_pair_contrast" column if present)
+## - groups numeric pair columns "pair_<var>_(mean|diff)" into one group "pair_<var>"
+## - keeps "(Intercept)" if present
+## - anything else stays as-is (unless include.other=TRUE, then grouped under "Other")
+makeGroupsPair <- function(M, include.other = FALSE) {
+    stopifnot(!is.null(colnames(M)))
+    cn <- colnames(M)
+    groups <- list()
     
-    # drop formula terms with insufficient samples
-    terms.in.formula <- all.vars(stats::terms(formula))
-    terms.in.formula <- setdiff(terms.in.formula, sample.id)
-    for (v in terms.in.formula) {
-      if (is.character(meta[[v]]) || is.logical(meta[[v]])) {
-        meta[[v]] <- factor(meta[[v]])
-      }
+    ## 1) Intercept
+    if ("(Intercept)" %in% cn) {
+        groups$Intercept <- "(Intercept)"
     }
-    valid.terms <- Filter(function(v) {
-      x <- meta[[v]]
-      if (is.factor(x)) nlevels(droplevels(x)) >= 2 else TRUE
-    }, terms.in.formula)
     
-    formula.inner <- stats::reformulate(valid.terms)
-    counts <- t(cm.norm)       # genes x samples (currently numeric)
-    counts <- round(as.matrix(counts))
-    storage.mode(counts) <- "integer"
-
-    meta <- meta[colnames(counts), , drop = FALSE] # reorder samples
-    stopifnot(identical(colnames(counts), rownames(meta)))
-    # run deseq2
-    dds <- DESeq2::DESeqDataSetFromMatrix(countData = counts, colData = meta, design = formula.inner)
-    dds <- suppressMessages(DESeq2::DESeq(dds, quiet = TRUE, test = 'Wald'))
-    sel.genes <- rownames(dds)[order(DESeq2::results(dds)$padj)]
-  } else {
-    checkPackageInstalled("pagoda2", details="for gene.selection='od'", cran=TRUE)
-    # TODO: we need to extract the OD function from Pagoda and scITD into sccore
-    # Pagoda2 should not be in DESCRIPTION
-    p2 <- pagoda2::Pagoda2$new(t(cm.norm), modelType="raw", verbose=FALSE, n.cores=1)
-    p2$adjustVariance(verbose=FALSE)
-    sel.genes <- p2$getOdGenes(Inf)
-  }
-
-
-
-  sel.genes %<>% setdiff(exclude.genes) %>% head(top.n.genes)
-  return(sel.genes)
-}
-
-#' @keywords internal
-parseDistance <- function(dist, top.n.genes, n.pcs) {
-  n.comps <- min(top.n.genes, n.pcs, Inf)
-  if (is.null(dist)) {
-    dist <- ifelse(n.comps < 20, 'l1', 'cor')
-    return(dist)
-  }
-
-  dist %<>% tolower()
-  if (dist == 'l2') {
-    warning("Using dist='l2' is not recommended, as it may introduce unwanted dependency ",
-            "on the number of cells per cluster. Please, consider using 'l1' instead.")
-  } else if (dist == 'cor') {
-    if (n.comps < 20) {
-      warning("dist='cor' is not recommended for data with dimensionality < 20. ",
-              "Please, consider using 'l1' instead.")
+    ## 2) Factor pair terms: "<var>_pair*"
+    pair.terms <- grep("_pair", cn, value = TRUE)
+    if (length(pair.terms)) {
+        # extract variable name before "_pair"
+        varnames <- sub("_pair.*$", "", pair.terms)
+        for (v in unique(varnames)) {
+            cols <- pair.terms[varnames == v]
+            # if there's a collapsed contrast, prefer that
+            contrast.cols <- grep("_pair_contrast$", cols, value = TRUE)
+            if (length(contrast.cols)) {
+                groups[[v]] <- contrast.cols
+            } else {
+                groups[[v]] <- cols
+            }
+        }
     }
-  } else if (dist == 'l1') {
-    if (n.comps > 30) {
-      warning("dist='l1' is not recommended for data with dimensionality > 30. ",
-              "Please, consider using 'cor' instead.")
+    
+    ## 3) Numeric pair terms: "pair_<var>_(mean|diff)"
+    num.pair <- grep("^pair_[A-Za-z0-9.]+_(mean|diff)$", cn, value = TRUE)
+    if (length(num.pair)) {
+        base <- sub("^pair_([A-Za-z0-9.]+)_(mean|diff)$", "\\1", num.pair)
+        for (v in unique(base)) {
+            cols <- num.pair[base == v]
+            gname <- paste0("pair_", v)
+            if (gname %in% names(groups)) {
+                groups[[gname]] <- unique(c(groups[[gname]], cols))
+            } else {
+                groups[[gname]] <- cols
+            }
+        }
     }
-  } else {
-    stop("Unknown dist: ", dist)
-  }
-
-  return(dist)
+    
+    ## 4) Leftovers
+    used <- unlist(groups, use.names = FALSE)
+    leftovers <- setdiff(cn, used)
+    if (length(leftovers)) {
+        if (include.other) {
+            groups$Other <- leftovers
+        } else {
+            for (lf in leftovers) groups[[lf]] <- lf
+        }
+    }
+    
+    groups
 }
 
-#' @keywords internal
-getTopPCs <- function(cm.norm, n.pcs) {
-  samp.names <- rownames(cm.norm)
 
-  if (!is.matrix(cm.norm)) {
-    cm.norm <- as.matrix(cm.norm)
-  }
-  if (!is.numeric(cm.norm)) {
-    stop("Input matrix must be numeric.")
-  }
-  cm.norm.p <- pca_project(cm.norm, n.pcs)
-  rownames(cm.norm.p) <- samp.names
-  return(cm.norm.p)
-}
+
 
 #' Extract Partial or Fitted Expression Shifts for Visualization. "partial" corresponds to the distance explained
 #'   by the contrast of interest only (i.e., after regressing out nuisance covariates).
-#' @param p.dist Output of \code{estimateExpressionShiftsForCellType} function.
+#' @param p.dist Output of \code{estimateExpressionShiftsForCellType} function for pairwise distances.
 #' @param res Output of \code{performLMPermutations} function.
 #' @param design.mat Output of \code{buildDesignMatrix} function. (or pairwise design matrices)
-#' @param contrast Contrast triplet (variable, ref, alt) used to define the groups.
-#' @param sample.meta Sample metadata data frame used to build the design matrix.
-#' @param sample.id Column name in \code{sample.meta} that contains sample IDs
-#'   matching the row names of the input cell matrices.
-#' @param cov.plot.keys Character vector of column names in \code{design.mat$pair.meta}
-#'   to use for coding covariate patterns in the output data frame.
 #' @param block.vars Optional character vector of column names in \code{design.mat$pair.meta}
 #'   to use for block-wise summary of shifts (e.g., batch or other grouping variable).
 #'   If provided, the function will compute mean shifts within each block and
 #'   return an additional data frame with this summary.
 #' @return A list with two data frames:
-#'   \item{df.cov.keys}{Data frame suitable for plotting shifts with covariate patterns.}
+#'   \item{pair.covariates}{Data frame suitable for plotting shifts with covariate patterns.}
 #'   \item{df.blocks}{(optional) Data frame with block-wise summary of shifts.}
 #'   \item{df.perm}{(optional) Data frame with permutation statistics for background distribution.}
 #' @details This function extracts expression shifts from the results of
@@ -822,151 +649,336 @@ getTopPCs <- function(cm.norm, n.pcs) {
 #'   for plotting. If \code{block.vars} is provided, it also computes mean shifts
 #'   within each block defined by the specified variables.
 #' @keywords internal
-extractPairwiseShifts <- function(res, p.dist, design.mat, dist.type, perm.method= c("freedman-lane", "block"),
-                           sample.meta, sample.id, contrast, block.vars = NULL, cov.plot.keys = NULL) {
-  perm.method <- match.arg(perm.method)
-  dist.type <- match.arg(dist.type, c("shift", "total"))
-  if (perm.method == "block") {
-    blk <- extractFitsBlock(res, p.dist, design.model = design.mat)
-    partial.fit <- blk$partial
-  } else if (perm.method == "freedman-lane") {
-    partial.fit <- extractFitsFL(res, p.dist, design.mat)
-  } else {
-    stop("Unknown model type: ", perm.method)
-  }
-
-  delta <- extractContrastDeltas(yhat.all = partial.fit, pair.meta = design.mat$pair.meta, pairs = design.mat$pairs,
-                                 sample.meta = sample.meta, sample.id = sample.id, contrast = contrast,
-                                 center.by = dist.type, block.vars = block.vars)
-
-  ## --- get covariate patterns ---
-  ab.pos <- alignABrows(p.dist$dists, design.mat$pairs, sample.meta, sample.id = sample.id)
-  pm.ab <- design.mat$pair.meta[ab.pos, , drop = FALSE]
-  pattern.keys <- paste0(cov.plot.keys, "_pair")
-  keys <- intersect(pattern.keys, colnames(pm.ab))
-  if (!length(keys)) warning("No key columns found in pair.meta. Check cov.plot.keys.")
-  patt.coded <- if (length(keys)) do.call(paste, c(pm.ab[, keys, drop = FALSE], sep = " | "))
-                else rep("(no key cols in pair.meta)", nrow(pm.ab))
-
-  ## --- panel I ---
-  df.shifts <- as.data.frame(delta$shifts) |>
-    tibble::rownames_to_column("pair") |>
-    tidyr::pivot_longer(-pair, names_to = "celltype", values_to = "shifts") |>
-    dplyr::filter(is.finite(shifts))
-
-  pattern.by.pair <- setNames(patt.coded, rownames(delta$shifts))
-  df.cov.keys <- df.shifts
-  df.cov.keys$pattern_coded <- factor(pattern.by.pair[df.cov.keys$pair])
-
-  ## --- panel II: block-wise summary (optional) ---
-  df.blocks <- delta$delta.block
-
-  ## --- panel III: permutation background + observed ---
-  stats.perm <- if (!is.null(res$stats.perm)) res$stats.perm else NULL
-  stat.obs   <- if (!is.null(res$stat.obs))   res$stat.obs   else NULL
-  df.perm     <- NULL
-  df.perm.obs <- NULL
-  if (!is.null(stats.perm)) {
-    ct <- colnames(stats.perm)
-    df.perm <- as.data.frame(stats.perm) |>
-      tidyr::pivot_longer(tidyselect::all_of(ct), names_to = "celltype", values_to = "perm_stat") |>
-      dplyr::filter(is.finite(perm_stat))
-    if (!is.null(stat.obs)) {
-      df.perm.obs <- data.frame(celltype = ct, obs = as.numeric(stat.obs), stringsAsFactors = FALSE)
+extractPairwiseShifts <- function(res, p.dist, design.mat,
+                                  perm.method = c("freedman-lane", "block"),
+                                  block.vars = NULL) {
+    perm.method <- match.arg(perm.method)
+    
+    if (perm.method == "block") {
+        blk <- extractFitsBlock(res, p.dist, design.model = design.mat)
+        partial.fit  <- blk$partial
+        contrast.vec <- design.mat$contrast.F
+        F <- as.matrix(design.mat$F)
+        
+        coef.mat <- NULL
+        if (!is.null(res$coef)) {
+            expect <- ncol(F) * ncol(p.dist$Y)
+            if (length(res$coef) == expect) {
+                coef.mat <- matrix(res$coef,
+                                   nrow = ncol(F),
+                                   dimnames = list(colnames(F), colnames(p.dist$Y)))
+            }
+        }
+        
+    } else if (perm.method == "freedman-lane") {
+        partial.fit  <- extractFitsFL(res, p.dist, design.model = design.mat)
+        contrast.vec <- design.mat$contrast.X
+        X <- as.matrix(design.mat$X)
+        
+        coef.mat <- NULL
+        if (!is.null(res$coef)) {
+            expect <- ncol(X) * ncol(p.dist$Y)
+            if (length(res$coef) == expect) {
+                coef.mat <- matrix(res$coef,
+                                   nrow = ncol(X),
+                                   dimnames = list(colnames(X), colnames(p.dist$Y)))
+            }
+        }
+        
+    } else {
+        stop("Unknown model type: ", perm.method)
     }
-  }
-  out <- list(df.shifts = df.shifts, df.cov.keys = df.cov.keys)
-  if (!is.null(df.blocks))    out$df.blocks    <- df.blocks
-  if (!is.null(df.perm))      out$df.perm      <- df.perm
-  if (!is.null(df.perm.obs))  out$df.perm.obs  <- df.perm.obs
-  return(out)
+    
+    ci <- getContrastInfo(contrast.vec)
+    center.contrast <- ci$center
+    x0.override <- NULL   # <- new: numeric baseline for continuous contrasts
+    
+    ## --- continuous contrasts: pick x0 using numeric_ref_used when possible ---
+    if (ci$kind == "continuous") {
+        var <- ci$var  # e.g. "pair_age_diff" or "pair_age_mean"
+        
+        # Heuristic for pair numerics: pair_<v>_(mean|diff)
+        m  <- regexec("^pair_([A-Za-z0-9.]+)_(mean|diff)$", var)
+        mt <- regmatches(var, m)[[1]]
+        
+        if (length(mt) == 3L) {
+            base <- mt[2]     # "age"
+            kind <- mt[3]     # "mean" or "diff"
+            
+            if (kind == "diff") {
+                # natural: baseline is zero difference
+                x0.override <- 0
+            } else if (kind == "mean") {
+                # natural: baseline is numeric_ref_used[[base]] if present
+                if (!is.null(design.mat$numeric_ref_used) &&
+                    base %in% names(design.mat$numeric_ref_used)) {
+                    x0.override <- design.mat$numeric_ref_used[[base]]
+                } else {
+                    # leave NULL here; we'll fall back to mean(x) inside extractContrastDeltas()
+                }
+            }
+        }
+        
+        # if we still don't have a numeric baseline, fall back to the old
+        # factor-centering mechanism via center.contrast
+        if (is.null(center.contrast)) {
+            for (v in list(design.mat$contrast.F, design.mat$contrast.X)) {
+                if (is.null(v)) next
+                v.center <- attr(v, "center")
+                if (!is.null(v.center)) { center.contrast <- v.center; break }
+                if (any(grepl("=", names(v), fixed = TRUE))) {
+                    center.contrast <- v
+                    break
+                }
+            }
+            # note: if center.contrast is still NULL and x0.override is NULL,
+            # extractContrastDeltas() will error with a clear message.
+        }
+    }
+    
+    delta <- extractContrastDeltas(
+        yhat.all        = partial.fit,      # contrast-specific fits
+        pair.meta       = design.mat$pair.meta,
+        contrast.vec    = contrast.vec,
+        block.vars      = block.vars,
+        coef.mat        = coef.mat,
+        center.contrast = center.contrast,
+        x0.override     = x0.override       # <- NEW
+    )
+    
+    df.shifts <- as.data.frame(delta$shifts) |>
+        tibble::rownames_to_column("pair") |>
+        tidyr::pivot_longer(-pair, names_to = "celltype", values_to = "shifts") |>
+        dplyr::filter(is.finite(shifts))
+    
+    stats.perm <- if (!is.null(res$stats.perm)) res$stats.perm else NULL
+    stat.obs   <- if (!is.null(res$stat.obs))   res$stat.obs   else NULL
+    df.perm     <- NULL
+    df.perm.obs <- NULL
+    
+    if (!is.null(stats.perm)) {
+        ct <- colnames(stats.perm)
+        df.perm <- as.data.frame(stats.perm) |>
+            tidyr::pivot_longer(tidyselect::all_of(ct),
+                                names_to = "celltype",
+                                values_to = "perm_stat") |>
+            dplyr::filter(is.finite(perm_stat))
+        if (!is.null(stat.obs)) {
+            df.perm.obs <- data.frame(celltype = ct,
+                                      obs      = as.numeric(stat.obs),
+                                      stringsAsFactors = FALSE)
+        }
+    }
+    
+    out <- list(
+        df.shifts       = df.shifts,
+        pair.covariates = design.mat$pair.meta[rownames(delta$shifts), , drop = FALSE],
+        dist.type       = delta$inferred,
+        contrast        = contrast.vec
+    )
+    if (!is.null(delta$delta.block)) out$df.blocks   <- delta$delta.block
+    if (!is.null(df.perm))           out$df.perm     <- df.perm
+    if (!is.null(df.perm.obs))       out$df.perm.obs <- df.perm.obs
+    if (!is.null(delta$x.center))    out$x.center    <- delta$x.center
+    
+    out
 }
 
-#' Extract Contrast-Specific Expression Shifts. // TODO modify to use the contrast vector instead
+
+#' Extract Contrast-Specific Expression Shifts
 #' @keywords internal
-extractContrastDeltas <- function(yhat.all,      # (all.pairs × celltypes),
-                 pair.meta,                        # design.mat$pair.meta (rows in design order)
-                 pairs,                            # design.mat$pairs with integer i,j
-                 sample.meta, sample.id,           # to classify AA vs AB via contrast var
-                 contrast,                         # triplet for ref/alt
-                 center.by = c("shift","total"),  # how to center baselines
-                 block.vars = NULL) {
-  center.by <- match.arg(center.by)
-  
-  # classify rows
-  tr <- parseTriplet(contrast)
-  g  <- factor(sample.meta[[tr$var]])
-  gi <- as.character(g[pairs$i])
-  gj <- as.character(g[pairs$j])
-  is.AA <- (gi == tr$ref & gj == tr$ref)
-  is.AB <- ((gi == tr$alt & gj == tr$ref) | (gi == tr$ref & gj == tr$alt))
-  is.BB <- (gi == tr$alt & gj == tr$alt)
-  if (!any(is.AB)) stop("No AB rows found.")
-  ct <- colnames(yhat.all)
-  
-  # --- centering baselines ---
-  if (center.by == "total") {
-    mu.AA <- colMeans(yhat.all[is.AA, , drop = FALSE], na.rm = TRUE)
-    base   <- matrix(rep(mu.AA, each = nrow(yhat.all)), nrow(yhat.all), byrow = FALSE,
-             dimnames = list(rownames(yhat.all), ct))
-
-  } else if (center.by == "shift") {
-    mu.AA <- colMeans(yhat.all[is.AA, , drop = FALSE], na.rm = TRUE)
-    mu.BB <- colMeans(yhat.all[is.BB, , drop = FALSE], na.rm = TRUE)
-    base   <- matrix(rep((mu.AA + mu.BB) / 2, each = nrow(yhat.all)), nrow(yhat.all), byrow = FALSE,
-             dimnames = list(rownames(yhat.all), ct))
-  }
-  # Δ for AB rows only
-  delta.df <- yhat.all[is.AB, , drop = FALSE] - base[is.AB, , drop = FALSE]
-
-  # --- block-wise summary (optional) ---
-  delta.block <- NULL
-  if(!is.null(block.vars)) {
-  blk.cols <- intersect(block.vars, colnames(pair.meta))
-  if (!length(blk.cols)) return(NULL)
-  block.all <- do.call(paste, c(pair.meta[, blk.cols, drop = FALSE], sep = " | "))
-  ct <- colnames(yhat.all)
-
-  # per block: centering by AA (or (AA+BB)/2), then mean shift of AB
-  delta.block <- do.call(rbind, lapply(unique(block.all), function(b) {
-    idx.ab <- which(is.AB & block.all == b)
-    idx.aa <- which(is.AA & block.all == b)
-    idx.bb <- which(is.BB & block.all == b)
-    if (!length(idx.ab)) return(NULL)
-
-    mean.ab <- colMeans(yhat.all[idx.ab, , drop = FALSE], na.rm = TRUE)
-    mu.aa   <- if (length(idx.aa)) colMeans(yhat.all[idx.aa, , drop = FALSE], na.rm = TRUE)
-               else rep(NA_real_, length(ct))
-    mu.bb  <- if (length(idx.bb)) colMeans(yhat.all[idx.bb, , drop = FALSE], na.rm = TRUE)
-               else rep(NA_real_, length(ct))
-    if (center.by == "total") {
-      shift <- mean.ab - mu.aa
-    } else if (center.by == "shift") {
-      shift <- mean.ab - (mu.aa + mu.bb) / 2
+extractContrastDeltas <- function(yhat.all, pair.meta, contrast.vec,
+                                  block.vars = NULL, tol = 1e-8,
+                                  coef.mat = NULL, center.contrast = NULL,
+                                  x0.override = NULL) {
+    ci <- getContrastInfo(contrast.vec)
+    
+    # Align pair.meta to yhat rows
+    if (is.null(rownames(yhat.all)))
+        stop("yhat.all must have rownames to align with pair.meta.")
+    if (is.null(rownames(pair.meta)))
+        stop("pair.meta must have rownames to align with yhat.all.")
+    pos.pm <- match(rownames(yhat.all), rownames(pair.meta))
+    if (any(is.na(pos.pm)))
+        stop("Could not align pair.meta to yhat rows; check rownames.")
+    pm.aligned <- pair.meta[pos.pm, , drop = FALSE]
+    
+    ## ----- FACTOR CONTRAST PATH -----
+    if (ci$kind == "factor") {
+        w        <- ci$w
+        pair.var <- ci$var
+        inferred <- inferCenteringType(w, tol)
+        
+        lab.aligned <- as.character(pm.aligned[[pair.var]])
+        if (is.null(lab.aligned))
+            stop("pair.meta[['", pair.var, "']] not found.")
+        
+        is.pos <- lab.aligned %in% names(w)[w > tol]
+        if (!any(is.pos))
+            stop("No rows match positive-weight levels in pair.meta[['", pair.var, "']].")
+        
+        neg.levels <- names(w)[w < -tol]
+        denom <- sum(w[w > tol]); if (denom <= 0) stop("Sum of positive weights must be > 0.")
+        
+        mu.neg <- lapply(neg.levels, function(L) {
+            idx <- (lab.aligned == L)
+            if (!any(idx)) return(rep(NA_real_, ncol(yhat.all)))
+            colMeans(yhat.all[idx, , drop = FALSE], na.rm = TRUE)
+        })
+        names(mu.neg) <- neg.levels
+        
+        neg.sum <- Reduce(`+`, Map(function(L) { (-w[L]) * mu.neg[[L]] }, neg.levels),
+                          init = rep(0, ncol(yhat.all)))
+        baseline <- neg.sum / denom
+        
+        base.mat <- matrix(rep(baseline, each = nrow(yhat.all)),
+                           nrow = nrow(yhat.all), byrow = FALSE,
+                           dimnames = list(rownames(yhat.all), colnames(yhat.all)))
+        
+        delta.df <- yhat.all[is.pos, , drop = FALSE] - base.mat[is.pos, , drop = FALSE]
+        
+        # block-wise summary
+        delta.block <- NULL
+        if (!is.null(block.vars)) {
+            blk.cols <- intersect(block.vars, colnames(pm.aligned))
+            if (length(blk.cols)) {
+                block.aligned <- do.call(paste, c(pm.aligned[, blk.cols, drop = FALSE], sep = " | "))
+                ublk <- unique(block.aligned)
+                delta.block <- do.call(rbind, lapply(ublk, function(b) {
+                    inb <- (block.aligned == b)
+                    inb.pos <- which(inb & is.pos); if (!length(inb.pos)) return(NULL)
+                    
+                    mu.neg.b <- lapply(neg.levels, function(L) {
+                        idx <- (lab.aligned == L) & inb
+                        if (!any(idx)) return(rep(NA_real_, ncol(yhat.all)))
+                        colMeans(yhat.all[idx, , drop = FALSE], na.rm = TRUE)
+                    })
+                    names(mu.neg.b) <- neg.levels
+                    
+                    neg.sum.b  <- Reduce(`+`, Map(function(L) { (-w[L]) * mu.neg.b[[L]] }, neg.levels),
+                                         init = rep(0, ncol(yhat.all)))
+                    baseline.b <- neg.sum.b / denom
+                    mean.pos.b <- colMeans(yhat.all[inb.pos, , drop = FALSE], na.rm = TRUE)
+                    shift.b    <- mean.pos.b - baseline.b
+                    
+                    data.frame(block   = b,
+                               celltype = colnames(yhat.all),
+                               shifts   = as.numeric(shift.b),
+                               stringsAsFactors = FALSE)
+                }))
+            }
+        }
+        return(list(shifts = delta.df,
+                    delta.block = delta.block,
+                    inferred = inferred))
     }
-    data.frame(block = b, celltype = ct, shifts = as.numeric(shift),
-               stringsAsFactors = FALSE)
-  }))
-  }
-    return(list(shifts = delta.df, delta.block = delta.block))
+    
+    ## ----- CONTINUOUS CONTRAST PATH -----
+    var <- ci$var
+    if (!var %in% names(pm.aligned))
+        stop("Continuous contrast variable '", var, "' not found in pair.meta.")
+    x <- pm.aligned[[var]]
+    if (!is.numeric(x))
+        stop("pair.meta[['", var, "']] must be numeric for a continuous contrast.")
+    
+    if (is.null(coef.mat) || !(var %in% rownames(coef.mat)))
+        stop("Provide coef.mat with a row named '", var, "' (rows = term names; cols = cell types).")
+    
+    # choose numeric baseline x0 (scalar) for continuous contrast
+    x0.scalar <- NA_real_
+    
+    if (!is.null(x0.override)) {
+        # If user supplies an anchor (from numeric_ref_used), use it directly
+        x0.scalar <- as.numeric(x0.override)[1]
+    } else {
+        # Heuristics for pair_<var>_(mean|diff)
+        m  <- regexec("^pair_([A-Za-z0-9.]+)_(mean|diff)$", var)
+        mt <- regmatches(var, m)[[1]]
+        if (length(mt) == 3L) {
+            kind <- mt[3]
+            if (kind == "diff") {
+                # zero difference is natural baseline
+                x0.scalar <- 0
+            } else if (kind == "mean") {
+                # fallback: mean of x when no explicit anchor
+                x0.scalar <- mean(x, na.rm = TRUE)
+            }
+        }
+    }
+    
+    # If still NA, use factor-based centering rule (as before)
+    if (!is.finite(x0.scalar)) {
+        if (!is.null(ci$center)) center.contrast <- ci$center
+        if (is.null(center.contrast))
+            stop("Provide centering via attr(contrast,'center'), 'center.contrast', ",
+                 "or x0.override for continuous contrasts.")
+        
+        cf <- getContrastInfo(center.contrast)
+        if (cf$kind != "factor")
+            stop("'center.contrast' must be factor-like with names '<pair_var>=<level>'.")
+        pair.var <- cf$var
+        if (!(pair.var %in% names(pm.aligned)))
+            stop("pair.meta lacks the factor variable '", pair.var, "' for centering.")
+        
+        x0.scalar <- contrastCenterX0(x,
+                                      pair.level = as.character(pm.aligned[[pair.var]]),
+                                      w = cf$w, tol = tol)
+    }
+    
+    beta <- coef.mat[var, , drop = TRUE]
+    x.c  <- x - x0.scalar
+    delta.df <- x.c %*% t(beta)
+    rownames(delta.df) <- rownames(yhat.all)
+    colnames(delta.df) <- colnames(yhat.all)
+    
+    delta.block <- NULL
+    if (!is.null(block.vars)) {
+        blk.cols <- intersect(block.vars, colnames(pm.aligned))
+        if (length(blk.cols)) {
+            block.aligned <- do.call(paste, c(pm.aligned[, blk.cols, drop = FALSE], sep = " | "))
+            ublk <- unique(block.aligned)
+            delta.block <- do.call(rbind, lapply(ublk, function(b) {
+                idx <- which(block.aligned == b); if (!length(idx)) return(NULL)
+                shift.b <- colMeans(delta.df[idx, , drop = FALSE], na.rm = TRUE)
+                data.frame(block   = b,
+                           celltype = colnames(delta.df),
+                           shifts   = as.numeric(shift.b),
+                           stringsAsFactors = FALSE)
+            }))
+        }
+    }
+    
+    list(
+        shifts      = delta.df,
+        delta.block = delta.block,
+        inferred    = "continuous",
+        x.center    = x0.scalar   # << scalar baseline used
+    )
 }
+
+
 
 extractFitsBlock <- function(res, p.dist, design.model) {
-  F <- as.matrix(design.model$model$F)
-  X <- as.matrix(design.model$model$X)
-
+  F <- as.matrix(design.model$F)
+  X <- as.matrix(design.model$X)
+  na.rows <- apply(is.na(p.dist$Y), 1, all)
   # Coefs are on F's columns
-  B_F <- matrix(res$coef, nrow = ncol(F), dimnames = list(colnames(F), colnames(p.dist$Y)))
+  B.F <- matrix(res$coef, nrow = ncol(F), dimnames = list(colnames(F), colnames(p.dist$Y)))
 
-  # Full fitted values: yhat = F %*% B_F
-  y.fitted.all <- as.matrix(F %*% B_F)
+  # Full fitted values: yhat = F %*% B.F
+  y.fitted.all <- as.matrix(F %*% B.F)
 
   # Partial *without noise*: X %*% beta_X
-  xnames <- intersect(colnames(X), rownames(B_F))
-  partial.fit.all <- as.matrix(X[, xnames, drop = FALSE] %*% B_F[xnames, , drop = FALSE])
+  xnames <- intersect(colnames(X), rownames(B.F))
+  partial.fit.all <- as.matrix(X[, xnames, drop = FALSE] %*% B.F[xnames, , drop = FALSE])
 
   # Partial *with noise*: (X %*% beta_X) + residuals from F-fit
   partial.all <- partial.fit.all + as.matrix(res$residuals)
+  
+  ## Drop rows that had NA in the original response
+  y.fitted.all    <- y.fitted.all[which(!na.rows), , drop = FALSE]
+  partial.fit.all <- partial.fit.all[which(!na.rows), , drop = FALSE]
+  partial.all     <- partial.all[which(!na.rows), , drop = FALSE]
 
   list(partial.fit = partial.fit.all,  # X * beta_X
        partial     = partial.all,      # X * beta_X + e
@@ -975,9 +987,10 @@ extractFitsBlock <- function(res, p.dist, design.model) {
 
 
 extractFitsFL <- function(res, p.dist, design.model) {
-    X    <- as.matrix(design.model$model$X)
-    core <- design.model$model$core.rows  # logical length n, or NULL
+    X    <- as.matrix(design.model$X)
+    core <- design.model$core.rows  # logical length n, or NULL
     rn   <- rownames(X); cn <- colnames(p.dist$Y)
+    na.rows <- apply(is.na(p.dist$Y), 1, all)
     y.r     <- matrix(NA_real_, nrow = nrow(X), ncol = ncol(p.dist$Y),
                               dimnames = list(rn, cn))
     if (!is.null(res$y.resid)) {
@@ -986,59 +999,101 @@ extractFitsFL <- function(res, p.dist, design.model) {
                   ncol(res$y.resid) == ncol(p.dist$Y))
         y.r[idx, ] <- as.matrix(res$y.resid)           # X_core %*% beta_X
     } else { stop("Residualized values not provided.")}
+    y.r <- y.r[which(!na.rows), , drop = FALSE]
     return(y.r)   # X * beta_X (on core rows if partial_core provided; NA elsewhere)
 }
 
 
 ## Helpers for visualization
 
-# Align AB rows in shifts to design.pairs using sample.meta
-# Returns integer vector of row indices into design.pairs
-# Arguments:
-## - shifts: AB-only matrix with rownames "SampleA__SampleB"
-## - x.Pair$pairs: data.frame with columns i,j in the design/lower-tri order
-## - sample.meta: data.frame in the same sample order used to build x.Pair
-## - sample.id: the column in sample.meta that produced those sample labels
+# infer centering & relevant levels from weights
+# Return one of: "shift", "total", "var", "custom"
 #' @keywords internal
-alignABrows <- function(shifts, pairs, sample.meta, sample.id = NULL) {
-    if (!is.null(sample.id) && sample.id %in% names(sample.meta)) {
-        s <- as.character(sample.meta[[sample.id]])
-    } else if (!is.null(rownames(sample.meta)) && all(nzchar(rownames(sample.meta)))) {
-        s <- rownames(sample.meta)
-    } else {
-        stop("Need sample.id (column in sample.meta) OR rownames(sample.meta) to make pair labels.")
-    }
-    s <- trimws(s)
-    pair_labels_all <- paste(s[pairs$i], s[pairs$j], sep="__")
-    ab_rows <- rownames(shifts)
-    m1 <- match(ab_rows, pair_labels_all)
-    if (anyNA(m1)) {
-        pair_labels_swapped <- paste(s[pairs$j], s[pairs$i], sep="__")
-        m2 <- match(ab_rows, pair_labels_swapped)
-        use_swapped <- sum(!is.na(m2)) > sum(!is.na(m1))
-        if (use_swapped) {
-            ab_pos <- m2
-            which_unmatched <- which(is.na(m2))
-            if (length(which_unmatched)) {
-                warning("Some AB rows did not match even after swapping: ",
-                        paste(head(ab_rows[which_unmatched], 5), collapse=", "), " ...")
-            }
-        } else {
-            ab_pos <- m1
-            which_unmatched <- which(is.na(m1))
-            if (length(which_unmatched)) {
-                warning("Some AB rows did not match: ",
-                        paste(head(ab_rows[which_unmatched], 5), collapse=", "), " ...")
-            }
-        }
-    } else {
-        ab_pos <- m1
-    }
-    if (anyNA(ab_pos)) stop("Could not align all AB rows. Check that sample.id matches AB labels.")
-    
-    ab_pos
+inferCenteringType <- function(w, tol = 1e-8) {
+  stopifnot(!is.null(names(w)))
+  pos <- names(w)[w >  tol]
+  neg <- names(w)[w < -tol]
+  nz  <- names(w)[abs(w) > tol]
+
+  is.same <- function(lab) grepl("^(.+)\\1$", lab)   # "AA" pattern (e.g., Group1Group1)
+  all.same <- function(labs) length(labs) > 0 && all(vapply(labs, is.same, logical(1)))
+  any.cross <- function(labs) any(!vapply(labs, is.same, logical(1)))
+
+  # VAR: contrast between two same levels (AA vs BB), no cross terms involved
+  if (length(nz) == 2 && sign(w[nz[1]]) != sign(w[nz[2]]) && all.same(nz)) {
+    return("var")
+  }
+
+  # TOTAL: exactly one positive (must be cross) and one negative (must be same)
+  if (length(pos) == 1 && length(neg) == 1 &&
+      !is.same(pos) && is.same(neg)) {
+    return("total")
+  }
+
+  # SHIFT: one positive (cross) and two negatives (both same)
+  if (length(pos) == 1 && length(neg) == 2 &&
+      !is.same(pos) && all.same(neg)) {
+    return("shift")
+  }
+  "custom"
 }
-  
-# readable label from pair.meta keys, fallback to design hash
+
+# names are either "<pair_var>=<level>" (factor) or "<numeric_var>" (continuous)
 #' @keywords internal
-designHash <- function(X) apply(round(X, 12), 1, paste, collapse="|")
+getContrastInfo <- function(contrast.vec) {
+    stopifnot(length(contrast.vec) > 0, !is.null(names(contrast.vec)))
+    nm <- names(contrast.vec)
+    ## ---------- FACTOR CASE: "<var>_pair<level>" (new pair design style) ----------
+    # e.g., "group_pairA_and_A", "group_pairB_and_B", "group_pairA_and_B"
+    # We want:
+    #   var = "group_pair"
+    #   w   = weights with names = "A_and_A", "B_and_B", "A_and_B"
+    #
+    # Try to split at the "_pair" boundary:
+    m <- regexec("^(.+?_pair)(.+)$", nm)
+    parts <- regmatches(nm, m)
+    
+    if (all(lengths(parts) == 3L)) {
+        var.prefix <- parts[[1]][2]  # "group_pair"
+        lev <- vapply(parts, function(p) p[3], character(1))
+        w   <- setNames(as.numeric(contrast.vec), lev)
+        return(list(kind = "factor", var = var.prefix, w = w, center = NULL))
+    }
+    
+    ## ---------- CONTINUOUS CASE ----------
+    nz <- nm[abs(contrast.vec) > 0]
+    stopifnot(length(nz) == 1)
+    ctr.center <- attr(contrast.vec, "center")  # for continuous contrasts
+    list(
+        kind   = "continuous",
+        var    = nz,
+        w      = setNames(as.numeric(contrast.vec[nz]), nz),
+        center = ctr.center
+    )
+}
+
+# x0 from factor-contrast weights applied to the predictor x (mirrors total/shift)
+#' @keywords internal
+contrastCenterX0 <- function(x, pair.level, w, tol = 1e-8) {
+  pos.lv <- names(w)[w >  tol]
+  neg.lv <- names(w)[w < -tol]
+  if (!length(pos.lv)) stop("Factor centering contrast has no positive weights.")
+  denom <- sum(w[pos.lv]); if (denom <= 0) stop("Sum of positive weights must be > 0.")
+
+  mu.x.neg <- lapply(neg.lv, function(L) {
+    idx <- (pair.level == L)
+    if (!any(idx)) return(NA_real_)
+    mean(x[idx], na.rm = TRUE)
+  })
+  names(mu.x.neg) <- neg.lv
+
+  num <- sum(mapply(function(L, mu) { (-w[L]) * mu }, neg.lv, mu.x.neg))
+  num / denom
+}
+
+
+# helper: detect factor vs numeric for a single column name in a data.frame
+#' @keywords internal
+isContinuousCol <- function(df, col) {
+  isTRUE(col %in% names(df)) && is.numeric(df[[col]])
+}

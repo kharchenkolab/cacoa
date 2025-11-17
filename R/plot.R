@@ -400,14 +400,14 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
   return(p)
 }
 
-#' Plot pairwise expression shifts
-#' This is a generic function for plotting pairwise expression shifts
-#' (used for expression shift distances - cluster-based)
+#' Plot pairwise expression shifts (used for expression shift distances - cluster-based)
+#' Categorical and continuous covariates are supported.
+#' Requires that covariate information is specified when running estimateExpressionShiftMagnitude()
 #' @param x output of extractPairwiseShifts() after running estimateExpressionShiftMagnitude()
 #' @param panel character c('covariate'(default), 'blocks', 'background') Type of a panel to plot
 #' @param type character c('box' (default),'point') Type of plot to create
 #' @param show.jitter boolean (default=TRUE) Whether to show individual data points
-#' @param color.by.covariate boolean (default=FALSE) Whether to color points by covariate pattern
+#' @param color.by.covariate boolean (default=FALSE) Whether to color points by covariate pattern.
 #' @param point.palette color palette for the points (default=NULL)
 #' @param jitter.alpha transparency value for the data points (default: 0.08)
 #' @param jitter.size marker size for the data points (default: 1.1)
@@ -429,40 +429,64 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
 #' @return A ggplot2 object
 #' @keywords internal
 plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", show.jitter = TRUE, notch = TRUE, 
-                                          color.by.covariate = FALSE, point.palette = NULL, jitter.alpha = 0.08,
+                                          point.palette = NULL, jitter.alpha = 0.08,
                                           jitter.size  = 1.1, trim = 0, palette = NULL, order.x = TRUE, yline = NULL,
                                           order.direction = "increasing", celltype.levels = NULL, pvalues = NULL,                      
-                                          ylab = expression(hat(y)[cross] - mean(hat(y)[ref])), coord.flip = FALSE,
+                                          ylab = NULL, coord.flip = FALSE, cov.plot.keys = NULL,
                                           plot.theme = theme_bw(), line.size = 0.75, ns.symbol = "", pvalue.y = NULL,
-                                          pvalue.size = 3.2) {
-  # Main plot - covariate panel 
+                                          pvalue.size = 3.2, cont.palette = rev(RColorBrewer::brewer.pal(11, "Spectral"))) {
+
   if (panel == "covariate") {
     stopifnot(!is.null(x$df.shifts))
     df.v <- x$df.shifts |>
       dplyr::rename(Type = celltype, value = shifts)
+    if (x$changed.contrast) {
+      ylab <- makeYLabelExpr(x$contrast, x$x.center)
+    } 
 
-    have.cov <- (!is.null(x$df.cov.keys) &&
-                 "pattern_coded" %in% names(x$df.cov.keys) &&
-                 color.by.covariate)
+    have.cov <- (!is.null(cov.plot.keys) &&
+                 !is.null(x$pair.covariates) &&
+                 nrow(x$pair.covariates) > 0)
 
     if (have.cov) {
-      df.p <- x$df.cov.keys |>
-        dplyr::rename(Type = celltype, value = shifts) |>
-        dplyr::select(Type, pair, value, pattern_coded)
-    } else {
-      df.p <- df.v; df.p$pattern_coded <- NULL
+      pm.ab <- x$pair.covariates
+      wanted <- unique(unlist(lapply(cov.plot.keys, function(k) pickColsForKey(pm.ab, k))))
+      if (!length(wanted)) {
+        warning("cov.plot.keys not found with *_pair or *_diff; disabling covariate coloring.")
+        have.cov <- FALSE
+      }
     }
 
-      conf.ints <- split(df.v$value, df.v$Type) |>
-        lapply(estimateMeanCI, trim = trim)
-      df.sum <- df.v |>
-        dplyr::group_by(Type) |>
-        dplyr::summarise(mean = mean(value, trim = trim),
-                         med  = stats::median(value), .groups = "drop") |>
-        dplyr::mutate(
-          LI = as.numeric(sapply(Type, function(ct) conf.ints[[ct]][1])),
-          UI = as.numeric(sapply(Type, function(ct) conf.ints[[ct]][2]))
-        )
+    if (have.cov) {
+      cov.is.cont <- (length(wanted) == 1 && is.numeric(pm.ab[[wanted]]))
+      if (cov.is.cont) {
+        patt.coded <- pm.ab[[wanted]]
+        cov.leg    <- wanted
+      } else {
+        patt.coded <- if (length(wanted) == 1) as.character(pm.ab[[wanted]])
+                      else do.call(paste, c(pm.ab[, wanted, drop = FALSE], sep = " | "))
+        cov.leg <- if (length(wanted) == 1) wanted else paste(wanted, collapse = " | ")
+      }
+      pattern.by.pair <- setNames(patt.coded, rownames(pm.ab))
+      df.p <- df.v
+      df.p$pattern.coded <- pattern.by.pair[df.p$pair]
+    } else {
+      df.p <- df.v
+      df.p$pattern.coded <- NULL
+      cov.is.cont <- FALSE
+      cov.leg <- "Covariate"
+    }
+
+    conf.ints <- split(df.v$value, df.v$Type) |>
+      lapply(estimateMeanCI, trim = trim)
+    df.sum <- df.v |>
+      dplyr::group_by(Type) |>
+      dplyr::summarise(mean = mean(value, trim = trim),
+                       med  = stats::median(value), .groups = "drop") |>
+      dplyr::mutate(
+        LI = as.numeric(sapply(Type, function(ct) conf.ints[[ct]][1])),
+        UI = as.numeric(sapply(Type, function(ct) conf.ints[[ct]][2]))
+      )
 
     if (!is.null(celltype.levels)) {
       ord <- intersect(celltype.levels, unique(df.v$Type))
@@ -481,61 +505,74 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
 
     # main layer
     if (type == "box") {
-      if (have.cov) {
-        p <- ggplot2::ggplot(df.v, ggplot2::aes(Type, value)) +
-             ggplot2::geom_boxplot(
-               notch = notch, outlier.shape = NA,
-               fill = "grey90", colour = "grey30", alpha = 0.9)
+     if (have.cov && is.numeric(df.p$pattern.coded)) {
+       # continuous covariate: neutral boxes
+       p <- ggplot(df.v, aes(Type, value)) +
+          geom_boxplot(
+             notch = notch, outlier.shape = NA,
+             fill = "grey90", colour = "grey30", alpha = 0.9
+          )
       } else {
-        p <- ggplot2::ggplot(df.v, ggplot2::aes(Type, value, fill = Type)) +
-             ggplot2::geom_boxplot(notch = notch, outlier.shape = NA)
+       # categorical (or no covariate): allow per-Type fills if you want
+       p <- ggplot(df.v, aes(Type, value, fill = Type)) +
+          geom_boxplot(
+            notch = notch, outlier.shape = NA,
+             colour = "grey30", alpha = 0.9
+         )
+       if (!is.null(palette)) p <- p + scale_fill_manual(values = palette)
       }
-      } else if (type == "point") {
+    } else if (type == "point") {
       p <- ggplot2::ggplot(df.sum, ggplot2::aes(Type, mean, colour = Type)) +
         ggplot2::geom_point(size = 3) +
         ggplot2::geom_errorbar(ggplot2::aes(ymin = LI, ymax = UI), width = 0.2, size = line.size)
-      if (!is.null(palette)) p <- p + ggplot2::scale_color_manual(values = palette)
+      if (!is.null(palette)) p <- p + ggplot2::scale_colour_manual(values = palette)
     }
 
     # jitter points
     if (show.jitter) {
-      if (have.cov) {
-        jitter.alpha <- max(1, jitter.alpha)
-        jitter.size  <- max(1, jitter.size)
-        df.p$pattern_coded <- as.factor(df.p$pattern_coded)
-        lev <- levels(df.p$pattern_coded)
-        if (is.null(point.palette)) {
-           cov.palette <- makeNamedPalette(sort(unique(df.p$pattern_coded)))
-         } else {
-            cov.palette <- point.palette[lev]
-         }
-        p <- p + ggplot2::geom_jitter(
-          data = df.p,
-          ggplot2::aes(Type, value, colour = pattern_coded),
-          alpha = jitter.alpha, size = jitter.size,
-          position = ggplot2::position_jitter(width = 0.12, height = 0)
-         ) + ggplot2::labs(colour = "pattern") + 
-         ggplot2::scale_colour_manual(values = cov.palette, breaks = lev, name = "Covariate")
+     if (have.cov) {
+      jitter.size  <- max(jitter.size, 1.1)
+      jitter.alpha <- 1
+      leg.title <- cov.leg
+      if (is.numeric(df.p$pattern.coded)) {
+       p <- p + ggplot2::geom_jitter(
+              data = df.p,
+              ggplot2::aes(Type, value, colour = pattern.coded),
+              alpha = jitter.alpha, size = jitter.size,
+              position = ggplot2::position_jitter(width = 0.12, height = 0)
+            ) +
+            ggplot2::labs(colour = leg.title) +
+            ggplot2::scale_colour_gradientn(colors = cont.palette)
       } else {
-          p <- p + ggplot2::geom_jitter(
-            data = df.p,
-            ggplot2::aes(Type, value),
-            colour = "black",
-            alpha = jitter.alpha, size = jitter.size,
-            position = ggplot2::position_jitter(width = 0.12, height = 0)
-          )
+       lev <- levels(factor(df.p$pattern.coded))
+       cov.palette <- if (is.null(point.palette)) makeNamedPalette(lev) else point.palette[lev]
+       p <- p + ggplot2::geom_jitter(
+              data = df.p,
+              ggplot2::aes(Type, value, colour = pattern.coded),
+              alpha = jitter.alpha, size = jitter.size,
+              position = ggplot2::position_jitter(width = 0.12, height = 0)
+            ) +
+            ggplot2::labs(colour = leg.title) +
+            ggplot2::scale_colour_manual(values = cov.palette, breaks = lev, name = leg.title)
       }
-    }
+    } else {
+      p <- p + ggplot2::geom_jitter(
+       data = df.v,
+       ggplot2::aes(Type, value),
+       colour = "black",
+       alpha = jitter.alpha, size = jitter.size,
+       position = ggplot2::position_jitter(width = 0.12, height = 0)
+      )
+     }
+   }
 
     if (!is.null(pvalues)) {
       if (is.null(names(pvalues))) names(pvalues) <- as.character(df.sum$Type)
       pv.df <- data.frame(Type = names(pvalues), p = as.numeric(pvalues), stringsAsFactors = FALSE)
       pv.df <- pv.df[pv.df$Type %in% ord, , drop = FALSE]
       pv.df$Type <- factor(pv.df$Type, levels = ord)
-
       codes <- pvalueToCode(stats::setNames(pv.df$p, as.character(pv.df$Type)), ns.symbol)
-      pval.df <- data.frame(Type = factor(names(codes), levels = ord),
-                            pvalue = unname(codes))
+      pval.df <- data.frame(Type = factor(names(codes), levels = ord), pvalue = unname(codes))
       if (is.null(pvalue.y)) pvalue.y <- max(df.v$value, na.rm = TRUE)
       p <- p + ggplot2::geom_text(data = pval.df,
                                   ggplot2::aes(x = Type, label = pvalue),
@@ -551,15 +588,20 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
       ggplot2::labs(y = ylab, x = NULL)
 
     if (coord.flip) p <- p + ggplot2::coord_flip()
-    if (!is.null(palette) && !have.cov) p <- p + ggplot2::scale_fill_manual(values = palette)
-    if (have.cov) p <- p + ggplot2::scale_fill_manual(values = rep("gray70", length(unique(df.p$Type))))
+    if (!is.null(palette) && !have.cov && type == "box")
+      p <- p + ggplot2::scale_fill_manual(values = palette)
+
+    if (have.cov && !is.numeric(df.p$pattern.coded))
+      p <- p + ggplot2::scale_fill_manual(values = rep("gray90", length(unique(df.p$Type))))
+
     return(p)
   }
 
-  # Blocks panel
+  # --- block panel ---
   if (panel == "block") {
     if (is.null(x$df.blocks)) stop("df.blocks not present (supply block.vars in extractor).")
     dfb <- x$df.blocks
+    if (x$changed.contrast) ylab <- makeYLabelExpr(x$contrast, x$x.center)
 
     if (!is.null(celltype.levels)) {
       ord <- intersect(celltype.levels, unique(dfb$celltype))
@@ -573,42 +615,22 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
     dfb$celltype <- factor(dfb$celltype, levels = ord)
 
     p <- ggplot2::ggplot(dfb, ggplot2::aes(celltype, shifts)) +
-      ggplot2::geom_hline(yintercept = yline, linetype = "dashed") +
+      ggplot2::geom_hline(yintercept = if (is.null(yline)) 0 else yline, linetype = "dashed") +
       ggplot2::geom_boxplot(ggplot2::aes(group = celltype), width = 0.18, outlier.shape = NA,
                             fill = "white", colour = "grey25") +
       ggplot2::geom_jitter(ggplot2::aes(colour = block),
                            width = 0.15, height = 0, alpha = 0.85, size = 1.6) +
-      #ggplot2::coord_flip() +
-      ggplot2::labs(x = NULL,
-                    y = expression(mean[block](hat(y)[cross]) - mean[block](hat(y)[ref])),
-                    colour = "block",
+      ggplot2::labs(x = NULL, y = ylab, colour = "block",
                     title = "Block-wise centered shifts") +
       plot.theme
-      if (is.null(point.palette)) {
-         block.palette <- makeNamedPalette(sort(unique(dfb$block)))
-      }
-      p <- p + ggplot2::scale_colour_manual(values = block.palette, name = "Blocks")
-
-    if (!is.null(pvalues)) {
-      if (is.null(names(pvalues))) names(pvalues) <- as.character(ord)
-      pv.df <- data.frame(celltype = names(pvalues), p = as.numeric(pvalues), stringsAsFactors = FALSE)
-      pv.df <- pv.df[pv.df$celltype %in% ord, , drop = FALSE]
-      pv.df$celltype <- factor(pv.df$celltype, levels = ord)
-
-      codes <- pvalueToCode(stats::setNames(pv.df$p, as.character(pv.df$celltype)), ns.symbol)
-      pval.df <- data.frame(celltype = factor(names(codes), levels = ord),
-                            pvalue = unname(codes))
-      if (is.null(pvalue.y)) pvalue.y <- max(dfb$shifts, na.rm = TRUE)
-      p <- p + ggplot2::geom_text(data = pval.df,
-                                  ggplot2::aes(x = celltype, label = pvalue),
-                                  y = pvalue.y, colour = "black", size = pvalue.size)
-    }
+    block.palette <- makeNamedPalette(sort(unique(dfb$block)))
+    p <- p + ggplot2::scale_colour_manual(values = block.palette, name = "Blocks")
     return(p)
   }
 
-  # background distribution panel
+  # --- background panel ---
   if (panel == "background") {
-    if (is.null(x$df.perm)) stop("background distribution not available 
+    if (is.null(x$df.perm)) stop("background distribution not available
               (set return.sampled.stats=TRUE in estimator and re-run estimateExpressionShiftMagnitudes).")
     dfp <- x$df.perm
     ob  <- x$df.perm.obs
@@ -641,7 +663,6 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
         ggplot2::aes(celltype, perm_stat, group = celltype),
         width = 0.14, outlier.shape = NA, fill = "white", colour = "grey20"
       ) +
-      #ggplot2::coord_flip() +
       ggplot2::geom_jitter(
         data = dfp,
         ggplot2::aes(celltype, perm_stat),
@@ -659,6 +680,200 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
       )
     }
     return(p)
+  }
+}
+
+#' Plot residuals per cell type
+#' Categorical and continuous covariates are supported.
+#' @param res output of performLMPermutations()
+#' @param design.mat pairwise design matrices used for fitting the linear model
+#' @param cell.groups character vector defining cell type per sample
+#' @param plot.per.celltype boolean (default=FALSE) Whether to plot separate panels per cell type
+#' @param palette color palette for the points (default=NULL)
+#' @param font.size integer (default=4) Font size for the plot
+#' @param ylab character vector (default=NULL) y axis label
+#' @param color.by.covariate boolean (default=FALSE) Whether to color points by covariate pattern.
+#' @param cov.plot.keys character vector (default=NULL) Covariate name(s) to use for coloring
+#' Requires that same covariate information is specified when running estimateExpressionShiftMagnitude()
+#' @param cont.palette color palette for continuous covariates (default=rev(RColorBrewer::brewer.pal(11, "Spectral")))
+#' @param jitter.size numeric (default=1) Point size for the jittered points
+#' @param jitter.alpha numeric (default=0.8) Transparency for the jittered points
+plotResidualsPerCelltype <- function(res, design.mat, sample.ids = NULL, palette = NULL, font.size = 4, ylab = NULL, 
+                                     plot.theme = theme_bw(), jitter.size = 1, jitter.alpha = 0.8, yline = 0,
+                                     cov.plot.keys = NULL, plot.per.celltype = FALSE, notch = TRUE, 
+                                     cont.palette = rev(RColorBrewer::brewer.pal(11, "Spectral"))) {
+
+  df <- as.data.frame(res$residuals)
+  df$sample <- rownames(df)   # rows = pairs (core rows for FL, all rows for block)
+
+  has.cov <- !is.null(cov.plot.keys)
+  is.cont <- FALSE
+  legend  <- "Covariate"
+
+  # ---- build / align pair-level covariates ----
+  if (has.cov) {
+    pm <- design.mat$pair.meta
+
+    # Rebuild "SampleA__SampleB" names if sample.ids + pairs are available
+    if (!is.null(sample.ids) && !is.null(design.mat$pairs)) {
+      pairs.mat <- design.mat$pairs
+      if (!all(c("i","j") %in% colnames(pairs.mat))) {
+        colnames(pairs.mat) <- c("i","j")
+      }
+      if (length(sample.ids) < max(pairs.mat)) {
+        stop("sample.ids is too short for design.mat$pairs.")
+      }
+      pair.names <- paste0(sample.ids[pairs.mat[,"i"]],
+                           "__",
+                           sample.ids[pairs.mat[,"j"]])
+      rownames(pm) <- pair.names
+    }
+    # otherwise we assume rownames(pm) already match residuals rownames
+
+    key <- grep(cov.plot.keys, colnames(pm), value = TRUE)
+    if (!length(key)) stop("No matching column found in pair.meta for cov.plot.keys.")
+    key <- key[1]
+    legend <- paste0("\u0394", cov.plot.keys)
+
+    # match residual rows (df$sample) to pair.meta rows via pair IDs
+    if (is.numeric(pm[[key]])) {
+      patt <- pm[[key]][match(df$sample, rownames(pm))]
+      df$pattern.coded <- as.numeric(patt)
+      is.cont <- TRUE
+    } else {
+      patt <- as.character(pm[[key]])[match(df$sample, rownames(pm))]
+      df$pattern.coded <- factor(patt)
+      is.cont <- FALSE
+    }
+
+    long <- df %>%
+      tidyr::pivot_longer(cols = c(-sample, -pattern.coded),
+                          names_to = "CellType", values_to = "Residuals")
+  } else {
+    long <- df %>%
+      tidyr::pivot_longer(cols = -sample,
+                          names_to = "CellType", values_to = "Residuals")
+  }
+
+  long$CellType <- as.factor(long$CellType)
+
+  # ---- per-celltype faceted version ----
+  if (plot.per.celltype) {
+    plots <- lapply(levels(long$CellType), function(ct) {
+      df.ct <- subset(long, CellType == ct)
+
+      if (has.cov && is.cont) {
+        # numeric covariate on x, always colored by covariate
+        p.ct <- ggplot(df.ct, aes(x = pattern.coded, y = Residuals, color = pattern.coded)) +
+          geom_hline(yintercept = yline, linetype = "dashed") +
+          geom_point(size = jitter.size, alpha = jitter.alpha,
+                     position = position_jitter(width = 0, height = 0)) +
+          labs(x = paste0("\u0394", cov.plot.keys),
+               y = ylab,
+               title = ct,
+               color = paste0("\u0394", cov.plot.keys)) +
+          plot.theme +
+          theme(legend.position = "right")
+        p.ct <- p.ct + scale_colour_gradientn(colors = cont.palette)
+        p.ct
+
+      } else if (has.cov && !is.cont) {
+        # categorical covariate: colored by levels
+        lev <- levels(factor(df.ct$pattern.coded))
+        cov.palette <- if (is.null(palette)) makeNamedPalette(lev) else palette[lev]
+        ggplot(df.ct, aes(x = pattern.coded, y = Residuals, color = pattern.coded)) +
+          geom_hline(yintercept = yline, linetype = "dashed") +
+          geom_boxplot(notch = notch, outlier.shape = NA,
+                       fill = "grey90", colour = "grey30", alpha = 0.9) +
+          geom_jitter(width = 0.12, height = 0,
+                      size = jitter.size, alpha = jitter.alpha) +
+          labs(x = paste0("\u0394", cov.plot.keys),
+               y = ylab,
+               color = legend,
+               title = ct) +
+          scale_colour_manual(values = cov.palette) +
+          plot.theme +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+      } else {
+        # no covariate: just residuals for this cell type
+        ggplot(df.ct, aes(x = 1, y = Residuals)) +
+          geom_hline(yintercept = yline, linetype = "dashed") +
+          geom_boxplot(notch = notch, outlier.shape = NA,
+                       fill = "grey90", colour = "grey30", alpha = 0.9) +
+          geom_point(position = position_jitter(width = 0.12),
+                     size = jitter.size, alpha = jitter.alpha) +
+          labs(x = NULL, y = ylab, title = ct) +
+          plot.theme
+      }
+    })
+
+    plots_nolegend <- lapply(plots, function(p) p +
+      theme(legend.position = "none",
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank()))
+    combined <- cowplot::plot_grid(plotlist = plots_nolegend, ncol = 4, align = "v")
+    legend.g <- cowplot::get_legend(plots[[1]] + theme(legend.position = "right"))
+    xlab.g <- ggdraw() + draw_label("Covariate", angle = 0, vjust = 1)
+    ylab.g <- ggdraw() + draw_label(if (!is.null(ylab)) ylab else "Residuals",
+                                    angle = 90, vjust = 1)
+    final <- cowplot::plot_grid(
+      cowplot::plot_grid(ylab.g, combined, ncol = 2, rel_widths = c(0.08, 1)),
+      legend.g, rel_widths = c(4, 0.5)
+    )
+    final <- cowplot::plot_grid(final, xlab.g, ncol = 1, rel_heights = c(1, 0.08))
+    return(final)
+  }
+
+  # ---- all-celltypes in one plot ----
+  p <- ggplot(long, aes(CellType, Residuals)) +
+    geom_boxplot(notch = notch, outlier.shape = NA,
+                 fill = "grey90", colour = "grey30", alpha = 0.9) +
+    geom_hline(yintercept = yline, linetype = "dashed") +
+    (if (is.null(ylab)) labs(x = NULL) else labs(y = ylab, x = NULL)) +
+    theme_bw() + plot.theme +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+  if (has.cov) {
+    if (is.cont) {
+      p <- p + geom_point(aes(color = pattern.coded),
+                          position = position_jitter(width = 0.15),
+                          size = jitter.size, alpha = jitter.alpha) +
+        labs(color = legend) +
+        scale_colour_gradientn(colors = cont.palette) +
+        theme(axis.title.x = element_blank())
+    } else {
+      if (is.null(palette))
+        palette <- makeNamedPalette(sort(unique(long$pattern.coded)))
+      p <- p + geom_point(aes(color = pattern.coded),
+                          position = position_jitter(width = 0.15),
+                          size = jitter.size, alpha = jitter.alpha) +
+        labs(color = legend) +
+        scale_colour_manual(values = palette) +
+        theme(axis.title.x = element_blank())
+    }
+  } else {
+    p <- p + geom_point(position = position_jitter(width = 0.15),
+                        size = jitter.size, alpha = jitter.alpha)
+  }
+
+  p
+}
+
+
+# Build a plotmath y-label from an arbitrary contrast vector.
+# Works for any weights: e.g. c("AA"=-0.5, "AB"=1, "BB"=-0.5) or any other pattern.
+makeYLabelExpr <- function(contrast.vec, x.center = NULL) {
+  ci <- getContrastInfo(contrast.vec)
+  if (ci$kind == "factor") {
+    # compact: Δ = sum w_k * ŷ[level_k]
+    lev <- names(ci$w); w <- as.numeric(ci$w)
+    pieces <- paste0(ifelse(w >= 0, "+", ""), w, "%*%hat(y)[", lev, "]")
+    as.expression(parse(text = paste0("Delta==", sub("^\\+", "", paste(pieces, collapse="")))))
+  } else {
+    var <- ci$var
+    xc  <- if (is.null(x.center)) "bar(x)" else formatC(x.center, digits = 3)
+    as.expression(bquote(Delta==beta[.(var)] %.% "(" * .(var) * " − " * .(xc) * ")"))
   }
 }
 
@@ -1448,6 +1663,42 @@ makeHCLPal <- function(n) {
         extra <- grDevices::hcl(h = seq(15, 375, length.out = extra_n + 1)[-1], c = 100, l = 55)
         c(base, extra)
     }
+}
+
+
+pickColsForKey <- function(pm, key) {
+  cn <- colnames(pm)
+  # escape regex metacharacters
+  k  <- gsub("([.|()\\^{}+$*?\\[\\]\\\\-])", "\\\\\\1", key)
+
+  ## 1) factor covariate columns: "<key>_pair"
+  exact_pair <- paste0(key, "_pair")
+  if (exact_pair %in% cn)
+    return(exact_pair)
+
+  ## 2) numeric covariates: "pair_<key>_diff" or "pair_<key>_mean"
+  # exact matches
+  exact_diff <- paste0("pair_", key, "_diff")
+  exact_mean <- paste0("pair_", key, "_mean")
+
+  # return *_diff if exists, else *_mean
+  if (exact_diff %in% cn)
+    return(exact_diff)
+  if (exact_mean %in% cn)
+    return(exact_mean)
+
+  ## 3) regex fallback: "pair_<something>_<key>_(mean|diff)"
+  rx <- grep(paste0("^pair_.*", k, ".*_(mean|diff)$"), cn, value = TRUE)
+  if (length(rx)) {
+    diffs <- grep("_diff$", rx, value = TRUE)
+    if (length(diffs)) return(diffs)
+    means <- grep("_mean$", rx, value = TRUE)
+    if (length(means)) return(means)
+    return(rx)
+  }
+
+  ## none found
+  character(0)
 }
 
 

@@ -349,7 +349,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
                                              contrast = NULL, pairContrast = NULL, pairFormula = NULL, block.vars = self$block.vars, sample.metadata = self$sample.meta,  
                                              sample.ids = self$sample.ids, dist = NULL, dist.type = "shift", min.cells.per.sample = 10, 
                                              min.samp.per.type = 2, min.gene.frac = 0.01, genes = NULL, perm.method="freedman-lane", robust.method = "none",
-                                             na.mode = "drop", alternative = "two-sided", return.residuals = TRUE, return.sampled.stats = FALSE,
+                                             na.mode = "drop", alternative = "two-sided", return.residuals = TRUE, return.sampled.stats = TRUE,
                                              name = "expression.shifts", n.permutations = 1000, return.sampled.fits = FALSE,
                                              verbose = self$verbose, n.cores = self$n.cores, ...) {
   

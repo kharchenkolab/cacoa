@@ -734,6 +734,8 @@ pruneFormulaByData <- function(formula, data, na.action = stats::na.pass, verbos
 
 # ---- Pretty helpers ----
 
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
 prettyJoin <- function(x, maxShow = 12) {
   x <- as.character(x)
   if (!length(x)) return("(none)")

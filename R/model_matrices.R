@@ -384,9 +384,11 @@ buildPairDesignMatrices <- function(sample.meta,
                                     dist.type = c("shift","total","var"),
                                     pairContrast = NULL,
                                     pairFormula  = NULL,
+                                    # NEW:
+                                    pairBlockVars = NULL,
+                                    buildBlocks   = TRUE,
                                     na.action = stats::na.pass,
                                     verbosity = c("none","warn","info")) {
-  
   stopifnot(is.data.frame(sample.meta))
   if (missing(sampleDesign) || is.null(sampleDesign) || is.null(sampleDesign$formula_used)) {
     stop("sampleDesign with a valid $formula_used is required.", call. = FALSE)
@@ -575,11 +577,22 @@ buildPairDesignMatrices <- function(sample.meta,
       explicitCoef[paste0(pair_fac, lab_mixed)]  <- w_mixed
   }
   
-  
-  ## 8) Pick the pair formula
+  ## 8) Pick the pair formula 
   pairFormulaUsed <- pairFormula %||% buildDefaultPairFormula(pair.meta)
   
-  ## 9) Build the actual model
+  ##  decide which pair-level block variables to use
+  blockVarsPair <- character(0)
+  if (isTRUE(buildBlocks)) {
+    if (!is.null(pairBlockVars) && length(pairBlockVars)) {
+      # allow both sample-level names ("Batch") and pair-level names ("Batch_pair")
+      blockVarsPair <- normalizePairBlockVars(pairBlockVars, sample.meta, pair.meta)
+    } else {
+      # default: reuse the nuisance factor set that produced sample-level blocks
+      blockVarsPair <- defaultPairBlockVarsFromSampleDesign(sampleDesign, sample.meta, pair.meta)
+    }
+  }
+  
+  ## 9) Build the actual model 
   out <- buildDesignMatrices(
     data        = pair.meta,
     contrast    = explicitCoef,
@@ -591,28 +604,34 @@ buildPairDesignMatrices <- function(sample.meta,
     validate    = TRUE,
     verbosity   = switch(verbosity, none="none", warn="warn", info="info"),
     computeQrZ  = TRUE,
-    buildBlocks = FALSE
+    # CHANGED: pass blocks through to the pair level
+    blockVars   = if (length(blockVarsPair)) blockVarsPair else NULL,
+    buildBlocks = buildBlocks
   )
   
   ## 10) Attach extras
-  out$pairs             <- pairs
-  out$pair.meta         <- pair.meta
-  out$pair_formula_used <- pairFormulaUsed
-  out$focus_var         <- focusVar
-  out$dist_type         <- dist.type
+  out$pairs                 <- pairs
+  out$pair.meta             <- pair.meta
+  out$pair_formula_used     <- pairFormulaUsed
+  out$focus_var             <- focusVar
+  out$dist_type             <- dist.type
+  out$pair_block_vars_used  <- blockVarsPair  # NEW: for transparency
   
   if (verbosity %in% c("info")) {
     fac_cols <- names(pair.meta)[grepl("_pair$", names(pair.meta))]
     num_cols <- names(pair.meta)[grepl("^pair_[A-Za-z0-9_]+_(mean|diff)$", names(pair.meta))]
-    message(sprintf("Paired design: factor(s)=%s; numeric=%s; formula=%s",
-                    if (length(fac_cols)) paste(sub("_pair_$","",fac_cols), collapse=", ") else "(none)",
-                    if (length(num_cols)) "(present)" else "(none)",
-                    paste(deparse(pairFormulaUsed), collapse="")))
+    msg <- sprintf("Paired design: factor(s)=%s; numeric=%s; formula=%s",
+                   if (length(fac_cols)) paste(sub("_pair$","",fac_cols), collapse=", ") else "(none)",
+                   if (length(num_cols)) "(present)" else "(none)",
+                   paste(deparse(pairFormulaUsed), collapse=""))
+    if (length(blockVarsPair)) {
+      msg <- paste0(msg, sprintf("; blocks=%s", paste(blockVarsPair, collapse = "+")))
+    }
+    message(msg)
   }
   
   out
 }
-
 
 
 
@@ -1783,6 +1802,44 @@ buildCoefFromCells <- function(pair_meta, var, cells) {
     res[target_col] <- res[target_col] + as.numeric(cells[[nm]])
   }
   res
+}
+
+
+# Map user-supplied block vars to *pair-level* columns
+# Accept both sample-level names ("Batch") and pair-level names ("Batch_pair").
+normalizePairBlockVars <- function(vars, sample.meta, pair.meta) {
+  if (!length(vars)) return(character(0))
+  out <- character(0)
+  for (v in vars) {
+    if (v %in% names(pair.meta)) {
+      out <- c(out, v)
+    } else if (v %in% names(sample.meta) && paste0(v, "_pair") %in% names(pair.meta)) {
+      out <- c(out, paste0(v, "_pair"))
+    } else {
+      stop("pairBlockVars entry '", v,
+           "' is neither a pair-level column in pair.meta nor a sample-level factor present in metadata.")
+    }
+  }
+  # must be factors on the pair meta
+  bad <- out[!vapply(pair.meta[out], function(x) is.factor(x) || is.character(x), logical(1))]
+  if (length(bad)) {
+    stop("All pairBlockVars must resolve to factor pair columns. Offending: ",
+         paste(bad, collapse=", "))
+  }
+  unique(out)
+}
+
+# Default: reuse sample-level nuisance factors that defined sampleDesign$blocks,
+# then pairify them (e.g., 'Batch' -> 'Batch_pair') if present in pair.meta.
+defaultPairBlockVarsFromSampleDesign <- function(sampleDesign, sample.meta, pair.meta) {
+  # Derive the same nuisance set used at the sample level
+  nuis <- deriveNuisanceFactors(sampleDesign$formula_used,
+                                data = sample.meta,
+                                contrastSpec = sampleDesign$contrast_spec,
+                                explicit = NULL)
+  if (!length(nuis)) return(character(0))
+  cand <- paste0(nuis, "_pair")
+  cand[cand %in% names(pair.meta)]
 }
 
 

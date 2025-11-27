@@ -155,6 +155,9 @@ performLMPermutations <- function(x, y,
   z    <- as.numeric(if (!is.null(fit$z.score)) fit$z.score else fit$z_score)
   p    <- as.numeric(if (!is.null(fit$p.value)) fit$p.value else fit$p_value)
   #names(stat) <- names(z) <- names(p) <- y.names
+  max.vals <- fit$perm_max_stat
+  min.vals <- fit$perm_min_stat
+  perm.valid <- if (!is.null(fit$perm_valid)) as.logical(fit$perm_valid) else NULL
 
   stats.perm <- NULL
   if (return.sampled.stats) {
@@ -192,7 +195,10 @@ performLMPermutations <- function(x, y,
     stats.perm = stats.perm,
     pval       = p,
     z.score    = z,
-    residuals  = residuals
+    residuals  = residuals,
+    max.perm   = max.vals,
+    min.perm   = min.vals,
+    perm.valid = perm.valid
   )
 }
 

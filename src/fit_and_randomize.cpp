@@ -493,6 +493,17 @@ Rcpp::List fit_and_randomize(const arma::mat& X,
     sampled_stats_out.set_size(n_randomizations, m);
     sampled_stats_out.fill(arma::datum::nan);
   }
+
+  // NEW: per-permutation extremes across all columns (on stat scale)
+  arma::vec perm_max_stat, perm_min_stat;                     
+  if (n_randomizations > 0) {                                 
+    perm_max_stat.set_size(n_randomizations);                 
+    perm_min_stat.set_size(n_randomizations);                 
+    perm_max_stat.fill(-arma::datum::inf);                    
+    perm_min_stat.fill( arma::datum::inf);                    
+  } 
+  arma::uvec perm_valid(m);             // 0 = invalid, 1 = valid
+  perm_valid.fill(0);
   
   // Parallel seeds
   bool parallel_mode = false;
@@ -618,8 +629,39 @@ Rcpp::List fit_and_randomize(const arma::mat& X,
             tally_perm(sobs, sperm, alt, ge, le, ge_abs);
             if (return_sampled_fits) Mcoef.row(r) = bperm.t();
           }
-          if (failed) { zscore[j] = NA_REAL; pvalue[j] = NA_REAL; }
+          if (failed) { zscore[j] = NA_REAL; pvalue[j] = NA_REAL; perm_valid[j] = 0;  }
           else {
+            // NEW: update permutation extremes for this column
+            if (n_randomizations > 0) {                      
+#ifdef _OPENMP                                              
+#pragma omp critical                                         
+#endif                                                       
+              {                                              
+                for (int r = 0; r < n_randomizations; ++r) { 
+                  double v = stat_perm[r];                   
+                  if (!std::isfinite(v)) continue;           
+                  if (v > perm_max_stat[r]) perm_max_stat[r] = v;   
+                  if (v < perm_min_stat[r]) perm_min_stat[r] = v;   
+                }                                            
+              }                                              
+            }                                                
+
+            // NEW: compute validity for this test
+            bool all_finite_perm = true;                     
+            double minv =  std::numeric_limits<double>::infinity();   
+            double maxv = -std::numeric_limits<double>::infinity();   
+            for (int r = 0; r < n_randomizations; ++r) {     
+              double v = stat_perm[r];                       
+              if (!std::isfinite(v)) { all_finite_perm = false; break; } 
+              if (v < minv) minv = v;                        
+              if (v > maxv) maxv = v;                        
+            }                                                
+            if (std::isfinite(sobs) && all_finite_perm && (maxv > minv)) 
+              perm_valid[j] = 1;                             
+            else                                             
+              perm_valid[j] = 0;                             
+            // END NEW      
+
             double pval = (alt==0) ? (ge_abs+1.0)/(n_randomizations+1.0)
               : (alt==1) ? (ge+1.0)/(n_randomizations+1.0)
               : (le+1.0)/(n_randomizations+1.0);
@@ -650,7 +692,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X,
         
         if (n_randomizations == 0) continue;
         
-        if (idx_fin.n_elem < 2) { zscore[j] = NA_REAL; pvalue[j] = NA_REAL; continue; }
+        if (idx_fin.n_elem < 2) { zscore[j] = NA_REAL; pvalue[j] = NA_REAL; perm_valid[j] = 0; continue; }
         
         int ge=0, le=0, ge_abs=0;
         arma::vec yperm = yc;
@@ -683,6 +725,37 @@ Rcpp::List fit_and_randomize(const arma::mat& X,
           if (return_sampled_fits) Mcoef.row(r) = bperm.t();
         }
         {
+          // NEW: update permutation extremes for this column
+          if (n_randomizations > 0) {                                
+#ifdef _OPENMP                                                      
+#pragma omp critical                                                 
+#endif                                                              
+            {                                                        
+              for (int r = 0; r < n_randomizations; ++r) {           
+                double v = stat_perm[r];                             
+                if (!std::isfinite(v)) continue;                     
+                if (v > perm_max_stat[r]) perm_max_stat[r] = v;      
+                if (v < perm_min_stat[r]) perm_min_stat[r] = v;      
+              }                                                      
+            }                                                        
+          }                                                          
+
+          // NEW: compute validity for this test
+          bool all_finite_perm = true;                               
+          double minv =  std::numeric_limits<double>::infinity();    
+          double maxv = -std::numeric_limits<double>::infinity();    
+          for (int r = 0; r < n_randomizations; ++r) {               
+            double v = stat_perm[r];                                 
+            if (!std::isfinite(v)) { all_finite_perm = false; break; } 
+            if (v < minv) minv = v;                                  
+            if (v > maxv) maxv = v;                                  
+          }                                                          
+          if (std::isfinite(sobs) && all_finite_perm && (maxv > minv)) 
+            perm_valid[j] = 1;                                       
+          else                                                       
+            perm_valid[j] = 0;                                       
+          // END NEW   
+
           double pval = (alt==0) ? (ge_abs+1.0)/(n_randomizations+1.0)
             : (alt==1) ? (ge+1.0)/(n_randomizations+1.0)
             : (le+1.0)/(n_randomizations+1.0);
@@ -732,7 +805,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X,
         if (full_permute_requested)  can_permute = (k >= 2);
         else for (const auto& g : groups_sub) if (g.size() >= 2) { can_permute = true; break; }
       }
-      if (!can_permute) { zscore[j] = NA_REAL; pvalue[j] = NA_REAL; continue; }
+      if (!can_permute) { zscore[j] = NA_REAL; pvalue[j] = NA_REAL; perm_valid[j] = 0; continue; }
       
       int ge=0, le=0, ge_abs=0;
       arma::vec yperm = yc;
@@ -796,10 +869,41 @@ Rcpp::List fit_and_randomize(const arma::mat& X,
 
       if (rob_huber && failed) { 
         zscore[j] = NA_REAL; 
-        pvalue[j] = NA_REAL;   
+        pvalue[j] = NA_REAL; 
+        perm_valid[j] = 0;  
         continue;
       }
-      
+      // NEW: update permutation extremes for this column
+      if (n_randomizations > 0) {                            
+#ifdef _OPENMP                                              
+#pragma omp critical                                         
+#endif                                                       
+        {                                                    
+          for (int r = 0; r < n_randomizations; ++r) {       
+            double v = stat_perm[r];                         
+            if (!std::isfinite(v)) continue;                
+            if (v > perm_max_stat[r]) perm_max_stat[r] = v; 
+            if (v < perm_min_stat[r]) perm_min_stat[r] = v; 
+          }                                                  
+        }                                                    
+      }                                                      
+
+      // NEW: compute validity for this test
+      bool all_finite_perm = true;                           
+      double minv =  std::numeric_limits<double>::infinity();
+      double maxv = -std::numeric_limits<double>::infinity();
+      for (int r = 0; r < n_randomizations; ++r) {           
+        double v = stat_perm[r];                             
+        if (!std::isfinite(v)) { all_finite_perm = false; break; } 
+        if (v < minv) minv = v;                              
+        if (v > maxv) maxv = v;                              
+      }                                                      
+      if (std::isfinite(sobs) && all_finite_perm && (maxv > minv)) 
+        perm_valid[j] = 1;                                   
+      else                                                   
+        perm_valid[j] = 0;                                   
+      // END NEW   
+
       double pval = (alt==0) ? (ge_abs+1.0)/(n_randomizations+1.0)
         : (alt==1) ? (ge+1.0)/(n_randomizations+1.0)
         : (le+1.0)/(n_randomizations+1.0);
@@ -815,9 +919,14 @@ Rcpp::List fit_and_randomize(const arma::mat& X,
       _["coef"]    = coef_obs,
       _["stat"]    = stat_obs,
       _["z_score"] = zscore,
-      _["p_value"] = pvalue
-      
+      _["p_value"] = pvalue,
+      _["perm_valid"] = perm_valid          // NEW
     );
+    // NEW: return permutation extremes if permutations were run
+    if (n_randomizations > 0) {                                  
+      out["perm_max_stat"] = perm_max_stat;                      
+      out["perm_min_stat"] = perm_min_stat;                      
+    }     
     if (return_residuals)     out["residuals"]     = resid_out;
     if (return_sampled_fits) {
       Rcpp::List L(m);
@@ -971,6 +1080,18 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
   std::vector<arma::mat> SampledFits; if (return_sampled_fits) SampledFits.resize(m);
   arma::mat SampledStats; if (return_sampled_stats && n_randomizations > 0) { SampledStats.set_size(n_randomizations, m); SampledStats.fill(arma::datum::nan); }
   
+  // NEW:  permutation extremes across all columns (stat scale)
+  arma::vec PermMaxStat, PermMinStat;                       
+  if (n_randomizations > 0) {                               
+    PermMaxStat.set_size(n_randomizations);                  
+    PermMinStat.set_size(n_randomizations);                  
+    PermMaxStat.fill(-arma::datum::inf);                     
+    PermMinStat.fill( arma::datum::inf);                     
+  }        
+  // NEW:  per-test validity flags 
+  arma::uvec PermValid(m);                                   
+  PermValid.fill(0);
+
   // Process NA-pattern groups
   for (auto & kv : groups) {
     const GInfo& g = kv.second;
@@ -1041,13 +1162,30 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
       arma::vec s = ans["stat"]; // |J|
       arma::vec z = ans["z_score"]; // |J|
       arma::vec pv = ans["p_value"]; // |J|
+      arma::uvec gValid = ans["perm_valid"];         // NEW
       for (size_t a = 0; a < J.size(); ++a) {
         arma::uword j = J[a];
         Coef.col(j) = B.col(a);
         Stat[j]     = s[a];
         Zscore[j]   = z[a];
         Pval[j]     = pv[a];
+        PermValid[j] = gValid[a];                   // NEW
       }
+
+      // NEW: merge per-group permutation extremes into global ones
+      if (n_randomizations > 0) {                                        
+        arma::vec gMax = ans["perm_max_stat"];                           
+        arma::vec gMin = ans["perm_min_stat"];                           
+        for (int r = 0; r < n_randomizations; ++r) {                     
+          double vM = gMax[r];                                           
+          double vN = gMin[r];                                           
+          if (std::isfinite(vM) && vM > PermMaxStat[r])                  
+            PermMaxStat[r] = vM;                                         
+          if (std::isfinite(vN) && vN < PermMinStat[r])                  
+            PermMinStat[r] = vN;                                         
+        }                                                                
+      }         
+
       if (return_residuals) {
         arma::mat Rg = ans["residuals"];                      // |core∩finite| x |J|
         Resid.submat(sel_corepos, Jv) = Rg; // write back at core positions
@@ -1121,6 +1259,7 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
       arma::vec s = ans["stat"];
       arma::vec z = ans["z_score"];
       arma::vec pv = ans["p_value"];
+      arma::uvec gValid = ans["perm_valid"];                // NEW
       for (size_t a = 0; a < J.size(); ++a) {
         arma::uword j = J[a];
         Coef.col(j) = B.col(a);
@@ -1128,6 +1267,20 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
         Zscore[j]   = z[a];
         Pval[j]     = pv[a];
       }
+      // NEW: merge per-group permutation extremes into global ones
+      if (n_randomizations > 0) {                                        
+        arma::vec gMax = ans["perm_max_stat"];                           
+        arma::vec gMin = ans["perm_min_stat"];                           
+        for (int r = 0; r < n_randomizations; ++r) {                     
+          double vM = gMax[r];                                           
+          double vN = gMin[r];                                           
+          if (std::isfinite(vM) && vM > PermMaxStat[r])                  
+            PermMaxStat[r] = vM;                                         
+          if (std::isfinite(vN) && vN < PermMinStat[r])                  
+            PermMinStat[r] = vN;                                         
+        }                                                                
+      }             
+
       if (return_residuals) {
         arma::mat Rg = ans["residuals"];            // nc x |J|
         Resid.cols(Jv) = Rg;                        // directly into core space
@@ -1157,7 +1310,8 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
     _["coef"]        = Coef,
     _["stat"]        = Stat,
     _["z_score"]     = Zscore,
-    _["p_value"]     = Pval
+    _["p_value"]     = Pval,
+    _["perm_valid"]  = PermValid          // NEW
   );
   if (return_residuals)     out["residuals"]     = Resid;
   if (return_sampled_fits) {
@@ -1165,6 +1319,13 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X,
     out["sampled_fits"] = L;
   }
   if (return_sampled_stats && n_randomizations > 0) out["sampled_stats"] = SampledStats;
+
+  // NEW: return global permutation extremes and partial_core
+  if (n_randomizations > 0) {                                     
+    out["perm_max_stat"] = PermMaxStat;                          
+    out["perm_min_stat"] = PermMinStat;                          
+  }      
+
   // --- added ---
   out["partial_core"] = PartialCore;
   // --------------

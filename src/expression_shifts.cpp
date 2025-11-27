@@ -524,6 +524,93 @@ std::vector<double> adjustZScoresWithPermutations(const std::vector<double> &z_s
 
 // [[Rcpp::export]]
 std::vector<double> adjustedZScoresMaxStat(
+    const std::vector<double>& z_obs,                 // observed test stat (or z), length m
+    int alt,                                          // 0=two-sided, 1=greater, 2=less
+    const Rcpp::NumericVector& max_vals_in,           // per-permutation max stats, length B; should be on the same scale as z_obs
+    const Rcpp::NumericVector& min_vals_in,           // per-permutation min stats, length B; should be on the same scale as z_obs
+    double wins = 0.0,
+    bool smooth = false,
+    Rcpp::Nullable<Rcpp::List> nn_ids = R_NilValue,
+    Rcpp::Nullable<Rcpp::IntegerVector> non_zero_ids = R_NilValue
+) {
+    const size_t m = z_obs.size();
+    const size_t B = max_vals_in.size();
+
+    if (!(alt == 0 || alt == 1 || alt == 2))
+        Rcpp::stop("alt must be 0, 1, or 2.");
+
+    if (min_vals_in.size() != B)
+        Rcpp::stop("max_vals and min_vals must have equal lengths.");
+
+    // copy extremes
+    std::vector<double> max_vals(max_vals_in.begin(), max_vals_in.end());
+    std::vector<double> min_vals(min_vals_in.begin(), min_vals_in.end());
+
+    std::sort(max_vals.begin(), max_vals.end());
+    std::sort(min_vals.begin(), min_vals.end());
+
+    // ---- optional neighbor metadata (unchanged) ----
+    std::vector<std::vector<int>> nn_cpp;
+    std::vector<size_t> nz_cpp;
+
+    if (smooth) {
+        nn_cpp.assign(m, std::vector<int>{});
+
+        if (nn_ids.isNotNull()) {
+            Rcpp::List L(nn_ids.get());
+            const int Lsz = L.size();
+            for (int i = 0; i < Lsz; ++i) {
+                size_t idx = static_cast<size_t>(i);
+                if (idx >= m) break;
+                Rcpp::IntegerVector v = L[i];
+                for (int a : v) {
+                    if (a >= 0 && a < (int)m)
+                        nn_cpp[idx].push_back(a);
+                }
+                if (nn_cpp[idx].empty())
+                    nn_cpp[idx].push_back(static_cast<int>(idx));
+            }
+        }
+
+        for (size_t i = 0; i < m; ++i)
+            if (nn_cpp[i].empty())
+                nn_cpp[i].push_back(static_cast<int>(i));
+
+        if (non_zero_ids.isNotNull()) {
+            Rcpp::IntegerVector iv(non_zero_ids.get());
+            for (int x : iv)
+                if (x >= 0 && x < (int)m)
+                    nz_cpp.push_back((size_t)x);
+        }
+        if (nz_cpp.empty()) {
+            nz_cpp.resize(m);
+            std::iota(nz_cpp.begin(), nz_cpp.end(), 0);
+        }
+    }
+
+    // ---- adjustment ----
+    std::vector<double> z_adj;
+
+    if (alt == 1) {
+        // one-sided: use max_vals only
+        z_adj = adjustZScoresWithPermutations(z_obs, wins, max_vals);
+    } else {
+        // two-sided or less: use min_vals + max_vals
+        std::mutex r_mut;
+        z_adj = adjustZScoresWithPermutations(
+            z_obs,
+            nn_cpp, nz_cpp,
+            wins, smooth,
+            min_vals, max_vals,
+            r_mut
+        );
+    }
+
+    return z_adj;
+}
+
+
+std::vector<double> adjustedZScoresMaxStat_old(
     const std::vector<double>& T_obs,                 // length m (tests)
     const Rcpp::NumericMatrix& T_perm_mat,            // B x m (rows=perms, cols=tests)
     int alt,                                          // 0=two-sided, 1=greater, 2=less

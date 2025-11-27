@@ -2720,21 +2720,25 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' cao$estimateClusterFreeDE()
     #' cao$estimateClusterFreeExpressionShifts()
     #' }
-    estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="z", name="cluster.free.expr.shifts",
+    estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="expression", name="cluster.free.expr.shifts",
                                                  min.n.between=2, min.n.within=max(min.n.between, 1), dist.type="shift",
+                                                 contrast=NULL, formula=NULL, pairContrast=NULL, pairFormula=NULL,
                                                  min.expr.frac=0.0, min.n.obs.per.samp=3, perm.method="freedman-lane", 
                                                  alternative="two-sided", adjust=TRUE, smooth=TRUE, robust.method="none",
                                                  na.mode="drop", dist="cor", log.vectors=(dist != "js"), wins=0.025, 
                                                  n.permutations=999, verbose=self$verbose, n.cores=self$n.cores, genes=NULL,
-                                                 min.edge.weight=0.0, contrast=NULL, formula=NULL, ...) {
+                                                 min.edge.weight=0.0, sample.metadata = self$sample.meta, ...) {
       
-        if(!is.null(formula) || !is.null(contrast)) {
-        vd <- validateDesign(formula = formula, sample.meta = self$full.meta, contrast = contrast, verbose = verbose)
-        sample.meta <- subsetMetadata(self$full.meta, vd$formula)
-        x.Pair<- buildPairDesignMatrices(sample.meta, triplet=vd$contrast, dist.type = dist.type)
+
+        if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
+        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
         } else {
-        x.Pair<- buildPairDesignMatrices(self$sample.meta, triplet=self$contrast, dist.type = dist.type)
+        sample.model <- self$model
         }
+        
+        # build paired model
+        x.Pair <- buildPairDesignMatrices(sample.metadata, sample.model, dist.type = dist.type, pairContrast = pairContrast,
+                                              pairFormula  = pairFormula, verbosity = if(verbose) 'info' else 'warn')
         
 
       ## TODO add warnings here for perm.method post diagnostics

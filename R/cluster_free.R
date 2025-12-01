@@ -102,14 +102,14 @@ estimateClusterFreeExpressionShiftsLM <- function(cm, sample.per.cell, nns.per.c
                                                   min.n.obs.per.samp = 2L, n.cores = 1, perm.method = c("freedman-lane","block"), 
                                                   robust.method = c("none","huber","winsor"),n.permutations = 999,  adjust= TRUE,
                                                   na.mode = c("drop","impute_weak"), alternative = c("two-sided","greater","less"),
-                                                  smooth = FALSE, wins = 0.025, return.sampled.stats = TRUE, 
+                                                  smooth = TRUE, wins = 0.025, return.sampled.stats = FALSE, 
                                                   return.residuals = FALSE, verbose = FALSE) {
   perm.method   <- match.arg(perm.method)
   robust.method <- match.arg(robust.method)
   na.mode       <- match.arg(na.mode)
   alternative   <- match.arg(alternative)
 
-  if (adjust) return.sampled.stats <- TRUE
+  #if (adjust) return.sampled.stats <- TRUE
   
   spc <- sample.per.cell
   if (is.factor(spc)) spc <- as.integer(spc) else spc <- as.integer(as.factor(spc))
@@ -132,21 +132,25 @@ estimateClusterFreeExpressionShiftsLM <- function(cm, sample.per.cell, nns.per.c
   #na.cols <- which(colSums(is.na(Y)) > 0)
 
   ## ---- fit & permutations ----
-  res <- performLMPermutations(x = x$model, y = Y, n.permutations = n.permutations, perm.method = perm.method,
+  res <- performLMPermutations(x = x, y = Y, n.permutations = n.permutations, perm.method = perm.method,
                                robust.method = robust.method, na.mode = na.mode, alternative = alternative,
                                return.sampled.stats = return.sampled.stats, return.residuals = return.residuals,
                                n.cores = n.cores)
 
-  valid <- is.finite(res$stat.obs) & apply(res$stats.perm, 2, function(col) {
-                                           all(is.finite(col)) && sd(col) > 0
-                                          })
+  valid <- if (!is.null(res$perm.valid)) {
+    is.finite(res$stat.obs) & res$perm.valid
+  } else {
+    is.finite(res$stat.obs)
+  }
   non.zero.ids <- which(valid)
   non.zero.ids.c <- as.integer(non.zero.ids - 1L)
 
-  ## new cpp function; uses old functions internally; edit fit_an_randomize to return min/max instead
-  z.adj <- adjustedZScoresMaxStat(T_obs = res$stat.obs, T_perm = res$stats.perm,   # rows=perms, cols=tests
-                                  alt = if (alternative == "two-sided") 0 else if (alternative == "greater") 1 else 2,
-                                  wins = wins, smooth = smooth, nn_ids = nn.list, non_zero_ids = non.zero.ids.c)
+  ## new cpp function; uses old functions internally; 
+  z.adj <- if (adjust) adjustedZScoresMaxStat(z_obs = as.numeric(res$stat.obs), max_vals_in  = as.numeric(res$max.perm),   
+                                  min_vals_in  = as.numeric(res$min.perm), alt = if (alternative == "two-sided") 0L 
+                                  else if (alternative == "greater") 1L else 2L, wins = wins, smooth = smooth, 
+                                  nn_ids = nn.list, non_zero_ids = non.zero.ids.c) else NULL
+
   ## ---- effect-size shifts (center by permutation mean) ----
   shifts <- res$stat.obs
   if (!is.null(res$stats.perm)) {
@@ -156,17 +160,16 @@ estimateClusterFreeExpressionShiftsLM <- function(cm, sample.per.cell, nns.per.c
   shifts.smoothed <- if (smooth) applyMedianFilterES(res$stat.obs, nn_ids = nn.list,
                                            non_zero_ids = which(is.finite(res$stat.obs))) else NULL
   
-  if (!is.null(colnames(Y))) {
-    names(shifts)     <- colnames(Y)
-    names(shifts.smoothed)   <- colnames(Y)
-    names(z.adj) <- names(res$z.score)   <- colnames(Y)
-  }
+  if (!is.null(colnames(Y))) names(shifts) <- names(res$z.score) <- colnames(Y)
+  if (!is.null(z.adj))  names(z.adj) <- colnames(Y)
+  if (!is.null(shifts.smoothed)) names(shifts.smoothed) <- colnames(Y)
+
 
   list(
     stat            = res$stat.obs,
     p.value         = res$pval,
     z.scores        = res$z.score,
-    z.adj           = if (adjust) z.adj else NULL,
+    z.adj           = z.adj,
     shifts          = shifts,
     shifts.smoothed = shifts.smoothed,
     sampled.stats   = if (!is.null(res$sampled_stats)) res$sampled_stats else NULL,

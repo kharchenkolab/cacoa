@@ -349,7 +349,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
                                              contrast = NULL, pairContrast = NULL, pairFormula = NULL, block.vars = self$block.vars, sample.metadata = self$sample.meta,  
                                              sample.ids = self$sample.ids, dist = NULL, dist.type = "shift", min.cells.per.sample = 10, 
                                              min.samp.per.type = 2, min.gene.frac = 0.01, genes = NULL, perm.method="freedman-lane", robust.method = "none",
-                                             na.mode = "drop", alternative = "two-sided", return.residuals = TRUE, return.sampled.stats = FALSE,
+                                             na.mode = "drop", alternative = "two-sided", return.residuals = TRUE, return.sampled.stats = TRUE,
                                              name = "expression.shifts", n.permutations = 1000, return.sampled.fits = FALSE,
                                              verbose = self$verbose, n.cores = self$n.cores, ...) {
   
@@ -2012,8 +2012,8 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' @param method character string Density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')
     #' @param beta numeric Smoothing strength parameter of the \link[sccore:heatFilter]{heatFilter} for graph based cell density (default=30)
     #' @param estimate.variation boolean Estimate variation (default=TRUE)
-    #' @param sample.groups 2-factor vector with annotation of groups/condition per sample (default=self$sample.groups)
-    #' @param contrast Character vector specifying the contrast variable and terms (default=self$contrast)
+    #' @param contrast Linear contrast specification (required).
+    #' @param formula RHS formula for the design (~ ...). If NULL, uses default.
     #' @param verbose boolean Print messages (default=self$verbose)
     #' @param n.cores integer Number of cores to use for parallelization (default=self$n.cores)
     #' @param bandwidth numeric KDE bandwidth multiplier (default=0.5). The full bandwidth is estimated by multiplying this value on the difference between 90% and 10%
@@ -2025,33 +2025,54 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' cao$estimateCellDensity()
     #' }
     estimateCellDensity = function(bins=400, method='kde', name='cell.density', beta=30, estimate.variation=TRUE, contrast=NULL,
-                                   sample.groups=self$sample.groups, verbose=self$verbose, n.cores=self$n.cores,
-                                   bandwidth=0.05, ...){
+                                   formula=NULL, verbose=self$verbose, n.cores=self$n.cores, sample.metadata=self$sample.metadata,
+                                   block.vars=self$block.vars, bandwidth=0.05, ...){
       sample.per.cell <- self$sample.per.cell
-      if(!is.null(contrast)){
-        sample.groups <- getSampleGroups(self$sample.meta, contrast, self$sample.id)
+
+      if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
+       sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+      } else {
+      sample.model <- self$model
+      }
+
+      # Get sample weights
+      w <- as.numeric(sample.model$F %*% sample.model$contrast.F)
+      names(w) <- rownames(sample.model$F)
+      sample.weights <- w
+
+      # Ensure weights are named by sample and restrict to samples present in data
+      sample.weights <- sample.weights[intersect(names(sample.weights), unique(sample.per.cell))]
+
+      if (length(sample.weights) == 0L) {
+       stop("No sample weights overlap with sample.per.cell; check sample IDs.")
       }
 
       if (method == 'kde') {
         private$checkCellEmbedding()
         res <- self$embedding %>% estimateCellDensityKde(
-          sample.per.cell=sample.per.cell, sample.groups=sample.groups, bins=bins, bandwidth=bandwidth, ...
+          sample.per.cell=sample.per.cell, sample.weights=sample.weights, bins=bins, bandwidth=bandwidth, ...
         )
       } else if (method == 'graph') {
         res <-  extractCellGraph(self$data.object) %>%
-          estimateCellDensityGraph(sample.per.cell=sample.per.cell, sample.groups=sample.groups,
+          estimateCellDensityGraph(sample.per.cell=sample.per.cell, sample.weights=sample.weights,
                                    n.cores=n.cores, beta=beta, verbose=verbose, ...)
       } else stop("Unknown method: ", method)
       
-      sg.ids <- sample.groups %>% {split(names(.), .)}
 
       if (estimate.variation) {
+        # groups defined by sign of weights
+        w <- sample.weights[colnames(res$density.mat)]
+        sg.ids <- list( num = names(w)[w >  0], den = names(w)[w <  0])
+
         res$density.mad <- res %$% lapply(sg.ids, function(ids) apply(density.mat[,ids,drop=FALSE], 1, mad)) %>%
           Reduce(`+`, .)
         res$density.sd <-res %$% lapply(sg.ids, function(ids) apply(density.mat[,ids,drop=FALSE], 1, sd)) %>%
           Reduce(`+`, .)
         res$missed.sample.frac <- res$density.mat %>% {(. / rowMeans(.)) < 0.05} %>% rowMeans()
       }
+
+      res$sample.weights  <- sample.weights
+      res$contrast_spec   <- sample.model$contrast_spec
 
       self$test.results[[name]] <- res
 
@@ -2091,22 +2112,48 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
         palette <- c("#FFFFFF", brewerPalette("YlOrRd", rev=FALSE)(9)) %>% grDevices::colorRampPalette()
       }
 
+      color.range %<>% parseLimitRange(unlist(dens.res$cond.densities))
+
       ps <- names(dens.res$cond.densities) %>% sn() %>% lapply(function(l) {
-        color.range %<>% parseLimitRange(unlist(dens.res$cond.densities))
+        #color.range %<>% parseLimitRange(unlist(dens.res$cond.densities))
         if (dens.res$method =='graph') {
-          p <- self$plotEmbedding(colors=dens.res$cond.densities[[l]], size=size, title=l, show.legend=show.legend,
+          col.vec <- dens.res$cond.densities[[l]]
+
+          # Align to embedding cells if names are present
+          if (!is.null(names(col.vec))) {
+           col.vec <- col.vec[rownames(self$embedding)]
+          }
+          p <- self$plotEmbedding(colors=col.vec, size=size, title=l, show.legend=show.legend,
                                   legend.title='Density', color.range=color.range, palette=palette, ...)
         } else {# dens.res$method =='kde'
-          condition.per.cell <- self$getConditionPerCell()
-          p <- dens.res %$% data.frame(density.emb, z=cond.densities[[l]]) %>%
+          p <- data.frame(density.emb, z=dens.res$cond.densities[[l]]) %>%
             plotDensityKde(bins=dens.res$bins, lims=color.range, title=l, show.legend=show.legend,
                            show.grid=show.grid, plot.theme=self$plot.theme, palette=palette, ...)
 
-          if (add.points) {
-            emb <- as.data.frame(self$embedding) %>% set_colnames(c('x', 'y')) %>% cbind(z=1)
-            nnames <- condition.per.cell %>% {names(.)[. == l]} %>% sample(min(2000, length(.)))
-            p <- p + geom_point(data=emb[nnames, ], aes(x=x, y=y), col=point.col, size=0.00001, alpha=0.2)
+          # ------------------- overlay points by weights -------------------
+        if (add.points && !is.null(dens.res$sample.weights)) {
+          w <- dens.res$sample.weights
+
+        # Samples belonging to numerator / denominator side
+          samps <- switch(l,num = names(w)[w >  0],den = names(w)[w <  0], character(0))
+          
+          if (length(samps) > 0L) {
+            sample.per.cell <- self$sample.per.cell
+            # cells whose sample is in the chosen side
+            cells <- names(sample.per.cell)[sample.per.cell %in% samps]
+
+            if (length(cells) > 0L) {
+              nnames <- sample(cells, min(2000, length(cells)))
+              emb <- as.data.frame(self$embedding) %>%
+              set_colnames(c('x', 'y')) %>%
+              cbind(z = 1)
+
+              p <- p + ggplot2::geom_point(data = emb[nnames, ],
+                ggplot2::aes(x = x, y = y), col = point.col, size  = 0.00001, alpha = 0.2)
+            }
+           }
           }
+          # -----------------------------------------------------------------
         }
 
         if (show.cell.groups) {
@@ -2185,7 +2232,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' @param type character method to calculate differential cell density; permutation, t.test, wilcox or subtract (target subtract ref density);
     #' @param adjust boolean Whether to adjust Z-scores for multiple comparison using BH method (default: FALSE for type='subtract', TRUE for everything else)
     #' @param name character Slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
-    #' @param sample.meta data.frame Sample metadata (default=self$sample.meta)
+    #' @param sample.metadata data.frame Sample metadata (default=self$sample.meta)
     #' @param formula formula Model formula (default=NULL)
     #' @param contrast character Vector with two elements specifying the reference and target levels (default=NULL)
     #' @param n.permutations numeric Number of permutations (default=400)
@@ -2199,8 +2246,8 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' cao$estimateCellDensity()
     #' cao$estimateDiffCellDensity()
     #' }
-    estimateDiffCellDensity=function(type='permutation', adjust=NULL, name='cell.density', sample.meta=self$sample.meta, 
-                                     formula=NULL, contrast=NULL, block.id=self$block.id, perm.method="freedman-lane",
+    estimateDiffCellDensity=function(type='permutation', adjust=NULL, name='cell.density', sample.metadata=self$sample.meta, 
+                                     formula=NULL, contrast=NULL, block.vars=self$block.vars, perm.method="freedman-lane",
                                      robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=TRUE,
                                      n.permutations=999, smooth=TRUE, verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
@@ -2220,33 +2267,26 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
         l.max <- NULL
       }
 
-      if(!is.null(formula) || !is.null(contrast)) {
-        vd <- validateDesign(formula = formula, sample.meta = self$full.meta, contrast = contrast, verbose = verbose)
-        sample.meta <- subsetMetadata(self$full.meta, vd$formula)
-        formula <- vd$formula
-        contrast <- vd$contrast
-        sample.groups <- getSampleGroups(sample.meta, contrast, sample.id=self$sample.id)
-        } else {
-        formula <- self$formula
-        contrast <- self$contrast
-        sample.meta <- self$sample.meta
-        sample.groups <- self$sample.groups
-        }
+      if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
+       sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, 
+                          formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+      } else {
+      sample.model <- self$model
+      }
 
       perm.res <- density.mat %>%
-          diffCellDensityPermutations(sample.meta = sample.meta, sample.groups = sample.groups, contrast= contrast, 
-                                      type=type, block.id= block.id, perm.method=perm.method, robust.method = robust.method,
+          diffCellDensityPermutations(sample.model=sample.model, perm.method=perm.method, robust.method = robust.method,
                                       na.mode = na.mode, alternative = alternative, n.permutations=n.permutations,
                                       return.residuals=return.residuals, return.sampled.stats=return.sampled.stats,
                                       n.cores=n.cores, verbose=verbose)
 
       if(!adjust){
         score <- perm.res %>% .$z.score
-        res <- list(raw=score, formula = formula, contrast = contrast, perm.method=perm.method, robust = robust.method)
+        res <- list(raw=score, model=sample.model, perm.method=perm.method, robust = robust.method)
       } else {
         res <- list(raw=perm.res$z.score, adj=perm.res %$% adjustZScoresByPermutations(
                     score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores, verbose=verbose,
-                    l.max=l.max, ...), formula = formula, contrast = contrast, perm.method=perm.method, robust = robust.method)
+                    l.max=l.max, ...), model = sample.model, perm.method=perm.method, robust = robust.method)
       }
 
       self$test.results[[name]]$diff[[type]] <- res
@@ -2255,7 +2295,6 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     },
 
     #' @description Estimate differential cell density
-    #' @param type character method to calculate differential cell density; t.test, wilcox or subtract (target subtract ref density);
     #' @param name character Slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
     #' @param size numeric (default=0.2)
     #' @param palette color palette, default is c('blue','white','red')
@@ -2276,31 +2315,23 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' cao$estimateDiffCellDensity()
     #' cao$plotDiffCellDensity()
     #' }
-    plotDiffCellDensity=function(type=NULL, name='cell.density', size=0.2, palette=NULL,
+    plotDiffCellDensity=function(name='cell.density', size=0.2, palette=NULL,
                                  adjust=NULL, contours=NULL, contour.color='black', contour.conf='10%',
                                  plot.na=FALSE, color.range=NULL, mid.color='gray95',
                                  scale.z.palette=adjust, min.z=qnorm(0.9), ...) {
       if (is.null(palette)) {
-        if (is.null(self$sample.groups.palette)) {
-          palette <- c('blue', mid.color, 'red')
-        } else {
-          palette <- self$sample.groups.palette %>% {c(.[self$ref.level], mid.color, .[self$target.level])}
-        }
-        palette %<>% grDevices::colorRampPalette(space="Lab")
+        palette <- grDevices::colorRampPalette(c("blue", mid.color, "red"), space = "Lab")
       }
       private$checkCellEmbedding()
       dens.res <- private$getResults(name, 'estimateCellDensity')
-      
-      if (is.null(type)) {
-        type <- if (length(dens.res$diff) == 0) 'permutation' else names(dens.res$diff)[1]
-      }
-      scores <- dens.res$diff[[type]]
-      if (is.null(scores)) {
-        warning("Can't find results for name, '", name, "' and type '", type,
-                "'. Running estimateDiffCellDensity with default parameters.")
-        self$estimateDiffCellDensity(type=type, name=name, adjust=adjust)
-        dens.res <- self$test.results[[name]]
-        scores <- dens.res$diff[[type]]
+           
+      scores <- dens.res$diff[[1]]
+      if (is.null(scores)) {                                             
+             warning("Can't find differential density results for name '", name,
+                 "'. Running estimateDiffCellDensity() with default parameters.")
+         self$estimateDiffCellDensity(name = name, adjust = adjust)       
+         dens.res <- self$test.results[[name]]
+         scores  <- dens.res$diff[[1]]                                    
       }
 
       if (is.null(adjust)) {
@@ -2330,7 +2361,6 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
         density.emb <- dens.res$density.emb[,1:2]
       } else stop("Unknown method: ", dens.res$method)
 
-      density.mat <- dens.res$density.mat[names(scores),]
       density.emb <- density.emb[names(scores),]
 
       if (is.null(color.range)) {
@@ -2341,14 +2371,14 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
         scores %<>% pmin(color.range[2]) %>% pmax(color.range[1])
       }
 
-      leg.title <- if (type == 'subtract') 'Prop. change' else {if (adjust) 'Z adj.' else 'Z-score'}
+      leg.title <- if (adjust) 'Z adj.' else 'Z-score'
       gg <- self$plotEmbedding(density.emb, colors=scores, size=size, legend.title=leg.title, palette=palette,
                                midpoint=0, plot.na=plot.na, color.range=color.range, ...)
 
-      if (scale.z.palette && (type != 'subtract')) {
+      if (scale.z.palette) {                               
         gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
         gg <- gg + getScaledZGradient(min.z=min.z, palette=palette, color.range=color.range)
-      }
+     }
 
       if (!is.null(contours)) {
         gg <- gg + private$getDensityContours(groups=contours, conf=contour.conf, color=contour.color)
@@ -2720,21 +2750,25 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' cao$estimateClusterFreeDE()
     #' cao$estimateClusterFreeExpressionShifts()
     #' }
-    estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="z", name="cluster.free.expr.shifts",
+    estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="expression", name="cluster.free.expr.shifts",
                                                  min.n.between=2, min.n.within=max(min.n.between, 1), dist.type="shift",
+                                                 contrast=NULL, formula=NULL, pairContrast=NULL, pairFormula=NULL,
                                                  min.expr.frac=0.0, min.n.obs.per.samp=3, perm.method="freedman-lane", 
                                                  alternative="two-sided", adjust=TRUE, smooth=TRUE, robust.method="none",
                                                  na.mode="drop", dist="cor", log.vectors=(dist != "js"), wins=0.025, 
                                                  n.permutations=999, verbose=self$verbose, n.cores=self$n.cores, genes=NULL,
-                                                 min.edge.weight=0.0, contrast=NULL, formula=NULL, ...) {
+                                                 min.edge.weight=0.0, sample.metadata = self$sample.meta, ...) {
       
-        if(!is.null(formula) || !is.null(contrast)) {
-        vd <- validateDesign(formula = formula, sample.meta = self$full.meta, contrast = contrast, verbose = verbose)
-        sample.meta <- subsetMetadata(self$full.meta, vd$formula)
-        x.Pair<- buildPairDesignMatrices(sample.meta, triplet=vd$contrast, dist.type = dist.type)
+
+        if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
+        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
         } else {
-        x.Pair<- buildPairDesignMatrices(self$sample.meta, triplet=self$contrast, dist.type = dist.type)
+        sample.model <- self$model
         }
+        
+        # build paired model
+        x.Pair <- buildPairDesignMatrices(sample.metadata, sample.model, dist.type = dist.type, pairContrast = pairContrast,
+                                              pairFormula  = pairFormula, verbosity = if(verbose) 'info' else 'warn')
         
 
       ## TODO add warnings here for perm.method post diagnostics

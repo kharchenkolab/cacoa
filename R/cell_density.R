@@ -5,10 +5,10 @@ NULL
 #'
 #' @param emb cell embedding matrix
 #' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
-#' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+#' @param sample.weights Named numeric vector: per-sample signed weights.
 #' @param bins number of bins for density estimation, default 400
 #' @keywords internal
-estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, bandwidth=0.05, expansion.mult=0.05) {
+estimateCellDensityKde <- function(emb, sample.per.cell, sample.weights, bins, bandwidth=0.05, expansion.mult=0.05) {
   if (is.null(bandwidth)) {
     bandwidth <- apply(emb, 2, MASS::bandwidth.nrd)
   } else {
@@ -32,8 +32,24 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ba
     set_colnames(names(cells.per.samp)) %>%
     set_rownames(1:nrow(.)) # needed for indexing in diffCellDensity
 
-  cond.densities <- split(names(sample.groups), sample.groups) %>%
-    lapply(function(ns) rowMeans(density.mat[,ns]))
+  # ---------- condition densities from weights ----------
+  # align weights to density.mat columns
+  w <- sample.weights[colnames(density.mat)]
+  if (any(is.na(w))) {
+    warning("Some samples in score.mat have no weights; treating them as 0.")
+    w[is.na(w)] <- 0
+  }
+
+  w.num <- pmax(w,  0)
+  w.den <- pmax(-w, 0)
+
+  if (sum(w.num) > 0) w.num <- w.num / sum(w.num)
+  if (sum(w.den) > 0) w.den <- w.den / sum(w.den)
+  dens.num <- as.numeric(density.mat %*% w.num)
+  dens.den <- as.numeric(density.mat %*% w.den)
+
+  cond.densities <- list(num = dens.num, den = dens.den)
+  # ------------------------------------------------------
 
   # coordinate embedding space
   mat <- matrix(cond.densities[[1]], ncol = bins, byrow = FALSE)
@@ -57,11 +73,11 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.groups, bins, ba
 #'
 #' @param graph input graph
 #' @param sample.per.cell  Named sample factor with cell names (default: stored vector)
-#' @param sample.groups A two-level factor on the sample names describing the conditions being compared (default: stored vector)
+#' @param sample.weights Named numeric vector: per-sample signed weights.
 #' @param n.cores number of cores
 #' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
 #' @keywords internal
-estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.cores=1, beta=30, m=50, verbose=TRUE) {
+estimateCellDensityGraph <- function(graph, sample.per.cell, sample.weights, n.cores=1, beta=30, m=50, verbose=TRUE) {
   sig.mat <- unique(sample.per.cell) %>% sapply(function(s) as.numeric(sample.per.cell == s)) %>%
     set_rownames(names(sample.per.cell)) %>% set_colnames(unique(sample.per.cell))
 
@@ -73,9 +89,25 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.groups, n.co
   score.mat %<>% {t(.) / colSums(.)} %>% t() # Normalize by columns to adjust on the number of cells per sample
 
 
-  cond.densities <- split(names(sample.groups), sample.groups) %>%
-    sapply(function(samps) apply(score.mat[,samps,drop=FALSE], 1, mean, trim=0.2)) # Robust estimator of sum
-  cond.densities %<>% {lapply(1:ncol(.), function(i) .[,i])} %>% setNames(colnames(cond.densities))
+  # ---------- condition densities from weights ----------
+  w <- sample.weights[colnames(score.mat)]
+  if (any(is.na(w))) {
+    warning("Some samples in score.mat have no weights; treating them as 0.")
+    w[is.na(w)] <- 0
+  }
+
+  w.num <- pmax(w,  0)
+  w.den <- pmax(-w, 0)
+
+  if (sum(w.num) > 0) w.num <- w.num / sum(w.num)
+  if (sum(w.den) > 0) w.den <- w.den / sum(w.den)
+  dens.num <- as.numeric(score.mat %*% w.num)  # cells x samples * samples
+  dens.den <- as.numeric(score.mat %*% w.den)
+
+  names(dens.num) <- names(dens.den) <- rownames(score.mat)
+
+  cond.densities <- list(num = dens.num, den = dens.den)
+  # ------------------------------------------------------
 
   return(list(density.mat=score.mat, cond.densities=cond.densities, method='graph'))
 }
@@ -181,8 +213,7 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
 #' @param type method to calculate differential cell density of each bin;
 #' @param block.id block variable for permutation test
 #' @keywords internal
-diffCellDensityPermutations <- function(density.mat, sample.meta, contrast, sample.groups,
-                                        type='permutation', block.id = NULL, perm.method=c("block", "freedman-lane"), 
+diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c("block", "freedman-lane"), 
                                         n.permutations=999, robust.method=c("none","huber","winsor"), na.mode=c("drop", "impute_weak"),
                                         alternative=c("two-sided","greater","less"), return.residuals=FALSE, return.sampled.stats=TRUE,
                                         n.cores=1, verbose=TRUE, ...) {
@@ -190,43 +221,18 @@ diffCellDensityPermutations <- function(density.mat, sample.meta, contrast, samp
   robust.method <- match.arg(robust.method)
   na.mode <- match.arg(na.mode)
   alternative <- match.arg(alternative)
-  ref.level <- contrast[3]
-  target.level <- contrast[2]
-
-  if (type %in% c('subtract', 't.test', 'wilcox')) { # no covariate implementation
-    nt <- names(sample.groups[sample.groups == target.level]) 
-   nr <- names(sample.groups[sample.groups == ref.level]) 
-    score <- diffCellDensity(
-      density.mat, sample.groups=sample.groups, ref.level=ref.level, target.level=target.level, type=type
-    )
-    permut.scores <- plapply(1:n.permutations, function(i) {
-      sg.shuff <- setNames(sample(sample.groups), names(sample.groups))
-      diffCellDensity(density.mat, sample.groups=sg.shuff, ref.level=ref.level, target.level=target.level, type=type)
-    }, progress=verbose, n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE) %>% do.call(cbind, .)
-
-    return(list(score=score, permut.scores=permut.scores))
-  }
-
-  if(type =='permutation'){
-    if (is.null(sample.meta) || is.null(contrast)) {
-      stop("Both 'sample.meta' and 'contrast' must be provided for testing with type='permutation'.")
+  
+    if (is.null(sample.model)) {
+      stop("sample.model must be provided for testing.")
     }
     res.diff <- list()
-    dm <- buildDesignMatrices(sample.meta,contrast = contrast, block.vars = block.id)
     Y <- t(density.mat)
+    
     ## ---- fit & permutations ----
-    res <- performLMPermutations(
-    x                   = dm,
-    y                   = Y,
-    n.permutations      = n.permutations,
-    perm.method         = perm.method,
-    robust.method       = robust.method,
-    na.mode             = na.mode,
-    alternative         = alternative,
-    return.sampled.stats= return.sampled.stats,
-    return.residuals    = return.residuals,
-    n.cores             = n.cores
-  )
+    res <- performLMPermutations(x = sample.model, y = Y, n.permutations = n.permutations, perm.method = perm.method,
+                                 robust.method = robust.method, na.mode = na.mode, alternative = alternative,
+                                 return.sampled.stats = return.sampled.stats, return.residuals = return.residuals,
+                                 n.cores = n.cores, ...)
   # center by permutation mean
   score.c <- as.numeric(res$stat.obs - colMeans(res$stats.perm, na.rm = TRUE)) 
   names(score.c) <- colnames(Y)
@@ -234,7 +240,7 @@ diffCellDensityPermutations <- function(density.mat, sample.meta, contrast, samp
   names(z.score) <- colnames(Y)
 
  return(list(score=score.c, permut.scores = t(res$stats.perm), z.score=z.score))
- }
+
 }
 
 #' @keywords internal

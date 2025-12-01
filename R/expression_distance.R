@@ -1463,39 +1463,66 @@ inferCenteringType <- function(w, tol = 1e-8) {
   "custom"
 }
 
-# names are either "<pair_var>=<level>" (factor) or "<numeric_var>" (continuous)
+# names can be either:
+#   - "<pair_var>=<level>" (factor-style contrast over levels)
+#   - "<var>_pair<level>"  (pairwise design coefficient-space factor)
+#   - "<numeric_var>"      (continuous; exactly one non-zero entry)
 #' @keywords internal
 getContrastInfo <- function(contrast.vec) {
-    stopifnot(length(contrast.vec) > 0, !is.null(names(contrast.vec)))
-    nm <- names(contrast.vec)
-    ## ---------- FACTOR CASE: "<var>_pair<level>" (new pair design style) ----------
-    # e.g., "group_pairA_and_A", "group_pairB_and_B", "group_pairA_and_B"
-    # We want:
-    #   var = "group_pair"
-    #   w   = weights with names = "A_and_A", "B_and_B", "A_and_B"
-    #
-    # Try to split at the "_pair" boundary:
-    m <- regexec("^(.+?_pair)(.+)$", nm)
-    parts <- regmatches(nm, m)
-    
-    if (all(lengths(parts) == 3L)) {
-        var.prefix <- parts[[1]][2]  # "group_pair"
-        lev <- vapply(parts, function(p) p[3], character(1))
-        w   <- setNames(as.numeric(contrast.vec), lev)
-        return(list(kind = "factor", var = var.prefix, w = w, center = NULL))
-    }
-    
-    ## ---------- CONTINUOUS CASE ----------
-    nz <- nm[abs(contrast.vec) > 0]
-    stopifnot(length(nz) == 1)
+  stopifnot(length(contrast.vec) > 0, !is.null(names(contrast.vec)))
+  nm <- names(contrast.vec)
+
+  # FACTOR CASE 1: "<var>=<level>" 
+  has.eq <- grepl("=", nm, fixed = TRUE)
+  if (any(has.eq)) {
+    # Use only the entries that look like var=level
+    nm.eq <- nm[has.eq]
+    var   <- sub("=.+$", "", nm.eq[1])           # variable name before '='
+    lev   <- sub("^.+?=", "", nm.eq)             # levels after '='
+    w     <- setNames(as.numeric(contrast.vec[has.eq]), lev)
+    return(list(kind = "factor", var = var, w = w, center = NULL))
+  }
+
+  # from here on: no '=' in names, so either continuous or coefficient-space factor
+  nz_mask  <- abs(contrast.vec) > 0
+  nz_names <- nm[nz_mask]
+
+  # CONTINUOUS CASE: exactly one non-zero term 
+  if (length(nz_names) == 1L) {
     ctr.center <- attr(contrast.vec, "center")  # for continuous contrasts
-    list(
-        kind   = "continuous",
-        var    = nz,
-        w      = setNames(as.numeric(contrast.vec[nz]), nz),
-        center = ctr.center
-    )
+    return(list(
+      kind   = "continuous",
+      var    = nz_names,
+      w      = setNames(as.numeric(contrast.vec[nz_mask]), nz_names),
+      center = ctr.center
+    ))
+  }
+
+  # FACTOR CASE 2: coefficient-space pair contrast "<var>_pair<level>" 
+  # Here we expect multiple non-zero coefficients with names like "Group_pairGroup1_and_Group1".
+  # We interpret them as a factor contrast over levels of <var>_pair.
+  if (length(nz_names) > 1L) {
+    pattern <- "^(.+?_pair)(.+)$"
+    m       <- regexec(pattern, nz_names)
+    parts   <- regmatches(nz_names, m)
+
+    if (all(lengths(parts) == 3L)) {
+      var.prefix <- parts[[1]][2L]                             # e.g. "Group_pair"
+      lev        <- vapply(parts, function(p) p[3L], character(1L))  # e.g. "Group1_and_Group1"
+      w          <- setNames(as.numeric(contrast.vec[nz_mask]), lev)
+      return(list(kind = "factor", var = var.prefix, w = w, center = NULL))
+    }
+  }
+
+  stop(
+    "Cannot interpret contrast vector: either multiple non-zero coefficients ",
+    "that do not match '<var>_pair<level>' or more than one non-zero term ",
+    "without '=' in names.\n",
+    "If this is a factor contrast, use names like 'var=level' or a '<var>_pair<level>' pattern.\n",
+    "If this is continuous, ensure only one term has a non-zero weight."
+  )
 }
+
 
 # x0 from factor-contrast weights applied to the predictor x (mirrors total/shift)
 #' @keywords internal

@@ -180,10 +180,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       
       self$model <- buildDesignMatrices(data = sample.metadata, contrast = contrast, formula=formula, blockVars = block.vars)
-      #self$sample.meta <- subsetMetadata(sample.metadata,formula) # seems like that would already be done at the buildDesignMatrices stage, however we don't return a "clean" metadata
       
       # remember default model arguments
-      self$contrast <- contrast
       self$contrast <- contrast
       self$block.vars <- block.vars
       
@@ -389,7 +387,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
                                                               n.permutations = n.permutations, n.cores = n.cores, verbose = verbose, ...)
 
   out$dists.adj <- out %$% extractPairwiseShifts(res, p.dist, design.mat = pair.model, perm.method = perm.method,
-                                                 block.vars = if (!is.null(block.vars)) paste0(block.vars, "_pair") else NULL, ...)
+                                                 block.vars = pair.model$pair_block_vars_used,, ...)
   out$dists.adj$changed.contrast <- if(!is.null(formula) || !is.null(contrast)) TRUE else FALSE # for plot labels
   self$test.results[[name]] <- out
   return(invisible(self$test.results[[name]]))

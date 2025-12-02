@@ -456,10 +456,15 @@ buildPairDesignMatrices <- function(sample.meta,
     tgt_try <- tryCatch(inferPairTargetFromDesign_local(sampleDesign, sample.meta),
                         error = function(e) e)
     if (inherits(tgt_try, "error")) {
-      stop(paste0("Cannot infer paired contrast from sampleDesign$contrast_spec: ",
-                  conditionMessage(tgt_try), "\n",
-                  "Either provide 'pairContrast', or use a single-factor simple/marginal sample contrast at the sample level."),
-           call. = FALSE)
+      avail_vars <- names(sample.meta)
+      msg <- paste0(
+        "Cannot infer paired contrast from sampleDesign$contrast_spec: ",
+        conditionMessage(tgt_try), "\n",
+        "Either provide 'pairContrast', or use a single-factor simple/marginal sample contrast at the sample level.\n",
+        "Available sample-level variables (columns) for contrasts: ",
+        if (length(avail_vars)) paste(avail_vars, collapse = ", ") else "<none>"
+      )
+      stop(msg, call. = FALSE)
     }
     focusVar <- tgt_try$var
   }

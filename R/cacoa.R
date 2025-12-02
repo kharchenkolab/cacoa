@@ -387,7 +387,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
                                                               n.permutations = n.permutations, n.cores = n.cores, verbose = verbose, ...)
 
   out$dists.adj <- out %$% extractPairwiseShifts(res, p.dist, design.mat = pair.model, perm.method = perm.method,
-                                                 block.vars = pair.model$pair_block_vars_used,, ...)
+                                                 block.vars = pair.model$pair_block_vars_used, ...)
   out$dists.adj$changed.contrast <- if(!is.null(formula) || !is.null(contrast)) TRUE else FALSE # for plot labels
   self$test.results[[name]] <- out
   return(invisible(self$test.results[[name]]))
@@ -498,26 +498,20 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' \dontrun{
     #' cao$estimateDEPerCellType()
     #' }
-    estimateDEPerCellType=function(cell.groups=self$cell.groups, sample.groups=self$sample.groups, sample.meta=self$sample.meta, 
+    estimateDEPerCellType=function(cell.groups=self$cell.groups, sample.meta=self$sample.meta, 
                                    formula=NULL, contrast=NULL, name='de', test='DESeq2.Wald', resampling.method=NULL, 
                                    n.resamplings=30, seed.resampling=239, min.cell.frac=0.05, common.genes=FALSE, 
                                    n.cores=self$n.cores, cooks.cutoff=FALSE, independent.filtering=FALSE, min.cell.count=10,
                                    n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, genes.to.omit = NULL, ...) {
       set.seed(seed.resampling)
-      if(!is.null(formula) || !is.null(contrast)) {
-         # Validate design
-         vd <- validateDesign(formula = formula, sample.meta = sample.meta, contrast = contrast, verbose = verbose)
-         formula  <- vd$formula
-         contrast <- vd$contrast
-         sample.groups <- getSampleGroups(sample.meta, contrast = contrast, sample.id = sample.id)
+      if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
+        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
       } else {
-         formula <- self$formula
-         contrast <- self$contrast
-         sample.groups <- self$sample.groups
+        sample.model <- self$model
       }
-      if (!is.list(sample.groups)) {
-        sample.groups %<>% {split(names(.), . == contrast[3])} %>% setNames(c(contrast[2], contrast[3]))
-      }
+      #if (!is.list(sample.groups)) {
+      #  sample.groups %<>% {split(names(.), . == contrast[3])} %>% setNames(c(contrast[2], contrast[3]))
+      #}
 
       possible.tests <- c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR',
                           'Wilcoxon.edgeR', 'Wilcoxon.DESeq2', 'Wilcoxon.totcount',
@@ -582,7 +576,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
       de.res <- names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
         estimateDEPerCellTypeInner(
           raw.mats=raw.mats, cell.groups=cell.groups, s.groups=s.groups.new[[resampling.name]],
-          common.genes=common.genes, sample.meta=sample.meta, formula=formula, contrast=contrast, 
+          common.genes=common.genes, sample.meta=sample.meta, model=sample.model, 
           cooks.cutoff=cooks.cutoff, min.cell.count=min.cell.count, max.cell.count=max.cell.count,
           independent.filtering=independent.filtering, test=test,  gene.filter=gene.filter,
           fix.n.samples=(if (resampling.name == 'initial') NULL else fix.samples),

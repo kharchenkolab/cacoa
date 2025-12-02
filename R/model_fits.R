@@ -94,26 +94,28 @@ performLMPermutations <- function(x, y,
   na.center     <- match.arg(na.center)
   # response vector/matrix
   if (is.numeric(y) && !is.matrix(y)) {
-  Y <- matrix(y, ncol = 1L)
+    Y <- matrix(y, ncol = 1L)
   } else if (is.matrix(y) && is.numeric(y)) {
-  Y <- y
+    Y <- y
   } else {
-  stop("y must be a numeric vector or matrix.")
+    stop("y must be a numeric vector or matrix.")
   }
   # sanity checks
   n.F <- nrow(x$F)
   if (nrow(Y) != n.F) stop("nrow(Y)=", nrow(Y), " != nrow(x$F)=", n.F, ".")
   if (!is.null(x$X) && nrow(x$X) != n.F) stop("nrow(x$X) must equal nrow(x$F).")
   if (!is.null(x$Z) && nrow(x$Z) != n.F) stop("nrow(x$Z) must equal nrow(x$F).")
-
+  
   y.names <- colnames(Y)
   if (is.null(y.names)) y.names <- paste0("Y", seq_len(ncol(Y)))
+  
+  y.resid <- NULL
 
   if (perm.method == "block") {
-  # ----------------------------------------------------------
-  # BLOCK: fit on F; randomize within blocks
-  # ----------------------------------------------------------
-  fit <- fit_and_randomize(
+    # ----------------------------------------------------------
+    # BLOCK: fit on F; randomize within blocks
+    # ----------------------------------------------------------
+    fit <- fit_and_randomize(
       X = x$F,
       Y = Y,
       contrast = x$contrast.F,
@@ -128,77 +130,129 @@ performLMPermutations <- function(x, y,
       illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores
     )
   } else if (perm.method == "freedman-lane") {
-  # ------------------------------------------------------------
-  # FREEDMAN–LANE: NA-aware, per-column residualization
-  # ------------------------------------------------------------
-  fit <- fl_fwl_cpp(
-  X = x$X,
-  Z = if (is.null(x$Z)) matrix(0,0,0) else x$Z,
-  Y = Y,
-  contrast = x$contrast.X,
-  core_rows = if (is.null(x$core.rows)) NULL else x$core.rows,  # logical 
-  n_randomizations = n.permutations,
-  alternative = alternative,
-  robust = robust.method,
-  huber_k = 1.345, huber_maxit = 8, huber_tol = 1e-6,
-  na_mode = na.mode, na_weight = 1e-4, na_center = na.center,
-  illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores, return_residuals = return.residuals,
-  return_sampled_fits=return.sampled.fits, return_sampled_stats = return.sampled.stats)
-  y.resid <- if(return.y.resid) fit$partial_core else NULL
-  } else {
-    stop("Unknown permutation method: ", perm.method)
-  }
-   
-  # extract and format results
-  coef <- as.numeric(fit$coef)
-  stat <- as.numeric(fit$stat)
-  z    <- as.numeric(if (!is.null(fit$z.score)) fit$z.score else fit$z_score)
-  p    <- as.numeric(if (!is.null(fit$p.value)) fit$p.value else fit$p_value)
-  #names(stat) <- names(z) <- names(p) <- y.names
-  max.vals <- fit$perm_max_stat
-  min.vals <- fit$perm_min_stat
-  perm.valid <- if (!is.null(fit$perm_valid)) as.logical(fit$perm_valid) else NULL
+    # ------------------------------------------------------------
+    # FREEDMAN–LANE: NA-aware, per-column residualization
+    # ------------------------------------------------------------
+    fit <- fl_fwl_cpp(
+      X = x$X,
+      Z = if (is.null(x$Z)) matrix(0,0,0) else x$Z,
+      Y = Y,
+      contrast = x$contrast.X,
+      core_rows = x$core.rows, 
+      n_randomizations = n.permutations,
+      alternative = alternative,
+      robust = robust.method,
+      huber_k = 1.345, huber_maxit = 8, huber_tol = 1e-6,
+      na_mode = na.mode, na_weight = 1e-4, na_center = na.center,
+      illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores, return_residuals = return.residuals,
+      return_sampled_fits=return.sampled.fits, return_sampled_stats = return.sampled.stats)
 
-  stats.perm <- NULL
-  if (return.sampled.stats) {
-    S <- fit$sampled_stats
-    if (!is.null(S)) {
-      if (is.matrix(S) && nrow(S) == n.permutations) {
-        colnames(S) <- y.names
-        rownames(S) <- paste0("perm", seq_len(nrow(S)))
-        stats.perm <- S
-      } else {
-        stats.perm <- S
-        if (!is.matrix(stats.perm)) names(stats.perm) <- y.names
-      }
-    }
+    y.resid <- if(return.y.resid) fit$partial_core else NULL
   }
-  #block: residuals are for all rows. freedman-lane: residuals are for core rows only (i.e., which(x$core.rows)).
+  
+  # extract and format results
+  coef <- fit$coef
+  stat <- fit$stat
+  z    <- fit$z_score
+  p    <- fit$p_value
+  names(stat) <- names(z) <- names(p) <- y.names
+  
+  ## dimnames for coef (p × m)
+  if (is.matrix(coef)) {
+    colnames(coef) <- y.names
+    rownames(coef) <- if (perm.method == "block") colnames(x$F) else colnames(x$X)
+  }
+  
+  ## --- permutation statistics ---
+  stats.perm <- NULL
+  max.perm <- min.perm <- NULL
+  if (return.sampled.stats && !is.null(fit$sampled_stats)) {
+    S <- fit$sampled_stats
+    if (is.matrix(S)) {
+      colnames(S) <- y.names
+      rownames(S) <- paste0("perm", seq_len(nrow(S)))
+      S[!is.finite(S)] <- NA_real_
+      perm.rng <- apply(S, 1, range, na.rm=TRUE)
+      min.perm <- perm.rng[1,]
+      max.perm <- perm.rng[2,]
+    }
+    stats.perm <- S
+  }
+
+  ## --- residuals: row/colnames & optional subsetting ---
   residuals <- NULL
   if (return.residuals && !is.null(fit$residuals)) {
     residuals <- fit$residuals
     colnames(residuals) <- y.names
-    # set rownames depending on method
-    rn.all <- rownames(Y); if (is.null(rn.all)) rn.all <- as.character(seq_len(nrow(Y)))
+    
+    rn.all <- rownames(Y)
+    if (is.null(rn.all)) rn.all <- as.character(seq_len(nrow(Y)))
+    
     used.idx <- if (perm.method == "freedman-lane" && !is.null(x$core.rows)) {
       which(x$core.rows)
     } else {
       seq_len(nrow(Y))
     }
     rownames(residuals) <- rn.all[used.idx]
+    
+    if (!is.null(cross.rows)) {
+      residuals <- residuals[cross.rows, , drop = FALSE]
+    }
   }
   
+  ## --- y.resid (partial_core) naming for FL ---
+  if (!is.null(y.resid)) {
+    colnames(y.resid) <- y.names
+    rn.all <- rownames(Y)
+    if (is.null(rn.all)) rn.all <- as.character(seq_len(nrow(Y)))
+    used.idx <- if (!is.null(x$core.rows)) which(x$core.rows) else seq_len(nrow(Y))
+    rownames(y.resid) <- rn.all[used.idx]
+  }
+  
+  ## --- detect failed columns and warn ---
+  failed_stat <- !is.finite(stat) | !is.finite(z) | !is.finite(p)
+  
+  if (is.matrix(coef)) {
+    failed_coef <- apply(!is.finite(coef), 2L, any)
+    failed      <- failed_stat | failed_coef
+  } else {
+    failed      <- failed_stat | !is.finite(coef)
+  }
+  
+  n.failed <- sum(failed)
+  
+  if (n.failed > 0L) {
+    stat[failed] <- NA_real_
+    z[failed]    <- NA_real_
+    p[failed]    <- NA_real_
+    
+    if (is.matrix(coef)) {
+      coef[, failed] <- NA_real_
+    } else {
+      coef[failed] <- NA_real_
+    }
+    
+    warning(
+      "Model fit failed for ", n.failed, " out of ", length(stat),
+      " columns of Y; statistics, p-values, and coefficients for these columns are NA/NaN. ",
+      "This is usually due to too many missing values or a singular design. ",
+      "Consider using perm.method = 'freedman-lane' and/or na.mode = 'impute_weak'.",
+      call. = FALSE
+    )
+  }
+  
+  
+  ## --- final result ---
   list(
     y.resid    = if(perm.method == "freedman-lane") y.resid else NULL,
     coef       = coef,
     stat.obs   = stat,
     stats.perm = stats.perm,
+    max.perm   = max.perm,
+    min.perm   = min.perm,
     pval       = p,
     z.score    = z,
-    residuals  = residuals,
-    max.perm   = max.vals,
-    min.perm   = min.vals,
-    perm.valid = perm.valid
+    residuals  = residuals
   )
 }
 

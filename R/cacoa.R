@@ -3087,6 +3087,50 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
 
       return(ggs)
     },
+                                            
+    #' @description Plot cluster-free expression shift residuals
+    #' @param name character Results slot name (default='cluster.free.expr.shifts')
+    #' @param palette (default=brewerPalette("PuOr", rev=FALSE))
+    #' @param alpha numeric (default=0.2)
+    #' @param font.size size range for cell type labels
+    #' @param build.panel boolean (default=TRUE)
+    #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
+    #' @return plot of cluster-free expression shift residuals
+    plotClusterFreeResiduals = function(name = "cluster.free.expr.shifts", palette = brewerPalette("GnBu"),
+                                        alpha = 0.2, font.size = c(3,5), build.panel = TRUE, ...) {
+      shifts <- private$getResults(name, "estimateClusterFreeExpressionShifts")
+      private$checkCellEmbedding()
+
+      if (is.null(shifts$residuals))
+          stop("Residuals not stored. Re-run estimateClusterFreeExpressionShifts(..., return.residuals=TRUE).")
+      res <- shifts$residuals  # n_pairs × n_cells
+
+      # Per-point statistics 
+      mean.abs.resid <- colMeans(abs(res), na.rm = TRUE)
+      sd.resid <- apply(res, 2, sd, na.rm = TRUE)
+
+      # Embedding panels 
+      # regions where the model performs poorly
+      g.mean <- self$plotEmbedding(colors = mean.abs.resid, alpha = alpha, palette = palette,
+                                   legend.title = "Mean |residual| per cell", ...)
+    
+      # systematic model misfit, not just outliers?
+      g.sd <- self$plotEmbedding(colors = sd.resid, alpha = alpha, palette = palette,
+                                legend.title = "Residual SD per cell", ...)
+
+      # Histogram panel ; Do LM assumptions hold?
+      df.hist <- data.frame(resid = as.numeric(res))
+      g.hist <- ggplot(df.hist, aes(x = resid)) +
+                 geom_histogram(bins = 100, fill = "grey40", color = "white") +
+                theme_classic() + ggtitle("Residual distribution") + xlab("Residual") + ylab("Frequency")
+
+      if (build.panel) {
+          return(cowplot::plot_grid(g.mean, g.sd, g.hist, labels = c("Mean |Residual|", "Residual SD", "Distribution"),
+                                    ncol = 3))
+      } else {
+          return(list(mean = g.mean, sd = g.sd, hist = g.hist))
+      }
+    },  
 
     #' @description Plot most changed genes
     #' @param n.top.genes numeric

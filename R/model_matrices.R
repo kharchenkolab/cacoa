@@ -580,6 +580,58 @@ buildPairDesignMatrices <- function(sample.meta,
   ## 8) Pick the pair formula 
   pairFormulaUsed <- pairFormula %||% buildDefaultPairFormula(pair.meta)
   
+  ## 8b) If the pair formula has an intercept and explicitCoef is expressed
+  ##     as cell-level weights for the focus factor, rewrite it into
+  ##     coefficient-space weights for (Intercept) + treatment-coded columns.
+  if (!is.null(explicitCoef) &&
+      is.numeric(explicitCoef) &&
+      !is.null(names(explicitCoef)) &&
+      !is.null(focusVar)) {
+    
+    pair_fac <- paste0(focusVar, "_pair")
+    
+    # only relevant if this factor exists in pair.meta
+    if (pair_fac %in% colnames(pair.meta)) {
+      
+      trm_pair      <- stats::terms(pairFormulaUsed, data = pair.meta)
+      has_intercept <- isTRUE(attr(trm_pair, "intercept") == 1L)
+      
+      if (has_intercept && !("(Intercept)" %in% names(explicitCoef))) {
+        
+        levs <- levels(pair.meta[[pair_fac]])
+        if (!length(levs))
+          stop("Focus pair factor '", pair_fac, "' has no levels.")
+        
+        # Expected full set of cell-level names for this factor
+        fact_names_full <- paste0(pair_fac, levs)
+        
+        # Only transform if we truly have weights for *all* cells
+        if (all(fact_names_full %in% names(explicitCoef))) {
+          
+          # Split factor (cell) part vs 'other' part (numeric mirrors, etc.)
+          w_factor <- explicitCoef[fact_names_full]
+          w_other  <- explicitCoef[setdiff(names(explicitCoef), fact_names_full)]
+          
+          # Sum of cell weights becomes the coefficient on the intercept
+          w_sum <- sum(w_factor)
+          
+          coef_new <- w_other
+          coef_new["(Intercept)"] <- w_sum
+          
+          if (length(levs) > 1L) {
+            # Non-reference levels: keep their original cell weights
+            nonref_levs  <- levs[-1L]                          # baseline = levs[1L]
+            nonref_names <- paste0(pair_fac, nonref_levs)
+            coef_new[nonref_names] <- w_factor[nonref_names]
+          }
+          
+          explicitCoef <- coef_new
+        }
+      }
+    }
+  }
+  
+  
   ##  decide which pair-level block variables to use
   blockVarsPair <- character(0)
   if (isTRUE(buildBlocks)) {

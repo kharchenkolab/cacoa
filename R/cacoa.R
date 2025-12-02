@@ -3306,13 +3306,9 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
       stop(msg)
     },
 
-    getTopGenes = function(n, gene.selection=c("z", "z.adj", "lfc", "expression", "od"), cm.joint=NULL,
+    getTopGenes = function(n, gene.selection=c("expression", "od"), cm.joint=NULL,
                            min.expr.frac=0.0, excluded.genes=NULL, included.genes=NULL, name="cluster.free.de", ...) {
       gene.selection <- match.arg(gene.selection)
-      if ((gene.selection %in% c("z", "lfc")) && is.null(self$test.results[[name]])) {
-        warning("Please run estimateClusterFreeDE() first to use gene.selection='z' or 'lfc'. Fall back to gene.selection='expression'.")
-        gene.selection <- "expression"
-      }
 
       if (min.expr.frac > 0) {
         if (is.null(cm.joint)) {
@@ -3323,9 +3319,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
         excluded.genes %<>% union(colnames(cm.joint)[colMeans(cm.joint, na.rm=TRUE) < min.expr.frac])
       }
 
-      if (gene.selection %in% c("z", "z.adj", "lfc")) {
-        genes <- names(self$getMostChangedGenes(Inf, method=gene.selection, ...))
-      } else if (gene.selection == "od") {
+      if (gene.selection == "od") {
         genes <- extractOdGenes(self$data.object)
       } else { # expression
         if (is.null(cm.joint)) {

@@ -172,9 +172,9 @@ performLMPermutations <- function(x, y,
       colnames(S) <- y.names
       rownames(S) <- paste0("perm", seq_len(nrow(S)))
       S[!is.finite(S)] <- NA_real_
-      perm.rng <- apply(S, 1, range, na.rm=TRUE)
-      min.perm <- perm.rng[1,]
-      max.perm <- perm.rng[2,]
+      #perm.rng <- apply(S, 1, range, na.rm=TRUE)
+      #min.perm <- perm.rng[1,]
+      #max.perm <- perm.rng[2,]
     }
     stats.perm <- S
   }
@@ -248,8 +248,7 @@ performLMPermutations <- function(x, y,
     coef       = coef,
     stat.obs   = stat,
     stats.perm = stats.perm,
-    max.perm   = max.perm,
-    min.perm   = min.perm,
+    sampled.fits = fit$sampled_fits,
     pval       = p,
     z.score    = z,
     residuals  = residuals

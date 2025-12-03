@@ -343,7 +343,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   n.permutations = 1000
     #' )
     #' }
-estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, formula = NULL,
+    estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, formula = NULL,
                                              contrast = NULL, pairContrast = NULL, pairFormula = NULL, block.vars = self$block.vars, sample.metadata = self$sample.meta,  
                                              sample.ids = self$sample.ids, dist = NULL, dist.type = "shift", min.cells.per.sample = 10, 
                                              min.samp.per.type = 2, min.gene.frac = 0.01, genes = NULL, perm.method="freedman-lane", robust.method = "none",
@@ -351,47 +351,46 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
                                              name = "expression.shifts", n.permutations = 1000, return.sampled.fits = FALSE,
                                              verbose = self$verbose, n.cores = self$n.cores, ...) {
   
-  if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-    sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
-  } else {
-    sample.model <- self$model
-  }
-  # build paired model
-  pair.model <- buildPairDesignMatrices(sample.metadata, sample.model, dist.type = dist.type, pairContrast = pairContrast,
+      if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
+      sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+      } else {
+        sample.model <- self$model
+      }
+      # build paired model
+      pair.model <- buildPairDesignMatrices(sample.metadata, sample.model, dist.type = dist.type, pairContrast = pairContrast,
                                         pairFormula  = pairFormula, verbosity = if(verbose) 'info' else 'warn')
   
-  count.matrices <- extractRawCountMatrices(self$data.object, transposed = TRUE)
+      count.matrices <- extractRawCountMatrices(self$data.object, transposed = TRUE)
 
-  if (verbose) message("Filtering data... ")
-  shift.inp <- filterExpressionDistanceInput(count.matrices, cell.groups = cell.groups, sample.per.cell = sample.per.cell,
+      if (verbose) message("Filtering data... ")
+      shift.inp <- filterExpressionDistanceInput(count.matrices, cell.groups = cell.groups, sample.per.cell = sample.per.cell,
                                              pair.model = pair.model, sample.ids = rownames(sample.metadata), min.cells.per.sample = min.cells.per.sample,
                                              min.samp.per.type = min.samp.per.type, min.gene.frac = min.gene.frac, genes = genes, verbose = verbose, ...) 
   
-  if (verbose) message("done!\n")
+      if (verbose) message("done!\n")
 
-  n.samps.per.type.eff <- sapply(shift.inp$cm.per.type, function(m) {
-  sum(rowSums(!is.na(m)) > 0) })
-  min.eff <- min(n.samps.per.type.eff)
-  if (min.eff <= 1) {
-      warning("Some cell types have ≤1 usable sample after keeping all samples")
-  } 
+      n.samps.per.type.eff <- sapply(shift.inp$cm.per.type, function(m) {
+       sum(rowSums(!is.na(m)) > 0) })
+      min.eff <- min(n.samps.per.type.eff)
+      if (min.eff <= 1) {
+        warning("Some cell types have ≤1 usable sample after keeping all samples")
+       } 
 
-  # LM-based estimation
-  if (verbose) message("Fitting LM with formula: ", deparse(pair.model$pair_formula_used))
-  #browser()
-  out <- shift.inp %$% estimateExpressionChange(cm.per.type, cell.groups = cell.groups, pair.model=pair.model,
+      # LM-based estimation
+      if (verbose) message("Fitting LM with formula: ", deparse(pair.model$pair_formula_used))
+      out <- shift.inp %$% estimateExpressionChange(cm.per.type, cell.groups = cell.groups, pair.model=pair.model,
                                                               sample.per.cell = sample.per.cell, perm.method= perm.method,
                                                               robust.method = robust.method, na.mode = na.mode, alternative = alternative,
                                                               return.residuals = return.residuals, return.sampled.stats = return.sampled.stats,
                                                               dist = dist %||% "cor", dist.type = dist.type, sample.ids = sample.ids,
                                                               n.permutations = n.permutations, n.cores = n.cores, verbose = verbose, ...)
 
-  out$dists.adj <- out %$% extractPairwiseShifts(res, p.dist, design.mat = pair.model, perm.method = perm.method,
+      out$dists.adj <- out %$% extractPairwiseShifts(res, p.dist, design.mat = pair.model, perm.method = perm.method,
                                                  block.vars = pair.model$pair_block_vars_used, ...)
-  out$dists.adj$changed.contrast <- if(!is.null(formula) || !is.null(contrast)) TRUE else FALSE # for plot labels
-  self$test.results[[name]] <- out
-  return(invisible(self$test.results[[name]]))
-},
+      out$dists.adj$changed.contrast <- if(!is.null(formula) || !is.null(contrast)) TRUE else FALSE # for plot labels
+      self$test.results[[name]] <- out
+      return(invisible(self$test.results[[name]]))
+    },
 
     #' @description Plot results from cao$estimateExpressionShiftMagnitudes() 
     #'
@@ -2752,7 +2751,6 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' @param min.n.obs.per.samp minimal number of cells per samples for estimating z-scores (default: 2)
     #' @param robust whether to use median estimates instead of mean. Using median is more robust,
     #' but greatly increase the number of zeros in the data, leading to bias towards highly-express genes. (Default: FALSE)
-    #' @param norm.both boolean (default=TRUE)
     #' @param adjust.pvalues boolean (default=FALSE)
     #' @param smoooth boolean (default=TRUE)
     #' @param wins numeric (default=0.01)
@@ -2775,37 +2773,52 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' cao$estimateClusterFreeDE()
     #' }
     estimateClusterFreeDE=function(n.top.genes=Inf, genes=NULL, max.z=20, min.expr.frac=0.01, min.n.samp.per.cond=2,
-                                   min.n.obs.per.samp=2, robust=FALSE, norm.both=TRUE, adjust.pvalues=FALSE,
-                                   smooth=TRUE, wins=0.01, n.permutations=200, lfc.pseudocount=1e-5,
-                                   min.edge.weight=0.6, verbose=self$verbose, n.cores=self$n.cores,
-                                   name="cluster.free.de") {
+                                   sample.per.cell=self$sample.per.cell, sample.metadata=self$sample.meta, formula=NULL, contrast=NULL,
+                                   perm.method = "freedman-lane", robust.method = "none", na.mode = "drop", alternative = "two-sided",
+                                   min.n.obs.per.samp=2, adjust.pvalues=FALSE, keep.means=FALSE, robust=FALSE,
+                                   smooth=TRUE, wins=0.01, n.permutations=200, lfc.pseudocount=1e-5, block.vars=NULL,
+                                   min.edge.weight=0.6, verbose=self$verbose, n.cores=self$n.cores, 
+                                   name="cluster.free.de", ...){
       if (is.null(genes)) {
         genes <- private$getTopGenes(n.top.genes, gene.selection="expression", min.expr.frac=min.expr.frac)
       }
+
+      if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
+        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+        } else {
+        sample.model <- self$model
+        }
 
       if (verbose)
         message("Estimating cluster-free Z-scores for ", length(genes), " most expressed genes")
 
       de.inp <- private$getClusterFreeDEInput(genes, min.edge.weight=min.edge.weight)
-      mats <- de.inp %$% clusterFreeZScoreMat(
-        cm, sample_per_cell=self$sample.per.cell[rownames(cm)], nn_ids=nns.per.cell, is_ref=is.ref,
-        min_n_samp_per_cond=min.n.samp.per.cond, min_n_obs_per_samp=min.n.obs.per.samp, robust=robust,
-        norm_both=norm.both, adjust_pvalues=adjust.pvalues, smooth=smooth, wins=wins, n_permutations=n.permutations,
-        verbose=verbose, n_cores=n.cores
-      )
+      #mats <- de.inp %$% clusterFreeZScoreMat(
+      #  cm, sample_per_cell=self$sample.per.cell[rownames(cm)], nn_ids=nns.per.cell, is_ref=is.ref,
+      #  min_n_samp_per_cond=min.n.samp.per.cond, min_n_obs_per_samp=min.n.obs.per.samp, robust=robust,
+      #  norm_both=norm.both, adjust_pvalues=adjust.pvalues, smooth=smooth, wins=wins, n_permutations=n.permutations,
+      #  verbose=verbose, n_cores=n.cores
+      #)
+      mats <- estimateClusterFreeDE_LM(genes, de.inp, sample.per.cell = sample.per.cell, design = sample.model, 
+                                                  perm.method = perm.method, robust.method = robust.method, 
+                                                  na.mode = na.mode, alternative = alternative, n.cores = n.cores,
+                                                  min.n.samp.per.cond = min.n.samp.per.cond, min.n.obs.per.samp = min.n.obs.per.samp,
+                                                  keep.means = keep.means, lfc.pseudocount = lfc.pseudocount, 
+                                                  n.permutations = n.permutations, max.z= max.z, ...) 
+      # TODO: add z-score adjustment
 
-      mats$z@x %<>% pmin(max.z) %>% pmax(-max.z)
-      if (length(mats$z.adj@x) > 0) {
-        mats$z.adj@x %<>% pmin(max.z) %>% pmax(-max.z)
-      }
-
-      lf.mat <- mats$reference
-      lf.mat@x <- log2(mats$target@x + lfc.pseudocount) - log2(lf.mat@x + lfc.pseudocount)
-      mats$lfc <- lf.mat
+      #mats$z@x %<>% pmin(max.z) %>% pmax(-max.z)
+      #if (length(mats$z.adj@x) > 0) {
+      #  mats$z.adj@x %<>% pmin(max.z) %>% pmax(-max.z)
+      #}
+      #lf.mat <- mats$reference
+      #lf.mat@x <- log2(mats$target@x + lfc.pseudocount) - log2(lf.mat@x + lfc.pseudocount)
+      #mats$lfc <- lf.mat
 
       self$test.results[[name]] <- mats
       return(invisible(self$test.results[[name]]))
     },
+
 
     #' @description Get most changed genes
     #' @param n numeric Number of genes to retrieve

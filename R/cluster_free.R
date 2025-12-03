@@ -176,3 +176,162 @@ estimateClusterFreeExpressionShiftsLM <- function(cm, sample.per.cell, nns.per.c
     residuals       = if (!is.null(res$residuals)) res$residuals else NULL
   )
 }
+
+
+#' Estimate cluster-free differential expression using linear model and permutations
+#' @param genes        vector of gene names to analyze
+#' @param de.inp       list with elements:
+#'                      - cm: dgCMatrix (cells x genes) count matrix
+#'                      - nns.per.cell: list of integer neighbor indices per cell
+#' @param sample.per.cell vector/factor of sample IDs for each cell (length = nrow(cm))
+#' @param design       output of buildDesignPairMatrices (must include $X, $F, $contrast.X, $contrast.F)
+#' @param perm.method   "freedman-lane" or "block"
+#' @param robust.method "none","huber","winsor"
+#' @param na.mode       "drop" or "impute_weak"
+#' @param alternative   "two-sided","greater","less"
+#' @param n.permutations number of permutations to perform
+#' @param max.z         maximum absolute z-score to store
+#' @param min.n.obs.per.samp  minimum number of observed cells per sample to include in response
+#' @param min.n.samp.per.cond minimum number of samples per condition to include response column
+#' @param lfc.pseudocount pseudocount to add when computing log-fold changes
+#' @param keep.means    logical; if TRUE, compute and return per-gene means per condition
+#' @param return.residuals logical; if TRUE, return residuals per gene
+#' @param verbose       logical
+#' @param n.cores       number of cores for parallel processing
+#' @keywords internal
+estimateClusterFreeDE_LM <- function(genes, de.inp, sample.per.cell, design, perm.method = c("block","freedman-lane"),
+                                     robust.method  = c("none","huber","winsor"), na.mode = c("drop","impute_weak"),
+                                     alternative = c("two-sided","greater","less"), n.permutations = 1000, max.z = 20, 
+                                     min.n.obs.per.samp  = 2, min.n.samp.per.cond = 2, lfc.pseudocount = 1e-5, 
+                                     keep.means = FALSE, return.residuals = FALSE, verbose = TRUE, 
+                                     n.cores = 1, ...) {
+  perm.method   <- match.arg(perm.method)
+  robust.method <- match.arg(robust.method)
+  na.mode       <- match.arg(na.mode)
+  alternative   <- match.arg(alternative)
+
+  cm  <- if (inherits(de.inp$cm, "dgCMatrix")) de.inp$cm else Matrix::Matrix(de.inp$cm, sparse = TRUE)
+  nns <- de.inp$nns.per.cell
+
+  ## align cells -> samples; 0-based ids for C++
+  idx <- match(rownames(cm), names(sample.per.cell))
+  if (any(is.na(idx))) stop("Could not align ", sum(is.na(idx)),
+                            " cell(s) between cm rownames and names(sample.per.cell).")
+  sample.vec <- sample.per.cell[idx]
+  sample.ids <- as.integer(as.factor(sample.vec)) - 1L
+
+  cm.genes <- colnames(cm)
+  overlap  <- intersect(genes, cm.genes)
+  missing  <- setdiff(genes, cm.genes)
+  if (length(missing) && verbose) {
+    message("Dropped ", length(missing), " gene(s) not present in count matrix: ",
+            paste(utils::head(missing, 10L), collapse = ", "),
+            if (length(missing) > 10L) " ..." else "")
+  }
+  if (!length(overlap)) stop("No requested genes are present in the matrix.")
+
+  g.act <- if (perm.method == "block") {
+    as.numeric(design$F %*% matrix(design$contrast.F, ncol = 1L))
+  } else {
+    as.numeric(design$X %*% matrix(design$contrast.X, ncol = 1L))
+  }
+
+  ## triplets for z/stat and optional means
+  i.z <- integer(0); j.z <- integer(0); x.z <- numeric(0)
+  i.s <- integer(0); j.s <- integer(0); x.s <- numeric(0)
+  i.r <- integer(0); j.r <- integer(0); x.r <- numeric(0)
+  i.t <- integer(0); j.t <- integer(0); x.t <- numeric(0)
+
+  ## optional residuals per gene
+  res.list <- if (return.residuals) setNames(vector("list", length(overlap)), overlap) else NULL
+
+  g2col <- match(overlap, cm.genes) - 1L
+
+  for (gk in seq_along(overlap)) {
+    gene <- overlap[gk]
+    gi <- g2col[gk]  # 0-based gene index
+
+    ## samples × focal-cells response
+    Y <- clusterFreeGeneMat(count_mat = cm, sample_per_cell = sample.ids, nn_ids = nns,
+                            min_n_obs_per_samp = as.integer(min.n.obs.per.samp), gi = gi)
+
+    ## per-column power check
+    if (min.n.samp.per.cond > 0L) {
+      for (ci in seq_len(ncol(Y))) {
+        yy <- Y[, ci]
+        n.ref  <- sum(!is.na(yy) & g.act < 0)
+        n.targ <- sum(!is.na(yy) & g.act > 0)
+        if (min(n.ref, n.targ) < min.n.samp.per.cond) Y[, ci] <- NA_real_
+      }
+    }
+    
+    fit <- performLMPermutations(x = design, y = Y, perm.method = perm.method, robust.method = robust.method,
+                                 na.mode = na.mode, alternative = alternative, n.permutations = n.permutations, 
+                                 n.cores = n.cores, return.residuals = return.residuals, return.sampled.stats = FALSE, 
+                                 return.sampled.fits = FALSE, return.y.resid = FALSE, ...)
+
+    z.vec <- as.numeric(fit$z.score)
+    if (!length(z.vec)) z.vec <- rep(NA_real_, ncol(Y))
+    s.vec <- as.numeric(fit$stat.obs)
+
+    if (return.residuals) {
+      # fit$residuals is (used rows) × (focal cells). Row names already map to used rows.
+      res.list[[gk]] <- fit$residuals
+      names(res.list)[gk] <- gene
+    }
+
+    ## optional means
+    if (keep.means) {
+      m.ref <- m.targ <- rep(NA_real_, ncol(Y))
+      idx.ref  <- which(g.act < 0)
+      idx.targ <- which(g.act > 0)
+      if (length(idx.ref))  m.ref  <- colMeans(Y[idx.ref,  , drop = FALSE], na.rm = TRUE)
+      if (length(idx.targ)) m.targ <- colMeans(Y[idx.targ,, drop = FALSE], na.rm = TRUE)
+    }
+
+    ## keep mask; use same mask for z/stat/means
+    keep <- which(is.na(z.vec) | abs(z.vec) >= 1e-3)
+    if (length(keep)) {
+      ## z
+      i.z <- c(i.z, keep - 1L)
+      j.z <- c(j.z, rep.int(gi, length(keep)))
+      x.z <- c(x.z, pmax(-max.z, pmin(max.z, z.vec[keep])))
+
+      ## stat.obs
+      i.s <- c(i.s, keep - 1L)
+      j.s <- c(j.s, rep.int(gi, length(keep)))
+      x.s <- c(x.s, s.vec[keep])
+
+      if (keep.means) {
+        i.r <- c(i.r, keep - 1L); j.r <- c(j.r, rep.int(gi, length(keep))); x.r <- c(x.r, m.ref [keep])
+        i.t <- c(i.t, keep - 1L); j.t <- c(j.t, rep.int(gi, length(keep))); x.t <- c(x.t, m.targ[keep])
+      }
+    }
+  }
+
+  ## build sparse outputs (cells × genes)
+  z.mat <- Matrix::sparseMatrix(i = i.z + 1L, j = j.z + 1L, x = x.z, dims = dim(cm), dimnames = dimnames(cm))
+  stat.mat <- Matrix::sparseMatrix(i = i.s + 1L, j = j.s + 1L, x = x.s, dims = dim(cm), dimnames = dimnames(cm))
+
+  if (keep.means) {
+    ref.mat <- Matrix::sparseMatrix(i = i.r + 1L, j = j.r + 1L, x = x.r, dims = dim(cm), dimnames = dimnames(cm))
+    targ.mat<- Matrix::sparseMatrix(i = i.t + 1L, j = j.t + 1L, x = x.t, dims = dim(cm), dimnames = dimnames(cm))
+
+    if (length(ref.mat@x) && length(targ.mat@x) &&
+        (min(ref.mat@x, na.rm = TRUE) < 0 || min(targ.mat@x, na.rm = TRUE) < 0)) {
+      if (verbose) message("LFC: detected negative means; using difference (target - reference).")
+      lfc.mat <- targ.mat
+      lfc.mat@x <- targ.mat@x - ref.mat@x
+    } else {
+      lfc.mat <- ref.mat
+      rx <- pmax(ref.mat@x, 0); tx <- pmax(targ.mat@x, 0)
+      lfc.mat@x <- log2(tx + lfc.pseudocount) - log2(rx + lfc.pseudocount)
+    }
+  }
+
+  out <- list(z = z.mat, stat.obs = stat.mat)
+  if (keep.means) out <- c(out, list(reference = ref.mat, target = targ.mat, lfc = lfc.mat))
+  if (return.residuals) out$residuals <- res.list   # named list: one matrix per gene
+
+  out
+}

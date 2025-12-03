@@ -180,10 +180,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       
       self$model <- buildDesignMatrices(data = sample.metadata, contrast = contrast, formula=formula, blockVars = block.vars)
-      #self$sample.meta <- subsetMetadata(sample.metadata,formula) # seems like that would already be done at the buildDesignMatrices stage, however we don't return a "clean" metadata
       
       # remember default model arguments
-      self$contrast <- contrast
       self$contrast <- contrast
       self$block.vars <- block.vars
       
@@ -389,7 +387,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
                                                               n.permutations = n.permutations, n.cores = n.cores, verbose = verbose, ...)
 
   out$dists.adj <- out %$% extractPairwiseShifts(res, p.dist, design.mat = pair.model, perm.method = perm.method,
-                                                 block.vars = if (!is.null(block.vars)) paste0(block.vars, "_pair") else NULL, ...)
+                                                 block.vars = pair.model$pair_block_vars_used, ...)
   out$dists.adj$changed.contrast <- if(!is.null(formula) || !is.null(contrast)) TRUE else FALSE # for plot labels
   self$test.results[[name]] <- out
   return(invisible(self$test.results[[name]]))
@@ -500,26 +498,20 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
     #' \dontrun{
     #' cao$estimateDEPerCellType()
     #' }
-    estimateDEPerCellType=function(cell.groups=self$cell.groups, sample.groups=self$sample.groups, sample.meta=self$sample.meta, 
+    estimateDEPerCellType=function(cell.groups=self$cell.groups, sample.meta=self$sample.meta, 
                                    formula=NULL, contrast=NULL, name='de', test='DESeq2.Wald', resampling.method=NULL, 
                                    n.resamplings=30, seed.resampling=239, min.cell.frac=0.05, common.genes=FALSE, 
                                    n.cores=self$n.cores, cooks.cutoff=FALSE, independent.filtering=FALSE, min.cell.count=10,
                                    n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, genes.to.omit = NULL, ...) {
       set.seed(seed.resampling)
-      if(!is.null(formula) || !is.null(contrast)) {
-         # Validate design
-         vd <- validateDesign(formula = formula, sample.meta = sample.meta, contrast = contrast, verbose = verbose)
-         formula  <- vd$formula
-         contrast <- vd$contrast
-         sample.groups <- getSampleGroups(sample.meta, contrast = contrast, sample.id = sample.id)
+      if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
+        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
       } else {
-         formula <- self$formula
-         contrast <- self$contrast
-         sample.groups <- self$sample.groups
+        sample.model <- self$model
       }
-      if (!is.list(sample.groups)) {
-        sample.groups %<>% {split(names(.), . == contrast[3])} %>% setNames(c(contrast[2], contrast[3]))
-      }
+      #if (!is.list(sample.groups)) {
+      #  sample.groups %<>% {split(names(.), . == contrast[3])} %>% setNames(c(contrast[2], contrast[3]))
+      #}
 
       possible.tests <- c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR',
                           'Wilcoxon.edgeR', 'Wilcoxon.DESeq2', 'Wilcoxon.totcount',
@@ -584,7 +576,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
       de.res <- names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
         estimateDEPerCellTypeInner(
           raw.mats=raw.mats, cell.groups=cell.groups, s.groups=s.groups.new[[resampling.name]],
-          common.genes=common.genes, sample.meta=sample.meta, formula=formula, contrast=contrast, 
+          common.genes=common.genes, sample.meta=sample.meta, model=sample.model, 
           cooks.cutoff=cooks.cutoff, min.cell.count=min.cell.count, max.cell.count=max.cell.count,
           independent.filtering=independent.filtering, test=test,  gene.filter=gene.filter,
           fix.n.samples=(if (resampling.name == 'initial') NULL else fix.samples),
@@ -2385,6 +2377,135 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
       }
       return(gg)
     },
+                                       
+    #' @description Plot residual diagnostics for differential cell density
+    #' @param name character Slot with results from estimateCellDensity (default: 'cell.density')
+    #' @param type character key in diff list, e.g. 'permutation' (default)
+    #' @param size numeric point size for embedding (default=0.2)
+    #' @param palette color palette for embedding plots (default: brewerPalette("BuGn"))
+    #' @param alpha numeric transparency for embedding points (default=0.2)
+    #' @param sample.metadata data.frame with sample-level covariates (default = self$sample.meta).
+    #'        Row names should match residual row names (sample IDs).
+    #' @param cov.plot.keys character vector of column names in sample.metadata to plot against
+    #'        sample-level residual metrics (default = NULL, meaning no sample-covariate plots).
+    #' @param metric character, which sample-level residual metric to use on y-axis:
+    #'        "mean_abs" (mean |residual| per sample) or "sd" (SD of residuals per sample).
+    #' @param build.panel logical; if TRUE and length(cov.plot.keys) == 1, returns a combined panel
+    #'        (2 embedding plots + 1 sample-covariate plot). Otherwise returns a list of ggplots.
+    #' @param jitter.size, jitter.alpha aesthetics for sample-level plots
+    #' @param cont.palette palette for continuous covariates (numeric)
+    #' @param ... passed to plotEmbedding
+    #' @return ggplot or list of ggplots
+    plotDiffCellDensityResiduals = function(name = "cell.density", type = "permutation", size = 0.2, palette = brewerPalette("GnBu"),
+                                            alpha = 0.2, sample.metadata = self$sample.meta, cov.plot.keys = NULL, 
+                                            metric = c("mean_abs", "sd"), build.panel = TRUE, jitter.size = 1, jitter.alpha = 0.8,
+                                            cont.palette  = rev(RColorBrewer::brewer.pal(11, "Spectral")), ...) {
+      metric <- match.arg(metric)
+      private$checkCellEmbedding()
+
+      dens.res <- private$getResults(name, "estimateCellDensity")
+
+      diff.res <- dens.res$diff[[type]]
+      if (is.null(diff.res)) {
+          stop("Can't find differential density results for name '", name,
+              "' and type '", type, "'. Run estimateDiffCellDensity(..., type='", type,
+              "', return.residuals=TRUE).")
+      }
+
+      if (is.null(diff.res$residuals)) {
+          stop("Residuals are not stored. Re-run estimateDiffCellDensity(..., return.residuals=TRUE).")
+      }
+
+      res <- diff.res$residuals  # matrix: samples 
+      ## ---- per-cell metrics (across samples) ----
+      mean.abs.resid.cell <- colMeans(abs(res), na.rm = TRUE)
+      sd.resid.cell <- apply(res, 2, sd, na.rm = TRUE)
+
+      ## align cells with embedding / density embedding
+      if (dens.res$method == "graph") {
+        density.emb <- self$embedding
+        common.cells <- intersect(colnames(res), rownames(density.emb))
+        mean.abs.resid.cell <- mean.abs.resid.cell[common.cells]
+        sd.resid.cell <- sd.resid.cell[common.cells]
+        density.emb  <- density.emb[common.cells, , drop = FALSE]
+      } else if (dens.res$method == "kde") {
+        density.emb <- dens.res$density.emb[, 1:2]
+        common.cells <- intersect(colnames(res), rownames(density.emb))
+        mean.abs.resid.cell <- mean.abs.resid.cell[common.cells]
+        sd.resid.cell <- sd.resid.cell[common.cells]
+        density.emb <- density.emb[common.cells, , drop = FALSE]
+      } else {
+        stop("Unknown density method: ", dens.res$method)
+      }
+
+      ## ---- embedding plots: where the density model fits badly ----
+      g.mean <- self$plotEmbedding(density.emb, colors = mean.abs.resid.cell, size = size,
+                               alpha = alpha, legend.title = "Density: mean |residual|",
+                               palette = palette, ...)
+      g.sd <- self$plotEmbedding(density.emb, colors = sd.resid.cell, size = size, alpha = alpha, 
+                             legend.title = "Density: residual SD", palette = palette, ...)
+      ## ---- sample-level metrics ----
+      sample.ids <- rownames(res)
+      if (is.null(sample.ids)) {
+         stop("Residual matrix must have rownames corresponding to samples.")
+      }
+      # subset / reorder sample.metadata to match residuals
+      if (!all(sample.ids %in% rownames(sample.metadata))) {
+        stop("Not all residual sample IDs are present as rownames in sample.metadata.")
+      }
+      sm <- sample.metadata[sample.ids, , drop = FALSE]
+
+      mean.abs.resid.sample <- rowMeans(abs(res), na.rm = TRUE)
+      sd.resid.sample <- apply(res, 1, sd, na.rm = TRUE)
+
+      metric.vec <- if (metric == "mean_abs") mean.abs.resid.sample else sd.resid.sample
+      ylab <- if (metric == "mean_abs") "Mean |residual| per sample" else "Residual SD per sample"
+
+      sample.df <- data.frame(sample = sample.ids, resid_metric = metric.vec, sm, check.names  = FALSE)
+
+      ## ---- sample-covariate plots ----
+      sample.plots <- list()
+      if (!is.null(cov.plot.keys)) {
+         for (covkey in cov.plot.keys) {
+           if (!covkey %in% colnames(sample.df)) {
+            warning("Covariate '", covkey, "' not found in sample.metadata; skipping.")
+           next
+           }
+
+          cov.vec <- sample.df[[covkey]]
+          is.cont <- is.numeric(cov.vec)
+
+          if (is.cont) {
+            p <- ggplot(sample.df, aes(x = .data[[covkey]], y = resid_metric, color = .data[[covkey]])) +
+              geom_point(size = jitter.size, alpha = jitter.alpha) + scale_colour_gradientn(colors = cont.palette) +
+              theme_bw() + labs(x = covkey,y = ylab,color = covkey, title = paste("Residual metric vs", covkey))
+          } else {
+            cov.fac <- factor(cov.vec)
+            p <- ggplot(sample.df, aes(x = cov.fac, y = resid_metric, color = cov.fac)) +
+              geom_boxplot(notch = TRUE, outlier.shape = NA,
+                           fill = "grey90", colour = "grey30", alpha = 0.9) +
+              geom_jitter(width = 0.15, height = 0,
+                          size = jitter.size, alpha = jitter.alpha) + theme_bw() +
+              theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+              labs(x = covkey,y = ylab, color = covkey, title = paste("Residual metric by", covkey))
+          }
+
+          sample.plots[[covkey]] <- p
+         }
+      }
+
+      ## ---- return / panel assembly ----
+      if (build.panel && length(sample.plots) == 1) {
+       # if exactly one covariate, build a 3-panel figure
+        g.sample <- sample.plots[[1]]
+        return(cowplot::plot_grid(g.mean, g.sd, g.sample, labels = c("Mean |Residual|", "Residual SD", "Sample-level"),
+                                  ncol = 3))
+      }
+
+      # otherwise return as a list
+      out <- list(mean_cell = g.mean, sd_cell   = g.sd, sample = sample.plots)
+      return(out)
+    },
 
 
     #' @description Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
@@ -3095,6 +3216,50 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
 
       return(ggs)
     },
+                                            
+    #' @description Plot cluster-free expression shift residuals
+    #' @param name character Results slot name (default='cluster.free.expr.shifts')
+    #' @param palette (default=brewerPalette("PuOr", rev=FALSE))
+    #' @param alpha numeric (default=0.2)
+    #' @param font.size size range for cell type labels
+    #' @param build.panel boolean (default=TRUE)
+    #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
+    #' @return plot of cluster-free expression shift residuals
+    plotClusterFreeResiduals = function(name = "cluster.free.expr.shifts", palette = brewerPalette("GnBu"),
+                                        alpha = 0.2, font.size = c(3,5), build.panel = TRUE, ...) {
+      shifts <- private$getResults(name, "estimateClusterFreeExpressionShifts")
+      private$checkCellEmbedding()
+
+      if (is.null(shifts$residuals))
+          stop("Residuals not stored. Re-run estimateClusterFreeExpressionShifts(..., return.residuals=TRUE).")
+      res <- shifts$residuals  # n_pairs × n_cells
+
+      # Per-point statistics 
+      mean.abs.resid <- colMeans(abs(res), na.rm = TRUE)
+      sd.resid <- apply(res, 2, sd, na.rm = TRUE)
+
+      # Embedding panels 
+      # regions where the model performs poorly
+      g.mean <- self$plotEmbedding(colors = mean.abs.resid, alpha = alpha, palette = palette,
+                                   legend.title = "Mean |residual| per cell", ...)
+    
+      # systematic model misfit, not just outliers?
+      g.sd <- self$plotEmbedding(colors = sd.resid, alpha = alpha, palette = palette,
+                                legend.title = "Residual SD per cell", ...)
+
+      # Histogram panel ; Do LM assumptions hold?
+      df.hist <- data.frame(resid = as.numeric(res))
+      g.hist <- ggplot(df.hist, aes(x = resid)) +
+                 geom_histogram(bins = 100, fill = "grey40", color = "white") +
+                theme_classic() + ggtitle("Residual distribution") + xlab("Residual") + ylab("Frequency")
+
+      if (build.panel) {
+          return(cowplot::plot_grid(g.mean, g.sd, g.hist, labels = c("Mean |Residual|", "Residual SD", "Distribution"),
+                                    ncol = 3))
+      } else {
+          return(list(mean = g.mean, sd = g.sd, hist = g.hist))
+      }
+    },  
 
     #' @description Plot most changed genes
     #' @param n.top.genes numeric
@@ -3314,13 +3479,9 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
       stop(msg)
     },
 
-    getTopGenes = function(n, gene.selection=c("z", "z.adj", "lfc", "expression", "od"), cm.joint=NULL,
+    getTopGenes = function(n, gene.selection=c("expression", "od"), cm.joint=NULL,
                            min.expr.frac=0.0, excluded.genes=NULL, included.genes=NULL, name="cluster.free.de", ...) {
       gene.selection <- match.arg(gene.selection)
-      if ((gene.selection %in% c("z", "lfc")) && is.null(self$test.results[[name]])) {
-        warning("Please run estimateClusterFreeDE() first to use gene.selection='z' or 'lfc'. Fall back to gene.selection='expression'.")
-        gene.selection <- "expression"
-      }
 
       if (min.expr.frac > 0) {
         if (is.null(cm.joint)) {
@@ -3331,9 +3492,7 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
         excluded.genes %<>% union(colnames(cm.joint)[colMeans(cm.joint, na.rm=TRUE) < min.expr.frac])
       }
 
-      if (gene.selection %in% c("z", "z.adj", "lfc")) {
-        genes <- names(self$getMostChangedGenes(Inf, method=gene.selection, ...))
-      } else if (gene.selection == "od") {
+      if (gene.selection == "od") {
         genes <- extractOdGenes(self$data.object)
       } else { # expression
         if (is.null(cm.joint)) {

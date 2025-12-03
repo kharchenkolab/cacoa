@@ -606,7 +606,7 @@ filterCellTypesByCoveragePairs <- function(cell.groups, sample.per.cell, pairDes
 #' @param sample.ids Character vector of global sample IDs, in the same order as
 #'   the sample metadata used to build `pair.model`.
 #' @param keep.all Logical; if `TRUE`, skip the paired design–based filtering of
-#'   cell types and samples and keep all input cells.
+#'   cell types and samples and keep all input cells (including all factor levels).
 #' @param min.cells.per.sample Minimum number of cells per (cell type, sample)
 #'   combination to consider that combination usable.
 #' @param min.samp.per.type Minimum number of samples that must pass the
@@ -628,7 +628,7 @@ filterCellTypesByCoveragePairs <- function(cell.groups, sample.per.cell, pairDes
 #'
 #' @keywords internal
 filterExpressionDistanceInput <- function(
-  cms, cell.groups, sample.per.cell, pair.model, sample.ids, keep.all=FALSE,
+  cms, cell.groups, sample.per.cell, pair.model, sample.ids, keep.all=TRUE,
   min.cells.per.sample=10, min.samp.per.type=2, min.gene.frac=0.01,
   genes=NULL, verbose=FALSE
 ) {

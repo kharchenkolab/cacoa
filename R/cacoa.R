@@ -2377,6 +2377,135 @@ estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sam
       }
       return(gg)
     },
+                                       
+    #' @description Plot residual diagnostics for differential cell density
+    #' @param name character Slot with results from estimateCellDensity (default: 'cell.density')
+    #' @param type character key in diff list, e.g. 'permutation' (default)
+    #' @param size numeric point size for embedding (default=0.2)
+    #' @param palette color palette for embedding plots (default: brewerPalette("BuGn"))
+    #' @param alpha numeric transparency for embedding points (default=0.2)
+    #' @param sample.metadata data.frame with sample-level covariates (default = self$sample.meta).
+    #'        Row names should match residual row names (sample IDs).
+    #' @param cov.plot.keys character vector of column names in sample.metadata to plot against
+    #'        sample-level residual metrics (default = NULL, meaning no sample-covariate plots).
+    #' @param metric character, which sample-level residual metric to use on y-axis:
+    #'        "mean_abs" (mean |residual| per sample) or "sd" (SD of residuals per sample).
+    #' @param build.panel logical; if TRUE and length(cov.plot.keys) == 1, returns a combined panel
+    #'        (2 embedding plots + 1 sample-covariate plot). Otherwise returns a list of ggplots.
+    #' @param jitter.size, jitter.alpha aesthetics for sample-level plots
+    #' @param cont.palette palette for continuous covariates (numeric)
+    #' @param ... passed to plotEmbedding
+    #' @return ggplot or list of ggplots
+    plotDiffCellDensityResiduals = function(name = "cell.density", type = "permutation", size = 0.2, palette = brewerPalette("GnBu"),
+                                            alpha = 0.2, sample.metadata = self$sample.meta, cov.plot.keys = NULL, 
+                                            metric = c("mean_abs", "sd"), build.panel = TRUE, jitter.size = 1, jitter.alpha = 0.8,
+                                            cont.palette  = rev(RColorBrewer::brewer.pal(11, "Spectral")), ...) {
+      metric <- match.arg(metric)
+      private$checkCellEmbedding()
+
+      dens.res <- private$getResults(name, "estimateCellDensity")
+
+      diff.res <- dens.res$diff[[type]]
+      if (is.null(diff.res)) {
+          stop("Can't find differential density results for name '", name,
+              "' and type '", type, "'. Run estimateDiffCellDensity(..., type='", type,
+              "', return.residuals=TRUE).")
+      }
+
+      if (is.null(diff.res$residuals)) {
+          stop("Residuals are not stored. Re-run estimateDiffCellDensity(..., return.residuals=TRUE).")
+      }
+
+      res <- diff.res$residuals  # matrix: samples 
+      ## ---- per-cell metrics (across samples) ----
+      mean.abs.resid.cell <- colMeans(abs(res), na.rm = TRUE)
+      sd.resid.cell <- apply(res, 2, sd, na.rm = TRUE)
+
+      ## align cells with embedding / density embedding
+      if (dens.res$method == "graph") {
+        density.emb <- self$embedding
+        common.cells <- intersect(colnames(res), rownames(density.emb))
+        mean.abs.resid.cell <- mean.abs.resid.cell[common.cells]
+        sd.resid.cell <- sd.resid.cell[common.cells]
+        density.emb  <- density.emb[common.cells, , drop = FALSE]
+      } else if (dens.res$method == "kde") {
+        density.emb <- dens.res$density.emb[, 1:2]
+        common.cells <- intersect(colnames(res), rownames(density.emb))
+        mean.abs.resid.cell <- mean.abs.resid.cell[common.cells]
+        sd.resid.cell <- sd.resid.cell[common.cells]
+        density.emb <- density.emb[common.cells, , drop = FALSE]
+      } else {
+        stop("Unknown density method: ", dens.res$method)
+      }
+
+      ## ---- embedding plots: where the density model fits badly ----
+      g.mean <- self$plotEmbedding(density.emb, colors = mean.abs.resid.cell, size = size,
+                               alpha = alpha, legend.title = "Density: mean |residual|",
+                               palette = palette, ...)
+      g.sd <- self$plotEmbedding(density.emb, colors = sd.resid.cell, size = size, alpha = alpha, 
+                             legend.title = "Density: residual SD", palette = palette, ...)
+      ## ---- sample-level metrics ----
+      sample.ids <- rownames(res)
+      if (is.null(sample.ids)) {
+         stop("Residual matrix must have rownames corresponding to samples.")
+      }
+      # subset / reorder sample.metadata to match residuals
+      if (!all(sample.ids %in% rownames(sample.metadata))) {
+        stop("Not all residual sample IDs are present as rownames in sample.metadata.")
+      }
+      sm <- sample.metadata[sample.ids, , drop = FALSE]
+
+      mean.abs.resid.sample <- rowMeans(abs(res), na.rm = TRUE)
+      sd.resid.sample <- apply(res, 1, sd, na.rm = TRUE)
+
+      metric.vec <- if (metric == "mean_abs") mean.abs.resid.sample else sd.resid.sample
+      ylab <- if (metric == "mean_abs") "Mean |residual| per sample" else "Residual SD per sample"
+
+      sample.df <- data.frame(sample = sample.ids, resid_metric = metric.vec, sm, check.names  = FALSE)
+
+      ## ---- sample-covariate plots ----
+      sample.plots <- list()
+      if (!is.null(cov.plot.keys)) {
+         for (covkey in cov.plot.keys) {
+           if (!covkey %in% colnames(sample.df)) {
+            warning("Covariate '", covkey, "' not found in sample.metadata; skipping.")
+           next
+           }
+
+          cov.vec <- sample.df[[covkey]]
+          is.cont <- is.numeric(cov.vec)
+
+          if (is.cont) {
+            p <- ggplot(sample.df, aes(x = .data[[covkey]], y = resid_metric, color = .data[[covkey]])) +
+              geom_point(size = jitter.size, alpha = jitter.alpha) + scale_colour_gradientn(colors = cont.palette) +
+              theme_bw() + labs(x = covkey,y = ylab,color = covkey, title = paste("Residual metric vs", covkey))
+          } else {
+            cov.fac <- factor(cov.vec)
+            p <- ggplot(sample.df, aes(x = cov.fac, y = resid_metric, color = cov.fac)) +
+              geom_boxplot(notch = TRUE, outlier.shape = NA,
+                           fill = "grey90", colour = "grey30", alpha = 0.9) +
+              geom_jitter(width = 0.15, height = 0,
+                          size = jitter.size, alpha = jitter.alpha) + theme_bw() +
+              theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+              labs(x = covkey,y = ylab, color = covkey, title = paste("Residual metric by", covkey))
+          }
+
+          sample.plots[[covkey]] <- p
+         }
+      }
+
+      ## ---- return / panel assembly ----
+      if (build.panel && length(sample.plots) == 1) {
+       # if exactly one covariate, build a 3-panel figure
+        g.sample <- sample.plots[[1]]
+        return(cowplot::plot_grid(g.mean, g.sd, g.sample, labels = c("Mean |Residual|", "Residual SD", "Sample-level"),
+                                  ncol = 3))
+      }
+
+      # otherwise return as a list
+      out <- list(mean_cell = g.mean, sd_cell   = g.sd, sample = sample.plots)
+      return(out)
+    },
 
 
     #' @description Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()

@@ -767,3 +767,71 @@ std::vector<std::vector<int>> mapIds(std::vector<std::vector<int>> ids_vec, std:
 
     return res_ids;
 }
+
+///// Cluster-free gene expression matrix for DE (new LM workflow)
+// [[Rcpp::export]]
+Rcpp::NumericMatrix clusterFreeGeneMat(
+    const SEXP count_mat,                   // dgCMatrix (cells x genes)
+    Rcpp::IntegerVector sample_per_cell,    // 0-based sample id per cell
+    Rcpp::List nn_ids,                      // neighbors per *cell* (indices into rows of cm)
+    int min_n_obs_per_samp,                 // NA threshold per (cell, sample)
+    int gi                                  // 0-based gene column index
+) {
+  // Convert inputs & basic checks
+  SparseMatrix<double> cm = Rcpp::as<SparseMatrix<double>>(count_mat);
+  std::vector<int> samp(sample_per_cell.begin(), sample_per_cell.end());
+  assert_r(cm.rows() == (int)samp.size(),
+           "cm rows must equal length(sample_per_cell)");
+  assert_r(gi >= 0 && gi < cm.cols(), "gi out of range");
+
+  const int n_cells   = cm.rows();
+  const int n_samples = (*std::max_element(samp.begin(), samp.end())) + 1;
+
+  // neighbors per cell
+  std::vector<std::vector<int>> nn_ids_c; nn_ids_c.reserve(nn_ids.size());
+  for (int i = 0; i < nn_ids.size(); ++i) {
+    IntegerVector v = nn_ids[i];
+    nn_ids_c.emplace_back(v.begin(), v.end());
+  }
+  assert_r((int)nn_ids_c.size() == n_cells,
+           "nn_ids length must equal number of cells (rows of cm)");
+
+  // For each focal cell, count neighbors by sample (used for averaging & NA threshold)
+  std::vector<std::vector<unsigned>> n_obs_per_samp; n_obs_per_samp.reserve(n_cells);
+  for (int ci = 0; ci < n_cells; ++ci) {
+    const auto &nbrs = nn_ids_c[ci];
+    std::vector<unsigned> counts(n_samples, 0u);
+    for (int id : nbrs) {
+      int fac = samp.at(id);
+      assert_r(fac >= 0 && fac < n_samples, "sample id out of range in nn_ids");
+      counts[fac] += 1u;
+    }
+    n_obs_per_samp.emplace_back(std::move(counts));
+  }
+
+  // Extract gene & build samples×cells neighborhood means 
+  VectorXd gene_vec = cm.col(gi);                 // length = n_cells
+  auto nz_ids = findNonZeroInds(gene_vec);        // focal cells with gene > EPS
+
+  // This reproduces the previous logic: only columns for non-zero cells get filled
+  MatrixXd sample_x_cell = buildCellXSampleMatrix(
+      gene_vec, samp, nn_ids_c, n_obs_per_samp, nz_ids);  // (n_samples × n_cells)
+
+  // Copy to R matrix and set NA where per-(cell,sample) obs < threshold 
+  Rcpp::NumericMatrix Y(n_samples, n_cells);
+  // initialize with zeros (already zero by default), then overwrite only nz columns
+  for (size_t k = 0; k < nz_ids.size(); ++k) {
+    int ci = (int)nz_ids[k];
+    const auto &counts = n_obs_per_samp[ci];
+    for (int s = 0; s < n_samples; ++s) {
+      if (counts[s] >= (unsigned)min_n_obs_per_samp) {
+        Y(s, ci) = sample_x_cell(s, ci);
+      } else {
+        Y(s, ci) = NA_REAL;
+      }
+    }
+  }
+  // Columns for zero-expression focal cells remain all zeros 
+
+  return Y;
+}

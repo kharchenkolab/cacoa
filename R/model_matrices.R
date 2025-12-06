@@ -153,6 +153,37 @@ buildDesignMatrices <- function(data, contrast,
   sp <- splitByContrast(F, cF, tol = tol, tolRow = tolRow, promoteIfNoNuisance = TRUE)
   X <- sp$X; Z <- sp$Z
   
+  ## extract endpoints in F-space, if present
+  endpoints_F <- attr(cF, "endpoints_F") %||% NULL
+  ## endpoints in X-space (restricted to core design columns)
+  endpoints_X <- NULL
+  if (!is.null(endpoints_F) && !is.null(sp$contrast.X)) {
+    endpoints_X <- lapply(endpoints_F, function(v) v[colnames(X)])
+  }
+  
+  ## human-readable labels for contrast and endpoints
+  contrast_label <- NULL
+  contrast_endpoint_labels <- list(
+    baseline = "baseline",
+    target   = "target"
+  )
+  if (!inherits(spec, "try-error") && !is.null(spec)) {
+    if (is.list(spec) &&
+        spec$type %in% c("simple", "marginal") &&
+        !grepl(":", spec$term, fixed = TRUE)) {
+      
+      var <- spec$term
+      num <- spec$num
+      den <- spec$den
+      
+      contrast_label <- paste0(var, ": ", num, " vs ", den)
+      contrast_endpoint_labels <- list(
+        baseline = paste0(var, " = ", den),
+        target   = paste0(var, " = ", num)
+      )
+    }
+  }
+  
   # qrZ for FL
   qrZ <- if (computeQrZ && !is.null(Z)) qr(as.matrix(Z)) else NULL
   
@@ -196,7 +227,11 @@ buildDesignMatrices <- function(data, contrast,
     numeric_ref_used = attr(cF, "numeric_ref_used") %||% list(),
     formula_used = formula_used,
     contrast_spec = if (!inherits(spec, "try-error")) spec else NULL,
-    baselines_used = baselines
+    baselines_used = baselines,
+    contrast_endpoints_F = endpoints_F,
+    contrast_endpoints_X = endpoints_X,
+    contrast_label = contrast_label,
+    contrast_endpoint_labels = contrast_endpoint_labels
   )
 }
 
@@ -1151,96 +1186,176 @@ buildSyntheticContrast <- function(F, data, contrast,
                                    numericRefRows = NULL,
                                    stopOnAmbiguousTriple = TRUE) {
   spec <- normalizeContrastSpec(contrast)
-  trm  <- attr(F, "terms"); xlv <- attr(F, "xlevels"); ctr <- attr(F, "contrasts")
+  trm  <- attr(F, "terms")
+  xlv  <- attr(F, "xlevels")
+  ctr  <- attr(F, "contrasts")
   if (is.null(trm) || is.null(xlv))
     stop("F must carry 'terms' and 'xlevels' (use buildFullDesign()).")
   
   tlabels <- attr(trm, "term.labels")
-  hasIntWith <- function(var) any(grepl(":", tlabels) & grepl(paste0("(^|:)", var, "(:|$)"), tlabels))
+  hasIntWith <- function(var) {
+    any(
+      grepl(":", tlabels) &
+        grepl(paste0("(^|:)", var, "(:|$)"), tlabels)
+    )
+  }
   
-  numRef <- resolveNumericRef(F, data, contrast,
-                              numericRef = numericRef,
-                              numericRefRows = numericRefRows)
+  numRef <- resolveNumericRef(
+    F, data, contrast,
+    numericRef     = numericRef,
+    numericRefRows = numericRefRows
+  )
+  
   one <- function(at) .oneRowFromFormula(trm, xlv, ctr, colnames(F), data, at, numRef)
   
   cF <- setNames(numeric(ncol(F)), colnames(F))
   
+  ## ------------------------------------------------------------
+  ## 1) Coefficient-level contrast (no canonical endpoints)
+  ## ------------------------------------------------------------
   if (spec$type == "coef") {
     miss <- setdiff(names(spec$coefs), colnames(F))
-    if (length(miss)) stop("Unknown coefficient(s) in contrast: ", paste(miss, collapse = ", "))
+    if (length(miss))
+      stop("Unknown coefficient(s) in contrast: ", paste(miss, collapse = ", "))
+    
     cF[names(spec$coefs)] <- as.numeric(spec$coefs)
     attr(cF, "numeric_ref_used") <- numRef
+    attr(cF, "endpoints_F")      <- NULL
     return(cF)
   }
   
-  if (identical(spec$plain_triple, TRUE) && stopOnAmbiguousTriple && hasIntWith(spec$term)) {
-    stop(sprintf("Ambiguous triple: interactions with '%s' present. Use type='simple' (add at=) or type='marginal' (add over=).", spec$term))
+  ## ------------------------------------------------------------
+  ## 2) Ambiguous triple guard (simple DESeq2-style triple with interactions)
+  ## ------------------------------------------------------------
+  if (identical(spec$plain_triple, TRUE) &&
+      stopOnAmbiguousTriple &&
+      hasIntWith(spec$term)) {
+    stop(sprintf(
+      "Ambiguous triple: interactions with '%s' present; ",
+      spec$term
+    ),
+    "please specify type='simple' (add at=) or type='marginal' (add over=).")
   }
   
+  ## ------------------------------------------------------------
+  ## 3) General linear combination of cells (no canonical endpoints)
+  ## ------------------------------------------------------------
   if (spec$type == "lincomb") {
     vars <- parseTermVars(spec$term)
     for (nm in names(spec$cells)) {
       at_i <- utils::modifyList(spec$at %||% list(), parseCell(nm, vars))
-      cF <- cF + as.numeric(spec$cells[[nm]]) * one(at_i)
+      cF   <- cF + as.numeric(spec$cells[[nm]]) * one(at_i)
     }
     attr(cF, "numeric_ref_used") <- numRef
+    attr(cF, "endpoints_F")      <- NULL
     return(cF)
   }
   
+  ## ------------------------------------------------------------
+  ## 4) Simple contrasts
+  ##    - Either single factor:   term = "Group", num="B", den="A"
+  ##    - Or interaction cell:    term = "Group:Batch", num="B:Batch1", ...
+  ##    We now also store endpoints in F-space.
+  ## ------------------------------------------------------------
   if (spec$type == "simple") {
     if (grepl(":", spec$term, fixed = TRUE)) {
+      ## interaction term: num/den are "A:B" style cells
       vars  <- parseTermVars(spec$term)
       atNum <- utils::modifyList(spec$at, parseCell(spec$num, vars))
       atDen <- utils::modifyList(spec$at, parseCell(spec$den, vars))
-      cF <- one(atNum) - one(atDen)
+      rNum  <- one(atNum)
+      rDen  <- one(atDen)
+      cF    <- rNum - rDen
     } else {
-      atN <- utils::modifyList(spec$at, setNames(list(spec$num), spec$term))
-      atD <- utils::modifyList(spec$at, setNames(list(spec$den), spec$term))
-      cF <- one(atN) - one(atD)
+      ## simple single factor contrast
+      atN  <- utils::modifyList(spec$at, setNames(list(spec$num), spec$term))
+      atD  <- utils::modifyList(spec$at, setNames(list(spec$den), spec$term))
+      rNum <- one(atN)
+      rDen <- one(atD)
+      cF   <- rNum - rDen
     }
     attr(cF, "numeric_ref_used") <- numRef
+    ## NEW: endpoints in F-space (num = alt, den = ref)
+    attr(cF, "endpoints_F") <- list(num = rNum, den = rDen)
     return(cF)
   }
   
+  ## ------------------------------------------------------------
+  ## 5) Marginal contrasts
+  ##    - Average (over=) across other factors, with weights
+  ##    - We accumulate weighted endpoints (num/den) in F-space.
+  ## ------------------------------------------------------------
   if (spec$type == "marginal") {
-    ov <- spec$over
+    ov  <- spec$over
     xlv <- attr(F, "xlevels")
-    levs <- lapply(ov, function(v) { L <- xlv[[v]]; if (is.null(L)) stop(sprintf("'%s' in over= is not a factor.", v)); L })
+    levs <- lapply(ov, function(v) {
+      L <- xlv[[v]]
+      if (is.null(L))
+        stop(sprintf("'%s' in over= is not a factor.", v))
+      L
+    })
     names(levs) <- ov
-    grid <- do.call(expand.grid, c(levs, stringsAsFactors = FALSE))
+    grid <- do.call(
+      expand.grid,
+      c(levs, stringsAsFactors = FALSE)
+    )
     
+    ## Weights over the grid
     ws <- spec$weights
     if (is.character(ws)) {
-      if (!ws %in% c("equal","proportional"))
+      if (!ws %in% c("equal", "proportional"))
         stop("weights must be 'equal', 'proportional', or named numeric.")
-      w <- rep(1/nrow(grid), nrow(grid))
+      w <- rep(1 / nrow(grid), nrow(grid))
       if (ws == "proportional") {
         tab <- data[, ov, drop = FALSE]
         for (v in ov) tab[[v]] <- factor(tab[[v]], levels = levs[[v]])
-        idx <- do.call(interaction, c(tab, drop=TRUE, sep=":"))
-        key <- apply(grid, 1, function(r) paste(r, collapse=":"))
+        idx <- do.call(interaction, c(tab, drop = TRUE, sep = ":"))
+        key <- apply(grid, 1, function(r) paste(r, collapse = ":"))
         cnt <- tapply(rep(1, nrow(tab)), idx, sum)
-        w   <- as.numeric(cnt[key]); w[is.na(w)] <- 0
-        if (sum(w) == 0) w <- rep(1/nrow(grid), nrow(grid)) else w <- w / sum(w)
+        w   <- as.numeric(cnt[key])
+        w[is.na(w)] <- 0
+        if (sum(w) == 0) {
+          w <- rep(1 / nrow(grid), nrow(grid))
+        } else {
+          w <- w / sum(w)
+        }
       }
     } else if (is.numeric(ws)) {
-      key <- apply(grid, 1, function(r) paste(r, collapse=":"))
-      if (is.null(names(ws))) stop("Numeric weights must be named by: ", paste(key, collapse=", "))
-      w <- as.numeric(ws[key]); if (any(is.na(w)) || any(w < 0) || sum(w) == 0) stop("Invalid numeric weights.")
+      key <- apply(grid, 1, function(r) paste(r, collapse = ":"))
+      if (is.null(names(ws)))
+        stop("Numeric weights must be named by: ", paste(key, collapse = ", "))
+      w <- as.numeric(ws[key])
+      if (any(is.na(w)) || any(w < 0) || sum(w) == 0)
+        stop("Invalid numeric weights.")
       w <- w / sum(w)
     } else stop("Unsupported weights spec.")
+    
+    ## Accumulate contrast and endpoints
+    rNumTot <- cF  # same length / names as columns of F
+    rDenTot <- cF
+    
     for (i in seq_len(nrow(grid))) {
-      at_i  <- as.list(grid[i,,drop=FALSE])
-      atN <- utils::modifyList(at_i, spec$at); atD <- atN
-      atN[[spec$term]] <- spec$num; atD[[spec$term]] <- spec$den
-      cF <- cF + w[i] * (one(atN) - one(atD))
+      at_i <- as.list(grid[i, , drop = FALSE])
+      atN  <- utils::modifyList(at_i, spec$at); atD <- atN
+      atN[[spec$term]] <- spec$num
+      atD[[spec$term]] <- spec$den
+      
+      rNum <- one(atN)
+      rDen <- one(atD)
+      
+      cF      <- cF      + w[i] * (rNum - rDen)
+      rNumTot <- rNumTot + w[i] * rNum
+      rDenTot <- rDenTot + w[i] * rDen
     }
     attr(cF, "numeric_ref_used") <- numRef
+    ## weighted endpoints in F-space
+    attr(cF, "endpoints_F") <- list(num = rNumTot, den = rDenTot)
     return(cF)
   }
   
   stop("Unhandled contrast type.")
 }
+
 
 # ---- Split by contrast (+ promotion) ----
 

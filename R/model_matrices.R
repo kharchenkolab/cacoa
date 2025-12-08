@@ -618,7 +618,7 @@ buildPairDesignMatrices <- function(sample.meta,
   }
   
   ## 8) Pick the pair formula 
-  pairFormulaUsed <- pairFormula %||% buildDefaultPairFormula(pair.meta)
+  pairFormulaUsed <- pairFormula %||% buildDefaultPairFormula(pair.meta, focusVar)
   
   ## 8b) If the pair formula has an intercept and explicitCoef is expressed
   ##     as cell-level weights for the focus factor, rewrite it into
@@ -2018,7 +2018,7 @@ defaultPairBlockVarsFromSampleDesign <- function(sampleDesign, sample.meta, pair
 
 
 # Build a default pair-level formula if the user didn't supply one.
-buildDefaultPairFormula <- function(pair.meta) {
+buildDefaultPairFormula <- function(pair.meta, focusVar = NULL) {
   stopifnot(is.data.frame(pair.meta))
   cols <- names(pair.meta)
   
@@ -2026,6 +2026,15 @@ buildDefaultPairFormula <- function(pair.meta) {
   pair_factors <- cols[grepl("_pair$", cols)]
   # numeric mirror columns (pair_<num>_(mean|diff))
   pair_numeric <- cols[grepl("^pair_[A-Za-z0-9_]+_(mean|diff)$", cols)]
+  
+  # put focus factor up front
+  if (!is.null(focusVar)) {
+    focus_pair <- paste0(focusVar, "_pair")
+    if (focus_pair %in% pair_factors) {
+      # Move focus factor to the front
+      pair_factors <- c(focus_pair, setdiff(pair_factors, focus_pair))
+    }
+  }
   
   rhs_terms <- c(pair_factors, pair_numeric)
   if (!length(rhs_terms)) return(~ 1)

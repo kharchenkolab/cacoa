@@ -9,7 +9,7 @@
 #'
 #' @param x A design bundle from [buildDesignMatrices()], containing at least:
 #'   `F`, `X`, `Z`, `contrast.F`, `contrast.X`, `perm.groups.full`, `perm.groups.core`,
-#'   and optionally `core.rows`.
+#'   and optionally `core.rows` and `pairs`.
 #' @param y Numeric vector (`n`) or matrix (`n × m`) of responses.
 #' @param n.permutations Integer, number of randomizations.
 #' @param perm.method One of `"block"` or `"freedman-lane"`.
@@ -120,6 +120,7 @@ performLMPermutations <- function(x, y,
       Y = Y,
       contrast = x$contrast.F,
       perm_groups = x$perm.groups.full,
+      pair_indices = x$pairs,
       n_randomizations = n.permutations,
       alternative = alternative,
       return_residuals = return.residuals,
@@ -139,6 +140,7 @@ performLMPermutations <- function(x, y,
       Y = Y,
       contrast = x$contrast.X,
       core_rows = x$core.rows, 
+      pair_indices = x$pairs,
       n_randomizations = n.permutations,
       alternative = alternative,
       robust = robust.method,

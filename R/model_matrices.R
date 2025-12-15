@@ -696,8 +696,7 @@ buildPairDesignMatrices <- function(sample.meta,
     validate    = TRUE,
     verbosity   = switch(verbosity, none="none", warn="warn", info="info"),
     computeQrZ  = TRUE,
-    # CHANGED: pass blocks through to the pair level
-    blockVars   = if (length(blockVarsPair)) blockVarsPair else NULL,
+    blockVars   = blockVarsPair,
     buildBlocks = buildBlocks
   )
   
@@ -707,7 +706,7 @@ buildPairDesignMatrices <- function(sample.meta,
   out$pair_formula_used     <- pairFormulaUsed
   out$focus_var             <- focusVar
   out$dist_type             <- dist.type
-  out$pair_block_vars_used  <- blockVarsPair  # NEW: for transparency
+  out$pair_block_vars_used  <- blockVarsPair
   
   if (verbosity %in% c("info")) {
     fac_cols <- names(pair.meta)[grepl("_pair$", names(pair.meta))]
@@ -1404,8 +1403,12 @@ makeBlocks <- function(meta, nuisance, block.vars = NULL) {
   fac.nuis <- if (length(nuisance)) {
     nuisance[vapply(meta[nuisance], function(x) is.factor(x) || is.character(x), logical(1))]
   } else character(0)
-  if (length(fac.nuis)) interaction(lapply(meta[fac.nuis], as.factor), drop = TRUE, lex.order = TRUE)
-  else factor(rep("all", nrow(meta)))
+  
+  if (length(fac.nuis)) {
+    interaction(lapply(meta[fac.nuis], as.factor), drop = TRUE, lex.order = TRUE)
+  } else {
+    NULL 
+  }
 }
 
 filterNuisance <- function(meta, nuisance.names) {
@@ -1420,6 +1423,8 @@ filterNuisance <- function(meta, nuisance.names) {
 }
 
 permutationGroups <- function(blocks, core.rows = NULL) {
+  if (is.null(blocks)) return(NULL) 
+  
   stopifnot("blocks is not a factor"=is.factor(blocks), "no randomization blocks found"=length(blocks) >= 1L)
   n <- length(blocks)
   if (is.null(core.rows)) {
@@ -1649,7 +1654,7 @@ reportContrastInfo <- function(F, X, Z, cF, numericRefUsed, tol, verbosity) {
 }
 
 deriveNuisanceFactors <- function(formula, data, contrastSpec, explicit = NULL) {
-  if (!is.null(explicit) && length(explicit)) {
+  if (!is.null(explicit)) {
     return(filterNuisance(data, explicit))
   }
   mf <- stats::model.frame(formula, data, na.action = stats::na.pass)

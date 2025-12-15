@@ -581,12 +581,19 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
     p <- p + base + plot.theme +
       ggplot2::theme(panel.grid.major.x = ggplot2::element_blank(),
                      panel.grid.minor   = ggplot2::element_blank(),
-                     legend.title       = ggplot2::element_text(size = 10),
-                     axis.title.x       = ggplot2::element_blank()) +
+                     legend.title       = ggplot2::element_text(size = 10)) +
       ggplot2::guides(fill = "none") +
       ggplot2::labs(y = ylab, x = NULL)
-
-    if (coord.flip) p <- p + ggplot2::coord_flip()
+    
+    if (coord.flip) {
+      p <- p + coord_flip() + theme(axis.title.y=element_blank())
+    } else {
+      p <- p + theme(
+        axis.text.x=element_text(angle=90, vjust=0.5, hjust=1),
+        axis.text.y=element_text(angle=90, hjust=0.5),
+        axis.title.x=element_blank()
+      )
+    }
     if (!is.null(palette) && !have.cov && type == "box")
       p <- p + ggplot2::scale_fill_manual(values = palette)
 

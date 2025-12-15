@@ -787,8 +787,10 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
  */
 // [[Rcpp::export]]
 Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y, const arma::vec& contrast,
-                      SEXP core_rows = R_NilValue, Rcpp::Nullable<Rcpp::List> perm_groups = R_NilValue,
-                      Rcpp::Nullable<arma::umat> pair_indices = R_NilValue, int n_randomizations = 100,
+                      SEXP core_rows = R_NilValue, 
+                      Rcpp::Nullable<Rcpp::List> core_perm_groups = R_NilValue,
+                      Rcpp::Nullable<arma::umat> core_pair_indices = R_NilValue,
+                      int n_randomizations = 100,
                       std::string alternative = "two-sided", std::string robust = "none",
                       double huber_k = 1.345, int huber_maxit = 8, double huber_tol = 1e-6,
                       std::string na_mode = "drop", double na_weight = 1e-4, std::string na_center = "mean",
@@ -798,123 +800,179 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y
   arma::uword n = X.n_rows, m = Y.n_cols;
   arma::uvec idx_core = parse_core_rows(core_rows, n);
   
-  // Group Y by NA pattern
+  // 1. FAST PATH: No Nuisance Variables (Z is empty)
+  if (Z.n_cols == 0) {
+    arma::mat X_sub = X.rows(idx_core);
+    arma::mat Y_sub = Y.rows(idx_core);
+    Rcpp::List out = fit_and_randomize(X_sub, Y_sub, contrast, core_perm_groups, core_pair_indices,
+                                       n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats,
+                                       robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center,
+                                       illcond_rcond, pinv_tol, n_cores);
+    out["partial_core"] = Y_sub;
+    return out;
+  }
+  
+  // 2. FREEDMAN-LANE PATH (Has Z)
   std::unordered_map<std::uint64_t, std::vector<arma::uword>> groups;
   for (arma::uword j=0; j<m; ++j) {
     std::vector<unsigned char> mask(n); 
     for(uword i=0; i<n; ++i) mask[i] = arma::is_finite(Y(i,j));
     groups[fnv1a64_mask_char(mask)].push_back(j);
   }
-
+  
   arma::mat Coef(X.n_cols, m); Coef.fill(datum::nan);
   arma::vec Stat(m), Zscore(m), Pval(m); Stat.fill(datum::nan); Zscore.fill(datum::nan); Pval.fill(datum::nan);
   arma::mat Resid; if(return_residuals) { Resid.set_size(idx_core.n_elem, m); Resid.fill(datum::nan); }
   arma::mat PartialCore; PartialCore.set_size(idx_core.n_elem, m); PartialCore.fill(datum::nan);
-  std::vector<arma::mat> SampledFits(m); 
   arma::mat SampledStats; if(return_sampled_stats) { SampledStats.set_size(n_randomizations, m); SampledStats.fill(datum::nan); }
-
+  std::vector<arma::mat> SampledFits(m); 
+  
+  std::vector<int> global_to_core(n, -1);
+  for(uword k=0; k < idx_core.n_elem; ++k) global_to_core[idx_core[k]] = k;
+  
   for (auto & kv : groups) {
     std::vector<arma::uword> J = kv.second;
     arma::uvec Jv = arma::conv_to<arma::uvec>::from(J);
     bool use_drop = (na_mode == "drop");
     
-    // 1. Identify valid rows for this group
-    arma::uvec valid_rows;
-    if (use_drop) {
-        arma::vec y_rep = Y.col(J[0]);
-        valid_rows = arma::find_finite(y_rep);
-    } else {
-        valid_rows = arma::regspace<arma::uvec>(0, n-1);
-    }
-
-    if (valid_rows.n_elem < X.n_cols) continue;
-
-    // 2. Project Z out
-    arma::mat Z_sub = Z.rows(valid_rows);
+    // A. Identify Rows
+    // 'valid_rows' are strictly those with FINITE data.
+    // In 'impute' mode, we will use ALL rows, but we need 'valid_rows' to calculate the mean.
+    arma::vec y_rep = Y.col(J[0]);
+    arma::uvec valid_rows = arma::find_finite(y_rep);
+    
+    // We need 'obs_rows' for the projection matrix.
+    // Drop: obs_rows = valid_rows
+    // Impute: obs_rows = 0..n-1 (all)
+    arma::uvec obs_rows;
+    if (use_drop) obs_rows = valid_rows;
+    else obs_rows = arma::regspace<arma::uvec>(0, n-1);
+    
+    if (obs_rows.n_elem < X.n_cols) continue;
+    
+    // B. Calculate Residuals (With Temp Imputation for Weak Mode)
+    arma::mat Z_sub = Z.rows(obs_rows);
     arma::mat Qz;
     if (!qr_basis(Z_sub, Qz, pinv_tol)) continue; 
-
-    arma::mat X_resid = project_out_Q(Qz, X.rows(valid_rows));
-    arma::mat Y_resid = project_out_Q(Qz, Y.submat(valid_rows, Jv));
-
-    // 3. Map global 'core_rows' to indices within 'valid_rows'
-    std::vector<uword> core_sub_indices;
-    std::vector<uword> core_dest_indices;
     
-    // Lookup: Global Row Index -> Residual Matrix Index
-    std::vector<int> global_to_resid(n, -1);
-    for(uword k=0; k<valid_rows.n_elem; ++k) global_to_resid[valid_rows[k]] = k;
-
-    for(uword k=0; k<idx_core.n_elem; ++k) {
-        uword glob = idx_core[k];
-        if (global_to_resid[glob] != -1) {
-            core_sub_indices.push_back(global_to_resid[glob]); 
-            core_dest_indices.push_back(k);                    
+    // Handle Y for projection
+    // If impute_weak, we must fill NaNs in Y before projecting, 
+    // otherwise Q'*Y propagates NaNs everywhere.
+    arma::mat Y_for_proj;
+    if (use_drop) {
+      Y_for_proj = Y.submat(obs_rows, Jv);
+    } else {
+      // Extract full columns
+      Y_for_proj = Y.cols(Jv); 
+      // Impute NaNs with Mean of Valid Data (or 0)
+      // Since all cols in J share the same mask, we iterate cols
+      for(uword c=0; c < Y_for_proj.n_cols; ++c) {
+        arma::vec col = Y_for_proj.col(c);
+        double mu = 0.0;
+        if (valid_rows.n_elem > 0) {
+          // valid_rows indices are global. We need valid indices relative to Y_for_proj (which is full size n)
+          // Since Y_for_proj is n rows, valid_rows works directly.
+          mu = (na_center == "mean") ? arma::mean(col.elem(valid_rows)) : 0.0;
         }
+        // Fill non-finite values
+        col.elem(find_nonfinite(col)).fill(mu);
+        Y_for_proj.col(c) = col;
+      }
     }
-
-    if (core_sub_indices.empty()) continue;
-    arma::uvec sel_src = arma::uvec(core_sub_indices);
-    arma::uvec sel_dst = arma::uvec(core_dest_indices);
-
-    arma::mat X_fin = X_resid.rows(sel_src);
-    arma::mat Y_fin = Y_resid.rows(sel_src);
-
-    // 4. Fit Residuals
-    Rcpp::List res = fit_and_randomize(X_fin, Y_fin, contrast, perm_groups, pair_indices,
+    
+    arma::mat X_resid_full = project_out_Q(Qz, X.rows(obs_rows));
+    arma::mat Y_resid_full = project_out_Q(Qz, Y_for_proj);
+    
+    // C. Construct Core Subset Matrices
+    // If 'impute_weak', we must RE-MASK the values that were originally missing to NaN.
+    // fit_and_randomize needs NaNs to trigger the weighting logic.
+    
+    arma::mat X_fin(idx_core.n_elem, X.n_cols); X_fin.fill(datum::nan);
+    arma::mat Y_fin(idx_core.n_elem, J.size()); Y_fin.fill(datum::nan);
+    
+    bool has_data = false;
+    
+    // Map from obs_rows index -> global index -> core index
+    for(uword k=0; k < obs_rows.n_elem; ++k) {
+      uword glob_idx = obs_rows[k];
+      int core_idx = global_to_core[glob_idx];
+      
+      if (core_idx != -1) {
+        // Check if this row was originally valid
+        bool was_valid = arma::is_finite(y_rep[glob_idx]);
+        
+        if (use_drop) {
+          // In Drop mode, obs_rows ARE valid_rows. So always valid.
+          X_fin.row(core_idx) = X_resid_full.row(k);
+          Y_fin.row(core_idx) = Y_resid_full.row(k);
+          has_data = true;
+        } else {
+          // In Impute mode, obs_rows includes NAs.
+          X_fin.row(core_idx) = X_resid_full.row(k);
+          
+          if (was_valid) {
+            Y_fin.row(core_idx) = Y_resid_full.row(k);
+          } else {
+            // It was originally NA. We imputed it for projection.
+            // Now RE-MASK it to NaN so fit_and_randomize applies epsilon weight.
+            Y_fin.row(core_idx).fill(datum::nan);
+          }
+          has_data = true; // Even if NaN, we pass it (as missing/weighted)
+        }
+      }
+    }
+    
+    if (!has_data) continue;
+    
+    // D. Call Fitter
+    Rcpp::List res = fit_and_randomize(X_fin, Y_fin, contrast, core_perm_groups, core_pair_indices,
                                        n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats,
                                        robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center,
                                        illcond_rcond, pinv_tol, n_cores);
-
-    // 5. Unpack
+    
+    // E. Unpack
     arma::mat B = res["coef"];
     arma::vec S = res["stat"];
     arma::vec Zs = res["z_score"];
     arma::vec Pv = res["p_value"];
     
     for(uword i=0; i<J.size(); ++i) {
-        uword col = J[i];
-        Coef.col(col) = B.col(i);
-        Stat(col) = S(i); Zscore(col) = Zs(i); Pval(col) = Pv(i);
+      uword col = J[i];
+      Coef.col(col) = B.col(i);
+      Stat(col) = S(i); Zscore(col) = Zs(i); Pval(col) = Pv(i);
     }
     
-    // Use Linear Indexing for assignment to avoid subview_col compilation issues
-    if(return_residuals) {
-        arma::mat Rr = res["residuals"];
-        for(uword c=0; c<J.size(); ++c) {
-            arma::uword glob_col = J[c];
-            // Linear index = row_idx + col_idx * n_rows
-            arma::uvec lin_idx = sel_dst + glob_col * Resid.n_rows;
-            Resid.elem(lin_idx) = Rr.col(c);
-            
-            arma::uvec lin_idx_p = sel_dst + glob_col * PartialCore.n_rows;
-            PartialCore.elem(lin_idx_p) = Y_fin.col(c);
-        }
-    } else {
-        for(uword c=0; c<J.size(); ++c) {
-            arma::uword glob_col = J[c];
-            arma::uvec lin_idx_p = sel_dst + glob_col * PartialCore.n_rows;
-            PartialCore.elem(lin_idx_p) = Y_fin.col(c);
-        }
+    // Fill PartialCore and Resid
+    if (return_residuals || true) {
+      arma::mat Rr = res["residuals"]; 
+      for(uword c=0; c < J.size(); ++c) {
+        uword col = J[c];
+        Resid.col(col) = Rr.col(c);
+        
+        // For PartialCore: In 'impute' mode, we might want the IMPUTED residual 
+        // rather than NaN for plotting? 
+        // Standard behavior: Return what was used. If it was NaN (masked), return NaN.
+        PartialCore.col(col) = Y_fin.col(c);
+      }
     }
     
     if(return_sampled_stats) {
-        arma::mat SS = res["sampled_stats"];
-        SampledStats.cols(Jv) = SS;
+      arma::mat SS = res["sampled_stats"];
+      SampledStats.cols(Jv) = SS;
     }
     if(return_sampled_fits) {
-        Rcpp::List L = res["sampled_fits"];
-        for(uword i=0; i<J.size(); ++i) SampledFits[J[i]] = Rcpp::as<arma::mat>(L[i]);
+      Rcpp::List L = res["sampled_fits"];
+      for(uword i=0; i<J.size(); ++i) SampledFits[J[i]] = Rcpp::as<arma::mat>(L[i]);
     }
   }
-
+  
   Rcpp::List out = Rcpp::List::create(_["coef"]=Coef, _["stat"]=Stat, _["z_score"]=Zscore, _["p_value"]=Pval);
   if(return_residuals) out["residuals"] = Resid;
   out["partial_core"] = PartialCore;
   if(return_sampled_stats && n_randomizations>0) out["sampled_stats"] = SampledStats;
   if(return_sampled_fits) {
-      Rcpp::List L(m); for(uword j=0; j<m; ++j) L[j]=Rcpp::wrap(SampledFits[j]);
-      out["sampled_fits"] = L;
+    Rcpp::List L(m); for(uword j=0; j<m; ++j) L[j]=Rcpp::wrap(SampledFits[j]);
+    out["sampled_fits"] = L;
   }
   return out;
 }

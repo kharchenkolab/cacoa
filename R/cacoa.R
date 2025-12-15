@@ -352,7 +352,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                              verbose = self$verbose, n.cores = self$n.cores, ...) {
   
       if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-      sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
       } else {
         sample.model <- self$model
       }
@@ -903,15 +903,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (color.by == 'cell.groups') {
           params$groups <- self$cell.groups
           params$palette <- self$cell.groups.palette
-        } else if (color.by == 'condition') {
-          params$groups <- self$getConditionPerCell()
-          params$palette <- self$sample.groups.palette
         } else if (color.by == 'sample') {
           params$groups <- self$sample.per.cell
-        } else stop("Unknown color.by option: ", color.by)
+        } else if(color.by %in% colnames(self$sample.meta)) {
+          # map from sample values to cells
+          params$groups <- setNames(self$sample.meta[as.character(self$sample.per.cell), color.by], names(self$sample.per.cell))
+        } else {
+          stop("Unknown color.by option: '", color.by, "'. It must be 'cell.groups', 'sample', or a column in self$sample.meta.")
+        }
       }
 
-      params$embedding <- embedding
+      params$object <- embedding
       params$plot.theme <- plot.theme
       if (is.null(params$show.legend)) {
         params$show.legend <- !is.null(params$colors)

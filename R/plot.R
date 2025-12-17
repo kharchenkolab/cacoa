@@ -1395,7 +1395,6 @@ distTreeOrder <- function(t, tree.order){
 #' helper function for creating dendograms
 #' @keywords internal
 plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme=theme_get(), label.angle=90,
-                             
                              p.threshold=0.05, adjust.pvalues=TRUE, h.methods='both', font.size=3, label.hjust=1,
                              show.text='pvalue.code', tree.order=NULL, loadings.mean=NULL, palette=NULL,
                              verbose=FALSE) {
@@ -1583,7 +1582,681 @@ plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.t
   return(px)
 }
 
-#' Internal plotting function for cell loadings
+#' Internal function to plot global statistics from CoDA analysis (NEW)
+#' @keywords internal
+plotCodaGlobal <- function(x, style = c("bar", "violin"), fdr.threshold = 0.05, drop.intercept = TRUE,
+                           use.contrast.title = FALSE) {
+  style <- match.arg(style)
+  
+  ## -----------------------------
+  ## 1. Collect global stats
+  ## -----------------------------
+  # Contrast
+  contrast.label <- if (!is.null(x$contrast$label)) {
+    x$contrast$label
+  } else {
+    "contrast"
+  }
+  
+  terms   <- "contrast"
+  labels  <- contrast.label
+  stats   <- x$contrast$global$stat
+  pvals   <- x$contrast$global$p
+  
+  # Coefficients
+  coef.names <- names(x$coefficients)
+  if (drop.intercept && "(Intercept)" %in% coef.names) {
+    coef.names <- setdiff(coef.names, "(Intercept)")
+  }
+  
+  if (length(coef.names) > 0) {
+    terms  <- c(terms, coef.names)
+    labels <- c(labels, coef.names)
+    stats  <- c(stats,vapply(coef.names, function(nm) x$coefficients[[nm]]$global$stat, numeric(1)))
+    pvals  <- c(pvals,vapply(coef.names, function(nm) x$coefficients[[nm]]$global$p, numeric(1)))
+  }
+  
+  df.stats <- data.frame(term.id = terms, term.label = labels, stat = stats, pval = pvals, stringsAsFactors = FALSE)
+  df.stats$padj   <- p.adjust(df.stats$pval, method = "fdr")
+  df.stats$signif <- df.stats$padj < fdr.threshold
+  
+  ## 1–3 star scheme based on adjusted p-value
+  df.stats$stars <- ifelse(
+    df.stats$padj < 0.001, "***",
+    ifelse(
+      df.stats$padj < 0.01, "**",
+      ifelse(df.stats$padj < 0.05, "*", "")
+    )
+  )
+  
+  # Order terms by decreasing variance explained
+  df.stats$term.label <- factor(df.stats$term.label, levels = df.stats$term.label[order(-df.stats$stat)])
+  
+  # Optional title from contrast label
+  plot.title <- NULL
+  if (use.contrast.title && !is.null(x$contrast$label)) {
+    plot.title <- x$contrast$label
+  }
+  
+  ## ========================================================
+  ## 2a. Bar-style global plot
+  ## ========================================================
+  if (style == "bar") {
+    p <- ggplot(df.stats,
+                aes(x = term.label,
+                    y = stat,
+                    fill = signif)) +
+      geom_col() +
+      geom_text(data = subset(df.stats, stars != ""), aes(label = stars), vjust = -0.0, size = 6, color = "black") +
+      scale_fill_manual(values = c(`TRUE` = "black", `FALSE` = "grey80"), name = paste0("FDR < ", fdr.threshold),
+                        labels = c(`TRUE` = "yes", `FALSE` = "no")) +
+      scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+      labs(x = "Term (contrast / coefficient)", y = "Variance explained in ILR space", title = plot.title) +
+      theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    return(p)
+  }
+  
+  ## ========================================================
+  ## 2b. Violin-style view of null distribution
+  ## ========================================================
+  # Build long data frame of permuted stats for each term
+  
+  perm.list <- list()
+  
+  # Contrast
+  if (!is.null(x$contrast$global$stat_perm)) {
+    perm.list[[length(perm.list) + 1]] <- data.frame(term.id = "contrast", term.label = contrast.label,
+                                                     stat.perm  = as.numeric(x$contrast$global$stat_perm),
+                                                     stringsAsFactors = FALSE)
+  }
+  
+  # Coefficients
+  if (length(coef.names) > 0) {
+    for (nm in coef.names) {
+      sp <- x$coefficients[[nm]]$global$stat_perm
+      if (is.null(sp)) next  # if missing, skip that term
+      perm.list[[length(perm.list) + 1]] <- data.frame(term.id = nm, term.label = nm, stat.perm  = as.numeric(sp),
+                                                       stringsAsFactors = FALSE)
+    }
+  }
+  
+  if (length(perm.list) == 0) {
+    stop("No permutation distributions found in x; ",
+         "cannot produce violin-style global plot.")
+  }
+  
+  df.perm <- do.call(rbind, perm.list)
+  
+  # Match factor levels to df_stats ordering
+  df.perm$term.label <- factor(df.perm$term.label,
+                               levels = levels(df.stats$term.label))
+  
+  p <- ggplot(df.perm, aes(x = term.label, y = stat.perm)) +
+    geom_violin(fill = "grey85", color = NA, trim = FALSE) +
+    geom_jitter(width = 0.15, alpha = 0.01, size = 0.6) +  # lower alpha as you set
+    # Observed stat overlaid
+    geom_point(data = df.stats, aes(x = term.label, y = stat, color = signif), size = 2) +
+    geom_text(data = subset(df.stats, stars != ""), aes(x = term.label, y = stat, label = stars),
+              vjust = -0.0, size = 6, color = "black") +
+    scale_color_manual(values = c(`TRUE` = "red", `FALSE` = "black"), name = paste0("FDR < ", fdr.threshold),
+                       labels = c(`TRUE` = "yes", `FALSE` = "no")) +
+    labs(x = "Term (contrast or coefficient)", y = "Variance explained in ILR space", title = plot.title) +
+    theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  return(p)
+}
+
+#' Internal function to plot heatmap of CoDA coefficients and contrast (NEW)
+#' @keywords internal
+plotCodaHeatmap <- function(x, coef.names = NULL, fdr.threshold = 0.05) {
+  # -----------------------------
+  # 1. Decide which coefficients
+  # -----------------------------
+  all.coef.names <- names(x$coefficients)
+  
+  if (is.null(coef.names)) {
+    coef.names <- all.coef.names
+  } else {
+    missing <- setdiff(coef.names, all.coef.names)
+    if (length(missing) > 0)
+      stop("Some coef.names not found in x$coefficients: ",
+           paste(missing, collapse = ", "))
+  }
+  
+  # -----------------------------
+  # 2. Build DF for coefficients
+  # -----------------------------
+  df.list <- lapply(coef.names, function(nm) {
+    cf <- x$coefficients[[nm]]
+    data.frame(celltype = names(cf$loadings), coef = nm, effect = as.numeric(cf$loadings),
+               padj = as.numeric(cf$padj_cell), stringsAsFactors = FALSE)
+  })
+  df.coef <- do.call(rbind, df.list)
+  
+  # -----------------------------
+  # 3. Build DF for contrast
+  # -----------------------------
+  if (is.null(x$contrast)) {
+    stop("x$contrast not found in lmCoda result; cannot add contrast column.")
+  }
+  
+  # Always use contrast label if available
+  contrast.col.label <- if (!is.null(x$contrast$label)) {
+    x$contrast$label
+  } else {
+    "contrast"
+  }
+  
+  df.contrast <- data.frame(celltype = names(x$contrast$loadings$obs), coef = contrast.col.label,
+                            effect = as.numeric(x$contrast$loadings$obs), padj = as.numeric(x$contrast$per_cell$padj),
+                            stringsAsFactors = FALSE)
+  
+  # -----------------------------
+  # 4. Combine contrast + coefs
+  # -----------------------------
+  df <- rbind(df.contrast, df.coef)
+  
+  # 1–3 star scheme based on adjusted p-value
+  df$stars <- ifelse(
+    df$padj < 0.001, "***",
+    ifelse(
+      df$padj < 0.01,  "**",
+      ifelse(df$padj < 0.05, "*", "")
+    )
+  )
+  df$signif <- df$padj < fdr.threshold
+  
+  # Order coef axis: contrast first, then chosen coef.names
+  df$coef <- factor(df$coef, levels = c(contrast.col.label, coef.names))
+  
+  # Order cell types (alphabetical by default; change here if you want a custom order)
+  df$celltype <- factor(df$celltype, levels = sort(unique(df$celltype)))
+  
+  # -----------------------------
+  # 5. Plot
+  # -----------------------------
+  ggplot(df, aes(x = coef, y = celltype, fill = effect)) +
+    geom_tile(color = "white") +
+    # Stars for significance (larger text symbols)
+    geom_text(data = subset(df, stars != ""), aes(label = stars), size = 4, color = "black") +
+    scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+    labs(x = "Term (contrast / coefficient)", y = "Cell type", fill = "Effect\n(log-ratio)") +
+    theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+#' Internal function to plot cell-type effects from CoDA analysis (NEW)
+#' @param x lmCoda result object
+#' @param coef Coefficient to plot (default "contrast" for the main contrast)
+#' @param value Type of effect to plot: "predicted" (predicted baseline vs target compositions; contrast only),
+#'   "reference-centered" (effects relative to reference clusters), or "volcano" (log2 effect vs -log10 p-value)    
+#' @param style Style of plot for reference-centered effects only: "bar" or "violin"
+#' @param fdr.threshold FDR threshold for significance
+#' @param sortCellTypes Whether to sort cell types by adjusted p-value
+#' @param labelCellTypes For volcano plots, which cell types to label: "significant", "all", or "none"
+#' @param celltype.palette Optional named vector of colors for cell types
+#' @param use.contrast.title Whether to use the contrast label as the plot title (if available)
+#' @return ggplot2 object
+#' @keywords internal
+plotCodaCellTypes <- function(x, coef = c("contrast"), value = c("predicted", "reference-centered", "volcano"),
+                              style = c("bar", "violin"), fdr.threshold = 0.05, sortCellTypes = FALSE,
+                              labelCellTypes = c("significant", "all", "none"), celltype.palette = NULL,
+                              use.contrast.title = FALSE) {
+  value <- match.arg(value)
+  coef  <- match.arg(coef, choices = c("contrast", names(x$coefficients)))
+  style <- match.arg(style)
+  labelCellTypes <- match.arg(labelCellTypes)
+  
+  ## -----------------------------
+  ## 1. Choose source of effects
+  ## -----------------------------
+  if (identical(coef, "contrast")) {
+    beta.ilr  <- x$contrast$beta_ilr
+    pval.cell <- x$contrast$per_cell$pval
+    padj.cell <- x$contrast$per_cell$padj
+    loadings  <- x$contrast$loadings$obs         # natural-log scale
+    ref.loads <- x$contrast$loadings$ref_centered
+  } else {
+    if (!coef %in% names(x$coefficients)) {
+      stop("Coefficient '", coef, "' not found in x$coefficients.")
+    }
+    beta.ilr  <- x$coefficients[[coef]]$beta_ilr
+    pval.cell <- x$coefficients[[coef]]$pval_cell
+    padj.cell <- x$coefficients[[coef]]$padj_cell
+    loadings  <- x$coefficients[[coef]]$loadings  # natural-log scale
+    
+    # For coefficients, reference-centering uses the same reference cluster as contrast
+    ref.idx   <- x$reference$idx
+    ref.mean  <- mean(loadings[ref.idx])
+    ref.loads <- loadings - ref.mean
+  }
+  
+  ## -----------------------------
+  ## 2. Common per-cell stats
+  ## -----------------------------
+  df.common <- data.frame(celltype = names(loadings), effect = as.numeric(loadings),    # natural-log scale
+                          effect_ref = as.numeric(ref.loads),   # natural-log scale
+    pval = as.numeric(pval.cell), padj = as.numeric(padj.cell), stringsAsFactors = FALSE)
+  df.common$signif <- df.common$padj < fdr.threshold
+  df.common$is_ref <- df.common$celltype %in% x$reference$celltypes
+  
+  # Convert to log2 scale (linear rescaling of natural-log effects)
+  log2_factor <- 1 / log(2)
+  df.common$effect_log2     <- df.common$effect     * log2_factor
+  df.common$effect_ref_log2 <- df.common$effect_ref * log2_factor
+  
+  # 1–3 star scheme based on adjusted p-value
+  df.common$stars <- ifelse(
+    df.common$padj < 0.001, "***",
+    ifelse(
+      df.common$padj < 0.01,  "**",
+      ifelse(df.common$padj < 0.05, "*", "")
+    )
+  )
+  
+  star.caption <- "Significance: * FDR < 0.05; ** FDR < 0.01; *** FDR < 0.001"
+  
+  ## -----------------------------
+  ## 3. Cell type ordering
+  ## -----------------------------
+  if (sortCellTypes) {
+    ord <- order(df.common$padj, df.common$celltype, na.last = TRUE)
+    df.common <- df.common[ord, , drop = FALSE]
+    celltypes <- df.common$celltype
+  } else {
+    celltypes <- names(loadings)
+  }
+  celltypes <- unique(celltypes)
+  
+  ## Stable cell-type palette
+  if (is.null(celltype.palette)) {
+    cols <- scales::hue_pal()(length(celltypes))
+    names(cols) <- celltypes
+  } else {
+    cols <- celltype.palette
+    missing.cols <- setdiff(celltypes, names(cols))
+    if (length(missing.cols) > 0) {
+      stop("celltype.palette is missing colors for: ",
+           paste(missing.cols, collapse = ", "))
+    }
+    cols <- cols[celltypes]
+  }
+  
+  ## Optional plot title from contrast label
+  plot.title <- NULL
+  if (use.contrast.title && !is.null(x$contrast$label)) {
+    plot.title <- x$contrast$label
+  }
+  
+  ## ========================================================
+  ## Mode 1: predicted baseline vs contrast (contrast only)
+  ## ========================================================
+  if (value == "predicted") {
+    if (!identical(coef, "contrast")) {
+      stop("value = 'predicted' is currently only implemented for coef = 'contrast'.")
+    }
+    if (is.null(x$contrast$predicted)) {
+      stop("No predicted compositions found. Ensure model$contrast_endpoints_* is set and lmCoda was run with that model.")
+    }
+    
+    baseline <- x$contrast$predicted$baseline
+    target   <- x$contrast$predicted$target
+    
+    # human-readable labels for endpoints (from lmCoda/model)
+    label.baseline <- "baseline"
+    label.target   <- "target"
+    if (!is.null(x$contrast$predicted$labels)) {
+      labs <- x$contrast$predicted$labels
+      if (!is.null(labs$baseline)) label.baseline <- labs$baseline
+      if (!is.null(labs$target))   label.target   <- labs$target
+    }
+    
+    # enforce consistent cell-type ordering
+    celltypes.order <- celltypes
+    df <- data.frame(celltype = celltypes.order, baseline = as.numeric(baseline[celltypes.order]),
+                     target = as.numeric(target[celltypes.order]), stringsAsFactors = FALSE)
+    
+    df.long <- reshape2::melt(df, id.vars = "celltype", variable.name = "condition", value.name = "prop")
+    
+    # merge padj/stars/signif from df_common
+    df.long <- merge(df.long, df.common[, c("celltype", "padj", "signif", "stars")], by = "celltype", all.x = TRUE)
+    
+    df.long$condition <- factor(df.long$condition,
+                                levels = c("baseline", "target"))
+    
+    p <- ggplot(df.long,aes(x = celltype, y = prop, fill = celltype, alpha = condition)) +
+      geom_col(position = position_dodge(width = 0.8), color = NA) +
+      # 1–3 stars only on target bars (explicit aes + no legend)
+      geom_text(data = subset(df.long, condition == "target" & stars != ""),
+        aes(x = celltype, y = prop, label = stars),position = position_dodge(width = 0.8), vjust = 0, size = 6,
+            color = "black", inherit.aes = FALSE, show.legend = FALSE) +
+      scale_fill_manual(values = cols, guide = "none") +  # no cell-type legend
+      scale_alpha_manual(values = c(baseline = 0.2, target = 1.0), name = "Condition",
+                         labels = c(baseline = label.baseline, target = label.target)) +
+      # Add headroom so stars are not clipped
+      scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+      labs(x = "Cell type", y = "Predicted proportion", title = plot.title, caption = star.caption) +
+      theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    return(p)
+  }
+  
+  ## ========================================================
+  ## Mode 2: reference-centered cell-type effect
+  ## ========================================================
+  if (value == "reference-centered") {
+    # Enforce cell-type order
+    df.common$celltype <- factor(df.common$celltype, levels = celltypes)
+    
+    if (style == "bar") {
+      df <- df.common
+      df$signif_flag <- ifelse(df$signif, "signif", "ns")
+      df$is_ref_flag <- ifelse(df$is_ref, "ref", "nonref")
+      
+      p <- ggplot(df, aes(x = celltype, y = effect_ref_log2, fill = celltype, alpha = signif_flag,
+                          color = is_ref_flag)) +
+        geom_hline(yintercept = 0, linetype = "dashed") +
+        geom_col() +
+        # 1–3 stars on significant bars (no legend participation)
+        geom_text(data = subset(df, stars != ""), aes(x = celltype, y = effect_ref_log2, label = stars),
+          vjust = 0, size = 6,color = "black", inherit.aes = FALSE, show.legend = FALSE) +
+        # cell-type colors but no legend
+        scale_fill_manual(values = cols, guide = "none") +
+        # significance legend via alpha
+        scale_alpha_manual(values = c(signif = 1.0, ns = 0.25),name = paste0("FDR < ", fdr.threshold)) +
+        # Reference cell type legend: darker outline, very light fill
+        scale_color_manual(values = c(ref = "black", nonref = "grey70"), name = "Reference cell types",
+                           labels = c(ref = "Reference", nonref = "Other"),
+                           guide  = guide_legend(override.aes = list(fill = c("grey95", "grey95")))) +
+        # symmetric padding so both top and bottom have headroom
+        scale_y_continuous(expand = expansion(mult = c(0.1, 0.1))) +
+        labs(x = "Cell type",y = "Reference-centered effect (log2-ratio)",title = plot.title, caption = star.caption) +
+        theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+      
+      return(p)
+    }
+    
+    ## --------- style == "violin": null distribution per cell type ----------
+    psi <- x$psi
+    
+    if (identical(coef, "contrast")) {
+      if (is.null(x$fit$stats.perm)) {
+        stop("No stats.perm found in x$fit; cannot build null for contrast.")
+      }
+      beta.perm <- as.matrix(x$fit$stats.perm)  # n_perm × K
+      ell.perm  <- psi %*% t(beta.perm)         # D × n_perm
+      ref.idx  <- x$reference$idx
+      ref.mean <- mean(loadings[ref.idx])
+      ell.perm.ref <- ell.perm - ref.mean       # natural-log scale
+    } else {
+      if (is.null(x$fit$sampled.fits)) {
+        stop("No sampled.fits in x$fit; cannot build null for coefficients.")
+      }
+      coef.mat <- x$fit$coef
+      j <- match(coef, rownames(coef.mat))
+      if (is.na(j)) stop("Could not find coefficient index for ", coef)
+      
+      beta.j.perm <- sapply(x$fit$sampled.fits, function(mat) mat[, j])
+      ell.perm <- psi %*% t(beta.j.perm)        # D × n_perm
+      ref.idx  <- x$reference$idx
+      ref.mean <- mean(loadings[ref.idx])
+      ell.perm.ref <- ell.perm - ref.mean       # natural-log scale
+    }
+    
+    # Convert permuted effects to log2 scale
+    ell.perm.ref.log2 <- ell.perm.ref * log2_factor
+    
+    # Build long DF for violins
+    celltypes_order <- rownames(ell.perm.ref.log2)
+    df.perm <- reshape2::melt(
+      ell.perm.ref.log2,
+      varnames = c("celltype", "perm_id"),
+      value.name = "effect_ref_perm_log2"
+    )
+    df.perm$celltype <- factor(df.perm$celltype, levels = celltypes)  # sorted / unsorted order
+    
+    # Observed summary DF (from df.common, log2 scale)
+    df.obs <- df.common
+    df.obs$celltype <- factor(df.obs$celltype, levels = celltypes)
+    
+    p <- ggplot(df.perm, aes(x = celltype, y = effect_ref_perm_log2)) +
+      geom_violin(fill = "grey85", color = NA, trim = FALSE) +
+      geom_jitter(width = 0.15, alpha = 0.01, size = 0.6) +
+      geom_point(data = df.obs, aes(x = celltype, y = effect_ref_log2, color = signif), size = 2) +
+      geom_text(data = subset(df.obs, stars != ""), aes(x = celltype, y = effect_ref_log2, label = stars),
+        vjust = -0.4, size = 6, color = "black", inherit.aes = FALSE, show.legend = FALSE) +
+      scale_color_manual(values = c(`TRUE` = "red", `FALSE` = "black"), name = paste0("FDR < ", fdr.threshold),
+                         labels = c(`TRUE` = "yes", `FALSE` = "no")) +
+      labs(x = "Cell type", y = "Reference-centered effect (log2-ratio)", title = plot.title, caption = star.caption) +
+      theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    return(p)
+  }
+  
+  ## ========================================================
+  ## Mode 3: volcano-style view
+  ## ========================================================
+  if (value == "volcano") {
+    df <- df.common
+    df$mlog10p     <- -log10(df$pval)
+    df$signif_flag <- ifelse(df$signif, "signif", "ns")
+    df$celltype    <- factor(df$celltype, levels = celltypes)
+    
+    # Decide which cell types to label
+    if (labelCellTypes == "all") {
+      df.label <- df
+    } else if (labelCellTypes == "significant") {
+      df.label <- subset(df, signif)
+    } else { # "none"
+      df.label <- df[0, , drop = FALSE]  # empty
+    }
+    
+    p <- ggplot(df, aes(x = effect, y = mlog10p)) +
+      geom_hline(yintercept = -log10(fdr.threshold), linetype = "dotted") +
+      geom_vline(xintercept = 0, linetype = "dashed") +
+      geom_point(aes(color = celltype, alpha = signif_flag), size = 2) +
+      geom_text(data = df.label, aes(x = effect, y = mlog10p, label = celltype),
+        vjust = -0.4, size = 3, inherit.aes = FALSE, show.legend = FALSE) +
+      scale_color_manual(values = cols, name = "Cell type") +
+      scale_alpha_manual(values = c(signif = 1.0, ns = 0.2), name = paste0("FDR < ", fdr.threshold)) +
+      labs(x = "Effect (log-ratio / loading)", y = "-log10(p-value)", title = plot.title, caption = star.caption) +
+      theme_bw()
+    
+    return(p)
+  }
+}
+
+#' Plot contrast tree using continuous contrast score (lmCoda)
+#' 
+#' Constructs and visualizes a supervised compositional tree where splits are driven
+#' by a continuous contrast score derived from an \code{lmCoda} fit, rather than by
+#' predefined sample groups. Each internal node represents a balance whose separation
+#' best explains variation along the contrast direction.
+#'
+#' Cell-type partitions are learned top-down using score-supervised balances, and
+#' node-level significance is assessed by regressing the contrast score on each balance.
+#' Sample-level contrast scores are displayed along significant nodes, colored by
+#' magnitude and direction of the contrast.
+#'
+#' This function replaces the old group-based contrast tree and is compatible
+#' with arbitrary contrasts defined in \code{lmCoda}.
+#'
+#' @param d.counts Matrix of cell-type counts (samples × cell types).
+#' @param score Numeric vector of per-sample contrast scores, typically obtained from
+#'   \code{getCodaContrastScore()}.
+#' @param plot.theme ggplot2 theme used for plotting.
+#' @param label.angle Angle of cell-type labels on the x-axis.
+#' @param p.threshold Significance threshold for node-level tests.
+#' @param adjust.pvalues Logical; whether to apply FDR correction to node p-values.
+#' @param font.size Font size for node annotations.
+#' @param label.hjust Horizontal justification of x-axis labels.
+#' @param show.text Which node annotation to display (e.g. \code{"pvalue"},
+#'   \code{"pvalue.code"}), or \code{FALSE} to hide text.
+#' @param tree.order Optional character vector specifying a desired leaf ordering;
+#'   used to rotate the tree for visual consistency.
+#' @param loadings.mean Optional named vector of cell-type loadings (e.g. contrast
+#'   loadings from \code{lmCoda}); if provided, can be used to guide tree reordering.
+#' @param verbose Logical; print progress messages.
+#' @param ... Additional graphical parameters, including color-scale controls such as
+#'   \code{score.palette}, \code{score.midpoint}, and \code{score.limits}.
+#'
+#' @return A \code{ggplot2} object representing the contrast-driven CoDA tree.
+#'
+#' @seealso \code{\link{lmCoda}}, \code{\link{getCodaContrastScore}},
+#'   \code{\link{constructTreeScore}}
+#'
+#' @keywords internal
+plotContrastTreeScore <- function(d.counts, score, plot.theme = theme_get(), label.angle = 90,
+                                  p.threshold = 0.05, adjust.pvalues = TRUE, font.size = 3,
+                                  label.hjust = 1, show.text = "pvalue.code", tree.order = NULL,
+                                  loadings.mean = NULL, verbose = FALSE, 
+                                  score.palette = c(low = "#2166AC", mid = "grey95", high = "#B2182B"),
+                                  score.midpoint = 0, score.limits = NULL, ...) {
+  checkPackageInstalled("ggdendro", cran = TRUE)
+  checkPackageInstalled("ape", cran = TRUE)
+
+  d.counts <- as.matrix(d.counts)
+  score <- score[rownames(d.counts)]
+  if (any(is.na(score))) stop("score has NA for some samples after alignment.")
+
+  log.f <- getLogFreq(d.counts)
+
+  # build supervised tree
+  t.cur <- constructTreeScore(d.counts, score)
+
+  if (!is.null(loadings.mean) && is.null(tree.order)) {
+    tree.order <- names(sort(loadings.mean))
+  }
+
+  # optional reorder to match a leaf order (same logic as before)
+  if (!is.null(tree.order)) {
+    t <- t.cur$tree
+    tree.order <- intersect(tree.order, t$tip.label)
+    d0 <- distTreeOrder(t, tree.order)
+    idx <- min(t$edge[, 1]):max(t$edge[, 1])
+    for (i.node in idx) {
+      t.alt <- ape::rotate(t, i.node)
+      d1 <- distTreeOrder(t.alt, tree.order)
+      if (d1 <= d0) { t <- t.alt; d0 <- d1 }
+    }
+    t.cur$tree <- t
+  }
+
+  # ------------------------------------------------------------------
+  # Canonical hclust-based node positions + SBP 
+  # ------------------------------------------------------------------
+  # Ensure branch lengths exist so as.hclust.phylo works
+  tree.bl <- ape::compute.brlen(t.cur$tree, method = "Grafen")
+  h <- stats::as.hclust(tree.bl)          # K = D-1 internal nodes
+  dend <- as.dendrogram(h)
+  dend.data <- ggdendro::dendro_data(dend, type = "rectangle")
+
+  sbp <- sbpFromHclust(h)                 # D x K
+  innode.pos <- innodePosFromHclust(h)    # K x 4
+
+  # balances: n_samples x K, aligned to innode.pos$id = 1..K
+  balances <- getNodeBalances(log.f, sbp)
+  colnames(balances) <- as.character(innode.pos$id)
+
+  # ------------------------------------------------------------------
+  # Node p-values: score ~ balance
+  # ------------------------------------------------------------------
+  p.val <- vapply(seq_len(ncol(balances)), function(i) {
+    df <- data.frame(balance = balances[, i], score = score)
+    fit <- lm(score ~ balance, data = df)
+    pv <- summary(fit)$coefficients[2, 4]
+    ifelse(is.na(pv), 1, pv)
+  }, numeric(1))
+
+  p.adj <- if (adjust.pvalues) p.adjust(p.val, method = "fdr") else p.val
+
+  # base dendrogram plot
+  px.init <- createDendrogram(dend.data, plot.theme = plot.theme, font.size = font.size,
+                              angle = label.angle, hjust = label.hjust)
+
+  if (sum(p.adj < p.threshold) == 0) return(px.init)
+
+  # ------------------------------------------------------------------
+  # Overlay balances as points near significant nodes
+  # ------------------------------------------------------------------
+  df.pval <- df.bals <- df.text <- data.frame()
+
+  for (id.node in seq_len(ncol(balances))) {
+    if (p.adj[id.node] > p.threshold) next
+
+    # node marker
+    df.pval <- rbind(df.pval, data.frame(x = innode.pos$x[id.node], y = innode.pos$y[id.node]))
+
+    x.tmp <- balances[, id.node]
+    x.tmp <- x.tmp - mean(x.tmp)
+
+    df.text <- rbind(df.text, data.frame(
+      x = innode.pos$x[id.node] + innode.pos$range[id.node] / 2,
+      y = innode.pos$y[id.node],
+      range = sprintf("%2.1f", max(abs(x.tmp))),
+      pvalue = signif(p.adj[id.node], 2),
+      pvalue.code = pvalueToCode(p.adj[id.node])
+    ))
+
+    # scale balance to node span, then place points
+    denom <- max(abs(x.tmp))
+    if (!is.finite(denom) || denom == 0) denom <- 1
+    x.tmp <- x.tmp / denom / 2 * innode.pos$range[id.node] * 0.9
+    x.tmp <- x.tmp + innode.pos$x[id.node]
+    y.tmp <- innode.pos$y[id.node] - 0.05 + runif(length(x.tmp), 0, 0.03)
+
+    df.bals <- rbind(df.bals, data.frame(
+      x = x.tmp, y = y.tmp, score = score, node = id.node
+    ))
+  }
+
+  px <- px.init +
+    geom_point(data = df.bals,
+               aes(x = x, y = y, col = score, group = factor(node)),
+               alpha = 0.15, size = 1) +
+    geom_point(data = df.pval, aes(x = x, y = y)) +
+    labs(col = "contrast score")
+
+  if (is.logical(show.text) && !show.text) show.text <- NULL
+  if (!is.null(show.text)) {
+    if (!(show.text %in% colnames(df.text)))
+      stop("Unexpected value for show.text: ", show.text)
+    px <- px +
+      geom_text(data = df.text,
+                aes_string(x = "x", y = "y", label = show.text),
+                vjust = 0, hjust = 0, size = font.size)
+  }
+
+  if (!is.null(loadings.mean)) {
+  leaf.df <- dend.data$labels
+  leaf.df$loadings <- as.numeric(loadings.mean[leaf.df$label])
+
+  px <- px +
+    geom_tile(data = leaf.df, aes(x = x, y = -0.1, fill = loadings), width = 0.5, height = 0.1) +
+    guides(fill = guide_colorbar(title = "loadings", title.position = "top", direction = "horizontal",
+           title.hjust = 0.5))
+           }
+  px <- px + scale_fill_gradient2(low="blue", mid="grey90", high="red", midpoint=0)
+
+  if (!is.null(score.palette)) {
+    # allow unnamed vectors of length 3
+    if (is.null(names(score.palette))) {
+      if (length(score.palette) != 3) stop("score.palette must have 3 colors (low, mid, high).")
+      names(score.palette) <- c("low", "mid", "high")
+    }
+    if (!all(c("low", "mid", "high") %in% names(score.palette))) {
+      stop("score.palette must be named c(low=..., mid=..., high=...).")
+    }
+
+    px <- px + scale_color_gradient2(low = score.palette[["low"]], mid = score.palette[["mid"]], 
+                                     high = score.palette[["high"]], midpoint = score.midpoint,
+                                     limits = score.limits)
+      }
+
+  px
+}
+
+#' Internal plotting function for cell loadings (old two group version)
 #' @keywords internal
 plotCellLoadings <- function(loadings, pval, ref.level, target.level, signif.threshold=0.05, jitter.alpha=0.1,
                              palette=NULL, show.pvals=FALSE, plot.theme=theme_get(), jitter.size=1,
@@ -1706,5 +2379,71 @@ pickColsForKey <- function(pm, key) {
   ## none found
   character(0)
 }
+
+#' Build SBP (D x K) aligned to hclust internal nodes (1..K)
+#' @keywords internal
+sbpFromHclust <- function(h) {
+  labs <- h$labels
+  D <- length(labs)
+  K <- nrow(h$merge)
+
+  # each element will store the leaf indices under node i
+  members <- vector("list", K)
+  for (i in seq_len(K)) {
+    a <- h$merge[i, 1]
+    b <- h$merge[i, 2]
+    ma <- if (a < 0) -a else members[[a]]
+    mb <- if (b < 0) -b else members[[b]]
+    members[[i]] <- c(ma, mb)
+  }
+
+  sbp <- matrix(0, nrow = D, ncol = K,
+                dimnames = list(labs, paste0("node_", seq_len(K))))
+
+  for (i in seq_len(K)) {
+    a <- h$merge[i, 1]
+    b <- h$merge[i, 2]
+    left  <- if (a < 0) -a else members[[a]]
+    right <- if (b < 0) -b else members[[b]]
+
+    sbp[left,  i] <-  1
+    sbp[right, i] <- -1
+  }
+
+  sbp
+}
+
+#' Compute internal-node positions from hclust (matches ggdendro coords)
+#' @keywords internal
+innodePosFromHclust <- function(h) {
+  D <- length(h$labels)
+  K <- nrow(h$merge)
+
+  # leaf x positions follow h$order (same as dendrogram drawing)
+  x.leaf <- numeric(D)
+  x.leaf[h$order] <- seq_len(D)
+
+  # internal node x/range via recursion on merge
+  x.node <- numeric(K)
+  range.node <- numeric(K)
+
+  members <- vector("list", K)
+
+  for (i in seq_len(K)) {
+    a <- h$merge[i, 1]
+    b <- h$merge[i, 2]
+
+    ma <- if (a < 0) -a else members[[a]]
+    mb <- if (b < 0) -b else members[[b]]
+    members[[i]] <- c(ma, mb)
+
+    xs <- x.leaf[members[[i]]]
+    x.node[i] <- mean(xs)
+    range.node[i] <- max(xs) - min(xs)
+  }
+
+  data.frame(id = seq_len(K), x = x.node, y = h$height, range = range.node, stringsAsFactors = FALSE)
+}
+
 
 

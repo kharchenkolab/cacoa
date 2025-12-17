@@ -2,7 +2,340 @@
 #' @importFrom sccore checkPackageInstalled
 NULL
 
-#' Get loadings by different methods
+
+## ------------------------------------------------------------
+## lmCoda: CoDA-aware LM + permutations
+## ------------------------------------------------------------
+#' Fits a multivariate linear model to sample-by-cell-type compositions using an
+#' isometric log-ratio (ILR) transform, and maps covariate/contrast effects back to
+#' cell-type loadings in clr (log-ratio) space.
+#'
+#' Given counts per sample and cell type, a small pseudocount is added to zeros and
+#' sample-wise frequencies are formed. An ILR basis matrix \eqn{\Psi \in \mathbb{R}^{D \times (D-1)}}
+#' with orthonormal columns is used to compute ILR coordinates
+#' \deqn{Z = \log(X)\Psi,}
+#' where \eqn{X} stacks compositions row-wise. A multivariate linear model is then fit in
+#' ILR space,
+#' \deqn{Z = F B + E,}
+#' with design matrix \eqn{F} (or its core subspace for Freedman--Lane),
+#' coefficient matrix \eqn{B}, and residuals \eqn{E}.
+#'
+#' For each model coefficient \eqn{j} (a column of the design matrix) the ILR-space effect is
+#' \eqn{\beta^{(j)} = B_{j,\cdot}}, and for a user-defined contrast vector \eqn{\theta} the ILR-space
+#' contrast effect is \eqn{\beta^{(\theta)} = \theta^\top B}. Effects are mapped to cell-type
+#' (clr) loadings via
+#' \deqn{\ell = \Psi \beta,}
+#' yielding a length-\eqn{D} loading vector that satisfies the zero-sum constraint and is
+#' interpretable only in relative terms. Differences \eqn{\ell_a - \ell_b} correspond to
+#' changes in log-ratios of cell-type proportions.
+#'
+#' Statistical significance is assessed by sample randomization (block permutations or the
+#' Freedman--Lane procedure) applied to the fitted ILR-space model. For each coefficient and
+#' the specified contrast, the function reports (i) a global composition-level statistic based on
+#' the fraction of ILR variance explained by the corresponding fitted component, and (ii)
+#' cell-type–specific empirical p-values for clr loadings, with FDR adjustment across cell types.
+#'
+#' @param cnts Matrix of counts (samples × cell types). Rows are samples; columns are parts.
+#' @param model Design specification returned by \code{buildDesignMatrices()}, containing
+#'   design matrices (e.g. \code{F} and/or \code{X}) and contrast information aligned to the
+#'   coefficient ordering.
+#' @param perm.method Permutation scheme used for inference. \code{"block"} permutes in the
+#'   full design space; \code{"freedman-lane"} uses the core design space.
+#' @param zero.pseudocount Non-negative pseudocount added to zero entries prior to forming
+#'   sample-wise frequencies.
+#' @param basis.type ILR basis type passed to \code{coda.base::ilr_basis()}.
+#' @param ref.p.thresh P-value threshold used to select a "least-affected" reference set for
+#'   centering loadings (optional, used for presentation).
+#' @param ref.min.size Minimum size of the reference set.
+#' @param ref.max.size Maximum size of the reference set.
+#' @param ... Additional arguments forwarded to the permutation/LM routine
+#'   (e.g. \code{n.permutations}, na.mode, robust, alternative, etc.).
+#' 
+#' @return A list containing ILR coordinates and basis, fitted model/permutation output, and
+#'   coefficient- and contrast-level results including global variance-explained statistics,
+#'   clr-space cell-type loadings, empirical p-values/FDR, and (if available) predicted endpoint
+#'   compositions for the specified contrast.
+#' @keywords internal
+lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), zero.pseudocount = 0.1,
+                   basis.type = c("default"), ref.p.thresh = 0.3, ref.min.size = 1, 
+                   ref.max.size = 3, ...) {
+  
+  basis.type  <- match.arg(basis.type)
+  perm.method <- match.arg(perm.method)
+  
+  cnts <- as.matrix(cnts)
+  if (is.null(rownames(cnts)))
+    rownames(cnts) <- paste0("sample_", seq_len(nrow(cnts)))
+  
+  ## 1) ILR transform
+  ilr.res <- computeILRMatrix(cnts = cnts, zero.pseudocount = zero.pseudocount, basis.type = basis.type)
+  B.ilr <- ilr.res$ilr     # n_samples × K
+  psi   <- ilr.res$psi     # D × K
+  freqs <- ilr.res$freqs # 
+  
+  K <- ncol(B.ilr)
+  D <- nrow(psi)
+  cell.types <- rownames(psi)
+  
+  ## 1b) Choose the *design space* based on perm.method
+  ##     - block         -> full F
+  ##     - freedman-lane -> core X
+  if (perm.method == "freedman-lane") {
+    design <- model$X
+    contrast.vec <- model$contrast.X
+    endpoints <- model$contrast_endpoints_X
+  } else {  # "block"
+    design <- model$F
+    contrast.vec <- model$contrast.F
+    endpoints <- model$contrast_endpoints_F
+  }
+  
+  if (is.null(design))
+    stop("Design matrix for perm.method='", perm.method, "' is missing in model.")
+  if (nrow(design) != nrow(B.ilr))
+    stop("Row counts of design matrix and ILR matrix do not match.")
+  
+  ## Total variance in ILR space (common denominator)
+  B.centered <- scale(B.ilr, center = TRUE, scale = FALSE)
+  total.ss   <- sum(B.centered^2)
+  
+  ## 2) Linear model + permutations in ILR space
+  fit <- performLMPermutations(model, B.ilr, perm.method = perm.method,
+                               return.sampled.stats = TRUE,
+                               return.sampled.fits  = TRUE, ...)
+  
+  coef.mat     <- fit$coef          # n_coef × K, aligned with chosen design
+  stat.obs     <- as.numeric(fit$stat.obs)   # length K
+  stats.perm   <- as.matrix(fit$stats.perm)  # n_perm × K
+  sampled.fits <- fit$sampled.fits          # list length K
+  
+  n.coef     <- nrow(coef.mat)
+  n.perm     <- nrow(stats.perm)
+  coef.names <- rownames(coef.mat)
+  ilr.names  <- colnames(coef.mat)
+  
+  ## --------------------------------------------------------
+  ## 3) USER-DEFINED CONTRAST
+  ##    - uses contrast in the *same space* as coef_mat
+  ## --------------------------------------------------------
+  if (is.null(contrast.vec))
+    stop("Contrast vector for perm.method='", perm.method, "' is missing in model.")
+  
+  beta.contrast.obs  <- stat.obs              # length K (ILR-space contrast effect)
+  beta.contrast.perm <- stats.perm            # n_perm × K
+  
+  # Cell-type loadings for contrast
+  ell.contrast.obs  <- drop(psi %*% beta.contrast.obs)          # D
+  ell.contrast.perm <- psi %*% t(beta.contrast.perm)            # D × n_perm
+  rownames(ell.contrast.perm) <- cell.types
+  
+  # Per-cell p-values (reference-free, two-sided)
+  p.contrast.cell <- (rowSums(abs(ell.contrast.perm) >= abs(ell.contrast.obs)) + 1) /
+                     (n.perm + 1)
+  names(p.contrast.cell) <- cell.types
+  padj.contrast.cell <- p.adjust(p.contrast.cell, method = "fdr")
+  
+  ## Global stat for contrast = variance explained in ILR space
+  # NOTE: contrast.vec must live in same space (F or X) as 'design'
+  z      <- as.numeric(design %*% contrast.vec)  # n_samples
+  sum.z2 <- sum(z^2)
+  scale.contrast <- sum.z2 / total.ss           # scaling factor
+  
+  # variance explained (observed + permuted)
+  T.contrast.obs  <- scale.contrast * sum(beta.contrast.obs^2)
+  T.contrast.perm <- scale.contrast * rowSums(beta.contrast.perm^2)
+  
+  # p-value (same ordering, now in var-expl units)
+  p.contrast.global <- (sum(T.contrast.perm >= T.contrast.obs) + 1) /
+                       (length(T.contrast.perm) + 1)
+  
+  # Reference cluster for interpretation (contrast-based)
+  ref <- pickReferenceCluster(loadings = ell.contrast.obs, pval = p.contrast.cell,
+                              p.thresh = ref.p.thresh, min.size = ref.min.size, 
+                              max.size = ref.max.size)
+  ell.contrast.ref <- ell.contrast.obs - ref$mean
+  
+  ## --------------------------------------------------------
+  ## 3b) PREDICTED BASELINE vs TARGET COMPOSITIONS (if endpoints present)
+  ##      endpoints must be in the *same coefficient space* as coef.mat
+  ## --------------------------------------------------------
+  predicted <- NULL
+  if (!is.null(endpoints)) {
+    if (!all(c("num", "den") %in% names(endpoints))) {
+      warning("contrast endpoints present but missing 'num'/'den'; skipping predicted compositions.")
+    } else {
+      x.den <- endpoints$den
+      x.num <- endpoints$num
+      
+      if (length(x.den) != n.coef || length(x.num) != n.coef) {
+        stop("Length of contrast endpoints (", length(x.den),
+             ") does not match number of coefficients (", n.coef, ").")
+      }
+      
+      # baseline/target ILR: 1×K = (1×n_coef) %*% (n_coef×K)
+      b.den <- as.numeric(x.den %*% coef.mat)
+      b.num <- as.numeric(x.num %*% coef.mat)
+      
+      ilr.den <- matrix(b.den, nrow = 1)
+      ilr.num <- matrix(b.num, nrow = 1)
+      
+      # back-transform to compositions
+      f.den <- ilrInverseFromBasis(ilr.den, psi)[1, ]
+      f.num <- ilrInverseFromBasis(ilr.num, psi)[1, ]
+      
+      # normalize & name (defensive, though inverse already normalizes)
+      f.den <- f.den / sum(f.den)
+      f.num <- f.num / sum(f.num)
+      names(f.den) <- cell.types
+      names(f.num) <- cell.types
+      
+      # choose human-readable labels from model, with safe defaults
+      endpoint.labels <- list(baseline = "baseline", target   = "target")
+      if (!is.null(model$contrast_endpoint_labels)) {
+        if (!is.null(model$contrast_endpoint_labels$baseline))
+          endpoint.labels$baseline <- model$contrast_endpoint_labels$baseline
+        if (!is.null(model$contrast_endpoint_labels$target))
+          endpoint.labels$target <- model$contrast_endpoint_labels$target
+      }
+      
+      predicted <- list(baseline = f.den, target = f.num, delta = f.num - f.den,
+                        labels = endpoint.labels)
+    }
+  }
+  
+  ## --------------------------------------------------------
+  ## 4) PER-COEFFICIENT EFFECTS (each design parameter)
+  ##     Uses the chosen 'design' (F or X) for var-expl scaling
+  ## --------------------------------------------------------
+  coef.results <- vector("list", length = n.coef)
+  names(coef.results) <- coef.names
+  
+  for (j in seq_len(n.coef)) {
+    # ILR-space coefficient for j
+    beta.j.obs <- coef.mat[j, ]             # length K
+    
+    # Permuted ILR-space coefficients for j: n_perm × K
+    # each element of sampled.fits[[k]] is n_perm × n_coef
+    beta.j.perm <- sapply(sampled.fits, function(mat) mat[, j])
+    # sapply gives n_perm × K with columns matching ILR dims
+    
+    ## Global stat for coefficient j = variance explained
+    x.j    <- design[, j]
+    sum.x2 <- sum(x.j^2)
+    scale.j <- sum.x2 / total.ss
+    
+    T.j.obs  <- scale.j * sum(beta.j.obs^2)
+    T.j.perm <- scale.j * rowSums(beta.j.perm^2)
+    p.j.global <- (sum(T.j.perm >= T.j.obs) + 1) / (length(T.j.perm) + 1)
+    
+    # Map to cell-type loadings
+    ell.j.obs  <- drop(psi %*% beta.j.obs)    # D
+    ell.j.perm <- psi %*% t(beta.j.perm)      # D × n_perm
+    rownames(ell.j.perm) <- cell.types
+    
+    # Per-cell p-values for coefficient j
+    p.j.cell <- (rowSums(abs(ell.j.perm) >= abs(ell.j.obs)) + 1) /
+                (n.perm + 1)
+    names(p.j.cell) <- cell.types
+    padj.j.cell <- p.adjust(p.j.cell, method = "fdr")
+    
+    coef.results[[j]] <- list(beta_ilr  = beta.j.obs, # ILR effect vector for coefficient j
+                              global = list(stat = T.j.obs, # variance explained by coefficient j
+                       stat_perm = T.j.perm, # background
+                       p = p.j.global),
+      loadings  = ell.j.obs,       # cell-type loadings (ref-free)
+      pval_cell = p.j.cell,
+      padj_cell = padj.j.cell)
+  }
+  
+  ## --------------------------------------------------------
+  ## 5) Final result structure
+  ## --------------------------------------------------------
+  list(ilr = B.ilr, psi = psi, freqs = freqs,
+       fit = fit, perm.method = perm.method, # Original LM/permutation output
+       contrast = list(beta_ilr = beta.contrast.obs, # ILR effect vector
+                       global = list(stat = T.contrast.obs, # variance explained by contrast
+                                     stat_perm = T.contrast.perm, # permuted var-expl
+                                     p = p.contrast.global),
+                       loadings = list(obs = ell.contrast.obs, # cell-type loadings (ref-free)
+                                       ref_centered = ell.contrast.ref), 
+                       per_cell = list(pval = p.contrast.cell, padj = padj.contrast.cell),
+                       predicted = predicted,# baseline / target / delta compositions (if available)
+                       label = if (!is.null(model$contrast_label)) model$contrast_label else NULL),
+   
+       coefficients = coef.results,  # Per-coefficient results
+       reference = ref)
+}
+
+## ILR transform helper
+computeILRMatrix <- function(cnts, zero.pseudocount = 0.1, basis.type = c("default")) {
+  basis.type <- match.arg(basis.type)
+  cnts <- as.matrix(cnts)
+  
+  if (any(rowSums(cnts) <= 0))
+    stop("Some samples have zero total count; cannot compute frequencies.")
+
+  #rs <- rowSums(cnts, na.rm = TRUE)
+  #bad <- is.na(rs) | rs <= 0
+  #if (any(bad)) {
+  #  cnts[bad, ] <- NA
+  #}
+  
+  # Simple pseudocount handling
+  cnts[cnts == 0] <- zero.pseudocount
+  freqs <- sweep(cnts, 1, rowSums(cnts), "/")
+  
+  # ILR basis: rows = cell types, cols = ILR dimensions
+  psi <- coda.base::ilr_basis(ncol(freqs), type = basis.type)
+  rownames(psi) <- colnames(freqs)
+  # ILR coordinates: samples × ILR dims
+  ilr <- log(freqs) %*% psi
+  
+  list(ilr = ilr, psi = psi, freqs = freqs)
+}
+
+#' Reference cluster helper: pick "least affected" cell types
+#' Chooses a small set of cell types with minimal evidence of association and uses it to
+#' compute reference-centered (presentation-only) loadings. The reference set is intended
+#' to anchor interpretation of clr-space loadings by selecting cell types that appear
+#' approximately unchanged under the tested contrast.
+#' @param loadings Named numeric vector of clr-space cell-type loadings \eqn{\ell}.
+#' @param pval Named numeric vector of empirical p-values for each cell type.
+#' @param p.thresh P-value threshold used to define candidate reference cell types.
+#' @param min.size Minimum number of cell types to include in the reference set.
+#' @param max.size Maximum number of cell types to include in the reference set.
+#'
+#' @return A list with indices and names of the selected reference cell types and the mean
+#'   loading over the reference set (useful for centering).
+#' @keywords internal
+pickReferenceCluster <- function(loadings, pval, p.thresh = 0.3, min.size = 1,
+                                 max.size = 3) {
+  stopifnot(length(loadings) == length(pval))
+  ct <- names(loadings)
+  # candidates: high p-value (weak evidence)
+  idx <- which(pval > p.thresh)
+  
+  # if too few candidates, fall back to smallest absolute loadings
+  if (length(idx) < min.size) {
+    idx <- order(abs(loadings))[seq_len(min.size)]
+  }
+  # if too many candidates, keep those closest to zero
+  if (length(idx) > max.size) {
+    idx <- idx[order(abs(loadings[idx]))[seq_len(max.size)]]
+  }
+
+  list(idx = idx, celltypes = ct[idx], mean = mean(loadings[idx]))
+}
+
+## Inverse ILR given coordinates (rows) and basis psi (D × (D-1))
+ilrInverseFromBasis <- function(z, psi) {
+  z   <- as.matrix(z)          # n_samples × (D-1)
+  logf <- z %*% t(psi)         # n_samples × D
+  f    <- exp(logf)
+  f / rowSums(f)
+}
+
+#' Get loadings by different methods (old two-group comparison)
 #'
 #' @param cnts Counts of cell typer in samples. Rows - samples, columns - cell types
 #' @param groups Vector with boolean values. TRUE - sample in the case group, FALSE - sample in the control group
@@ -92,7 +425,7 @@ getLoadings <- function(cnts, groups, method = c('lda', 'svm', 'cda', 'cda.std')
   return(loadings)
 }
 
-#' This function produces the resampling dataset
+#' This function produces the resampling dataset (old two-group comparison)
 #'
 #' @param cnts Counts of cell types in samples. Rows - samples, columns - cell types
 #' @param groups Vector with boolean values. TRUE - sample in the case group, FALSE - sample in the control group
@@ -127,8 +460,8 @@ produceResampling <- function(cnts, groups, n.perm = 1000, seed = 239) {
   return(list(cnts = cnts.perm, groups = groups.perm))
 }
 
-
-#' @keywords internal
+#' This function runs the coda analysis (old two-group comparison)
+#' @keywords internal 
 runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, null.distr=FALSE, method="lda", n.cores=1, verbose=TRUE) {
   # Create datasets as
   samples.init <- produceResampling(cnts = cnts, groups = groups, n.perm = n.boot, seed = n.seed)
@@ -212,6 +545,7 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
               cell.list=cell.list))
 }
 
+#' old two-group comparison: reference set selection
 #' @keywords internal
 referenceSet <- function(freqs, groups, p.thresh=0.05) {
   checkPackageInstalled("psych", cran=TRUE)
@@ -410,7 +744,108 @@ checkDataTree <- function(d.counts, tree){
   checkDataAndCells(d.counts, tree$tip.label)
 }
 
-#' Construct the canonical tree
+#' Compute per-sample contrast score from lmCoda result
+#' @keywords internal
+getCodaContrastScore <- function(x) {
+  if (is.null(x$ilr) || is.null(x$contrast$beta_ilr))
+    stop("lmCoda result missing x$ilr or x$contrast$beta_ilr.")
+  sc <- drop(x$ilr %*% x$contrast$beta_ilr)
+  names(sc) <- rownames(x$ilr)
+  sc
+}
+
+#' Construct a supervised SBP tree using a continuous contrast score (top-down)
+#' This replaces legacy constructTree() but uses a continuous score.
+#' @keywords internal
+constructTreeScore <- function(cnts, score, partition.thresh = 0, zero.pseudocount = 0.1,
+                               basis.type = c("default")) {
+  basis.type <- match.arg(basis.type)
+  cnts <- as.matrix(cnts)
+  checkData(cnts)
+
+  score <- score[rownames(cnts)]
+  if (any(is.na(score))) stop("score has NA for some samples after alignment.")
+
+  n.cells <- ncol(cnts)
+  sbp <- matrix(0, nrow = n.cells, ncol = n.cells - 1,
+                dimnames = list(colnames(cnts), NULL))
+
+  unsolved <- list(colnames(cnts))
+  for (k in 1:(n.cells - 1)) {
+    cur <- unsolved[[k]]
+
+    if (length(cur) == 2) {
+      sbp[cur[1], k] <- 1
+      sbp[cur[2], k] <- -1
+      next
+    }
+
+    d.tmp <- cnts[, cur, drop = FALSE]
+    ld <- getLoadingsScore(d.tmp, score, zero.pseudocount = zero.pseudocount,
+                           basis.type = basis.type)
+
+    plus  <- names(ld)[ld >  partition.thresh]
+    minus <- names(ld)[ld <  partition.thresh]
+
+    # fallback if threshold produces empty side
+    if (length(plus) == 0 || length(minus) == 0) {
+      ord <- order(ld)
+      mid <- floor(length(ord) / 2)
+      minus <- names(ld)[ord[1:mid]]
+      plus  <- names(ld)[ord[(mid+1):length(ord)]]
+    }
+
+    sbp[minus, k] <- -1
+    sbp[plus,  k] <-  1
+
+    if (length(minus) > 1) unsolved[[length(unsolved) + 1]] <- minus
+    if (length(plus)  > 1) unsolved[[length(unsolved) + 1]] <- plus
+  }
+
+  tree <- sbp2tree(sbp)
+  tree <- ape::compute.brlen(tree, method = "Grafen")
+  h <- stats::as.hclust(tree)
+  list(tree = ape::as.phylo(h), sbp = sbp, dendro = as.dendrogram(h))
+}
+
+# local helper: compute score-supervised loadings for this subset
+#' @keywords internal
+getLoadingsScore <- function(cnts.sub, score, zero.pseudocount = 0.1,
+                             basis.type = c("default")) {
+  basis.type <- match.arg(basis.type)
+
+  cnts.sub <- as.matrix(cnts.sub)
+
+  score.sub <- score[rownames(cnts.sub)]
+  if (any(is.na(score.sub))) stop("score has NA for some samples in this subset.")
+
+  cnts.sub[cnts.sub == 0] <- zero.pseudocount
+  freqs <- sweep(cnts.sub, 1, rowSums(cnts.sub), "/")
+
+  psi <- coda.base::ilr_basis(ncol(freqs), type = basis.type)
+  rownames(psi) <- colnames(freqs)
+
+  b <- log(freqs) %*% psi
+  b <- scale(b)
+
+  df <- data.frame(b, score = as.numeric(score.sub))
+  fit <- lm(score ~ ., data = df)
+
+  w <- coef(fit)[-1]
+  w[is.na(w)] <- 0
+  w <- as.numeric(w)
+  if (sum(w^2) == 0) w[1] <- 1
+  w <- w / sqrt(sum(w^2))
+
+  shat <- drop(b %*% w)
+  if (cor(shat, score.sub, use = "pairwise.complete.obs") < 0) w <- -w
+
+  load <- drop(psi %*% w)
+  names(load) <- colnames(cnts.sub)
+  load
+}
+
+#' Construct the canonical tree (old two-group comparison)
 #'
 #' @param cnts Table with cell type counts
 #' @param groups Groups variable for samples
@@ -460,7 +895,7 @@ constructTree <- function(cnts, groups, partition.thresh = 0){
   return(list(tree = tree, sbp = sbp.cda, dendro = d.cur))
 }
 
-
+#' (old two-group comparison)
 #' @keywords internal
 constructTreeUp <- function(freqs, groups) {
   
@@ -473,7 +908,7 @@ constructTreeUp <- function(freqs, groups) {
   return(list(tree = tree, sbp = sbp, dendro = d.cur))
 }
 
-
+#' (old two-group comparison)
 #' @keywords internal
 constructTreeUpDown <- function(cnts, groups){
   cnts[cnts <= 0] <- 0.5
@@ -537,7 +972,7 @@ constructTreeUpDown <- function(cnts, groups){
 #' @details We use ellipsis because a previous version of this function
 #'          contains additional and insignificant parameters.
 #' @keywords internal
-sbp2tree <- function(sbpart){
+sbp2tree_old <- function(sbpart){
   checkSbpWhole(sbpart)
   
   n.cells <- nrow(sbpart)
@@ -566,6 +1001,45 @@ sbp2tree <- function(sbpart){
   t.tmp$tip.label <- rownames(sbpart)
   return(t.tmp)
 }
+
+#' Get tree from balances (safe phylo constructor)
+#' @keywords internal
+sbp2tree <- function(sbpart){
+  checkSbpWhole(sbpart)
+
+  n.cells <- nrow(sbpart)
+  edges <- c(n.cells+1, n.cells+1)
+  id <- 2*n.cells - 1
+
+  collapse <- sbpart
+  rownames(collapse) <- 1:n.cells
+
+  #  map each balance column -> internal node id
+  node.id.by.balance <- integer(n.cells - 1)
+
+  for(i in rev(1:(n.cells - 1)) ){
+    ids <- which(collapse[,i] != 0)
+
+    node.id.by.balance[i] <- id  # NEW
+
+    edges <- rbind(edges, as.integer(c(id, rownames(collapse)[ids[1]])))
+    edges <- rbind(edges, as.integer(c(id, rownames(collapse)[ids[2]])))
+    rownames(collapse)[ids[2]] <- id
+    id <- id - 1
+
+    collapse[ids[1],] <- 0
+  }
+
+  edge <- edges[-1, , drop=FALSE]
+  phy <- list(edge = edge, tip.label = rownames(sbpart), Nnode = n.cells - 1)
+  class(phy) <- "phylo"
+
+  phy <- ape::reorder.phylo(phy)
+
+  attr(phy, "balance_node_id") <- node.id.by.balance  # NEW
+  phy
+}
+
 
 
 #' Get balances for all inner nodes of the tree
@@ -632,7 +1106,7 @@ bestPartition <- function(freqs.tmp, groups){
 
 
 
-#' Construct the canonical tree
+#' Construct the canonical tree (old two-group comparison)
 #'
 #' @param cnts Table with cell type counts
 #' @param groups Groups variable for samples

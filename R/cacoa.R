@@ -1841,7 +1841,47 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg + gg.labs + self$plot.theme)
     },
 
-    #' @description Plot contrast tree
+    #' @description Plot contrast tree (NEW: lmCoda score-based)
+    #' @param name character Results name slot (default='coda')
+    #' @param cells.to.remain character Specific cell types to keep (default=NULL)
+    #' @param cells.to.remove character Specific cell types to remove (default=NULL)
+    #' @param filter.empty.cell.types boolean Remove cell types without cells (default=TRUE)
+    #' @param adjust.pvalues boolean Adjust P values or not (default=TRUE)
+    #' @param reorder.tree boolean Reorder tree or not (default=TRUE)
+    #' @param ... passed to internal plotContrastTreeScore()
+    #' @return A ggplot2 object
+    plotCodaContrastTree=function(name = "coda", cells.to.remain = NULL, cells.to.remove = NULL,
+                                     filter.empty.cell.types = TRUE, adjust.pvalues = TRUE, reorder.tree = TRUE, 
+                                     score.palette = c(low = "#2166AC", mid = "grey95", high = "#B2182B"),
+                                     score.midpoint = 0, score.limits = NULL, ...) {
+      checkPackageInstalled(c("ape", "ggdendro"), cran = TRUE)
+      # fetch lmCoda results
+      x <- private$getResults(name, "estimateCellLoadings()")
+      # counts only (no d.groups)
+      d.counts <- x$cnts 
+
+      # contrast score
+      score <- getCodaContrastScore(x)
+      score <- score[rownames(d.counts)]  # align to counts
+
+      # optional tree reorder by mean loadings (if present)
+      loadings.mean <- NULL
+      if (reorder.tree) {
+      # for lmCoda, use contrast loadings (or ref_centered)
+        if (!is.null(x$contrast$loadings$obs)) {
+          loadings.mean <- x$contrast$loadings$obs
+        }
+      }
+      gg <- plotContrastTreeScore(d.counts = d.counts, score = score, plot.theme = self$plot.theme, 
+                                  adjust.pvalues = adjust.pvalues, loadings.mean = loadings.mean,
+                                  score.palette = score.palette, score.midpoint = score.midpoint, 
+                                  score.limits = score.limits, ...)
+
+      return(gg)
+    },
+
+
+    #' @description Plot contrast tree (old: two-group version)
     #' @param cell.groups character Cell annotations with cell IDs as name (default=self$cell.groups)
     #' @param palette plot palette (default=self$sample.groups.palette)
     #' @param name character Results name slot (default='coda')
@@ -1912,12 +1952,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Estimate cell loadings
     #' @param n.boot numeric Number of boot straps (default=1000)
-    #' @param ref.cell.type character Reference cell type (default=NULL)
     #' @param name character Results name slot (default='coda')
     #' @param n.seed numeric Seed number for reproducibility (default=239)
     #' @param cells.to.remove character Specific cell types to keep (default=NULL)
     #' @param cells.to.remain character Specific cell types to remove (default=NULL)
-    #' @param samples.to.remove character Specific samples to remove (default=NULL)
     #' @param filter.empty.cell.types boolean Remove cell types without cells (default=TRUE)
     #' @param n.cores integer Number of cores to use for parallelization (default=self$n.cores)
     #' @param verbose boolean Print messages (default=self$verbose)
@@ -1927,51 +1965,152 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' \dontrun{
     #' cao$estimateCellLoadings()
     #' }
-    estimateCellLoadings=function(n.boot=1000, ref.cell.type=NULL, name='coda', n.seed=239,
-                                  cells.to.remove=NULL, cells.to.remain=NULL, samples.to.remove=NULL,
-                                  filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose, method="lda") {
+    estimateCellLoadings=function(n.permutations=1000, name='coda', n.seed=239,
+                                  cells.to.remove=NULL, cells.to.remain=NULL, 
+                                  filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose, method="lda",
+                                  formula=NULL, contrast=NULL, perm.method=c("freedman-lane", "block"), zero.pseudocount=0.1,
+                                  basis.type = c("default"), ref.p.thresh = 0.3, ref.min.size = 1,ref.max.size = 3,
+                                  block.vars = NULL, ...) {
       # Checks
       checkPackageInstalled(c("coda.base", "psych"), cran=TRUE)
-      method <- match.arg(method)
-      if (method == "svm") checkPackageInstalled("e1071", cran=TRUE)
-      if (method == "cda") checkPackageInstalled("candisc", cran=TRUE)
-      if (method == "lda") checkPackageInstalled("quadprog", cran=TRUE)
+      #method <- match.arg(method)
+      #if (method == "svm") checkPackageInstalled("e1071", cran=TRUE)
+      #if (method == "cda") checkPackageInstalled("candisc", cran=TRUE)
+      #if (method == "lda") checkPackageInstalled("quadprog", cran=TRUE)
 
-      if ((!is.null(ref.cell.type)) && (!(ref.cell.type %in% levels(self$cell.groups))))
-        stop('Incorrect reference cell type')
+      perm.method <- match.arg(perm.method)
+      basis.type  <- match.arg(basis.type)
 
       # Get cell counts and groups
-      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain,
-                                     samples.to.remove=samples.to.remove)
+      cnts <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain,
+                                     samples.to.remove=NULL)
 
-      if (ncol(tmp$d.counts) < 3) stop("Cell loadings cannot be estimated for less than 3 cell types.")
+      if (ncol(cnts) < 3) stop("Cell loadings cannot be estimated for less than 3 cell types.")
 
       if (filter.empty.cell.types) {
-        cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
-          (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
-        tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
+        keep.ct <- colSums(cnts, na.rm = TRUE) > 0
+        cnts <- cnts[, keep.ct, drop = FALSE]
       }
 
-      res <- runCoda(tmp$d.counts, tmp$d.groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type, method=method, n.cores=n.cores, verbose=verbose)
-      res$cnts <- tmp$d.counts
-      res$groups <- tmp$d.groups
+      # Build model
+      if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
+       sample.model <- buildDesignMatrices(data = self$sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+      } else {
+      sample.model <- self$model
+      }
+
+      if (verbose) message("Running lmCoda with design='", sample.model$formula_used, "' and ", perm.method, " permutations")
+
+      #res <- runCoda(tmp$d.counts, tmp$d.groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type, method=method, n.cores=n.cores, verbose=verbose)
+      res <- lmCoda(cnts, sample.model, perm.method=perm.method, n.permutations=n.permutations,
+                    zero.pseudocount=zero.pseudocount, basis.type = basis.type, ref.p.thresh = ref.p.thresh,
+                    ref.min.size = ref.min.size, ref.max.size = ref.max.size, ...)
+      res$cnts <- cnts
+      #res$groups <- tmp$d.groups
 
       ## Calculate normalized counts
-      ref.cell.type <- res$ref.cell.type
-
-      ref.cnts <- tmp$d.counts[, ref.cell.type, drop=FALSE]
-      ref.cnts[ref.cnts == 0] <- 0.5
-      norm.val <- 1 / nrow(ref.cnts) * rowSums(log(ref.cnts))
-      cnts.nonzero <- tmp$d.counts
-      cnts.nonzero[cnts.nonzero == 0] <- 0.5
-      res$norm.cnts <- log(cnts.nonzero) - norm.val
+      #ref.cell.type <- res$ref.cell.type
+      #ref.cnts <- tmp$d.counts[, ref.cell.type, drop=FALSE]
+      #ref.cnts[ref.cnts == 0] <- 0.5
+      #norm.val <- 1 / nrow(ref.cnts) * rowSums(log(ref.cnts))
+      #cnts.nonzero <- tmp$d.counts
+      #cnts.nonzero[cnts.nonzero == 0] <- 0.5
+      #res$norm.cnts <- log(cnts.nonzero) - norm.val
 
       self$test.results[[name]] <- res
 
       return(invisible(res))
     },
 
-    #' @description Plot Loadings
+    #' @description Plot global (composition-level) effects from lmCoda
+    #' @param name character Results slot name (default='coda')
+    #' @param style character One of "bar" or "violin" (default="bar")
+    #' @param fdr.threshold numeric FDR threshold for marking significance (default=0.05)
+    #' @param drop.intercept logical Drop "(Intercept)" from coefficient list (default=TRUE)
+    #' @param use.contrast.title logical Use contrast label as plot title (default=FALSE)
+    #' @param ... passed to plotCodaGlobal()
+    #' @return A ggplot2 object
+    plotCodaGlobal = function(name = "coda", style = c("bar", "violin"), fdr.threshold = 0.05,
+                              drop.intercept = TRUE, use.contrast.title = FALSE, ...) {
+      style <- match.arg(style)
+
+      x <- private$getResults(name, "estimateCellLoadings()")
+
+      # Basic structure check
+      if (is.null(x$contrast) || is.null(x$coefficients)) {
+        stop("Result '", name, "' does not look like an lmCoda output. ",
+             "Run estimateCellLoadings(method='lm.coda', ...) first.")
+      }
+
+      p <- plotCodaGlobal(x, style = style, fdr.threshold = fdr.threshold, drop.intercept = drop.intercept,
+                          use.contrast.title = use.contrast.title, ...)
+      return(p)
+    },
+
+    #' @description Plot a heatmap of cell-type effects for contrast and coefficients (lmCoda)
+    #' @param name character Results slot name (default='coda')
+    #' @param coef.names character vector of coefficient names to include (default=NULL = all)
+    #' @param fdr.threshold numeric FDR threshold for marking significance (default=0.05)
+    #' @param ... passed to plotCodaHeatmap()
+    #' @return A ggplot2 object
+    plotCodaHeatmap = function(name = "coda", coef.names = NULL, fdr.threshold = 0.05, ...) {
+
+      x <- private$getResults(name, "estimateCellLoadings()")
+
+      if (is.null(x$contrast) || is.null(x$coefficients)) {
+         stop("Result '", name, "' does not look like an lmCoda output. ",
+              "Run estimateCellLoadings(method='lm.coda', ...) first.")
+      }
+
+      plotCodaHeatmap(x, coef.names = coef.names, fdr.threshold = fdr.threshold, ...)
+    },
+
+    #' @description Plot cell-type–level effects from lmCoda (contrast or coefficient)
+    #' @param name character Results slot name (default='coda')
+    #' @param coef character "contrast" or a coefficient name in x$coefficients
+    #' @param value character One of "predicted", "reference-centered", "volcano"
+    #' @param style character "bar" or "violin" (used when value="reference-centered")
+    #' @param fdr.threshold numeric FDR threshold (default=0.05)
+    #' @param sortCellTypes logical Sort cell types (default=FALSE)
+    #' @param labelCellTypes character Label mode for volcano: "significant","all","none"
+    #' @param palette named vector of colors for cell types (default: self$cell.groups.palette)
+    #' @param use.contrast.title logical Use contrast label as plot title (default=FALSE)
+    #' @param ... passed to plotCodaCellTypes()
+    #' @return A ggplot2 object
+    plotCodaCellTypes = function(name = "coda", coef = "contrast", style = c("bar", "violin"),
+                                 value = c("predicted", "reference-centered", "volcano"), 
+                                 fdr.threshold = 0.05, sortCellTypes = FALSE,
+                                 labelCellTypes = c("significant", "all", "none"),
+                                 palette = self$cell.groups.palette, use.contrast.title = FALSE, ...) {
+
+      value <- match.arg(value)
+      style <- match.arg(style)
+      labelCellTypes <- match.arg(labelCellTypes)
+
+      x <- private$getResults(name, "estimateCellLoadings()")
+
+      if (is.null(x$contrast) || is.null(x$coefficients) || is.null(x$psi)) {
+        stop("Result '", name, "' does not look like an lmCoda output. ",
+            "Run estimateCellLoadings(method='lm.coda', ...) first.")
+      }
+
+      # Ensure palette is either NULL or named with celltypes
+      celltype.palette <- palette
+      if (!is.null(celltype.palette) && is.null(names(celltype.palette))) {
+       # unnamed palettes are ambiguous; let plotCodaCellTypes generate stable colors
+        celltype.palette <- NULL
+      }
+
+      p <- plotCodaCellTypes(x, coef = coef, value = value, style = style, fdr.threshold = fdr.threshold,
+                        sortCellTypes = sortCellTypes, labelCellTypes = labelCellTypes, 
+                        celltype.palette = celltype.palette, use.contrast.title = use.contrast.title, ...)
+      return(p)
+    },
+
+
+
+
+    #' @description Plot Loadings (old two group comparison)
     #' @param alpha numeric Transparency (default=0.01)
     #' @param palette plot palette specification for cell types (default: stored $cell.groups.palette)
     #' @param font.size numeric Font size (default=NULL)
@@ -3654,7 +3793,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     ## cells.to.remain character vector Cells which should remain (default=NULL)
     ## samples.to.remove character vector Samples which should remain (default=NULL)
     ## list of cell counts and cell groups
-    extractCodaData=function(ret.groups=TRUE, cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL,
+    extractCodaData=function(ret.groups=FALSE, cell.groups=self$cell.groups, cells.to.remove=NULL, cells.to.remain=NULL,
                              samples.to.remove=NULL) {
       d.counts <- cell.groups %>% data.frame(anno=., group=self$sample.per.cell[names(.)]) %>%
         table() %>% rbind() %>% t()

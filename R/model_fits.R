@@ -154,9 +154,26 @@ performLMPermutations <- function(x, y,
   
   # extract and format results
   coef <- fit$coef
-  stat <- fit$stat
-  z    <- fit$z_score
-  p    <- fit$p_value
+  stat <- as.vector(fit$stat)    
+  z    <- as.vector(fit$z_score) 
+  p    <- as.vector(fit$p_value) 
+
+  
+  # calculate z scores
+  p_clamped <- pmin(pmax(p, 1e-16), 1 - 1e-16)
+  if (alternative == "two-sided") {
+    # For two-sided: p = 2 * (1 - pnorm(|Z|))  =>  |Z| = qnorm(1 - p/2)
+    # We restore the sign from the original statistic (assuming symmetry under null)
+    # Note: If stat is 0, sign is 0.
+    z <- qnorm(1 - p_clamped / 2) * sign(stat)
+  } else if (alternative == "greater") {
+    # For greater: p = 1 - pnorm(Z)  =>  Z = qnorm(1 - p)
+    z <- qnorm(1 - p_clamped)
+  } else { 
+    # For less: p = pnorm(Z)  =>  Z = qnorm(p)
+    z <- qnorm(p_clamped)
+  }
+  
   names(stat) <- names(z) <- names(p) <- y.names
   
   ## dimnames for coef (p × m)
@@ -212,7 +229,11 @@ performLMPermutations <- function(x, y,
   }
   
   ## --- detect failed columns and warn ---
-  failed_stat <- !is.finite(stat) | !is.finite(z) | !is.finite(p)
+  if (n.permutations > 0) {
+    failed_stat <- !is.finite(stat) | !is.finite(z) | !is.finite(p)
+  } else {
+    failed_stat <- !is.finite(stat)
+  }
   
   if (is.matrix(coef)) {
     failed_coef <- apply(!is.finite(coef), 2L, any)

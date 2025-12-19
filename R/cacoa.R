@@ -373,6 +373,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                              sample.ids = self$sample.ids, dist = NULL, dist.type = "shift", min.cells.per.sample = 10, 
                                              min.samp.per.type = 2, min.gene.frac = 0.01, genes = NULL, perm.method="freedman-lane", robust.method = "none",
                                              top.n.genes = NULL, gene.selection = c("t-test", "wilcox"),
+                                             n.pcs = NULL,
                                              na.mode = "drop", alternative = "two-sided", return.residuals = TRUE, return.sampled.stats = TRUE,
                                              name = "expression.shifts", n.permutations = 1000, return.sampled.fits = FALSE,
                                              verbose = self$verbose, n.cores = self$n.cores, ...) {
@@ -410,6 +411,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                               top.n.genes = top.n.genes, gene.selection = gene.selection,
                                                               return.residuals = return.residuals, return.sampled.stats = return.sampled.stats,
                                                               dist = dist %||% "cor", dist.type = dist.type, 
+                                                              n.pcs = n.pcs,
                                                               n.permutations = n.permutations, n.cores = n.cores, verbose = verbose, ...)
      
       out$dists.adj <- out %$% extractPairwiseShifts(res, design.mat = pair.model, perm.method = perm.method,

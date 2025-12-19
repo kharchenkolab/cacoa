@@ -82,6 +82,7 @@ estimateExpressionChange <- function(cm.per.type, cell.groups, pair.model, sampl
                                      n.permutations = 1000, p.adjust.method = "BH", trim = 0.2, return.residuals = FALSE, 
                                      return.sampled.stats = TRUE, return.sampled.fits = FALSE, 
                                      top.n.genes = NULL, gene.selection = c("t-test", "wilcox"), 
+                                     n.pcs = NULL,
                                      n.cores = 1, verbose = TRUE, ...) {
   
   dist.type <- match.arg(dist.type)
@@ -117,7 +118,8 @@ estimateExpressionChange <- function(cm.per.type, cell.groups, pair.model, sampl
       alternative = alternative,
       n.cores = n.cores,
       na.mode = na.mode,
-      robust.method = robust.method
+      robust.method = robust.method,
+      n.pcs = n.pcs
     )
     
     # 2. Refit using Standard Engine on Observed Y (n.permutations = 0)
@@ -148,7 +150,7 @@ estimateExpressionChange <- function(cm.per.type, cell.groups, pair.model, sampl
   } else { # non-focused path
  
     # Pairwise Distances (Static, All genes)
-    p.dist <- estimateExpressionShiftsForCellType(cm.per.type, dist = dist, pair.model = pair.model, sample.ids = sample.ids)
+    p.dist <- estimateExpressionShiftsForCellType(cm.per.type, dist = dist, pair.model = pair.model, sample.ids = sample.ids, n.pcs = n.pcs)
     
     # Fitting and randomization
     res <- performLMPermutations(y = p.dist$Y, x = pair.model, n.permutations = n.permutations, perm.method = perm.method, 
@@ -188,6 +190,7 @@ estimateExpressionChange <- function(cm.per.type, cell.groups, pair.model, sampl
 fitWithFocusingWrapper <- function(cm.per.type, pair.model, sample.model, sample.ids,
                                    top.n.genes, gene.selection, dist, 
                                    n.permutations, alternative, n.cores, 
+                                   n.pcs = NULL,
                                    na.mode = "drop", robust.method = "none", ...) {
   
   # --- 1. Dist Type Mapping & Pre-processing ---
@@ -223,6 +226,8 @@ fitWithFocusingWrapper <- function(cm.per.type, pair.model, sample.model, sample
     cpp_dist_type <- "cosine" 
   }
   
+  cpp_n_pcs <- if (is.null(n.pcs)) 0L else as.integer(n.pcs)
+  
   # --- 2. Prepare C++ Inputs ---
   pair_Z <- if (!is.null(pair.model$Z)) as.matrix(pair.model$Z) else matrix(0, 0, 0)
   
@@ -246,7 +251,8 @@ fitWithFocusingWrapper <- function(cm.per.type, pair.model, sample.model, sample
     dist_type = cpp_dist_type,
     robust = robust.method,
     na_mode = na.mode,
-    n_cores = n.cores
+    n_cores = n.cores,
+    n_pcs = cpp_n_pcs
   )
   
   # --- 4. Format Outputs ---
@@ -356,7 +362,7 @@ fitWithFocusingWrapper <- function(cm.per.type, pair.model, sample.model, sample
 #' @keywords internal
 #' Estimate pairwise expression distances for all cell types in a paired design
 #' @keywords internal
-estimateExpressionShiftsForCellType <- function(cm.norm, dist, pair.model, sample.ids) {
+estimateExpressionShiftsForCellType <- function(cm.norm, dist, pair.model, sample.ids, n.pcs=NULL) {
   # ---- basic checks ----
   if (!is.list(cm.norm))
     stop("cm.norm must be a list of count matrices per cell type.")
@@ -385,15 +391,51 @@ estimateExpressionShiftsForCellType <- function(cm.norm, dist, pair.model, sampl
   
   # ---- loop over cell types ----
   for (t in seq_along(cm.norm)) {
-    X <- cm.norm[[t]]    # samples x genes for this type (subset of samples)
+    X <- cm.norm[[t]]    # samples x genes
     
-    # ensure rownames are sample IDs; needed for mapping
     if (is.null(rownames(X))) {
       stop("cm.norm[[", t, "]] has no rownames; cannot map to sample.ids.")
     }
     
     Xp <- as.matrix(X)
     n_rows <- nrow(Xp)
+    
+    # PCA REDUCTION BLOCK
+    if (!is.null(n.pcs) && n.pcs > 0 && n_rows > 0) {
+      # 1. Identify valid (non-missing) samples
+      valid_mask <- !apply(Xp, 1, anyNA)
+      valid_rows <- which(valid_mask)
+      
+      # Need enough samples to run PCA
+      if (length(valid_rows) > 1) {
+        checkPackageInstalled("irlba", cran=TRUE)
+        X_subset <- Xp[valid_rows, , drop = FALSE]
+        
+        # irlba is for truncated SVD and typically requires n < min(dim(X)).
+        # If n.pcs is large relative to the matrix, we default to standard prcomp.
+        max_pcs <- min(nrow(X_subset), ncol(X_subset))
+        k_use <- min(n.pcs, max_pcs)
+        
+        if (k_use < max_pcs/3) {
+          # Truncated PCA with irlba (faster)
+          pca <- irlba::prcomp_irlba(X_subset, n = k_use, center = TRUE, scale. = FALSE)
+        } else {
+          # Full/Near-full PCA with standard prcomp (safer fallback)
+          pca <- prcomp(X_subset, center = TRUE, scale. = FALSE)
+        }
+        
+        # 3. Extract top k PCsss
+        scores <- pca$x[, 1:k_use, drop = FALSE]
+        
+        # 4. Re-embed into full matrix (preserving NA rows for missing samples)
+        X_pca <- matrix(NA_real_, nrow = n_rows, ncol = k_use, 
+                        dimnames = list(rownames(Xp), paste0("PC", 1:k_use)))
+        X_pca[valid_rows, ] <- scores
+        
+        # Replace the original expression matrix with the PC score matrix
+        Xp <- X_pca 
+      }
+    }
     
     # (1) Distances — square matrix D over *local* rows of this type
     D <- NULL
@@ -402,37 +444,23 @@ estimateExpressionShiftsForCellType <- function(cm.norm, dist, pair.model, sampl
       D <- matrix(0, n_rows, n_rows, dimnames = list(rownames(Xp), rownames(Xp)))
     } else {
       if (dist == "cor" || dist == "cosine") {
-        # --- FIX: GENE-CENTERED COSINE (instead of sample-centered Pearson) ---
-        
-        # 1. Center Genes (Columns)
-        # use na.rm=TRUE because Xp may have all-NA rows for missing samples
+        # --- GENE-CENTERED COSINE ---
         gene_means <- colMeans(Xp, na.rm = TRUE)
         Xc <- sweep(Xp, 2, gene_means, "-")
         
-        # 2. Normalize Rows (Samples) to unit length
-        # If a row is all NA (missing sample), sum is NA -> norm is NA -> row becomes NA.
         norms <- sqrt(rowSums(Xc^2))
-        
-        # Protect against zero-norm (flat constant genes -> 0 variance)
         norms[is.finite(norms) & norms < 1e-12] <- NA 
         
         Xc <- Xc / norms
         
-        # 3. Cosine Similarity -> Distance
-        # tcrossprod handles NA propagation correctly (NA * value = NA)
         Sim <- tcrossprod(Xc)
         D <- 1 - Sim
-        
-        # Cleanup diagonal (should be 0)
         diag(D) <- 0
         
       } else if (dist %in% c("l2", "l1")) {
-        # Euclidean / Manhattan logic remains same, but handle NAs explicitly
         if (anyNA(Xp)) {
-          D <- matrix(NA_real_, n_rows, n_rows,
-                      dimnames = list(rownames(Xp), rownames(Xp)))
+          D <- matrix(NA_real_, n_rows, n_rows, dimnames = list(rownames(Xp), rownames(Xp)))
           diag(D) <- 0
-          # Manual loop for sparse/NA-heavy matrices
           for (i in seq_len(n_rows - 1L)) {
             xi <- Xp[i, ]
             for (j in (i + 1L):n_rows) {
@@ -456,15 +484,13 @@ estimateExpressionShiftsForCellType <- function(cm.norm, dist, pair.model, sampl
       }
     }
     
-    # ensure D is square and has rownames
     if (!is.matrix(D)) D <- as.matrix(D)
     if (is.null(rownames(D))) rownames(D) <- colnames(D) <- rownames(Xp)
     
-    # (2) Vectorize using global pairs, mapping to local D indices via sample IDs
     Y[, t] <- vectorizeLowerTri(D, pairs = idx, sample.ids = sample.ids, row.ids = rownames(D))
   }
   
-  list(Y = Y)        # all pairs x cell types (NA where sample missing in type)
+  list(Y = Y)       
 }
 
 #' Map a square distance matrix to a global pairwise layout

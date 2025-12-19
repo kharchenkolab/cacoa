@@ -9,9 +9,9 @@
 struct DistDesignGroup {
   bool valid = false;
   arma::uvec valid_samples;
-  std::vector<bool> is_valid_sample; 
+  std::vector<bool> is_valid_sample; // Mask for ObsDist generation
   arma::uvec valid_pairs; 
-  arma::vec sqrt_pair_weights;       
+  arma::vec sqrt_pair_weights;       // Weights for Y
   arma::mat X_pair_sub;
   arma::mat B_pair, invXtX_pair, Xt_pair;
   arma::vec alpha; 
@@ -20,6 +20,57 @@ struct DistDesignGroup {
 };
 
 struct Job { arma::uword col_idx; int group_idx; };
+
+// Helper to compute PCA scores (Principal Components)
+static arma::mat compute_pca_scores(const arma::mat& M, int n_pcs) {
+  if (n_pcs < 1 || n_pcs >= (int)M.n_cols) return M;
+  
+  // M is (Samples x Genes). princomp returns score (Samples x PCs)
+  // Note: princomp automatically centers columns.
+  arma::mat coeff, score;
+  arma::vec latent;
+  
+  bool success = arma::princomp(coeff, score, latent, M);
+  
+  if (!success) { 
+    // Fallback if PCA fails (e.g. singular), return raw data
+    return M; 
+  }
+  
+  if ((int)score.n_cols > n_pcs) {
+    return score.cols(0, n_pcs - 1);
+  }
+  return score;
+}
+
+// Helper to calculate distances on a data matrix (Raw Genes or PCA Scores)
+static arma::vec calc_dist_matrix(const arma::mat& M, const arma::umat& pairs, int d_code) {
+  uword n_pairs = pairs.n_rows;
+  arma::vec dists(n_pairs);
+  
+  arma::vec norms;
+  if (d_code == 2) { // Cosine
+    norms = arma::sqrt(arma::sum(arma::square(M), 1));
+  }
+  
+  for (uword k = 0; k < n_pairs; ++k) {
+    uword i = pairs(k, 0);
+    uword j = pairs(k, 1);
+    double d = 0.0;
+    
+    if (d_code == 0) { // L2
+      d = arma::norm(M.row(i) - M.row(j), 2);
+    } else if (d_code == 1) { // L1
+      d = arma::norm(M.row(i) - M.row(j), 1);
+    } else if (d_code == 2) { // Cosine
+      double dot = arma::dot(M.row(i), M.row(j));
+      double denom = norms(i) * norms(j);
+      d = 1.0 - (dot / (denom + 1e-12));
+    }
+    dists(k) = d;
+  }
+  return dists;
+}
 
 static std::vector<arma::uvec> filter_blocks_global(
     const std::vector<arma::uvec>& global_blocks, 
@@ -53,35 +104,6 @@ static arma::vec get_projection_vector(const arma::mat& X, const arma::vec& cont
   return X * (invXtX * contrast);
 }
 
-// Calculate distances for EXPLICIT pairs
-static arma::vec calc_dist_subset(const arma::mat& M, const arma::uvec& perm, 
-                                  const arma::uvec& feat_idx, const arma::umat& pairs, int d_code) {
-  arma::mat M_sub = M.submat(perm, feat_idx); 
-  
-  // We assume M is already Gene-Centered from R if d_code=2 (Cosine) is used.
-  
-  uword n_pairs = pairs.n_rows;
-  arma::vec dists(n_pairs);
-  arma::vec norms;
-  if (d_code == 2) norms = arma::sqrt(arma::sum(arma::square(M_sub), 1));
-  
-  for (uword k = 0; k < n_pairs; ++k) {
-    uword i = pairs(k, 0);
-    uword j = pairs(k, 1);
-    double d = 0.0;
-    
-    if (d_code == 0)      d = arma::norm(M_sub.row(i) - M_sub.row(j), 2);
-    else if (d_code == 1) d = arma::norm(M_sub.row(i) - M_sub.row(j), 1);
-    else if (d_code == 2) {
-      double dot = arma::dot(M_sub.row(i), M_sub.row(j));
-      double denom = norms(i) * norms(j);
-      d = 1.0 - (dot / (denom + 1e-12));
-    }
-    dists(k) = d;
-  }
-  return dists;
-}
-
 static void rank_transform_matrix(arma::mat& M) {
   for (uword j = 0; j < M.n_cols; ++j) {
     arma::vec v = M.col(j);
@@ -99,6 +121,9 @@ static void impute_matrix_means(arma::mat& M, const arma::uvec& valid_samples, c
   for(uword ghost_idx : ghost_samples) M.row(ghost_idx) = means;
 }
 
+// -------------------------------------------------------------------------
+// EXPORT
+// -------------------------------------------------------------------------
 // [[Rcpp::export]]
 Rcpp::List fit_with_focusing(
     Rcpp::List M_list,                 
@@ -119,7 +144,8 @@ Rcpp::List fit_with_focusing(
     double huber_tol = 1e-6,
     std::string na_mode = "drop",
     double na_weight = 1e-4,
-    int n_cores = 1
+    int n_cores = 1,
+    int n_pcs = 0 // <--- NEW PARAMETER
 ) {
   Config cfg; 
   cfg.robust = robust; cfg.huber_k = huber_k; cfg.huber_maxit = huber_maxit; cfg.huber_tol = huber_tol;
@@ -135,10 +161,13 @@ Rcpp::List fit_with_focusing(
   arma::mat M0 = mats[0];
   arma::uword n = M0.n_rows; 
   
-  int d_code = (dist_type == "l1") ? 1 : (dist_type == "cosine") ? 2 : 0; 
+  // Mapping: L1=1, Cosine/Cor=2 (Gene Centering in R), L2=0
+  int d_code = (dist_type == "l1") ? 1 : 
+    (dist_type == "cosine" || dist_type == "cor" || dist_type == "pearson") ? 2 : 0;
   
   bool is_drop = (na_mode == "drop");
   
+  // 1. Group Inputs
   std::unordered_map<std::uint64_t, std::vector<int>> pattern_map;
   for (int k = 0; k < n_mats; ++k) {
     if (mats[k].n_rows != n) stop("All matrices in M_list must have same number of rows.");
@@ -149,6 +178,7 @@ Rcpp::List fit_with_focusing(
   std::vector<Job> jobs; jobs.reserve(n_mats);
   int grp_idx = 0;
   
+  // 2. Pre-calculate Designs
   for (auto& kv : pattern_map) {
     DistDesignGroup g;
     int rep_idx = kv.second[0];
@@ -227,6 +257,7 @@ Rcpp::List fit_with_focusing(
           if(ug.max() > 0) ug -= 1; raw_blocks.push_back(ug);
         }
       } else raw_blocks.push_back(arma::regspace<arma::uvec>(0, n - 1));
+      
       if (is_drop) g.perm_blocks = filter_blocks_global(raw_blocks, is_valid);
       else g.perm_blocks = raw_blocks;
       g.valid = true;
@@ -236,6 +267,7 @@ Rcpp::List fit_with_focusing(
     grp_idx++;
   }
   
+  // 3. Execution
   arma::vec Stat(n_mats); Stat.fill(datum::nan);
   arma::vec Pval(n_mats); Pval.fill(datum::nan);
   arma::mat PermStats(n_randomizations, n_mats); PermStats.fill(datum::nan);
@@ -266,19 +298,31 @@ Rcpp::List fit_with_focusing(
     }
     
     if (test_type == "wilcox") rank_transform_matrix(M_local);
-    arma::uvec p_id = arma::regspace<arma::uvec>(0, n - 1);
     
+    // --- OBSERVED STEP ---
+    // Raw projection scores (Variance Standardization removed)
     arma::vec scores_obs = M_local.t() * grp.w_sample;
+    
     arma::uvec sorted_obs = arma::sort_index(arma::abs(scores_obs), "descend");
     arma::uvec top_obs = sorted_obs.head(n_top_features);
     
-    arma::vec Y_full = calc_dist_subset(M_local, p_id, top_obs, pairs, d_code);
+    // 1. Extract Genes
+    arma::mat M_feat = M_local.cols(top_obs);
     
+    // 2. Optional PCA
+    if (n_pcs > 0) {
+      M_feat = compute_pca_scores(M_feat, n_pcs);
+    }
+    
+    // 3. Calculate Distances (using the updated matrix helper)
+    arma::vec Y_full = calc_dist_matrix(M_feat, pairs, d_code);
+    
+    // --- OBS DIST MASKING (Fix for Baseline) ---
     if (is_drop) {
       arma::uvec global_idx = grp.valid_pairs + (mat_idx * n_rows_obs);
       ObsDist.elem(global_idx) = Y_full.elem(grp.valid_pairs); 
     } else {
-      // Enforce NaN for missing pairs to trigger correct imputation in R
+      // Force NaNs for missing pairs to trigger correct imputation in R
       for (uword r = 0; r < pairs.n_rows; ++r) {
         uword i = pairs(r, 0);
         uword j = pairs(r, 1);
@@ -290,13 +334,15 @@ Rcpp::List fit_with_focusing(
       }
     }
     
+    // --- WEIGHTING (Fix for Sensitivity) ---
     arma::vec Y_use;
     if (is_drop) Y_use = Y_full.elem(grp.valid_pairs);
-    else Y_use = Y_full % grp.sqrt_pair_weights; // Weighted Y
+    else Y_use = Y_full % grp.sqrt_pair_weights; 
     
     double s_obs = arma::dot(grp.alpha, Y_use);
     Stat(mat_idx) = s_obs;
     
+    // --- PERMUTATION STEPS ---
     std::mt19937_64 rng = make_rng(0xD1B54A32D192ED03ULL + mat_idx, 0);
     arma::vec perm_vec(n_randomizations);
     PairLookup dummy_map; arma::umat dummy_mat;
@@ -309,10 +355,20 @@ Rcpp::List fit_with_focusing(
       arma::uvec sorted_perm = arma::sort_index(arma::abs(scores), "descend");
       arma::uvec top_idx = sorted_perm.head(n_top_features);
       
-      arma::vec Y_perm_full = calc_dist_subset(M_local, p, top_idx, pairs, d_code);
+      // 1. Extract Permuted Matrix (Shuffle Rows, Subset Cols)
+      arma::mat M_perm_sub = M_local.submat(p, top_idx);
+      
+      // 2. Optional PCA
+      if (n_pcs > 0) {
+        M_perm_sub = compute_pca_scores(M_perm_sub, n_pcs);
+      }
+      
+      // 3. Calculate Distances
+      arma::vec Y_perm_full = calc_dist_matrix(M_perm_sub, pairs, d_code);
+      
       arma::vec Y_perm;
       if (is_drop) Y_perm = Y_perm_full.elem(grp.valid_pairs);
-      else Y_perm = Y_perm_full % grp.sqrt_pair_weights; // Weighted Y
+      else Y_perm = Y_perm_full % grp.sqrt_pair_weights; 
       
       perm_vec[r] = arma::dot(grp.alpha, Y_perm);
     }

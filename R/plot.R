@@ -518,7 +518,6 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
             notch = notch, outlier.shape = NA,
              colour = "grey30", alpha = 0.9
          )
-       if (!is.null(palette)) p <- p + scale_fill_manual(values = palette)
       }
     } else if (type == "point") {
       p <- ggplot2::ggplot(df.sum, ggplot2::aes(Type, mean, colour = Type)) +

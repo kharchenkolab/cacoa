@@ -78,7 +78,7 @@ NULL
 estimateExpressionChange <- function(cm.per.type, cell.groups, pair.model, sample.per.cell,
                                      sample.model = NULL, sample.ids = NULL, dist = "cor", dist.type = c("shift", "total", "var"), 
                                      perm.method = c("freedman-lane", "block"), robust.method = c("none", "huber", "winsor"),
-                                     na.mode = c("drop", "impute_weak"), alternative = c("two-sided", "greater", "less"),
+                                     na.mode = c("drop", "impute_weak"), alternative = c("greater", "two-sided","less"),
                                      n.permutations = 1000, p.adjust.method = "BH", trim = 0.2, return.residuals = FALSE, 
                                      return.sampled.stats = TRUE, return.sampled.fits = FALSE, 
                                      top.n.genes = NULL, gene.selection = c("t-test", "wilcox"), 
@@ -1179,7 +1179,7 @@ extractPairwiseShifts <- function(res,design.mat,
         }
         
     } else if (perm.method == "freedman-lane") {
-        partial.fit  <- extractFitsFL(res, p.dist, design.model = design.mat)
+        partial.fit  <- extractFitsFL(res, res$sample.distances, design.model = design.mat)
         contrast.vec <- design.mat$contrast.X
         X <- as.matrix(design.mat$X)
         

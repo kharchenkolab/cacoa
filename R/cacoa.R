@@ -374,7 +374,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                              min.samp.per.type = 2, min.gene.frac = 0.01, genes = NULL, perm.method="freedman-lane", robust.method = "none",
                                              top.n.genes = NULL, gene.selection = c("t-test", "wilcox"),
                                              n.pcs = NULL,
-                                             na.mode = "drop", alternative = "two-sided", return.residuals = TRUE, return.sampled.stats = TRUE,
+                                             na.mode = "drop", alternative = "greater", return.residuals = TRUE, return.sampled.stats = TRUE,
                                              name = "expression.shifts", n.permutations = 1000, return.sampled.fits = FALSE,
                                              verbose = self$verbose, n.cores = self$n.cores, ...) {
   

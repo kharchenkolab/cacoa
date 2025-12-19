@@ -197,11 +197,10 @@ fitWithFocusingWrapper <- function(cm.per.type, pair.model, sample.model, sample
   cm_input <- lapply(cm.per.type, function(M) {
     if (is.null(M)) return(NULL)
     
-    # If M is already perfectly aligned, return as is
+    # Expand to match sample.ids
     if (nrow(M) == length(sample.ids) && all(rownames(M) == sample.ids)) {
       M_aligned <- M
     } else {
-      # Otherwise expand/reorder
       M_aligned <- matrix(NA_real_, nrow = length(sample.ids), ncol = ncol(M), 
                           dimnames = list(sample.ids, colnames(M)))
       common <- intersect(sample.ids, rownames(M))
@@ -210,16 +209,17 @@ fitWithFocusingWrapper <- function(cm.per.type, pair.model, sample.model, sample
       }
     }
     
-    # R-side Centering logic (Column centering) for Correlation
-    if (dist == "cor") {
+    # CENTERING LOGIC: Always center genes for correlation/cosine modes.
+    # This prevents using raw cosine on positive data (which kills signal).
+    if (dist %in% c("cor", "cosine", "pearson")) {
       gene_means <- colMeans(M_aligned, na.rm = TRUE)
       M_aligned <- sweep(M_aligned, 2, gene_means, "-")
     }
     return(M_aligned)
   })
   
-  # Handle dist code for C++
-  if (dist == "cor") {
+  # Map all correlation-like requests to "cosine" in C++
+  if (dist %in% c("cor", "cosine", "pearson")) {
     cpp_dist_type <- "cosine" 
   }
   
@@ -354,111 +354,117 @@ fitWithFocusingWrapper <- function(cm.per.type, pair.model, sample.model, sample
 #'
 #' @seealso \code{\link{buildPairDesignMatrices}} for constructing the pair design
 #' @keywords internal
-estimateExpressionShiftsForCellType <- function( cm.norm, dist, pair.model, sample.ids) {
-    # ---- basic checks ----
-    if (!is.list(cm.norm))
-        stop("cm.norm must be a list of count matrices per cell type.")
-    if (missing(pair.model) || is.null(pair.model$pairs))
-        stop("pair.model (from buildPairDesignMatrices) with $pairs is required.")
-    if (missing(sample.ids))
-        stop("sample.ids must be provided and must align with rows of sample.metadata.")
+#' Estimate pairwise expression distances for all cell types in a paired design
+#' @keywords internal
+estimateExpressionShiftsForCellType <- function(cm.norm, dist, pair.model, sample.ids) {
+  # ---- basic checks ----
+  if (!is.list(cm.norm))
+    stop("cm.norm must be a list of count matrices per cell type.")
+  if (missing(pair.model) || is.null(pair.model$pairs))
+    stop("pair.model (from buildPairDesignMatrices) with $pairs is required.")
+  if (missing(sample.ids))
+    stop("sample.ids must be provided and must align with rows of sample.metadata.")
+  
+  idx <- pair.model$pairs
+  if (!(is.matrix(idx) && ncol(idx) == 2L))
+    stop("pair.model$pairs must be an n_pairs x 2 matrix of sample indices (i,j).")
+  
+  if (length(sample.ids) < max(idx))
+    stop("sample.ids length is smaller than max(pair.model$pairs).")
+  
+  # pair names for rows of Y / dists (for printing)
+  pair.names <- paste(sample.ids[idx[, "i"]], sample.ids[idx[, "j"]], sep = "__")
+  
+  # cell type names
+  ctnames <- names(cm.norm)
+  if (is.null(ctnames)) ctnames <- paste0("CT", seq_along(cm.norm))
+  
+  # ---- allocate Y: rows = pairs, cols = cell types ----
+  Y <- matrix(NA_real_, nrow = nrow(idx), ncol = length(cm.norm),
+              dimnames = list(pair.names, ctnames))
+  
+  # ---- loop over cell types ----
+  for (t in seq_along(cm.norm)) {
+    X <- cm.norm[[t]]    # samples x genes for this type (subset of samples)
     
-    idx <- pair.model$pairs
-    if (!(is.matrix(idx) && ncol(idx) == 2L))
-        stop("pair.model$pairs must be an n_pairs x 2 matrix of sample indices (i,j).")
-    
-    if (length(sample.ids) < max(idx))
-        stop("sample.ids length is smaller than max(pair.model$pairs).")
-    
-    # pair names for rows of Y / dists (for printing)
-    pair.names <- paste(sample.ids[idx[, "i"]], sample.ids[idx[, "j"]], sep = "__")
-    
-    # cell type names
-    ctnames <- names(cm.norm)
-    if (is.null(ctnames)) ctnames <- paste0("CT", seq_along(cm.norm))
-    
-    # ---- allocate Y: rows = pairs, cols = cell types ----
-    Y <- matrix(NA_real_, nrow = nrow(idx), ncol = length(cm.norm),
-                dimnames = list(pair.names, ctnames))
-    
-    # ---- loop over cell types ----
-    for (t in seq_along(cm.norm)) {
-        X <- cm.norm[[t]]    # samples x genes for this type (subset of samples)
-        Xp <- X              # removed any PCA / gene selection
-        
-        # ensure rownames are sample IDs; needed for mapping
-        if (is.null(rownames(Xp))) {
-            stop("cm.norm[[", t, "]] has no rownames; cannot map to sample.ids.")
-        }
-        
-        # (1) Distances — square matrix D over *local* rows of this type
-        D <- NULL
-        if (dist == "cor") {
-            Xc <- as.matrix(Xp)
-            n_rows <- nrow(Xc)
-            if (is.null(n_rows) || n_rows < 2L) {
-                D <- matrix(0, n_rows, n_rows,
-                            dimnames = list(rownames(Xc), rownames(Xc)))
-            } else {
-                R <- stats::cor(t(Xc), use = "pairwise.complete.obs", method = "pearson")
-                D <- 1 - R
-                if (is.null(rownames(R))) {
-                    rownames(D) <- colnames(D) <- rownames(Xc)
-                }
-            }
-        } else if (dist %in% c("l2", "l1")) {
-            Xd <- as.matrix(Xp)
-            n_rows <- nrow(Xd)
-            if (n_rows < 2L) {
-                D <- matrix(0, n_rows, n_rows,
-                            dimnames = list(rownames(Xd), rownames(Xd)))
-            } else if (anyNA(Xd)) {
-                D <- matrix(NA_real_, n_rows, n_rows,
-                            dimnames = list(rownames(Xd), rownames(Xd)))
-                diag(D) <- 0
-                for (i in seq_len(n_rows - 1L)) {
-                    xi <- Xd[i, ]
-                    for (j in (i + 1L):n_rows) {
-                        xj <- Xd[j, ]
-                        if (anyNA(xi) || anyNA(xj)) {
-                            d <- NA_real_
-                        } else if (dist == "l2") {
-                            d <- sqrt(sum((xi - xj)^2))
-                        } else {
-                            d <- sum(abs(xi - xj))
-                        }
-                        D[i, j] <- D[j, i] <- d
-                    }
-                }
-            } else {
-                method <- if (dist == "l2") "euclidean" else "manhattan"
-                D <- as.matrix(stats::dist(Xd, method = method))
-                if (is.null(rownames(D)) && !is.null(rownames(Xd))) {
-                    rownames(D) <- colnames(D) <- rownames(Xd)
-                }
-            }
-        } else {
-            stop("Unknown distance: ", dist)
-        }
-        
-        # ensure D is square and has rownames
-        if (!is.matrix(D)) D <- as.matrix(D)
-        dimD <- dim(D)
-        if (length(dimD) != 2L || dimD[1] != dimD[2]) {
-            stop("Distance is not a square matrix for cell type '", ctnames[t],
-                 "': got ", paste(dimD, collapse = "x"))
-        }
-        if (is.null(rownames(D))) {
-            stop("Distance matrix D for cell type '", ctnames[t],
-                 "' has no rownames; cannot map to sample.ids.")
-        }
-        
-        # (2) Vectorize using global pairs, mapping to local D indices via sample IDs
-        Y[, t] <- vectorizeLowerTri(D, pairs = idx, sample.ids = sample.ids, row.ids = rownames(D))
+    # ensure rownames are sample IDs; needed for mapping
+    if (is.null(rownames(X))) {
+      stop("cm.norm[[", t, "]] has no rownames; cannot map to sample.ids.")
     }
     
-    list(Y = Y)        # all pairs x cell types (NA where sample missing in type)
+    Xp <- as.matrix(X)
+    n_rows <- nrow(Xp)
     
+    # (1) Distances — square matrix D over *local* rows of this type
+    D <- NULL
+    
+    if (n_rows < 2L) {
+      D <- matrix(0, n_rows, n_rows, dimnames = list(rownames(Xp), rownames(Xp)))
+    } else {
+      if (dist == "cor" || dist == "cosine") {
+        # --- FIX: GENE-CENTERED COSINE (instead of sample-centered Pearson) ---
+        
+        # 1. Center Genes (Columns)
+        # use na.rm=TRUE because Xp may have all-NA rows for missing samples
+        gene_means <- colMeans(Xp, na.rm = TRUE)
+        Xc <- sweep(Xp, 2, gene_means, "-")
+        
+        # 2. Normalize Rows (Samples) to unit length
+        # If a row is all NA (missing sample), sum is NA -> norm is NA -> row becomes NA.
+        norms <- sqrt(rowSums(Xc^2))
+        
+        # Protect against zero-norm (flat constant genes -> 0 variance)
+        norms[is.finite(norms) & norms < 1e-12] <- NA 
+        
+        Xc <- Xc / norms
+        
+        # 3. Cosine Similarity -> Distance
+        # tcrossprod handles NA propagation correctly (NA * value = NA)
+        Sim <- tcrossprod(Xc)
+        D <- 1 - Sim
+        
+        # Cleanup diagonal (should be 0)
+        diag(D) <- 0
+        
+      } else if (dist %in% c("l2", "l1")) {
+        # Euclidean / Manhattan logic remains same, but handle NAs explicitly
+        if (anyNA(Xp)) {
+          D <- matrix(NA_real_, n_rows, n_rows,
+                      dimnames = list(rownames(Xp), rownames(Xp)))
+          diag(D) <- 0
+          # Manual loop for sparse/NA-heavy matrices
+          for (i in seq_len(n_rows - 1L)) {
+            xi <- Xp[i, ]
+            for (j in (i + 1L):n_rows) {
+              xj <- Xp[j, ]
+              if (anyNA(xi) || anyNA(xj)) {
+                d <- NA_real_
+              } else if (dist == "l2") {
+                d <- sqrt(sum((xi - xj)^2))
+              } else {
+                d <- sum(abs(xi - xj))
+              }
+              D[i, j] <- D[j, i] <- d
+            }
+          }
+        } else {
+          method <- if (dist == "l2") "euclidean" else "manhattan"
+          D <- as.matrix(stats::dist(Xp, method = method))
+        }
+      } else {
+        stop("Unknown distance: ", dist)
+      }
+    }
+    
+    # ensure D is square and has rownames
+    if (!is.matrix(D)) D <- as.matrix(D)
+    if (is.null(rownames(D))) rownames(D) <- colnames(D) <- rownames(Xp)
+    
+    # (2) Vectorize using global pairs, mapping to local D indices via sample IDs
+    Y[, t] <- vectorizeLowerTri(D, pairs = idx, sample.ids = sample.ids, row.ids = rownames(D))
+  }
+  
+  list(Y = Y)        # all pairs x cell types (NA where sample missing in type)
 }
 
 #' Map a square distance matrix to a global pairwise layout

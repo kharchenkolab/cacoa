@@ -526,20 +526,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' \dontrun{
     #' cao$estimateDEPerCellType()
     #' }
-    estimateDEPerCellType=function(cell.groups=self$cell.groups, sample.meta=self$sample.meta, 
+    estimateDEPerCellType=function(cell.groups=self$cell.groups, sample.meta=self$sample.meta, sample.per.cell=self$sample.per.cell,
                                    formula=NULL, contrast=NULL, name='de', test='DESeq2.Wald', resampling.method=NULL, 
                                    n.resamplings=30, seed.resampling=239, min.cell.frac=0.05, common.genes=FALSE, 
                                    n.cores=self$n.cores, cooks.cutoff=FALSE, independent.filtering=FALSE, min.cell.count=10,
                                    n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, genes.to.omit = NULL, ...) {
       set.seed(seed.resampling)
       if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+        sample.model <- buildDesignMatrices(data = sample.meta, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars =  self$block.vars)
       } else {
         sample.model <- self$model
       }
-      #if (!is.list(sample.groups)) {
-      #  sample.groups %<>% {split(names(.), . == contrast[3])} %>% setNames(c(contrast[2], contrast[3]))
-      #}
 
       possible.tests <- c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR',
                           'Wilcoxon.edgeR', 'Wilcoxon.DESeq2', 'Wilcoxon.totcount',
@@ -553,33 +550,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         stop('Test ', test, ' is not supported. Available tests: ', paste(possible.tests, collapse=', '))
       }
 
-      # s.groups.new contains list of case/control groups of samples to run DE on.
-      # First element in s.groups.new corresponds to the initial grouping.
-
+      # If n.cells.subsample is set and no resampling specified -> fix.cells
       if (!is.null(n.cells.subsample) && is.null(resampling.method)) resampling.method <- 'fix.cells'
-      s.groups.new <- list(initial=sample.groups)
-      max.cell.count <- Inf
 
-      fix.samples <- NULL
-      # If resampling is defined, new contrasts will append to s.groups.new
-      if (!is.null(resampling.method) && (n.resamplings != 0)) {
-        s.groups.new %<>% c(
-          prepareSamplesForDE(sample.groups, resampling.method=resampling.method, n.resamplings=n.resamplings)
-        )
-
-        if (resampling.method == 'fix.samples') {
-          if (is.null(fix.n.samples)) {
-            stop("fix.n.samples must be provided for resampling.method='fix.samples'")
-          }
-          fix.samples <- fix.n.samples
-        }
-      }
-
-      if (!is.null(n.cells.subsample)) {
-        if (verbose) message('Number of cell counts is fixed to ', n.cells.subsample)
-        max.cell.count <- min.cell.count <- n.cells.subsample
-      }
       raw.mats <- extractRawCountMatrices(self$data.object, transposed=TRUE)
+
+      # Determine initial sample universe from model and raw.mats intersection
+      all.samples <- intersect(rownames(sample.model$F), names(raw.mats))
+      if (length(all.samples) == 0L) stop("No overlap between model samples and raw.mats")
 
       expr.fracs <- self$getJointCountMatrix() %>% getExpressionFractionPerGroup(cell.groups)
       
@@ -591,25 +569,48 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(genes.to.omit)) {
         gene.filter[genes.to.omit, ] <- FALSE
         gene.filter %<>%
-          apply(2, as.logical) %>%
-          as.matrix() %>%
-          `rownames<-`(gene.filter %>% rownames())
+          apply(2, as.logical) %>% as.matrix() %>% `rownames<-`(gene.filter %>% rownames())
+      }
+
+      max.cell.count <- Inf
+      if (!is.null(n.cells.subsample)) {
+       if (verbose) message("Subsampling up to ", n.cells.subsample,
+                             " cells per (cell type, core samples) in resamples.")
+      }
+      n.cells.subsample.core <- n.cells.subsample
+
+      # Resampling plan = list of sample vectors (NO two-group lists)
+      sample.sets <- list(initial = all.samples)
+
+      fix.samples <- NULL
+      if (!is.null(resampling.method) && (n.resamplings != 0)) {
+        sample.sets <- c(sample.sets,
+           prepareSamplesForDE_model(sample.model, sample.meta=sample.meta, resampling.method=resampling.method, n.resamplings=n.resamplings)
+         )
+
+        if (resampling.method == 'fix.samples') {
+          if (is.null(fix.n.samples)) {
+            stop("fix.n.samples must be provided for resampling.method='fix.samples'")
+          }
+          fix.samples <- fix.n.samples
+        }
       }
 
       # parallelize the outer loop if subsampling is on
-      n.cores.outer <- min(length(s.groups.new), n.cores)
-      n.cores.inner <- max(n.cores %/% length(s.groups.new), 1)
+      n.cores.outer <- min(length(sample.sets), n.cores)
+      n.cores.inner <- max(n.cores %/% length(sample.sets), 1)
       verbose.inner <- (verbose & (n.cores.outer == 1))
 
-      de.res <- names(s.groups.new) %>% sn() %>% plapply(function(resampling.name) {
-        estimateDEPerCellTypeInner(
-          raw.mats=raw.mats, cell.groups=cell.groups, s.groups=s.groups.new[[resampling.name]],
-          common.genes=common.genes, sample.meta=sample.meta, model=sample.model, 
+      de.res <- names(sample.sets) %>% sn() %>% plapply(function(resampling.name) {
+        estimateDEPerCellTypeInner_model(
+          raw.mats=raw.mats, cell.groups=cell.groups, samples=sample.sets[[resampling.name]],
+          common.genes=common.genes, sample.meta=sample.meta, model=sample.model,  sample.per.cell = sample.per.cell,
           cooks.cutoff=cooks.cutoff, min.cell.count=min.cell.count, max.cell.count=max.cell.count,
+          n.cells.subsample.core = (if (resampling.name == "initial") NULL else n.cells.subsample.core),
           independent.filtering=independent.filtering, test=test,  gene.filter=gene.filter,
-          fix.n.samples=(if (resampling.name == 'initial') NULL else fix.samples),
-          n.cores=n.cores.inner, verbose=verbose.inner, return.matrix=(resampling.name == 'initial'), ...
-        )
+          fix.n.samples=(if (resampling.name == 'initial') NULL else fix.samples), 
+          seed = seed.resampling + match(resampling.name, names(sample.sets)), 
+          n.cores=n.cores.inner, verbose=verbose.inner, return.matrix=is.null(resampling.method), ...)
       }, n.cores=n.cores.outer, progress=(!verbose.inner & verbose), mc.preschedule=TRUE, mc.allow.recursive=TRUE)
 
       # if resampling: calculate median and variance on ranks after resampling
@@ -663,41 +664,81 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateDEPerCellType()
     #' cao$estimateDEStabilityPerGene()
     #' }
-    estimateDEStabilityPerGene=function(de.name="de", top.n.genes=500, p.adj.cutoff=NULL, visualize=FALSE) {
+    estimateDEStabilityPerGene = function(de.name = "de", top.n.genes = 500, p.adj.cutoff = NULL, visualize = FALSE) {
       de.res <- self$test.results[[de.name]]
-      for(cell.type in names(de.res$initial)) {
-        if(!is.null(p.adj)) {
-          top.n.genes <- sum(de.res$initial[[cell.type]]$res$padj <= p.adj)
-        }
-        genes.tmp <- rownames(de.res$initial[[cell.type]]$res)
-        tmp <- rep(0, length(genes.tmp))
-        n.tmp <- 0
-        for(resampling.name in setdiff(names(de.res), 'initial')){
-          if(is.null(de.res[[resampling.name]][[cell.type]])) next
-          tmp <- tmp + 1*(rank(de.res[[resampling.name]][[cell.type]][genes.tmp,'padj']) < top.n.genes)
-          n.tmp <- n.tmp + 1
-        }
-        de.res$initial[[cell.type]]$res$Stability <- tmp / n.tmp
-      }
-      self$test.results[[de.name]] <- de.res
-      if(visualize){
-        stability.all <- c()
-        for(cell.type in names(de.res$initial)) {
-          tmp <- de.res$initial[[cell.type]]$res
-          stability.all <- rbind(stability.all,
-                                 data.frame(rank = 1:nrow(tmp),
-                                            stability = tmp$Stability, cell.type = cell.type))
+
+      for (cell.type in names(de.res)) {
+        df0 <- de.res[[cell.type]]
+        subs <- attr(df0, "subsamples")
+
+        if (is.null(df0) || !is.data.frame(df0)) next
+        if (is.null(subs) || length(subs) == 0L) {
+           df0$Stability <- NA_real_
+           df0$n.subsamples.used <- 0L
+           de.res[[cell.type]] <- df0
+           next
         }
 
+        # Decide threshold for "top" genes
+        top.n <- top.n.genes
+        if (!is.null(p.adj.cutoff)) {
+          if (!("padj" %in% names(df0))) stop("padj column missing in initial DE table for ", cell.type)
+          top.n <- sum(df0$padj <= p.adj.cutoff, na.rm = TRUE)
+          top.n <- max(top.n, 1L)
+        }
+
+        genes <- rownames(df0)
+        if (is.null(genes) || length(genes) == 0L) next
+
+        hits <- setNames(numeric(length(genes)), genes)
+        n.used <- 0L
+
+        for (s in subs) {
+          if (is.null(s) || !is.data.frame(s)) next
+          if (!("padj" %in% names(s))) next
+
+          common <- intersect(genes, rownames(s))
+          if (length(common) == 0L) next
+
+          r <- rank(s[common, "padj"], ties.method = "average", na.last = "keep")
+          hits[common] <- hits[common] + as.numeric(r <= top.n)
+          n.used <- n.used + 1L
+        }
+
+        df0$Stability <- if (n.used > 0L) hits / n.used else NA_real_
+        df0$n.subsamples.used <- n.used
+        de.res[[cell.type]] <- df0
+      }
+
+      self$test.results[[de.name]] <- de.res
+
+      if (visualize) {
+        stability.all <- do.call(rbind, lapply(names(de.res), function(ct) {
+          d <- de.res[[ct]]
+          if (is.null(d) || !is.data.frame(d) || is.null(d$Stability)) return(NULL)
+          if (!("pvalue" %in% names(d))) return(NULL)
+
+          data.frame(
+            rank = rank(d$pvalue, na.last = "keep"),
+            stability = d$Stability,
+            cell.type = ct
+          )
+        }))
+
         p <- ggplot(stability.all, aes(rank, stability, colour = cell.type)) +
-          xlim(0, top.n.genes) + geom_smooth(method = "loess") + self$plot.theme +
-          xlab('Gene rank by p-value') + ylab('Fraction of LOOs') +
-          scale_color_manual(values=self$cell.groups.palette) +
-          guides(color=guide_legend(override.aes=list(fill=NA), ncol=1)) +
-          theme(legend.text = element_text(size=6),legend.key.height= unit(0.1, 'cm'),
-                legend.key.width = unit(0.2, 'cm')) + ylim(0, 1)
+          xlim(0, top.n.genes) +
+          geom_smooth(method = "loess") + self$plot.theme +
+          xlab("Gene rank by p-value") + ylab("Fraction of resamples") +
+          scale_color_manual(values = self$cell.groups.palette) +
+          guides(color = guide_legend(override.aes = list(fill = NA), ncol = 1)) +
+          theme(legend.text = element_text(size = 6),
+               legend.key.height = unit(0.1, "cm"),
+                legend.key.width = unit(0.2, "cm")) +
+          ylim(0, 1)
+
         return(p)
       }
+      invisible(self$test.results[[de.name]])
     },
 
     #' @description Plot DE stability per cell type
@@ -720,15 +761,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                         show.pairs = FALSE, sort.order = TRUE, pallete=self$cell.groups.palette,
                                         set.fill=TRUE) {
       jaccards <- private$getResults(name, 'estimateDEStability()')
-      p <- plotStability(jaccards = jaccards,
-                         notch = notch,
-                         show.jitter = show.jitter,
-                         jitter.alpha = jitter.alpha,
-                         show.pairs = show.pairs,
-                         sort.order = sort.order,
-                         xlabel = 'Cell Type',
-                         ylabel = 'Jaccard Index',
-                         palette=NULL,
+      p <- plotStability(jaccards = jaccards,notch = notch, show.jitter = show.jitter,
+                         jitter.alpha = jitter.alpha, show.pairs = show.pairs, sort.order = sort.order,
+                         xlabel = 'Cell Type', ylabel = 'Jaccard Index', palette=NULL, 
                          plot.theme=self$plot.theme, set.fill=set.fill) + theme(legend.position = "none")
 
       p <- p + theme(legend.position = "none") +
@@ -756,17 +791,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateDEStabilityPerGene()
     #' cao$plotDEStabilityPerGene()
     #' }
-    plotDEStabilityPerGene=function(name='de', cell.type=NULL, stability.score='stab.median.rank') {
+    plotDEStabilityPerGene=function(name='de', cell.type=NULL, stability.score='stab.median.rank', top.n=500) {
       de.res <- private$getResults(name, 'estimateDEPerCellType()')
       possible.scores <- c('stab.median.rank', 'stab.mean.rank', 'stab.var.rank')
       if ( !(stability.score %in% possible.scores) ) stop('Please provide correct name of the stability core')
-      if ( !(cell.type %in% names(de.res$initial)) ) stop('Please provide correct cell type to visualise')
-      if ( !(stability.score %in% names(de.res$initial[[cell.type]]$res)) ) stop('Stability score was not estimated')
-
-      idx <- (rank(de.res$initial[[cell.type]]$res$pvalue) < 500)
-      p <- smoothScatter(x = rank(de.res$initial[[cell.type]]$res$pvalue)[idx],
-                         y = rank(de.res$initial[[cell.type]]$res[[stability.score]])[idx],
-                         xlab = 'rank of DE gene', ylab = 'stability score',
+      if (!(cell.type %in% names(de.res))) stop('Please provide correct cell type to visualise')
+      df <- de.res[[cell.type]]
+      if (!is.data.frame(df) || !(stability.score %in% colnames(df))) stop("Stability score not found in DE table.")
+       
+      if (!("pvalue" %in% colnames(df))) stop("Need 'pvalue' column in DE result.")
+      idx <- rank(df$pvalue, na.last = NA) <= top.n
+      if (!any(idx)) stop("No genes found in top.n filter.")
+      p <- smoothScatter(x = rank(df$pvalue)[idx],
+                         y = rank(df[[stability.score]])[idx],
+                         xlab = 'rank of DE gene', ylab = paste0("rank of ", stability.score),
                          colramp = grDevices::colorRampPalette(c("white", 'seagreen4')))
       return(p)
     },
@@ -791,33 +829,50 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       de.raw <- private$getResults(name, 'estimateDEPerCellType()')
 
       if (show.resampling.results) {
-        subsamples <- lapply(de.raw, `[[`, 'subsamples')
-        miss.subsamples <- names(subsamples)[sapply(subsamples, is.null)]
+        subsamples <- lapply(de.raw, function(df) attr(df, "subsamples"))
+        miss.subsamples <- names(subsamples)[sapply(subsamples, function(x) is.null(x) || length(x) == 0L)]
         if (length(miss.subsamples) == length(subsamples)) {
           warning("resampling results are missing for all cell types, falling back to point estimates.",
                   "Please rerun estimateDEPerCellType() with resampling != NULL")
-          rl <- lapply(de.raw, `[[`, 'res')
+          rl <- de.raw
         } else {
           if (length(miss.subsamples) > 0) {
             warning("Subtypes ", paste(miss.subsamples, collapse=","), " are missed form sampling, ignoring those")
           }
 
-          rl <- unlist(subsamples, recursive=FALSE) %>%
-            setNames(rep(names(de.raw), sapply(subsamples, length)))
+          # combine: resampling dfs for cell types that have them
+          rl <- list()
+
+          for (ct in names(de.raw)) {
+            subs <- subsamples[[ct]]
+            if (!is.null(subs) && length(subs) > 0L) {
+              # name resamples for plotting
+              nm <- names(subs)
+              if (is.null(nm) || any(nm == "")) nm <- paste0("resample.", seq_along(subs))
+              names(subs) <- paste0(ct, ".", nm)
+              rl <- c(rl, subs)
+            } else {
+              # fallback to point estimate df
+              rl[[paste0(ct, ".initial")]] <- de.raw[[ct]]
+             }
+          }
         }
+
       } else {
-        rl <- lapply(de.raw, `[[`, 'res')
+        rl <- de.raw
+        names(rl) <- paste0(names(rl), ".initial")
       }
 
       # convert to dataframe for plotting
       p.col <- if (p.adjust) "padj" else "pvalue"
-      df <- lapply(rl, function(d) data.frame(value=sum(d[[p.col]] <= pvalue.cutoff, na.rm=TRUE))) %>%
-        bind_rows(.id="Type")
+      df <- lapply(rl, function(d) {
+        if (is.null(d) || !(p.col %in% colnames(d))) return(data.frame(value = NA_real_))
+        data.frame(value = sum(d[[p.col]] <= pvalue.cutoff, na.rm = TRUE))
+      }) %>% dplyr::bind_rows(.id = "Type")
 
       plotMeanMedValuesPerCellType(
         df, show.jitter=show.jitter, jitter.alpha=jitter.alpha, notch=notch, type=type,
-        palette=self$cell.groups.palette, ylab='number of DE genes', yline=NA, plot.theme=self$plot.theme, ...
-      )
+        palette=self$cell.groups.palette, ylab='number of DE genes', yline=NA, plot.theme=self$plot.theme, ...)
     },
 
     #' @description Make volcano plots
@@ -835,7 +890,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' }
     plotVolcano=function(name='de', cell.types=NULL, palette=NULL, build.panel=TRUE, n.col=3,
                          color.var = 'CellFrac', ...) {
-      de <- private$getResults(name, 'estimateDEPerCellType()') %>% lapply(`[[`, 'res')
+      de <- private$getResults(name, 'estimateDEPerCellType()') 
       if (is.null(palette)) {
         palette <- c("#5e4fa2", "#3288bd", "#abdda4", "#fdae61", "#f46d43", "#9e0142") %>%
           grDevices::colorRampPalette()
@@ -986,8 +1041,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.null(de.raw)) {
         de.raw <- private$getResults(de.name, "estimateDEPerCellType()")
       }
-      # If estimateDEPerCellType was run with return.matrix = TRUE, remove matrix before calculating
-      if ("list" %in% class(de.raw[[1]])) de.raw %<>% lapply(`[[`, "res")
+      de.raw <- lapply(de.raw, getDeTable)
+      de.raw <- de.raw[!vapply(de.raw, is.null, logical(1))]
+      if (length(de.raw) == 0L) {
+        stop("No usable DE tables found in de.raw.")
+      }
 
       de.gene.ids <- getDEEntrezIdsSplitted(de.raw, org.db=org.db, p.adj=p.adj)
 
@@ -995,8 +1053,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       res <- estimateOntologyFromIds(
         de.gene.ids, type=type, org.db=org.db, n.top.genes=n.top.genes, go.environment=go.environment,
         pAdjustMethod=p.adjust.method, readable=readable, minGSSize=min.gs.size, maxGSSize=max.gs.size,
-        keep.gene.sets=keep.gene.sets, verbose=verbose, n.cores=n.cores, ...
-      )
+        keep.gene.sets=keep.gene.sets, verbose=verbose, n.cores=n.cores, ...)
 
       self$test.results[[name]] <- list(res=res, de.gene.ids=de.gene.ids, type=type) # redundancy needed
       return(invisible(self$test.results[[name]]))

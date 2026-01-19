@@ -25,3 +25,12 @@ permuteWithinBlocks <- function(v, blocks) {
   if (is.null(blocks)) return(sample(v, length(v), replace = FALSE))
   ave(v, blocks, FUN = function(w) sample(w, length(w), replace = FALSE))
 }
+
+#' Extract DE result table from various possible formats
+#' @keywords internal
+getDeTable <- function(x) {
+  if (is.null(x)) return(NULL)
+  if (is.data.frame(x)) return(x)
+  if (is.list(x) && !is.null(x$res) && is.data.frame(x$res)) return(x$res)
+  NULL
+}

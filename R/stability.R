@@ -5,8 +5,12 @@ jaccardPwTop <- function(subsamples, top.thresh){
   for(i in 1:length(subsamples)) {
     for(j in 1:length(subsamples)) {
       if (j <= i) next
-      set1 <- rownames(subsamples[[i]])[rank(subsamples[[i]]$pvalue) <= top.thresh]
-      set2 <- rownames(subsamples[[j]])[rank(subsamples[[j]]$pvalue) <= top.thresh]
+      d1 <- subsamples[[i]] ; d2 <- subsamples[[j]]
+      if (is.null(d1) || is.null(d2)) next
+      r1 <- rank(d1$pvalue, na.last = "keep")
+      r2 <- rank(d2$pvalue, na.last = "keep")
+      set1 <- rownames(d1)[!is.na(r1) & (r1 <= top.thresh)]
+      set2 <- rownames(d2)[!is.na(r2) & (r2 <= top.thresh)]
       if((length(set1) != 0) || (length(set2) != 0)) {
         jac.all <- c(jac.all, length(intersect(set1, set2)) / length(unique(c(set1, set2))))
       } else {
@@ -25,8 +29,12 @@ jaccardPwPval <- function(subsamples, p.val.cutoff){
   for(i in 1:length(subsamples)) {
     for(j in 1:length(subsamples)) {
       if (j <= i) next
-      set1 <- rownames(subsamples[[i]])[subsamples[[i]]$padj <= p.val.cutoff]
-      set2 <- rownames(subsamples[[j]])[subsamples[[j]]$padj <= p.val.cutoff]
+
+      d1 <- subsamples[[i]] ; d2 <- subsamples[[j]]
+      if (is.null(d1) || is.null(d2)) next
+
+      set1 <- rownames(d1)[!is.na(d1$padj) & (d1$padj <= p.val.cutoff)]
+      set2 <- rownames(d2)[!is.na(d2$padj) & (d2$padj <= p.val.cutoff)]
       if((length(set1) != 0) || (length(set2) != 0)) {
         jac.all <- c(jac.all, length(intersect(set1, set2)) / length(unique(c(set1, set2))))
       } else {
@@ -90,39 +98,35 @@ plotStability <- function(jaccards, notch, show.jitter, jitter.alpha, show.pairs
 #' @keywords internal
 estimateStabilityPerCellType <- function(de.res, top.n.genes, p.val.cutoff) {
   data.all <- data.frame()
-  for(cell.type in names(de.res$initial)){
-    # print(cell.type)
-    subsamples.names <- setdiff(names(de.res), 'initial')
 
-    # Remove some subsamples due to the min.cell.counts
-    # compare resampling results with "initial"
-    jacc.init <- c()
-    for(subs.name in subsamples.names){
-      subsamples.tmp = list(de.res[[subs.name]][[cell.type]],
-                            de.res$initial[[cell.type]]$res)
-      jacc.pw.tmp <- jaccardPwTop(subsamples.tmp, 200)
-      jacc.init <- c(jacc.init, jacc.pw.tmp$jac)  # please remain 200 here - it is only a technical thing
-    }
-    subsamples.names <- subsamples.names[(jacc.init != 0) & (jacc.init != 1)]
-    subsamples.tmp <- lapply(subsamples.names, function(s){de.res[[s]][[cell.type]]})
-    names(subsamples.tmp) <- subsamples.names
+  for (cell.type in names(de.res)) {
+    df0 <- de.res[[cell.type]]
+    subs <- attr(df0, "subsamples")
 
-    if(length(subsamples.names) <= 2) next
+    # need enough resamples to do pairwise comparisons
+    if (!is.list(subs) || length(subs) < 3) next
 
-    # Calculate jaccard
+    # optional: drop NULL / empty subs
+    ok <- vapply(subs, function(x) is.data.frame(x) && nrow(x) > 0, logical(1))
+    subs <- subs[ok]
+    if (length(subs) < 3) next
+
+    # Calculate jaccard across subsamples
     if (is.null(p.val.cutoff)) {
-      jacc.tmp <- jaccardPwTop(subsamples.tmp, top.n.genes)
+      jacc.tmp <- jaccardPwTop(subs, top.n.genes)
     } else {
-      jacc.tmp <- jaccardPwPval(subsamples.tmp, p.val.cutoff)
+      jacc.tmp <- jaccardPwPval(subs, p.val.cutoff)
     }
 
-    if(is.null(jacc.tmp$jac)) next
-    # print(jacc.tmp)
-    data.tmp <- data.frame(group = cell.type,
-                           value = jacc.tmp$jac,
-                           cmp = jacc.tmp$id)
+    if (is.null(jacc.tmp$jac) || length(jacc.tmp$jac) == 0) next
+
+    data.tmp <- data.frame(
+      group = cell.type,
+      value = jacc.tmp$jac,
+      cmp = jacc.tmp$id
+    )
     data.all <- rbind(data.all, data.tmp)
   }
 
-  return(data.all)
+  data.all
 }

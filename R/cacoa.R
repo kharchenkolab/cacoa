@@ -417,6 +417,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       out$dists.adj <- out %$% extractPairwiseShifts(res, design.mat = pair.model, perm.method = perm.method,
                                                  block.vars = pair.model$pair_block_vars_used, ...)
       out$dists.adj$changed.contrast <- if(!is.null(formula) || !is.null(contrast)) TRUE else FALSE # for plot labels
+      out$pair.model <- pair.model
+      out$sample.ids <- rownames(sample.metadata)
       self$test.results[[name]] <- out
       return(invisible(self$test.results[[name]]))
     },
@@ -2092,6 +2094,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                     zero.pseudocount=zero.pseudocount, basis.type = basis.type, ref.p.thresh = ref.p.thresh,
                     ref.min.size = ref.min.size, ref.max.size = ref.max.size, ...)
       res$cnts <- cnts
+      res$model <- sample.model
       #res$groups <- tmp$d.groups
 
       ## Calculate normalized counts
@@ -2790,7 +2793,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
     #' @param space character One of 'expression.shifts', 'coda', 'pseudo.bulk' (default="expression.shifts")
+    #' @param values character One of "pre-fit" (observed raw distances), "post-fit" (core/partial fit covariate-adjusted) (default="pre-fit")
     #' @param cell.type character Cell type reference for distancing (default=NULL)
+    #' @param pair.set character samples to be included; "all" (all pairs), "core" (core pairs only) (default="all")
     #' @param dist character Must be one of "cor", "l1" (manhattan), "l2" (euclidian) (default=NULL)
     #' @param name character Results slot name (default=NULL)
     #' @param verbose boolean Print messages (default=self$verbose)
@@ -2800,47 +2805,181 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' \dontrun{
     #' cao$getSampleDistanceMatrix()
     #' }
-    getSampleDistanceMatrix=function(space=c('expression.shifts', 'coda', 'pseudo.bulk'), cell.type=NULL,
-                                     dist=NULL, name=NULL, verbose=self$verbose, sample.subset=NULL, ...) {
+    getSampleDistanceMatrix=function(space=c('expression.shifts', 'coda', 'pseudo.bulk'), values = c("pre-fit", "post-fit"), 
+                                     cell.type=NULL, pair.set=c("all", "core"), dist=NULL, name=NULL, verbose=self$verbose, sample.subset=NULL, ...) {
       space <- match.arg(space)
+      values <- match.arg(values)
+      pair.set <- match.arg(pair.set)
       if ((space != 'pseudo.bulk') && (length(list(...)) > 0)) stop("Unexpected arguments: ", names(list(...)))
 
       if (space == 'expression.shifts') {
         if (is.null(name)) name <- 'expression.shifts'
         clust.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
-        if (!is.null(cell.type)) { # use distances based on the specified cell type
-          title <- cell.type
-          p.dists <- clust.info$p.dist.info[[cell.type]]
-          if (is.null(p.dists)) {
-            warning("Distances were not estimated for cell type ", cell.type)
-            return(NULL)
-          }
-        } else { # weighted expression distance across all cell types
-          p.dists <- prepareJointExpressionDistance(clust.info$p.dist.info)
-        }
+        if (is.null(clust.info$res) || is.null(clust.info$res$sample.distances))
+        stop("Missing clust.info$res$sample.distances.")
+        if (is.null(clust.info$pair.model) || is.null(clust.info$pair.model$pairs))
+        stop("Missing clust.info$pair.model$pairs.")
+        if (is.null(clust.info$sample.ids))
+        stop("Missing clust.info$sample.ids.")
+        pairs <- clust.info$pair.model$pairs
+        sids  <- clust.info$sample.ids
+        stopifnot(length(sids) >= max(pairs))
+
+        if(values == "pre-fit"){
+          Y <- clust.info$res$sample.distances  # n_pairs x n_celltypes
+          pairs.use <- pairs
+          Y.use <- Y
+          if (pair.set == "core" && !is.null(clust.info$pair.model$core.rows)) {
+            idx.core <- which(as.logical(clust.info$pair.model$core.rows))
+            Y.core <- Y[idx.core, , drop = FALSE]
+            keep <- rowSums(is.na(Y.core)) < ncol(Y.core)
+            idx.core.use <- idx.core[keep]
+            pairs.use <- pairs[idx.core.use, , drop = FALSE]
+            Y.use <- Y[idx.core.use, , drop = FALSE]
+            }
+
+          if (!is.null(cell.type)) {
+            if (!cell.type %in% colnames(Y.use)) {
+              warning("Distances were not estimated for cell type ", cell.type)
+              return(NULL)
+            }
+            M <- pairTableToSquare(Y.use[, cell.type], pairs.use, sids)
+            M <- attachNC(M, cell.type, clust.info)
+            p.dists <- M
+          } else {
+             mats <- lapply(colnames(Y.use), function(ct) {
+              M <- pairTableToSquare(Y.use[, ct], pairs.use, sids)
+              attachNC(M, ct, clust.info)
+             })
+             names(mats) <- colnames(Y.use)
+             mats <- mats[vapply(mats, function(M) is.matrix(M) && nrow(M) >= 2, logical(1))]
+             if (length(mats) == 0) return(NULL)
+
+             p.dists <- prepareJointExpressionDistance(mats)
+            }
+           } else if (values == "post-fit") {
+            perm.method <- clust.info$perm.method %||% "freedman-lane"
+            p.dist <- clust.info$res$sample.distances
+            
+            yhat <- if (perm.method == "block") {
+              ef <- extractFitsBlock(clust.info$res, p.dist, design.model = clust.info$pair.model)
+              if (!is.null(ef$partial.fit)) ef$partial.fit else ef$partial
+              } else {
+                extractFitsFL(clust.info$res, p.dist, design.model = clust.info$pair.model)
+                }
+
+            if (!is.null(cell.type)) {
+              if (!cell.type %in% colnames(yhat)) {
+                warning("No fitted values available for cell type ", cell.type)
+                return(NULL)
+                }
+                yhat <- yhat[, cell.type, drop = FALSE]
+                }
+
+            if (nrow(yhat) == nrow(pairs)) {
+              pairs.use <- pairs
+              yhat.use <- yhat
+              
+              if (pair.set == "core" && !is.null(clust.info$pair.model$core.rows)) {
+                idx.core <- which(as.logical(clust.info$pair.model$core.rows))
+                y.core <- yhat[idx.core, , drop = FALSE]
+                pd_core <- p.dist[idx.core, , drop = FALSE]
+                keep <- rowSums(is.na(pd_core)) < ncol(pd_core)
+                idx.core.use <- idx.core[keep]
+                pairs.use <- pairs[idx.core.use, , drop = FALSE]
+                yhat.use <- yhat[idx.core.use, , drop = FALSE]
+                }
+                
+              } else {
+                # yhat is shorter: assume it corresponds to core rows with all-NA dropped
+                core <- clust.info$pair.model$core.rows
+                idx.core <- if (is.null(core)) seq_len(nrow(pairs)) else which(as.logical(core))
+                pd_core <- p.dist[idx.core, , drop = FALSE]
+                keep <- rowSums(is.na(pd_core)) < ncol(pd_core)
+                idx.core.use <- idx.core[keep]
+                pairs.use <- pairs[idx.core.use, , drop = FALSE]
+
+                if (nrow(yhat) != nrow(pairs.use)) {
+                  stop("Row alignment mismatch: nrow(yhat)=", nrow(yhat),
+                  " but expected=", nrow(pairs.use),". Cannot safely map yhat rows to pairs.")
+                  }
+                  yhat.use <- yhat
+                  }
+
+                if (!is.null(cell.type)) {
+                  M <- pairTableToSquare(yhat.use[, 1], pairs.use, sids)
+                  M <- attachNC(M, colnames(yhat.use)[1], clust.info)
+                  p.dists <- M
+                  } else {
+                    mats <- lapply(seq_len(ncol(yhat.use)), function(j) {
+                      ct <- colnames(yhat.use)[j]
+                      M <- pairTableToSquare(yhat.use[, j], pairs.use, sids)
+                      attachNC(M, ct, clust.info)
+                    })
+                    names(mats) <- colnames(yhat.use)
+                    mats <- mats[vapply(mats, function(M) is.matrix(M) && nrow(M) >= 2, logical(1))]
+                    if (length(mats) == 0) return(NULL)
+                    p.dists <- prepareJointExpressionDistance(mats)
+                    }
+                }
         if (any(is.na(p.dists))) { # NA imputation
           p.dists %<>% ape::additive() %>% `dimnames<-`(dimnames(p.dists))
         }
       } else if (space=='coda') {
-        n.cells.per.samp <- table(self$sample.per.cell)
-        mat <- private$extractCodaData() %$% getRndBalances(d.counts) %$% prcomp(norm) %$% as.data.frame(x)
+        if (is.null(name)) name <- "coda"
+        coda.info <- private$getResults(name, "estimateCellLoadings()")
 
-        dist %<>% parseDistance(top.n.genes=ncol(mat), n.pcs=NULL)
-        if (dist == 'cor') {
-          p.dists <- 1 - cor(t(mat))
-        } else if (dist == 'l2') {
-          p.dists <- dist(mat, method="euclidean") %>% as.matrix()
-        } else if (dist == 'l1') {
-          p.dists <- dist(mat, method="manhattan") %>% as.matrix()
+        if (is.null(coda.info$ilr) || !is.matrix(coda.info$ilr))
+          stop("Missing coda.info$ilr. Run estimateCellLoadings() first.")
+
+        if (values == "pre-fit") {
+          mat <- coda.info$ilr
+
+        } else if (values == "post-fit") {
+          if (is.null(coda.info$model))
+        stop("Missing coda.info$model. Re-run estimateCellLoadings() after adding res$model <- sample.model.")
+
+          if (is.null(coda.info$fit) || is.null(coda.info$fit$coef))
+        stop("Missing coda.info$fit$coef.")
+
+          perm.method <- coda.info$perm.method %||% "freedman-lane"
+          design <- if (perm.method == "freedman-lane") coda.info$model$X else coda.info$model$F
+          if (is.null(design)) stop("Design matrix missing for perm.method='", perm.method, "'.")
+
+          # Align design rows to ilr rows by sample id
+          s <- intersect(rownames(coda.info$ilr), rownames(design))
+          if (length(s) < 2) stop("Too few overlapping samples between ilr and design.")
+          design <- design[s, , drop = FALSE]
+          coef   <- coda.info$fit$coef
+
+          # Ensure coef rownames match design columns
+          if (is.null(rownames(coef))) stop("coda.info$fit$coef must have rownames.")
+          miss <- setdiff(colnames(design), rownames(coef))
+          if (length(miss) > 0)
+          stop("coda fit is missing coefficients for design columns: ", paste(miss, collapse=", "))
+
+          coef <- coef[colnames(design), , drop = FALSE]
+          mat  <- design %*% coef
+          rownames(mat) <- s
+        }
+
+        dist %<>% parseDistance(top.n.genes = ncol(mat), n.pcs = NULL)
+
+        if (dist == "cor") {
+          p.dists <- 1 - cor(t(mat), use = "pairwise.complete.obs")
+        } else if (dist == "l2") {
+          p.dists <- as.matrix(stats::dist(mat, method = "euclidean"))
+        } else if (dist == "l1") {
+          p.dists <- as.matrix(stats::dist(mat, method = "manhattan"))
         } else {
           stop("Unknown distance: ", dist)
         }
       } else {
         stop("Not implemented space: ", space, "!")
       }
-
+      
       if (!is.null(sample.subset)) {
-        p.dists <- p.dists[sample.subset, sample.subset]
+        p.dists <- p.dists[sample.subset, sample.subset, drop = FALSE]
       }
 
       return(p.dists)
@@ -2850,6 +2989,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param space character string "expression.shifts" Results from cao$estimateExpressionShiftMagnitudes(); CDA- cell composition shifts result from cao$estimateCellLoadings(); sudo.bulk- expression distance of sudo bulk
     #' @param method character string "MDS"
     #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default correlation distance)
+    #' @param values character One of "pre-fit" (observed distances), "post-fit" (core/partial fit covariate-adjusted) (default="post-fit")
     #' @param cell.type If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)
     #' @param palette a set of colors to use for conditions (default: stored $sample.groups.palette)
     #' @param show.sample.size make point size proportional to the log10 of the number of cells per sample (default: FALSE)
@@ -2865,7 +3005,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateExpressionShiftMagnitudes()
     #' cao$plotSampleDistances()
     #' }
-    plotSampleDistances=function(space='expression.shifts', method='MDS', dist=NULL, name=NULL, cell.type=NULL,
+    plotSampleDistances=function(space='expression.shifts', method='MDS', values = 'post-fit', dist=NULL, 
+                                 name=NULL, cell.type=NULL, sample.meta=NULL, color.by=NULL, 
                                  palette=NULL, show.sample.size=FALSE, sample.colors=NULL, color.title=NULL,
                                  title=NULL, n.permutations=2000, show.pvalues=FALSE, sample.subset=NULL,
                                  n.cores=self$n.cores, ...) {
@@ -2877,19 +3018,28 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       p.dists <- self$getSampleDistanceMatrix(
-        space=space, cell.type=cell.type, dist=dist, name=name, sample.subset=sample.subset
-      )
+        space=space, cell.type=cell.type, dist=dist, name=name, sample.subset=sample.subset, values = values)
       if (is.null(p.dists)) return(NULL)
 
-      if (is.null(sample.colors) && is.null(palette)) {
-        # Has to be in the same order, or ggplot separates shape and color legends into two
-        palette <- self$sample.groups.palette[levels(as.factor(self$sample.groups))]
+      sample.labels <- NULL
+      if (!is.null(sample.meta) && !is.null(color.by)) {
+        if (!color.by %in% colnames(sample.meta)) {
+          stop("color.by column not found in sample.meta: ", color.by)
+         }
+      # align to samples present in p.dists
+      sm <- sample.meta[rownames(p.dists), , drop=FALSE]
+      sample.labels <- sm[[color.by]]
+      names(sample.labels) <- rownames(sm)
       }
+
+      if (is.null(color.title) && !is.null(color.by)) {
+        color.title <- color.by
+        }
+    if (is.null(title)) title <- paste0(space, " | ", values)
       gg <- plotSampleDistanceMatrix(
-        p.dists=p.dists, sample.groups=self$sample.groups, n.cells.per.samp=n.cells.per.samp, method=method,
+        p.dists=p.dists, sample.labels=sample.labels, n.cells.per.samp=n.cells.per.samp, method=method,
         sample.colors=sample.colors, show.sample.size=show.sample.size, palette=palette, color.title=color.title,
-        title=title, plot.theme=self$plot.theme, ...
-      )
+        title=title, plot.theme=self$plot.theme, ...)
 
       return(gg)
     },

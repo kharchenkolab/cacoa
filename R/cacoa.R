@@ -475,14 +475,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ylab character string Label of the y-axis (default="Residual Variance")
     #' @param ... additional arguments
     #' @return A ggplot2 object
-    plotExpressionShiftResiduals=function(name="expression.shifts", cov.plot.keys = NULL,
+    plotExpressionShiftResiduals=function(name="expression.shifts", cov.plot.keys = NULL, residual.type = c("pearson","raw"),
                                            jitter.alpha=0.8, jitter.size=1, yline=0.0, plot.per.celltype = FALSE, palette=NULL,
                                            ylab='Residual Variance', cont.palette = rev(RColorBrewer::brewer.pal(11, "Spectral")), ...) {
 
       res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
-
+      residual.type <- match.arg(residual.type)
       res %$% plotResidualsPerCelltype(res, design.mat, self$sample.ids, palette=palette, plot.theme=self$plot.theme, 
-                                       cov.plot.keys = cov.plot.keys, jitter.alpha=jitter.alpha, 
+                                       cov.plot.keys = cov.plot.keys, jitter.alpha=jitter.alpha, residual.type=residual.type,
                                        jitter.size=jitter.size, plot.per.celltype=plot.per.celltype, yline=yline, cont.palette=cont.palette,
                                        ylab=ylab, ...)
     },
@@ -2507,6 +2507,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                     l.max=l.max, ...), model = sample.model, perm.method=perm.method, robust = robust.method)
       }
 
+      if (return.residuals) {
+        res$residuals <- perm.res$residuals
+        res$residuals.pearson <- perm.res$residuals.pearson
+      }
+
       self$test.results[[name]]$diff[[type]] <- res
 
       return(invisible(self$test.results[[name]]))
@@ -2625,8 +2630,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotDiffCellDensityResiduals = function(name = "cell.density", type = "permutation", size = 0.2, palette = brewerPalette("GnBu"),
                                             alpha = 0.2, sample.metadata = self$sample.meta, cov.plot.keys = NULL, 
                                             metric = c("mean_abs", "sd"), build.panel = TRUE, jitter.size = 1, jitter.alpha = 0.8,
-                                            cont.palette  = rev(RColorBrewer::brewer.pal(11, "Spectral")), ...) {
+                                            cont.palette  = rev(RColorBrewer::brewer.pal(11, "Spectral")), residual.type = c("pearson","raw"),
+                                             ...) {
       metric <- match.arg(metric)
+      residual.type <- match.arg(residual.type)
       private$checkCellEmbedding()
 
       dens.res <- private$getResults(name, "estimateCellDensity")
@@ -2642,7 +2649,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           stop("Residuals are not stored. Re-run estimateDiffCellDensity(..., return.residuals=TRUE).")
       }
 
-      res <- diff.res$residuals  # matrix: samples 
+      res <- if (residual.type == "pearson") {
+               if (!is.null(diff.res$residuals.pearson)) diff.res$residuals.pearson else diff.res$residuals
+             } else {
+               diff.res$residuals # matrix: samples 
+             }
+  
       ## ---- per-cell metrics (across samples) ----
       mean.abs.resid.cell <- colMeans(abs(res), na.rm = TRUE)
       sd.resid.cell <- apply(res, 2, sd, na.rm = TRUE)
@@ -2685,7 +2697,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       sd.resid.sample <- apply(res, 1, sd, na.rm = TRUE)
 
       metric.vec <- if (metric == "mean_abs") mean.abs.resid.sample else sd.resid.sample
-      ylab <- if (metric == "mean_abs") "Mean |residual| per sample" else "Residual SD per sample"
+      ylab <- if (metric == "mean_abs") {
+                if (residual.type == "pearson") "Mean |Pearson residual| per sample" else "Mean |residual| per sample"
+              } else {
+                if (residual.type == "pearson") "Pearson residual SD per sample" else "Residual SD per sample"
+              }
 
       sample.df <- data.frame(sample = sample.ids, resid_metric = metric.vec, sm, check.names  = FALSE)
 
@@ -3460,19 +3476,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Plot cluster-free expression shift residuals
     #' @param name character Results slot name (default='cluster.free.expr.shifts')
     #' @param palette (default=brewerPalette("PuOr", rev=FALSE))
+    #' @param residual.type character Must be one of "pearson" or "raw" (default="pearson")
     #' @param alpha numeric (default=0.2)
     #' @param font.size size range for cell type labels
     #' @param build.panel boolean (default=TRUE)
     #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
     #' @return plot of cluster-free expression shift residuals
     plotClusterFreeResiduals = function(name = "cluster.free.expr.shifts", palette = brewerPalette("GnBu"),
-                                        alpha = 0.2, font.size = c(3,5), build.panel = TRUE, ...) {
+                                        residual.type = c("pearson", "raw"), alpha = 0.2, font.size = c(3,5), 
+                                        build.panel = TRUE, ...){
+      residual.type <- match.arg(residual.type)
       shifts <- private$getResults(name, "estimateClusterFreeExpressionShifts")
       private$checkCellEmbedding()
 
       if (is.null(shifts$residuals))
           stop("Residuals not stored. Re-run estimateClusterFreeExpressionShifts(..., return.residuals=TRUE).")
-      res <- shifts$residuals  # n_pairs × n_cells
+      res <- if (residual.type == "pearson") {
+                if (!is.null(shifts$residuals.pearson)) shifts$residuals.pearson else shifts$residuals
+             } else {
+                shifts$residuals # n_pairs × n_cells
+             }
 
       # Per-point statistics 
       mean.abs.resid <- colMeans(abs(res), na.rm = TRUE)
@@ -3481,17 +3504,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # Embedding panels 
       # regions where the model performs poorly
       g.mean <- self$plotEmbedding(colors = mean.abs.resid, alpha = alpha, palette = palette,
-                                   legend.title = "Mean |residual| per cell", ...)
+                                   legend.title = if (residual.type == "pearson") "Mean |Pearson residual| per cell" else "Mean |residual| per cell", 
+                                   ...)
     
       # systematic model misfit, not just outliers?
       g.sd <- self$plotEmbedding(colors = sd.resid, alpha = alpha, palette = palette,
-                                legend.title = "Residual SD per cell", ...)
+                                legend.title = if (residual.type == "pearson") "Pearson residual SD per cell" else "Residual SD per cell", 
+                                ...)
 
       # Histogram panel ; Do LM assumptions hold?
       df.hist <- data.frame(resid = as.numeric(res))
       g.hist <- ggplot(df.hist, aes(x = resid)) +
                  geom_histogram(bins = 100, fill = "grey40", color = "white") +
-                theme_classic() + ggtitle("Residual distribution") + xlab("Residual") + ylab("Frequency")
+                theme_classic() + ggtitle("Residual distribution") + xlab(if (residual.type == "pearson") "Pearson residual" else "Residual") + 
+                ylab("Frequency")
 
       if (build.panel) {
           return(cowplot::plot_grid(g.mean, g.sd, g.hist, labels = c("Mean |Residual|", "Residual SD", "Distribution"),

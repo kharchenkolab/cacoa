@@ -239,8 +239,13 @@ diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c
   z.score <- res$z.score
   names(z.score) <- colnames(Y)
 
- return(list(score=score.c, permut.scores = t(res$stats.perm), z.score=z.score))
+  out <- list(score = score.c, permut.scores = t(res$stats.perm), z.score = z.score)
 
+  if (return.residuals) {
+    out$residuals <- res$residuals
+    out$residuals.pearson <- res$residuals.pearson
+  }
+  return(out)
 }
 
 #' @keywords internal

@@ -218,6 +218,26 @@ performLMPermutations <- function(x, y,
       residuals <- residuals[cross.rows, , drop = FALSE]
     }
   }
+
+  ## -- Pearson's residuals ---
+  residuals.pearson <- NULL
+  sigma.hat <- NULL
+  df.resid  <- NULL
+
+  if (return.residuals && !is.null(residuals)) {
+    D <- if (perm.method == "block") as.matrix(x$F) else as.matrix(x$X)
+    p.eff <- qr(D)$rank # effective parameter count
+
+    # Per-response-column n used 
+    n.obs <- colSums(is.finite(residuals))
+    df.resid <- pmax(1, n.obs - p.eff) # Residual df per column
+    rss <- colSums(residuals^2, na.rm = TRUE) # Sigma-hat per column
+    sigma.hat <- sqrt(rss / df.resid)
+    sigma.hat[!is.finite(sigma.hat) | sigma.hat <= 0] <- NA_real_
+
+    # Pearson residuals: r / sigma
+    residuals.pearson <- sweep(residuals, 2, sigma.hat, "/")
+  }
   
   ## --- y.resid (partial_core) naming for FL ---
   if (!is.null(y.resid)) {
@@ -274,7 +294,8 @@ performLMPermutations <- function(x, y,
     sampled.fits = fit$sampled_fits,
     pval       = p,
     z.score    = z,
-    residuals  = residuals
+    residuals  = residuals,
+    residuals.pearson = residuals.pearson
   )
 }
 

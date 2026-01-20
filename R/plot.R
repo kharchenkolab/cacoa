@@ -706,9 +706,12 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
 plotResidualsPerCelltype <- function(res, design.mat, sample.ids = NULL, palette = NULL, font.size = 4, ylab = NULL, 
                                      plot.theme = theme_bw(), jitter.size = 1, jitter.alpha = 0.8, yline = 0,
                                      cov.plot.keys = NULL, plot.per.celltype = FALSE, notch = TRUE, 
-                                     cont.palette = rev(RColorBrewer::brewer.pal(11, "Spectral"))) {
+                                     cont.palette = rev(RColorBrewer::brewer.pal(11, "Spectral")), 
+                                     residual.type = c("pearson","raw")) {
 
-  df <- as.data.frame(res$residuals)
+  residual.type <- match.arg(residual.type)
+
+  df <- as.data.frame(if(residual.type == "pearson") res$residuals.pearson else res$residuals)
   df$sample <- rownames(df)   # rows = pairs (core rows for FL, all rows for block)
 
   has.cov <- !is.null(cov.plot.keys)

@@ -173,7 +173,8 @@ estimateClusterFreeExpressionShiftsLM <- function(cm, sample.per.cell, nns.per.c
     shifts          = shifts,
     shifts.smoothed = shifts.smoothed,
     sampled.stats   = if (!is.null(res$sampled_stats)) res$sampled_stats else NULL,
-    residuals       = if (!is.null(res$residuals)) res$residuals else NULL
+    residuals       = if (!is.null(res$residuals)) res$residuals else NULL,
+    residuals.pearson = if (!is.null(res$residuals.pearson)) res$residuals.pearson else NULL
   )
 }
 
@@ -244,6 +245,7 @@ estimateClusterFreeDE_LM <- function(genes, de.inp, sample.per.cell, design, per
 
   ## optional residuals per gene
   res.list <- if (return.residuals) setNames(vector("list", length(overlap)), overlap) else NULL
+  res.list.pearson <- if (return.residuals) setNames(vector("list", length(overlap)), overlap) else NULL
 
   g2col <- match(overlap, cm.genes) - 1L
 
@@ -277,7 +279,9 @@ estimateClusterFreeDE_LM <- function(genes, de.inp, sample.per.cell, design, per
     if (return.residuals) {
       # fit$residuals is (used rows) × (focal cells). Row names already map to used rows.
       res.list[[gk]] <- fit$residuals
+      res.list.pearson[[gk]] <- fit$residuals.pearson
       names(res.list)[gk] <- gene
+      names(res.list.pearson)[gk] <- gene
     }
 
     ## optional means
@@ -332,6 +336,7 @@ estimateClusterFreeDE_LM <- function(genes, de.inp, sample.per.cell, design, per
   out <- list(z = z.mat, stat.obs = stat.mat)
   if (keep.means) out <- c(out, list(reference = ref.mat, target = targ.mat, lfc = lfc.mat))
   if (return.residuals) out$residuals <- res.list   # named list: one matrix per gene
+  if (return.residuals) out$residuals.pearson <- res.list.pearson
 
   out
 }

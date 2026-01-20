@@ -1227,9 +1227,10 @@ getScaledZGradient <- function(min.z, palette, color.range) {
 
 
 #' @keywords internal
-plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, method='MDS', sample.colors=NULL,
+plotSampleDistanceMatrix <- function(p.dists, sample.labels=NULL, n.cells.per.samp, method='MDS', sample.colors=NULL,
                                      show.sample.size=TRUE, palette=NULL, font.size=NULL, show.ticks=FALSE, title=NULL,
                                      show.labels=FALSE, size=5, color.title=NULL, perplexity=4, max.iter=1e3,
+                                     cont.palette = rev(RColorBrewer::brewer.pal(11, "Spectral")),
                                      plot.theme=theme_get(), n.neighbors=15, ...) {
       if (method == 'tSNE') {
         checkPackageInstalled('Rtsne', cran=TRUE, details='for `method="tSNE"`')
@@ -1251,21 +1252,70 @@ plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, m
       }
 
       df <- data.frame(emb) %>% set_rownames(rownames(p.dists)) %>% set_colnames(c("x", "y")) %>%
-        mutate(sample=rownames(.), condition=sample.groups[sample], n.cells=as.vector(n.cells.per.samp[sample]))
+               mutate(sample = rownames(.), n.cells = as.vector(n.cells.per.samp[sample]))
 
-      if (is.null(sample.colors)) {
-        gg <- ggplot(df, aes(x, y, color=condition, shape=condition))
-      } else {
-        df$color <- sample.colors[as.character(df$sample)]
-        gg <- ggplot(df, aes(x, y, color=color, shape=condition))
-        if (!is.null(color.title)) gg <- gg + labs(color=color.title)
-      }
+      if (!is.null(sample.labels)) {
+        # align by sample id
+        df$label <- sample.labels[df$sample]
+       } else {
+        df$label <- factor("All")
+       }
+      
+      if (is.null(color.title)) color.title <- "Covariate"
 
-      if (!is.null(palette)) {
-        gg <- gg + if (is.function(palette)) {
-          scale_color_gradientn(colors=palette(100))
+      if (!(is.numeric(df$label) || is.integer(df$label))) {
+        df$label <- addNA(as.factor(df$label))
+        }
+
+      is.cont <- is.numeric(df$label) || is.integer(df$label)
+      if (is.cont) {
+        if (is.null(sample.colors)) {
+          gg <- ggplot(df, aes(x, y, color=label))
+          } else {
+            df$color <- sample.colors[as.character(df$sample)]
+            gg <- ggplot(df, aes(x, y, color=color))
+            }
+            } else {
+              if (is.null(sample.colors)) {
+                gg <- ggplot(df, aes(x, y, color=label, shape=label))
+                } else {
+                  df$color <- sample.colors[as.character(df$sample)]
+                  gg <- ggplot(df, aes(x, y, color=color, shape=label))
+                  }
+                }
+      # apply legend titles
+      if (is.cont) {
+        gg <- gg + labs(color = color.title)
         } else {
-          scale_color_manual(values=palette)
+          gg <- gg + labs(color = color.title, shape = color.title)
+          }
+
+      # Apply palette only when it is valid for the data type
+      if (is.cont) {
+        if (is.null(palette)) {
+          # default continuous palette
+          gg <- gg + scale_color_gradientn(colors = cont.palette)
+        } else if (is.function(palette)) {
+          gg <- gg + scale_color_gradientn(colors = palette(100))
+        } else if (is.character(palette) && length(palette) > 1) {
+          gg <- gg + scale_color_gradientn(colors = palette)
+        } else {
+          warning("Ignoring 'palette' for continuous covariate: provide a function like viridisLite::viridis or a vector of colors.")
+        }
+      } else {
+        if (!is.null(palette)) {
+          if (is.function(palette)) {
+            gg <- gg + scale_color_manual(values = palette(length(levels(df$label))))
+          } else if (is.character(palette) && length(palette) > 0) {
+            nlev <- length(levels(df$label))
+            if (is.null(names(palette)) && length(palette) < nlev) {
+              warning("Ignoring 'palette': insufficient values (need ", nlev, ", got ", length(palette), ").")
+            } else {
+              gg <- gg + scale_color_manual(values = palette)
+            }
+          } else {
+            warning("Ignoring 'palette': must be a non-empty character vector (discrete) or a function (continuous).")
+          }
         }
       }
 
@@ -1282,7 +1332,7 @@ plotSampleDistanceMatrix <- function(p.dists, sample.groups, n.cells.per.samp, m
       }
 
       gg %<>% sccore::styleEmbeddingPlot(title=title, show.ticks=show.ticks, show.labels=show.labels, ...)
-
+      gg <- gg + ggtitle(title) + theme(plot.title = element_text(face = "bold"))
       if (!is.null(font.size)) {
         gg <- gg + ggrepel::geom_text_repel(aes(label=sample), size=font.size, color="black")
       }

@@ -1811,3 +1811,32 @@ contrastCenterX0 <- function(x, pair.level, w, tol = 1e-8) {
 isContinuousCol <- function(df, col) {
   isTRUE(col %in% names(df)) && is.numeric(df[[col]])
 }
+
+#' @keywords internal
+parseDistance <- function(dist, top.n.genes, n.pcs) {
+  n.comps <- min(top.n.genes, n.pcs, Inf)
+  if (is.null(dist)) {
+    dist <- ifelse(n.comps < 20, 'l1', 'cor')
+    return(dist)
+  }
+
+  dist %<>% tolower()
+  if (dist == 'l2') {
+    warning("Using dist='l2' is not recommended, as it may introduce unwanted dependency ",
+            "on the number of cells per cluster. Please, consider using 'l1' instead.")
+  } else if (dist == 'cor') {
+    if (n.comps < 20) {
+      warning("dist='cor' is not recommended for data with dimensionality < 20. ",
+              "Please, consider using 'l1' instead.")
+    }
+  } else if (dist == 'l1') {
+    if (n.comps > 30) {
+      warning("dist='l1' is not recommended for data with dimensionality > 30. ",
+              "Please, consider using 'cor' instead.")
+    }
+  } else {
+    stop("Unknown dist: ", dist)
+  }
+
+  return(dist)
+}

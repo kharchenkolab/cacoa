@@ -1229,9 +1229,9 @@ getScaledZGradient <- function(min.z, palette, color.range) {
 #' @keywords internal
 plotSampleDistanceMatrix <- function(p.dists, sample.labels=NULL, n.cells.per.samp, method='MDS', sample.colors=NULL,
                                      show.sample.size=TRUE, palette=NULL, font.size=NULL, show.ticks=FALSE, title=NULL,
-                                     show.labels=FALSE, size=5, color.title=NULL, perplexity=4, max.iter=1e3,
+                                     shape.labels=NULL, shape.title=NULL, show.labels=FALSE, size=5, color.title=NULL, 
                                      cont.palette = rev(RColorBrewer::brewer.pal(11, "Spectral")),
-                                     plot.theme=theme_get(), n.neighbors=15, ...) {
+                                     perplexity=4, max.iter=1e3, plot.theme=theme_get(), n.neighbors=15, ...) {
       if (method == 'tSNE') {
         checkPackageInstalled('Rtsne', cran=TRUE, details='for `method="tSNE"`')
         emb <- Rtsne::Rtsne(p.dists, is_distance=TRUE, perplexity=perplexity, max_iter=max.iter)$Y
@@ -1260,8 +1260,22 @@ plotSampleDistanceMatrix <- function(p.dists, sample.labels=NULL, n.cells.per.sa
        } else {
         df$label <- factor("All")
        }
+
+      if (!is.null(shape.labels)) {
+        df$shape <- shape.labels[df$sample]
+        } else {
+          df$shape <- factor("All")
+          }
+          # shapes must be discrete; if numeric, coerce with a warning
+          if (is.numeric(df$shape) || is.integer(df$shape)) {
+            warning("shape.by is numeric; coercing to factor for discrete shapes.")
+            df$shape <- as.factor(df$shape)
+            } else {
+              df$shape <- addNA(as.factor(df$shape))
+              }
       
       if (is.null(color.title)) color.title <- "Covariate"
+      if (is.null(shape.title)) shape.title <- "Covariate"
 
       if (!(is.numeric(df$label) || is.integer(df$label))) {
         df$label <- addNA(as.factor(df$label))
@@ -1270,24 +1284,24 @@ plotSampleDistanceMatrix <- function(p.dists, sample.labels=NULL, n.cells.per.sa
       is.cont <- is.numeric(df$label) || is.integer(df$label)
       if (is.cont) {
         if (is.null(sample.colors)) {
-          gg <- ggplot(df, aes(x, y, color=label))
+          gg <- ggplot(df, aes(x, y, color=label, shape=shape))
           } else {
             df$color <- sample.colors[as.character(df$sample)]
-            gg <- ggplot(df, aes(x, y, color=color))
+            gg <- ggplot(df, aes(x, y, color=color, shape=shape))
             }
             } else {
               if (is.null(sample.colors)) {
-                gg <- ggplot(df, aes(x, y, color=label, shape=label))
+                gg <- ggplot(df, aes(x, y, color=label, shape=shape))
                 } else {
                   df$color <- sample.colors[as.character(df$sample)]
-                  gg <- ggplot(df, aes(x, y, color=color, shape=label))
+                  gg <- ggplot(df, aes(x, y, color=color, shape=shape))
                   }
                 }
       # apply legend titles
       if (is.cont) {
         gg <- gg + labs(color = color.title)
         } else {
-          gg <- gg + labs(color = color.title, shape = color.title)
+          gg <- gg + labs(color = color.title, shape = shape.title)
           }
 
       # Apply palette only when it is valid for the data type

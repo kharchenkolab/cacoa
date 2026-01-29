@@ -2989,12 +2989,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param space character string "expression.shifts" Results from cao$estimateExpressionShiftMagnitudes(); CDA- cell composition shifts result from cao$estimateCellLoadings(); sudo.bulk- expression distance of sudo bulk
     #' @param method character string "MDS"
     #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default correlation distance)
-    #' @param values character One of "pre-fit" (observed distances), "post-fit" (core/partial fit covariate-adjusted) (default="post-fit")
+    #' @param values character One of "pre-fit" (observed distances), "post-fit" (core/partial fit covariate-adjusted), or both (default="both")
+    #' @param color.by character Sample metadata column name for coloring points (default=NULL)
+    #' @param shape.by character Sample metadata column name for shaping points (default=NULL)
+    #' @param sample.meta data.frame containing Sample metadata (default=self$sample.meta)
+    #' @param sample.subset character vector of sample IDs to include (default=NULL, meaning all samples)
+    #' @param both.ncol numeric number of columns for both plots (default=2)
+    #' @param both.align character alignment for both plots, one of "h", "v", "hv" (default="hv")
+    #' @param name character Results slot name (default=NULL)
     #' @param cell.type If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)
     #' @param palette a set of colors to use for conditions (default: stored $sample.groups.palette)
     #' @param show.sample.size make point size proportional to the log10 of the number of cells per sample (default: FALSE)
     #' @param sample.colors (default=NULL)
     #' @param color.title (default=NULL)
+    #' @param shape.title (default=NULL)
     #' @param title (default=NULL)
     #' @param n.permutations numeric (default=2000)
     #' @param show.pvalues boolean (default=FALSE)
@@ -3005,11 +3013,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateExpressionShiftMagnitudes()
     #' cao$plotSampleDistances()
     #' }
-    plotSampleDistances=function(space='expression.shifts', method='MDS', values = 'post-fit', dist=NULL, 
-                                 name=NULL, cell.type=NULL, sample.meta=NULL, color.by=NULL, 
+    plotSampleDistances=function(space='expression.shifts', method='MDS', values = 'both', dist=NULL, 
+                                 name=NULL, cell.type=NULL, sample.meta=NULL, color.by=NULL, shape.by=NULL,
                                  palette=NULL, show.sample.size=FALSE, sample.colors=NULL, color.title=NULL,
-                                 title=NULL, n.permutations=2000, show.pvalues=FALSE, sample.subset=NULL,
-                                 n.cores=self$n.cores, ...) {
+                                 shape.title=NULL, title=NULL, both.ncol = 2, both.align = "hv",
+                                 n.permutations=2000, show.pvalues=FALSE, sample.subset=NULL, n.cores=self$n.cores, ...) {
+      values <- match.arg(values, c("pre-fit", "post-fit", "both"))
       if (is.null(cell.type)) {
         n.cells.per.samp <- table(self$sample.per.cell)
       } else {
@@ -3017,35 +3026,122 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         n.cells.per.samp <- self$sample.per.cell %>% .[self$cell.groups[names(.)] == cell.type] %>% table()
       }
 
-      p.dists <- self$getSampleDistanceMatrix(
-        space=space, cell.type=cell.type, dist=dist, name=name, sample.subset=sample.subset, values = values)
-      if (is.null(p.dists)) return(NULL)
-
-      if (is.null(sample.meta) && !is.null(color.by)) {
+      if (is.null(sample.meta) && (!is.null(color.by) || !is.null(shape.by))) {
         sample.meta <- self$sample.meta
-      }
-
-      sample.labels <- NULL
-      if (!is.null(sample.meta) && !is.null(color.by)) {
-        if (!color.by %in% colnames(sample.meta)) {
-          stop("color.by column not found in sample.meta: ", color.by)
-         }
-      # align to samples present in p.dists
-      sm <- sample.meta[rownames(p.dists), , drop=FALSE]
-      sample.labels <- sm[[color.by]]
-      names(sample.labels) <- rownames(sm)
-      }
+        }
 
       if (is.null(color.title) && !is.null(color.by)) {
         color.title <- color.by
         }
-    if (is.null(title)) title <- paste0(space, " | ", values)
-      gg <- plotSampleDistanceMatrix(
-        p.dists=p.dists, sample.labels=sample.labels, n.cells.per.samp=n.cells.per.samp, method=method,
-        sample.colors=sample.colors, show.sample.size=show.sample.size, palette=palette, color.title=color.title,
-        title=title, plot.theme=self$plot.theme, ...)
+      if (is.null(shape.title) && !is.null(shape.by)) shape.title <- shape.by
 
-      return(gg)
+      if (is.null(title)) title <- space
+
+      if (values == "both") {
+        checkPackageInstalled("cowplot", cran=TRUE, details="for values='both'")
+
+        # pre-fit; sample labels can be different pre and post-fit due to contrast specification.
+        pd.pre <- self$getSampleDistanceMatrix(space=space, cell.type=cell.type, dist=dist, name=name,
+                                               sample.subset=sample.subset, values="pre-fit")
+        if (is.null(pd.pre)) return(NULL)
+        sample.labels.pre <- NULL
+        if (!is.null(sample.meta) && !is.null(color.by)) {
+         if (!color.by %in% colnames(sample.meta)) {
+          stop("color.by column not found in sample.meta: ", color.by)
+         }
+         # align to samples present in p.dists
+         sm <- sample.meta[rownames(pd.pre), , drop=FALSE]
+         sample.labels.pre <- sm[[color.by]]
+         names(sample.labels.pre) <- rownames(sm)
+        }
+
+        shape.labels.pre <- NULL
+        if (!is.null(sample.meta) && !is.null(shape.by)) {
+         if (!shape.by %in% colnames(sample.meta)) {
+          stop("shape.by column not found in sample.meta: ", shape.by)
+          }
+          sm <- sample.meta[rownames(pd.pre), , drop=FALSE]
+          shape.labels.pre <- sm[[shape.by]]
+          names(shape.labels.pre) <- rownames(sm)
+          }
+
+        # post-fit
+        pd.post <- self$getSampleDistanceMatrix(space=space, cell.type=cell.type, dist=dist, name=name,
+                                               sample.subset=sample.subset, values="post-fit")
+        if (is.null(pd.post)) return(NULL)
+
+        sample.labels.post <- NULL
+        if (!is.null(sample.meta) && !is.null(color.by)) {
+         if (!color.by %in% colnames(sample.meta)) {
+          stop("color.by column not found in sample.meta: ", color.by)
+         }
+         # align to samples present in p.dists
+         sm <- sample.meta[rownames(pd.post), , drop=FALSE]
+         sample.labels.post <- sm[[color.by]]
+         names(sample.labels.post) <- rownames(sm)
+        }
+
+        shape.labels.post <- NULL
+        if (!is.null(sample.meta) && !is.null(shape.by)) {
+         if (!shape.by %in% colnames(sample.meta)) {
+          stop("shape.by column not found in sample.meta: ", shape.by)
+          }
+          sm <- sample.meta[rownames(pd.post), , drop=FALSE]
+          shape.labels.post <- sm[[shape.by]]
+          names(shape.labels.post) <- rownames(sm)
+          }
+        
+        gg.pre <- plotSampleDistanceMatrix(
+          p.dists=pd.pre, sample.labels=sample.labels.pre, n.cells.per.samp=n.cells.per.samp, method=method,
+          sample.colors=sample.colors, show.sample.size=show.sample.size, palette=palette, color.title=color.title,
+          shape.labels=shape.labels.pre, shape.title=shape.title, title=paste0("(pre-fit)"),
+          plot.theme=self$plot.theme, ...)
+
+        gg.post <- plotSampleDistanceMatrix(
+          p.dists=pd.post, sample.labels=sample.labels.post, n.cells.per.samp=n.cells.per.samp, method=method,
+          sample.colors=sample.colors, show.sample.size=show.sample.size, palette=palette, color.title=color.title,
+          shape.labels=shape.labels.post, shape.title=shape.title, title=paste0("(post-fit)"),
+          plot.theme=self$plot.theme, ...)
+
+        gg <- cowplot::plot_grid(gg.pre, gg.post, ncol = both.ncol, align = both.align)
+        gg <- cowplot::plot_grid(cowplot::ggdraw() + cowplot::draw_label(space, fontface="bold", x=0, hjust=0),
+                                 gg, ncol = 1,rel_heights = c(0.08, 1))
+
+        return(gg)
+      } else {
+        
+        p.dists <- self$getSampleDistanceMatrix(space=space, cell.type=cell.type, dist=dist, 
+                                                name=name, sample.subset=sample.subset, values = values)
+        if (is.null(p.dists)) return(NULL)
+
+        sample.labels <- NULL
+        if (!is.null(sample.meta) && !is.null(color.by)) {
+          if (!color.by %in% colnames(sample.meta)) {
+            stop("color.by column not found in sample.meta: ", color.by)
+           }
+          # align to samples present in p.dists
+          sm <- sample.meta[rownames(p.dists), , drop=FALSE]
+          sample.labels <- sm[[color.by]]
+          names(sample.labels) <- rownames(sm)
+        }
+
+        shape.labels <- NULL
+        if (!is.null(sample.meta) && !is.null(shape.by)) {
+          if (!shape.by %in% colnames(sample.meta)) {
+            stop("shape.by column not found in sample.meta: ", shape.by)
+            }
+            sm <- sample.meta[rownames(p.dists), , drop=FALSE]
+            shape.labels <- sm[[shape.by]]
+            names(shape.labels) <- rownames(sm)
+          }
+        if (is.null(title)) title <- paste0(space, " | ", values)
+        gg <- plotSampleDistanceMatrix(
+          p.dists=p.dists, sample.labels=sample.labels, n.cells.per.samp=n.cells.per.samp, method=method,
+          sample.colors=sample.colors, show.sample.size=show.sample.size, palette=palette, color.title=color.title,
+          shape.labels=shape.labels, shape.title=shape.title, title=title, plot.theme=self$plot.theme, ...) 
+
+        return(gg)
+      } 
     },
 
     #' @description Estimate metadata separation using variance on the sample distance graph

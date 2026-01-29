@@ -3021,6 +3021,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         space=space, cell.type=cell.type, dist=dist, name=name, sample.subset=sample.subset, values = values)
       if (is.null(p.dists)) return(NULL)
 
+      if (is.null(sample.meta) && !is.null(color.by)) {
+        sample.meta <- self$sample.meta
+      }
+
       sample.labels <- NULL
       if (!is.null(sample.meta) && !is.null(color.by)) {
         if (!color.by %in% colnames(sample.meta)) {

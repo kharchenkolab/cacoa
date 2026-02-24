@@ -231,11 +231,55 @@ estimateClusterFreeDE_LM <- function(genes, de.inp, sample.per.cell, design, per
   }
   if (!length(overlap)) stop("No requested genes are present in the matrix.")
 
+  ## contrast-aware group membership (binary vs continuous)
+   tol <- 1e-8
+
+  ## Matrix used for contrast score in this perm.method branch
+  A <- if (perm.method == "block") design$F else design$X
+
+  ## Contrast score per sample (what you already do)
   g.act <- if (perm.method == "block") {
     as.numeric(design$F %*% matrix(design$contrast.F, ncol = 1L))
   } else {
     as.numeric(design$X %*% matrix(design$contrast.X, ncol = 1L))
   }
+
+  ## Determine whether g.act is effectively binary (two unique values up to tolerance)
+  g.act.round <- round(g.act / tol) * tol
+  u <- sort(unique(g.act.round[is.finite(g.act.round)]))
+  contrast.is.binary <- length(u) == 2L
+
+  ## Default: unknown membership
+  is.ref  <- rep(FALSE, length(g.act))
+  is.targ <- rep(FALSE, length(g.act))
+
+  if (contrast.is.binary) {
+    ## Try endpoints first (preferred)
+    end <- if (perm.method == "block") design$contrast_endpoints_F else design$contrast_endpoints_X
+    
+      num.hat <- as.numeric(A %*% matrix(end$num, ncol = 1L))
+      den.hat <- as.numeric(A %*% matrix(end$den, ncol = 1L))
+
+      is.targ <- (num.hat - den.hat) > tol
+      is.ref  <- (den.hat - num.hat) > tol
+
+      ## If endpoints produce no split, fall back to low/high unique values
+      if (!(any(is.ref) && any(is.targ))) {
+        lo <- u[1]; hi <- u[2]
+        is.ref  <- abs(g.act.round - lo) < tol
+        is.targ <- abs(g.act.round - hi) < tol
+      }
+    
+    ## Sanity: ensure disjoint
+    both <- is.ref & is.targ
+    if (any(both)) {
+      is.ref[both]  <- FALSE
+      is.targ[both] <- FALSE
+    }
+  }
+
+  ## Apply min.n.samp.per.cond only when the contrast is binary
+  apply.min.per.cond <- (min.n.samp.per.cond > 0L) && contrast.is.binary
 
   ## triplets for z/stat and optional means
   i.z <- integer(0); j.z <- integer(0); x.z <- numeric(0)
@@ -257,15 +301,38 @@ estimateClusterFreeDE_LM <- function(genes, de.inp, sample.per.cell, design, per
     Y <- clusterFreeGeneMat(count_mat = cm, sample_per_cell = sample.ids, nn_ids = nns,
                             min_n_obs_per_samp = as.integer(min.n.obs.per.samp), gi = gi)
 
-    ## per-column power check
-    if (min.n.samp.per.cond > 0L) {
-      for (ci in seq_len(ncol(Y))) {
-        yy <- Y[, ci]
-        n.ref  <- sum(!is.na(yy) & g.act < 0)
-        n.targ <- sum(!is.na(yy) & g.act > 0)
-        if (min(n.ref, n.targ) < min.n.samp.per.cond) Y[, ci] <- NA_real_
+    ## per-column power / feasibility check
+    for (ci in seq_len(ncol(Y))) {
+      yy <- Y[, ci]
+
+      if (apply.min.per.cond) {
+        ## Binary contrast: require enough samples per side among non-missing yy
+        n.ref  <- sum(!is.na(yy) & is.ref)
+        n.targ <- sum(!is.na(yy) & is.targ)
+
+        if (min(n.ref, n.targ) < min.n.samp.per.cond) {
+          Y[, ci] <- NA_real_
+          next
+        }
+      } else if (min.n.samp.per.cond > 0L && !contrast.is.binary) {
+        ## Continuous contrast: disable min.n.samp.per.cond (ill-defined).
+        ## Instead require enough usable rows and enough contrast variation.
+        ok <- !is.na(yy) & is.finite(g.act)
+
+        ## need at least (number of coefficients in F) + 2 rows to fit stably
+        min.rows <- ncol(design$F) + 2L
+
+        if (sum(ok) < min.rows) {
+          Y[, ci] <- NA_real_
+          next
+        }
+        if (stats::sd(g.act[ok]) < tol) {
+          Y[, ci] <- NA_real_
+          next
+        }
       }
     }
+
     
     fit <- performLMPermutations(x = design, y = Y, perm.method = perm.method, robust.method = robust.method,
                                  na.mode = na.mode, alternative = alternative, n.permutations = n.permutations, 
@@ -286,11 +353,17 @@ estimateClusterFreeDE_LM <- function(genes, de.inp, sample.per.cell, design, per
 
     ## optional means
     if (keep.means) {
-      m.ref <- m.targ <- rep(NA_real_, ncol(Y))
-      idx.ref  <- which(g.act < 0)
-      idx.targ <- which(g.act > 0)
-      if (length(idx.ref))  m.ref  <- colMeans(Y[idx.ref,  , drop = FALSE], na.rm = TRUE)
-      if (length(idx.targ)) m.targ <- colMeans(Y[idx.targ,, drop = FALSE], na.rm = TRUE)
+    m.ref <- m.targ <- rep(NA_real_, ncol(Y))
+
+    if (contrast.is.binary) {
+       idx.ref  <- which(is.ref)
+        idx.targ <- which(is.targ)
+        if (length(idx.ref))  m.ref  <- colMeans(Y[idx.ref,  , drop = FALSE], na.rm = TRUE)
+        if (length(idx.targ)) m.targ <- colMeans(Y[idx.targ, , drop = FALSE], na.rm = TRUE)
+      } else {
+        ## Continuous contrast: "reference/target means" are not well-defined.
+        ## Leave as NA rather than reporting misleading values.
+      }
     }
 
     ## keep mask; use same mask for z/stat/means

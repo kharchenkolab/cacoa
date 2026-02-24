@@ -2082,7 +2082,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # Build model
       if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-       sample.model <- buildDesignMatrices(data = self$sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+       sample.model <- buildDesignMatrices(data = self$sample.meta, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
       } else {
       sample.model <- self$model
       }

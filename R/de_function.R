@@ -1175,13 +1175,41 @@ summarizeDEResamplingResults <- function(de.list, var.to.sort = "pvalue") {
 #' 
 #' @keywords internal
 appendStatisticsToDE <- function(de.list, expr.frac.per.type) {
+
   for (n in names(de.list)) {
-    de.list[[n]]$res %<>%
-      mutate(CellFrac=expr.frac.per.type[Gene, n], SampleFrac=Matrix::rowMeans(de.list[[n]]$cm > 0)[Gene]) %>%
-      as.data.frame(stringsAsFactors=FALSE) %>% set_rownames(.$Gene)
+
+    # Skip cell types with no DE table
+    if (is.null(de.list[[n]]$res) || nrow(de.list[[n]]$res) == 0) {
+      next
+    }
+
+    res <- de.list[[n]]$res
+
+    # Ensure there is a Gene column
+    if (!("Gene" %in% colnames(res))) {
+      res <- tibble::rownames_to_column(as.data.frame(res), var = "Gene")
+    }
+
+    # Compute CellFrac safely (match genes)
+    cf <- as.numeric(expr.frac.per.type[res$Gene, n])
+
+    # Compute SampleFrac if cm exists
+    if (!is.null(de.list[[n]]$cm)) {
+      sf_all <- Matrix::rowMeans(de.list[[n]]$cm > 0)
+      sf <- as.numeric(sf_all[res$Gene])
+    } else {
+      sf <- rep(NA_real_, nrow(res))
+    }
+
+    # Add columns and restore rownames
+    res <- dplyr::mutate(res, CellFrac = cf, SampleFrac = sf) |>
+      as.data.frame(stringsAsFactors = FALSE)
+
+    rownames(res) <- res$Gene
+    de.list[[n]]$res <- res
   }
 
-  return(de.list)
+  de.list
 }
 
 #' get expression fraction per cell group
@@ -1205,24 +1233,51 @@ getExpressionFractionPerGroup <- function(cm, cell.groups) {
 #
 #' @keywords internal
 getPerCellTypeGeneFilter <- function(counts, cell.groups, threshold = 0.05) {
+
+  # --- checks + alignment  ---
+  if (is.null(colnames(counts))) {
+    stop("getPerCellTypeGeneFilter(): counts must have colnames (cell IDs) for alignment.")
+  }
+  if (is.null(names(cell.groups))) {
+    stop("getPerCellTypeGeneFilter(): cell.groups must be a named vector (names are cell IDs).")
+  }
+
+  common.cells <- intersect(colnames(counts), names(cell.groups))
+  if (length(common.cells) == 0) {
+    stop("getPerCellTypeGeneFilter(): no overlapping cell IDs between counts and cell.groups.")
+  }
+
+  counts <- counts[, common.cells, drop = FALSE]
+  cell.groups <- cell.groups[common.cells]
+  stopifnot(identical(colnames(counts), names(cell.groups)))
+
+  # binarize counts (>1)
+  if (!inherits(counts, "dgCMatrix")) {
+    counts <- Matrix::Matrix(counts, sparse = TRUE)
+  }
   counts@x <- as.numeric(counts@x > 1)
-  cell.types <- unique(cell.groups)
-  cell.type.indicator <- Matrix(0, nrow = length(cell.groups), ncol = length(cell.types),
-                               dimnames = list(names(cell.groups), cell.types))
-  row.inds <- match(names(cell.groups), rownames(cell.type.indicator))
-  col.inds <- match(cell.groups, colnames(cell.type.indicator))
-  cell.type.indicator[cbind(row.inds, col.inds)] <- 1
-  
-  counts.per.type <- counts %*% cell.type.indicator
-  n.cells <- colSums(cell.type.indicator)
+
+  # build indicator 
+  cell.types <- sort(unique(cell.groups))
+  cell.type.indicator <- Matrix::sparseMatrix(
+    i = seq_along(cell.groups),
+    j = match(cell.groups, cell.types),
+    x = 1,
+    dims = c(length(cell.groups), length(cell.types)),
+    dimnames = list(names(cell.groups), cell.types)
+  )
+
+  # compute fraction of expressing cells per gene per celltype
+  counts.per.type <- counts %*% cell.type.indicator   # (genes x cells) %*% (cells x types) = genes x types
+  n.cells <- Matrix::colSums(cell.type.indicator)
   expr.frac <- sweep(counts.per.type, 2, n.cells, FUN = "/")
   filters <- expr.frac > threshold
-  
+
   filters.list <- lapply(seq_len(ncol(filters)), function(i) {
     setNames(as.vector(filters[, i]), rownames(counts))
   })
   names(filters.list) <- colnames(filters)
-  return(filters.list)
+  filters.list
 }
 
 #' Extract simple triplet contrast from model contrast specification

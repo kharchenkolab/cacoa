@@ -2082,7 +2082,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # Build model
       if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-       sample.model <- buildDesignMatrices(data = self$sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+       sample.model <- buildDesignMatrices(data = self$sample.meta, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
       } else {
       sample.model <- self$model
       }
@@ -2706,7 +2706,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                 if (residual.type == "pearson") "Pearson residual SD per sample" else "Residual SD per sample"
               }
 
-      sample.df <- data.frame(sample = sample.ids, resid_metric = metric.vec, sm, check.names  = FALSE)
+      # avoid duplicate column names (sample is commonly present in metadata)
+      sm2 <- sm
+      if ("sample" %in% names(sm2)) sm2 <- sm2[, names(sm2) != "sample", drop = FALSE]
+
+      sample.df <- data.frame(sample = sample.ids, resid_metric = metric.vec, sm2, check.names = FALSE)
+      names(sample.df) <- make.unique(names(sample.df))
 
       ## ---- sample-covariate plots ----
       sample.plots <- list()
@@ -2793,7 +2798,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
     #' @param space character One of 'expression.shifts', 'coda', 'pseudo.bulk' (default="expression.shifts")
-    #' @param values character One of "pre-fit" (observed raw distances), "post-fit" (core/partial fit covariate-adjusted) (default="pre-fit")
+    #' @param values character One of "unadjusted" (observed raw distances), "adjusted" (core/partial fit covariate-adjusted) (default="unadjusted")
     #' @param cell.type character Cell type reference for distancing (default=NULL)
     #' @param pair.set character samples to be included; "all" (all pairs), "core" (core pairs only) (default="all")
     #' @param dist character Must be one of "cor", "l1" (manhattan), "l2" (euclidian) (default=NULL)
@@ -2805,7 +2810,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' \dontrun{
     #' cao$getSampleDistanceMatrix()
     #' }
-    getSampleDistanceMatrix=function(space=c('expression.shifts', 'coda', 'pseudo.bulk'), values = c("pre-fit", "post-fit"), 
+    getSampleDistanceMatrix=function(space=c('expression.shifts', 'coda', 'pseudo.bulk'), values = c("unadjusted", "adjusted"), 
                                      cell.type=NULL, pair.set=c("all", "core"), dist=NULL, name=NULL, verbose=self$verbose, sample.subset=NULL, ...) {
       space <- match.arg(space)
       values <- match.arg(values)
@@ -2825,7 +2830,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         sids  <- clust.info$sample.ids
         stopifnot(length(sids) >= max(pairs))
 
-        if(values == "pre-fit"){
+        if(values == "unadjusted"){
           Y <- clust.info$res$sample.distances  # n_pairs x n_celltypes
           pairs.use <- pairs
           Y.use <- Y
@@ -2857,7 +2862,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
              p.dists <- prepareJointExpressionDistance(mats)
             }
-           } else if (values == "post-fit") {
+           } else if (values == "adjusted") {
             perm.method <- clust.info$perm.method %||% "freedman-lane"
             p.dist <- clust.info$res$sample.distances
             
@@ -2932,10 +2937,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (is.null(coda.info$ilr) || !is.matrix(coda.info$ilr))
           stop("Missing coda.info$ilr. Run estimateCellLoadings() first.")
 
-        if (values == "pre-fit") {
+        if (values == "unadjusted") {
           mat <- coda.info$ilr
 
-        } else if (values == "post-fit") {
+        } else if (values == "adjusted") {
           if (is.null(coda.info$model))
         stop("Missing coda.info$model. Re-run estimateCellLoadings() after adding res$model <- sample.model.")
 
@@ -2989,7 +2994,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param space character string "expression.shifts" Results from cao$estimateExpressionShiftMagnitudes(); CDA- cell composition shifts result from cao$estimateCellLoadings(); sudo.bulk- expression distance of sudo bulk
     #' @param method character string "MDS"
     #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default correlation distance)
-    #' @param values character One of "pre-fit" (observed distances), "post-fit" (core/partial fit covariate-adjusted), or both (default="both")
+    #' @param values character One of "unadjusted" (observed distances), "adjusted" (core/partial fit covariate-adjusted), or both (default="both")
     #' @param color.by character Sample metadata column name for coloring points (default=NULL)
     #' @param shape.by character Sample metadata column name for shaping points (default=NULL)
     #' @param sample.meta data.frame containing Sample metadata (default=self$sample.meta)
@@ -3018,7 +3023,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                  palette=NULL, show.sample.size=FALSE, sample.colors=NULL, color.title=NULL,
                                  shape.title=NULL, title=NULL, both.ncol = 2, both.align = "hv",
                                  n.permutations=2000, show.pvalues=FALSE, sample.subset=NULL, n.cores=self$n.cores, ...) {
-      values <- match.arg(values, c("pre-fit", "post-fit", "both"))
+      values <- match.arg(values, c("unadjusted","adjusted","both"))
       if (is.null(cell.type)) {
         n.cells.per.samp <- table(self$sample.per.cell)
       } else {
@@ -3042,7 +3047,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
         # pre-fit; sample labels can be different pre and post-fit due to contrast specification.
         pd.pre <- self$getSampleDistanceMatrix(space=space, cell.type=cell.type, dist=dist, name=name,
-                                               sample.subset=sample.subset, values="pre-fit")
+                                               sample.subset=sample.subset, values="unadjusted")
         if (is.null(pd.pre)) return(NULL)
         sample.labels.pre <- NULL
         if (!is.null(sample.meta) && !is.null(color.by)) {
@@ -3067,7 +3072,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
         # post-fit
         pd.post <- self$getSampleDistanceMatrix(space=space, cell.type=cell.type, dist=dist, name=name,
-                                               sample.subset=sample.subset, values="post-fit")
+                                               sample.subset=sample.subset, values="adjusted")
         if (is.null(pd.post)) return(NULL)
 
         sample.labels.post <- NULL
@@ -3094,13 +3099,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         gg.pre <- plotSampleDistanceMatrix(
           p.dists=pd.pre, sample.labels=sample.labels.pre, n.cells.per.samp=n.cells.per.samp, method=method,
           sample.colors=sample.colors, show.sample.size=show.sample.size, palette=palette, color.title=color.title,
-          shape.labels=shape.labels.pre, shape.title=shape.title, title=paste0("(pre-fit)"),
+          shape.labels=shape.labels.pre, shape.title=shape.title, title=paste0("Unadjusted"),
           plot.theme=self$plot.theme, ...)
 
         gg.post <- plotSampleDistanceMatrix(
           p.dists=pd.post, sample.labels=sample.labels.post, n.cells.per.samp=n.cells.per.samp, method=method,
           sample.colors=sample.colors, show.sample.size=show.sample.size, palette=palette, color.title=color.title,
-          shape.labels=shape.labels.post, shape.title=shape.title, title=paste0("(post-fit)"),
+          shape.labels=shape.labels.post, shape.title=shape.title, title=paste0("Model-adjusted"),
           plot.theme=self$plot.theme, ...)
 
         gg <- cowplot::plot_grid(gg.pre, gg.post, ncol = both.ncol, align = both.align)

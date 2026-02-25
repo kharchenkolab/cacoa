@@ -1808,51 +1808,55 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       write.table(res, file=file, sep=sep, row.names=FALSE, ...)
     },
 
+    
     #' @description Plot the cell group sizes or proportions per sample
     #' @param cell.groups factor Cell annotations with cell IDs as names (default=self$cell.groups)
+    #' @param condition character Metadata column to group samples by (default: self$contrast[1])
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
     #' @param show.significance boolean show statistical significance between sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001) (default=FALSE)
     #' @param filter.empty.cell.types boolean Remove cell types without cells (default=TRUE)
     #' @param proportions boolean Plot proportions or absolute numbers (default=TRUE)
     #' @param ... additional plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    #' @examples
-    #' \dontrun{
-    #' cao$plotCellGroupSizes()
-    #' }
-    plotCellGroupSizes=function(cell.groups=self$cell.groups, show.significance=FALSE, filter.empty.cell.types=TRUE,
+    plotCellGroupSizes=function(cell.groups=self$cell.groups, condition=NULL, show.significance=FALSE, filter.empty.cell.types=TRUE,
                                 proportions=TRUE, palette=self$sample.groups.palette, ...) {
       df.melt <- private$extractCodaData(cell.groups=cell.groups, ret.groups=FALSE)
-
+      
       if (proportions) {
         df.melt %<>% {100 * . / rowSums(.)}
         y.lab <- "% cells per sample"
       } else {
         y.lab <- "Num. cells per sample"
       }
-
-      df.melt %<>% as.data.frame() %>%
-        dplyr::mutate(group=self$sample.groups[levels(self$sample.per.cell)]) %>%
-        reshape2::melt(id.vars="group")
-
+      
+      # Infer grouping variable from the new contrast/metadata model
+      if (is.null(condition)) {
+        condition <- if (!is.null(self$contrast)) self$contrast[1] else colnames(self$sample.meta)[1]
+      }
+      
+      df.melt <- as.data.frame(df.melt)
+      df.melt$group <- self$sample.meta[rownames(df.melt), condition]
+      df.melt <- reshape2::melt(df.melt, id.vars="group")
+      
       # Filtration
       if (filter.empty.cell.types) {
         cell.types.counts <- table(df.melt$variable[df.melt$value>0], df.melt$group[df.melt$value>0])
         cell.types.to.remain <- cell.types.counts %>% {rownames(.)[rowSums(. == 0) == 0]}
         df.melt <- df.melt[df.melt$variable %in% cell.types.to.remain,]
-
+        
         for (tmp.level in colnames(cell.types.counts)) {
           cell.types.tmp <- cell.types.counts %>% {rownames(.)[(rowSums(. == 0) != 0) & (.[, tmp.level] > 0)]}
           if (length(cell.types.tmp) > 0)
             message('Cell types {', paste(cell.types.tmp, collapse=", "), '} are present only in ', tmp.level, ' samples')
         }
       }
-
+      
       gg <- plotCountBoxplotsPerType(df.melt, y.lab=y.lab, palette=palette, show.significance=show.significance,
                                      plot.theme=self$plot.theme, ...)
-
+      
       return(gg)
     },
+    
 
     #' @description Plot the cell group sizes or proportions per sample
     #' @param cell.groups character Cell annotations with cell IDs as names(default=self$cell.groups)
@@ -4159,18 +4163,24 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                              samples.to.remove=NULL) {
       d.counts <- cell.groups %>% data.frame(anno=., group=self$sample.per.cell[names(.)]) %>%
         table() %>% rbind() %>% t()
-
+      
       if (!is.null(cells.to.remove)) d.counts %<>% .[,!(colnames(.) %in% cells.to.remove)]
       if (!is.null(cells.to.remain)) d.counts %<>% .[,colnames(.) %in% cells.to.remain]
       if (!is.null(samples.to.remove)) d.counts %<>% .[!(rownames(.) %in% samples.to.remove),]
-
+      
       if (!ret.groups) {
         return(d.counts)
       }
-
-      d.groups <- (self$sample.groups[rownames(d.counts)] == self$target.level) %>%
+      
+      # Adapt to the new metadata and contrast model
+      condition <- if (!is.null(self$contrast)) self$contrast[1] else colnames(self$sample.meta)[1]
+      target <- if (!is.null(self$contrast)) self$contrast[2] else self$target.level
+      
+      sample.groups <- setNames(self$sample.meta[[condition]], rownames(self$sample.meta))
+      
+      d.groups <- (sample.groups[rownames(d.counts)] == target) %>%
         setNames(rownames(d.counts))
-
+      
       return(list(d.counts = d.counts,
                   d.groups = d.groups))
     },

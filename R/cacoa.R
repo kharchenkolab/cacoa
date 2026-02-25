@@ -2756,44 +2756,94 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(out)
     },
 
-
     #' @description Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
-    #' @param name character Test results to plot (default=expression.shifts)
+    #' @param name character Test results to plot (default="expression.shifts")
     #' @param joint boolean Whether to show joint boxplot with the expression distance weighed by the sizes of cell types (default: TRUE), or show distances for each individual cell type
+    #' @param condition character Metadata column to group samples by (default: inferred from contrast)
+    #' @param values character One of "pre-fit" (observed raw distances), "post-fit" (core/partial fit covariate-adjusted) (default="pre-fit")
     #' @param palette plot palette (default=self$sample.groups.palette)
     #' @param show.significance boolean Whether to show statistical significance between sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001)
     #' @param ... other plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
-    #' @examples
-    #' \dontrun{
-    #' cao$estimateExpressionShiftMagnitudes()
-    #' cao$plotExpressionDistance()
-    #' }
-    plotExpressionDistance = function(name='expression.shifts', joint=FALSE, palette=self$sample.groups.palette,
+    plotExpressionDistance = function(name='expression.shifts', joint=FALSE, condition=NULL,
+                                      values=c("pre-fit", "post-fit"), palette=NULL,
                                       show.significance=FALSE, ...) {
-      cluster.shifts <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
-      if (!joint) {
-        df <- cluster.shifts %$%
-          lapply(p.dist.info, subsetDistanceMatrix, sample.groups, cross.factor=FALSE, build.df=TRUE) %>%
-          joinExpressionShiftDfs(sample.groups=cluster.shifts$sample.groups) %>%
-          rename(group=Condition, variable=Type)
-        plot.theme <- self$plot.theme
-      } else {
-        df <- cluster.shifts %$%
-          prepareJointExpressionDistance(p.dist.info, sample.groups=sample.groups, return.dists=FALSE) %>%
-          group_by(Var1, Var2, type1) %>%
-          summarize(value=median(value)) %>%
-          mutate(group=type1, variable="")
+      values <- match.arg(values)
+      clust.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
+      
+      # Determine grouping variable from new model
+      if (is.null(condition)) {
+        condition <- if (!is.null(self$contrast)) self$contrast[1] else colnames(self$sample.meta)[1]
+      }
+      if (is.null(palette)) palette <- self$sample.groups.palette
+      
+      # Helper to melt square matrix and filter for within-group distances
+      get_within_group_dists <- function(mat, var_name) {
+        df <- reshape2::melt(as.matrix(mat))
+        
+        # Keep unique pairs only (avoid duplicates & self-distances)
+        df <- df[as.character(df$Var1) < as.character(df$Var2), ]
+        
+        # Annotate with metadata
+        df$cond1 <- self$sample.meta[as.character(df$Var1), condition]
+        df$cond2 <- self$sample.meta[as.character(df$Var2), condition]
+        
+        # Filter for within-condition comparisons only
+        df <- df[df$cond1 == df$cond2, ]
+        df$group <- df$cond1
+        df$variable <- var_name
+        
+        # Drop NAs
+        df <- df[!is.na(df$value), ]
+        return(df[, c("Var1", "Var2", "value", "group", "variable")])
+      }
+      
+      if (joint) {
+        dist_mat <- self$getSampleDistanceMatrix(space="expression.shifts", name=name, values=values)
+        if (is.null(dist_mat)) stop("Could not compute joint distance matrix.")
+        
+        df <- get_within_group_dists(dist_mat, var_name="")
+        
         plot.theme <- self$plot.theme +
           theme(axis.title.x=element_blank(), axis.text.x=element_blank(),
                 axis.ticks.x=element_blank(), panel.grid.major.x=element_blank())
+      } else {
+        cell_types <- colnames(clust.info$res$sample.distances)
+        
+        df_list <- lapply(cell_types, function(ct) {
+          dist_mat <- self$getSampleDistanceMatrix(space="expression.shifts", name=name, cell.type=ct, values=values)
+          if (is.null(dist_mat)) return(NULL)
+          get_within_group_dists(dist_mat, var_name=ct)
+        })
+        
+        df <- do.call(rbind, df_list)
+        plot.theme <- self$plot.theme
       }
-
+      
+      if (nrow(df) == 0) {
+        stop("No within-group distances could be calculated. Please check your condition and sample metadata.")
+      }
+      
+      # Safety net for wilcox.test
+      if (show.significance) {
+        # Check how many distinct groups have data for each cell type
+        counts <- table(df$variable, df$group)
+        valid_vars <- rownames(counts)[rowSums(counts > 0) >= 2]
+        invalid_vars <- setdiff(unique(df$variable), valid_vars)
+        
+        if (length(invalid_vars) > 0) {
+          warning("The following cell types do not have enough pairs in both conditions for Wilcoxon testing and will be excluded from the plot: ", 
+                  paste(invalid_vars, collapse = ", "))
+          df <- df[df$variable %in% valid_vars, ]
+        }
+      }
+      
       gg <- plotCountBoxplotsPerType(df, y.lab="expression distance", show.significance=show.significance,
                                      plot.theme=plot.theme, palette=palette, ...)
-
+      
       return(gg)
     },
+    
 
     #' @description Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
     #' @param space character One of 'expression.shifts', 'coda', 'pseudo.bulk' (default="expression.shifts")

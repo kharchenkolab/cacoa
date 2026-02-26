@@ -55,7 +55,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field data.object list The main object storing data (Conos or Seurat) (default=list())
     data.object = list(),
 
-    #' @field sample.metadata Data frame with annotation of covariates per sample (default=NULL)
+    #' @field sample.metada Data frame with annotation of covariates per sample (default=NULL)
     sample.meta = NULL,
 
     #' @field full.meta Full sample metadata (default=NULL)
@@ -85,7 +85,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field target.level Target/disease level for sample.group vector
     target.level = NULL,
 
-    #' @field sample.id Character of column name containing sample IDs in sample.metadata
+    #' @field sample.id Character of column name containing sample IDs in sample.meta
     sample.ids = NULL,
 
     #' @field block.vars Character of column name containing variable name to restrict permutations to
@@ -2086,9 +2086,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # Build model
       if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-       sample.model <- buildDesignMatrices(data = self$sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+       sample.model <- buildDesignMatrices(data = self$sample.meta, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
       } else {
-      sample.model <- self$model
+        sample.model <- self$model
       }
 
       if (verbose) message("Running lmCoda with design='", sample.model$formula_used, "' and ", perm.method, " permutations")
@@ -2250,7 +2250,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateCellDensity()
     #' }
     estimateCellDensity = function(bins=400, method='kde', name='cell.density', beta=30, estimate.variation=TRUE, contrast=NULL,
-                                   formula=NULL, verbose=self$verbose, n.cores=self$n.cores, sample.metadata=self$sample.metadata,
+                                   formula=NULL, verbose=self$verbose, n.cores=self$n.cores, sample.metadata=self$sample.meta,
                                    block.vars=self$block.vars, bandwidth=0.05, ...){
       sample.per.cell <- self$sample.per.cell
 
@@ -4214,9 +4214,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       d.counts <- cell.groups %>% data.frame(anno=., group=self$sample.per.cell[names(.)]) %>%
         table() %>% rbind() %>% t()
       
-      if (!is.null(cells.to.remove)) d.counts %<>% .[,!(colnames(.) %in% cells.to.remove)]
-      if (!is.null(cells.to.remain)) d.counts %<>% .[,colnames(.) %in% cells.to.remain]
-      if (!is.null(samples.to.remove)) d.counts %<>% .[!(rownames(.) %in% samples.to.remove),]
+      if (!is.null(cells.to.remove)) d.counts %<>% .[,!(colnames(.) %in% cells.to.remove), drop=FALSE]
+      if (!is.null(cells.to.remain)) d.counts %<>% .[,colnames(.) %in% cells.to.remain, drop=FALSE]
+      if (!is.null(samples.to.remove)) d.counts %<>% .[!(rownames(.) %in% samples.to.remove), , drop=FALSE]
+      
+      s.order <- intersect(rownames(self$sample.meta), rownames(d.counts))
+      d.counts <- d.counts[s.order, , drop=FALSE]
       
       if (!ret.groups) {
         return(d.counts)

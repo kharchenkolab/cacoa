@@ -274,24 +274,24 @@ computeILRMatrix <- function(cnts, zero.pseudocount = 0.1, basis.type = c("defau
   
   if (any(rowSums(cnts) <= 0))
     stop("Some samples have zero total count; cannot compute frequencies.")
-
-  #rs <- rowSums(cnts, na.rm = TRUE)
-  #bad <- is.na(rs) | rs <= 0
-  #if (any(bad)) {
-  #  cnts[bad, ] <- NA
-  #}
   
-  # Simple pseudocount handling
-  cnts[cnts == 0] <- zero.pseudocount
+  # cnts[cnts == 0] <- zero.pseudocount # add pseudocount just to zero entries
+  cnts <- cnts + zero.pseudocount # add to all entries
+  
   freqs <- sweep(cnts, 1, rowSums(cnts), "/")
   
   # ILR basis: rows = cell types, cols = ILR dimensions
   psi <- coda.base::ilr_basis(ncol(freqs), type = basis.type)
   rownames(psi) <- colnames(freqs)
+  
   # ILR coordinates: samples × ILR dims
   ilr <- log(freqs) %*% psi
   
-  list(ilr = ilr, psi = psi, freqs = freqs)
+  list(
+    ilr   = ilr,    # n_samples × (D-1)
+    psi   = psi,    # D × (D-1)
+    freqs = freqs   # n_samples × D
+  )
 }
 
 #' Reference cluster helper: pick "least affected" cell types

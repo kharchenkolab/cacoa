@@ -106,3 +106,61 @@ test_that("max-statistic combination across cell types is calibrated under share
   expect_true(inBand(pg["global", ], R))
   expect_lte(mean(pg["any.fwer", ] == 1), band(R)[2])
 })
+
+# ---- API-level simulations (api note E1 / E3) ---------------------------------------------------
+
+test_that("E1: partial screen with seven covariates is calibrated and separates dispersion from location (slow)", {
+  skip_on_cran(); skip_if(Sys.getenv("CACOA_SKIP_SLOW") == "true", "slow test skipped")
+  set.seed(2024); n <- 40; p <- 200; R <- 120
+  L <- diag(sqrt((1:p)^-1)) * sqrt(p / sum((1:p)^-1))
+  mkMeta <- function(n) {
+    cond <- factor(rep(c("ctrl", "dis"), length.out = n))
+    data.frame(cond = cond, batch = factor(sample(c("b1", "b2", "b3"), n, TRUE)), sex = factor(sample(c("F", "M"), n, TRUE)),
+               age = round(50 + 8 * (cond == "dis") + rnorm(n, 0, 10)), rin = rnorm(n, 7, 1), pmi = rexp(n, 1 / 12),
+               site = factor(sample(c("s1", "s2"), n, TRUE)), ancestry = factor(sample(c("a1", "a2", "a3"), n, TRUE, prob = c(.6, .3, .1))),
+               row.names = sprintf("s%02d", seq_len(n)))
+  }
+  simY <- function(meta, condVar = 1) {
+    X <- model.matrix(~ batch + sex + scale(age) + scale(rin) + ancestry, meta)[, -1]
+    B <- matrix(rnorm(ncol(X) * p), ncol(X)) * 0.35
+    X %*% B + matrix(rnorm(nrow(meta) * p), nrow(meta)) %*% L * ifelse(meta$cond == "dis", sqrt(condVar), 1)
+  }
+  one <- function(condVar) {
+    meta <- mkMeta(n); Y <- simY(meta, condVar); D <- as.matrix(dist(Y)); dimnames(D) <- list(rownames(meta), rownames(meta))
+    sc <- screenCovariates(list(ct = D), meta, mode = "partial", dist = "l2", n.permutations = 99, seed = sample.int(1e6, 1))
+    r <- sc$table[sc$table$covariate == "cond", ]
+    c(p = r$p, p.disp = r$p.disp, r.eff = r$r.eff)
+  }
+  null <- t(replicate(R, one(1)))
+  disp <- t(replicate(R, one(2)))
+  band <- function(k) c(qbinom(0.005, k, 0.05), qbinom(0.995, k, 0.05)) / k
+  rej.null <- mean(null[, "p"] < 0.05); rej.disp.null <- mean(null[, "p.disp"] < 0.05)
+  expect_lte(rej.null, band(R)[2])                                   # FL partial test: nominal or conservative
+  expect_true(rej.disp.null >= band(R)[1] - 0.02 && rej.disp.null <= band(R)[2] + 0.02)
+  expect_gt(mean(disp[, "p.disp"] < 0.05), 0.8)                       # a 2x variance change is found by the dispersion score
+  expect_lte(mean(disp[, "p"] < 0.05), band(R)[2] + 0.03)             # ... and does not masquerade as a location effect
+  expect_true(median(null[, "r.eff"]) > 10 && median(null[, "r.eff"]) < 40)
+})
+
+test_that("E3: the global max-statistic p-value across cell types is calibrated under shared sample variation (slow)", {
+  skip_on_cran(); skip_if(Sys.getenv("CACOA_SKIP_SLOW") == "true", "slow test skipped")
+  set.seed(77); R <- 150; nct <- 12; n <- 24
+  meta <- data.frame(x = factor(rep(c("a", "b"), each = n / 2)), row.names = sprintf("s%02d", 1:n))
+  des <- suppressMessages(buildDesignMatrices(meta, contrast = c("x", "b", "a")))
+  one <- function(shared) {
+    U <- matrix(rnorm(n * 30), n)
+    D <- lapply(seq_len(nct), function(k) { Y <- sqrt(shared) * U %*% matrix(rnorm(30 * 100), 30) / sqrt(30) + sqrt(1 - shared) * matrix(rnorm(n * 100), n)
+      M <- as.matrix(dist(Y)); dimnames(M) <- list(rownames(meta), rownames(meta)); M })
+    names(D) <- paste0("ct", seq_len(nct))
+    r <- testPairwiseEffects(D, des, meta, dist = "l2", n.permutations = 99, seed = sample.int(1e6, 1), influence = FALSE)
+    c(global = r$global$p[r$global$effect == "shift"], any.raw = any(r$results$p.shift < 0.05), any.fwer = any(r$results$p.fwer.shift < 0.05))
+  }
+  for (shared in c(0, 0.9)) {
+    out <- t(replicate(R, one(shared)))
+    rej <- mean(out[, "global"] < 0.05); fw <- mean(out[, "any.fwer"] == 1)
+    band <- c(qbinom(0.005, R, 0.05), qbinom(0.995, R, 0.05)) / R
+    expect_true(rej >= band[1] && rej <= band[2], info = sprintf("shared %.1f: global rejection %.3f", shared, rej))
+    expect_true(fw >= band[1] && fw <= band[2], info = sprintf("shared %.1f: FWER %.3f", shared, fw))
+    expect_gt(mean(out[, "any.raw"] == 1), 0.1)                       # unadjusted "any cell type" is far above 5%
+  }
+})

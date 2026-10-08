@@ -523,7 +523,7 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 
 \item{\code{data.object}}{list The main object storing data (Conos or Seurat) (default=list())}
 
-\item{\code{sample.metada}}{Data frame with annotation of covariates per sample (default=NULL)}
+\item{\code{sample.meta}}{Data frame with annotation of covariates per sample (default=NULL)}
 
 \item{\code{full.meta}}{Full sample metadata (default=NULL)}
 
@@ -543,13 +543,13 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 
 \item{\code{target.level}}{Target/disease level for sample.group vector}
 
-\item{\code{sample.id}}{Character of column name containing sample IDs in sample.meta}
+\item{\code{sample.ids}}{Character vector of sample identifiers (row names of \code{sample.meta})}
 
 \item{\code{block.vars}}{Character of column name containing variable name to restrict permutations to}
 
 \item{\code{numeric.ref}}{Reference points for numeric covariates in contrasts: "auto" or a named list}
 
-\item{\code{method}}{for permutation testing (default=NULL)}
+\item{\code{perm.method}}{Legacy field (unused): permutation method of the previous implementation}
 
 \item{\code{model}}{The stored model (class \code{cacoaModel}, see \code{setModel()}): formula, tests, designs, issues (default=NULL)}
 
@@ -564,17 +564,6 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item{\code{plot.theme}}{ggplot2 theme for all plots (default=NULL)}
 
 \item{\code{plot.params}}{list with parameters, forwarded to all \code{plotEmbedding} calls (default=NULL)}
-}
-\if{html}{\out{</div>}}
-}
-\section{Active bindings}{
-\if{html}{\out{<div class="r6-active-bindings">}}
-\describe{
-\item{\code{sample.metada}}{Data frame with annotation of covariates per sample (default=NULL)}
-
-\item{\code{sample.id}}{Character of column name containing sample IDs in sample.meta}
-
-\item{\code{method}}{for permutation testing (default=NULL)}
 }
 \if{html}{\out{</div>}}
 }
@@ -743,7 +732,9 @@ explored (\code{checkDesign()}, \code{screenCovariates()}); set the model later 
 
 \item{\code{sample.groups}}{deprecated: named vector of group per sample (old two-group API); becomes a \code{condition} metadata column and \code{test = "condition"}.}
 
-\item{\code{ref.level, target.level}}{deprecated: the two levels of \code{sample.groups} to compare (reference, target).}
+\item{\code{ref.level}}{deprecated: the reference level of \code{sample.groups} (old two-group API).}
+
+\item{\code{target.level}}{deprecated: the target level of \code{sample.groups} (old two-group API).}
 }
 \if{html}{\out{</div>}}
 }

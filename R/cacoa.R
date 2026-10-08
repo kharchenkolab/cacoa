@@ -55,7 +55,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field data.object list The main object storing data (Conos or Seurat) (default=list())
     data.object = list(),
 
-    #' @field sample.metada Data frame with annotation of covariates per sample (default=NULL)
+    #' @field sample.meta Data frame with annotation of covariates per sample (default=NULL)
     sample.meta = NULL,
 
     #' @field full.meta Full sample metadata (default=NULL)
@@ -85,7 +85,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field target.level Target/disease level for sample.group vector
     target.level = NULL,
 
-    #' @field sample.id Character of column name containing sample IDs in sample.meta
+    #' @field sample.ids Character vector of sample identifiers (row names of `sample.meta`)
     sample.ids = NULL,
 
     #' @field block.vars Character of column name containing variable name to restrict permutations to
@@ -94,7 +94,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field numeric.ref Reference points for numeric covariates in contrasts: "auto" or a named list
     numeric.ref = "auto",
 
-    #' @field method for permutation testing (default=NULL)
+    #' @field perm.method Legacy field (unused): permutation method of the previous implementation
     perm.method = NULL,
 
     #' @field model The stored model (class `cacoaModel`, see `setModel()`): formula, tests, designs, issues (default=NULL)
@@ -132,7 +132,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param dispersion.formula formula for the dispersion (heterogeneity) model (default: the test variables).
     #' @param numeric.ref reference points for numeric covariates in the contrast specification. `"auto"` or named list of numeric anchors (e.g., `list(age=35)`).
     #' @param sample.groups deprecated: named vector of group per sample (old two-group API); becomes a `condition` metadata column and `test = "condition"`.
-    #' @param ref.level,target.level deprecated: the two levels of `sample.groups` to compare (reference, target).
+    #' @param ref.level deprecated: the reference level of `sample.groups` (old two-group API).
+    #' @param target.level deprecated: the target level of `sample.groups` (old two-group API).
     #' @param block.vars optional list of covariates in sample.metadata on which to form randomizaton blocks
     #' @param sample.ids character scalar naming the column in `sample.metadata` that contains sample IDs.
     #' @param cell.groups vector Indicates cell groups with cell names (default: extracted from `data.object`)
@@ -4286,6 +4287,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!length(dots)) return(out)
       nms <- names(dots)
       if (is.null(nms) || any(!nzchar(nms))) stop("unnamed extra arguments are not accepted")
+      if (any(c("pairFormula", "pairContrast") %in% nms))
+        stop("`pairFormula` / `pairContrast` no longer exist: the model is specified at the sample level (formula + test). ",
+             "Pair-level terms are derived from it; see ?Cacoa for `setModel()` and the `test` grammar.", call. = FALSE)
       if ("perm.method" %in% nms) { out$permutation <- dots$perm.method; if (verbose) message("`perm.method` is deprecated: use `permutation`") }
       if ("dist.type" %in% nms && verbose) message("`dist.type` is deprecated: shift, var and total are all reported; choose the effect when plotting")
       if ("min.samp.per.type" %in% nms && verbose) message("`min.samp.per.type` is deprecated: use `min.samp.per.level` (samples per compared level)")

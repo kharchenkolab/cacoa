@@ -1,4 +1,4 @@
-#' @import ape
+#' @rawNamespace import(ape, except = where)
 #' @importFrom sccore checkPackageInstalled
 NULL
 

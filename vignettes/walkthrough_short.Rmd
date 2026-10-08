@@ -13,13 +13,13 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, eval=FALSE, purl=FALSE}
 # The walkthrough uses a Conos object of a pulmonary fibrosis cohort that is not shipped with the package,
 # so the chunks are not evaluated when the vignette is built.
 knitr::opts_chunk$set(eval = FALSE, purl = FALSE)
 ```
 
-```{r libs, message=FALSE}
+```{r libs, message=FALSE, eval=FALSE, purl=FALSE}
 library(conos)
 library(cacoa)
 library(cowplot)
@@ -43,7 +43,7 @@ cluster-free analyses. The recommended order is
 
 ## Load data
 
-```{r}
+```{r, eval=FALSE, purl=FALSE}
 con <- Conos$new(readRDS("../../cacoaAnalysis/data/PF/con.rds"))
 sample.meta <- as.data.frame(con$misc$sample_metadata)   # rows = samples, columns = covariates
 rownames(sample.meta) <- sample.meta$Sample_Name
@@ -60,7 +60,7 @@ mostly missing, too many levels). The previous two-group constructor (`sample.gr
 
 ## Check the design
 
-```{r}
+```{r, eval=FALSE, purl=FALSE}
 cao$checkDesign(test = "Diagnosis")
 cao$plotDesign("associations")
 cao$plotDesign("balance")
@@ -71,7 +71,7 @@ covariates, small groups, few distinct permutations) and notes, each with a sugg
 
 ## Screen covariates
 
-```{r}
+```{r, eval=FALSE, purl=FALSE}
 cao$screenCovariates()            # all usable covariates, marginal and partial, per cell type
 cao$plotCovariateScreen()         # dot: FDR < 0.05; ring: significant only marginally (explained by other covariates)
 cao$plotCovariateSummary()
@@ -82,7 +82,7 @@ The screen ends with a suggested model. It is not applied automatically.
 
 ## Set the model
 
-```{r}
+```{r, eval=FALSE, purl=FALSE}
 cao$setModel(~ Diagnosis + Sample_Source, test = "Diagnosis")
 ```
 
@@ -93,22 +93,22 @@ adjustment set, the permutation scheme and the number of distinct permutations.
 
 Options shared by all methods are set once:
 
-```{r}
+```{r, eval=FALSE, purl=FALSE}
 cao$setOptions(n.permutations = 1999, seed = 1, n.cores = 45)
 ```
 
 ## Cluster-based changes
 
-```{r}
+```{r, eval=FALSE, purl=FALSE}
 cao$estimateCellLoadings()
 cao$estimateExpressionShiftMagnitudes()
 ```
 
-```{r, fig.width=5, fig.height=6}
+```{r, fig.width=5, fig.height=6, eval=FALSE, purl=FALSE}
 cao$plotCellLoadings(show.pvals = FALSE)
 ```
 
-```{r, fig.width=9, fig.height=5}
+```{r, fig.width=9, fig.height=5, eval=FALSE, purl=FALSE}
 cao$plotExpressionShiftMagnitudes()
 ```
 
@@ -127,7 +127,7 @@ effect of leaving each sample out.
 
 ## Robustness
 
-```{r}
+```{r, eval=FALSE, purl=FALSE}
 cao$checkSensitivity()
 cao$plotSensitivity()
 ```
@@ -137,46 +137,46 @@ with the top covariates proposed by the screen. One verdict per cell type summar
 
 ## Sample structure
 
-```{r, fig.width=8, fig.height=4}
+```{r, fig.width=8, fig.height=4, eval=FALSE, purl=FALSE}
 cao$plotSampleDistances(space = "expression.shifts", color.by = "test", values = "both")
 cao$plotSampleDistances(space = "expression.shifts", color.by = "Sample_Source", adjust.for = ~ Diagnosis)
 ```
 
 ## Functional interpretation
 
-```{r}
+```{r, eval=FALSE, purl=FALSE}
 cao$estimateDEPerCellType(independent.filtering = TRUE, test = "DESeq2.Wald")
 cao$estimateOntology(type = "GSEA", org.db = org.Hs.eg.db::org.Hs.eg.db, n.cores = 1)
 ```
 
-```{r, fig.width=10, fig.height=12}
+```{r, fig.width=10, fig.height=12, eval=FALSE, purl=FALSE}
 cao$plotVolcano(xlim = c(-3, 3), ylim = c(0, 3.5), lf.cutoff = 1)
 ```
 
-```{r, fig.width=9, fig.height=12}
+```{r, fig.width=9, fig.height=12, eval=FALSE, purl=FALSE}
 cao$plotOntologyHeatmapCollapsed(name = "GSEA", genes = "up", n = 50, clust.method = "ward.D", size.range = c(1, 4))
 ```
 
 ## Cluster-free analyses
 
-```{r}
+```{r, eval=FALSE, purl=FALSE}
 cao$estimateCellDensity(method = "graph")
 cao$estimateDiffCellDensity(type = "permutation")
 cao$estimateClusterFreeExpressionShifts()
 ```
 
-```{r, fig.width=8, fig.height=4}
+```{r, fig.width=8, fig.height=4, eval=FALSE, purl=FALSE}
 plot_grid(cao$plotEmbedding(color.by = "cell.groups"), cao$plotDiffCellDensity(legend.position = c(0, 1)), ncol = 2)
 cao$plotClusterFreeExpressionShifts(legend.position = c(0, 1), font.size = 2)
 ```
 
-```{r}
+```{r, eval=FALSE, purl=FALSE}
 cao$estimateClusterFreeDE(n.top.genes = 1000, min.expr.frac = 0.01, adjust.pvalues = TRUE, smooth = TRUE)
 cao$estimateGenePrograms(method = "leiden", z.adj = TRUE, smooth = FALSE)
 ```
 
 ## Session Info
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, eval=FALSE, purl=FALSE}
 sessionInfo()
 ```

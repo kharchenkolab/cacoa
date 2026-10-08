@@ -2,7 +2,6 @@
 #' @import cowplot
 #' @import dplyr
 #' @import magrittr
-#' @import ape
 #' @importFrom reshape2 melt
 #' @importFrom sccore checkPackageInstalled
 NULL

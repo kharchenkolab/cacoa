@@ -234,6 +234,41 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// permuted_contrast_F
+arma::vec permuted_contrast_F(const arma::mat& G, const arma::vec& a, const arma::mat& H, double cXc, int q, const arma::imat& P);
+RcppExport SEXP _cacoa_permuted_contrast_F(SEXP GSEXP, SEXP aSEXP, SEXP HSEXP, SEXP cXcSEXP, SEXP qSEXP, SEXP PSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type G(GSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type a(aSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type H(HSEXP);
+    Rcpp::traits::input_parameter< double >::type cXc(cXcSEXP);
+    Rcpp::traits::input_parameter< int >::type q(qSEXP);
+    Rcpp::traits::input_parameter< const arma::imat& >::type P(PSEXP);
+    rcpp_result_gen = Rcpp::wrap(permuted_contrast_F(G, a, H, cXc, q, P));
+    return rcpp_result_gen;
+END_RCPP
+}
+// permuted_contrast_F_fl
+arma::vec permuted_contrast_F_fl(const arma::mat& K1, const arma::mat& K2, const arma::mat& K3, const arma::mat& K4, const arma::vec& a, const arma::mat& H, double cXc, int q, const arma::imat& P);
+RcppExport SEXP _cacoa_permuted_contrast_F_fl(SEXP K1SEXP, SEXP K2SEXP, SEXP K3SEXP, SEXP K4SEXP, SEXP aSEXP, SEXP HSEXP, SEXP cXcSEXP, SEXP qSEXP, SEXP PSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type K1(K1SEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type K2(K2SEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type K3(K3SEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type K4(K4SEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type a(aSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type H(HSEXP);
+    Rcpp::traits::input_parameter< double >::type cXc(cXcSEXP);
+    Rcpp::traits::input_parameter< int >::type q(qSEXP);
+    Rcpp::traits::input_parameter< const arma::imat& >::type P(PSEXP);
+    rcpp_result_gen = Rcpp::wrap(permuted_contrast_F_fl(K1, K2, K3, K4, a, H, cXc, q, P));
+    return rcpp_result_gen;
+END_RCPP
+}
 // projdiff
 arma::rowvec projdiff(const arma::mat& mat, const arma::ivec& g1, const arma::ivec& g2);
 RcppExport SEXP _cacoa_projdiff(SEXP matSEXP, SEXP g1SEXP, SEXP g2SEXP) {
@@ -314,6 +349,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_adjustedZScoresMaxStat", (DL_FUNC) &_cacoa_adjustedZScoresMaxStat, 8},
     {"_cacoa_fit_and_randomize", (DL_FUNC) &_cacoa_fit_and_randomize, 21},
     {"_cacoa_fl_fwl_cpp", (DL_FUNC) &_cacoa_fl_fwl_cpp, 23},
+    {"_cacoa_permuted_contrast_F", (DL_FUNC) &_cacoa_permuted_contrast_F, 6},
+    {"_cacoa_permuted_contrast_F_fl", (DL_FUNC) &_cacoa_permuted_contrast_F_fl, 9},
     {"_cacoa_projdiff", (DL_FUNC) &_cacoa_projdiff, 3},
     {"_cacoa_fit_density_lm", (DL_FUNC) &_cacoa_fit_density_lm, 3},
     {"_cacoa_perm_full_contrast_mat", (DL_FUNC) &_cacoa_perm_full_contrast_mat, 5},

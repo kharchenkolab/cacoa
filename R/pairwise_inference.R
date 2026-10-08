@@ -269,10 +269,12 @@ permutationStatsForCellType <- function(eff, plan, P, bias.correct = TRUE) {
   B <- ncol(P)
   perm <- matrix(NA_real_, B, 4, dimnames = list(NULL, c("F", "shift", "var", "total")))
   if (plan$scheme == "block") {
-    for (b in seq_len(B)) perm[b, ] <- permutedStats(G, X, Z, cvec, z.end, pre, P[, b], bias.correct, need.var)
+    if (!need.var) { storage.mode(P) <- "integer"; perm[, "F"] <- permuted_contrast_F(G, pre$a, pre$H, pre$cXc, pre$q, P) }   # C++ kernel
+    else for (b in seq_len(B)) perm[b, ] <- permutedStats(G, X, Z, cvec, z.end, pre, P[, b], bias.correct, need.var)
   } else if (plan$scheme == "freedman-lane") {
     parts <- flGowerParts(G, X %*% contrastNullBasis(cvec))
-    for (b in seq_len(B)) {
+    if (!need.var) { storage.mode(P) <- "integer"; perm[, "F"] <- permuted_contrast_F_fl(parts$K1, parts$K2, parts$K3, parts$K4, pre$a, pre$H, pre$cXc, pre$q, P) }
+    else for (b in seq_len(B)) {
       Gs <- flGowerPermute(parts, P[, b])
       pre.b <- pre; pre.b$trG <- sum(diag(Gs)); pre.b$dG <- diag(Gs)
       perm[b, ] <- permutedStats(Gs, X, Z, cvec, z.end, pre.b, NULL, bias.correct, need.var)

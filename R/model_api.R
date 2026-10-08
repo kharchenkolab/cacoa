@@ -483,3 +483,19 @@ modelProvenance <- function(model, test = NULL, extra = NULL) {
              extra)
   paste(parts, collapse = "; ")
 }
+
+#' Regression weights of a contrast
+#'
+#' The sample weights `w = X (X'X)^- c` such that `w' y` is the least-squares estimate of the contrast `c'beta`
+#' for any response `y`. For a balanced two-group comparison without covariates they are +1/n_alt and
+#' -1/n_ref; with covariates they are the adjusted weights (which sum to zero within every stratum of a
+#' discrete covariate).
+#' @param design output of [buildDesignMatrices()] (or a `cacoaModel`)
+#' @return named numeric vector over samples
+#' @export
+regressionWeights <- function(design) {
+  X <- as.matrix(design$F); cvec <- design$contrast.F[colnames(X)]
+  w <- drop(X %*% MASS::ginv(crossprod(X)) %*% cvec)
+  names(w) <- rownames(X)
+  w
+}

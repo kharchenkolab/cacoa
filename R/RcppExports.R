@@ -2,66 +2,74 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 clusterFreeZScoreMat <- function(count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond = 2L, min_n_obs_per_samp = 1L, robust = FALSE, norm_both = TRUE, min_z = 0.001, verbose = TRUE, n_cores = 1L, adjust_pvalues = FALSE, n_permutations = 500L, smooth = TRUE, wins = 0.01) {
-    .Call('_cacoa_clusterFreeZScoreMat', PACKAGE = 'cacoa', count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust, norm_both, min_z, verbose, n_cores, adjust_pvalues, n_permutations, smooth, wins)
+    .Call(`_cacoa_clusterFreeZScoreMat`, count_mat, sample_per_cell, nn_ids, is_ref, min_n_samp_per_cond, min_n_obs_per_samp, robust, norm_both, min_z, verbose, n_cores, adjust_pvalues, n_permutations, smooth, wins)
 }
 
 estimateCorrelationDistance <- function(v1, v2, centered) {
-    .Call('_cacoa_estimateCorrelationDistance', PACKAGE = 'cacoa', v1, v2, centered)
+    .Call(`_cacoa_estimateCorrelationDistance`, v1, v2, centered)
 }
 
 estimateClusterFreeExpressionShiftsInfo <- function(cm, sample_per_cell, nn_ids, min_n_obs_per_samp = 1L, verbose = TRUE, n_cores = 1L, dist = "cor", log_vecs = TRUE) {
-    .Call('_cacoa_estimateClusterFreeExpressionShiftsInfo', PACKAGE = 'cacoa', cm, sample_per_cell, nn_ids, min_n_obs_per_samp, verbose, n_cores, dist, log_vecs)
+    .Call(`_cacoa_estimateClusterFreeExpressionShiftsInfo`, cm, sample_per_cell, nn_ids, min_n_obs_per_samp, verbose, n_cores, dist, log_vecs)
 }
 
 estimateClusterFreeExpressionShiftsC <- function(cm, sample_per_cell, nn_ids, is_ref, min_n_between = 1L, min_n_within = 1L, min_n_obs_per_samp = 1L, norm_all = TRUE, verbose = TRUE, n_cores = 1L, dist = "cor", log_vecs = TRUE, n_permutations = 100L, smooth = TRUE, wins = 0.01, seed = 0L) {
-    .Call('_cacoa_estimateClusterFreeExpressionShiftsC', PACKAGE = 'cacoa', cm, sample_per_cell, nn_ids, is_ref, min_n_between, min_n_within, min_n_obs_per_samp, norm_all, verbose, n_cores, dist, log_vecs, n_permutations, smooth, wins, seed)
+    .Call(`_cacoa_estimateClusterFreeExpressionShiftsC`, cm, sample_per_cell, nn_ids, is_ref, min_n_between, min_n_within, min_n_obs_per_samp, norm_all, verbose, n_cores, dist, log_vecs, n_permutations, smooth, wins, seed)
 }
 
 mapIds <- function(ids_vec, id_map) {
-    .Call('_cacoa_mapIds', PACKAGE = 'cacoa', ids_vec, id_map)
+    .Call(`_cacoa_mapIds`, ids_vec, id_map)
 }
 
 clusterFreeGeneMat <- function(count_mat, sample_per_cell, nn_ids, min_n_obs_per_samp, gi) {
-    .Call('_cacoa_clusterFreeGeneMat', PACKAGE = 'cacoa', count_mat, sample_per_cell, nn_ids, min_n_obs_per_samp, gi)
+    .Call(`_cacoa_clusterFreeGeneMat`, count_mat, sample_per_cell, nn_ids, min_n_obs_per_samp, gi)
 }
 
 estimateExpressionShiftsPairsLM <- function(cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp = 1L, dist = "cor", log_vecs = TRUE) {
-    .Call('_cacoa_estimateExpressionShiftsPairsLM', PACKAGE = 'cacoa', cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp, dist, log_vecs)
+    .Call(`_cacoa_estimateExpressionShiftsPairsLM`, cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp, dist, log_vecs)
 }
 
 applyMedianFilterES <- function(x, nn_ids, non_zero_ids = NULL, one_based = FALSE) {
-    .Call('_cacoa_applyMedianFilterES', PACKAGE = 'cacoa', x, nn_ids, non_zero_ids, one_based)
+    .Call(`_cacoa_applyMedianFilterES`, x, nn_ids, non_zero_ids, one_based)
 }
 
 adjustedZScoresMaxStat <- function(z_obs, alt, max_vals_in, min_vals_in, wins = 0.0, smooth = FALSE, nn_ids = NULL, non_zero_ids = NULL) {
-    .Call('_cacoa_adjustedZScoresMaxStat', PACKAGE = 'cacoa', z_obs, alt, max_vals_in, min_vals_in, wins, smooth, nn_ids, non_zero_ids)
+    .Call(`_cacoa_adjustedZScoresMaxStat`, z_obs, alt, max_vals_in, min_vals_in, wins, smooth, nn_ids, non_zero_ids)
 }
 
 fit_and_randomize <- function(X, Y, contrast, perm_groups = NULL, pair_indices = NULL, n_randomizations = 100L, alternative = "two-sided", return_residuals = TRUE, return_sampled_fits = FALSE, return_sampled_stats = FALSE, robust = "none", huber_k = 1.345, huber_maxit = 8L, huber_tol = 1e-6, na_mode = "drop", na_weight = 1e-4, na_center = "mean", illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = 1L, seed = 0L) {
-    .Call('_cacoa_fit_and_randomize', PACKAGE = 'cacoa', X, Y, contrast, perm_groups, pair_indices, n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, seed)
+    .Call(`_cacoa_fit_and_randomize`, X, Y, contrast, perm_groups, pair_indices, n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, seed)
 }
 
 fl_fwl_cpp <- function(X, Z, Y, contrast, core_rows = NULL, core_perm_groups = NULL, core_pair_indices = NULL, n_randomizations = 100L, alternative = "two-sided", robust = "none", huber_k = 1.345, huber_maxit = 8L, huber_tol = 1e-6, na_mode = "drop", na_weight = 1e-4, na_center = "mean", illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = 1L, return_residuals = TRUE, return_sampled_fits = FALSE, return_sampled_stats = FALSE, seed = 0L) {
-    .Call('_cacoa_fl_fwl_cpp', PACKAGE = 'cacoa', X, Z, Y, contrast, core_rows, core_perm_groups, core_pair_indices, n_randomizations, alternative, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, return_residuals, return_sampled_fits, return_sampled_stats, seed)
+    .Call(`_cacoa_fl_fwl_cpp`, X, Z, Y, contrast, core_rows, core_perm_groups, core_pair_indices, n_randomizations, alternative, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, return_residuals, return_sampled_fits, return_sampled_stats, seed)
+}
+
+permuted_contrast_F <- function(G, a, H, cXc, q, P) {
+    .Call(`_cacoa_permuted_contrast_F`, G, a, H, cXc, q, P)
+}
+
+permuted_contrast_F_fl <- function(K1, K2, K3, K4, a, H, cXc, q, P) {
+    .Call(`_cacoa_permuted_contrast_F_fl`, K1, K2, K3, K4, a, H, cXc, q, P)
 }
 
 projdiff <- function(mat, g1, g2) {
-    .Call('_cacoa_projdiff', PACKAGE = 'cacoa', mat, g1, g2)
+    .Call(`_cacoa_projdiff`, mat, g1, g2)
 }
 
 fit_density_lm <- function(M, P, n_randomizations) {
-    .Call('_cacoa_fit_density_lm', PACKAGE = 'cacoa', M, P, n_randomizations)
+    .Call(`_cacoa_fit_density_lm`, M, P, n_randomizations)
 }
 
 perm_full_contrast_mat <- function(F, Y, contrastF, blocks, B) {
-    .Call('_cacoa_perm_full_contrast_mat', PACKAGE = 'cacoa', F, Y, contrastF, blocks, B)
+    .Call(`_cacoa_perm_full_contrast_mat`, F, Y, contrastF, blocks, B)
 }
 
 perm_FL_contrast_mat <- function(Xr, Yr, contrastX, blocks, B) {
-    .Call('_cacoa_perm_FL_contrast_mat', PACKAGE = 'cacoa', Xr, Yr, contrastX, blocks, B)
+    .Call(`_cacoa_perm_FL_contrast_mat`, Xr, Yr, contrastX, blocks, B)
 }
 
 colwiseBinaryDistance <- function(mat) {
-    .Call('_cacoa_colwiseBinaryDistance', PACKAGE = 'cacoa', mat)
+    .Call(`_cacoa_colwiseBinaryDistance`, mat)
 }
 

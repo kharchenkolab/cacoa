@@ -421,15 +421,6 @@ cao$getMostChangedGenes(n = 10) # n can be any number of genes to extract
 }
 
 ## ------------------------------------------------
-## Method `Cacoa$estimateClusterFreeExpressionShifts`
-## ------------------------------------------------
-
-\dontrun{
-cao$estimateClusterFreeDE()
-cao$estimateClusterFreeExpressionShifts()
-}
-
-## ------------------------------------------------
 ## Method `Cacoa$smoothClusterFreeZScores`
 ## ------------------------------------------------
 
@@ -599,6 +590,8 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item \href{#method-Cacoa-plotDesign}{\code{Cacoa$plotDesign()}}
 \item \href{#method-Cacoa-describeMetadata}{\code{Cacoa$describeMetadata()}}
 \item \href{#method-Cacoa-getSampleGroups}{\code{Cacoa$getSampleGroups()}}
+\item \href{#method-Cacoa-checkSensitivity}{\code{Cacoa$checkSensitivity()}}
+\item \href{#method-Cacoa-plotSensitivity}{\code{Cacoa$plotSensitivity()}}
 \item \href{#method-Cacoa-screenCovariates}{\code{Cacoa$screenCovariates()}}
 \item \href{#method-Cacoa-plotCovariateScreen}{\code{Cacoa$plotCovariateScreen()}}
 \item \href{#method-Cacoa-plotCovariateSummary}{\code{Cacoa$plotCovariateSummary()}}
@@ -1016,6 +1009,74 @@ itself for numeric tests or term tests
 }
 \subsection{Returns}{
 named vector over samples (\code{NULL} when the test has no variable, e.g. coefficient contrasts)
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-checkSensitivity"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-checkSensitivity}{}}}
+\subsection{Method \code{checkSensitivity()}}{
+Robustness of the expression-shift result: alternative covariate sets and single-sample influence
+
+Reruns the first test of the stored model under alternative adjustment sets (unadjusted; current; current
+minus each covariate; current plus each of the top screened covariates not yet in the model; all screened,
+if the degrees of freedom allow) on the cached distances, and reads the leave-one-sample-out influence of
+the current result. Prints one verdict per cell type: "robust", "sign / significance depends on adjustment",
+"estimate changes by x\%", or "driven by sample S".
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$checkSensitivity(
+  covariate.sets = "auto",
+  screen.name = "covariate.screen",
+  top.k = 3,
+  name = "sensitivity",
+  shifts.name = "expression.shifts",
+  n.permutations = NULL,
+  verbose = NULL,
+  n.cores = NULL,
+  seed = NULL
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{covariate.sets}}{\code{"auto"} (default, see above) or a named list of location formulas}
+
+\item{\code{screen.name}}{results slot of a covariate screen used to propose additions (default "covariate.screen")}
+
+\item{\code{top.k}}{number of screened covariates to try adding (default 3)}
+
+\item{\code{name}}{results slot (default "sensitivity")}
+
+\item{\code{shifts.name}}{results slot of the expression shifts the sensitivity refers to (default "expression.shifts")}
+
+\item{\code{n.permutations, verbose, n.cores, seed}}{defaults from options (permutations capped at 499)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+\code{cacoaSensitivity} (see \code{\link[=checkSensitivity]{checkSensitivity()}}), also stored in \code{cao$test.results[[name]]}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-plotSensitivity"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-plotSensitivity}{}}}
+\subsection{Method \code{plotSensitivity()}}{
+Forest plot of the sensitivity analysis (see \code{\link[=plotSensitivity]{plotSensitivity()}})
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotSensitivity(name = "sensitivity", ...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{results slot (default "sensitivity")}
+
+\item{\code{...}}{passed to \code{\link[=plotSensitivity]{plotSensitivity()}} (\code{effect}, \code{cell.types}, \code{normalized})}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
@@ -1463,6 +1524,7 @@ Estimate differential gene expression per cell type between conditions
   sample.per.cell = self$sample.per.cell,
   formula = NULL,
   contrast = NULL,
+  test.spec = NULL,
   name = "de",
   test = "DESeq2.Wald",
   resampling.method = NULL,
@@ -2950,6 +3012,7 @@ Estimate cell loadings
   method = "lda",
   formula = NULL,
   contrast = NULL,
+  test = NULL,
   perm.method = c("freedman-lane", "block"),
   zero.pseudocount = 0.1,
   basis.type = c("default"),
@@ -3180,10 +3243,11 @@ Estimate cell density in giving embedding
   estimate.variation = TRUE,
   contrast = NULL,
   formula = NULL,
+  test = NULL,
   verbose = self$verbose,
   n.cores = self$n.cores,
   sample.metadata = self$sample.meta,
-  block.vars = self$block.vars,
+  block.vars = NULL,
   bandwidth = 0.05,
   ...
 )}\if{html}{\out{</div>}}
@@ -3367,7 +3431,8 @@ Estimate differential cell density
   sample.metadata = self$sample.meta,
   formula = NULL,
   contrast = NULL,
-  block.vars = self$block.vars,
+  test = NULL,
+  block.vars = NULL,
   perm.method = "freedman-lane",
   robust.method = "none",
   na.mode = "drop",
@@ -4023,37 +4088,35 @@ cao$getMostChangedGenes(n = 10) # n can be any number of genes to extract
 \if{html}{\out{<a id="method-Cacoa-estimateClusterFreeExpressionShifts"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateClusterFreeExpressionShifts}{}}}
 \subsection{Method \code{estimateClusterFreeExpressionShifts()}}{
-Estimate Cluster-free Expression Shift
+Cluster-free expression shifts: for every cell, the contrast's shift between samples' mean
+expression over the cell's neighbourhood, with permutation z-scores adjusted across cells
+
+Uses the stored model (or a temporary one) and the same engine as \code{estimateExpressionShiftMagnitudes()}:
+one set of sample permutations shared by all cells, the max-statistic adjustment of the z-scores, and
+median smoothing over the graph.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeExpressionShifts(
   n.top.genes = 3000,
   gene.selection = "expression",
   name = "cluster.free.expr.shifts",
-  min.n.between = 2,
-  min.n.within = max(min.n.between, 1),
-  dist.type = "shift",
-  contrast = NULL,
+  test = NULL,
   formula = NULL,
-  pairContrast = NULL,
-  pairFormula = NULL,
-  min.expr.frac = 0,
+  contrast = NULL,
+  block.vars = NULL,
   min.n.obs.per.samp = 3,
-  perm.method = "freedman-lane",
-  alternative = "two-sided",
+  min.samp.per.level = 2,
+  permutation = NULL,
+  n.permutations = NULL,
+  seed = NULL,
+  dist = c("cor", "cosine", "js"),
   adjust = TRUE,
   smooth = TRUE,
-  robust.method = "none",
-  na.mode = "drop",
-  dist = "cor",
-  log.vectors = (dist != "js"),
   wins = 0.025,
-  n.permutations = 999,
-  verbose = self$verbose,
-  n.cores = self$n.cores,
   genes = NULL,
+  min.expr.frac = 0,
   min.edge.weight = 0,
-  sample.metadata = self$sample.meta,
-  block.vars = self$block.vars,
+  verbose = NULL,
+  n.cores = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -4061,61 +4124,31 @@ Estimate Cluster-free Expression Shift
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{number of top genes for the distance estimation (default: 3000)}
+\item{\code{n.top.genes, gene.selection, genes, min.expr.frac}}{gene set (default: 3000 most expressed genes)}
 
-\item{\code{gene.selection}}{character string Method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
-"expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "z".}
+\item{\code{name}}{results slot (default "cluster.free.expr.shifts")}
 
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{test, formula, contrast, block.vars}}{optional temporary model (see \code{estimateExpressionShiftMagnitudes()})}
 
-\item{\code{min.n.between}}{minimal number of pairs between condition for distance estimation (default: 2)}
+\item{\code{min.n.obs.per.samp}}{minimum cells of a sample in a neighbourhood (default 3)}
 
-\item{\code{min.n.within}}{minimal number of pairs within one condition for distance estimation (default: \code{min.n.between})}
+\item{\code{min.samp.per.level}}{minimum samples per compared level in a neighbourhood (default 2)}
 
-\item{\code{min.expr.frac}}{numeric (default=0.0)}
+\item{\code{permutation, n.permutations, seed, verbose, n.cores}}{defaults from options (permutations capped at 499)}
 
-\item{\code{min.n.obs.per.samp}}{minimal number of cells per sample for using it in distance estimation (default: 3)}
+\item{\code{dist}}{\code{"cor"} (default), \code{"cosine"} or \code{"js"}}
 
-\item{\code{dist}}{distance measure. Options: "cor" (correlation), "cosine" or "js" (Jensen–Shannon)}
+\item{\code{adjust, smooth, wins}}{see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
 
-\item{\code{log.vectors}}{whether to use log10 on the normalized expression before estimating the distance.
-In most cases, must be TRUE for "cosine" and "cor" distances and always must be FALSE for "js". (default: \code{dist != 'js'})}
+\item{\code{min.edge.weight}}{minimum graph edge weight between cells of different samples (default 0)}
 
-\item{\code{wins}}{numeric (default=0.025)}
-
-\item{\code{n.permutations}}{numeric Number of permutations (default=500)}
-
-\item{\code{verbose}}{boolean Print messages (default=self$verbose)}
-
-\item{\code{n.cores}}{integer Number of cores to use for parallelization (default=self$n.cores)}
-
-\item{\code{genes}}{character vector Genes to include (default=NULL)}
-
-\item{\code{min.edge.weight}}{numeric Minimum edge weight (default=0.0)}
-
-\item{\code{block.vars}}{character Optional metadata columns defining permutation blocks (default=self$block.vars)}
-
-\item{\code{...}}{additional parameters passed to estimateClusterFreeExpressionShiftsC()}
-
-\item{\code{normalize.both}}{whether to normalize results relative to distances within both conditions (TRUE) or only to the control (FALSE)}
+\item{\code{...}}{deprecated arguments of the previous implementation are accepted and ignored with a message}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
-Results are also stored in the \code{cluster.free.expr.shifts} field.
+list (see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}), also stored in \code{cao$test.results[[name]]}
 }
-\subsection{Examples}{
-\if{html}{\out{<div class="r example copy">}}
-\preformatted{\dontrun{
-cao$estimateClusterFreeDE()
-cao$estimateClusterFreeExpressionShifts()
-}
-}
-\if{html}{\out{</div>}}
-
-}
-
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-smoothClusterFreeZScores"></a>}}

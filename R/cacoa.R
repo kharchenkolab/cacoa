@@ -463,6 +463,48 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.factor(x) || is.character(x)) droplevels(factor(x)) else x
     },
 
+    #' @description Robustness of the expression-shift result: alternative covariate sets and single-sample influence
+    #'
+    #' Reruns the first test of the stored model under alternative adjustment sets (unadjusted; current; current
+    #' minus each covariate; current plus each of the top screened covariates not yet in the model; all screened,
+    #' if the degrees of freedom allow) on the cached distances, and reads the leave-one-sample-out influence of
+    #' the current result. Prints one verdict per cell type: "robust", "sign / significance depends on adjustment",
+    #' "estimate changes by x%", or "driven by sample S".
+    #' @param covariate.sets `"auto"` (default, see above) or a named list of location formulas
+    #' @param screen.name results slot of a covariate screen used to propose additions (default "covariate.screen")
+    #' @param top.k number of screened covariates to try adding (default 3)
+    #' @param name results slot (default "sensitivity")
+    #' @param shifts.name results slot of the expression shifts the sensitivity refers to (default "expression.shifts")
+    #' @param n.permutations,verbose,n.cores,seed defaults from options (permutations capped at 499)
+    #' @return `cacoaSensitivity` (see [checkSensitivity()]), also stored in `cao$test.results[[name]]`
+    checkSensitivity = function(covariate.sets = "auto", screen.name = "covariate.screen", top.k = 3, name = "sensitivity",
+                                shifts.name = "expression.shifts", n.permutations = NULL, verbose = NULL, n.cores = NULL, seed = NULL) {
+      verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
+      n.permutations <- n.permutations %||% min(private$opt("n.permutations"), 499)
+      seed <- if (missing(seed)) private$opt("seed") else seed
+      res <- self$test.results[[shifts.name]]
+      if (is.null(res)) stop("run estimateExpressionShiftMagnitudes() first")
+      model <- res$model
+      D.list <- res$distances
+      screen <- self$test.results[[screen.name]]
+      formulas <- if (identical(covariate.sets, "auto")) NULL else covariate.sets
+      infl <- if (!is.null(res$influence[[1]])) list(influence = res$influence[[1]], wide = res$wide[[1]]) else NULL
+      out <- checkSensitivity(D.list, model, self$sample.meta, formulas = formulas, screen = screen, influence = infl, dist = res$settings$dist,
+                              permutation = res$settings$permutation, n.permutations = n.permutations, seed = seed %||% sample.int(.Machine$integer.max, 1),
+                              alpha = private$opt("alpha"), min.samp.per.level = res$settings$min.samp.per.level, n.cores = n.cores, top.k = top.k)
+      self$test.results[[name]] <- out
+      if (verbose) print(out)
+      invisible(out)
+    },
+
+    #' @description Forest plot of the sensitivity analysis (see [plotSensitivity()])
+    #' @param name results slot (default "sensitivity")
+    #' @param ... passed to [plotSensitivity()] (`effect`, `cell.types`, `normalized`)
+    #' @return ggplot2 object
+    plotSensitivity = function(name = "sensitivity", ...) {
+      plotSensitivity(private$getResults(name, "checkSensitivity()"), plot.theme = self$plot.theme, ...)
+    },
+
     #' @description Screen covariates: which metadata variables are associated with sample-level variation, per cell type
     #'
     #' Exploratory, term-level and contrast-free. For every covariate and cell type the between-sample variation it
@@ -776,15 +818,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateDEPerCellType()
     #' }
     estimateDEPerCellType=function(cell.groups=self$cell.groups, sample.meta=self$sample.meta, sample.per.cell=self$sample.per.cell,
-                                   formula=NULL, contrast=NULL, name='de', test='DESeq2.Wald', resampling.method=NULL, 
+                                   formula=NULL, contrast=NULL, test.spec=NULL, name='de', test='DESeq2.Wald', resampling.method=NULL, 
                                    n.resamplings=30, seed.resampling=239, min.cell.frac=0.05, common.genes=FALSE, 
                                    n.cores=self$n.cores, cooks.cutoff=FALSE, independent.filtering=FALSE, min.cell.count=10,
                                    n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, genes.to.omit = NULL, ...) {
       set.seed(seed.resampling)
-      if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-        sample.model <- buildDesignMatrices(data = sample.meta, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = self$block.vars, numericRef = self$numeric.ref)
-      } else {
-        sample.model <- self$model
+      sample.model <- private$resolveModel(formula = formula, test = test.spec, contrast = contrast, verbose = verbose, what = "estimateDEPerCellType()")
+      if (identical(sample.model$contrast_spec$type, "term")) {   # whole-factor test: F-type tests only
+        if (tolower(test) %in% c("deseq2", "deseq2.wald")) { test <- "DESeq2.LRT"; if (verbose) message("Whole-factor test: using DESeq2 LRT (full vs reduced model)") }
+        if (grepl("^wilcoxon|^t-test", tolower(test))) stop("Wilcoxon / t-test need a two-group contrast")
       }
 
       possible.tests <- c('DESeq2.Wald', 'DESeq2.LRT', 'edgeR',
@@ -865,6 +907,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # if resampling: calculate median and variance on ranks after resampling
       de.res <- if(length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
       de.res %<>% appendStatisticsToDE(expr.fracs[, names(de.res)])
+      attr(de.res, "model") <- sample.model          # provenance (an attribute, so the per-cell-type list keeps its shape)
+      attr(de.res, "test") <- test
       
       self$test.results[[name]] <- de.res
 
@@ -2307,7 +2351,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateCellLoadings=function(n.permutations=1000, name='coda', n.seed=239,
                                   cells.to.remove=NULL, cells.to.remain=NULL, 
                                   filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose, method="lda",
-                                  formula=NULL, contrast=NULL, perm.method=c("freedman-lane", "block"), zero.pseudocount=0.1,
+                                  formula=NULL, contrast=NULL, test=NULL, perm.method=c("freedman-lane", "block"), zero.pseudocount=0.1,
                                   basis.type = c("default"), ref.p.thresh = 0.3, ref.min.size = 1,ref.max.size = 3,
                                   block.vars = NULL, ...) {
       # Checks
@@ -2332,13 +2376,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       # Build model
-      if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-       sample.model <- buildDesignMatrices(data = self$sample.meta, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars, numericRef = self$numeric.ref)
-      } else {
-        sample.model <- self$model
+      sample.model <- private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose,
+                                           what = "estimateCellLoadings()")
+      if (identical(sample.model$contrast_spec$type, "term")) {
+        # whole-factor test on the ILR coordinates (Euclidean): location / dispersion through the distance engine
+        if (verbose) message("Whole-factor test on composition: location and dispersion of the ILR coordinates")
+        ilr <- computeILRMatrix(cnts, zero.pseudocount = zero.pseudocount, basis.type = basis.type)
+        D <- as.matrix(stats::dist(ilr$ilr))
+        tr <- testTermEffects(list(composition = D), sample.model$tests[[1]]$design, sample.model$meta, dispersion.formula = sample.model$dispersion.formula,
+                              dist = "l2", permutation = private$opt("permutation"), n.permutations = n.permutations, block.vars = block.vars %||% self$block.vars,
+                              seed = private$opt("seed") %||% sample.int(.Machine$integer.max, 1), alpha = private$opt("alpha"), n.cores = n.cores)
+        res <- list(kind = "term", results = tr$results, fits = tr$fits, ilr = ilr$ilr, psi = ilr$psi, cnts = cnts, model = sample.model, notes = tr$notes)
+        self$test.results[[name]] <- res
+        return(invisible(res))
       }
 
-      if (verbose) message("Running lmCoda with design='", sample.model$formula_used, "' and ", perm.method, " permutations")
+      if (verbose) message("Running lmCoda with design='", deparse(sample.model$formula_used), "' and ", perm.method, " permutations")
 
       #res <- runCoda(tmp$d.counts, tmp$d.groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type, method=method, n.cores=n.cores, verbose=verbose)
       res <- lmCoda(cnts, sample.model, perm.method=perm.method, n.permutations=n.permutations,
@@ -2497,20 +2550,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateCellDensity()
     #' }
     estimateCellDensity = function(bins=400, method='kde', name='cell.density', beta=30, estimate.variation=TRUE, contrast=NULL,
-                                   formula=NULL, verbose=self$verbose, n.cores=self$n.cores, sample.metadata=self$sample.meta,
-                                   block.vars=self$block.vars, bandwidth=0.05, ...){
+                                   formula=NULL, test=NULL, verbose=self$verbose, n.cores=self$n.cores, sample.metadata=self$sample.meta,
+                                   block.vars=NULL, bandwidth=0.05, ...){
       sample.per.cell <- self$sample.per.cell
 
-      if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-       sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars, numericRef = self$numeric.ref)
-      } else {
-      sample.model <- self$model
-      }
+      sample.model <- private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose,
+                                           what = "estimateCellDensity()")
+      if (identical(sample.model$contrast_spec$type, "term")) stop("cell density needs a contrast test (two groups or a numeric step), not a whole-factor test")
 
       # Get sample weights
-      w <- as.numeric(sample.model$F %*% sample.model$contrast.F)
-      names(w) <- rownames(sample.model$F)
-      sample.weights <- w
+      # regression weights w = X (X'X)^- c: +1/n_alt and -1/n_ref for a plain two-group comparison, adjusted weights with covariates
+      sample.weights <- regressionWeights(sample.model)
 
       # Ensure weights are named by sample and restrict to samples present in data
       sample.weights <- sample.weights[intersect(names(sample.weights), unique(sample.per.cell))]
@@ -2545,6 +2595,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       res$sample.weights  <- sample.weights
       res$contrast_spec   <- sample.model$contrast_spec
+      res$model           <- sample.model
 
       self$test.results[[name]] <- res
 
@@ -2719,7 +2770,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateDiffCellDensity()
     #' }
     estimateDiffCellDensity=function(type='permutation', adjust=NULL, name='cell.density', sample.metadata=self$sample.meta, 
-                                     formula=NULL, contrast=NULL, block.vars=self$block.vars, perm.method="freedman-lane",
+                                     formula=NULL, contrast=NULL, test=NULL, block.vars=NULL, perm.method="freedman-lane",
                                      robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=TRUE,
                                      n.permutations=999, smooth=TRUE, verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
@@ -2739,12 +2790,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         l.max <- NULL
       }
 
-      if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-       sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, 
-                          formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars, numericRef = self$numeric.ref)
-      } else {
-      sample.model <- self$model
-      }
+      sample.model <- if (!is.null(formula) || !is.null(contrast) || !is.null(test)) {
+        private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose, what = "estimateDiffCellDensity()")
+      } else dens.res$model %||% private$resolveModel(verbose = verbose, what = "estimateDiffCellDensity()")
 
       perm.res <- density.mat %>%
           diffCellDensityPermutations(sample.model=sample.model, perm.method=perm.method, robust.method = robust.method,
@@ -3570,68 +3618,45 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(scores)
     },
 
-    #' @description Estimate Cluster-free Expression Shift
-    #' @param n.top.genes number of top genes for the distance estimation (default: 3000)
-    #' @param min.n.between minimal number of pairs between condition for distance estimation (default: 2)
-    #' @param min.n.within minimal number of pairs within one condition for distance estimation (default: `min.n.between`)
-    #' @param min.expr.frac numeric (default=0.0)
-    #' @param min.n.obs.per.samp minimal number of cells per sample for using it in distance estimation (default: 3)
-    #' @param normalize.both whether to normalize results relative to distances within both conditions (TRUE) or only to the control (FALSE)
-    #' @param dist distance measure. Options: "cor" (correlation), "cosine" or "js" (Jensen–Shannon)
-    #' @param log.vectors whether to use log10 on the normalized expression before estimating the distance.
-    #' In most cases, must be TRUE for "cosine" and "cor" distances and always must be FALSE for "js". (default: `dist != 'js'`)
-    #' @param wins numeric (default=0.025)
-    #' @param genes character vector Genes to include (default=NULL)
-    #' @param n.permutations numeric Number of permutations (default=500)
-    #' @param verbose boolean Print messages (default=self$verbose)
-    #' @param n.cores integer Number of cores to use for parallelization (default=self$n.cores)
-    #' @param min.edge.weight numeric Minimum edge weight (default=0.0)
-    #' @param block.vars character Optional metadata columns defining permutation blocks (default=self$block.vars)
-    #' @param ... additional parameters passed to estimateClusterFreeExpressionShiftsC()
-    #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
-    #' Results are also stored in the `cluster.free.expr.shifts` field.
-    #' @examples
-    #' \dontrun{
-    #' cao$estimateClusterFreeDE()
-    #' cao$estimateClusterFreeExpressionShifts()
-    #' }
+    #' @description Cluster-free expression shifts: for every cell, the contrast's shift between samples' mean
+    #'   expression over the cell's neighbourhood, with permutation z-scores adjusted across cells
+    #'
+    #' Uses the stored model (or a temporary one) and the same engine as `estimateExpressionShiftMagnitudes()`:
+    #' one set of sample permutations shared by all cells, the max-statistic adjustment of the z-scores, and
+    #' median smoothing over the graph.
+    #' @param n.top.genes,gene.selection,genes,min.expr.frac gene set (default: 3000 most expressed genes)
+    #' @param name results slot (default "cluster.free.expr.shifts")
+    #' @param test,formula,contrast,block.vars optional temporary model (see `estimateExpressionShiftMagnitudes()`)
+    #' @param min.n.obs.per.samp minimum cells of a sample in a neighbourhood (default 3)
+    #' @param min.samp.per.level minimum samples per compared level in a neighbourhood (default 2)
+    #' @param permutation,n.permutations,seed,verbose,n.cores defaults from options (permutations capped at 499)
+    #' @param dist `"cor"` (default), `"cosine"` or `"js"`
+    #' @param adjust,smooth,wins see [clusterFreeExpressionShifts()]
+    #' @param min.edge.weight minimum graph edge weight between cells of different samples (default 0)
+    #' @param ... deprecated arguments of the previous implementation are accepted and ignored with a message
+    #' @return list (see [clusterFreeExpressionShifts()]), also stored in `cao$test.results[[name]]`
     estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="expression", name="cluster.free.expr.shifts",
-                                                 min.n.between=2, min.n.within=max(min.n.between, 1), dist.type="shift",
-                                                 contrast=NULL, formula=NULL, pairContrast=NULL, pairFormula=NULL,
-                                                 min.expr.frac=0.0, min.n.obs.per.samp=3, perm.method="freedman-lane", 
-                                                 alternative="two-sided", adjust=TRUE, smooth=TRUE, robust.method="none",
-                                                 na.mode="drop", dist="cor", log.vectors=(dist != "js"), wins=0.025, 
-                                                 n.permutations=999, verbose=self$verbose, n.cores=self$n.cores, genes=NULL,
-                                                 min.edge.weight=0.0, sample.metadata = self$sample.meta, block.vars = self$block.vars, ...) {
-      
-
-        if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars, numericRef = self$numeric.ref)
-        } else {
-        sample.model <- self$model
-        }
-        
-        # build paired model
-        x.Pair <- buildPairDesignMatrices(sample.metadata, sample.model, dist.type = dist.type, pairContrast = pairContrast,
-                                              pairFormula  = pairFormula, verbosity = if(verbose) 'info' else 'warn')
-        
-
-      ## TODO add warnings here for perm.method post diagnostics
-
-      if (is.null(genes)) {
-        genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, min.expr.frac=min.expr.frac)
-        ## TODO add DESeq2-based gene selection after clusterfree DE is implemented
-      }
-
+                                                 test=NULL, formula=NULL, contrast=NULL, block.vars=NULL,
+                                                 min.n.obs.per.samp=3, min.samp.per.level=2, permutation=NULL, n.permutations=NULL, seed=NULL,
+                                                 dist=c("cor", "cosine", "js"), adjust=TRUE, smooth=TRUE, wins=0.025, genes=NULL, min.expr.frac=0.0,
+                                                 min.edge.weight=0.0, verbose=NULL, n.cores=NULL, ...) {
+      dist <- match.arg(dist)
+      verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
+      legacy <- private$legacyShiftArgs(list(...), verbose)
+      permutation <- private$opt("permutation", legacy$permutation %||% permutation)
+      n.permutations <- n.permutations %||% min(private$opt("n.permutations"), 499)
+      seed <- if (missing(seed)) private$opt("seed") else seed
+      model <- private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose,
+                                    what = "estimateClusterFreeExpressionShifts()")
+      if (is.null(genes)) genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, min.expr.frac=min.expr.frac)
       inp <- private$getClusterFreeDEInput(genes, raw=TRUE, min.edge.weight=min.edge.weight)
-      shifts <- inp %$% estimateClusterFreeExpressionShiftsLM(
-                        cm = t(cm), sample.per.cell=self$sample.per.cell[rownames(cm)], nns.per.cell = nns.per.cell, 
-                        x = x.Pair, min.n.obs.per.samp=min.n.obs.per.samp, dist=dist, log.vecs=log.vectors, 
-                        perm.method = perm.method, robust.method = robust.method, na.mode = na.mode, wins=wins,
-                        alternative = alternative, adjust = adjust, smooth = smooth, n.cores=n.cores, 
-                        n.permutations=n.permutations, verbose=verbose, ...)
+      shifts <- clusterFreeExpressionShifts(cm = Matrix::t(inp$cm), sample.per.cell = self$sample.per.cell[rownames(inp$cm)], nns.per.cell = inp$nns.per.cell,
+                                            design = model, meta = model$meta, dist = dist, min.n.obs.per.samp = min.n.obs.per.samp,
+                                            min.samp.per.level = min.samp.per.level, permutation = permutation, n.permutations = n.permutations,
+                                            block.vars = block.vars %||% model$block.vars, seed = seed %||% sample.int(.Machine$integer.max, 1),
+                                            adjust = adjust, smooth = smooth, wins = wins, n.cores = n.cores, verbose = verbose)
+      shifts$model <- model
       self$test.results[[name]] <- shifts
-
       return(invisible(shifts))
     },
 
@@ -4567,7 +4592,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     getClusterFreeDEInput = function(genes, raw=FALSE, min.edge.weight=0.0) {
       cm <- self$getJointCountMatrix(raw=raw)
       genes <- intersect(genes, colnames(cm))
-      is.ref <- (self$sample.groups[levels(self$sample.per.cell)] == self$ref.level)
+      is.ref <- if (!is.null(self$sample.groups)) (as.character(self$sample.groups[levels(self$sample.per.cell)]) == self$ref.level) else rep(NA, nlevels(self$sample.per.cell))
 
       adj.mat <- extractCellGraph(self$data.object) %>% igraph::as_adj()
       diag(adj.mat) <- 1

@@ -59,6 +59,11 @@ test_that("conos panel shipped with the package runs through the new entry point
   expect_true(nrow(res$results) > 0)
   expect_true(all(res$results$exhaustive))                                    # 2 vs 2: 6 distinct relabelings
   expect_s3_class(cao$plotExpressionShiftMagnitudes(), "ggplot")
+  # cluster-free shifts through the object (graph from conos)
+  cf <- cao$estimateClusterFreeExpressionShifts(n.top.genes = 300, n.permutations = 19, min.samp.per.level = 2, verbose = FALSE)
+  expect_equal(length(cf$stat), length(cao$cell.groups))
+  expect_true(sum(is.finite(cf$z.adj)) > 0)
+  expect_s3_class(cf$model, "cacoaModel")
 })
 
 test_that("simulated objects: planted DE strength orders the shifts (slow)", {

@@ -339,7 +339,9 @@ pairwiseEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL
 
   # samples per contrasted level (factor contrasts only)
   spec <- design$contrast_spec; n.ref <- n.alt <- NA_integer_
-  if (!is.null(spec) && spec$type %in% c("simple", "marginal") && !grepl(":", spec$term, fixed = TRUE)) {
+  factor.contrast <- !is.null(spec) && spec$type %in% c("simple", "marginal") && !grepl(":", spec$term, fixed = TRUE) &&
+    spec$term %in% names(meta) && !is.numeric(meta[[spec$term]])
+  if (factor.contrast) {
     g <- as.character(meta[samples, spec$term])
     n.ref <- sum(g == spec$den); n.alt <- sum(g == spec$num)
     if (min(n.ref, n.alt) < min.samp.per.level)
@@ -379,7 +381,7 @@ pairwiseEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL
     if (length(tl)) eff$r2 <- partialR2PerTerm(G, X, a, tl)
   }
   # model-implied cell table over the levels of a single contrasted factor
-  if (!is.null(spec) && spec$type %in% c("simple", "marginal") && !grepl(":", spec$term, fixed = TRUE)) {
+  if (factor.contrast) {
     levs <- levels(droplevels(factor(meta[samples, spec$term])))
     at0 <- if (spec$type == "simple") spec$at else list()
     one <- function(Fm, at) .oneRowFromFormula(attr(Fm, "terms"), attr(Fm, "xlevels"), attr(Fm, "contrasts"),

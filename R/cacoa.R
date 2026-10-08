@@ -97,6 +97,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field method for permutation testing (default=NULL)
     perm.method = NULL,
 
+    #' @field model The stored model (class `cacoaModel`, see `setModel()`): formula, tests, designs, issues (default=NULL)
+    model = NULL,
+
+    #' @field options Analysis options shared by all methods (see `setOptions()`)
+    options = NULL,
+
+    #' @field sample.groups Named factor of the primary test's groups per sample (reference, target); derived from the model
+    sample.groups = NULL,
+
     #' @field sample.groups.palette Color palette for the sample.groups (default=NULL)
     sample.groups.palette = NULL,
 
@@ -114,9 +123,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'
     #' @param data.object Object used to initialize the Cacoa class. Either a raw or normalized count matrix, Conos object, or Seurat object.
     #' @param sample.metadata data.frame; rows = samples, columns = covariates. Row names must be sample IDs.
-    #' @param formula character or formula (e.g. "~ condition + batch"). 
-    #' @param contrast specification (see buildDesignMatrices documentation).
+    #' @param formula character or formula (e.g. "~ condition + batch"). Optional; the default is `~ <test variables> + <block.vars>`.
+    #' @param test what to test: a metadata column name (`"condition"`), several (`c("condition", "sex")`), `"all"`,
+    #'   an explicit comparison (`"condition: disease vs control"` or `c("condition", "disease", "control")`), or a
+    #'   structured contrast list (see `buildDesignMatrices()`). Optional: without a model the object can still be
+    #'   explored (`checkDesign()`, `screenCovariates()`); set the model later with `setModel()`.
+    #' @param contrast expert synonym of `test` (a `c(var, alt, ref)` triple or a structured contrast).
+    #' @param dispersion.formula formula for the dispersion (heterogeneity) model (default: the test variables).
     #' @param numeric.ref reference points for numeric covariates in the contrast specification. `"auto"` or named list of numeric anchors (e.g., `list(age=35)`).
+    #' @param sample.groups deprecated: named vector of group per sample (old two-group API); becomes a `condition` metadata column and `test = "condition"`.
+    #' @param ref.level,target.level deprecated: the two levels of `sample.groups` to compare (reference, target).
     #' @param block.vars optional list of covariates in sample.metadata on which to form randomizaton blocks
     #' @param sample.ids character scalar naming the column in `sample.metadata` that contains sample IDs.
     #' @param cell.groups vector Indicates cell groups with cell names (default: extracted from `data.object`)
@@ -147,18 +163,38 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao <- Cacoa$new(data.object = con, sample.metadata = sample.metadata, sample.id=sample.id, formula = formula, contrast = contrast, cell.groups = cell.groups)
     #' }
     initialize=function(
-      data.object, sample.metadata=NULL, sample.ids=NULL, formula=NULL, contrast=NULL, numeric.ref = "auto", block.vars=NULL, cell.groups=NULL, sample.per.cell=NULL, sample.groups.palette=NULL,
+      data.object, sample.metadata=NULL, sample.ids=NULL, formula=NULL, test=NULL, contrast=NULL, dispersion.formula=NULL,
+      numeric.ref = "auto", block.vars=NULL, cell.groups=NULL, sample.per.cell=NULL, sample.groups.palette=NULL,
       cell.groups.palette=NULL, embedding=NULL, n.cores=1, verbose=TRUE,
       graph.name=NULL, assay.name="RNA", data.layer='scale.data',
-      plot.theme=ggplot2::theme_bw(), plot.params=NULL
+      plot.theme=ggplot2::theme_bw(), plot.params=NULL,
+      sample.groups=NULL, ref.level=NULL, target.level=NULL
     ) {
 
-      if ('Cacoa' %in% class(data.object)) { 
+      if ('Cacoa' %in% class(data.object)) {
         for (n in ls(data.object)) {
           if (!is.function(get(n, data.object))) assign(n, get(n, data.object), self)
         }
-
+        if (is.null(self$options)) self$options <- cacoaDefaultOptions()
         return(NULL)
+      }
+
+      # deprecated two-group API (D35): sample.groups + ref.level / target.level -> a `condition` column and test
+      if (!is.null(sample.groups)) {
+        .Deprecated(msg = "`sample.groups` / `ref.level` / `target.level` are deprecated: give `sample.metadata` with a condition column and `test = \"condition\"`.")
+        if (is.null(names(sample.groups))) stop("`sample.groups` must be named by sample")
+        sg <- data.frame(condition = as.character(sample.groups), row.names = names(sample.groups), stringsAsFactors = FALSE)
+        if (is.null(sample.metadata)) sample.metadata <- sg
+        else {
+          if (is.null(rownames(sample.metadata)) && !is.null(sample.ids)) rownames(sample.metadata) <- as.character(sample.metadata[[sample.ids]])
+          if (!"condition" %in% names(sample.metadata)) sample.metadata$condition <- sg[rownames(sample.metadata), "condition"]
+        }
+        if (is.null(test) && is.null(contrast)) {
+          levs <- unique(sg$condition)
+          if (is.null(ref.level)) ref.level <- chooseReferenceLevel(sg$condition)$level
+          if (is.null(target.level)) target.level <- setdiff(levs, ref.level)[1]
+          test <- c("condition", target.level, ref.level)
+        }
       }
 
       if (is.null(sample.metadata)) stop("sample.metadata must be provided")
@@ -181,21 +217,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           stop("sample identifiers are unavailable: set rownames(sample.metadata) OR provide a valid `sample.id` column.")
         }
 
-      
-      self$model <- buildDesignMatrices(data = sample.metadata, contrast = contrast, formula = formula,
-                                        numericRef = numeric.ref, blockVars = block.vars)
 
-      # remember default model arguments (the formula as actually used, so later calls reuse it)
-      self$contrast <- contrast
-      self$formula <- self$model$formula_used
+      self$options <- cacoaDefaultOptions()
+      self$options$n.cores <- n.cores; self$options$verbose <- verbose
       self$numeric.ref <- numeric.ref
       self$block.vars <- block.vars
-      
       self$sample.meta <- self$full.meta <- sample.metadata
       self$sample.ids <- samp.names
       self$n.cores <- n.cores
       self$verbose <- verbose
-      
+      self$sample.groups.palette <- sample.groups.palette
+
+      # the model is optional (D25): set it now when asked, otherwise print the metadata audit
+      if (!is.null(formula) || !is.null(test) || !is.null(contrast)) {
+        self$setModel(formula = formula, test = test, contrast = contrast, dispersion.formula = dispersion.formula,
+                      block.vars = block.vars, numeric.ref = numeric.ref, verbose = verbose)
+      } else if (verbose) {
+        message(formatMetadataSummary(describeMetadata(sample.metadata), sample.metadata))
+        message("Next: cao$checkDesign() and cao$screenCovariates(), or cao$setModel(test = \"<variable>\").")
+      }
+
       # interpret different types of data objects
 
       if ("Seurat" %in% class(data.object)) {
@@ -264,11 +305,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           stop("sample identifiers found in sample.metadata do not match sample.per.cell")
       }
 
-      if(is.null(sample.groups.palette)) {
-        self$sample.groups.palette <- c("#d73027", "#4575b4") %>%
-          setNames(c(self$target.level, self$ref.level))
-      } else {
-        self$sample.groups.palette <- sample.groups.palette
+      if (is.null(self$sample.groups.palette)) {
+        self$sample.groups.palette <- c("#d73027", "#4575b4")
+        if (!is.null(self$target.level)) names(self$sample.groups.palette) <- c(self$target.level, self$ref.level)
       }
 
       if(is.null(cell.groups.palette)) {
@@ -290,188 +329,274 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
 
-    #' @description Expression shift magnitudes between conditions
-    #' Calculate expression shift magnitudes of different cell clusters between conditions,
-    #' using pairwise sample-sample distances within each cell type and a linear-model
-    #' framework that can account for covariates via a design formula and contrast.
-    #'
-    #' This function estimates the magnitude of expression changes (shifts) between
-    #' conditions using a pairwise distance approach. It supports two modes of analysis:
-    #'
-    #' Uses the full set of genes to calculate a single pairwise distance matrix per cell type.
-    #' Permutation testing is performed by shuffling residuals (Freedman-Lane) or blocks within
-    #' the linear model \code{Y ~ Model}.
-    #'
-    #' @param cell.groups factor/character Named vector of cell-group labels per cell
-    #'   (default = `self$cell.groups`).
-    #' @param sample.per.cell factor/character Named vector mapping each cell to its sample
-    #'   (default = `self$sample.per.cell`).
-    #' @param formula formula|character Design formula specifying covariates to model
-    #'   (default = `self$formula`).
-    #' @param contrast character or list specifying the contrast (default = `self$contrast`).
-    #' @param sample.meta data.frame Sample-level metadata (rows = samples, columns = covariates)
-    #'   used to build the design matrix (default = `self$sample.meta`).
-    #' @param sample.ids character vector containing sample IDs (default = `self$sample.ids`).
-    #' @param dist character Distance metric for expression shifts: `"cor"` (1 − correlation),
-    #'   `"l1"` (Manhattan), or `"l2"` (Euclidean). If `NULL`, a sensible default is chosen
-    #'   based on dimensionality (default = `NULL`).
-    #' @param dist.type character Type of expression distance to test:
-    #'   `"shift"` (linear shift; default), `"var"` (variance change), or `"total"` (both).
-    #' @param min.cells.per.sample integer Minimum cells per sample to include (default = 10).
-    #' @param min.samp.per.type integer Minimum samples per cell type (default = 2).
-    #' @param min.gene.frac numeric Minimum fraction of cells per type expressing a gene
-    #'   for the gene to be kept (default = 0.01).
-    #' @param perm.method character Permutation method: `"freedman-lane"` (default) or `"block"`.
-    #' @param block.vars character Optional column in `sample.meta` specifying blocks for restricted randomization
-    #' @param verbose logical Print progress messages (default = `self$verbose`).
-    #' @param n.cores integer Number of CPU cores (default = `self$n.cores`).
-    #' @param name character Results slot name (default = `"expression.shifts"`).
-    #' @param n.permutations integer Number of permutations used to estimate the
-    #'   null distribution for coefficients and partial R² (default = 1000).
-    #' @param genes character Optional subset of genes to use (default = `NULL`).
-    #' @param robust.method character Robust regression method: `"none"` (default), `"huber"`, or `"winsor"`.
-    #' @param pairContrast character or list specifying the paired contrast (default = `NULL`).
-    #' @param pairFormula formula|character Design formula for paired model (default = `NULL`).
-    #' @param ... Additional parameters forwarded to \code{estimateExpressionChange_lm()}
-    #'   and lower-level distance functions.
-    #'
-    #' @return A list with (per cell type unless noted):
-    #' \itemize{
-    #'   \item \code{dists.per.type}: vector of observed pairwise distances.
-    #'   \item \code{p.dist.info}: normalized distance matrices used in fitting.
-    #'   \item \code{sample.groups}: factor of sample groups used in analysis.
-    #'   \item \code{results}: Data frame summarizing results per cell type including: observed and permutation statistics,
-    #'   \item \code{pvalues}, \code{padjust}: p-values and BH-adjusted p-values.
-    #'   \item \code{perm.stat}: permutation statistics used for inference.
-    #'   \item \code{partial.r2.df}: observed partial R² by model term.
-    #' }
+    #' @description Set analysis options shared by all methods (explicit call arguments still win)
+    #' @param ... options to change: `n.permutations` (999), `seed` (1; `NULL` to draw from R's RNG), `alpha` (0.05),
+    #'   `p.adjust.method` ("BH"), `n.cores`, `verbose`, `plot.provenance` (TRUE), `min.samp.per.level` (3),
+    #'   `dist` ("cor"), `permutation` ("auto"), `numeric.step` (1)
+    #' @return the full option list, invisibly
     #' @examples
     #' \dontrun{
-    #' # expression shifts:
-    #' cao$estimateExpressionShiftMagnitudes(
-    #'   formula   = ~ condition + batch, #optional
-    #'   contrast  = c("condition", "treated", "control"), #optional
-    #'   dist.type = "shift", perm.method = "freedman-lane",
-    #'   n.permutations = 1000
-    #' )
+    #' cao$setOptions(n.permutations = 1999, seed = 7, n.cores = 8)
     #' }
-    estimateExpressionShiftMagnitudes = function(cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, formula = NULL,
-                                             contrast = NULL, pairContrast = NULL, pairFormula = NULL, block.vars = self$block.vars, sample.metadata = self$sample.meta,  
-                                             sample.ids = self$sample.ids, dist = NULL, dist.type = "shift", min.cells.per.sample = 10, 
-                                             min.samp.per.type = 2, min.gene.frac = 0.01, genes = NULL, perm.method="freedman-lane", robust.method = "none",
-                                             n.pcs = NULL,
-                                             na.mode = "drop", alternative = "greater", return.residuals = TRUE, return.sampled.stats = TRUE,
-                                             name = "expression.shifts", n.permutations = 1000, return.sampled.fits = FALSE,
-                                             verbose = self$verbose, n.cores = self$n.cores, ...) {
-  
-      if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars, numericRef = self$numeric.ref)
-      } else {
-        sample.model <- self$model
-      }
-      # build paired model
-      pair.model <- buildPairDesignMatrices(sample.metadata, sample.model, dist.type = dist.type, pairContrast = pairContrast,
-                                        pairFormula  = pairFormula, verbosity = if(verbose) 'info' else 'warn')
-  
-      count.matrices <- extractRawCountMatrices(self$data.object, transposed = TRUE)
-
-      if (verbose) message("Filtering data... ")
-      shift.inp <- filterExpressionDistanceInput(count.matrices, cell.groups = cell.groups, sample.per.cell = sample.per.cell,
-                                             pair.model = pair.model, sample.ids = rownames(sample.metadata), min.cells.per.sample = min.cells.per.sample,
-                                             min.samp.per.type = min.samp.per.type, min.gene.frac = min.gene.frac, genes = genes, verbose = verbose, ...) 
-  
-      if (verbose) message("done!\n")
-
-      n.samps.per.type.eff <- sapply(shift.inp$cm.per.type, function(m) {
-       sum(rowSums(!is.na(m)) > 0) })
-      min.eff <- min(n.samps.per.type.eff)
-      if (min.eff <= 1) {
-        warning("Some cell types have ≤1 usable sample after keeping all samples")
-       } 
-      
-      # LM-based estimation
-      if (verbose) message("Fitting LM with formula: ", deparse(pair.model$pair_formula_used))
-      out <- shift.inp %$% estimateExpressionChange(cm.per.type, cell.groups = cell.groups, pair.model=pair.model, sample.model=sample.model,
-                                                              sample.per.cell = sample.per.cell, sample.ids = sample.ids, perm.method= perm.method,
-                                                              robust.method = robust.method, na.mode = na.mode, alternative = alternative,
-                                                              return.residuals = return.residuals, return.sampled.stats = return.sampled.stats,
-                                                              dist = dist %||% "cor", dist.type = dist.type, 
-                                                              n.pcs = n.pcs,
-                                                              n.permutations = n.permutations, n.cores = n.cores, verbose = verbose, ...)
-     
-      out$dists.adj <- out %$% extractPairwiseShifts(res, design.mat = pair.model, perm.method = perm.method,
-                                                 block.vars = pair.model$pair_block_vars_used, ...)
-      out$dists.adj$changed.contrast <- if(!is.null(formula) || !is.null(contrast)) TRUE else FALSE # for plot labels
-      out$pair.model <- pair.model
-      out$sample.ids <- rownames(sample.metadata)
-      self$test.results[[name]] <- out
-      return(invisible(self$test.results[[name]]))
+    setOptions = function(...) {
+      new <- list(...)
+      if (is.null(self$options)) self$options <- cacoaDefaultOptions()
+      unknown <- setdiff(names(new), names(self$options))
+      if (length(unknown) || (length(new) && is.null(names(new)))) stop("unknown option(s): ", paste(unknown, collapse = ", "),
+                                                                      ". Known: ", paste(names(self$options), collapse = ", "))
+      opts <- self$options
+      for (nm in names(new)) opts[nm] <- list(new[[nm]])   # list() so that NULL (seed) is stored
+      checkOptionValues(opts)
+      self$options <- opts
+      if ("n.cores" %in% names(new)) self$n.cores <- new$n.cores
+      if ("verbose" %in% names(new)) self$verbose <- new$verbose
+      invisible(self$options)
     },
 
-    #' @description Plot results from cao$estimateExpressionShiftMagnitudes() 
+    #' @description Get analysis options
+    #' @param name optional option name; all options when `NULL`
+    #' @return the option value, or the list of all options
+    getOptions = function(name = NULL) {
+      if (is.null(self$options)) self$options <- cacoaDefaultOptions()
+      if (is.null(name)) self$options else self$options[[name]]
+    },
+
+    #' @description Set (or change) the stored model used by every analysis
     #'
-    #' @param name character Results slot name (default="expression.shifts")
-    #' @param type character type of a plot "bar" or "box" (default="bar")
-    #' @param notch boolean Whether to show notches in the boxplot version (default=TRUE)
-    #' @param show.jitter boolean Whether to show individual data points (default=FALSE)
-    #' @param jitter.alpha numeric Transparency value for the data points (default=0.05)
-    #' @param show.pvalues character string Which p-values to plot. Accepted values are "none", "raw", or "adjusted". (default=c("adjusted", "raw", "none"))
-    #' @param ylab character string Label of the y-axis (default="normalized expression distance")
-    #' @param cov.plot.keys character covariates to color data points by (default=NULL)
-    #' @param jitter.size numeric Size of the jitter points (default=1)
-    #' @param celltype.levels character Optional ordering of cell types (default=NULL)
-    #' @param panel character Which panel to use: "covariate" (default), "block", or "background". 
-    #' @param order.direction character Order cell types by increasing or decreasing distance ("increasing", "decreasing"; default="increasing")
-    #' @param ... additional arguments
-    #' @return A ggplot2 object
+    #' Resolves what to test (`test` grammar), builds the design, checks it, determines the permutation plan and
+    #' stores the result as `cao$model`. The constructor calls this when it receives `formula` / `test` / `contrast`;
+    #' call it directly to change the model after exploration (`checkDesign()`, `screenCovariates()`).
+    #' @param formula location formula (default: `~ <test variables> + <block.vars>`)
+    #' @param test what to test (see `Cacoa$new()`)
+    #' @param contrast expert synonym of `test`
+    #' @param dispersion.formula dispersion formula (default: the test variables)
+    #' @param block.vars metadata columns defining permutation strata (default: stored)
+    #' @param numeric.ref anchors for numeric covariates (default: stored)
+    #' @param numeric.step step for numeric tests (default: option)
+    #' @param permutation permutation scheme (default: option `"auto"`)
+    #' @param verbose print the model summary (default: option)
+    #' @return the model (class `cacoaModel`), invisibly
     #' @examples
     #' \dontrun{
+    #' cao$setModel(~ condition + batch + sex, test = "condition")
+    #' cao$setModel(test = "condition: disease vs control", block.vars = "batch")
+    #' }
+    setModel = function(formula = NULL, test = NULL, contrast = NULL, dispersion.formula = NULL, block.vars = self$block.vars,
+                        numeric.ref = self$numeric.ref, numeric.step = NULL, permutation = NULL, verbose = NULL) {
+      verbose <- private$opt("verbose", verbose)
+      if (is.null(test) && is.null(contrast) && !is.null(self$model)) { test <- self$model$test.spec$test; contrast <- self$model$test.spec$contrast }
+      m <- private$buildModel(formula = formula, test = test, contrast = contrast, dispersion.formula = dispersion.formula,
+                              block.vars = block.vars, permutation = permutation, numeric.ref = numeric.ref, numeric.step = numeric.step)
+      self$model <- m
+      self$block.vars <- block.vars; self$numeric.ref <- numeric.ref
+      private$syncLegacyFields()
+      if (verbose) print(m)
+      invisible(m)
+    },
+
+    #' @description Get the stored model
+    #' @return the model (class `cacoaModel`) or `NULL`
+    getModel = function() self$model,
+
+    #' @description Describe the sample metadata columns (type, levels, missing values, role as a covariate)
+    #' @return data.frame, see [describeMetadata()]
+    describeMetadata = function() describeMetadata(self$sample.meta),
+
+    #' @description Sample groups of a test: a factor (reference, target) for two-level contrasts, the variable
+    #'   itself for numeric tests or term tests
+    #' @param test test index or label within the stored model (default: the primary test)
+    #' @param model model to take the test from (default: stored)
+    #' @return named vector over samples (`NULL` when the test has no variable, e.g. coefficient contrasts)
+    getSampleGroups = function(test = NULL, model = self$model) {
+      if (is.null(model)) return(NULL)
+      t <- if (is.null(test)) model$tests[[1]] else if (is.numeric(test)) model$tests[[test]] else
+        model$tests[[match(test, vapply(model$tests, `[[`, character(1), "label"))]]
+      if (is.null(t) || is.null(t$variable) || is.na(t$variable)) return(NULL)
+      x <- self$sample.meta[[t$variable]]
+      if (t$kind == "contrast" && is.null(t$step)) {
+        x <- setNames(as.character(x), rownames(self$sample.meta)); keep <- x %in% t$levels[c("ref", "alt")]
+        return(factor(x[keep], levels = unname(t$levels[c("ref", "alt")])))
+      }
+      names(x) <- rownames(self$sample.meta)
+      if (is.factor(x) || is.character(x)) droplevels(factor(x)) else x
+    },
+
+    #' @description Expression shift magnitudes per cell type
+    #'
+    #' For every cell type, pseudobulk profiles per sample are compared through sample-sample distances
+    #' (gene-centred cosine by default). An individual-level model (location: the design formula; dispersion:
+    #' `dispersion.formula`) is fitted to the distances and, for each test of the model, three effects are
+    #' estimated and tested by permuting sample labels:
+    #' \itemize{
+    #'   \item \code{shift}: a common change in direction between the compared settings (squared distance between
+    #'     the group means, corrected for within-group variability);
+    #'   \item \code{var}: the change in within-group heterogeneity (dispersion);
+    #'   \item \code{total}: how much farther samples of the target setting are from the reference than reference
+    #'     samples are from each other (\code{shift + var/2}).
+    #' }
+    #' Term tests (a factor with more than two levels) report \code{location} and \code{dispersion} instead, plus
+    #' a pairwise table over the levels. Unset arguments fall back to the stored options (`cao$getOptions()`).
+    #'
+    #' @param test what to test (default: the stored model's tests). Giving `test`, `formula` or `contrast` builds
+    #'   a temporary model for this call; `cao$setModel()` changes the stored one.
+    #' @param formula location formula for a temporary model
+    #' @param contrast expert synonym of `test`
+    #' @param dispersion.formula dispersion formula for a temporary model
+    #' @param dist `"cor"` (gene-centred cosine; default from options), `"l2"` or `"l1"` (`l1` does not separate shift
+    #'   from dispersion and is discouraged)
+    #' @param permutation `"auto"`, `"block"`, `"freedman-lane"` or `"huh-jhun"` (default from options)
+    #' @param n.permutations number of permutations (default from options)
+    #' @param block.vars metadata columns defining additional permutation strata (default: stored)
+    #' @param cell.groups,sample.per.cell cell annotations (default: stored)
+    #' @param n.pcs optional number of principal components to reduce the pseudobulk profiles to before the distance
+    #' @param min.cells.per.sample minimum cells per (cell type, sample) (default 10)
+    #' @param min.samp.per.level minimum samples at each compared level per cell type (default from options)
+    #' @param min.gene.frac gene filter: fraction of cells expressing the gene (default 0.01)
+    #' @param genes optional gene subset
+    #' @param bias.correct correct the shift for within-group dispersion (default TRUE)
+    #' @param influence compute leave-one-sample-out effects and jackknife standard errors (default TRUE)
+    #' @param seed integer seed (default from options; `NULL` draws from R's RNG)
+    #' @param name results slot (default "expression.shifts")
+    #' @param verbose,n.cores defaults from options
+    #' @param ... deprecated arguments of the previous implementation (`dist.type`, `perm.method`, `pairFormula`,
+    #'   `pairContrast`, `alternative`, `robust.method`, `na.mode`, `top.n.genes`, `gene.selection`, ...) are
+    #'   accepted with a message and otherwise ignored
+    #' @return list, also stored in `cao$test.results[[name]]`: \code{results} (one row per test x cell type x effect:
+    #'   `estimate`, `estimate.norm`, `se.jk`, `ci.low`, `ci.high`, `statistic`, `p`, `padj` (BH across cell types),
+    #'   `p.fwer` (max-statistic, familywise), `n`, `scheme`, `n.perm.distinct`, `p.floor`, `flags`), \code{global}
+    #'   (per test x effect: p-value across all cell types), \code{wide} (per test, one row per cell type),
+    #'   \code{fits}, \code{skipped} (cell types not tested, with the reason), \code{distances},
+    #'   \code{adjusted.distances}, \code{influence}, \code{model}, \code{settings}, \code{n.cells}
+    #' @examples
+    #' \dontrun{
+    #' cao$setModel(~ condition + batch, test = "condition")
     #' cao$estimateExpressionShiftMagnitudes()
     #' cao$plotExpressionShiftMagnitudes()
     #' }
-    plotExpressionShiftMagnitudes=function(name="expression.shifts", type='box', notch=TRUE, show.jitter=TRUE, cov.plot.keys = NULL,
-                                           jitter.alpha=0.05, jitter.size=1, show.pvalues=c("adjusted", "raw", "none"), celltype.levels=NULL,
-                                           panel = c("covariate", "block", "background"), order.direction = "increasing",
-                                           ylab='Centered Pairwise Shifts', ...) {
-      show.pvalues <- match.arg(show.pvalues)
-      panel <- match.arg(panel)
+    estimateExpressionShiftMagnitudes = function(test = NULL, formula = NULL, contrast = NULL, dispersion.formula = NULL,
+                                                 dist = NULL, permutation = NULL, n.permutations = NULL, block.vars = NULL,
+                                                 cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, n.pcs = NULL,
+                                                 min.cells.per.sample = 10, min.samp.per.level = NULL, min.gene.frac = 0.01, genes = NULL,
+                                                 bias.correct = TRUE, influence = TRUE, seed = NULL, name = "expression.shifts",
+                                                 verbose = NULL, n.cores = NULL, ...) {
+      verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
+      legacy <- private$legacyShiftArgs(list(...), verbose)
+      permutation <- legacy$permutation %||% permutation
+      dist <- private$opt("dist", dist); permutation <- private$opt("permutation", permutation)
+      n.permutations <- private$opt("n.permutations", n.permutations); min.samp.per.level <- private$opt("min.samp.per.level", min.samp.per.level)
+      seed <- if (missing(seed)) private$opt("seed") else seed
+      alpha <- private$opt("alpha")
+      if (dist == "l1") warning("dist = 'l1' does not separate location from dispersion: shift estimates absorb dispersion changes")
 
-      res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
-      df <- res$dists.adj
+      model <- private$resolveModel(formula = formula, test = test, contrast = contrast, dispersion.formula = dispersion.formula,
+                                    block.vars = block.vars, permutation = permutation, verbose = verbose,
+                                    what = "estimateExpressionShiftMagnitudes()")
+      block.vars <- block.vars %||% model$block.vars
 
-      if (show.pvalues == "adjusted") {
-        pvalues <- res$results$padjust %>% setNames(res$results$celltype)
-      } else if (show.pvalues == "raw") {
-        pvalues <- res$results$pvalue %>% setNames(res$results$celltype)
-      } else {
-        pvalues <- NULL
+      pb <- private$getPseudobulk(cell.groups = cell.groups, sample.per.cell = sample.per.cell, min.cells.per.sample = min.cells.per.sample,
+                                  min.gene.frac = min.gene.frac, genes = genes, verbose = verbose)
+      D.list <- private$getSampleDistances(pb, dist = dist, n.pcs = n.pcs, verbose = verbose)
+
+      if (verbose) message(sprintf("Testing %d cell type(s), %d test(s), %d permutations (%s)...", length(D.list), length(model$tests),
+                                   n.permutations, permutation))
+      res <- expressionShiftsForModel(D.list, model, dist = dist, permutation = permutation, n.permutations = n.permutations,
+                                      block.vars = block.vars, bias.correct = bias.correct, influence = influence,
+                                      min.samp.per.level = min.samp.per.level, seed = seed, alpha = alpha, n.cores = n.cores,
+                                      verbose = FALSE, n.cells = pb$n.cells)
+      res$n.cells <- pb$n.cells; res$genes <- pb$genes
+      res$settings$n.pcs <- n.pcs; res$settings$min.cells.per.sample <- min.cells.per.sample
+      res$settings$temporary.model <- !is.null(formula) || !is.null(test) || !is.null(contrast)
+      res$sample.ids <- rownames(model$meta)
+      if (verbose) {
+        if (nrow(res$skipped)) message(sprintf("Skipped %d cell type/test combination(s): %s", nrow(res$skipped),
+                                               paste(unique(res$skipped$reason), collapse = "; ")))
+        for (nt in res$notes) message("Note: ", nt)
+        if (nrow(res$results)) {
+          sig <- res$results[res$results$effect %in% c("shift", "location") & !is.na(res$results$padj) & res$results$padj < alpha, ]
+          message(sprintf("%d of %d cell types with a significant %s at FDR %.0f%% (global p = %s).", length(unique(sig$celltype)),
+                          length(unique(res$results$celltype)), if (any(res$results$effect == "shift")) "shift" else "location effect", 100 * alpha,
+                          paste(format(res$global$p[res$global$effect %in% c("shift", "location")], digits = 2), collapse = ", ")))
+        }
       }
-
-      plotPairwiseShiftsPerCellType(df, pvalues=pvalues, panel=panel, cov.plot.keys=cov.plot.keys, show.jitter=show.jitter,jitter.alpha=jitter.alpha, notch=notch, type=type,
-        palette=self$cell.groups.palette, ylab=ylab, plot.theme=self$plot.theme, yline=0.0, ...)
+      self$test.results[[name]] <- res
+      invisible(res)
     },
 
-    #' @description Plot residuals from cao$estimateExpressionShiftMagnitudes() 
-    #' @param name character Results slot name (default="expression.shifts")
-    #' @param cov.plot.keys character covariates to color data points by (default=NULL)
-    #' @param jitter.alpha numeric Transparency value for the data points (default=0.05)
-    #' @param jitter.size numeric Size of the jitter points (default=1)
-    #' @param yline numeric Horizontal line to draw (default=0.0)
-    #' @param plot.per.celltype boolean Whether to plot per cell type (default=FALSE)
-    #' @param cont.palette character vector Color palette for continuous covariates 
-    #' @param ylab character string Label of the y-axis (default="Residual Variance")
-    #' @param ... additional arguments
-    #' @return A ggplot2 object
-    plotExpressionShiftResiduals=function(name="expression.shifts", cov.plot.keys = NULL, residual.type = c("pearson","raw"),
-                                           jitter.alpha=0.8, jitter.size=1, yline=0.0, plot.per.celltype = FALSE, palette=NULL,
-                                           ylab='Residual Variance', cont.palette = rev(RColorBrewer::brewer.pal(11, "Spectral")), ...) {
-
+    #' @description Plot the expression-shift effects per cell type
+    #'
+    #' Dot plot with jackknife 95% intervals, one panel per effect (shift | var | total, or location | dispersion
+    #' for term tests), cell types ordered by the first effect. Filled points are significant at `alpha` by the
+    #' chosen `significance` column; a provenance subtitle records test, adjustment and permutation scheme.
+    #' @param name results slot (default "expression.shifts")
+    #' @param test test label or index to show (default: all tests, one row of panels each)
+    #' @param effects which effects (default: all available)
+    #' @param normalized plot normalized effects (comparable across cell types; default TRUE) or absolute ones
+    #' @param type `"dot"` (default) or `"bar"`
+    #' @param order.by effect used to order cell types (default: the first of `effects`)
+    #' @param show.ci show jackknife intervals (default TRUE)
+    #' @param significance which p-value marks significance: `"padj"` (BH across cell types; default), `"p.fwer"`
+    #'   (familywise, max-statistic) or `"p"` (raw)
+    #' @param alpha significance level (default from options)
+    #' @param show.provenance add the provenance subtitle (default from options)
+    #' @param cell.types optional subset / order of cell types
+    #' @param ... ignored (accepted for backward compatibility: `show.pvalues`, `notch`, `show.jitter`, ...)
+    #' @return ggplot2 object
+    plotExpressionShiftMagnitudes = function(name = "expression.shifts", test = NULL, effects = NULL, normalized = TRUE,
+                                             type = c("dot", "bar"), order.by = NULL, show.ci = TRUE,
+                                             significance = c("padj", "p.fwer", "p"), alpha = NULL, show.provenance = NULL,
+                                             cell.types = NULL, ...) {
+      type <- match.arg(type); significance <- match.arg(significance)
+      alpha <- private$opt("alpha", alpha); show.provenance <- private$opt("plot.provenance", show.provenance)
       res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
-      residual.type <- match.arg(residual.type)
-      res %$% plotResidualsPerCelltype(res, design.mat, self$sample.ids, palette=palette, plot.theme=self$plot.theme, 
-                                       cov.plot.keys = cov.plot.keys, jitter.alpha=jitter.alpha, residual.type=residual.type,
-                                       jitter.size=jitter.size, plot.per.celltype=plot.per.celltype, yline=yline, cont.palette=cont.palette,
-                                       ylab=ylab, ...)
+      if (is.null(res$results) || !nrow(res$results)) stop("no cell type could be tested (see cao$test.results[['", name, "']]$skipped)")
+      df <- res$results
+      if (!is.null(test)) {
+        keep <- if (is.numeric(test)) df$test.id %in% test else df$test %in% test
+        if (!any(keep)) stop("test not found; available: ", paste(unique(df$test), collapse = ", "))
+        df <- df[keep, ]
+      }
+      if (!is.null(effects)) df <- df[df$effect %in% effects, ]
+      if (!is.null(cell.types)) df <- df[df$celltype %in% cell.types, ]
+      subtitle <- if (show.provenance) {
+        prov <- vapply(unique(df$test.id), function(i) modelProvenance(res$model, i), character(1))
+        sc <- unique(df$scheme); fl <- unique(df$p.floor)
+        paste(c(prov, sprintf("dist = %s; %s; significance: %s < %.2g", res$settings$dist,
+                              if (length(sc) == 1) sprintf("%s permutations (%d)", sc, res$settings$n.permutations) else "mixed permutation schemes",
+                              significance, alpha)), collapse = "\n")
+      } else NULL
+      plotEffectsPerCellType(df, normalized = normalized, type = type, order.by = order.by, show.ci = show.ci, significance = significance,
+                             alpha = alpha, palette = self$cell.groups.palette, plot.theme = self$plot.theme, subtitle = subtitle,
+                             cell.types = cell.types)
+    },
+
+    #' @description Leave-one-sample-out influence on the expression-shift effects (replaces `plotExpressionShiftResiduals`)
+    #' @param name results slot (default "expression.shifts")
+    #' @param effect `"shift"` (default), `"var"` or `"total"`
+    #' @param test test label or index (default: the first contrast test)
+    #' @param cell.types optional subset of cell types
+    #' @param normalized express the change relative to the effect's jackknife SE (default TRUE)
+    #' @return ggplot2 heatmap: samples x cell types, the change in the effect when the sample is left out
+    plotSampleInfluence = function(name = "expression.shifts", effect = c("shift", "var", "total"), test = NULL, cell.types = NULL, normalized = TRUE) {
+      effect <- match.arg(effect)
+      res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
+      if (is.null(test)) test <- which(vapply(res$model$tests, function(t) t$kind == "contrast", logical(1)))[1]
+      if (is.numeric(test)) test <- names(res$influence)[test]
+      infl <- res$influence[[test]]
+      if (is.null(infl)) stop("no influence results for test '", test, "' (run estimateExpressionShiftMagnitudes(influence = TRUE))")
+      m <- infl[[effect]]
+      if (!is.null(cell.types)) m <- m[, intersect(cell.types, colnames(m)), drop = FALSE]
+      w <- res$wide[[test]]
+      se <- setNames(w[[paste0("se.", effect)]], w$celltype)
+      groups <- self$getSampleGroups(test, model = res$model)
+      plotInfluenceHeatmap(m, se = if (normalized) se[colnames(m)] else NULL, groups = groups, effect = effect, plot.theme = self$plot.theme,
+                           palette = self$sample.groups.palette)
+    },
+
+    #' @description Deprecated: use `plotSampleInfluence()`
+    #' @param ... passed to `plotSampleInfluence()`
+    plotExpressionShiftResiduals = function(...) {
+      .Deprecated("plotSampleInfluence", msg = "plotExpressionShiftResiduals() is deprecated: residual plots of the pair model no longer exist; showing plotSampleInfluence() instead.")
+      self$plotSampleInfluence(...)
     },
 
     #' @description Alias for estimateDEPerCellType
@@ -2854,118 +2979,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       space <- match.arg(space)
       values <- match.arg(values)
       pair.set <- match.arg(pair.set)
-      if ((space != 'pseudo.bulk') && (length(list(...)) > 0)) stop("Unexpected arguments: ", names(list(...)))
+      extra <- setdiff(names(list(...)), "test")
+      if ((space != 'pseudo.bulk') && length(extra)) stop("Unexpected arguments: ", paste(extra, collapse = ", "))
 
       if (space == 'expression.shifts') {
         if (is.null(name)) name <- 'expression.shifts'
-        clust.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
-        if (is.null(clust.info$res) || is.null(clust.info$res$sample.distances))
-        stop("Missing clust.info$res$sample.distances.")
-        if (is.null(clust.info$pair.model) || is.null(clust.info$pair.model$pairs))
-        stop("Missing clust.info$pair.model$pairs.")
-        if (is.null(clust.info$sample.ids))
-        stop("Missing clust.info$sample.ids.")
-        pairs <- clust.info$pair.model$pairs
-        sids  <- clust.info$sample.ids
-        stopifnot(length(sids) >= max(pairs))
-
-        if(values == "unadjusted"){
-          Y <- clust.info$res$sample.distances  # n_pairs x n_celltypes
-          pairs.use <- pairs
-          Y.use <- Y
-          if (pair.set == "core" && !is.null(clust.info$pair.model$core.rows)) {
-            idx.core <- which(as.logical(clust.info$pair.model$core.rows))
-            Y.core <- Y[idx.core, , drop = FALSE]
-            keep <- rowSums(is.na(Y.core)) < ncol(Y.core)
-            idx.core.use <- idx.core[keep]
-            pairs.use <- pairs[idx.core.use, , drop = FALSE]
-            Y.use <- Y[idx.core.use, , drop = FALSE]
-            }
-
-          if (!is.null(cell.type)) {
-            if (!cell.type %in% colnames(Y.use)) {
-              warning("Distances were not estimated for cell type ", cell.type)
-              return(NULL)
-            }
-            M <- pairTableToSquare(Y.use[, cell.type], pairs.use, sids)
-            M <- attachNC(M, cell.type, clust.info)
-            p.dists <- M
-          } else {
-             mats <- lapply(colnames(Y.use), function(ct) {
-              M <- pairTableToSquare(Y.use[, ct], pairs.use, sids)
-              attachNC(M, ct, clust.info)
-             })
-             names(mats) <- colnames(Y.use)
-             mats <- mats[vapply(mats, function(M) is.matrix(M) && nrow(M) >= 2, logical(1))]
-             if (length(mats) == 0) return(NULL)
-
-             p.dists <- prepareJointExpressionDistance(mats)
-            }
-           } else if (values == "adjusted") {
-            perm.method <- clust.info$perm.method %||% "freedman-lane"
-            p.dist <- clust.info$res$sample.distances
-            
-            yhat <- if (perm.method == "block") {
-              ef <- extractFitsBlock(clust.info$res, p.dist, design.model = clust.info$pair.model)
-              if (!is.null(ef$partial.fit)) ef$partial.fit else ef$partial
-              } else {
-                extractFitsFL(clust.info$res, p.dist, design.model = clust.info$pair.model)
-                }
-
-            if (!is.null(cell.type)) {
-              if (!cell.type %in% colnames(yhat)) {
-                warning("No fitted values available for cell type ", cell.type)
-                return(NULL)
-                }
-                yhat <- yhat[, cell.type, drop = FALSE]
-                }
-
-            if (nrow(yhat) == nrow(pairs)) {
-              pairs.use <- pairs
-              yhat.use <- yhat
-              
-              if (pair.set == "core" && !is.null(clust.info$pair.model$core.rows)) {
-                idx.core <- which(as.logical(clust.info$pair.model$core.rows))
-                y.core <- yhat[idx.core, , drop = FALSE]
-                pd_core <- p.dist[idx.core, , drop = FALSE]
-                keep <- rowSums(is.na(pd_core)) < ncol(pd_core)
-                idx.core.use <- idx.core[keep]
-                pairs.use <- pairs[idx.core.use, , drop = FALSE]
-                yhat.use <- yhat[idx.core.use, , drop = FALSE]
-                }
-                
-              } else {
-                # yhat is shorter: assume it corresponds to core rows with all-NA dropped
-                core <- clust.info$pair.model$core.rows
-                idx.core <- if (is.null(core)) seq_len(nrow(pairs)) else which(as.logical(core))
-                pd_core <- p.dist[idx.core, , drop = FALSE]
-                keep <- rowSums(is.na(pd_core)) < ncol(pd_core)
-                idx.core.use <- idx.core[keep]
-                pairs.use <- pairs[idx.core.use, , drop = FALSE]
-
-                if (nrow(yhat) != nrow(pairs.use)) {
-                  stop("Row alignment mismatch: nrow(yhat)=", nrow(yhat),
-                  " but expected=", nrow(pairs.use),". Cannot safely map yhat rows to pairs.")
-                  }
-                  yhat.use <- yhat
-                  }
-
-                if (!is.null(cell.type)) {
-                  M <- pairTableToSquare(yhat.use[, 1], pairs.use, sids)
-                  M <- attachNC(M, colnames(yhat.use)[1], clust.info)
-                  p.dists <- M
-                  } else {
-                    mats <- lapply(seq_len(ncol(yhat.use)), function(j) {
-                      ct <- colnames(yhat.use)[j]
-                      M <- pairTableToSquare(yhat.use[, j], pairs.use, sids)
-                      attachNC(M, ct, clust.info)
-                    })
-                    names(mats) <- colnames(yhat.use)
-                    mats <- mats[vapply(mats, function(M) is.matrix(M) && nrow(M) >= 2, logical(1))]
-                    if (length(mats) == 0) return(NULL)
-                    p.dists <- prepareJointExpressionDistance(mats)
-                    }
-                }
+        res <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
+        if (is.null(res$distances)) stop("Result '", name, "' has no sample distances; re-run estimateExpressionShiftMagnitudes().")
+        if (pair.set != "all") message("`pair.set` is deprecated and ignored: distances are per sample, not per pair")
+        mats <- if (values == "unadjusted") res$distances else {
+          tst <- list(...)$test
+          adj <- if (is.null(tst)) res$adjusted.distances[[1]] else if (is.numeric(tst)) res$adjusted.distances[[tst]] else res$adjusted.distances[[tst]]
+          if (is.null(adj)) stop("no adjusted distances for the requested test")
+          adj
+        }
+        if (!is.null(cell.type)) {
+          if (!cell.type %in% names(mats)) { warning("Distances were not estimated for cell type ", cell.type); return(NULL) }
+          p.dists <- mats[[cell.type]]
+        } else {
+          mats <- mats[vapply(mats, function(M) is.matrix(M) && nrow(M) >= 2, logical(1))]
+          if (!length(mats)) return(NULL)
+          for (ct in names(mats)) if (is.null(attr(mats[[ct]], "n.cells")))
+            attr(mats[[ct]], "n.cells") <- setNames(as.numeric(res$n.cells[ct, rownames(mats[[ct]])]), rownames(mats[[ct]]))
+          p.dists <- prepareJointExpressionDistance(mats)
+        }
         if (any(is.na(p.dists))) { # NA imputation
           p.dists %<>% ape::additive() %>% `dimnames<-`(dimnames(p.dists))
         }
@@ -4038,6 +4075,116 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         msg <- paste(msg, "Please first run", suggested.function)
       }
       stop(msg)
+    },
+
+    # pseudobulk per cell type, cached on the settings that produce it
+    getPseudobulk = function(cell.groups, sample.per.cell, min.cells.per.sample, min.gene.frac, genes, verbose = FALSE) {
+      key <- settingsKey(as.character(cell.groups), names(cell.groups), as.character(sample.per.cell), min.cells.per.sample, min.gene.frac, genes)
+      hit <- self$cache$pseudobulk
+      if (!is.null(hit) && identical(hit$key, key)) return(hit$value)
+      if (verbose) message("Building pseudobulk profiles per cell type...")
+      cms <- extractRawCountMatrices(self$data.object, transposed = TRUE)
+      cms <- cms[intersect(names(cms), rownames(self$sample.meta))]
+      pb <- pseudobulkPerCellType(cms, cell.groups = cell.groups, sample.per.cell = sample.per.cell,
+                                  min.cells.per.sample = min.cells.per.sample, min.gene.frac = min.gene.frac, genes = genes)
+      self$cache$pseudobulk <- list(key = key, value = pb)
+      pb
+    },
+
+    getSampleDistances = function(pb, dist, n.pcs = NULL, verbose = FALSE) {
+      key <- settingsKey(self$cache$pseudobulk$key, dist, n.pcs)
+      hit <- self$cache$sample.distances
+      if (!is.null(hit) && identical(hit$key, key)) return(hit$value)
+      if (verbose) message(sprintf("Computing sample distances (%s%s)...", dist, if (!is.null(n.pcs)) sprintf(", %d PCs", n.pcs) else ""))
+      D.list <- sampleDistanceMatrices(pb$cm.per.type, dist = dist, n.pcs = n.pcs)
+      D.list <- Filter(function(D) !is.null(D) && nrow(D) >= 3, D.list)
+      for (ct in names(D.list)) attr(D.list[[ct]], "n.cells") <- setNames(as.numeric(pb$n.cells[ct, rownames(D.list[[ct]])]), rownames(D.list[[ct]]))
+      self$cache$sample.distances <- list(key = key, value = D.list)
+      D.list
+    },
+
+    # arguments of the previous expression-shift implementation: translate what has an equivalent, announce the rest
+    legacyShiftArgs = function(dots, verbose = TRUE) {
+      out <- list()
+      if (!length(dots)) return(out)
+      nms <- names(dots)
+      if (is.null(nms) || any(!nzchar(nms))) stop("unnamed extra arguments are not accepted")
+      if ("perm.method" %in% nms) { out$permutation <- dots$perm.method; if (verbose) message("`perm.method` is deprecated: use `permutation`") }
+      if ("dist.type" %in% nms && verbose) message("`dist.type` is deprecated: shift, var and total are all reported; choose the effect when plotting")
+      if ("min.samp.per.type" %in% nms && verbose) message("`min.samp.per.type` is deprecated: use `min.samp.per.level` (samples per compared level)")
+      known <- c("perm.method", "dist.type", "pairFormula", "pairContrast", "alternative", "robust.method", "na.mode", "return.residuals",
+                 "return.sampled.stats", "return.sampled.fits", "top.n.genes", "gene.selection", "sample.metadata", "sample.ids",
+                 "min.samp.per.type", "p.adjust.method", "trim", "keep.all")
+      ignored <- setdiff(intersect(nms, known), c("perm.method", "dist.type", "min.samp.per.type"))
+      if (length(ignored) && verbose) message("Ignoring deprecated argument(s): ", paste(ignored, collapse = ", "))
+      unknown <- setdiff(nms, known)
+      if (length(unknown)) stop("unknown argument(s): ", paste(unknown, collapse = ", "))
+      out
+    },
+
+    # option lookup: an explicit (non-NULL) argument wins over the stored options
+    opt = function(name, value = NULL) {
+      if (!is.null(value)) return(value)
+      if (is.null(self$options)) self$options <- cacoaDefaultOptions()
+      self$options[[name]]
+    },
+
+    # The model a method should use: the stored one, or a temporary one when the call gives formula / test /
+    # contrast (announced with a message; the stored model is left unchanged).
+    resolveModel = function(formula = NULL, test = NULL, contrast = NULL, dispersion.formula = NULL, block.vars = NULL,
+                            permutation = NULL, verbose = TRUE, what = "this call") {
+      if (is.null(formula) && is.null(test) && is.null(contrast) && is.null(dispersion.formula) && is.null(block.vars)) {
+        if (is.null(self$model)) stop("no model is set: call cao$setModel(test = \"<variable>\") or pass `test` / `formula` to ", what)
+        return(self$model)
+      }
+      m <- self$model
+      if (is.null(test) && is.null(contrast)) {
+        if (is.null(m)) stop("`formula` given without `test`: say what to test (e.g. test = \"condition\")")
+        test <- m$test.spec$test; contrast <- m$test.spec$contrast
+      }
+      if (is.null(formula) && !is.null(m)) {
+        tv <- unique(stats::na.omit(vapply(resolveTests(test, contrast, self$sample.meta, m$formula, private$opt("numeric.step")),
+                                           function(t) t$variable %||% NA_character_, character(1))))
+        if (all(tv %in% all.vars(m$formula))) formula <- m$formula
+      }
+      tmp <- private$buildModel(formula = formula, test = test, contrast = contrast,
+                                dispersion.formula = dispersion.formula %||% (if (!is.null(m) && is.null(test) && is.null(contrast)) m$dispersion.formula else NULL),
+                                block.vars = block.vars %||% self$block.vars, permutation = permutation)
+      if (verbose) message("Using a temporary model for ", what, ": ", paste(deparse(tmp$formula), collapse = ""), ", test ",
+                           paste(vapply(tmp$tests, `[[`, character(1), "label"), collapse = "; "),
+                           ". The stored model is unchanged (cao$setModel() changes it).")
+      tmp
+    },
+
+    buildModel = function(formula = NULL, test = NULL, contrast = NULL, dispersion.formula = NULL, block.vars = NULL,
+                          permutation = NULL, numeric.ref = NULL, numeric.step = NULL) {
+      m <- buildCacoaModel(self$sample.meta, formula = formula, test = test, contrast = contrast, dispersion.formula = dispersion.formula,
+                           block.vars = block.vars, numeric.ref = numeric.ref %||% self$numeric.ref,
+                           numeric.step = private$opt("numeric.step", numeric.step), permutation = private$opt("permutation", permutation),
+                           n.permutations = private$opt("n.permutations"))
+      m$test.spec <- list(test = test, contrast = contrast)
+      err <- m$issues[m$issues$severity == "error", , drop = FALSE]
+      if (nrow(err)) stop(paste(c(err$message, if (nzchar(err$suggestion[1])) paste("Suggestion:", err$suggestion[1])), collapse = "\n"), call. = FALSE)
+      m
+    },
+
+    # legacy two-group fields (ref.level, target.level, sample.groups, contrast, palette names) from the primary test
+    syncLegacyFields = function() {
+      m <- self$model
+      self$ref.level <- self$target.level <- self$sample.groups <- NULL
+      self$formula <- m$formula
+      t <- m$tests[[1]]
+      self$contrast <- if (is.character(t$contrast) && length(t$contrast) == 3) t$contrast else t$contrast
+      if (t$kind == "contrast" && is.null(t$step) && !is.null(t$variable) && !is.na(t$variable) && all(!is.na(t$levels))) {
+        self$ref.level <- unname(t$levels[["ref"]]); self$target.level <- unname(t$levels[["alt"]])
+        self$sample.groups <- self$getSampleGroups()
+      }
+      pal <- self$sample.groups.palette
+      if (!is.null(self$target.level) && (is.null(pal) || is.null(names(pal)) || !all(c(self$target.level, self$ref.level) %in% names(pal)))) {
+        if (is.null(pal) || length(pal) < 2) pal <- c("#d73027", "#4575b4")
+        self$sample.groups.palette <- setNames(unname(pal[1:2]), c(self$target.level, self$ref.level))
+      }
+      invisible(NULL)
     },
 
     getTopGenes = function(n, gene.selection=c("expression", "od"), cm.joint=NULL,

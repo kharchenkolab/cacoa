@@ -29,6 +29,11 @@ contrastSampleInfo <- function(design, meta, samples) {
   spec <- design$contrast_spec
   free <- list(type = "free", in.set = rep(TRUE, n), labels = as.character(seq_len(n)), diff.vars = character(0),
                fixed = list(), tested.vars = character(0))
+  if (!is.null(spec) && identical(spec$type, "term")) {       # whole-factor test: every level takes part
+    labels <- as.character(meta[[spec$term]])
+    return(list(type = "labels", in.set = !is.na(labels), labels = labels, diff.vars = spec$term, fixed = list(),
+                num = NA_character_, den = NA_character_, tested.vars = spec$term))
+  }
   if (is.null(spec) || !spec$type %in% c("simple", "marginal")) {
     # coefficient-level contrasts: tested variables are those of the terms with non-zero weight
     cF <- design$contrast.F; assign <- attr(design$F, "assign"); tl <- attr(attr(design$F, "terms"), "term.labels")

@@ -62,7 +62,7 @@ pairCellMeans <- function(D2, g, ref, alt) {
 # n.per.group samples per group, `cells.per.sample` cells each, `n.genes` genes; a subset of genes is shifted
 # in the second group so that expression-shift tests have something to find.
 makeToyCacoa <- function(n.per.group = c(A = 4, B = 4), cells.per.sample = 30, n.genes = 60, n.cell.types = 2,
-                         shift = 1.0, seed = 42, ...) {
+                         shift = 1.0, seed = 42, contrast = c("group", "B", "A"), verbose = FALSE, suppress.warnings = TRUE, suppress.messages = TRUE, ...) {
   set.seed(seed)
   groups <- rep(names(n.per.group), n.per.group)
   samples <- sprintf("%s%d", groups, unlist(lapply(n.per.group, seq_len)))
@@ -79,6 +79,8 @@ makeToyCacoa <- function(n.per.group = c(A = 4, B = 4), cells.per.sample = 30, n
   mu[shifted, isB] <- mu[shifted, isB] * exp(shift)
   cm <- Matrix::Matrix(matrix(rpois(n.genes * n.cells, mu), n.genes, n.cells,
                               dimnames = list(sprintf("g%03d", seq_len(n.genes)), names(sample.per.cell))), sparse = TRUE)
-  suppressWarnings(suppressMessages(Cacoa$new(data.object = cm, sample.metadata = meta, sample.per.cell = sample.per.cell,
-                             cell.groups = cell.groups, contrast = c("group", "B", "A"), n.cores = 1, verbose = FALSE, ...)))
+  build <- function() Cacoa$new(data.object = cm, sample.metadata = meta, sample.per.cell = sample.per.cell,
+                                cell.groups = cell.groups, contrast = contrast, n.cores = 1, verbose = verbose, ...)
+  if (suppress.messages) build <- local({ b <- build; function() suppressMessages(b()) })
+  if (suppress.warnings) suppressWarnings(build()) else build()
 }

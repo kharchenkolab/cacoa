@@ -398,6 +398,48 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return the model (class `cacoaModel`) or `NULL`
     getModel = function() self$model,
 
+    #' @description Check the study design from the sample metadata (no expression data needed)
+    #'
+    #' Reports associations among covariates, balance of each covariate against the test variable, structural
+    #' problems (a covariate that fully determines the test variable, nesting, single-sample or empty cells, rank
+    #' deficiency), collinearity (GVIF), the degrees-of-freedom budget, permutation feasibility per test and
+    #' over-adjustment candidates (covariates strongly tied to the test variable).
+    #' @param formula,test,contrast optional model to check instead of the stored one (a temporary model is built)
+    #' @param covariates covariates to examine (default: all usable metadata columns)
+    #' @param block.vars permutation strata (default: stored)
+    #' @param verbose print the report (default: option)
+    #' @return object of class `cacoaDesignCheck` (see [checkDesign()]), also stored in `cao$cache$design.check`
+    #' @examples
+    #' \dontrun{
+    #' cao$checkDesign()
+    #' cao$plotDesign("associations")
+    #' }
+    checkDesign = function(formula = NULL, test = NULL, contrast = NULL, covariates = NULL, block.vars = NULL, verbose = NULL) {
+      verbose <- private$opt("verbose", verbose)
+      model <- if (!is.null(formula) || !is.null(test) || !is.null(contrast)) {
+        tryCatch(private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = FALSE, what = "checkDesign()"),
+                 error = function(e) { if (verbose) message("Model could not be built: ", conditionMessage(e)); NULL })
+      } else self$model
+      test.variable <- if (is.null(model) && !is.null(test) && is.character(test) && length(test) == 1 && test %in% names(self$sample.meta)) test else NULL
+      chk <- checkDesign(self$sample.meta, model = model, test.variable = test.variable, covariates = covariates,
+                         block.vars = block.vars %||% self$block.vars)
+      self$cache$design.check <- chk
+      if (verbose) print(chk)
+      invisible(chk)
+    },
+
+    #' @description Plot the design check
+    #' @param type `"associations"` (default), `"balance"` or `"issues"`
+    #' @param covariates optional subset of covariates
+    #' @param ... passed to [plotDesignCheck()]
+    #' @return ggplot2 object
+    plotDesign = function(type = c("associations", "balance", "issues"), covariates = NULL, ...) {
+      type <- match.arg(type)
+      chk <- self$cache$design.check
+      if (is.null(chk)) chk <- self$checkDesign(verbose = FALSE)
+      plotDesignCheck(chk, type = type, meta = self$sample.meta, covariates = covariates, plot.theme = self$plot.theme, ...)
+    },
+
     #' @description Describe the sample metadata columns (type, levels, missing values, role as a covariate)
     #' @return data.frame, see [describeMetadata()]
     describeMetadata = function() describeMetadata(self$sample.meta),

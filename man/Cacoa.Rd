@@ -45,6 +45,15 @@ cao$setModel(test = "condition: disease vs control", block.vars = "batch")
 }
 
 ## ------------------------------------------------
+## Method `Cacoa$checkDesign`
+## ------------------------------------------------
+
+\dontrun{
+cao$checkDesign()
+cao$plotDesign("associations")
+}
+
+## ------------------------------------------------
 ## Method `Cacoa$estimateExpressionShiftMagnitudes`
 ## ------------------------------------------------
 
@@ -578,6 +587,8 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item \href{#method-Cacoa-getOptions}{\code{Cacoa$getOptions()}}
 \item \href{#method-Cacoa-setModel}{\code{Cacoa$setModel()}}
 \item \href{#method-Cacoa-getModel}{\code{Cacoa$getModel()}}
+\item \href{#method-Cacoa-checkDesign}{\code{Cacoa$checkDesign()}}
+\item \href{#method-Cacoa-plotDesign}{\code{Cacoa$plotDesign()}}
 \item \href{#method-Cacoa-describeMetadata}{\code{Cacoa$describeMetadata()}}
 \item \href{#method-Cacoa-getSampleGroups}{\code{Cacoa$getSampleGroups()}}
 \item \href{#method-Cacoa-estimateExpressionShiftMagnitudes}{\code{Cacoa$estimateExpressionShiftMagnitudes()}}
@@ -879,6 +890,83 @@ Get the stored model
 
 \subsection{Returns}{
 the model (class \code{cacoaModel}) or \code{NULL}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-checkDesign"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-checkDesign}{}}}
+\subsection{Method \code{checkDesign()}}{
+Check the study design from the sample metadata (no expression data needed)
+
+Reports associations among covariates, balance of each covariate against the test variable, structural
+problems (a covariate that fully determines the test variable, nesting, single-sample or empty cells, rank
+deficiency), collinearity (GVIF), the degrees-of-freedom budget, permutation feasibility per test and
+over-adjustment candidates (covariates strongly tied to the test variable).
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$checkDesign(
+  formula = NULL,
+  test = NULL,
+  contrast = NULL,
+  covariates = NULL,
+  block.vars = NULL,
+  verbose = NULL
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{formula, test, contrast}}{optional model to check instead of the stored one (a temporary model is built)}
+
+\item{\code{covariates}}{covariates to examine (default: all usable metadata columns)}
+
+\item{\code{block.vars}}{permutation strata (default: stored)}
+
+\item{\code{verbose}}{print the report (default: option)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+object of class \code{cacoaDesignCheck} (see \code{\link[=checkDesign]{checkDesign()}}), also stored in \code{cao$cache$design.check}
+}
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
+cao$checkDesign()
+cao$plotDesign("associations")
+}
+}
+\if{html}{\out{</div>}}
+
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-plotDesign"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-plotDesign}{}}}
+\subsection{Method \code{plotDesign()}}{
+Plot the design check
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotDesign(
+  type = c("associations", "balance", "issues"),
+  covariates = NULL,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{type}}{\code{"associations"} (default), \code{"balance"} or \code{"issues"}}
+
+\item{\code{covariates}}{optional subset of covariates}
+
+\item{\code{...}}{passed to \code{\link[=plotDesignCheck]{plotDesignCheck()}}}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}

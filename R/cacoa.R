@@ -2765,13 +2765,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param name character Test results to plot (default="expression.shifts")
     #' @param joint boolean Whether to show joint boxplot with the expression distance weighed by the sizes of cell types (default: TRUE), or show distances for each individual cell type
     #' @param condition character Metadata column to group samples by (default: inferred from contrast)
-    #' @param values character One of "pre-fit" (observed raw distances), "post-fit" (core/partial fit covariate-adjusted) (default="pre-fit")
+    #' @param values character One of "unadjusted" (observed raw distances), "adjusted" (after regressing out nuissance covariates) (default="unadjusted")
     #' @param palette plot palette (default=self$sample.groups.palette)
     #' @param show.significance boolean Whether to show statistical significance between sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001)
     #' @param ... other plot parameters, forwarded to \link{plotCountBoxplotsPerType}
     #' @return A ggplot2 object
     plotExpressionDistance = function(name='expression.shifts', joint=FALSE, condition=NULL,
-                                      values=c("pre-fit", "post-fit"), palette=NULL,
+                                      values=c("unadjusted", "adjusted"), palette=NULL,
                                       show.significance=FALSE, ...) {
       values <- match.arg(values)
       clust.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')

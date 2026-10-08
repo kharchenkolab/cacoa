@@ -26,19 +26,25 @@ estimatePairwiseEffects(
 \item{z.end}{list(num =, den =) rows of \code{Z} at the contrast endpoints; default: both equal to the
 intercept-only row (var and total are then 0)}
 
-\item{bias.correct}{logical; subtract the leverage-corrected dispersion term from \code{M} (unbiased under
-homoscedastic residuals, default TRUE)}
+\item{bias.correct}{logical; subtract the model-based dispersion term \verb{A diag(s) A'} from \code{M} (default TRUE)}
 
 \item{G}{optional precomputed Gower matrix (\code{gowerCenter(D2)})}
 }
 \value{
 list with \code{shift}, \code{var}, \code{total}, \code{ratio}, \code{s.alt}, \code{s.ref}, \code{shift.raw} (uncorrected),
-\code{shift.norm}, \code{var.norm}, \code{total.norm}, \code{M} (q x q), \code{gamma}, \code{v} (per-sample dispersion), \code{h}
-(leverage), \code{n}, \code{rank}
+\code{shift.norm}, \code{var.norm}, \code{total.norm}, \code{M} (q x q), \code{gamma}, \code{s} (model-based per-sample dispersion),
+\code{v} (leverage-corrected per-sample dispersion), \code{h} (leverage), \code{n}, \code{rank}
 }
 \description{
 Core estimator of the individual-level model. \code{X} is the location design, \code{Z} the dispersion design;
 \code{contrast} is a numeric contrast over \code{colnames(X)}; \code{z.end} gives the rows of \code{Z} at the contrast
 endpoints (\code{num} = target, \code{den} = reference). Returns the three effects, their normalized versions,
 the estimated effect matrix and per-sample dispersions.
+}
+\details{
+The dispersion model is fitted without bias under arbitrary (heteroscedastic) per-sample
+dispersions: with \verb{r_i = (R G R)_ii} the squared residual norm and \code{R} the residual projection,
+\verb{E[r] = (R o R) s} exactly, so \code{gamma} is the least-squares solution of \verb{r ~ (R o R) Z}. In the one-way
+layout this equals the classical leverage-corrected estimator \code{r_i / (1 - h_i)} averaged per group.
+\code{v} reports the per-sample leverage-corrected values (used for diagnostics and influence).
 }

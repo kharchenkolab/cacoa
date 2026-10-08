@@ -75,12 +75,16 @@ isEstimable <- function(X, cvec, tol = 1e-8) {
 #' @param Z dispersion design matrix (n x r); default: intercept only
 #' @param z.end list(num =, den =) rows of `Z` at the contrast endpoints; default: both equal to the
 #'   intercept-only row (var and total are then 0)
-#' @param bias.correct logical; subtract the leverage-corrected dispersion term from `M` (unbiased under
-#'   homoscedastic residuals, default TRUE)
+#' @param bias.correct logical; subtract the model-based dispersion term `A diag(s) A'` from `M` (default TRUE)
 #' @param G optional precomputed Gower matrix (`gowerCenter(D2)`)
+#' @details The dispersion model is fitted without bias under arbitrary (heteroscedastic) per-sample
+#'   dispersions: with `r_i = (R G R)_ii` the squared residual norm and `R` the residual projection,
+#'   `E[r] = (R o R) s` exactly, so `gamma` is the least-squares solution of `r ~ (R o R) Z`. In the one-way
+#'   layout this equals the classical leverage-corrected estimator `r_i / (1 - h_i)` averaged per group.
+#'   `v` reports the per-sample leverage-corrected values (used for diagnostics and influence).
 #' @return list with `shift`, `var`, `total`, `ratio`, `s.alt`, `s.ref`, `shift.raw` (uncorrected),
-#'   `shift.norm`, `var.norm`, `total.norm`, `M` (q x q), `gamma`, `v` (per-sample dispersion), `h`
-#'   (leverage), `n`, `rank`
+#'   `shift.norm`, `var.norm`, `total.norm`, `M` (q x q), `gamma`, `s` (model-based per-sample dispersion),
+#'   `v` (leverage-corrected per-sample dispersion), `h` (leverage), `n`, `rank`
 #' @export
 estimatePairwiseEffects <- function(D2, X, contrast, Z = NULL, z.end = NULL, bias.correct = TRUE, G = NULL) {
   X <- as.matrix(X); n <- nrow(X)
@@ -97,18 +101,14 @@ estimatePairwiseEffects <- function(D2, X, contrast, Z = NULL, z.end = NULL, bia
   RG <- R %*% G
   r <- rowSums(RG * R)                           # diag(R G R): squared distance of i from its fitted position
   ok <- h < 1 - 1e-8
-  v <- rep(NA_real_, n); v[ok] <- r[ok] / (1 - h[ok])   # leverage-corrected per-sample dispersion
+  v <- rep(NA_real_, n); v[ok] <- r[ok] / (1 - h[ok])   # leverage-corrected per-sample dispersion (diagnostic)
   M <- hi$A %*% G %*% t(hi$A)                    # = Bhat Bhat' for Euclidean data
   shift.raw <- drop(crossprod(cvec, M %*% cvec))
-  if (bias.correct) {
-    vfill <- v; vfill[!ok] <- mean(v[ok])
-    M <- M - hi$A %*% (vfill * t(hi$A))
-  }
-  # dispersion model fitted on samples with usable v
-  gamma <- rep(NA_real_, ncol(Z))
-  if (sum(ok) > 0 && qr(Z[ok, , drop = FALSE])$rank > 0)
-    gamma <- drop(MASS::ginv(crossprod(Z[ok, , drop = FALSE])) %*% t(Z[ok, , drop = FALSE]) %*% v[ok])
+  # dispersion model: E[r] = (R o R) s with s = Z gamma  ->  unbiased gamma for any dispersion pattern
+  gamma <- fitDispersion(R, Z, r)
   names(gamma) <- colnames(Z)
+  s <- drop(Z %*% gamma); names(s) <- rownames(X)
+  if (bias.correct) M <- M - hi$A %*% (s * t(hi$A))     # E[A G A'] = M + A diag(s) A'
   s.alt <- sum(as.numeric(z.end$num) * gamma); s.ref <- sum(as.numeric(z.end$den) * gamma)
   shift <- drop(crossprod(cvec, M %*% cvec))
   var   <- 2 * (s.alt - s.ref)
@@ -119,7 +119,15 @@ estimatePairwiseEffects <- function(D2, X, contrast, Z = NULL, z.end = NULL, bia
        ratio = 1 + shift / (s.alt + s.ref),
        s.alt = s.alt, s.ref = s.ref, shift.raw = shift.raw,
        shift.norm = shift / (s.alt + s.ref), var.norm = log2(s.alt / s.ref), total.norm = total / (2 * s.ref),
-       M = M, gamma = gamma, v = v, h = h, n = n, rank = hi$rank)
+       M = M, gamma = gamma, s = s, v = v, h = h, n = n, rank = hi$rank)
+}
+
+# Least-squares fit of the dispersion model through E[r] = (R o R) Z gamma. Falls back to the intercept-only
+# solution when the regressor matrix is rank deficient.
+fitDispersion <- function(R, Z, r) {
+  W <- (R * R) %*% Z
+  g <- tryCatch(drop(MASS::ginv(crossprod(W)) %*% crossprod(W, r)), error = function(e) rep(NA_real_, ncol(Z)))
+  g
 }
 
 # Model-implied pair cell m(a, b) = (x_a - x_b)' M (x_a - x_b) + s_a + s_b for rows of a location design

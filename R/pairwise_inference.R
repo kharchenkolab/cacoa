@@ -200,7 +200,7 @@ inferencePrecompute <- function(G, X, Z, cvec) {
   hi <- hatInfo(X); n <- nrow(X)
   a <- drop(t(hi$A) %*% cvec)
   list(n = n, q = hi$rank, XtXi = hi$XtXi, A = hi$A, H = hi$H, a = a, cXc = drop(crossprod(cvec, hi$XtXi %*% cvec)),
-       trG = sum(diag(G)), dG = diag(G), ZtZi = MASS::ginv(crossprod(Z)))
+       trG = sum(diag(G)), dG = diag(G))
 }
 
 # shift F, var, total for labels permuted by p (X[p, ], Z[p, ]) against a fixed Gower matrix G.
@@ -220,12 +220,12 @@ permutedStats <- function(G, X, Z, cvec, z.end, pre, p = NULL, bias.correct = TR
   hG <- rowSums(Xp * t(AG))                      # diag(H_p G)
   hGh <- rowSums((Xp %*% M) * Xp)                # diag(H_p G H_p)
   r <- pre$dG - 2 * hG + hGh                     # diag(R G R)
-  h <- diag(Hp); ok <- h < 1 - 1e-8
-  v <- rep(NA_real_, n); v[ok] <- r[ok] / (1 - h[ok])
-  if (bias.correct) { vf <- v; vf[!ok] <- mean(v[ok]); M <- M - Ap %*% (vf * t(Ap)) }
-  shift <- drop(crossprod(cvec, M %*% cvec))
   Zp <- Z[p, , drop = FALSE]
-  gamma <- drop(pre$ZtZi %*% crossprod(Zp[ok, , drop = FALSE], v[ok]))
+  Rp <- -Hp; diag(Rp) <- diag(Rp) + 1            # residual projection under the relabeling
+  gamma <- fitDispersion(Rp, Zp, r)
+  s <- drop(Zp %*% gamma)
+  if (bias.correct) M <- M - Ap %*% (s * t(Ap))
+  shift <- drop(crossprod(cvec, M %*% cvec))
   s.alt <- sum(as.numeric(z.end$num) * gamma); s.ref <- sum(as.numeric(z.end$den) * gamma)
   var <- 2 * (s.alt - s.ref)
   c(F = Fs, shift = shift, var = var, total = shift + var / 2)

@@ -171,3 +171,22 @@ test_that("design-level wrapper: endpoints, dispersion formula, cell table and s
   expect_equal(dim(effI$influence$effects), c(nrow(meta), 3))
   expect_true(all(is.finite(effI$influence$se)))
 })
+
+test_that("dispersion fit is unbiased with a continuous covariate and unequal dispersions", {
+  # the leverage-corrected per-sample estimator is biased towards the other group when a covariate couples the
+  # groups; the model-based fit through E[r] = (R o R) Z gamma is not
+  set.seed(31); reps <- 150; p <- 60
+  est <- replicate(reps, {
+    sim <- simulateIndividualModel(c(A = 8, B = 8), p = p, group.effect = 0, group.sd = c(A = 1, B = sqrt(2)), age = TRUE, age.effect = 0.3)
+    sim$meta$age <- sim$meta$age + 8 * (sim$meta$group == "B")          # age correlated with group
+    X <- model.matrix(~ group + age, sim$meta); Z <- model.matrix(~ group, sim$meta)
+    e <- estimatePairwiseEffects(sim$D2, X, c(0, 1, 0), Z, list(num = c(1, 1), den = c(1, 0)))
+    hc2 <- tapply(e$v, sim$meta$group, mean)
+    c(var = e$var, var.hc2 = unname(2 * (hc2["B"] - hc2["A"])), s.ref = e$s.ref, s.alt = e$s.alt)
+  })
+  truth.var <- 2 * (2 - 1) * p
+  expect_lt(abs(mean(est["var", ]) - truth.var) / truth.var, 0.06)       # unbiased within MC error
+  expect_lt(mean(est["var.hc2", ]), mean(est["var", ]) - 0.05 * truth.var) # the old per-sample estimator is biased low
+  expect_lt(abs(mean(est["s.ref", ]) - p) / p, 0.06)
+  expect_lt(abs(mean(est["s.alt", ]) - 2 * p) / (2 * p), 0.06)
+})

@@ -91,6 +91,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field block.vars Character of column name containing variable name to restrict permutations to
     block.vars = NULL,
 
+    #' @field numeric.ref Reference points for numeric covariates in contrasts: "auto" or a named list
+    numeric.ref = "auto",
+
     #' @field method for permutation testing (default=NULL)
     perm.method = NULL,
 
@@ -144,7 +147,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao <- Cacoa$new(data.object = con, sample.metadata = sample.metadata, sample.id=sample.id, formula = formula, contrast = contrast, cell.groups = cell.groups)
     #' }
     initialize=function(
-      data.object, sample.metadata=NULL, sample.ids=NULL, formula=NULL, contrast=NULL, numericRef = numeric.ref, block.vars=NULL, cell.groups=NULL, sample.per.cell=NULL, sample.groups.palette=NULL,
+      data.object, sample.metadata=NULL, sample.ids=NULL, formula=NULL, contrast=NULL, numeric.ref = "auto", block.vars=NULL, cell.groups=NULL, sample.per.cell=NULL, sample.groups.palette=NULL,
       cell.groups.palette=NULL, embedding=NULL, n.cores=1, verbose=TRUE,
       graph.name=NULL, assay.name="RNA", data.layer='scale.data',
       plot.theme=ggplot2::theme_bw(), plot.params=NULL
@@ -179,10 +182,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
 
       
-      self$model <- buildDesignMatrices(data = sample.metadata, contrast = contrast, formula=formula, blockVars = block.vars)
-      
-      # remember default model arguments
+      self$model <- buildDesignMatrices(data = sample.metadata, contrast = contrast, formula = formula,
+                                        numericRef = numeric.ref, blockVars = block.vars)
+
+      # remember default model arguments (the formula as actually used, so later calls reuse it)
       self$contrast <- contrast
+      self$formula <- self$model$formula_used
+      self$numeric.ref <- numeric.ref
       self$block.vars <- block.vars
       
       self$sample.meta <- self$full.meta <- sample.metadata
@@ -359,7 +365,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                              verbose = self$verbose, n.cores = self$n.cores, ...) {
   
       if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars, numericRef = self$numeric.ref)
       } else {
         sample.model <- self$model
       }
@@ -514,7 +520,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, genes.to.omit = NULL, ...) {
       set.seed(seed.resampling)
       if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-        sample.model <- buildDesignMatrices(data = sample.meta, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars =  self$block.vars)
+        sample.model <- buildDesignMatrices(data = sample.meta, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = self$block.vars, numericRef = self$numeric.ref)
       } else {
         sample.model <- self$model
       }
@@ -2065,7 +2071,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # Build model
       if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-       sample.model <- buildDesignMatrices(data = self$sample.meta, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+       sample.model <- buildDesignMatrices(data = self$sample.meta, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars, numericRef = self$numeric.ref)
       } else {
         sample.model <- self$model
       }
@@ -2234,7 +2240,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       sample.per.cell <- self$sample.per.cell
 
       if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-       sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+       sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars, numericRef = self$numeric.ref)
       } else {
       sample.model <- self$model
       }
@@ -2473,7 +2479,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, 
-                          formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+                          formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars, numericRef = self$numeric.ref)
       } else {
       sample.model <- self$model
       }
@@ -3315,7 +3321,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars, numericRef = self$numeric.ref)
         } else {
         sample.model <- self$model
         }
@@ -3407,6 +3413,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param verbose boolean Print messages (default=self$verbose)
     #' @param n.cores integer Number of cores to use for parallelization (default=self$n.cores)
     #' @param min.edge.weight numeric Minimum edge weight (default=0.0)
+    #' @param block.vars character Optional metadata columns defining permutation blocks (default=self$block.vars)
     #' @param ... additional parameters passed to estimateClusterFreeExpressionShiftsC()
     #' @return Vector of cluster-free expression shifts per cell. Values above 1 correspond to difference between conditions.
     #' Results are also stored in the `cluster.free.expr.shifts` field.
@@ -3422,11 +3429,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                  alternative="two-sided", adjust=TRUE, smooth=TRUE, robust.method="none",
                                                  na.mode="drop", dist="cor", log.vectors=(dist != "js"), wins=0.025, 
                                                  n.permutations=999, verbose=self$verbose, n.cores=self$n.cores, genes=NULL,
-                                                 min.edge.weight=0.0, sample.metadata = self$sample.meta, ...) {
+                                                 min.edge.weight=0.0, sample.metadata = self$sample.meta, block.vars = self$block.vars, ...) {
       
 
         if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars)
+        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars, numericRef = self$numeric.ref)
         } else {
         sample.model <- self$model
         }

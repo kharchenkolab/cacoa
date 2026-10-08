@@ -43,6 +43,8 @@ The class encompasses etc etc
 
 \item{\code{block.vars}}{Character of column name containing variable name to restrict permutations to}
 
+\item{\code{numeric.ref}}{Reference points for numeric covariates in contrasts: "auto" or a named list}
+
 \item{\code{method}}{for permutation testing (default=NULL)}
 
 \item{\code{sample.groups.palette}}{Color palette for the sample.groups (default=NULL)}
@@ -144,7 +146,7 @@ The class encompasses etc etc
   sample.ids = NULL,
   formula = NULL,
   contrast = NULL,
-  numericRef = numeric.ref,
+  numeric.ref = "auto",
   block.vars = NULL,
   cell.groups = NULL,
   sample.per.cell = NULL,
@@ -1590,6 +1592,7 @@ The class encompasses etc etc
   genes = NULL,
   min.edge.weight = 0,
   sample.metadata = self$sample.meta,
+  block.vars = self$block.vars,
   ...
 )}\if{html}{\out{</div>}}
 }

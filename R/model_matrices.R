@@ -125,10 +125,10 @@ buildDesignMatrices <- function(data, contrast,
   
   # Default formula
   if (is.null(formula)) {
-    formula <- buildDefaultFormula(data)
-    if (verbosity %in% c("info","debug")) {
-      message("No formula supplied; using: ", deparse(formula))
-    }
+    formula <- buildDefaultFormula(data, contrast = contrast, block.vars = blockVars)
+    message("No formula supplied; using ", deparse(formula),
+            " (contrast variables", if (length(blockVars)) " and block.vars" else "", "). ",
+            "Pass `formula` to adjust for other covariates.")
   } else { # check for mixed effect models
     formula <- checkFormula(formula)
   }
@@ -230,6 +230,7 @@ buildDesignMatrices <- function(data, contrast,
     baselines_used = baselines,
     contrast_endpoints_F = endpoints_F,
     contrast_endpoints_X = endpoints_X,
+    contrast_endpoints_at = attr(cF, "endpoints_at") %||% NULL,
     contrast_label = contrast_label,
     contrast_endpoint_labels = contrast_endpoint_labels
   )
@@ -768,11 +769,25 @@ checkFormula <- function(formula) {
   }
 }
 
-buildDefaultFormula <- function(data) {
+# Default sample-level formula: the variables named by the contrast plus block.vars (never every
+# metadata column, which would pull in ID-like columns). Uses `~ 0 + ...` coding when a factor is present,
+# as the previous default did.
+buildDefaultFormula <- function(data, contrast = NULL, block.vars = NULL) {
   stopifnot(is.data.frame(data))
-  vars <- names(data)
+  spec <- if (is.null(contrast)) NULL else normalizeContrastSpec(contrast)
+  vars <- character(0)
+  if (!is.null(spec)) {
+    vars <- switch(spec$type,
+                   simple   = c(parseTermVars(spec$term), names(spec$at)),
+                   marginal = c(spec$term, spec$over, names(spec$at)),
+                   lincomb  = c(parseTermVars(spec$term), names(spec$at)),
+                   coef     = stop("Cannot derive a default formula from a coefficient-level contrast; please supply `formula`."))
+  }
+  vars <- unique(c(vars, block.vars))
+  miss <- setdiff(vars, names(data))
+  if (length(miss)) stop("Variable(s) not found in sample metadata: ", paste(miss, collapse = ", "))
   if (!length(vars)) return(as.formula("~ 1"))
-  anyFac <- any(vapply(data, function(x) is.factor(x) || is.character(x), logical(1)))
+  anyFac <- any(vapply(data[vars], function(x) is.factor(x) || is.character(x), logical(1)))
   if (anyFac) {
     as.formula(paste("~ 0 +", paste(vars, collapse = " + ")))
   } else {
@@ -1065,42 +1080,37 @@ chooseBaselinesForSpec <- function(formula, data, spec) {
 buildFullDesign <- function(formula, data, na.action = stats::na.pass,
                             contrasts.arg = NULL, baselines = NULL) {
   rhs <- if (inherits(formula, "formula")) formula else as.formula(formula)
+  data <- prepareDesignData(data, baselines)
+
+  # model.frame() on the raw data: its "terms" attribute carries `predvars` (e.g. poly() coefficients),
+  # which is what lets .oneRowFromFormula() evaluate transformed covariates on new rows.
   mf  <- stats::model.frame(rhs, data, na.action = na.action)
-  
-  # 1. Apply requested baselines (relevel)
-  if (length(baselines)) {
-    for (v in names(baselines)) {
-      if (!is.null(mf[[v]]) && (is.factor(mf[[v]]) || is.character(mf[[v]]))) {
-        lev <- as.character(baselines[[v]])
-        if (length(lev) && lev %in% levels(droplevels(factor(mf[[v]])))) {
-          mf[[v]] <- stats::relevel(droplevels(factor(mf[[v]])), ref = lev)
-        }
-      }
-    }
-  }
-  
-  # 2. Force any remaining character columns to factors NOW.
-  #    This makes the representation consistent with how model.matrix
-  #    will treat them anyway, and guarantees that:
-  #    - attr(F, "xlevels") has entries for them
-  #    - .oneRowFromFormula() will treat them as factors
-  #    - contrasts.arg will not be applied to a non-factor down the line
-  for (v in names(mf)) {
-    if (is.character(mf[[v]])) {
-      mf[[v]] <- droplevels(factor(mf[[v]]))
-    }
-  }
-  
-  trm <- stats::terms(rhs, data = mf)   # NOTE: use mf, not the original data,
-  # so terms() sees factors with baselines
+  trm <- attr(mf, "terms")
   F   <- stats::model.matrix(trm, mf, contrasts.arg = contrasts.arg)
-  
+
   # Attach metadata so downstream builders (.oneRowFromFormula, etc.) can reconstruct rows
   attr(F, "terms")     <- trm
   attr(F, "xlevels")   <- lapply(mf, function(x) if (is.factor(x)) levels(x) else NULL)
   attr(F, "contrasts") <- attr(F, "contrasts")
-  
+
   F
+}
+
+# Character columns become factors and requested baselines are applied, on the raw data so that
+# transformed terms (log(age), poly(age, 2), factor(batch), ...) can still be evaluated from it.
+prepareDesignData <- function(data, baselines = NULL) {
+  for (v in names(data)) {
+    if (is.character(data[[v]])) data[[v]] <- droplevels(factor(data[[v]]))
+  }
+  for (v in names(baselines)) {
+    x <- data[[v]]
+    if (!is.null(x) && is.factor(x)) {
+      lev <- as.character(baselines[[v]])
+      x <- droplevels(x)
+      if (length(lev) && lev %in% levels(x)) data[[v]] <- stats::relevel(x, ref = lev)
+    }
+  }
+  data
 }
 
 
@@ -1151,33 +1161,70 @@ resolveNumericRef <- function(F, data, contrast, numericRef = "auto", numericRef
   out
 }
 
+# One design row for a given covariate setting `at` (named by RAW metadata variables).
+# Factors not in `at` sit at their first (reference) level; numerics not in `at` sit at `numericRef[[v]]`
+# or, failing that, at their sample mean. New data is built from the raw variables so that transformed
+# terms (log(age), poly(age, 2), factor(batch), ...) are evaluated the same way as on the original data.
 .oneRowFromFormula <- function(trm, xlevels, contrastsArg, targetCols,
                                data, at = list(), numericRef = NULL) {
-  mf <- stats::model.frame(trm, data, na.action = stats::na.pass)
-  vars <- names(mf)
-  if (!is.null(attr(trm,"response")) && attr(trm,"response") > 0) {
-    resp <- all.vars(stats::delete.response(trm))[1]
-    vars <- setdiff(vars, resp)
+  trm  <- stats::delete.response(trm)
+  vars <- all.vars(trm)
+  data <- prepareDesignData(data)
+  # xlevels are keyed by model-frame column names (e.g. "factor(batch)"); map them to raw variables
+  xlevVar <- function(v) {
+    if (!is.null(xlevels[[v]])) return(xlevels[[v]])
+    for (nm in names(xlevels)) {
+      if (!is.null(xlevels[[nm]]) && identical(all.vars(str2lang(nm)), v)) return(xlevels[[nm]])
+    }
+    NULL
   }
   newd <- vector("list", length(vars)); names(newd) <- vars
   for (v in vars) {
-    if (!is.null(xlevels[[v]])) newd[[v]] <- factor(xlevels[[v]][1], levels = xlevels[[v]])
-    else                        newd[[v]] <- (numericRef[[v]] %||% 0)
+    x <- data[[v]]
+    if (is.null(x)) stop(sprintf("Variable '%s' of the formula is not in the sample metadata.", v))
+    levs <- xlevVar(v)
+    if (is.factor(x)) {
+      levs <- levs %||% levels(x)
+      newd[[v]] <- factor(levs[1], levels = levs)
+    } else if (!is.null(levs)) {                  # numeric/logical wrapped as factor(...) in the formula
+      newd[[v]] <- if (is.logical(x)) as.logical(levs[1]) else as.numeric(levs[1])
+    } else {
+      ref <- numericRef[[v]]
+      if (is.null(ref)) ref <- mean(x, na.rm = TRUE)
+      newd[[v]] <- ref
+    }
   }
   for (v in names(at)) {
     if (!v %in% vars) stop(sprintf("Variable '%s' not in model terms.", v))
-    if (!is.null(xlevels[[v]])) {
-      levs <- xlevels[[v]]; val <- as.character(at[[v]])
+    levs <- xlevVar(v)
+    if (is.factor(newd[[v]])) {
+      val <- as.character(at[[v]])
       if (!val %in% levs) stop(sprintf("Level '%s' not in levels(%s): {%s}", val, v, paste(levs, collapse=", ")))
       newd[[v]] <- factor(val, levels = levs)
     } else newd[[v]] <- at[[v]]
   }
-  nd  <- as.data.frame(newd)
+  nd  <- as.data.frame(newd, stringsAsFactors = FALSE)
   mf1 <- stats::model.frame(trm, nd, xlev = xlevels, na.action = stats::na.pass)
   r1  <- stats::model.matrix(trm, mf1, contrasts.arg = contrastsArg)
   miss <- setdiff(targetCols, colnames(r1))
   if (length(miss)) r1 <- cbind(r1, matrix(0, 1, length(miss), dimnames = list(NULL, miss)))
   drop(r1[1, targetCols, drop = FALSE])
+}
+
+# Evaluate stored endpoint settings (attr "endpoints_at" of a synthetic contrast, see
+# buildSyntheticContrast) on an arbitrary design `F` built by buildFullDesign() -- e.g. the dispersion
+# design. Returns list(num =, den =) rows in the column space of `F`, each a weighted sum over settings.
+endpointRowsFromDesign <- function(F, data, endpoints_at, numericRef = list()) {
+  if (is.null(endpoints_at)) return(NULL)
+  trm <- attr(F, "terms"); xlv <- attr(F, "xlevels"); ctr <- attr(F, "contrasts")
+  if (is.null(trm) || is.null(xlv)) stop("F must carry 'terms' and 'xlevels' (use buildFullDesign()).")
+  one <- function(at) .oneRowFromFormula(trm, xlv, ctr, colnames(F), data, at, numericRef)
+  evalSide <- function(side) {
+    r <- setNames(numeric(ncol(F)), colnames(F))
+    for (e in side) r <- r + e$w * one(e$at)
+    r
+  }
+  list(num = evalSide(endpoints_at$num), den = evalSide(endpoints_at$den))
 }
 
 buildSyntheticContrast <- function(F, data, contrast,
@@ -1220,6 +1267,7 @@ buildSyntheticContrast <- function(F, data, contrast,
     cF[names(spec$coefs)] <- as.numeric(spec$coefs)
     attr(cF, "numeric_ref_used") <- numRef
     attr(cF, "endpoints_F")      <- NULL
+    attr(cF, "endpoints_at")     <- NULL
     return(cF)
   }
   
@@ -1247,6 +1295,7 @@ buildSyntheticContrast <- function(F, data, contrast,
     }
     attr(cF, "numeric_ref_used") <- numRef
     attr(cF, "endpoints_F")      <- NULL
+    attr(cF, "endpoints_at")     <- NULL
     return(cF)
   }
   
@@ -1265,6 +1314,7 @@ buildSyntheticContrast <- function(F, data, contrast,
       rNum  <- one(atNum)
       rDen  <- one(atDen)
       cF    <- rNum - rDen
+      atNum_ <- atNum; atDen_ <- atDen
     } else {
       ## simple single factor contrast
       atN  <- utils::modifyList(spec$at, setNames(list(spec$num), spec$term))
@@ -1272,10 +1322,12 @@ buildSyntheticContrast <- function(F, data, contrast,
       rNum <- one(atN)
       rDen <- one(atD)
       cF   <- rNum - rDen
+      atNum_ <- atN; atDen_ <- atD
     }
     attr(cF, "numeric_ref_used") <- numRef
-    ## NEW: endpoints in F-space (num = alt, den = ref)
-    attr(cF, "endpoints_F") <- list(num = rNum, den = rDen)
+    ## endpoints in F-space (num = alt, den = ref) and the covariate settings that produced them
+    attr(cF, "endpoints_F")  <- list(num = rNum, den = rDen)
+    attr(cF, "endpoints_at") <- list(num = list(list(at = atNum_, w = 1)), den = list(list(at = atDen_, w = 1)))
     return(cF)
   }
   
@@ -1332,7 +1384,8 @@ buildSyntheticContrast <- function(F, data, contrast,
     ## Accumulate contrast and endpoints
     rNumTot <- cF  # same length / names as columns of F
     rDenTot <- cF
-    
+    atNumAll <- list(); atDenAll <- list()
+
     for (i in seq_len(nrow(grid))) {
       at_i <- as.list(grid[i, , drop = FALSE])
       atN  <- utils::modifyList(at_i, spec$at); atD <- atN
@@ -1345,10 +1398,12 @@ buildSyntheticContrast <- function(F, data, contrast,
       cF      <- cF      + w[i] * (rNum - rDen)
       rNumTot <- rNumTot + w[i] * rNum
       rDenTot <- rDenTot + w[i] * rDen
+      atNumAll[[i]] <- list(at = atN, w = w[i]); atDenAll[[i]] <- list(at = atD, w = w[i])
     }
     attr(cF, "numeric_ref_used") <- numRef
-    ## weighted endpoints in F-space
-    attr(cF, "endpoints_F") <- list(num = rNumTot, den = rDenTot)
+    ## weighted endpoints in F-space and the settings/weights that produced them
+    attr(cF, "endpoints_F")  <- list(num = rNumTot, den = rDenTot)
+    attr(cF, "endpoints_at") <- list(num = atNumAll, den = atDenAll)
     return(cF)
   }
   
@@ -1689,18 +1744,6 @@ makeSafeVar <- function(s) {
   if (grepl("^[0-9]", s)) s <- paste0("v_", s)
   s
 }
-
-# Return variables that appear in the (sample-level) formula, split by type
-varsFromFormula <- function(formula, data, na.action = stats::na.pass) {
-  trm <- stats::terms(formula, data = data)
-  # Build a model.frame once to evaluate factor/character vs numeric on raw columns
-  mf <- stats::model.frame(trm, data, na.action = na.action)
-  vars <- setdiff(names(mf), "(Intercept)")
-  isFac <- vapply(mf, function(x) is.factor(x) || is.character(x), logical(1))
-  isNum <- vapply(mf, function(x) is.numeric(x) && !is.matrix(x), logical(1))
-  list(factors = vars[isFac], numeric = vars[isNum])
-}
-
 
 # Infer pair target (var, alt, ref) from a **sample-level design** object.
 # Uses sampleDesign$contrast_spec, which is created by buildDesignMatrices().

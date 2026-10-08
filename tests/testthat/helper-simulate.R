@@ -57,3 +57,28 @@ pairCellMeans <- function(D2, g, ref, alt) {
   }
   c(RR = m(ref, ref), TT = m(alt, alt), RT = m(ref, alt))
 }
+
+# A small Cacoa object built from a synthetic count matrix (genes x cells), without conos/Seurat.
+# n.per.group samples per group, `cells.per.sample` cells each, `n.genes` genes; a subset of genes is shifted
+# in the second group so that expression-shift tests have something to find.
+makeToyCacoa <- function(n.per.group = c(A = 4, B = 4), cells.per.sample = 30, n.genes = 60, n.cell.types = 2,
+                         shift = 1.0, seed = 42, ...) {
+  set.seed(seed)
+  groups <- rep(names(n.per.group), n.per.group)
+  samples <- sprintf("%s%d", groups, unlist(lapply(n.per.group, seq_len)))
+  meta <- data.frame(group = factor(groups), batch = factor(rep(c("b1", "b2"), length.out = length(samples))),
+                     age = round(rnorm(length(samples), 50, 8)), row.names = samples)
+  n.cells <- cells.per.sample * length(samples)
+  sample.per.cell <- factor(rep(samples, each = cells.per.sample))
+  cell.groups <- factor(rep(paste0("ct", seq_len(n.cell.types)), length.out = n.cells))
+  names(sample.per.cell) <- names(cell.groups) <- sprintf("cell%04d", seq_len(n.cells))
+  base <- exp(rnorm(n.genes, 1, 0.7))
+  mu <- outer(base, rep(1, n.cells))
+  shifted <- seq_len(n.genes) <= n.genes / 4
+  isB <- meta[as.character(sample.per.cell), "group"] == "B"
+  mu[shifted, isB] <- mu[shifted, isB] * exp(shift)
+  cm <- Matrix::Matrix(matrix(rpois(n.genes * n.cells, mu), n.genes, n.cells,
+                              dimnames = list(sprintf("g%03d", seq_len(n.genes)), names(sample.per.cell))), sparse = TRUE)
+  suppressWarnings(suppressMessages(Cacoa$new(data.object = cm, sample.metadata = meta, sample.per.cell = sample.per.cell,
+                             cell.groups = cell.groups, contrast = c("group", "B", "A"), n.cores = 1, verbose = FALSE, ...)))
+}

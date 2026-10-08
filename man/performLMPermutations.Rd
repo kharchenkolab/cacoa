@@ -110,6 +110,6 @@ out.fl <- performLMPermutations(
 }
 }
 \seealso{
-\code{\link[=buildDesignMatrices]{buildDesignMatrices()}}, \code{cpp_fl()}, \code{fit_and_randomize()}, \code{\link[=permutationGroups]{permutationGroups()}}
+\code{\link[=buildDesignMatrices]{buildDesignMatrices()}}, \code{cpp_fl()}, \code{fit_and_randomize()}, \code{permutationGroups()}
 }
 \keyword{internal}

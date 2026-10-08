@@ -149,6 +149,9 @@ termPermutationStats <- function(eff, plan, P) {
 #' shared across cell types for the max-statistic combination.
 #'
 #' @inheritParams testPairwiseEffects
+#' @param dispersion.formula dispersion formula (default: the tested variable)
+#' @param dist distance type of the matrices
+#' @param min.samp.per.level minimum samples per level of the tested factor
 #' @return list like [testPairwiseEffects()]: `results` (one row per cell type: `R2`, `R2.adj`, `R2.partial`,
 #'   `F`, `df`, `r.eff`, `p.location`, `F.disp`, `R2.disp.adj`, `p.dispersion`, adjusted p-values, ...),
 #'   `global`, `fits`, `skipped`, `plan`, `notes`, `call.info`

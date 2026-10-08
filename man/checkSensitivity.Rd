@@ -30,7 +30,7 @@ checkSensitivity(
 
 \item{meta}{sample metadata}
 
-\item{formulas}{named list of alternative location formulas (default: \code{\link[=sensitivityFormulas]{sensitivityFormulas()}})}
+\item{formulas}{named list of alternative location formulas (default: the D31 sets of \code{sensitivityFormulas()})}
 
 \item{screen}{optional \code{cacoaCovariateScreen} used to propose added covariates}
 

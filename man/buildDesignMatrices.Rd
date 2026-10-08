@@ -23,7 +23,7 @@ buildDesignMatrices(
 \arguments{
 \item{data}{A \code{data.frame} of sample-level covariates (factor/character/numeric).}
 
-\item{contrast}{A linear contrast (see “Supported contrast specifications”).}
+\item{contrast}{A linear contrast (see "Supported contrast specifications").}
 
 \item{formula}{RHS formula for the design (\code{~ ...}). If \code{NULL}, a default
 is constructed as described above.}
@@ -42,7 +42,7 @@ is constructed as described above.}
 
 \item{verbosity}{\code{"none"|"warn"|"info"|"debug"}.}
 
-\item{computeQrZ}{Logical; if \code{TRUE} return \code{qrZ} of \code{Z} for Freedman–Lane.}
+\item{computeQrZ}{Logical; if \code{TRUE} return \code{qrZ} of \code{Z} for Freedman-Lane.}
 
 \item{blockVars}{Optional character vector of factor names to define permutation blocks.}
 
@@ -55,7 +55,7 @@ A list with:
 \item{Z}{Nuisance submatrix (or \code{NULL} if none).}
 \item{contrast.F, contrast.X}{Contrast vectors aligned to \code{F} and \code{X}.}
 \item{core.rows}{Logical mask of rows with non-negligible activity in \code{X}.}
-\item{qrZ}{QR decomposition of \code{Z} for Freedman–Lane (or \code{NULL}).}
+\item{qrZ}{QR decomposition of \code{Z} for Freedman-Lane (or \code{NULL}).}
 \item{blocks, perm.groups, diagnostics}{If \code{buildBlocks=TRUE}, auxiliary info.}
 \item{numeric_ref_used, formula_used, baselines_used, contrast_spec}{Metadata.}
 }
@@ -109,7 +109,7 @@ All contrasts must be \strong{linear in coefficients}. Supported forms:
 \item \strong{DESeq2 triple} (single factor)
 }
 
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{contrast <- c("group","B","A")  # μ(group=B) − μ(group=A)
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{contrast <- c("group","B","A")  # mu(group=B) - mu(group=A)
 }\if{html}{\out{</div>}}
 \enumerate{
 \item \strong{Simple triple on an interaction}

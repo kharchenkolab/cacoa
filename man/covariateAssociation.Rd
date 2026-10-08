@@ -10,7 +10,7 @@ covariateAssociation(x, y)
 \item{x, y}{vectors of equal length}
 }
 \value{
-a number in \link{0, 1} (NA when undefined)
+a number between 0 and 1 (NA when undefined)
 }
 \description{
 Bias-corrected Cramer's V for two discrete variables, the correlation ratio eta for a discrete and a

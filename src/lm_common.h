@@ -183,7 +183,7 @@ static inline double z_from_p(double p, int alt, double obs, double med) {
 static inline std::uint64_t hash_vec_mask(const arma::vec& v) {
   std::uint64_t h = 1469598103934665603ULL;
   for (const double& val : v) {
-    h ^= (std::uint64_t)(arma::is_finite(val) ? 1u : 0u);
+    h ^= (std::uint64_t)(std::isfinite(val) ? 1u : 0u);
     h *= 1099511628211ULL;
   }
   return h;

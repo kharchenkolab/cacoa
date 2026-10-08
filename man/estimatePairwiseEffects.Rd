@@ -43,8 +43,8 @@ the estimated effect matrix and per-sample dispersions.
 }
 \details{
 The dispersion model is fitted without bias under arbitrary (heteroscedastic) per-sample
-dispersions: with \verb{r_i = (R G R)_ii} the squared residual norm and \code{R} the residual projection,
-\verb{E[r] = (R o R) s} exactly, so \code{gamma} is the least-squares solution of \verb{r ~ (R o R) Z}. In the one-way
+dispersions: with r_i = (R G R)_ii the squared residual norm and R the residual projection,
+E(r) = (R o R) s exactly, so \code{gamma} is the least-squares solution of the regression of r on (R o R) Z. In the one-way
 layout this equals the classical leverage-corrected estimator \code{r_i / (1 - h_i)} averaged per group.
 \code{v} reports the per-sample leverage-corrected values (used for diagnostics and influence).
 }

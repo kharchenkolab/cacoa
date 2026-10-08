@@ -31,3 +31,4 @@ estimateDEPerCellTypeInner_model(
 NOTE: This replaces the existing estimateDEPerCellTypeInner() that uses s.groups.
 The new argument is \code{samples} (character vector of sample IDs).
 }
+\keyword{internal}

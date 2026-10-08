@@ -671,7 +671,7 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y
       
       if (core_idx != -1) {
         // Check if this row was originally valid
-        bool was_valid = arma::is_finite(y_rep[glob_idx]);
+        bool was_valid = std::isfinite(y_rep[glob_idx]);
         
         if (use_drop) {
           // In Drop mode, obs_rows ARE valid_rows. So always valid.

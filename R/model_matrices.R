@@ -40,7 +40,7 @@
 #'
 #' 1) **DESeq2 triple** (single factor)
 #' ```r
-#' contrast <- c("group","B","A")  # μ(group=B) − μ(group=A)
+#' contrast <- c("group","B","A")  # mu(group=B) - mu(group=A)
 #' ```
 #'
 #' 2) **Simple triple on an interaction**
@@ -71,7 +71,7 @@
 #' with `over=` to average across them.
 #'
 #' @param data A `data.frame` of sample-level covariates (factor/character/numeric).
-#' @param contrast A linear contrast (see “Supported contrast specifications”).
+#' @param contrast A linear contrast (see "Supported contrast specifications").
 #' @param formula RHS formula for the design (`~ ...`). If `NULL`, a default
 #'   is constructed as described above.
 #' @param na.action NA handler for `model.frame`.
@@ -81,7 +81,7 @@
 #' @param tolRow Per-row activity threshold used to compute `core.rows`.
 #' @param validate Logical; compute diagnostics (rank, aliasing, VIF, permutation checks).
 #' @param verbosity `"none"|"warn"|"info"|"debug"`.
-#' @param computeQrZ Logical; if `TRUE` return `qrZ` of `Z` for Freedman–Lane.
+#' @param computeQrZ Logical; if `TRUE` return `qrZ` of `Z` for Freedman-Lane.
 #' @param blockVars Optional character vector of factor names to define permutation blocks.
 #' @param buildBlocks Logical; if `TRUE` compute `blocks`, permutation groups, and diagnostics.
 #'
@@ -91,7 +91,7 @@
 #' \item{Z}{Nuisance submatrix (or `NULL` if none).}
 #' \item{contrast.F, contrast.X}{Contrast vectors aligned to `F` and `X`.}
 #' \item{core.rows}{Logical mask of rows with non-negligible activity in `X`.}
-#' \item{qrZ}{QR decomposition of `Z` for Freedman–Lane (or `NULL`).}
+#' \item{qrZ}{QR decomposition of `Z` for Freedman-Lane (or `NULL`).}
 #' \item{blocks, perm.groups, diagnostics}{If `buildBlocks=TRUE`, auxiliary info.}
 #' \item{numeric_ref_used, formula_used, baselines_used, contrast_spec}{Metadata.}
 #'
@@ -357,7 +357,7 @@ prettyJoin <- function(x, maxShow = 12) {
   x <- as.character(x)
   if (!length(x)) return("(none)")
   if (length(x) <= maxShow) return(paste(x, collapse = ", "))
-  paste0(paste(x[1:maxShow], collapse = ", "), sprintf(", … (+%d more)", length(x) - maxShow))
+  paste0(paste(x[1:maxShow], collapse = ", "), sprintf(", ... (+%d more)", length(x) - maxShow))
 }
 
 parseTermVars <- function(termStr) strsplit(termStr, ":", fixed = TRUE)[[1]]
@@ -1207,7 +1207,7 @@ reportContrastInfo <- function(F, X, Z, cF, numericRefUsed, tol, verbosity) {
     top <- head(nz, 30)
     message("Non-zero contrast weights (top 30 by |weight|):")
     message(paste(sprintf("  %-30s % .6g", names(top), unclass(top)), collapse = "\n"))
-    if (length(nz) > 30) message(sprintf("  … (+%d more)", length(nz) - 30))
+    if (length(nz) > 30) message(sprintf("  ... (+%d more)", length(nz) - 30))
   }
 }
 

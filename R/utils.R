@@ -2,7 +2,12 @@
 #' @import ggplot2
 #' @useDynLib cacoa, .registration = TRUE
 #' @importFrom Rcpp evalCpp
+#' @importFrom rlang .data %||%
+#' @importFrom stats ave lm.fit terms complete.cases p.adjust.methods
 NULL
+
+utils::globalVariables(c("celltype", "effect", "effect_ref_log2", "effect_ref_perm_log2", "go_name", "is_ref_flag", "label", "mlog10p",
+                         "prop", "sample.groups", "shape", "signif_flag", "stars", "stat.perm", "term.label"))
 
 
 #' @keywords internal

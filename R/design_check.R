@@ -32,7 +32,7 @@ isDiscreteVar <- function(x) is.factor(x) || is.character(x) || is.logical(x)
 #' Bias-corrected Cramer's V for two discrete variables, the correlation ratio eta for a discrete and a
 #' numeric variable, and |Spearman rho| for two numeric variables.
 #' @param x,y vectors of equal length
-#' @return a number in [0, 1] (NA when undefined)
+#' @return a number between 0 and 1 (NA when undefined)
 #' @export
 covariateAssociation <- function(x, y) {
   dx <- isDiscreteVar(x); dy <- isDiscreteVar(y)

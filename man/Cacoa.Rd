@@ -135,6 +135,15 @@ cao$plotNumberOfDEGenes()
 }
 
 ## ------------------------------------------------
+## Method `Cacoa$plotVolcano`
+## ------------------------------------------------
+
+\dontrun{
+cao$estimateDEPerCellType()
+cao$plotVolcano()
+}
+
+## ------------------------------------------------
 ## Method `Cacoa$saveDeAsJson`
 ## ------------------------------------------------
 
@@ -726,6 +735,8 @@ explored (\code{checkDesign()}, \code{screenCovariates()}); set the model later 
 
 \item{\code{assay.name}}{assay name for Seurat object, ignored otherwise (default="RNA")}
 
+\item{\code{data.layer}}{Seurat data layer to use for normalized expression (default='scale.data'; 'data' is usually better)}
+
 \item{\code{plot.theme}}{ggplot2 plot theme (default=ggplot2::theme_bw())}
 
 \item{\code{plot.params}}{list with parameters, replacing defaults from \link[sccore:embeddingPlot]{embeddingPlot} (default=NULL)}
@@ -913,7 +924,11 @@ over-adjustment candidates (covariates strongly tied to the test variable).
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{formula, test, contrast}}{optional model to check instead of the stored one (a temporary model is built)}
+\item{\code{formula}}{optional model to check instead of the stored one (a temporary model is built)}
+
+\item{\code{test}}{optional model to check instead of the stored one (a temporary model is built)}
+
+\item{\code{contrast}}{optional model to check instead of the stored one (a temporary model is built)}
 
 \item{\code{covariates}}{covariates to examine (default: all usable metadata columns)}
 
@@ -1040,7 +1055,13 @@ the current result. Prints one verdict per cell type: "robust", "sign / signific
 
 \item{\code{shifts.name}}{results slot of the expression shifts the sensitivity refers to (default "expression.shifts")}
 
-\item{\code{n.permutations, verbose, n.cores, seed}}{defaults from options (permutations capped at 499)}
+\item{\code{n.permutations}}{defaults from options (permutations capped at 499)}
+
+\item{\code{verbose}}{defaults from options (permutations capped at 499)}
+
+\item{\code{n.cores}}{defaults from options (permutations capped at 499)}
+
+\item{\code{seed}}{defaults from options (permutations capped at 499)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1113,7 +1134,17 @@ across cell types; a dispersion association is reported alongside. Ends with a s
 
 \item{\code{adjust.for}}{optional formula of covariates always adjusted for}
 
-\item{\code{dist, n.pcs, cell.groups, min.cells.per.sample, min.gene.frac, genes}}{as in \code{estimateExpressionShiftMagnitudes()}}
+\item{\code{dist}}{as in \code{estimateExpressionShiftMagnitudes()}}
+
+\item{\code{n.pcs}}{as in \code{estimateExpressionShiftMagnitudes()}}
+
+\item{\code{cell.groups}}{as in \code{estimateExpressionShiftMagnitudes()}}
+
+\item{\code{min.cells.per.sample}}{as in \code{estimateExpressionShiftMagnitudes()}}
+
+\item{\code{min.gene.frac}}{as in \code{estimateExpressionShiftMagnitudes()}}
+
+\item{\code{genes}}{as in \code{estimateExpressionShiftMagnitudes()}}
 
 \item{\code{min.samples.per.type}}{cell types with fewer samples are skipped (default 6)}
 
@@ -1123,7 +1154,11 @@ across cell types; a dispersion association is reported alongside. Ends with a s
 
 \item{\code{name}}{results slot (default "covariate.screen")}
 
-\item{\code{verbose, n.cores, seed}}{defaults from options}
+\item{\code{verbose}}{defaults from options}
+
+\item{\code{n.cores}}{defaults from options}
+
+\item{\code{seed}}{defaults from options}
 }
 \if{html}{\out{</div>}}
 }
@@ -1211,7 +1246,9 @@ of the between-sample variation (chance-corrected). For questions like "is this 
 
 \item{\code{cell.types}}{optional subset}
 
-\item{\code{dist, n.pcs}}{as in \code{estimateExpressionShiftMagnitudes()}}
+\item{\code{dist}}{as in \code{estimateExpressionShiftMagnitudes()}}
+
+\item{\code{n.pcs}}{as in \code{estimateExpressionShiftMagnitudes()}}
 
 \item{\code{return.table}}{return the partition table instead of the plot}
 }
@@ -1313,7 +1350,9 @@ from dispersion and is discouraged)}
 
 \item{\code{block.vars}}{metadata columns defining additional permutation strata (default: stored)}
 
-\item{\code{cell.groups, sample.per.cell}}{cell annotations (default: stored)}
+\item{\code{cell.groups}}{cell annotations (default: stored)}
+
+\item{\code{sample.per.cell}}{cell annotations (default: stored)}
 
 \item{\code{n.pcs}}{optional number of principal components to reduce the pseudobulk profiles to before the distance}
 
@@ -1333,7 +1372,9 @@ from dispersion and is discouraged)}
 
 \item{\code{name}}{results slot (default "expression.shifts")}
 
-\item{\code{verbose, n.cores}}{defaults from options}
+\item{\code{verbose}}{defaults from options}
+
+\item{\code{n.cores}}{defaults from options}
 
 \item{\code{...}}{deprecated arguments of the previous implementation (\code{dist.type}, \code{perm.method}, \code{pairFormula},
 \code{pairContrast}, \code{alternative}, \code{robust.method}, \code{na.mode}, \code{top.n.genes}, \code{gene.selection}, ...) are
@@ -1542,9 +1583,13 @@ Estimate differential gene expression per cell type between conditions
 
 \item{\code{sample.meta}}{data.frame Sample-level metadata (rows = samples, columns = covariates) (default=self$sample.meta)}
 
+\item{\code{sample.per.cell}}{named factor of sample per cell (default: stored)}
+
 \item{\code{formula}}{formula|character Design formula specifying covariates to model (default=NULL)}
 
 \item{\code{contrast}}{character length-3 Contrast triplet c(var, ref, target) indicating the grouping variable and the two levels to compare (default=NULL)}
+
+\item{\code{test.spec}}{what to test (see \code{Cacoa$new()}); builds a temporary model for this call}
 
 \item{\code{name}}{character string Slot in which to save the results (default='de')}
 
@@ -1577,8 +1622,6 @@ Estimate differential gene expression per cell type between conditions
 \item{\code{genes.to.omit}}{character Genes to omit from calculations (default = NULL)}
 
 \item{\code{...}}{additional parameters}
-
-\item{\code{sample.groups}}{2-factor vector with annotation of groups/condition per sample (default=self$sample.groups)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1757,6 +1800,8 @@ Plot DE stability per gene
 \item{\code{cell.type}}{character If set only show stability for a specific cell type in DE results (default=NULL)}
 
 \item{\code{stability.score}}{character string Any of "stab.median.rank", "stab.mean.rank", or "stab.var.rank" (default='stab.median.rank')}
+
+\item{\code{top.n}}{number of top genes to show}
 }
 \if{html}{\out{</div>}}
 }
@@ -1798,7 +1843,7 @@ Plot number of significant DE genes
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{name}}{results slot name}
 
 \item{\code{p.adjust}}{boolean Whether the cutoff should be based on the adjusted P value (default=TRUE)}
 
@@ -1871,11 +1916,18 @@ Make volcano plots
 }
 \subsection{Returns}{
 A ggplot2 object
-\dontrun{
+}
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
 cao$estimateDEPerCellType()
 cao$plotVolcano()
 }
 }
+\if{html}{\out{</div>}}
+
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-saveDeAsJson"></a>}}
@@ -1904,7 +1956,7 @@ Save DE results as JSON files
 
 \item{\code{de.raw}}{List of DE results. If NULL will use stored DE results defined by "de.name" (default=NULL)}
 
-\item{\code{sample.groups}}{a two-level factor on the sample names describing the conditions being compared (default: stored vector)}
+\item{\code{sample.groups}}{named vector of group per sample (default: derived from the stored model)}
 
 \item{\code{de.name}}{character string DE results slot name (default='de')}
 
@@ -2013,7 +2065,7 @@ Estimate ontology terms based on DEs
 
 \item{\code{p.adj}}{numeric adjust-pvalues cutoff fed to getDEEntrezIdsSplitted() (default: 1)}
 
-\item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values (default="BH")}
+\item{\code{p.adjust.method}}{p-value adjustment method (default='BH')}
 
 \item{\code{readable}}{boolean Mapping gene ID to gene name (default=TRUE)}
 
@@ -2027,15 +2079,11 @@ Estimate ontology terms based on DEs
 
 \item{\code{de.raw}}{(default=NULL)}
 
-\item{\code{verbose}}{boolean Whether to show progress}
+\item{\code{verbose}}{print progress messages (default: stored option)}
 
-\item{\code{n.cores}}{numeric Number of cores for parallelization}
+\item{\code{n.cores}}{number of cores (default: stored option)}
 
 \item{\code{...}}{further argument for ontology estimation. Pass \code{nPerm} with \code{type='GSEA'} to use fgseaSimple method}
-
-\item{\code{min.genes}}{numeric Minimum number of input genes overlapping with ontologies (default=0)}
-
-\item{\code{qvalue.cutoff}}{numeric Q value cutoff, please see clusterProfiler package for more information (default=0.2)}
 }
 \if{html}{\out{</div>}}
 }
@@ -2221,8 +2269,6 @@ Plot a dotplot of ontology terms with adj. P values for a specific cell subgroup
 \item{\code{min.genes}}{integer Minimum overlapping genes per term (default=1)}
 
 \item{\code{...}}{additional parameters passed to enrichplot::dotplot() or enrichplot::barplot()}
-
-\item{\code{cell.subgroup}}{character Specific cell group to plot}
 }
 \if{html}{\out{</div>}}
 }
@@ -2279,14 +2325,14 @@ Plot a heatmap of ontology P values per cell type
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{name}}{results slot name}
 
 \item{\code{genes}}{Specify which genes to plot, can either be 'down' for downregulated genes, 'up' or 'all'
 (default="up")}
 
 \item{\code{subtype}}{character string (default="BP")}
 
-\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
+\item{\code{p.adj}}{adjusted p-value cutoff}
 
 \item{\code{q.value}}{numeric (default=0.2)}
 
@@ -2329,8 +2375,6 @@ Plot a heatmap of ontology P values per cell type
 \item{\code{return.info}}{boolean (default=FALSE)}
 
 \item{\code{...}}{parameters forwarded to \link{plotHeatmap}}
-
-\item{\code{type}}{Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")}
 }
 \if{html}{\out{</div>}}
 }
@@ -2430,7 +2474,7 @@ Plot a heatmap of ontology p-values per cell type heatmap, collapsed
 
 \item{\code{readjust.p}}{boolean Whether to re-adjust p-values (default=TRUE)}
 
-\item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values (default="BH")}
+\item{\code{p.adjust.method}}{p-value adjustment method (default='BH')}
 
 \item{\code{description.regex}}{(default=NULL)}
 
@@ -2449,10 +2493,6 @@ Plot a heatmap of ontology p-values per cell type heatmap, collapsed
 \item{\code{return.info}}{boolean Whether to return the info (default=FALSE)}
 
 \item{\code{...}}{parameters forwarded to \link{plotHeatmap}}
-
-\item{\code{top.n}}{Number of terms to show (default=Inf)}
-
-\item{\code{color.range}}{vector with two values for min/max values of p-values}
 }
 \if{html}{\out{</div>}}
 }
@@ -2620,15 +2660,15 @@ Save ontology results as a table
 \describe{
 \item{\code{file}}{character string File name passed to write.table(). Set to NULL to return the table instead of saving.}
 
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{name}}{results slot name}
 
 \item{\code{subtype}}{character string Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)}
 
 \item{\code{genes}}{character Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)}
 
-\item{\code{p.adj}}{numeric Cut-off for adjusted p-values (default=0.05)}
+\item{\code{p.adj}}{adjusted p-value cutoff}
 
-\item{\code{sep}}{character Separator (default: "\t", tab)}
+\item{\code{sep}}{character Separator (default: tab)}
 
 \item{\code{...}}{additional arguments passed to write.table()}
 }
@@ -2672,7 +2712,7 @@ Save family results as a table
 \describe{
 \item{\code{file}}{character string File name passed to write.table(). Set to NULL to return the table instead of saving.}
 
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{name}}{results slot name}
 
 \item{\code{subtype}}{character Type of result to filter by, must be "BP", "MF", or "CC" (default=NULL)}
 
@@ -2680,11 +2720,9 @@ Save family results as a table
 
 \item{\code{p.adj}}{numeric Adjusted P to filter by (default=0.05)}
 
-\item{\code{sep}}{character Separator (default = "\t", tab)}
+\item{\code{sep}}{character Separator (default: tab)}
 
 \item{\code{...}}{additional arguments passed to write.table()}
-
-\item{\code{type}}{character string Type of ontology result, i.e., GO, GSEA, or DO (default='GO')}
 }
 \if{html}{\out{</div>}}
 }
@@ -2727,7 +2765,7 @@ Plot the cell group sizes or proportions per sample
 \describe{
 \item{\code{cell.groups}}{factor Cell annotations with cell IDs as names (default=self$cell.groups)}
 
-\item{\code{condition}}{character Metadata column to group samples by (default: self$contrast\link{1})}
+\item{\code{condition}}{character Metadata column to group samples by (default: the variable of the stored contrast)}
 
 \item{\code{show.significance}}{boolean show statistical significance between sample groups. wilcox.test was used; (\code{*} < 0.05; \verb{**} < 0.01; \verb{***} < 0.001) (default=FALSE)}
 
@@ -2808,7 +2846,7 @@ Plot compositions in CoDA space (PCA or CDA)
 \describe{
 \item{\code{space}}{character either 'PCA' or 'CDA' (default="CDA")}
 
-\item{\code{cell.groups}}{vector Indicates cell groups with cell IDs as names (default: stored vector)}
+\item{\code{cell.groups}}{named factor of cell type per cell (default: stored)}
 
 \item{\code{font.size}}{numeric Font size (default=3)}
 
@@ -2871,6 +2909,12 @@ Plot contrast tree (NEW: lmCoda score-based)
 \item{\code{adjust.pvalues}}{boolean Adjust P values or not (default=TRUE)}
 
 \item{\code{reorder.tree}}{boolean Reorder tree or not (default=TRUE)}
+
+\item{\code{score.palette}}{colour palette for the node scores}
+
+\item{\code{score.midpoint}}{midpoint of the score colour scale}
+
+\item{\code{score.limits}}{limits of the score colour scale}
 
 \item{\code{...}}{passed to internal plotContrastTreeScore()}
 }
@@ -3018,6 +3062,8 @@ Estimate cell loadings
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{n.permutations}}{number of permutations}
+
 \item{\code{name}}{character Results name slot (default='coda')}
 
 \item{\code{n.seed}}{numeric Seed number for reproducibility (default=239)}
@@ -3034,7 +3080,27 @@ Estimate cell loadings
 
 \item{\code{method}}{character One of 'lda', svm', 'cda', or 'cda.std' (default=lda)}
 
-\item{\code{n.boot}}{numeric Number of boot straps (default=1000)}
+\item{\code{formula}}{optional location formula for a temporary model (see \code{estimateExpressionShiftMagnitudes()})}
+
+\item{\code{contrast}}{optional contrast for a temporary model (expert synonym of \code{test})}
+
+\item{\code{test}}{optional test for a temporary model (see \code{Cacoa$new()})}
+
+\item{\code{perm.method}}{permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'}
+
+\item{\code{zero.pseudocount}}{pseudocount added to zero counts before the log-ratio transform (default 0.1)}
+
+\item{\code{basis.type}}{ILR basis type (default 'default')}
+
+\item{\code{ref.p.thresh}}{p-value threshold for picking the reference cell types (default 0.3)}
+
+\item{\code{ref.min.size}}{minimum number of reference cell types (default 1)}
+
+\item{\code{ref.max.size}}{maximum number of reference cell types (default 3)}
+
+\item{\code{block.vars}}{metadata columns defining permutation strata (default: stored)}
+
+\item{\code{...}}{further arguments passed to the underlying function}
 }
 \if{html}{\out{</div>}}
 }
@@ -3251,7 +3317,7 @@ Estimate cell density in giving embedding
 
 \item{\code{method}}{character string Density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')}
 
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{name}}{results slot name}
 
 \item{\code{beta}}{numeric Smoothing strength parameter of the \link[sccore:heatFilter]{heatFilter} for graph based cell density (default=30)}
 
@@ -3261,9 +3327,15 @@ Estimate cell density in giving embedding
 
 \item{\code{formula}}{RHS formula for the design (~ ...). If NULL, uses default.}
 
+\item{\code{test}}{optional test for a temporary model (see \code{Cacoa$new()})}
+
 \item{\code{verbose}}{boolean Print messages (default=self$verbose)}
 
 \item{\code{n.cores}}{integer Number of cores to use for parallelization (default=self$n.cores)}
+
+\item{\code{sample.metadata}}{sample metadata (default: stored)}
+
+\item{\code{block.vars}}{metadata columns defining permutation strata (default: stored)}
 
 \item{\code{bandwidth}}{numeric KDE bandwidth multiplier (default=0.5). The full bandwidth is estimated by multiplying this value on the difference between 90\% and 10\%
 of the corresponding embedding dimension. Set it to NULL to use \link[MASS:bandwidth.nrd]{bandwidth.nrd} estimator. (default=0.05)}
@@ -3453,6 +3525,22 @@ Estimate differential cell density
 
 \item{\code{contrast}}{character Vector with two elements specifying the reference and target levels (default=NULL)}
 
+\item{\code{test}}{optional test for a temporary model (see \code{Cacoa$new()})}
+
+\item{\code{block.vars}}{metadata columns defining permutation strata (default: stored)}
+
+\item{\code{perm.method}}{permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'}
+
+\item{\code{robust.method}}{robust fitting: 'none', 'huber' or 'winsor'}
+
+\item{\code{na.mode}}{handling of missing responses: 'drop' or 'impute_weak'}
+
+\item{\code{alternative}}{alternative hypothesis for the z-scores: 'two-sided', 'greater' or 'less'}
+
+\item{\code{return.residuals}}{also return residuals}
+
+\item{\code{return.sampled.stats}}{also return the permutation statistics}
+
 \item{\code{n.permutations}}{numeric Number of permutations (default=400)}
 
 \item{\code{smooth}}{boolean Smooth results (default=TRUE)}
@@ -3599,9 +3687,13 @@ sample-level residual metrics (default = NULL, meaning no sample-covariate plots
 \item{\code{build.panel}}{logical; if TRUE and length(cov.plot.keys) == 1, returns a combined panel
 (2 embedding plots + 1 sample-covariate plot). Otherwise returns a list of ggplots.}
 
-\item{\code{jitter.size, }}{jitter.alpha aesthetics for sample-level plots}
+\item{\code{jitter.size}}{point size}
+
+\item{\code{jitter.alpha}}{point transparency}
 
 \item{\code{cont.palette}}{palette for continuous covariates (numeric)}
+
+\item{\code{residual.type}}{'pearson' or 'raw' residuals}
 
 \item{\code{...}}{passed to plotEmbedding}
 }
@@ -3688,7 +3780,9 @@ Plot inter-sample expression distance. The inputs to this function are the resul
 
 \item{\code{verbose}}{boolean Print messages (default=self$verbose)}
 
-\item{\code{sample.subset}}{subset data for analysis only to the given samples}
+\item{\code{sample.subset}}{optional subset of samples}
+
+\item{\code{adjust.for}}{optional formula of covariates regressed out of the distances before use (G_adj = R G R)}
 
 \item{\code{...}}{additional arguments}
 }
@@ -3784,7 +3878,9 @@ Project samples to 2D space with MDS. Plots results from cao$estimateExpressionS
 
 \item{\code{sample.subset}}{character vector of sample IDs to include (default=NULL, meaning all samples)}
 
-\item{\code{n.cores}}{numeric Number of cores for parallelization}
+\item{\code{n.cores}}{number of cores (default: stored option)}
+
+\item{\code{adjust.for}}{optional formula of covariates regressed out of the distances before use (G_adj = R G R)}
 
 \item{\code{...}}{additional parameters passed to plotSampleDistanceMatrix()}
 }
@@ -3842,9 +3938,9 @@ Estimate metadata separation using variance on the sample distance graph
 
 \item{\code{space.name}}{(default=NULL)}
 
-\item{\code{sample.subset}}{subset data for analysis only to the given samples}
+\item{\code{sample.subset}}{optional subset of samples}
 
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{name}}{results slot name}
 
 \item{\code{n.permutations}}{number permutations for the test (default=5000)}
 
@@ -3861,9 +3957,11 @@ the function uses a fully-connected graph (default=20)}
 
 \item{\code{adjust.pvalues}}{boolean (default=TRUE)}
 
-\item{\code{p.adjust.method}}{character string Method for calculating adjusted p-values (default="BH")}
+\item{\code{p.adjust.method}}{p-value adjustment method (default='BH')}
 
 \item{\code{pvalue.cutoff}}{numeric (default=0.05)}
+
+\item{\code{mode}}{'marginal' (default), 'partial' or 'both' (see \code{screenCovariates()})}
 }
 \if{html}{\out{</div>}}
 }
@@ -3902,7 +4000,7 @@ Plot metadata separation
 
 \item{\code{pvalue.y}}{numeric (default=0.93)}
 
-\item{\code{...}}{additional parameters forwarded to \link[plotMeanMedValuesPerCellType]{plotMeanMedValuesPerCellType}}
+\item{\code{...}}{additional parameters forwarded to \code{plotMeanMedValuesPerCellType}}
 }
 \if{html}{\out{</div>}}
 }
@@ -3969,9 +4067,27 @@ Estimate differential expression Z-scores between two conditions per individual 
 
 \item{\code{min.n.samp.per.cond}}{minimal number of samples per condition for estimating z-scores (default: 2)}
 
+\item{\code{sample.per.cell}}{named factor of sample per cell (default: stored)}
+
+\item{\code{sample.metadata}}{sample metadata (default: stored)}
+
+\item{\code{formula}}{optional location formula for a temporary model (see \code{estimateExpressionShiftMagnitudes()})}
+
+\item{\code{contrast}}{optional contrast for a temporary model (expert synonym of \code{test})}
+
+\item{\code{perm.method}}{permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'}
+
+\item{\code{robust.method}}{robust fitting: 'none', 'huber' or 'winsor'}
+
+\item{\code{na.mode}}{handling of missing responses: 'drop' or 'impute_weak'}
+
+\item{\code{alternative}}{alternative hypothesis for the z-scores: 'two-sided', 'greater' or 'less'}
+
 \item{\code{min.n.obs.per.samp}}{minimal number of cells per samples for estimating z-scores (default: 2)}
 
 \item{\code{adjust.pvalues}}{boolean (default=FALSE)}
+
+\item{\code{keep.means}}{also return per-condition mean expression}
 
 \item{\code{robust}}{whether to use median estimates instead of mean. Using median is more robust,
 but greatly increase the number of zeros in the data, leading to bias towards highly-express genes. (Default: FALSE)}
@@ -3984,6 +4100,8 @@ but greatly increase the number of zeros in the data, leading to bias towards hi
 
 \item{\code{lfc.pseudocount}}{pseudocount value for estimation of log2(fold-change)}
 
+\item{\code{block.vars}}{metadata columns defining permutation strata (default: stored)}
+
 \item{\code{min.edge.weight}}{numeric (default=0.6)}
 
 \item{\code{verbose}}{boolean Print messages (default=self$verbose)}
@@ -3992,7 +4110,7 @@ but greatly increase the number of zeros in the data, leading to bias towards hi
 
 \item{\code{name}}{character string (default='cluster.free.de')}
 
-\item{\code{smoooth}}{boolean (default=TRUE)}
+\item{\code{...}}{further arguments passed to the underlying function}
 }
 \if{html}{\out{</div>}}
 }
@@ -4115,23 +4233,47 @@ median smoothing over the graph.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes, gene.selection, genes, min.expr.frac}}{gene set (default: 3000 most expressed genes)}
+\item{\code{n.top.genes}}{gene set (default: 3000 most expressed genes)}
+
+\item{\code{gene.selection}}{gene set (default: 3000 most expressed genes)}
 
 \item{\code{name}}{results slot (default "cluster.free.expr.shifts")}
 
-\item{\code{test, formula, contrast, block.vars}}{optional temporary model (see \code{estimateExpressionShiftMagnitudes()})}
+\item{\code{test}}{optional temporary model (see \code{estimateExpressionShiftMagnitudes()})}
+
+\item{\code{formula}}{optional temporary model (see \code{estimateExpressionShiftMagnitudes()})}
+
+\item{\code{contrast}}{optional temporary model (see \code{estimateExpressionShiftMagnitudes()})}
+
+\item{\code{block.vars}}{optional temporary model (see \code{estimateExpressionShiftMagnitudes()})}
 
 \item{\code{min.n.obs.per.samp}}{minimum cells of a sample in a neighbourhood (default 3)}
 
 \item{\code{min.samp.per.level}}{minimum samples per compared level in a neighbourhood (default 2)}
 
-\item{\code{permutation, n.permutations, seed, verbose, n.cores}}{defaults from options (permutations capped at 499)}
+\item{\code{permutation}}{defaults from options (permutations capped at 499)}
+
+\item{\code{n.permutations}}{defaults from options (permutations capped at 499)}
+
+\item{\code{seed}}{defaults from options (permutations capped at 499)}
 
 \item{\code{dist}}{\code{"cor"} (default), \code{"cosine"} or \code{"js"}}
 
-\item{\code{adjust, smooth, wins}}{see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
+\item{\code{adjust}}{see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
+
+\item{\code{smooth}}{see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
+
+\item{\code{wins}}{see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
+
+\item{\code{genes}}{gene set (default: 3000 most expressed genes)}
+
+\item{\code{min.expr.frac}}{gene set (default: 3000 most expressed genes)}
 
 \item{\code{min.edge.weight}}{minimum graph edge weight between cells of different samples (default 0)}
+
+\item{\code{verbose}}{defaults from options (permutations capped at 499)}
+
+\item{\code{n.cores}}{defaults from options (permutations capped at 499)}
 
 \item{\code{...}}{deprecated arguments of the previous implementation are accepted and ignored with a message}
 }
@@ -4174,7 +4316,7 @@ Performs graph smoothing of the cluster-free DE Z-scores
 
 \item{\code{gene.selection}}{character Must be one of "z.adj" or "z", default is based on the "z.adj" parameter (default=ifelse(z.adj, "z.adj", "z"))}
 
-\item{\code{excluded.genes}}{List of genes to exclude during estimation. For example, a list of mitochondrial genes.}
+\item{\code{excluded.genes}}{genes to exclude}
 
 \item{\code{n.cores}}{integer Number of cores to use for parallelization (default=self$n.cores)}
 
@@ -4183,8 +4325,6 @@ Performs graph smoothing of the cluster-free DE Z-scores
 \item{\code{name}}{character Results slot name (default='cluster.free.de')}
 
 \item{\code{...}}{parameters forwarded to \link[sccore:smoothSignalOnGraph]{smoothSignalOnGraph}}
-
-\item{\code{exluded.genes}}{character Genes to exclude (default=NULL)}
 }
 \if{html}{\out{</div>}}
 }
@@ -4243,14 +4383,13 @@ Estimate Gene Programs based on cluster-free Z-scores
 
 \item{\code{z.adj}}{boolean (default=FALSE)}
 
-\item{\code{gene.selection}}{character string Method to select top genes, "z" selects genes by cluster-free Z-score change, "lfc" uses log2(fold-change) instead,
-"expression" picks the most expressed genes and "od" picks overdispersed genes.  Default: "z".}
+\item{\code{gene.selection}}{gene selection method: 'z' or 'z.adj'}
 
 \item{\code{smooth}}{boolean (default=TRUE)}
 
 \item{\code{abs.scores}}{boolean (default=FALSE)}
 
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{name}}{results slot name}
 
 \item{\code{cell.subset}}{(default=NULL)}
 
@@ -4320,7 +4459,7 @@ Plot gene program scores
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{name}}{results slot name}
 
 \item{\code{prog.ids}}{(default=NULL)}
 
@@ -4381,7 +4520,7 @@ Plot gene program genes
 \describe{
 \item{\code{program.id}}{program id}
 
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{name}}{results slot name}
 
 \item{\code{ordering}}{character vector (default=c("similarity", "loading"))}
 
@@ -4447,7 +4586,9 @@ Plot cluster-free expression shift z-scores
 
 \item{\code{plot.na}}{boolean (default=FALSE)}
 
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{adjusted}}{plot the adjusted z-scores (default TRUE)}
+
+\item{\code{name}}{results slot name}
 
 \item{\code{scale.z.palette}}{boolean (default=TRUE)}
 
@@ -4461,11 +4602,13 @@ Plot cluster-free expression shift z-scores
 
 \item{\code{adj.list}}{(default=NULL)}
 
+\item{\code{pal.seq}}{sequential palette for the shift magnitudes}
+
+\item{\code{pal.div}}{diverging palette for the z-scores}
+
 \item{\code{build.panel}}{boolean (default=TRUE)}
 
 \item{\code{...}}{parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}}
-
-\item{\code{palette}}{(default=brewerPalette("YlOrRd", rev=FALSE))}
 }
 \if{html}{\out{</div>}}
 }
@@ -4666,7 +4809,7 @@ Plot gene expression comparison
 
 \item{\code{keep.limits}}{(default=NULL)}
 
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{name}}{results slot name}
 
 \item{\code{...}}{additional parameters}
 }

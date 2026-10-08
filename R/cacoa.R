@@ -163,6 +163,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cell.groups <- my.named.annotation.factor
     #' cao <- Cacoa$new(data.object = con, sample.metadata = sample.metadata, sample.id=sample.id, formula = formula, contrast = contrast, cell.groups = cell.groups)
     #' }
+    #' @param data.layer Seurat data layer to use for normalized expression (default='scale.data'; 'data' is usually better)
     initialize=function(
       data.object, sample.metadata=NULL, sample.ids=NULL, formula=NULL, test=NULL, contrast=NULL, dispersion.formula=NULL,
       numeric.ref = "auto", block.vars=NULL, cell.groups=NULL, sample.per.cell=NULL, sample.groups.palette=NULL,
@@ -405,7 +406,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' problems (a covariate that fully determines the test variable, nesting, single-sample or empty cells, rank
     #' deficiency), collinearity (GVIF), the degrees-of-freedom budget, permutation feasibility per test and
     #' over-adjustment candidates (covariates strongly tied to the test variable).
-    #' @param formula,test,contrast optional model to check instead of the stored one (a temporary model is built)
+    #' @param formula optional model to check instead of the stored one (a temporary model is built)
+    #' @param test optional model to check instead of the stored one (a temporary model is built)
+    #' @param contrast optional model to check instead of the stored one (a temporary model is built)
     #' @param covariates covariates to examine (default: all usable metadata columns)
     #' @param block.vars permutation strata (default: stored)
     #' @param verbose print the report (default: option)
@@ -476,7 +479,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param top.k number of screened covariates to try adding (default 3)
     #' @param name results slot (default "sensitivity")
     #' @param shifts.name results slot of the expression shifts the sensitivity refers to (default "expression.shifts")
-    #' @param n.permutations,verbose,n.cores,seed defaults from options (permutations capped at 499)
+    #' @param n.permutations defaults from options (permutations capped at 499)
+    #' @param verbose defaults from options (permutations capped at 499)
+    #' @param n.cores defaults from options (permutations capped at 499)
+    #' @param seed defaults from options (permutations capped at 499)
     #' @return `cacoaSensitivity` (see [checkSensitivity()]), also stored in `cao$test.results[[name]]`
     checkSensitivity = function(covariate.sets = "auto", screen.name = "covariate.screen", top.k = 3, name = "sensitivity",
                                 shifts.name = "expression.shifts", n.permutations = NULL, verbose = NULL, n.cores = NULL, seed = NULL) {
@@ -516,12 +522,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param space `"expression.shifts"` (per cell type; default) or `"composition"` (CoDA ILR coordinates, one row)
     #' @param mode `"both"` (default), `"partial"` or `"marginal"`
     #' @param adjust.for optional formula of covariates always adjusted for
-    #' @param dist,n.pcs,cell.groups,min.cells.per.sample,min.gene.frac,genes as in `estimateExpressionShiftMagnitudes()`
+    #' @param dist as in `estimateExpressionShiftMagnitudes()`
+    #' @param n.pcs as in `estimateExpressionShiftMagnitudes()`
+    #' @param cell.groups as in `estimateExpressionShiftMagnitudes()`
+    #' @param min.cells.per.sample as in `estimateExpressionShiftMagnitudes()`
+    #' @param min.gene.frac as in `estimateExpressionShiftMagnitudes()`
+    #' @param genes as in `estimateExpressionShiftMagnitudes()`
     #' @param min.samples.per.type cell types with fewer samples are skipped (default 6)
     #' @param p.values `"permutation"` (default) or `"analytic"` (instant preview, approximate)
     #' @param n.permutations number of permutations (default: option `n.permutations`, capped at 499 for the screen)
     #' @param name results slot (default "covariate.screen")
-    #' @param verbose,n.cores,seed defaults from options
+    #' @param verbose defaults from options
+    #' @param n.cores defaults from options
+    #' @param seed defaults from options
     #' @return `cacoaCovariateScreen` (see [screenCovariates()]), also stored in `cao$test.results[[name]]`
     #' @examples
     #' \dontrun{
@@ -569,7 +582,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param covariates 2-4 covariates
     #' @param space `"expression.shifts"` (default) or `"composition"`
     #' @param cell.types optional subset
-    #' @param dist,n.pcs as in `estimateExpressionShiftMagnitudes()`
+    #' @param dist as in `estimateExpressionShiftMagnitudes()`
+    #' @param n.pcs as in `estimateExpressionShiftMagnitudes()`
     #' @param return.table return the partition table instead of the plot
     #' @return ggplot2 object (or a matrix: cell types x components)
     plotVariancePartition = function(covariates, space = c("expression.shifts", "composition"), cell.types = NULL, dist = NULL, n.pcs = NULL,
@@ -627,7 +641,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param permutation `"auto"`, `"block"`, `"freedman-lane"` or `"huh-jhun"` (default from options)
     #' @param n.permutations number of permutations (default from options)
     #' @param block.vars metadata columns defining additional permutation strata (default: stored)
-    #' @param cell.groups,sample.per.cell cell annotations (default: stored)
+    #' @param cell.groups cell annotations (default: stored)
+    #' @param sample.per.cell cell annotations (default: stored)
     #' @param n.pcs optional number of principal components to reduce the pseudobulk profiles to before the distance
     #' @param min.cells.per.sample minimum cells per (cell type, sample) (default 10)
     #' @param min.samp.per.level minimum samples at each compared level per cell type (default from options)
@@ -637,7 +652,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param influence compute leave-one-sample-out effects and jackknife standard errors (default TRUE)
     #' @param seed integer seed (default from options; `NULL` draws from R's RNG)
     #' @param name results slot (default "expression.shifts")
-    #' @param verbose,n.cores defaults from options
+    #' @param verbose defaults from options
+    #' @param n.cores defaults from options
     #' @param ... deprecated arguments of the previous implementation (`dist.type`, `perm.method`, `pairFormula`,
     #'   `pairContrast`, `alternative`, `robust.method`, `na.mode`, `top.n.genes`, `gene.selection`, ...) are
     #'   accepted with a message and otherwise ignored
@@ -793,7 +809,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Estimate differential gene expression per cell type between conditions
     #' @param cell.groups factor specifying cell types (default=self$cell.groups)
-    #' @param sample.groups 2-factor vector with annotation of groups/condition per sample (default=self$sample.groups)
     #' @param sample.meta data.frame Sample-level metadata (rows = samples, columns = covariates) (default=self$sample.meta)
     #' @param formula formula|character Design formula specifying covariates to model (default=NULL)
     #' @param contrast character length-3 Contrast triplet c(var, ref, target) indicating the grouping variable and the two levels to compare (default=NULL)
@@ -818,6 +833,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' \dontrun{
     #' cao$estimateDEPerCellType()
     #' }
+    #' @param sample.per.cell named factor of sample per cell (default: stored)
+    #' @param test.spec what to test (see `Cacoa$new()`); builds a temporary model for this call
     estimateDEPerCellType=function(cell.groups=self$cell.groups, sample.meta=self$sample.meta, sample.per.cell=self$sample.per.cell,
                                    formula=NULL, contrast=NULL, test.spec=NULL, name='de', test='DESeq2.Wald', resampling.method=NULL, 
                                    n.resamplings=30, seed.resampling=239, min.cell.frac=0.05, common.genes=FALSE, 
@@ -1085,6 +1102,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateDEStabilityPerGene()
     #' cao$plotDEStabilityPerGene()
     #' }
+    #' @param top.n number of top genes to show
     plotDEStabilityPerGene=function(name='de', cell.type=NULL, stability.score='stab.median.rank', top.n=500) {
       de.res <- private$getResults(name, 'estimateDEPerCellType()')
       possible.scores <- c('stab.median.rank', 'stab.mean.rank', 'stab.var.rank')
@@ -1118,6 +1136,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateDEPerCellType()
     #' cao$plotNumberOfDEGenes()
     #' }
+    #' @param name results slot name
     plotNumberOfDEGenes=function(name='de', p.adjust=TRUE, pvalue.cutoff=0.05, show.resampling.results=TRUE,
                                  show.jitter=FALSE, jitter.alpha=0.05, type='bar', notch=TRUE, ...) {
       de.raw <- private$getResults(name, 'estimateDEPerCellType()')
@@ -1178,6 +1197,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param color.var character string (default='CellFrac')
     #' @param ... additional parameters fed to plotVolcano
     #' @return A ggplot2 object
+    #' @examples
     #' \dontrun{
     #' cao$estimateDEPerCellType()
     #' cao$plotVolcano()
@@ -1240,6 +1260,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateDEPerCellType()
     #' cao$saveDeAsJson()
     #' }
+    #' @param sample.groups named vector of group per sample (default: derived from the stored model)
     saveDeAsJson=function(saveprefix=NULL, dir.name="JSON", de.raw=NULL, sample.groups=self$sample.groups, de.name='de',
                           ref.level=self$ref.level, gene.metadata=NULL, verbose=self$verbose) {
       if (is.null(de.raw)) {
@@ -1311,8 +1332,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param keep.gene.sets boolean (default=FALSE)
     #' @param ignore.cache (default=NULL)
     #' @param de.raw (default=NULL)
-    #' @param min.genes numeric Minimum number of input genes overlapping with ontologies (default=0)
-    #' @param qvalue.cutoff numeric Q value cutoff, please see clusterProfiler package for more information (default=0.2)
     #' @param min.gs.size numeric Minimal geneset size, please see clusterProfiler package for more information (default=5)
     #' @param max.gs.size numeric Minimal geneset size, please see clusterProfiler package for more information (default=5e2)
     #' @param ... further argument for ontology estimation. Pass `nPerm` with `type='GSEA'` to use fgseaSimple method
@@ -1323,6 +1342,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' library(org.Hs.eg.db)
     #' cao$estimateOntology(type = "GSEA", org.db = org.Hs.eg.db)
     #' }
+    #' @param p.adjust.method p-value adjustment method (default='BH')
+    #' @param verbose print progress messages (default: stored option)
+    #' @param n.cores number of cores (default: stored option)
     estimateOntology=function(type=c("GO", "DO", "GSEA"), name=NULL, de.name='de', org.db, n.top.genes=500, p.adj=1,
                               p.adjust.method="BH", readable=TRUE, min.gs.size=10, max.gs.size=500,
                               keep.gene.sets=FALSE, ignore.cache=NULL, de.raw=NULL, verbose=self$verbose,
@@ -1599,7 +1621,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param plot character string Type of plot to return (default="dot"). Either "dot" or "bar".
     #' @param genes Specify which genes to plot, can either be 'down', 'up' or 'all' (default="up")
     #' @param subtype character string Ontology type, must be either "BP", "CC", or "MF" (GO types), "GO" or "DO" (default="GO")
-    #' @param cell.subgroup character Specific cell group to plot
     #' @param n integer Number of ontology terms to show. Not applicable when order is 'unique' or 'unique-max-row' (default=10)
     #' @param p.adj numeric Adjusted P cutoff (default=0.05)
     #' @param min.genes integer Minimum overlapping genes per term (default=1)
@@ -1688,7 +1709,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param q.value numeric (default=0.2)
     #' @param min.genes integer Minimum genes (default=1)
     #' @param top.n Number of terms to show (default=Inf)
-    #' @param type Ontology, must be either "BP", "CC", or "MF" (GO types) or "DO" (default="GO")
     #' @param legend.position Position of legend in plot. See ggplot2::theme (default="left")
     #' @param selection Order of rows in heatmap. Can be 'unique' (only show terms that are unique for any cell type);
     #'   'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms)
@@ -1718,6 +1738,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateOntologyFamilies(name = "GSEA")
     #' cao$plotOntologyHeatmap(name = "GSEA", only.family.children = TRUE)
     #' }
+    #' @param name results slot name
+    #' @param p.adj adjusted p-value cutoff
     plotOntologyHeatmap=function(name="GO", genes="up", subtype="BP", p.adj=0.05, q.value=0.2, min.genes=1, top.n=Inf,
                                  legend.position="left", selection="all", cluster=TRUE, cell.subgroups=NULL,
                                  row.order=TRUE, col.order=TRUE, max.log.p=10, only.family.children=FALSE,
@@ -1768,11 +1790,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   'common' (only show terms that are present in at least two cell types); 'all' (all ontology terms)
     #'   (default="all")
     #' @param max.log.p numeric Maximum log P value, used for coloring (default=10)
-    #' @param top.n Number of terms to show (default=Inf)
     #' @param cluster Whether to show GO clusters or raw GOs (default=TRUE)
     #' @param clust.naming Field with the results for GO clustering. Ignored if `clusters == FALSE`.
     #' @param cell.subgroups Cell groups to plot (default=NULL). This affects only visualization, but not clustering.
-    #' @param color.range vector with two values for min/max values of p-values
     #' @param row.order boolean Whether to order rows (default=TRUE)
     #' @param col.order boolean Whether to order columns (default=TRUE)
     #' @param n.words integer (default=5)
@@ -1796,6 +1816,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateOntologyFamilies(name = "GSEA")
     #' cao$plotOntologyHeatmapCollapsed(name = "GSEA", only.family.children = TRUE)
     #' }
+    #' @param p.adjust.method p-value adjustment method (default='BH')
     plotOntologyHeatmapCollapsed=function(name="GO", genes="up", subtype="BP", p.adj=0.05, q.value=0.2, min.genes=1,
                                           n=20, legend.position="left", selection="all", max.log.p=10, cluster=TRUE,
                                           cell.subgroups=NULL, palette=NULL, row.order=TRUE, col.order=TRUE,
@@ -2027,7 +2048,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param file character string File name passed to write.table(). Set to NULL to return the table instead of saving.
     #' @param subtype character string Only for GO results: Type of result to filter by, must be "BP", "MF", or "CC" (default: NULL)
     #' @param genes character Direction of genes to filter by, must be "up", "down", or "all" (default: NULL)
-    #' @param sep character Separator (default: "\t", tab)
+    #' @param sep character Separator (default: tab)
     #' @param ... additional arguments passed to write.table()
     #' @return table for import into text editor
     #' @examples
@@ -2036,6 +2057,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateOntology(name = "GSEA")
     #' cao$saveOntologyAsTable(name = "GSEA", file = "Ontologies.tsv")
     #' }
+    #' @param name results slot name
+    #' @param p.adj adjusted p-value cutoff
     saveOntologyAsTable=function(file, name="GO", subtype=NULL, genes=NULL, p.adj=0.05, sep="\t", ...) {
       ont.res <- private$getResults(name, 'estimateOntology()')
 
@@ -2052,11 +2075,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Save family results as a table
     #' @param file character string File name passed to write.table(). Set to NULL to return the table instead of saving.
-    #' @param type character string Type of ontology result, i.e., GO, GSEA, or DO (default='GO')
     #' @param subtype character Type of result to filter by, must be "BP", "MF", or "CC" (default=NULL)
     #' @param genes character Direction of genes to filter by, must be "up", "down", or "all" (default=NULL)
     #' @param p.adj numeric Adjusted P to filter by (default=0.05)
-    #' @param sep character Separator (default = "\t", tab)
+    #' @param sep character Separator (default: tab)
     #' @param ... additional arguments passed to write.table()
     #' @return table for import into text editor
     #' @examples
@@ -2066,6 +2088,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateOntologyFamilies(name = "GSEA")
     #' cao$saveFamiliesAsTable(name = "GSEA", file = "Families.tsv")
     #' }
+    #' @param name results slot name
     saveFamiliesAsTable=function(file, name="GO", subtype=NULL, genes=NULL, p.adj=0.05, sep="\t", ...) {
       # Extract results
       ont.res <- private$getResults(name, 'estimateOntology()')
@@ -2103,7 +2126,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     
     #' @description Plot the cell group sizes or proportions per sample
     #' @param cell.groups factor Cell annotations with cell IDs as names (default=self$cell.groups)
-    #' @param condition character Metadata column to group samples by (default: self$contrast[1])
+    #' @param condition character Metadata column to group samples by (default: the variable of the stored contrast)
     #' @param palette color palette to use for conditions (default: stored $sample.groups.palette)
     #' @param show.significance boolean show statistical significance between sample groups. wilcox.test was used; (`*` < 0.05; `**` < 0.01; `***` < 0.001) (default=FALSE)
     #' @param filter.empty.cell.types boolean Remove cell types without cells (default=TRUE)
@@ -2200,6 +2223,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateCellLoadings()
     #' cao$plotCodaSpace()
     #' }
+    #' @param cell.groups named factor of cell type per cell (default: stored)
     plotCodaSpace=function(space='CDA', cell.groups=self$cell.groups, font.size=3,
                             cells.to.remain=NULL, cells.to.remove=NULL,
                             samples.to.remove=NULL, palette=self$sample.groups.palette) {
@@ -2234,6 +2258,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param reorder.tree boolean Reorder tree or not (default=TRUE)
     #' @param ... passed to internal plotContrastTreeScore()
     #' @return A ggplot2 object
+    #' @param score.palette colour palette for the node scores
+    #' @param score.midpoint midpoint of the score colour scale
+    #' @param score.limits limits of the score colour scale
     plotCodaContrastTree=function(name = "coda", cells.to.remain = NULL, cells.to.remove = NULL,
                                      filter.empty.cell.types = TRUE, adjust.pvalues = TRUE, reorder.tree = TRUE, 
                                      score.palette = c(low = "#2166AC", mid = "grey95", high = "#B2182B"),
@@ -2335,7 +2362,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     #' @description Estimate cell loadings
-    #' @param n.boot numeric Number of boot straps (default=1000)
     #' @param name character Results name slot (default='coda')
     #' @param n.seed numeric Seed number for reproducibility (default=239)
     #' @param cells.to.remove character Specific cell types to keep (default=NULL)
@@ -2349,6 +2375,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' \dontrun{
     #' cao$estimateCellLoadings()
     #' }
+    #' @param n.permutations number of permutations
+    #' @param formula optional location formula for a temporary model (see `estimateExpressionShiftMagnitudes()`)
+    #' @param contrast optional contrast for a temporary model (expert synonym of `test`)
+    #' @param test optional test for a temporary model (see `Cacoa$new()`)
+    #' @param perm.method permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'
+    #' @param zero.pseudocount pseudocount added to zero counts before the log-ratio transform (default 0.1)
+    #' @param basis.type ILR basis type (default 'default')
+    #' @param ref.p.thresh p-value threshold for picking the reference cell types (default 0.3)
+    #' @param ref.min.size minimum number of reference cell types (default 1)
+    #' @param ref.max.size maximum number of reference cell types (default 3)
+    #' @param block.vars metadata columns defining permutation strata (default: stored)
+    #' @param ... further arguments passed to the underlying function
     estimateCellLoadings=function(n.permutations=1000, name='coda', n.seed=239,
                                   cells.to.remove=NULL, cells.to.remain=NULL, 
                                   filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose, method="lda",
@@ -2550,6 +2588,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' \dontrun{
     #' cao$estimateCellDensity()
     #' }
+    #' @param name results slot name
+    #' @param test optional test for a temporary model (see `Cacoa$new()`)
+    #' @param sample.metadata sample metadata (default: stored)
+    #' @param block.vars metadata columns defining permutation strata (default: stored)
     estimateCellDensity = function(bins=400, method='kde', name='cell.density', beta=30, estimate.variation=TRUE, contrast=NULL,
                                    formula=NULL, test=NULL, verbose=self$verbose, n.cores=self$n.cores, sample.metadata=self$sample.meta,
                                    block.vars=NULL, bandwidth=0.05, ...){
@@ -2770,6 +2812,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateCellDensity()
     #' cao$estimateDiffCellDensity()
     #' }
+    #' @param test optional test for a temporary model (see `Cacoa$new()`)
+    #' @param block.vars metadata columns defining permutation strata (default: stored)
+    #' @param perm.method permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'
+    #' @param robust.method robust fitting: 'none', 'huber' or 'winsor'
+    #' @param na.mode handling of missing responses: 'drop' or 'impute_weak'
+    #' @param alternative alternative hypothesis for the z-scores: 'two-sided', 'greater' or 'less'
+    #' @param return.residuals also return residuals
+    #' @param return.sampled.stats also return the permutation statistics
     estimateDiffCellDensity=function(type='permutation', adjust=NULL, name='cell.density', sample.metadata=self$sample.meta, 
                                      formula=NULL, contrast=NULL, test=NULL, block.vars=NULL, perm.method="freedman-lane",
                                      robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=TRUE,
@@ -2926,10 +2976,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'        "mean_abs" (mean |residual| per sample) or "sd" (SD of residuals per sample).
     #' @param build.panel logical; if TRUE and length(cov.plot.keys) == 1, returns a combined panel
     #'        (2 embedding plots + 1 sample-covariate plot). Otherwise returns a list of ggplots.
-    #' @param jitter.size, jitter.alpha aesthetics for sample-level plots
     #' @param cont.palette palette for continuous covariates (numeric)
     #' @param ... passed to plotEmbedding
     #' @return ggplot or list of ggplots
+    #' @param jitter.size point size
+    #' @param jitter.alpha point transparency
+    #' @param residual.type 'pearson' or 'raw' residuals
     plotDiffCellDensityResiduals = function(name = "cell.density", type = "permutation", size = 0.2, palette = brewerPalette("GnBu"),
                                             alpha = 0.2, sample.metadata = self$sample.meta, cov.plot.keys = NULL, 
                                             metric = c("mean_abs", "sd"), build.panel = TRUE, jitter.size = 1, jitter.alpha = 0.8,
@@ -3160,6 +3212,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' \dontrun{
     #' cao$getSampleDistanceMatrix()
     #' }
+    #' @param sample.subset optional subset of samples
+    #' @param adjust.for optional formula of covariates regressed out of the distances before use (G_adj = R G R)
     getSampleDistanceMatrix=function(space=c('expression.shifts', 'coda', 'pseudo.bulk'), values = c("unadjusted", "adjusted"), 
                                      cell.type=NULL, pair.set=c("all", "core"), dist=NULL, name=NULL, verbose=self$verbose, sample.subset=NULL,
                                      adjust.for=NULL, ...) {
@@ -3292,6 +3346,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateExpressionShiftMagnitudes()
     #' cao$plotSampleDistances()
     #' }
+    #' @param n.cores number of cores (default: stored option)
+    #' @param adjust.for optional formula of covariates regressed out of the distances before use (G_adj = R G R)
     plotSampleDistances=function(space='expression.shifts', method='MDS', values = 'both', dist=NULL, 
                                  name=NULL, cell.type=NULL, sample.meta=NULL, color.by=NULL, shape.by=NULL,
                                  palette=NULL, show.sample.size=FALSE, sample.colors=NULL, color.title=NULL,
@@ -3449,6 +3505,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateExpressionShiftMagnitudes() # or estimateCellLoadings()
     #' cao$estimateMetadataSeparation(sample.meta = meta.data) # meta.data is a list or data.frame with metadata per sample
     #' }
+    #' @param sample.subset optional subset of samples
+    #' @param name results slot name
+    #' @param p.adjust.method p-value adjustment method (default='BH')
+    #' @param mode 'marginal' (default), 'partial' or 'both' (see `screenCovariates()`)
     estimateMetadataSeparation=function(sample.meta=self$sample.meta, space='expression.shifts', dist=NULL, space.name=NULL,
                                         sample.subset=NULL,
                                         name='metadata.separation', n.permutations=NULL, trim=NULL, k=NULL,
@@ -3483,7 +3543,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Plot metadata separation
     #' @param name character Name for storage in test.results (default="metadata.separation")
     #' @param pvalue.y numeric (default=0.93)
-    #' @param ... additional parameters forwarded to \link[plotMeanMedValuesPerCellType]{plotMeanMedValuesPerCellType}
+    #' @param ... additional parameters forwarded to \code{plotMeanMedValuesPerCellType}
     #' @examples
     #' \dontrun{
     #' cao$estimateExpressionShiftMagnitudes() # or estimateCellLoadings()
@@ -3511,7 +3571,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param robust whether to use median estimates instead of mean. Using median is more robust,
     #' but greatly increase the number of zeros in the data, leading to bias towards highly-express genes. (Default: FALSE)
     #' @param adjust.pvalues boolean (default=FALSE)
-    #' @param smoooth boolean (default=TRUE)
     #' @param wins numeric (default=0.01)
     #' @param n.permutations numeric (default=200)
     #' @param lfc.pseudocount pseudocount value for estimation of log2(fold-change)
@@ -3531,6 +3590,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' \dontrun{
     #' cao$estimateClusterFreeDE()
     #' }
+    #' @param sample.per.cell named factor of sample per cell (default: stored)
+    #' @param sample.metadata sample metadata (default: stored)
+    #' @param formula optional location formula for a temporary model (see `estimateExpressionShiftMagnitudes()`)
+    #' @param contrast optional contrast for a temporary model (expert synonym of `test`)
+    #' @param perm.method permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'
+    #' @param robust.method robust fitting: 'none', 'huber' or 'winsor'
+    #' @param na.mode handling of missing responses: 'drop' or 'impute_weak'
+    #' @param alternative alternative hypothesis for the z-scores: 'two-sided', 'greater' or 'less'
+    #' @param keep.means also return per-condition mean expression
+    #' @param block.vars metadata columns defining permutation strata (default: stored)
+    #' @param ... further arguments passed to the underlying function
     estimateClusterFreeDE=function(n.top.genes=Inf, genes=NULL, max.z=20, min.expr.frac=0.01, min.n.samp.per.cond=2,
                                    sample.per.cell=self$sample.per.cell, sample.metadata=self$sample.meta, formula=NULL, contrast=NULL,
                                    perm.method = "freedman-lane", robust.method = "none", na.mode = "drop", alternative = "two-sided",
@@ -3625,14 +3695,26 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' Uses the stored model (or a temporary one) and the same engine as `estimateExpressionShiftMagnitudes()`:
     #' one set of sample permutations shared by all cells, the max-statistic adjustment of the z-scores, and
     #' median smoothing over the graph.
-    #' @param n.top.genes,gene.selection,genes,min.expr.frac gene set (default: 3000 most expressed genes)
+    #' @param n.top.genes gene set (default: 3000 most expressed genes)
+    #' @param gene.selection gene set (default: 3000 most expressed genes)
+    #' @param genes gene set (default: 3000 most expressed genes)
+    #' @param min.expr.frac gene set (default: 3000 most expressed genes)
     #' @param name results slot (default "cluster.free.expr.shifts")
-    #' @param test,formula,contrast,block.vars optional temporary model (see `estimateExpressionShiftMagnitudes()`)
+    #' @param test optional temporary model (see `estimateExpressionShiftMagnitudes()`)
+    #' @param formula optional temporary model (see `estimateExpressionShiftMagnitudes()`)
+    #' @param contrast optional temporary model (see `estimateExpressionShiftMagnitudes()`)
+    #' @param block.vars optional temporary model (see `estimateExpressionShiftMagnitudes()`)
     #' @param min.n.obs.per.samp minimum cells of a sample in a neighbourhood (default 3)
     #' @param min.samp.per.level minimum samples per compared level in a neighbourhood (default 2)
-    #' @param permutation,n.permutations,seed,verbose,n.cores defaults from options (permutations capped at 499)
+    #' @param permutation defaults from options (permutations capped at 499)
+    #' @param n.permutations defaults from options (permutations capped at 499)
+    #' @param seed defaults from options (permutations capped at 499)
+    #' @param verbose defaults from options (permutations capped at 499)
+    #' @param n.cores defaults from options (permutations capped at 499)
     #' @param dist `"cor"` (default), `"cosine"` or `"js"`
-    #' @param adjust,smooth,wins see [clusterFreeExpressionShifts()]
+    #' @param adjust see [clusterFreeExpressionShifts()]
+    #' @param smooth see [clusterFreeExpressionShifts()]
+    #' @param wins see [clusterFreeExpressionShifts()]
     #' @param min.edge.weight minimum graph edge weight between cells of different samples (default 0)
     #' @param ... deprecated arguments of the previous implementation are accepted and ignored with a message
     #' @return list (see [clusterFreeExpressionShifts()]), also stored in `cao$test.results[[name]]`
@@ -3667,7 +3749,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param filter graph filter function. (default=NULL)
     #' @param z.adj boolean Adjust Z scores (default=FALSE)
     #' @param gene.selection character Must be one of "z.adj" or "z", default is based on the "z.adj" parameter (default=ifelse(z.adj, "z.adj", "z"))
-    #' @param exluded.genes character Genes to exclude (default=NULL)
     #' @param n.cores integer Number of cores to use for parallelization (default=self$n.cores)
     #' @param verbose boolean Print messages (default=self$verbose)
     #' @param name character Results slot name (default='cluster.free.de')
@@ -3678,6 +3759,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateClusterFreeDE()
     #' cao$smoothClusterFreeZScores()
     #' }
+    #' @param excluded.genes genes to exclude
     smoothClusterFreeZScores = function(n.top.genes=1000, smoothing=20, filter=NULL, z.adj=FALSE, gene.selection=ifelse(z.adj, "z.adj", "z"),
                                         excluded.genes=NULL, n.cores=self$n.cores, verbose=self$verbose, name="cluster.free.de", ...) {
       z.scores <- private$getResults(name, "estimateClusterFreeDE")
@@ -3739,6 +3821,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateClusterFreeDE()
     #' cao$estimateGenePrograms()
     #' }
+    #' @param gene.selection gene selection method: 'z' or 'z.adj'
+    #' @param name results slot name
     estimateGenePrograms = function(method=c("pam", "leiden", "fabia"), n.top.genes=Inf, genes=NULL, n.programs=15,
                                     z.adj=FALSE, gene.selection=ifelse(z.adj, "z.adj", "z"), smooth=TRUE,
                                     abs.scores=FALSE, name="gene.programs", cell.subset=NULL, n.cores=self$n.cores,
@@ -3828,6 +3912,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateGenePrograms()
     #' cao$plotGeneProgramScores()
     #' }
+    #' @param name results slot name
     plotGeneProgramScores=function(name="gene.programs", prog.ids=NULL, build.panel=TRUE, nrow=NULL,
                                     adj.list=NULL, legend.title="Score", palette=NULL, min.genes.per.prog=10,
                                     color.range=c("0.5%", "99.5%"), ...) {
@@ -3878,6 +3963,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateGenePrograms()
     #' cao$plotGeneProgramGenes(program.id = 1) # program.id is any gene program ID in 1:cao$test.results$gene.programs$n.progs
     #' }
+    #' @param name results slot name
     plotGeneProgramGenes = function(program.id, name="gene.programs", ordering=c("similarity", "loading"), max.genes=9, build.panel=TRUE, ncol=3, plots="z.adj", ...) {
       ordering <- match.arg(ordering)
       gene.progs <- private$getResults(name, "estimateGenePrograms")
@@ -3905,7 +3991,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param alpha numeric (default=0.2)
     #' @param font.size size range for cell type labels
     #' @param adj.list (default=NULL)
-    #' @param palette (default=brewerPalette("YlOrRd", rev=FALSE))
     #' @param build.panel boolean (default=TRUE)
     #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
     #' @examples
@@ -3914,6 +3999,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateClusterFreeExpressionShifts()
     #' cao$plotClusterFreeExpressionShifts()
     #' }
+    #' @param adjusted plot the adjusted z-scores (default TRUE)
+    #' @param name results slot name
+    #' @param pal.seq sequential palette for the shift magnitudes
+    #' @param pal.div diverging palette for the z-scores
     plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=TRUE, plot.na=FALSE, adjusted=TRUE,
                                                name="cluster.free.expr.shifts", scale.z.palette=TRUE, min.z=qnorm(0.9),
                                                color.range=c("0", "97.5%"), alpha=0.2, font.size=c(3, 5), adj.list=NULL,
@@ -4075,6 +4164,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateClusterFreeDE()
     #' cao$plotGeneExpressionComparison()
     #' }
+    #' @param name results slot name
     plotGeneExpressionComparison=function(genes=NULL, scores=NULL, max.expr="97.5%", plots=c("z.adj", "z", "expression"),
                                           min.z=qnorm(0.9), max.z=4, max.z.adj=NULL, max.lfc=3, smoothed=FALSE,
                                           gene.palette=dark.red.palette, z.palette=NULL, z.adj.palette=z.palette,

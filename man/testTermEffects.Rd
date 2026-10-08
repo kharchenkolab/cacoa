@@ -28,11 +28,17 @@ testTermEffects(
 
 \item{meta}{sample metadata (rows named by sample)}
 
+\item{dispersion.formula}{dispersion formula (default: the tested variable)}
+
+\item{dist}{distance type of the matrices}
+
 \item{permutation}{\code{"auto"}, \code{"block"}, \code{"freedman-lane"} or \code{"huh-jhun"} (see \code{\link[=permutationPlan]{permutationPlan()}})}
 
 \item{n.permutations}{number of permutations}
 
 \item{block.vars}{metadata columns defining additional permutation strata}
+
+\item{min.samp.per.level}{minimum samples per level of the tested factor}
 
 \item{seed}{integer seed (default: drawn from R's RNG, so \code{set.seed()} applies)}
 

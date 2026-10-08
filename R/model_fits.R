@@ -52,7 +52,7 @@
 #' * For `"freedman-lane"`, if some columns are not estimable under a subset (e.g., too few rows),
 #'   their outputs may be `NA`. 
 #'
-#' @seealso [buildDesignMatrices()], `cpp_fl()`, `fit_and_randomize()`, [permutationGroups()]
+#' @seealso [buildDesignMatrices()], `cpp_fl()`, `fit_and_randomize()`, `permutationGroups()`
 #'
 #' @examples
 #' \dontrun{

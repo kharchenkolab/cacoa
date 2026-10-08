@@ -33,7 +33,7 @@ sensitivityFormulas <- function(model, screen = NULL, meta, top.k = 3, min.resid
 #' @param D.list named list of sample distance matrices (per cell type)
 #' @param model the current `cacoaModel` (its first test is examined)
 #' @param meta sample metadata
-#' @param formulas named list of alternative location formulas (default: [sensitivityFormulas()])
+#' @param formulas named list of alternative location formulas (default: the D31 sets of `sensitivityFormulas()`)
 #' @param screen optional `cacoaCovariateScreen` used to propose added covariates
 #' @param influence optional per-test influence matrices from the current result (`res$influence[[1]]`) and the
 #'   current wide table (`res$wide[[1]]`), as `list(influence =, wide =)`; when `NULL` they are recomputed

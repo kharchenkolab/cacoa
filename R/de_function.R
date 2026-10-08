@@ -212,7 +212,7 @@ prepareSamplesForDE <- function(sample.groups, resampling.method=c('loo', 'boots
 #' NOTE: This replaces the existing estimateDEPerCellTypeInner() that uses s.groups.
 #' The new argument is `samples` (character vector of sample IDs).
 #'
-#' @export
+#' @keywords internal
 estimateDEPerCellTypeInner_model <- function(raw.mats, cell.groups = NULL, samples = NULL, sample.meta = NULL, model = NULL,
                                              sample.per.cell = NULL, n.cells.subsample.core = NULL, seed = NULL,
                                              common.genes = FALSE, cooks.cutoff = FALSE, min.cell.count = 10,

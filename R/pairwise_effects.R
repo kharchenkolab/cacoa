@@ -78,8 +78,8 @@ isEstimable <- function(X, cvec, tol = 1e-8) {
 #' @param bias.correct logical; subtract the model-based dispersion term `A diag(s) A'` from `M` (default TRUE)
 #' @param G optional precomputed Gower matrix (`gowerCenter(D2)`)
 #' @details The dispersion model is fitted without bias under arbitrary (heteroscedastic) per-sample
-#'   dispersions: with `r_i = (R G R)_ii` the squared residual norm and `R` the residual projection,
-#'   `E[r] = (R o R) s` exactly, so `gamma` is the least-squares solution of `r ~ (R o R) Z`. In the one-way
+#'   dispersions: with r_i = (R G R)_ii the squared residual norm and R the residual projection,
+#'   E(r) = (R o R) s exactly, so `gamma` is the least-squares solution of the regression of r on (R o R) Z. In the one-way
 #'   layout this equals the classical leverage-corrected estimator `r_i / (1 - h_i)` averaged per group.
 #'   `v` reports the per-sample leverage-corrected values (used for diagnostics and influence).
 #' @return list with `shift`, `var`, `total`, `ratio`, `s.alt`, `s.ref`, `shift.raw` (uncorrected),

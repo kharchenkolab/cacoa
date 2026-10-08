@@ -95,3 +95,60 @@ test_that("simulated objects: planted DE strength orders the shifts (slow)", {
     expect_gt(mean(sh$estimate[s == "moderate"]), mean(sh$estimate[s == "none"]))
   }
 })
+
+test_that("simulated objects: the whole workflow runs end to end on a conos-backed object (slow)", {
+  skip_on_cran()
+  skip_if(Sys.getenv("CACOA_SKIP_SLOW") == "true", "slow test skipped")
+  root <- devRoot()
+  f <- if (!is.null(root)) file.path(root, "test/shifts_sim_objects.rds") else ""
+  skip_if(!file.exists(f), "simulated objects not available")
+  skip_if_not_installed("conos"); skip_if_not_installed("limma"); skip_if_not_installed("coda.base")
+  old <- readRDS(f)$with_batch
+  meta <- old$data.object$misc$sample_meta
+  if (is.null(rownames(meta)) || !all(names(old$data.object$samples) %in% rownames(meta))) rownames(meta) <- meta$Individual
+  set.seed(1); meta$age <- round(rnorm(nrow(meta), 55, 8))                    # a numeric covariate unrelated to the groups
+  # 1. construct without a model: metadata audit
+  expect_message(cao <- Cacoa$new(old$data.object, sample.metadata = meta, cell.groups = old$cell.groups, sample.per.cell = old$sample.per.cell,
+                                  n.cores = 4, verbose = TRUE), "Sample metadata")
+  expect_null(cao$model)
+  cao$setOptions(n.permutations = 199, seed = 3, verbose = FALSE)
+  # 2. design check and screen before any model
+  chk <- cao$checkDesign(test = "Group")
+  expect_s3_class(chk, "cacoaDesignCheck"); expect_false(any(chk$issues$severity == "error"))
+  sc <- cao$screenCovariates(n.permutations = 99)
+  expect_true("Group" %in% sc$covariates)
+  g <- sc$global[sc$global$mode == "partial", ]
+  expect_lt(g$p.global[g$covariate == "Group"], 0.05)                          # the planted groups are found
+  expect_gt(g$p.global[g$covariate == "age"], 0.05)                            # the unrelated covariate is not
+  expect_s3_class(cao$plotCovariateScreen(), "ggplot")
+  # 3. model: two-level contrast adjusted for batch; whole-factor test of Group as a second test
+  cao$setModel(~ Group + Batch, test = c("Group: Group2 vs Group1", "Group"))
+  expect_length(cao$model$tests, 2); expect_equal(cao$model$tests[[2]]$kind, "term")
+  expect_equal(cao$ref.level, "Group1")
+  res <- cao$estimateExpressionShiftMagnitudes()
+  expect_setequal(unique(res$results$effect), c("shift", "var", "total", "location", "dispersion"))
+  sh <- res$results[res$results$effect == "shift", ]
+  expect_true(all(sh$padj[sh$celltype %in% c("IN-SST", "IN-PV", "L2/3")] < 0.05))
+  loc <- res$results[res$results$effect == "location", ]
+  expect_true(all(loc$padj[loc$celltype %in% c("IN-SST", "IN-PV", "L2/3")] < 0.05))
+  expect_s3_class(cao$plotExpressionShiftMagnitudes(), "ggplot")
+  expect_true(inherits(cao$plotShiftDetail("IN-SST"), "ggplot"))
+  expect_s3_class(cao$plotSampleInfluence(), "ggplot")
+  expect_s3_class(cao$plotSampleDistances(space = "expression.shifts", cell.type = "IN-SST", values = "unadjusted", color.by = "test"), "ggplot")
+  # 4. sensitivity: planted effects are robust
+  sens <- cao$checkSensitivity(n.permutations = 99)
+  expect_true(all(sens$summary$verdict[sens$summary$celltype %in% c("IN-SST", "IN-PV", "L2/3")] == "robust"))
+  expect_s3_class(cao$plotSensitivity(), "ggplot")
+  # 5. other analyses on the same model
+  de <- cao$estimateDEPerCellType(test = "limma-voom", min.cell.count = 5)
+  expect_s3_class(attr(de, "model"), "cacoaModel")
+  expect_gt(sum(de[["IN-SST"]]$res$padj < 0.05, na.rm = TRUE), sum(de[["Microglia"]]$res$padj < 0.05, na.rm = TRUE))
+  coda <- cao$estimateCellLoadings(n.permutations = 199)
+  expect_s3_class(coda$model, "cacoaModel")
+  dens <- cao$estimateCellDensity(method = "graph")
+  expect_equal(sum(dens$sample.weights), 0, tolerance = 1e-10)
+  cf <- cao$estimateClusterFreeExpressionShifts(n.top.genes = 500, n.permutations = 49)
+  z <- tapply(cf$z.adj, old$cell.groups[names(cf$z.adj)], median, na.rm = TRUE)
+  expect_gt(z[["IN-SST"]], z[["Microglia"]])
+  expect_s3_class(cao$plotClusterFreeExpressionShifts(), "ggplot")
+})

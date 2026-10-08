@@ -16,7 +16,7 @@ vignette: >
 ```{r setup, include=FALSE}
 # The walkthrough uses a Conos object of a pulmonary fibrosis cohort that is not shipped with the package,
 # so the chunks are not evaluated when the vignette is built.
-knitr::opts_chunk$set(eval = FALSE)
+knitr::opts_chunk$set(eval = FALSE, purl = FALSE)
 ```
 
 ```{r libs, message=FALSE}

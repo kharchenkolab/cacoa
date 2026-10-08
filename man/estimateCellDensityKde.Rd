@@ -7,7 +7,7 @@
 estimateCellDensityKde(
   emb,
   sample.per.cell,
-  sample.groups,
+  sample.weights,
   bins,
   bandwidth = 0.05,
   expansion.mult = 0.05
@@ -18,7 +18,7 @@ estimateCellDensityKde(
 
 \item{sample.per.cell}{Named sample factor with cell names (default: stored vector)}
 
-\item{sample.groups}{A two-level factor on the sample names describing the conditions being compared (default: stored vector)}
+\item{sample.weights}{Named numeric vector: per-sample signed weights.}
 
 \item{bins}{number of bins for density estimation, default 400}
 }

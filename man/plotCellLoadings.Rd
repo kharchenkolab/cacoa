@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot.R
 \name{plotCellLoadings}
 \alias{plotCellLoadings}
-\title{Internal plotting function for cell loadings}
+\title{Internal plotting function for cell loadings (old two group version)}
 \usage{
 plotCellLoadings(
   loadings,
@@ -22,6 +22,6 @@ plotCellLoadings(
 )
 }
 \description{
-Internal plotting function for cell loadings
+Internal plotting function for cell loadings (old two group version)
 }
 \keyword{internal}

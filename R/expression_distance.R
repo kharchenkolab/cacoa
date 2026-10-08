@@ -4,24 +4,10 @@ NULL
 #' Estimate expression shift magnitudes per cell type between conditions
 #'
 #' This function estimates the magnitude of expression changes (shifts) between
-#' conditions using a pairwise distance approach. It supports two modes of analysis:
-#'
-#' \strong{1. Standard Mode (Static):}
-#' Uses the full set of genes provided in \code{cm.per.type} to calculate a single,
-#' static pairwise distance matrix \code{Y}. Permutation testing is performed by
-#' shuffling residuals (Freedman-Lane) or blocks within the linear model \code{Y ~ Model}.
-#'
-#' \strong{2. Gene Focusing Mode (Dynamic):}
-#' Triggered when \code{top.n.genes} is specified. In this mode, genes are
-#' dynamically selected in every permutation step.
-#' \itemize{
-#'   \item For the observed data (and each randomization), the function ranks genes
-#'         by their association with the sample-level contrast (using a t-test or Wilcoxon equivalent).
-#'   \item Pairwise distances are computed using only the top \eqn{N} selected genes.
-#'   \item The test statistic is the correlation of these focused distances with the pair-level design.
-#' }
-#' This mode tests whether the \emph{most differentially expressed} genes drive a
-#' significant global shift, accounting for the selection bias via permutation.
+#' conditions using a pairwise distance approach. It uses the full set of genes
+#' provided in \code{cm.per.type} to calculate a single pairwise distance matrix
+#' \code{Y} per cell type. Permutation testing is performed by shuffling residuals
+#' (Freedman-Lane) or blocks within the linear model \code{Y ~ Model}.
 #'
 #' @param cm.per.type List of normalized count matrices per cell type (samples x genes).
 #' @param cell.groups Named factor defining cell types/clusters for summary tables.
@@ -30,12 +16,10 @@ NULL
 #'        and the contrast \code{$contrast.X}.
 #' @param sample.per.cell Named vector indicating the sample ID for each cell.
 #' @param sample.ids Character vector of sample IDs aligning with the rows of the
-#'        design matrices. \strong{Required} for the Gene Focusing path to align
-#'        expression matrices with \code{sample.model}.
+#'        design matrices.
 #' @param dist Distance metric to use:
 #'        \itemize{
-#'          \item \code{"cor"} (default): Pearson correlation distance (1 - r).
-#'                In focusing mode, this centers the data before computing cosine similarity.
+#'          \item \code{"cor"} (default): gene-centred cosine distance (1 - r).
 #'          \item \code{"l2"}: Euclidean distance.
 #'          \item \code{"l1"}: Manhattan distance.
 #'        }
@@ -43,8 +27,6 @@ NULL
 #'        \code{"shift"} (default), \code{"total"}, or \code{"var"}.
 #' @param perm.method Permutation method for the Standard Path:
 #'        \code{"freedman-lane"} (default) or \code{"block"}.
-#'        (Note: The Focusing path uses a specialized randomization of the sample-level
-#'        contrast and ignores this argument).
 #' @param robust.method Robust regression method for the linear model:
 #'        \code{"none"} (default), \code{"huber"}, or \code{"winsor"}.
 #' @param na.mode How to handle \code{NA} values in distance matrices:
@@ -53,15 +35,7 @@ NULL
 #'        \code{"greater"}, or \code{"less"}.
 #' @param n.permutations Number of permutations to perform (default=1000).
 #' @param p.adjust.method Method for p-value adjustment (default="BH").
-#' @param top.n.genes Integer. If provided, triggers the **Gene Focusing** path.
-#'        The function will select this many top ranking genes (based on \code{gene.selection})
-#'        to compute distances in every permutation.
-#' @param gene.selection Method to rank genes for focusing:
-#'        \code{"t-test"} (default) or \code{"wilcox"}.
-#'        Requires \code{sample.model} to be provided.
-#' @param sample.model The sample-level design object (from \code{buildDesignMatrices}).
-#'        \strong{Required} if \code{top.n.genes} is used. This provides the
-#'        sample-level design matrix and contrast used to rank genes.
+#' @param sample.model The sample-level design object (from \code{buildDesignMatrices}); kept for reference.
 #' @param n.cores Number of cores for parallel processing (default=1).
 #' @param verbose Logical; print progress messages (default=TRUE).
 #' @param ... Additional arguments passed to internal functions.
@@ -81,7 +55,6 @@ estimateExpressionChange <- function(cm.per.type, cell.groups, pair.model, sampl
                                      na.mode = c("drop", "impute_weak"), alternative = c("greater", "two-sided","less"),
                                      n.permutations = 1000, p.adjust.method = "BH", trim = 0.2, return.residuals = FALSE, 
                                      return.sampled.stats = TRUE, return.sampled.fits = FALSE, 
-                                     top.n.genes = NULL, gene.selection = c("t-test", "wilcox"), 
                                      n.pcs = NULL,
                                      n.cores = 1, verbose = TRUE, ...) {
   
@@ -89,81 +62,23 @@ estimateExpressionChange <- function(cm.per.type, cell.groups, pair.model, sampl
   perm.method <- match.arg(perm.method)
   robust.method <- match.arg(robust.method)
   na.mode <- match.arg(na.mode)
-  gene.selection <- match.arg(gene.selection)
   
   cell.groups <- droplevels(factor(cell.groups))
   sample.type.table <- table(cell.groups, sample.per.cell[names(cell.groups)])
   
-  # --- FOCUSING PATH CHECK ---
-  # Trigger if top.n.genes is set and meaningful (less than total genes available)
-  n_total_genes <- if(length(cm.per.type) > 0) ncol(cm.per.type[[1]]) else 0
-  use.focusing <- !is.null(top.n.genes) && (n_total_genes > top.n.genes)
-  
-  if (use.focusing) { # focused path
-    if (verbose) message(sprintf("Using gene focusing path (top %d genes via %s)...", top.n.genes, gene.selection))
-    
-    if(is.null(sample.model)) stop("Gene focusing path requires 'sample.model' to perform gene selection.")
-    if(is.null(sample.ids)) stop("Gene focusing path requires 'sample.ids' to align matrices.")
-    
-    # 1. Run Focusing Engine (get valid P-values, Z-scores, and Observed Y)
-    focus.res <- fitWithFocusingWrapper(
-      cm.per.type = cm.per.type, 
-      pair.model = pair.model, 
-      sample.model = sample.model,
-      sample.ids = sample.ids,
-      top.n.genes = top.n.genes, 
-      gene.selection = gene.selection,
-      dist = dist,
-      n.permutations = n.permutations, 
-      alternative = alternative,
-      n.cores = n.cores,
-      na.mode = na.mode,
-      robust.method = robust.method,
-      n.pcs = n.pcs
-    )
-    
-    # 2. Refit using Standard Engine on Observed Y (n.permutations = 0)
-    # This generates coefficients and residuals matching the standard output structure.
-    # We pass the same robust/na settings to match the focusing logic.
-    res <- performLMPermutations(
-      y = focus.res$sample.distances, 
-      x = pair.model, 
-      n.permutations = 0, # No perms, just fit
-      perm.method = perm.method, 
-      robust.method = robust.method, 
-      na.mode = na.mode, 
-      alternative = alternative,
-      return.residuals = return.residuals, 
-      n.cores = n.cores, 
-      ...
-    )
-    
-    # 3. Inject Focusing Statistics
-    # We overwrite the parametric/dummy stats from the 0-perm fit with the 
-    # correct permutation-based stats from the focusing engine.
-    res$stat.obs   <- focus.res$stat.obs
-    res$pval       <- focus.res$pval
-    res$z.score    <- focus.res$z.score
-    res$stats.perm <- focus.res$stats.perm
-    res$sample.distances <- focus.res$sample.distances
-    
-  } else { # non-focused path
- 
-    # Pairwise Distances (Static, All genes)
-    p.dist <- estimateExpressionShiftsForCellType(cm.per.type, dist = dist, pair.model = pair.model, sample.ids = sample.ids, n.pcs = n.pcs)
-    
-    # Fitting and randomization
-    res <- performLMPermutations(y = p.dist$Y, x = pair.model, n.permutations = n.permutations, perm.method = perm.method, 
-                                 robust.method = robust.method, na.mode = na.mode, alternative = alternative,
-                                 return.residuals = return.residuals, return.sampled.stats = return.sampled.stats,
-                                 return.sampled.fits = return.sampled.fits, n.cores = n.cores, ...)
-    
-    res$sample.distances <- p.dist$Y
-  }
-  
+  # Pairwise distances (all genes)
+  p.dist <- estimateExpressionShiftsForCellType(cm.per.type, dist = dist, pair.model = pair.model, sample.ids = sample.ids, n.pcs = n.pcs)
+
+  # Fitting and randomization
+  res <- performLMPermutations(y = p.dist$Y, x = pair.model, n.permutations = n.permutations, perm.method = perm.method,
+                               robust.method = robust.method, na.mode = na.mode, alternative = alternative,
+                               return.residuals = return.residuals, return.sampled.stats = return.sampled.stats,
+                               return.sampled.fits = return.sampled.fits, n.cores = n.cores, ...)
+  res$sample.distances <- p.dist$Y
+
   # --- COMMON POST-PROCESSING ---
   
-  # R2 estimation (standard for both, using the Y matrix from either path)
+  # R2 estimation per model term
   r2 <- estimateR2PerTerm(pair.model$F, res$sample.distances, groups = makeGroupsPair(pair.model$F))
   
   if (verbose) message("Done!\n")
@@ -180,123 +95,6 @@ estimateExpressionChange <- function(cm.per.type, cell.groups, pair.model, sampl
   )
   out
 }
-
-#' Wrapper for C++ gene focusing engine
-#' @keywords internal
-#' Wrapper for C++ gene focusing engine
-#' @keywords internal
-#' Wrapper for C++ gene focusing engine
-#' @keywords internal
-fitWithFocusingWrapper <- function(cm.per.type, pair.model, sample.model, sample.ids,
-                                   top.n.genes, gene.selection, dist, 
-                                   n.permutations, alternative, n.cores, 
-                                   n.pcs = NULL,
-                                   na.mode = "drop", robust.method = "none", ...) {
-  
-  # --- 1. Dist Type Mapping & Pre-processing ---
-  # Center samples in R to match Pearson in C++
-  cpp_dist_type <- dist
-  
-  cm_input <- lapply(cm.per.type, function(M) {
-    if (is.null(M)) return(NULL)
-    
-    # Expand to match sample.ids
-    if (nrow(M) == length(sample.ids) && all(rownames(M) == sample.ids)) {
-      M_aligned <- M
-    } else {
-      M_aligned <- matrix(NA_real_, nrow = length(sample.ids), ncol = ncol(M), 
-                          dimnames = list(sample.ids, colnames(M)))
-      common <- intersect(sample.ids, rownames(M))
-      if (length(common) > 0) {
-        M_aligned[common, ] <- M[common, ]
-      }
-    }
-    
-    # CENTERING LOGIC: Always center genes for correlation/cosine modes.
-    # This prevents using raw cosine on positive data (which kills signal).
-    if (dist %in% c("cor", "cosine", "pearson")) {
-      gene_means <- colMeans(M_aligned, na.rm = TRUE)
-      M_aligned <- sweep(M_aligned, 2, gene_means, "-")
-    }
-    return(M_aligned)
-  })
-  
-  # Map all correlation-like requests to "cosine" in C++
-  if (dist %in% c("cor", "cosine", "pearson")) {
-    cpp_dist_type <- "cosine" 
-  }
-  
-  cpp_n_pcs <- if (is.null(n.pcs)) 0L else as.integer(n.pcs)
-  
-  # --- 2. Prepare C++ Inputs ---
-  pair_Z <- if (!is.null(pair.model$Z)) as.matrix(pair.model$Z) else matrix(0, 0, 0)
-  
-  # Pass explicit pairs (converted to 0-based) to ensure C++ loop order 
-  # matches the R design matrix order.
-  pairs_0 <- as.matrix(pair.model$pairs) - 1
-  
-  # --- 3. Call C++ Engine ---
-  res_cpp <- fit_with_focusing(
-    M_list = cm_input,                   
-    sample_X = as.matrix(sample.model$X),           
-    sample_contrast = sample.model$contrast.X, 
-    pair_X = as.matrix(pair.model$X),
-    pairs = pairs_0,                     
-    pair_Z = pair_Z,                     
-    pair_contrast = pair.model$contrast.X, 
-    sample_perm_groups = sample.model$perm.groups$full,
-    n_randomizations = n.permutations,
-    n_top_features = top.n.genes,
-    test_type = gene.selection,
-    dist_type = cpp_dist_type,
-    robust = robust.method,
-    na_mode = na.mode,
-    n_cores = n.cores,
-    n_pcs = cpp_n_pcs
-  )
-  
-  # --- 4. Format Outputs ---
-  stat.obs   <- as.vector(res_cpp$stat)
-  pvals      <- as.vector(res_cpp$p_value)
-  perm.stats <- res_cpp$perm_stats
-  obs_Y      <- res_cpp$Y
-  
-  # Handle NAs
-  stat.obs[is.na(stat.obs)] <- 0
-  pvals[is.na(pvals)] <- 1
-  
-  # Z-scores
-  p_clamped <- pmin(pmax(pvals, 1e-16), 1 - 1e-16)
-  z.scores <- if (alternative == "two-sided") {
-    qnorm(1 - p_clamped / 2) * sign(stat.obs)
-  } else if (alternative == "greater") {
-    qnorm(1 - p_clamped)
-  } else { 
-    qnorm(p_clamped)
-  }
-  
-  ct_names <- names(cm.per.type)
-  names(stat.obs) <- names(pvals) <- names(z.scores) <- ct_names
-  if(!is.null(perm.stats)) colnames(perm.stats) <- ct_names
-  
-  # Format Y matrix
-  if (!is.null(obs_Y)) {
-    colnames(obs_Y) <- ct_names
-    # Reconstruct pair names
-    idx <- pair.model$pairs
-    pair.names <- paste(sample.ids[idx[, 1]], sample.ids[idx[, 2]], sep = "__")
-    rownames(obs_Y) <- pair.names
-  }
-  
-  list(
-    stat.obs = stat.obs,
-    stats.perm = perm.stats,
-    pval = pvals,
-    z.score = z.scores,
-    sample.distances = obs_Y
-  )
-}
-
 
 #' Estimate pairwise expression distances for all cell types in a paired design
 #'
@@ -1813,8 +1611,8 @@ isContinuousCol <- function(df, col) {
 }
 
 #' @keywords internal
-parseDistance <- function(dist, top.n.genes, n.pcs) {
-  n.comps <- min(top.n.genes, n.pcs, Inf)
+parseDistance <- function(dist, n.dims = NULL) {
+  n.comps <- min(n.dims, Inf)
   if (is.null(dist)) {
     dist <- ifelse(n.comps < 20, 'l1', 'cor')
     return(dist)

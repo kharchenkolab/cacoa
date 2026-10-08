@@ -20,27 +20,7 @@ estimateGeneProgramsFabia(
 \item{n.sampled.cells}{number of sub-sampled cells for estimating the gene programs. If 0, all cells are used.
 it is interpreted as a vector of cell}
 
-\item{...}{
-  Arguments passed on to \code{\link[fabia:fabia]{fabia::fabia}}
-  \describe{
-    \item{\code{spl}}{sparseness prior loadings (0 - 2.0); default = 0 (Laplace).}
-    \item{\code{spz}}{sparseness factors (0.5 - 2.0); default = 0.5 (Laplace).}
-    \item{\code{non_negative}}{Non-negative factors and loadings if non_negative
-    > 0; default = 0.}
-    \item{\code{center}}{data centering: 1 (mean), 2
-    (median), > 2 (mode), 0 (no); default = 2.}
-    \item{\code{norm}}{data normalization:   1 (0.75-0.25 quantile), >1 (var=1),
-    0 (no); default = 1.}
-    \item{\code{scale}}{loading vectors are scaled in each iteration to the given
-    variance. 0.0 indicates non scaling; default = 0.0.}
-    \item{\code{lap}}{minimal value of the variational parameter; default = 1.0}
-    \item{\code{nL}}{maximal number of biclusters at which a row element can participate; default
-    = 0 (no limit)}
-    \item{\code{lL}}{maximal number of row elements per bicluster; default
-    = 0 (no limit)}
-    \item{\code{bL}}{cycle at which the nL or lL maximum starts; default
-    = 0 (start at the beginning)}
-  }}
+\item{...}{further arguments passed to \code{fabia::fabia()} (other than \code{p}, \code{X}, \code{cyc}, \code{alpha}, \code{random})}
 }
 \description{
 Estimate Gene Programs with FABIA

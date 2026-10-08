@@ -2,7 +2,7 @@
 % Please edit documentation in R/coda.R
 \name{getLoadings}
 \alias{getLoadings}
-\title{Get loadings by different methods}
+\title{Get loadings by different methods (old two-group comparison)}
 \usage{
 getLoadings(
   cnts,
@@ -24,6 +24,6 @@ getLoadings(
 Updated data frame with Z scores
 }
 \description{
-Get loadings by different methods
+Get loadings by different methods (old two-group comparison)
 }
 \keyword{internal}

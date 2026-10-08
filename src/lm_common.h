@@ -2,17 +2,14 @@
 #define STATS_COMMONS_H
 
 #include <RcppArmadillo.h>
-#include <omp.h>
+#include "parallel.h"
 #include <random>
 #include <vector>
 #include <string>
 #include <unordered_map>
 #include <algorithm>
 #include <cmath>
-#include <ctime>
 
-// Disable Armadillo's internal OpenMP to avoid thread oversubscription.
-#define ARMA_DONT_USE_OPENMP 
 
 using namespace Rcpp;
 using namespace arma;

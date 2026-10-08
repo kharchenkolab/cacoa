@@ -1,6 +1,7 @@
 #' @import Matrix
 #' @import ggplot2
-#' @useDynLib cacoa
+#' @useDynLib cacoa, .registration = TRUE
+#' @importFrom Rcpp evalCpp
 NULL
 
 

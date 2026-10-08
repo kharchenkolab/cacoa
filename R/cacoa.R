@@ -292,22 +292,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' This function estimates the magnitude of expression changes (shifts) between
     #' conditions using a pairwise distance approach. It supports two modes of analysis:
     #'
-    #' \strong{1. Standard Mode (Static):}
-    #' Uses the full set of genes provided in \code{cm.per.type} to calculate a single,
-    #' static pairwise distance matrix \code{Y}. Permutation testing is performed by
-    #' shuffling residuals (Freedman-Lane) or blocks within the linear model \code{Y ~ Model}.
-    #'
-    #' \strong{2. Gene Focusing Mode (Dynamic):}
-    #' Triggered when \code{top.n.genes} is specified. In this mode, genes are
-    #' dynamically selected in every permutation step.
-    #' \itemize{
-    #'   \item For the observed data (and each randomization), the function ranks genes
-    #'         by their association with the sample-level contrast (using a t-test or Wilcoxon equivalent).
-    #'   \item Pairwise distances are computed using only the top \eqn{N} selected genes.
-    #'   \item The test statistic is the correlation of these focused distances with the pair-level design.
-    #' }
-    #' This mode tests whether the \emph{most differentially expressed} genes drive a
-    #' significant global shift, accounting for the selection bias via permutation.
+    #' Uses the full set of genes to calculate a single pairwise distance matrix per cell type.
+    #' Permutation testing is performed by shuffling residuals (Freedman-Lane) or blocks within
+    #' the linear model \code{Y ~ Model}.
     #'
     #' @param cell.groups factor/character Named vector of cell-group labels per cell
     #'   (default = `self$cell.groups`).
@@ -324,12 +311,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   based on dimensionality (default = `NULL`).
     #' @param dist.type character Type of expression distance to test:
     #'   `"shift"` (linear shift; default), `"var"` (variance change), or `"total"` (both).
-    #' @param top.n.genes Integer. If provided, triggers the **Gene Focusing** path.
-    #'        The function will select this many top ranking genes (based on \code{gene.selection})
-    #'        to compute distances in every permutation.
-    #' @param gene.selection Method to rank genes for focusing:
-    #'        \code{"t-test"} (default) or \code{"wilcox"}.
-    #'        Requires \code{sample.model} to be provided.
     #' @param min.cells.per.sample integer Minimum cells per sample to include (default = 10).
     #' @param min.samp.per.type integer Minimum samples per cell type (default = 2).
     #' @param min.gene.frac numeric Minimum fraction of cells per type expressing a gene
@@ -372,7 +353,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                              contrast = NULL, pairContrast = NULL, pairFormula = NULL, block.vars = self$block.vars, sample.metadata = self$sample.meta,  
                                              sample.ids = self$sample.ids, dist = NULL, dist.type = "shift", min.cells.per.sample = 10, 
                                              min.samp.per.type = 2, min.gene.frac = 0.01, genes = NULL, perm.method="freedman-lane", robust.method = "none",
-                                             top.n.genes = NULL, gene.selection = c("t-test", "wilcox"),
                                              n.pcs = NULL,
                                              na.mode = "drop", alternative = "greater", return.residuals = TRUE, return.sampled.stats = TRUE,
                                              name = "expression.shifts", n.permutations = 1000, return.sampled.fits = FALSE,
@@ -408,7 +388,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       out <- shift.inp %$% estimateExpressionChange(cm.per.type, cell.groups = cell.groups, pair.model=pair.model, sample.model=sample.model,
                                                               sample.per.cell = sample.per.cell, sample.ids = sample.ids, perm.method= perm.method,
                                                               robust.method = robust.method, na.mode = na.mode, alternative = alternative,
-                                                              top.n.genes = top.n.genes, gene.selection = gene.selection,
                                                               return.residuals = return.residuals, return.sampled.stats = return.sampled.stats,
                                                               dist = dist %||% "cor", dist.type = dist.type, 
                                                               n.pcs = n.pcs,
@@ -3022,7 +3001,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           rownames(mat) <- s
         }
 
-        dist %<>% parseDistance(top.n.genes = ncol(mat), n.pcs = NULL)
+        dist %<>% parseDistance(n.dims = ncol(mat))
 
         if (dist == "cor") {
           p.dists <- 1 - cor(t(mat), use = "pairwise.complete.obs")

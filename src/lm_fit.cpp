@@ -1,4 +1,3 @@
-// [[Rcpp::plugins(cpp11)]]
 // [[Rcpp::depends(RcppArmadillo)]]
 
 #include "lm_common.h"
@@ -219,6 +218,10 @@ static inline arma::vec winsor_fit(const DesignGroup& g, const arma::vec& y, dou
  * @param pinv_tol (double)
  * Tolerance for the pseudo-inverse (if Cholesky decomposition fails).
  *
+ * @param seed (int)
+ * Seed of the permutation RNG (per-column streams are derived from it); results are
+ * reproducible for a given seed regardless of n_cores.
+ *
  * @param n_cores (int)
  * Number of OpenMP threads to use.
  *
@@ -251,7 +254,8 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
                              bool return_residuals = true, bool return_sampled_fits = false, bool return_sampled_stats = false,
                              std::string robust = "none", double huber_k = 1.345, int huber_maxit = 8, double huber_tol = 1e-6,
                              std::string na_mode = "drop", double na_weight = 1e-4, std::string na_center = "mean",
-                             double illcond_rcond = 1e-12, double pinv_tol = 0.0, int n_cores = 1) {
+                             double illcond_rcond = 1e-12, double pinv_tol = 0.0, int n_cores = 1,
+                             int seed = 0) {
   
   Config cfg; 
   cfg.robust = robust; cfg.na_mode = na_mode; cfg.huber_k = huber_k; cfg.huber_maxit = huber_maxit; cfg.huber_tol = huber_tol;
@@ -306,12 +310,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
   designs.resize(grp_cnt);
 
   // 3. Pre-calculate Designs (Parallel)
-  #ifdef _OPENMP
-  if (n_cores > 1) omp_set_num_threads(n_cores);
-  #endif
-
-  #pragma omp parallel for schedule(dynamic)
-  for (int i=0; i<grp_cnt; ++i) {
+  cacoa::parallelFor(0, grp_cnt, [&](int i) {
     DesignGroup& g = designs[i]; const RawGroup& raw = raw_groups[i];
     g.obs_indices = raw.obs;
     bool is_drop = (cfg.na_mode == "drop");
@@ -350,7 +349,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
             g.perm_blocks = blocks; g.n_units_for_perm = n;
         }
     }
-  }
+  }, n_cores, false);
 
   // 4. Execution (Flattened Parallelism)
   arma::mat Coef(p, m); Coef.fill(datum::nan);
@@ -362,16 +361,15 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
   arma::mat SampledStats; 
   if (cfg.ret_stats && n_randomizations > 0) { SampledStats.set_size(n_randomizations, m); SampledStats.fill(datum::nan); }
 
-  std::uint64_t seed = 0xD1B54A32D192ED03ULL + (std::uint64_t)std::time(0);
+  const std::uint64_t seed64 = 0xD1B54A32D192ED03ULL ^ (std::uint64_t)(std::int64_t)seed;
   bool is_huber = (cfg.robust == "huber"), is_winsor = (cfg.robust == "winsor");
 
-  #pragma omp parallel for schedule(dynamic)
-  for (size_t k=0; k<jobs.size(); ++k) {
+  cacoa::parallelFor(0, (int)jobs.size(), [&](int k) {
     const Job& job = jobs[k]; const DesignGroup& grp = designs[job.group_idx];
     arma::uword j = job.col_idx;
-    if (!grp.valid_design) continue;
+    if (!grp.valid_design) return;
 
-    std::mt19937_64 rng = make_rng(seed, j);
+    std::mt19937_64 rng = make_rng(seed64, j);
 
     // Prepare Vectors
     arma::vec y_raw = Y.col(j);
@@ -396,7 +394,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
     else if (is_winsor) beta = winsor_fit(grp, y_work, cfg.huber_k);
     else beta = grp.B * y_work;
 
-    if (!beta.is_finite()) continue;
+    if (!beta.is_finite()) return;
     double stat_obs = arma::dot(beta, contrast);
     Coef.col(j) = beta; Stat[j] = stat_obs;
 
@@ -410,7 +408,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
       Resid.col(j) = r_out;
     }
 
-    if (cfg.n_randomizations == 0 || !grp.can_permute) continue;
+    if (cfg.n_randomizations == 0 || !grp.can_permute) return;
 
     // Permutation Loop
     arma::vec stats_perm(cfg.n_randomizations);
@@ -471,7 +469,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
     Pval[j] = pval;
     if (cfg.ret_stats) SampledStats.col(j) = stats_perm;
     if (cfg.ret_fits) SampledFits[j] = fits_perm;
-  }
+  }, n_cores, false);
 
   Rcpp::List out = Rcpp::List::create(_["coef"]=Coef, _["stat"]=Stat, _["p_value"]=Pval);
   if (cfg.ret_res) out["residuals"] = Resid;
@@ -570,7 +568,8 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y
                       double huber_k = 1.345, int huber_maxit = 8, double huber_tol = 1e-6,
                       std::string na_mode = "drop", double na_weight = 1e-4, std::string na_center = "mean",
                       double illcond_rcond = 1e-12, double pinv_tol = 0.0, int n_cores = 1,
-                      bool return_residuals = true, bool return_sampled_fits = false, bool return_sampled_stats = false) {
+                      bool return_residuals = true, bool return_sampled_fits = false, bool return_sampled_stats = false,
+                      int seed = 0) {
   
   arma::uword n = X.n_rows, m = Y.n_cols;
   arma::uvec idx_core = parse_core_rows(core_rows, n);
@@ -582,7 +581,7 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y
     Rcpp::List out = fit_and_randomize(X_sub, Y_sub, contrast, core_perm_groups, core_pair_indices,
                                        n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats,
                                        robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center,
-                                       illcond_rcond, pinv_tol, n_cores);
+                                       illcond_rcond, pinv_tol, n_cores, seed);
     out["partial_core"] = Y_sub;
     return out;
   }
@@ -701,7 +700,7 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y
     Rcpp::List res = fit_and_randomize(X_fin, Y_fin, contrast, core_perm_groups, core_pair_indices,
                                        n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats,
                                        robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center,
-                                       illcond_rcond, pinv_tol, n_cores);
+                                       illcond_rcond, pinv_tol, n_cores, seed);
     
     // E. Unpack
     arma::mat B = res["coef"];
@@ -728,7 +727,7 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y
       }
     }
     
-    if(return_sampled_stats) {
+    if(return_sampled_stats && n_randomizations > 0) {
       arma::mat SS = res["sampled_stats"];
       SampledStats.cols(Jv) = SS;
     }

@@ -4,16 +4,14 @@
 \alias{validateDEPerCellTypeParams}
 \title{Validate parameters per cell type}
 \usage{
-validateDEPerCellTypeParams(raw.mats, cell.groups, sample.groups, ref.level)
+validateDEPerCellTypeParams(raw.mats, cell.groups, model)
 }
 \arguments{
 \item{raw.mats}{List of raw count matrices}
 
 \item{cell.groups}{Named clustering/annotation factor with cell names}
 
-\item{sample.groups}{Named factor with cell names indicating condition/sample, e.g., ctrl/disease}
-
-\item{ref.level}{Reference cluster level in 'sample.groups', e.g., ctrl, healthy, wt}
+\item{model}{Model object returned by buildDesignMatrices}
 }
 \description{
 Validate parameters per cell type

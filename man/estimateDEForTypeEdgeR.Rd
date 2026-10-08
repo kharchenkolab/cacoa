@@ -2,18 +2,16 @@
 % Please edit documentation in R/de_function.R
 \name{estimateDEForTypeEdgeR}
 \alias{estimateDEForTypeEdgeR}
-\title{Estimate DE using edgeR}
+\title{Estimate DE using edgeR (design + contrast from buildDesignMatrices)}
 \usage{
-estimateDEForTypeEdgeR(cm, meta, design.formula)
+estimateDEForTypeEdgeR(cm, model)
 }
 \arguments{
-\item{cm}{count matrix}
+\item{cm}{count matrix (genes x samples)}
 
-\item{meta}{data frame containing metadata}
-
-\item{design.formula}{design formula according to}
+\item{model}{list returned by buildDesignMatrices (must contain F and contrast.F)}
 }
 \description{
-Estimate DE using edgeR
+Estimate DE using edgeR (design + contrast from buildDesignMatrices)
 }
 \keyword{internal}

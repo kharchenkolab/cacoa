@@ -2,7 +2,7 @@
 % Please edit documentation in R/coda.R
 \name{produceResampling}
 \alias{produceResampling}
-\title{This function produces the resampling dataset}
+\title{This function produces the resampling dataset (old two-group comparison)}
 \usage{
 produceResampling(cnts, groups, n.perm = 1000, seed = 239)
 }
@@ -23,6 +23,6 @@ produceResampling(cnts, groups, n.perm = 1000, seed = 239)
 Updated data frame with Z scores
 }
 \description{
-This function produces the resampling dataset
+This function produces the resampling dataset (old two-group comparison)
 }
 \keyword{internal}

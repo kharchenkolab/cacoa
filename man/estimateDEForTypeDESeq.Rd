@@ -2,34 +2,30 @@
 % Please edit documentation in R/de_function.R
 \name{estimateDEForTypeDESeq}
 \alias{estimateDEForTypeDESeq}
-\title{estimate DE using DESeq2}
+\title{Estimate DE using DESeq2}
 \usage{
 estimateDEForTypeDESeq(
   cm,
-  meta,
-  design.formula,
-  ref.level,
-  target.level,
-  test.type,
+  sample.meta,
+  model,
+  test.type = "wald",
+  cooksCutoff = FALSE,
+  independentFiltering = TRUE,
   ...
 )
 }
 \arguments{
 \item{cm}{count matrix}
 
-\item{meta}{data frame containing meta data}
+\item{sample.meta}{sample metadata data frame}
 
-\item{design.formula}{design formula according to}
+\item{model}{list returned by buildDesignMatrices (must contain F and contrast.F)}
 
-\item{ref.level}{reference level, e.g. controls}
-
-\item{target.level}{target level, e.g. disease}
-
-\item{test.type}{test type incorporated in DESeq2, either "Wald" or "LRT"}
+\item{test.type}{test type incorporated in DESeq2, either "wald" or "LRT"}
 
 \item{...}{additional parameters forwarded to DESeq2}
 }
 \description{
-estimate DE using DESeq2
+Estimate DE using DESeq2
 }
 \keyword{internal}

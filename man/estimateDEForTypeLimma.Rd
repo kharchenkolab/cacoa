@@ -2,20 +2,16 @@
 % Please edit documentation in R/de_function.R
 \name{estimateDEForTypeLimma}
 \alias{estimateDEForTypeLimma}
-\title{Estimate DE using limma}
+\title{Estimate DE using limma-voom (design + contrast from buildDesignMatrices)}
 \usage{
-estimateDEForTypeLimma(cm, meta, design.formula, target.level)
+estimateDEForTypeLimma(cm, model)
 }
 \arguments{
-\item{cm}{count matrix}
+\item{cm}{count matrix (genes x samples)}
 
-\item{meta}{data frame containing metadata}
-
-\item{design.formula}{design formula according to}
-
-\item{target.level}{target level, e.g. disease}
+\item{model}{list returned by buildDesignMatrices (must contain F and contrast.F)}
 }
 \description{
-Estimate DE using limma
+Estimate DE using limma-voom (design + contrast from buildDesignMatrices)
 }
 \keyword{internal}

@@ -2,21 +2,11 @@
 % Please edit documentation in R/coda.R
 \name{sbp2tree}
 \alias{sbp2tree}
-\title{Get tree from balances}
+\title{Get tree from balances (safe phylo constructor)}
 \usage{
 sbp2tree(sbpart)
 }
-\arguments{
-\item{sbpart}{A contrast matrix for balances, sequential binary partition}
-}
-\value{
-phylo tree
-}
 \description{
-Get tree from balances
-}
-\details{
-We use ellipsis because a previous version of this function
-contains additional and insignificant parameters.
+Get tree from balances (safe phylo constructor)
 }
 \keyword{internal}

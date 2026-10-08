@@ -2,7 +2,7 @@
 % Please edit documentation in R/coda.R
 \name{constructBestPartitionTree}
 \alias{constructBestPartitionTree}
-\title{Construct the canonical tree}
+\title{Construct the canonical tree (old two-group comparison)}
 \usage{
 constructBestPartitionTree(cnts, groups, partition.thresh = 0)
 }
@@ -15,6 +15,6 @@ constructBestPartitionTree(cnts, groups, partition.thresh = 0)
 phylo tree
 }
 \description{
-Construct the canonical tree
+Construct the canonical tree (old two-group comparison)
 }
 \keyword{internal}

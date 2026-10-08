@@ -7,4 +7,4 @@ CHANGELOG.md
 cacoa*.tar.gz
 README.Rmd
 ^\.circleci$
-CONTRIBUTING.md
+CONTRIBUTING.md^misc$

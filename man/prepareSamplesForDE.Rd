@@ -2,7 +2,7 @@
 % Please edit documentation in R/de_function.R
 \name{prepareSamplesForDE}
 \alias{prepareSamplesForDE}
-\title{Prepare samples for DE analysis}
+\title{Prepare samples for DE analysis (old; two-group)}
 \usage{
 prepareSamplesForDE(
   sample.groups,
@@ -18,6 +18,6 @@ prepareSamplesForDE(
 \item{n.resamplings}{number of iterations (default=30)}
 }
 \description{
-Prepare samples for DE analysis
+Prepare samples for DE analysis (old; two-group)
 }
 \keyword{internal}

@@ -85,13 +85,16 @@ performLMPermutations <- function(x, y,
                   return.sampled.fits = FALSE,
                   return.y.resid = TRUE,
                   n.permutations = 1000,
-                  n.cores=1) {
+                  n.cores=1, seed = NULL) {
 
   robust.method <- match.arg(robust.method)
   perm.method   <- match.arg(perm.method)
   na.mode       <- match.arg(na.mode)
   alternative   <- match.arg(alternative)
   na.center     <- match.arg(na.center)
+  # seed for the C++ permutation RNG: drawn from R's RNG when not given, so set.seed() makes runs reproducible
+  if (is.null(seed)) seed <- sample.int(.Machine$integer.max, 1L)
+  seed <- as.integer(seed)
   # response vector/matrix
   if (is.numeric(y) && !is.matrix(y)) {
     Y <- matrix(y, ncol = 1L)
@@ -128,7 +131,7 @@ performLMPermutations <- function(x, y,
       return_sampled_stats = return.sampled.stats,
       robust = robust.method, huber_k = 1.345, huber_maxit = 8, huber_tol = 1e-6,
       na_mode = na.mode, na_weight = 1e-4, na_center = na.center,
-      illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores
+      illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores, seed = seed
     )
   } else if (perm.method == "freedman-lane") {
     # ------------------------------------------------------------
@@ -147,7 +150,7 @@ performLMPermutations <- function(x, y,
       huber_k = 1.345, huber_maxit = 8, huber_tol = 1e-6,
       na_mode = na.mode, na_weight = 1e-4, na_center = na.center,
       illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores, return_residuals = return.residuals,
-      return_sampled_fits=return.sampled.fits, return_sampled_stats = return.sampled.stats)
+      return_sampled_fits=return.sampled.fits, return_sampled_stats = return.sampled.stats, seed = seed)
 
     y.resid <- if(return.y.resid) fit$partial_core else NULL
   }

@@ -6,7 +6,7 @@ NULL
 #' @param n.programs maximal number of gene programs to find (parameter `p` for fabia).
 #' @param n.sampled.cells number of sub-sampled cells for estimating the gene programs. If 0, all cells are used.
 #' it is interpreted as a vector of cell
-#' @inheritDotParams fabia::fabia -p -X -cyc -alpha -random
+#' @param ... further arguments passed to \code{fabia::fabia()} (other than \code{p}, \code{X}, \code{cyc}, \code{alpha}, \code{random})
 #' @keywords internal
 estimateGeneProgramsFabia <- function(z.scores, n.programs, n.sampled.cells=15000, cyc=1500, alpha=0.2, random=-1, ...) {
   checkPackageInstalled("fabia", bioc=TRUE)

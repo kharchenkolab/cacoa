@@ -4,12 +4,14 @@
 \alias{estimateDEForTypePairwiseStat}
 \title{Estimate pair-wise DEGs}
 \usage{
-estimateDEForTypePairwiseStat(cm.norm, meta, target.level, test)
+estimateDEForTypePairwiseStat(cm.norm, meta, group.var, target.level, test)
 }
 \arguments{
 \item{cm.norm}{normalized count matrix}
 
 \item{meta}{data frame with meta data}
+
+\item{group.var}{grouping variable}
 
 \item{target.level}{target level, e.g., disease group}
 

@@ -1218,7 +1218,10 @@ endpointRowsFromDesign <- function(F, data, endpoints_at, numericRef = list()) {
   if (is.null(endpoints_at)) return(NULL)
   trm <- attr(F, "terms"); xlv <- attr(F, "xlevels"); ctr <- attr(F, "contrasts")
   if (is.null(trm) || is.null(xlv)) stop("F must carry 'terms' and 'xlevels' (use buildFullDesign()).")
-  one <- function(at) .oneRowFromFormula(trm, xlv, ctr, colnames(F), data, at, numericRef)
+  vars <- all.vars(stats::delete.response(trm))
+  # settings for variables the design does not contain (e.g. the batch setting of an interaction-cell
+  # contrast evaluated on a dispersion design without batch) do not affect the row and are dropped
+  one <- function(at) .oneRowFromFormula(trm, xlv, ctr, colnames(F), data, at[intersect(names(at), vars)], numericRef)
   evalSide <- function(side) {
     r <- setNames(numeric(ncol(F)), colnames(F))
     for (e in side) r <- r + e$w * one(e$at)

@@ -355,11 +355,11 @@ plotMeanMedValuesPerCellType <- function(df, pvalues=NULL, type=c('box', 'point'
     p <- ggplot(odf,aes(x=Type, y=value, fill=Type)) + geom_boxplot(notch=notch, outlier.shape=NA)
   } else if (type=='point') { # point + se
     p <- ggplot(df, aes(x=Type, y=mean, color=Type)) + geom_point(size=3) +
-      geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, size=line.size)
+      geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, linewidth=line.size)
     if (!is.null(palette)) {p <- p + scale_color_manual(values=palette)}
   } else { # barplot
     p <- ggplot(df,aes(x=Type,y=mean,fill=Type)) + geom_bar(stat='identity') +
-      geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, size=line.size)
+      geom_errorbar(aes(ymin=LI, ymax=UI), width=0.2, linewidth=line.size)
   }
   if (!is.na(yline) && !is.null(yline)) {p <- p + geom_hline(yintercept = yline, linetype=2, color='gray50')}
   p <- p +
@@ -522,7 +522,7 @@ plotPairwiseShiftsPerCellType <- function(x, panel = "covariate", type = "box", 
     } else if (type == "point") {
       p <- ggplot2::ggplot(df.sum, ggplot2::aes(Type, mean, colour = Type)) +
         ggplot2::geom_point(size = 3) +
-        ggplot2::geom_errorbar(ggplot2::aes(ymin = LI, ymax = UI), width = 0.2, size = line.size)
+        ggplot2::geom_errorbar(ggplot2::aes(ymin = LI, ymax = UI), width = 0.2, linewidth = line.size)
       if (!is.null(palette)) p <- p + ggplot2::scale_colour_manual(values = palette)
     }
 

@@ -54,6 +54,14 @@ cao$plotDesign("associations")
 }
 
 ## ------------------------------------------------
+## Method `Cacoa$screenCovariates`
+## ------------------------------------------------
+
+\dontrun{
+cao$screenCovariates(); cao$plotCovariateScreen(); cao$plotCovariateSummary()
+}
+
+## ------------------------------------------------
 ## Method `Cacoa$estimateExpressionShiftMagnitudes`
 ## ------------------------------------------------
 
@@ -591,6 +599,11 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item \href{#method-Cacoa-plotDesign}{\code{Cacoa$plotDesign()}}
 \item \href{#method-Cacoa-describeMetadata}{\code{Cacoa$describeMetadata()}}
 \item \href{#method-Cacoa-getSampleGroups}{\code{Cacoa$getSampleGroups()}}
+\item \href{#method-Cacoa-screenCovariates}{\code{Cacoa$screenCovariates()}}
+\item \href{#method-Cacoa-plotCovariateScreen}{\code{Cacoa$plotCovariateScreen()}}
+\item \href{#method-Cacoa-plotCovariateSummary}{\code{Cacoa$plotCovariateSummary()}}
+\item \href{#method-Cacoa-plotVariancePartition}{\code{Cacoa$plotVariancePartition()}}
+\item \href{#method-Cacoa-plotShiftDetail}{\code{Cacoa$plotShiftDetail()}}
 \item \href{#method-Cacoa-estimateExpressionShiftMagnitudes}{\code{Cacoa$estimateExpressionShiftMagnitudes()}}
 \item \href{#method-Cacoa-plotExpressionShiftMagnitudes}{\code{Cacoa$plotExpressionShiftMagnitudes()}}
 \item \href{#method-Cacoa-plotSampleInfluence}{\code{Cacoa$plotSampleInfluence()}}
@@ -1003,6 +1016,182 @@ itself for numeric tests or term tests
 }
 \subsection{Returns}{
 named vector over samples (\code{NULL} when the test has no variable, e.g. coefficient contrasts)
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-screenCovariates"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-screenCovariates}{}}}
+\subsection{Method \code{screenCovariates()}}{
+Screen covariates: which metadata variables are associated with sample-level variation, per cell type
+
+Exploratory, term-level and contrast-free. For every covariate and cell type the between-sample variation it
+explains is reported alone (\code{marginal}) and after adjusting for the other screened covariates (\code{partial}),
+as chance-corrected R2 with permutation p-values (BH over the whole grid) and a per-covariate global p-value
+across cell types; a dispersion association is reported alongside. Ends with a suggested model (not applied).
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$screenCovariates(
+  covariates = NULL,
+  space = c("expression.shifts", "composition"),
+  mode = c("both", "partial", "marginal"),
+  adjust.for = NULL,
+  dist = NULL,
+  n.pcs = NULL,
+  cell.groups = self$cell.groups,
+  min.cells.per.sample = 10,
+  min.gene.frac = 0.01,
+  genes = NULL,
+  min.samples.per.type = 6,
+  p.values = c("permutation", "analytic"),
+  n.permutations = NULL,
+  name = "covariate.screen",
+  verbose = NULL,
+  n.cores = NULL,
+  seed = NULL
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{covariates}}{covariates to screen (default: all usable metadata columns); transform strings allowed}
+
+\item{\code{space}}{\code{"expression.shifts"} (per cell type; default) or \code{"composition"} (CoDA ILR coordinates, one row)}
+
+\item{\code{mode}}{\code{"both"} (default), \code{"partial"} or \code{"marginal"}}
+
+\item{\code{adjust.for}}{optional formula of covariates always adjusted for}
+
+\item{\code{dist, n.pcs, cell.groups, min.cells.per.sample, min.gene.frac, genes}}{as in \code{estimateExpressionShiftMagnitudes()}}
+
+\item{\code{min.samples.per.type}}{cell types with fewer samples are skipped (default 6)}
+
+\item{\code{p.values}}{\code{"permutation"} (default) or \code{"analytic"} (instant preview, approximate)}
+
+\item{\code{n.permutations}}{number of permutations (default: option \code{n.permutations}, capped at 499 for the screen)}
+
+\item{\code{name}}{results slot (default "covariate.screen")}
+
+\item{\code{verbose, n.cores, seed}}{defaults from options}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+\code{cacoaCovariateScreen} (see \code{\link[=screenCovariates]{screenCovariates()}}), also stored in \code{cao$test.results[[name]]}
+}
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
+cao$screenCovariates(); cao$plotCovariateScreen(); cao$plotCovariateSummary()
+}
+}
+\if{html}{\out{</div>}}
+
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-plotCovariateScreen"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-plotCovariateScreen}{}}}
+\subsection{Method \code{plotCovariateScreen()}}{
+Heatmap of the covariate screen (see \code{\link[=plotCovariateScreen]{plotCovariateScreen()}})
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCovariateScreen(name = "covariate.screen", ...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{results slot (default "covariate.screen")}
+
+\item{\code{...}}{passed to \code{\link[=plotCovariateScreen]{plotCovariateScreen()}} (\code{effect}, \code{mode}, \code{value}, \code{cell.types}, \code{covariates}, \code{cluster}, \code{alpha})}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-plotCovariateSummary"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-plotCovariateSummary}{}}}
+\subsection{Method \code{plotCovariateSummary()}}{
+Summary bars of the covariate screen (see \code{\link[=plotCovariateSummary]{plotCovariateSummary()}})
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCovariateSummary(name = "covariate.screen", ...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{results slot (default "covariate.screen")}
+
+\item{\code{...}}{passed to \code{\link[=plotCovariateSummary]{plotCovariateSummary()}}}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-plotVariancePartition"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-plotVariancePartition}{}}}
+\subsection{Method \code{plotVariancePartition()}}{
+Variance partition of 2-4 covariates per cell type: unique, shared and residual fractions
+of the between-sample variation (chance-corrected). For questions like "is this disease or medication?"
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotVariancePartition(
+  covariates,
+  space = c("expression.shifts", "composition"),
+  cell.types = NULL,
+  dist = NULL,
+  n.pcs = NULL,
+  return.table = FALSE
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{covariates}}{2-4 covariates}
+
+\item{\code{space}}{\code{"expression.shifts"} (default) or \code{"composition"}}
+
+\item{\code{cell.types}}{optional subset}
+
+\item{\code{dist, n.pcs}}{as in \code{estimateExpressionShiftMagnitudes()}}
+
+\item{\code{return.table}}{return the partition table instead of the plot}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+ggplot2 object (or a matrix: cell types x components)
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-plotShiftDetail"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-plotShiftDetail}{}}}
+\subsection{Method \code{plotShiftDetail()}}{
+Drill-down for one cell type: MDS of the adjusted distances, the pair-distance boxplots that
+define shift / var / total, per-sample dispersion by group, and the level x level table for term tests
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotShiftDetail(cell.type, test = NULL, name = "expression.shifts")}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{cell.type}}{cell type}
+
+\item{\code{test}}{test label or index (default: first test)}
+
+\item{\code{name}}{results slot (default "expression.shifts")}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+cowplot grid of ggplot2 panels
 }
 }
 \if{html}{\out{<hr>}}
@@ -3421,6 +3610,7 @@ Plot inter-sample expression distance. The inputs to this function are the resul
   name = NULL,
   verbose = self$verbose,
   sample.subset = NULL,
+  adjust.for = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -3490,6 +3680,7 @@ Project samples to 2D space with MDS. Plots results from cao$estimateExpressionS
   show.pvalues = FALSE,
   sample.subset = NULL,
   n.cores = self$n.cores,
+  adjust.for = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -3565,21 +3756,22 @@ cao$plotSampleDistances()
 Estimate metadata separation using variance on the sample distance graph
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateMetadataSeparation(
-  sample.meta,
+  sample.meta = self$sample.meta,
   space = "expression.shifts",
   dist = NULL,
   space.name = NULL,
   sample.subset = NULL,
   name = "metadata.separation",
-  n.permutations = 5000,
-  trim = 0.05,
-  k = 20,
+  n.permutations = NULL,
+  trim = NULL,
+  k = NULL,
   show.warning = TRUE,
-  verbose = self$verbose,
-  n.cores = self$n.cores,
+  verbose = NULL,
+  n.cores = NULL,
   adjust.pvalues = TRUE,
   p.adjust.method = "BH",
-  pvalue.cutoff = 0.05
+  pvalue.cutoff = 0.05,
+  mode = c("marginal", "partial", "both")
 )}\if{html}{\out{</div>}}
 }
 

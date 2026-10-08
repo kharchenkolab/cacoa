@@ -463,6 +463,101 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.factor(x) || is.character(x)) droplevels(factor(x)) else x
     },
 
+    #' @description Screen covariates: which metadata variables are associated with sample-level variation, per cell type
+    #'
+    #' Exploratory, term-level and contrast-free. For every covariate and cell type the between-sample variation it
+    #' explains is reported alone (`marginal`) and after adjusting for the other screened covariates (`partial`),
+    #' as chance-corrected R2 with permutation p-values (BH over the whole grid) and a per-covariate global p-value
+    #' across cell types; a dispersion association is reported alongside. Ends with a suggested model (not applied).
+    #' @param covariates covariates to screen (default: all usable metadata columns); transform strings allowed
+    #' @param space `"expression.shifts"` (per cell type; default) or `"composition"` (CoDA ILR coordinates, one row)
+    #' @param mode `"both"` (default), `"partial"` or `"marginal"`
+    #' @param adjust.for optional formula of covariates always adjusted for
+    #' @param dist,n.pcs,cell.groups,min.cells.per.sample,min.gene.frac,genes as in `estimateExpressionShiftMagnitudes()`
+    #' @param min.samples.per.type cell types with fewer samples are skipped (default 6)
+    #' @param p.values `"permutation"` (default) or `"analytic"` (instant preview, approximate)
+    #' @param n.permutations number of permutations (default: option `n.permutations`, capped at 499 for the screen)
+    #' @param name results slot (default "covariate.screen")
+    #' @param verbose,n.cores,seed defaults from options
+    #' @return `cacoaCovariateScreen` (see [screenCovariates()]), also stored in `cao$test.results[[name]]`
+    #' @examples
+    #' \dontrun{
+    #' cao$screenCovariates(); cao$plotCovariateScreen(); cao$plotCovariateSummary()
+    #' }
+    screenCovariates = function(covariates = NULL, space = c("expression.shifts", "composition"), mode = c("both", "partial", "marginal"),
+                                adjust.for = NULL, dist = NULL, n.pcs = NULL, cell.groups = self$cell.groups, min.cells.per.sample = 10,
+                                min.gene.frac = 0.01, genes = NULL, min.samples.per.type = 6, p.values = c("permutation", "analytic"),
+                                n.permutations = NULL, name = "covariate.screen", verbose = NULL, n.cores = NULL, seed = NULL) {
+      space <- match.arg(space); mode <- match.arg(mode); p.values <- match.arg(p.values)
+      verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores); dist <- private$opt("dist", dist)
+      n.permutations <- n.permutations %||% min(private$opt("n.permutations"), 499)
+      seed <- if (missing(seed)) private$opt("seed") else seed
+      D.list <- private$distancesForSpace(space, dist = dist, n.pcs = n.pcs, cell.groups = cell.groups, min.cells.per.sample = min.cells.per.sample,
+                                          min.gene.frac = min.gene.frac, genes = genes, verbose = verbose)
+      test.variable <- if (!is.null(self$model)) self$model$tests[[1]]$variable else NULL
+      if (!is.null(test.variable) && is.na(test.variable)) test.variable <- NULL
+      res <- screenCovariates(D.list, self$sample.meta, covariates = covariates, mode = mode, adjust.for = adjust.for, dist = if (space == "composition") "l2" else dist,
+                              test.variable = test.variable, p.values = p.values, n.permutations = n.permutations,
+                              min.samples.per.type = min.samples.per.type, alpha = private$opt("alpha"), seed = seed %||% sample.int(.Machine$integer.max, 1),
+                              n.cores = n.cores, verbose = verbose)
+      res$settings$space <- space
+      self$test.results[[name]] <- res
+      invisible(res)
+    },
+
+    #' @description Heatmap of the covariate screen (see [plotCovariateScreen()])
+    #' @param name results slot (default "covariate.screen")
+    #' @param ... passed to [plotCovariateScreen()] (`effect`, `mode`, `value`, `cell.types`, `covariates`, `cluster`, `alpha`)
+    #' @return ggplot2 object
+    plotCovariateScreen = function(name = "covariate.screen", ...) {
+      plotCovariateScreen(private$getResults(name, "screenCovariates()"), plot.theme = self$plot.theme, ...)
+    },
+
+    #' @description Summary bars of the covariate screen (see [plotCovariateSummary()])
+    #' @param name results slot (default "covariate.screen")
+    #' @param ... passed to [plotCovariateSummary()]
+    #' @return ggplot2 object
+    plotCovariateSummary = function(name = "covariate.screen", ...) {
+      plotCovariateSummary(private$getResults(name, "screenCovariates()"), plot.theme = self$plot.theme, ...)
+    },
+
+    #' @description Variance partition of 2-4 covariates per cell type: unique, shared and residual fractions
+    #'   of the between-sample variation (chance-corrected). For questions like "is this disease or medication?"
+    #' @param covariates 2-4 covariates
+    #' @param space `"expression.shifts"` (default) or `"composition"`
+    #' @param cell.types optional subset
+    #' @param dist,n.pcs as in `estimateExpressionShiftMagnitudes()`
+    #' @param return.table return the partition table instead of the plot
+    #' @return ggplot2 object (or a matrix: cell types x components)
+    plotVariancePartition = function(covariates, space = c("expression.shifts", "composition"), cell.types = NULL, dist = NULL, n.pcs = NULL,
+                                     return.table = FALSE) {
+      space <- match.arg(space)
+      if (length(covariates) < 2 || length(covariates) > 4) stop("give 2 to 4 covariates")
+      dist <- private$opt("dist", dist)
+      D.list <- private$distancesForSpace(space, dist = dist, n.pcs = n.pcs, cell.groups = self$cell.groups, verbose = FALSE)
+      if (!is.null(cell.types)) D.list <- D.list[intersect(cell.types, names(D.list))]
+      parts <- lapply(D.list, function(D) variancePartition(D, self$sample.meta, covariates, dist = if (space == "composition") "l2" else dist))
+      if (return.table) return(do.call(rbind, parts))
+      plotVariancePartition(parts, plot.theme = self$plot.theme)
+    },
+
+    #' @description Drill-down for one cell type: MDS of the adjusted distances, the pair-distance boxplots that
+    #'   define shift / var / total, per-sample dispersion by group, and the level x level table for term tests
+    #' @param cell.type cell type
+    #' @param test test label or index (default: first test)
+    #' @param name results slot (default "expression.shifts")
+    #' @return cowplot grid of ggplot2 panels
+    plotShiftDetail = function(cell.type, test = NULL, name = "expression.shifts") {
+      res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
+      if (is.null(test)) test <- 1
+      tn <- if (is.numeric(test)) names(res$fits)[test] else test
+      eff <- res$fits[[tn]][[cell.type]]
+      if (is.null(eff) || !isTRUE(eff$ok)) stop("no fit for cell type '", cell.type, "' in test '", tn, "'")
+      groups <- self$getSampleGroups(tn, model = res$model)
+      plotShiftDetailPanels(eff, adjusted = res$adjusted.distances[[tn]][[cell.type]], groups = groups, dist = res$settings$dist,
+                            title = sprintf("%s: %s", cell.type, tn), palette = self$sample.groups.palette, plot.theme = self$plot.theme)
+    },
+
     #' @description Expression shift magnitudes per cell type
     #'
     #' For every cell type, pseudobulk profiles per sample are compared through sample-sample distances
@@ -3017,7 +3112,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$getSampleDistanceMatrix()
     #' }
     getSampleDistanceMatrix=function(space=c('expression.shifts', 'coda', 'pseudo.bulk'), values = c("unadjusted", "adjusted"), 
-                                     cell.type=NULL, pair.set=c("all", "core"), dist=NULL, name=NULL, verbose=self$verbose, sample.subset=NULL, ...) {
+                                     cell.type=NULL, pair.set=c("all", "core"), dist=NULL, name=NULL, verbose=self$verbose, sample.subset=NULL,
+                                     adjust.for=NULL, ...) {
       space <- match.arg(space)
       values <- match.arg(values)
       pair.set <- match.arg(pair.set)
@@ -3048,6 +3144,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (any(is.na(p.dists))) { # NA imputation
           p.dists %<>% ape::additive() %>% `dimnames<-`(dimnames(p.dists))
         }
+        dist.type <- res$settings$dist
       } else if (space=='coda') {
         if (is.null(name)) name <- "coda"
         coda.info <- private$getResults(name, "estimateCellLoadings()")
@@ -3097,6 +3194,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         } else {
           stop("Unknown distance: ", dist)
         }
+        dist.type <- dist
       } else {
         stop("Not implemented space: ", space, "!")
       }
@@ -3104,7 +3202,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(sample.subset)) {
         p.dists <- p.dists[sample.subset, sample.subset, drop = FALSE]
       }
-
+      if (!is.null(adjust.for)) {   # regress the covariates of `adjust.for` out of the Gower matrix: G_adj = R G R
+        nc <- attr(p.dists, "n.cells")
+        meta <- self$sample.meta[rownames(p.dists), , drop = FALSE]
+        Z <- do.call(cbind, lapply(intersect(all.vars(stats::as.formula(adjust.for)), names(meta)), function(v) covariateColumns(meta, v)))
+        ok <- stats::complete.cases(Z)
+        G <- gowerCenter(asSquaredDistance(p.dists[ok, ok], dist.type))
+        p.dists <- adjustedDistanceMatrix(G, cbind(1, Z[ok, , drop = FALSE]), dist.type)
+        if (!is.null(nc)) attr(p.dists, "n.cells") <- nc[rownames(p.dists)]
+      }
+      attr(p.dists, "dist.type") <- dist.type
       return(p.dists)
     },
 
@@ -3140,8 +3247,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                  name=NULL, cell.type=NULL, sample.meta=NULL, color.by=NULL, shape.by=NULL,
                                  palette=NULL, show.sample.size=FALSE, sample.colors=NULL, color.title=NULL,
                                  shape.title=NULL, title=NULL, both.ncol = 2, both.align = "hv",
-                                 n.permutations=2000, show.pvalues=FALSE, sample.subset=NULL, n.cores=self$n.cores, ...) {
+                                 n.permutations=2000, show.pvalues=FALSE, sample.subset=NULL, n.cores=self$n.cores, adjust.for=NULL, ...) {
       values <- match.arg(values, c("unadjusted","adjusted","both"))
+      if (!is.null(adjust.for) && values != "unadjusted") { values <- "unadjusted" }   # adjust.for replaces the model-adjusted view
+      if (identical(color.by, "test") && !is.null(self$model)) {   # the active test's groups / values
+        sg <- self$getSampleGroups()
+        if (!is.null(sg)) { sample.meta <- (sample.meta %||% self$sample.meta); sample.meta$test <- as.vector(sg[rownames(sample.meta)]); color.title <- color.title %||% self$model$tests[[1]]$label }
+      }
       if (is.null(cell.type)) {
         n.cells.per.samp <- table(self$sample.per.cell)
       } else {
@@ -3234,8 +3346,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else {
         
         p.dists <- self$getSampleDistanceMatrix(space=space, cell.type=cell.type, dist=dist, 
-                                                name=name, sample.subset=sample.subset, values = values)
+                                                name=name, sample.subset=sample.subset, values = values, adjust.for = adjust.for)
         if (is.null(p.dists)) return(NULL)
+        if (!is.null(adjust.for) && is.null(title)) title <- sprintf("%s | adjusted for %s", space, paste(all.vars(stats::as.formula(adjust.for)), collapse = ", "))
 
         sample.labels <- NULL
         if (!is.null(sample.meta) && !is.null(color.by)) {
@@ -3287,52 +3400,33 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateExpressionShiftMagnitudes() # or estimateCellLoadings()
     #' cao$estimateMetadataSeparation(sample.meta = meta.data) # meta.data is a list or data.frame with metadata per sample
     #' }
-    estimateMetadataSeparation=function(sample.meta, space='expression.shifts', dist=NULL, space.name=NULL,
+    estimateMetadataSeparation=function(sample.meta=self$sample.meta, space='expression.shifts', dist=NULL, space.name=NULL,
                                         sample.subset=NULL,
-                                        name='metadata.separation', n.permutations=5000, trim=0.05, k=20,
-                                        show.warning=TRUE, verbose=self$verbose, n.cores=self$n.cores,
-                                        adjust.pvalues=TRUE, p.adjust.method="BH", pvalue.cutoff=0.05) {
-      p.dists <- self$getSampleDistanceMatrix(
-        space=space, cell.type=NULL, dist=dist, name=space.name, sample.subset=sample.subset
-      )
-      # Check whether results are empty
+                                        name='metadata.separation', n.permutations=NULL, trim=NULL, k=NULL,
+                                        show.warning=TRUE, verbose=NULL, n.cores=NULL,
+                                        adjust.pvalues=TRUE, p.adjust.method="BH", pvalue.cutoff=0.05, mode=c("marginal", "partial", "both")) {
+      mode <- match.arg(mode); verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
+      n.permutations <- n.permutations %||% min(private$opt("n.permutations"), 499)
+      if (!is.null(trim) || !is.null(k)) message("`trim` and `k` are deprecated (the graph-based pseudo-R2 was replaced by the covariate screen)")
+      p.dists <- self$getSampleDistanceMatrix(space=space, cell.type=NULL, dist=dist, name=space.name, sample.subset=sample.subset)
       if (is.null(p.dists)) {
         warning("An empty sample distance matrix was returned. Consider changing 'space', 'cell.type', 'name',  or 'sample.subset'.")
         return(NULL)
       }
-
-      # Check whether any sample names are present in sample.meta and p.dists
-      if (!any(rownames(sample.meta) %in% rownames(p.dists))) {
-        cat("Printing the first three rownames of sample.meta:\n",head(rownames(sample.meta), 3),"\nPrinting the first three sample names:\n",head(rownames(p.dists), 3),"\n"); stop("The rownames of the sample.meta object doesn't match any sample names.")
-      }
-
-      if (is.data.frame(sample.meta)) {
-        sample.meta %<>% lapply(setNames, rownames(.))
-      } else if (!is.list(sample.meta)) {
-        sample.meta %<>% list()
-      }
-
-      adj.mat <- adjacencyMatrixFromPaiwiseDists(p.dists, trim=trim, k=k)
-      sep.info <- sample.meta %>% plapply(
-        function(mg) estimateGraphVarianceSignificance(adj.mat, signal=mg[colnames(adj.mat)], n.permutations=n.permutations),
-        progress=(verbose && (length(sample.meta) > 1)), n.cores=n.cores, mc.preschedule=TRUE, fail.on.error=TRUE
-      )
-
-      pvalues <- sapply(sep.info, `[[`, 'pvalue')
-      pseudo.r2 <- sapply(sep.info, `[[`, 'pr2')
-
-      res <- list(metadata=sample.meta, pvalues=pvalues, pseudo.r2=pseudo.r2)
-      if (adjust.pvalues) {
-        pvalues %<>% p.adjust(method=p.adjust.method)
-        res$padjust <- pvalues
-      }
-
-      if (any(is.na(pvalues))) warning(paste0(paste(names(pvalues)[is.na(pvalues)], sep = "\t")," resulted in NAs when calculating p values. Is the metadata defined for all samples?"))
-
-      if (show.warning && any(pvalues < pvalue.cutoff, na.rm = TRUE)){
-        warning("Significant separation by: ", paste(names(pvalues)[pvalues < pvalue.cutoff], collapse=', '))
-      }
-
+      if (!is.data.frame(sample.meta)) sample.meta <- as.data.frame(sample.meta)
+      if (!any(rownames(sample.meta) %in% rownames(p.dists))) stop("The rownames of the sample.meta object don't match any sample names.")
+      meta <- sample.meta[intersect(rownames(p.dists), rownames(sample.meta)), , drop = FALSE]
+      sc <- screenCovariates(list(joint = p.dists[rownames(meta), rownames(meta)]), meta, covariates = names(meta), mode = mode,
+                             dist = attr(p.dists, "dist.type") %||% "l2", p.values = "permutation", n.permutations = n.permutations,
+                             min.samples.per.type = 4, alpha = pvalue.cutoff, seed = private$opt("seed") %||% sample.int(.Machine$integer.max, 1),
+                             n.cores = n.cores, verbose = FALSE)
+      tb <- sc$table[sc$table$mode == (if (mode == "both") "marginal" else mode), ]
+      pvalues <- setNames(tb$p, tb$covariate); pseudo.r2 <- setNames(tb$R2.adj, tb$covariate)
+      res <- list(metadata=meta, pvalues=pvalues, pseudo.r2=pseudo.r2, screen=sc)
+      if (adjust.pvalues) res$padjust <- p.adjust(pvalues, method=p.adjust.method)
+      pv <- if (adjust.pvalues) res$padjust else pvalues
+      if (any(is.na(pv))) warning(paste(names(pv)[is.na(pv)], collapse = ", "), " could not be tested (constant or too many missing values?)")
+      if (show.warning && any(pv < pvalue.cutoff, na.rm = TRUE)) warning("Significant separation by: ", paste(names(pv)[pv < pvalue.cutoff], collapse=', '))
       self$test.results[[name]] <- res
       return(invisible(res))
     },
@@ -3350,8 +3444,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotMetadataSeparation=function(name='metadata.separation', pvalue.y=0.93, ...) {
       res <- private$getResults(name, "estimateMetadataSeparation()")
       pvals <- if (is.null(res$padjust)) res$pvalues else res$padjust
-      gg <- res$pseudo.r2 %>% {tibble(Type=names(.), value=ifelse(is.na(.), 0, .))} %>%
-        plotMeanMedValuesPerCellType(type="bar", ylab=expression(Pseudo-R^2), jitter.alpha=0, pvalues=pvals,
+      gg <- res$pseudo.r2 %>% {tibble(Type=names(.), value=ifelse(is.na(.), 0, pmax(., 0)))} %>%
+        plotMeanMedValuesPerCellType(type="bar", ylab=expression(adjusted~R^2), jitter.alpha=0, pvalues=pvals,
                                      pvalue.y=pvalue.y, ...) +
         scale_y_continuous(expand=c(0, 0)) +
         scale_fill_manual(values=rep("#2b8cbe", length(pvals)))
@@ -4117,6 +4211,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         msg <- paste(msg, "Please first run", suggested.function)
       }
       stop(msg)
+    },
+
+    # per-"cell type" distance matrices for a space: expression shifts (cached pseudobulk + distances) or composition
+    distancesForSpace = function(space, dist, n.pcs = NULL, cell.groups = self$cell.groups, min.cells.per.sample = 10, min.gene.frac = 0.01,
+                                 genes = NULL, verbose = FALSE) {
+      if (space == "composition") {
+        checkPackageInstalled("coda.base", cran = TRUE)
+        cnts <- private$extractCodaData(cells.to.remove = NULL, cells.to.remain = NULL, samples.to.remove = NULL)
+        cnts <- cnts[, colSums(cnts, na.rm = TRUE) > 0, drop = FALSE]
+        ilr <- computeILRMatrix(cnts, zero.pseudocount = 0.1)$ilr
+        D <- as.matrix(stats::dist(ilr)); attr(D, "n.cells") <- setNames(rowSums(cnts)[rownames(D)], rownames(D))
+        return(list(composition = D))
+      }
+      pb <- private$getPseudobulk(cell.groups = cell.groups, sample.per.cell = self$sample.per.cell, min.cells.per.sample = min.cells.per.sample,
+                                  min.gene.frac = min.gene.frac, genes = genes, verbose = verbose)
+      private$getSampleDistances(pb, dist = dist, n.pcs = n.pcs, verbose = verbose)
     },
 
     # pseudobulk per cell type, cached on the settings that produce it

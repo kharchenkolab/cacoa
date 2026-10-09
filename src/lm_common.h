@@ -125,6 +125,35 @@ static inline std::vector<arma::uvec> subset_blocks(const std::vector<arma::uvec
     return sub_blocks;
 }
 
+/**
+ * Induce a global permutation onto a subset of units (R: inducePermutation()).
+ * `p` holds 0-based images of a design-convention permutation over n_global rows (permuted design = X[p, ]);
+ * `units` are the global ids of the m units present; `blocks` index into `units` and are the (stratum x in-set)
+ * cells. Within each block the members (sorted ascending) are reassigned by the ranks of their images under p;
+ * units outside every block keep their place. Returns q over the units (design convention: X_units[q, ]).
+ * When no unit is missing and the blocks are the cells p was drawn in, q equals p.
+ */
+static inline arma::uvec induced_perm(const arma::uvec& p, const arma::uvec& units, const std::vector<arma::uvec>& blocks) {
+  const arma::uword m = units.n_elem;
+  arma::uvec q = arma::regspace<arma::uvec>(0, (m == 0) ? 0 : m - 1);
+  if (m == 0) return arma::uvec();
+  std::vector<arma::uword> blk, ord;
+  for (const auto& b : blocks) {
+    if (b.n_elem < 2) continue;
+    blk.assign(b.begin(), b.end()); std::sort(blk.begin(), blk.end());
+    ord.resize(blk.size()); for (arma::uword i = 0; i < ord.size(); ++i) ord[i] = i;
+    std::stable_sort(ord.begin(), ord.end(), [&](arma::uword a, arma::uword c) { return p[units[blk[a]]] < p[units[blk[c]]]; });
+    // ord[i] = member with rank i; member k takes the member with rank(k) = position of k in ord
+    for (arma::uword i = 0; i < ord.size(); ++i) q[blk[ord[i]]] = blk[i];
+  }
+  return q;
+}
+
+/** Inverse of a permutation over m units: y[inv] is the response aligned with the permuted design X[q, ]. */
+static inline arma::uvec inverse_perm(const arma::uvec& q) {
+  arma::uvec inv(q.n_elem); for (arma::uword i = 0; i < q.n_elem; ++i) inv[q[i]] = i; return inv;
+}
+
 static inline std::mt19937_64 make_rng(std::uint64_t base, arma::uword j) {
   return std::mt19937_64(base ^ (0x9e3779b97f4a7c15ULL + j + (j<<6) + (j>>2)));
 }

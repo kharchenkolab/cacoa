@@ -220,6 +220,19 @@ within stratum cells, compute the observed and permuted shift F (existing kernel
 with the dispersion correction, the same quantities), and return stat / p / shift / n per cell plus the per-
 permutation maxima for the max-statistic adjustment; the loop over cells runs on the sccore thread pool.
 
+## Progress log
+
+- **Step 1 done (2026-10-09).** `fit_and_randomize()` / `fl_fwl_cpp()` accept `perm_matrix` (design convention, induced
+  per NA pattern onto the observed rows within the plan's cells; Freedman-Lane induces onto the core rows first);
+  `modelPermutations()` builds plan + P + cells from a model; `performLMPermutations()` draws from the model's plan by
+  default (legacy generator only for designs without metadata) and returns `P` / `perm.cells`; CoDA, density and
+  cluster-free DE forward the option seed, so they share P with the shift tests. Found and fixed on the way: under
+  `impute_weak` the fitter permuted the weighted response against a design weighted with the unpermuted weights, so
+  the weak weights detached from their rows under relabeling; the design rows are now permuted instead (OLS, huber,
+  winsor). `buildDesignMatrices()` returns `meta`. Tests: `test-kernel-b.R` (39 expectations: brute-force
+  equality on complete data, per-NA-pattern induction, impute_weak WLS reference, robust and FL paths consume P,
+  exhaustive 2-vs-2 enumeration, only compared levels move, CoDA and shifts share P). Fast suite 728 / 0 failed.
+
 ## 6. Scaling the cluster-free tests to ~10^6 cells
 
 The batched kernel of step 4 handles this if two things are built in from the start; the current R loop cannot

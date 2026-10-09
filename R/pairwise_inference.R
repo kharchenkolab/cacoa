@@ -162,6 +162,29 @@ distinctLabelPermutations <- function(labels) {
   })
 }
 
+#' Permutation plan and draws for a model
+#'
+#' One set of permutations for every analysis on the same model: the plan of [permutationPlan()] for the model's
+#' sample set, the drawn matrix `P` and the cells (stratum x permuted-set groups of row indices) the labels were
+#' swapped in. Used by the per-column fitter (`performLMPermutations()`) so composition, density and cluster-free
+#' DE share the shift tests' permutations.
+#'
+#' @param model a `cacoaModel` or a `buildDesignMatrices()` design with `F` and `meta`
+#' @param scheme,n.permutations,block.vars see [permutationPlan()]; `block.vars` defaults to the model's
+#' @param seed seed for the draws (`NULL`: current RNG state)
+#' @param samples sample set (default: rows of the design)
+#' @return list: `plan`, `P` (n x B integer matrix), `cells` (list of integer vectors, row indices), `samples`
+#' @export
+modelPermutations <- function(model, scheme = "auto", n.permutations = 999, block.vars = NULL, seed = NULL, samples = rownames(model$F)) {
+  if (is.null(model$meta)) stop("the model carries no sample metadata; cannot build a permutation plan")
+  plan <- permutationPlan(model, model$meta, samples, scheme = scheme, block.vars = block.vars %||% model$block.vars, n.permutations = n.permutations)
+  P <- if (is.null(seed)) drawPermutations(plan) else withSeed(seed, drawPermutations(plan))
+  storage.mode(P) <- "integer"
+  cells <- split(which(plan$in.set), droplevels(plan$strata[plan$in.set]))
+  cells <- unname(cells[lengths(cells) >= 2])
+  list(plan = plan, P = P, cells = cells, samples = samples)
+}
+
 #' Draw permutations according to a plan
 #'
 #' @param plan output of [permutationPlan()]

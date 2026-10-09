@@ -232,7 +232,8 @@ buildDesignMatrices <- function(data, contrast,
     contrast_endpoints_X = endpoints_X,
     contrast_endpoints_at = attr(cF, "endpoints_at") %||% NULL,
     contrast_label = contrast_label,
-    contrast_endpoint_labels = contrast_endpoint_labels
+    contrast_endpoint_labels = contrast_endpoint_labels,
+    meta = data                      # sample metadata (rows = samples of F), used by modelPermutations()
   )
 }
 

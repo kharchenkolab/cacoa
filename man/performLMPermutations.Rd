@@ -19,7 +19,10 @@ performLMPermutations(
   return.y.resid = TRUE,
   n.permutations = 1000,
   n.cores = 1,
-  seed = NULL
+  seed = NULL,
+  P = NULL,
+  perm.cells = NULL,
+  block.vars = NULL
 )
 }
 \arguments{

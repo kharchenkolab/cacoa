@@ -66,6 +66,7 @@ struct DesignGroup {
   // Permutation config for this group
   std::vector<arma::uvec> perm_blocks;
   arma::uword n_units_for_perm; 
+  arma::uvec perm_units_global;        // global row ids of the permutation units (for perm_matrix induction)
 };
 
 struct Job { arma::uword col_idx; int group_idx; };
@@ -112,6 +113,47 @@ static inline arma::vec winsor_fit(const DesignGroup& g, const arma::vec& y, dou
   if (s <= 1e-12) return beta;
   r.clamp(-k*s, k*s);
   return g.B * (g.X_sub * beta + r);
+}
+
+// --- Fits on an explicitly permuted design (impute_weak under relabeling) ---
+// Under a relabeling the response rows keep their weights, so the design rows are permuted instead of the
+// response: beta_b = (X_q' W X_q)^-1 X_q' W y with X_q = X.rows(q). These helpers take the design as given.
+static inline arma::vec ols_free(const arma::mat& X, const arma::vec& y) {
+  arma::mat XtX = X.t() * X; arma::vec Xty = X.t() * y; arma::vec b;
+  if (!arma::solve(b, XtX, Xty, arma::solve_opts::likely_sympd + arma::solve_opts::no_approx)) b = arma::pinv(XtX) * Xty;
+  return b;
+}
+static arma::vec huber_irls_free(const arma::mat& X, const arma::vec& y, const arma::vec& wts, const Config& cfg) {
+  arma::vec beta = ols_free(X, y);
+  if (!beta.is_finite()) return beta;
+  for (int it = 0; it < cfg.huber_maxit; ++it) {
+    arma::vec r = y - X * beta;
+    double s = robust_scale_mad(r);
+    if (s <= 1e-12) break;
+    double ks = cfg.huber_k * s;
+    arma::vec w = arma::abs(r);
+    w.transform([&](double val){ return (val > ks) ? (ks/val) : 1.0; });
+    if (wts.n_elem) w %= wts;
+    arma::mat XtWX = X.t() * (X.each_col() % w);
+    arma::vec XtWy = X.t() * (y % w);
+    double tr = arma::trace(XtWX);
+    XtWX.diag() += 1e-10 * ((tr > 0.0) ? tr/X.n_cols : 1.0);
+    arma::mat Minv;
+    if (!inv_sympd(Minv, XtWX)) Minv = arma::pinv(XtWX);
+    arma::vec beta_new = Minv * XtWy;
+    if (!beta_new.is_finite()) return beta;
+    if (arma::norm(beta_new - beta)/(arma::norm(beta)+1e-12) < cfg.huber_tol) { beta = beta_new; break; }
+    beta = beta_new;
+  }
+  return beta;
+}
+static inline arma::vec winsor_fit_free(const arma::mat& X, const arma::vec& y, double k) {
+  arma::vec beta = ols_free(X, y);
+  arma::vec r = y - X * beta;
+  double s = robust_scale_mad(r);
+  if (s <= 1e-12) return beta;
+  r.clamp(-k*s, k*s);
+  return ols_free(X, X * beta + r);
 }
 
 // -------------------------------------------------------------------------
@@ -255,7 +297,8 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
                              std::string robust = "none", double huber_k = 1.345, int huber_maxit = 8, double huber_tol = 1e-6,
                              std::string na_mode = "drop", double na_weight = 1e-4, std::string na_center = "mean",
                              double illcond_rcond = 1e-12, double pinv_tol = 0.0, int n_cores = 1,
-                             int seed = 0) {
+                             int seed = 0,
+                             Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix = R_NilValue) {
   
   Config cfg; 
   cfg.robust = robust; cfg.na_mode = na_mode; cfg.huber_k = huber_k; cfg.huber_maxit = huber_maxit; cfg.huber_tol = huber_tol;
@@ -288,6 +331,23 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
   } else {
     // Default: Global shuffling
     blocks.push_back(arma::regspace<arma::uvec>(0, n_units - 1));
+  }
+
+  // Permutations supplied from R (drawPermutations): n_units x B, 1-based, design convention (permuted design = X[p, ]).
+  // Every column of Y then sees the same relabeling b, induced onto its observed rows within the blocks.
+  const bool has_P = perm_matrix.isNotNull();
+  arma::umat Pm;
+  if (has_P) {
+    if (is_graph) Rcpp::stop("perm_matrix is not supported together with pair_indices (graph mode)");
+    Rcpp::IntegerMatrix pm(perm_matrix);
+    if ((arma::uword)pm.nrow() != n_units) Rcpp::stop("perm_matrix must have %d rows (one per unit), got %d", (int)n_units, pm.nrow());
+    Pm.set_size(pm.nrow(), pm.ncol());
+    for (int b = 0; b < pm.ncol(); ++b) for (int i = 0; i < pm.nrow(); ++i) {
+      int v = pm(i, b) - 1;
+      if (v < 0 || v >= (int)n_units) Rcpp::stop("perm_matrix has an index outside 1..%d", (int)n_units);
+      Pm(i, b) = (arma::uword)v;
+    }
+    n_randomizations = (int)Pm.n_cols; cfg.n_randomizations = n_randomizations;
   }
 
   // 2. Group Columns by NA Pattern (Optimization)
@@ -343,10 +403,10 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
             // Fallback if subsetting leaves no valid blocks
             if (g.perm_blocks.empty() && g.obs_indices.n_elem > 0) 
                 g.perm_blocks.push_back(arma::regspace<arma::uvec>(0, g.obs_indices.n_elem - 1));
-            g.n_units_for_perm = g.obs_indices.n_elem;
+            g.n_units_for_perm = g.obs_indices.n_elem; g.perm_units_global = g.obs_indices;
         } else {
             // Impute Mode: Shuffle full N rows
-            g.perm_blocks = blocks; g.n_units_for_perm = n;
+            g.perm_blocks = blocks; g.n_units_for_perm = n; g.perm_units_global = arma::regspace<arma::uvec>(0, n - 1);
         }
     }
   }, n_cores, false);
@@ -420,7 +480,8 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
     int ge=0, le=0, ge_abs=0;
     for (int r=0; r<cfg.n_randomizations; ++r) {
         // Generate indices
-        arma::uvec perm_idx = generate_permutation(rng, grp.perm_blocks, grp.n_units_for_perm, is_graph, pair_mapper, pairs_mat);
+        arma::uvec perm_idx = has_P ? inverse_perm(induced_perm(Pm.col(r), grp.perm_units_global, grp.perm_blocks))
+                                    : generate_permutation(rng, grp.perm_blocks, grp.n_units_for_perm, is_graph, pair_mapper, pairs_mat);
         
         // Apply indices to data
         arma::vec y_perm;
@@ -441,7 +502,18 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
 
         // Fit
         double s_perm = 0.0; arma::vec b_perm;
-        if (is_huber) {
+        if (cfg.na_mode != "drop") {
+             // impute_weak: the near-zero weights stay with the response rows; permute the design rows instead
+             arma::uvec q = has_P ? induced_perm(Pm.col(r), grp.perm_units_global, grp.perm_blocks) : inverse_perm(perm_idx);
+             arma::mat Xq = X.rows(q);
+             if (is_huber) b_perm = huber_irls_free(Xq, y_clean, grp.weights, cfg);
+             else {
+               arma::vec sw = arma::sqrt(grp.weights);
+               arma::mat Xqw = Xq.each_col() % sw; arma::vec yw = y_clean % sw;
+               b_perm = is_winsor ? winsor_fit_free(Xqw, yw, cfg.huber_k) : ols_free(Xqw, yw);
+             }
+             s_perm = arma::dot(b_perm, contrast);
+        } else if (is_huber) {
              b_perm = (cfg.na_mode=="drop") ? huber_irls(grp.X_sub, y_perm, grp, cfg) : huber_irls(X, y_perm, grp, cfg);
              s_perm = arma::dot(b_perm, contrast);
         } else if (is_winsor) {
@@ -569,10 +641,32 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y
                       std::string na_mode = "drop", double na_weight = 1e-4, std::string na_center = "mean",
                       double illcond_rcond = 1e-12, double pinv_tol = 0.0, int n_cores = 1,
                       bool return_residuals = true, bool return_sampled_fits = false, bool return_sampled_stats = false,
-                      int seed = 0) {
+                      int seed = 0,
+                      Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix = R_NilValue) {
   
   arma::uword n = X.n_rows, m = Y.n_cols;
   arma::uvec idx_core = parse_core_rows(core_rows, n);
+
+  // Permutations from R over all n rows: induce onto the core rows within the core blocks and hand the result to the inner fit.
+  Rcpp::Nullable<Rcpp::IntegerMatrix> inner_P = R_NilValue;
+  if (perm_matrix.isNotNull()) {
+    Rcpp::IntegerMatrix pm(perm_matrix);
+    if ((arma::uword)pm.nrow() != n) Rcpp::stop("perm_matrix must have %d rows, got %d", (int)n, pm.nrow());
+    std::vector<arma::uvec> core_blocks;
+    if (core_perm_groups.isNotNull()) {
+      Rcpp::List pg(core_perm_groups);
+      for (int i = 0; i < pg.size(); ++i) { arma::uvec ug = Rcpp::as<arma::uvec>(Rcpp::IntegerVector(pg[i])); if (ug.n_elem && ug.max() > 0) ug -= 1; core_blocks.push_back(ug); }
+    } else core_blocks.push_back(arma::regspace<arma::uvec>(0, idx_core.n_elem - 1));
+    Rcpp::IntegerMatrix pc(idx_core.n_elem, pm.ncol());
+    arma::uvec p(n);
+    for (int b = 0; b < pm.ncol(); ++b) {
+      for (arma::uword i = 0; i < n; ++i) p[i] = (arma::uword)(pm(i, b) - 1);
+      arma::uvec q = induced_perm(p, idx_core, core_blocks);
+      for (arma::uword k = 0; k < idx_core.n_elem; ++k) pc(k, b) = (int)q[k] + 1;
+    }
+    inner_P = Rcpp::Nullable<Rcpp::IntegerMatrix>(Rcpp::wrap(pc));
+    n_randomizations = pm.ncol();
+  }
   
   // 1. FAST PATH: No Nuisance Variables (Z is empty)
   if (Z.n_cols == 0) {
@@ -581,7 +675,7 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y
     Rcpp::List out = fit_and_randomize(X_sub, Y_sub, contrast, core_perm_groups, core_pair_indices,
                                        n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats,
                                        robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center,
-                                       illcond_rcond, pinv_tol, n_cores, seed);
+                                       illcond_rcond, pinv_tol, n_cores, seed, inner_P);
     out["partial_core"] = Y_sub;
     return out;
   }
@@ -700,7 +794,7 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y
     Rcpp::List res = fit_and_randomize(X_fin, Y_fin, contrast, core_perm_groups, core_pair_indices,
                                        n_randomizations, alternative, /* return_residuals = */ true, return_sampled_fits, return_sampled_stats,
                                        robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center,
-                                       illcond_rcond, pinv_tol, n_cores, seed);
+                                       illcond_rcond, pinv_tol, n_cores, seed, inner_P);
     
     // E. Unpack
     arma::mat B = res["coef"];

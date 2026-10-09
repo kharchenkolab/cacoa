@@ -85,16 +85,28 @@ performLMPermutations <- function(x, y,
                   return.sampled.fits = FALSE,
                   return.y.resid = TRUE,
                   n.permutations = 1000,
-                  n.cores=1, seed = NULL) {
+                  n.cores=1, seed = NULL, P = NULL, perm.cells = NULL, block.vars = NULL) {
 
   robust.method <- match.arg(robust.method)
   perm.method   <- match.arg(perm.method)
   na.mode       <- match.arg(na.mode)
   alternative   <- match.arg(alternative)
   na.center     <- match.arg(na.center)
-  # seed for the C++ permutation RNG: drawn from R's RNG when not given, so set.seed() makes runs reproducible
+  # seed: drawn from R's RNG when not given, so set.seed() makes runs reproducible
   if (is.null(seed)) seed <- sample.int(.Machine$integer.max, 1L)
   seed <- as.integer(seed)
+  # permutations from the model's plan (shared with the distance-based tests) unless given explicitly;
+  # the legacy internal generator is used only for designs without metadata
+  if (is.null(P) && !is.null(x$meta) && !is.null(x$F) && n.permutations > 0) {
+    mp <- modelPermutations(x, scheme = perm.method, n.permutations = n.permutations, block.vars = block.vars, seed = seed)
+    P <- mp$P; perm.cells <- mp$cells
+  }
+  if (!is.null(P)) {
+    storage.mode(P) <- "integer"
+    if (nrow(P) != nrow(x$F)) stop("P must have one row per sample of the design (", nrow(x$F), ")")
+    n.permutations <- ncol(P)
+    if (is.null(perm.cells)) perm.cells <- list(seq_len(nrow(P)))
+  }
   # response vector/matrix
   if (is.numeric(y) && !is.matrix(y)) {
     Y <- matrix(y, ncol = 1L)
@@ -122,8 +134,9 @@ performLMPermutations <- function(x, y,
       X = x$F,
       Y = Y,
       contrast = x$contrast.F,
-      perm_groups = x$perm.groups$full,
+      perm_groups = if (!is.null(P)) perm.cells else x$perm.groups$full,
       pair_indices = x$pairs,
+      perm_matrix = P,
       n_randomizations = n.permutations,
       alternative = alternative,
       return_residuals = return.residuals,
@@ -143,7 +156,9 @@ performLMPermutations <- function(x, y,
       Y = Y,
       contrast = x$contrast.X,
       core_rows = x$core.rows, 
+      core_perm_groups = if (!is.null(P)) coreCells(perm.cells, x$core.rows %||% rep(TRUE, nrow(P))) else NULL,
       core_pair_indices = if(!is.null(x$pairs) && !is.null(x$core.rows)) x$pairs[x$core.rows, , drop=FALSE] else x$pairs,
+      perm_matrix = P,
       n_randomizations = n.permutations,
       alternative = alternative,
       robust = robust.method,
@@ -290,6 +305,7 @@ performLMPermutations <- function(x, y,
   
   ## --- final result ---
   list(
+    P = P, perm.cells = perm.cells,
     y.resid    = if(perm.method == "freedman-lane") y.resid else NULL,
     coef       = coef,
     stat.obs   = stat,
@@ -326,4 +342,12 @@ getSSE <- function(X, y) {
     bhat <- fit$coefficients; bhat[!is.finite(bhat)] <- 0
     res  <- y - as.numeric(X %*% bhat)
     sum(res^2)
+}
+
+
+# cells of row indices restricted to the core rows, re-indexed to core positions (for the Freedman-Lane fitter)
+coreCells <- function(cells, core.rows) {
+  pos <- integer(length(core.rows)); pos[core.rows] <- seq_len(sum(core.rows))
+  out <- lapply(cells, function(i) pos[i[core.rows[i]]])
+  out[lengths(out) >= 2]
 }

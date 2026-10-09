@@ -2435,7 +2435,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (verbose) message("Running lmCoda with design='", deparse(sample.model$formula_used), "' and ", perm.method, " permutations")
 
       #res <- runCoda(tmp$d.counts, tmp$d.groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type, method=method, n.cores=n.cores, verbose=verbose)
-      res <- lmCoda(cnts, sample.model, perm.method=perm.method, n.permutations=n.permutations,
+      res <- lmCoda(cnts, sample.model, seed = private$opt("seed"), perm.method=perm.method, n.permutations=n.permutations,
                     zero.pseudocount=zero.pseudocount, basis.type = basis.type, ref.p.thresh = ref.p.thresh,
                     ref.min.size = ref.min.size, ref.max.size = ref.max.size, ...)
       res$cnts <- cnts
@@ -2848,7 +2848,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else dens.res$model %||% private$resolveModel(verbose = verbose, what = "estimateDiffCellDensity()")
 
       perm.res <- density.mat %>%
-          diffCellDensityPermutations(sample.model=sample.model, perm.method=perm.method, robust.method = robust.method,
+          diffCellDensityPermutations(sample.model=sample.model, seed = private$opt("seed"), perm.method=perm.method, robust.method = robust.method,
                                       na.mode = na.mode, alternative = alternative, n.permutations=n.permutations,
                                       return.residuals=return.residuals, return.sampled.stats=return.sampled.stats,
                                       n.cores=n.cores, verbose=verbose)
@@ -3630,7 +3630,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       #  norm_both=norm.both, adjust_pvalues=adjust.pvalues, smooth=smooth, wins=wins, n_permutations=n.permutations,
       #  verbose=verbose, n_cores=n.cores
       #)
-      mats <- estimateClusterFreeDE_LM(genes, de.inp, sample.per.cell = sample.per.cell, design = sample.model, 
+      mats <- estimateClusterFreeDE_LM(seed = private$opt("seed"), genes, de.inp, sample.per.cell = sample.per.cell, design = sample.model, 
                                                   perm.method = perm.method, robust.method = robust.method, 
                                                   na.mode = na.mode, alternative = alternative, n.cores = n.cores,
                                                   min.n.samp.per.cond = min.n.samp.per.cond, min.n.obs.per.samp = min.n.obs.per.samp,

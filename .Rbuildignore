@@ -11,3 +11,5 @@ CONTRIBUTING.md
 ^misc$
 ^Rplots\.pdf$
 ^vignettes/.*\.ipynb$
+^vignettes/walkthrough_short\.md$
+^vignettes/walkthrough_short_files$

@@ -40,3 +40,30 @@ test_that("batched kernel equals the R reference: whole-type and random neighbou
   res1 <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns.rand, cao$model, cao$sample.meta, permutation = "freedman-lane", n.permutations = 29, seed = 1, adjust = TRUE, smooth = TRUE, n.cores = 1)
   expect_equal(res4$stat, res1$stat); expect_equal(res4$z.adj, res1$z.adj); expect_equal(res4$shifts.smoothed, res1$shifts.smoothed)
 })
+
+test_that("streaming kernel equals the batched kernel on a precomputed distance matrix; 0-based neighbourhoods are read as such", {
+  cao <- makeToyCacoa(n.per.group = c(A = 5, B = 5), cells.per.sample = 40, n.genes = 80, shift = 1.2)
+  cg <- cao$cell.groups; idx <- split(seq_along(cg) - 1L, cg)
+  nns <- lapply(as.character(cg), function(t) idx[[t]]); names(nns) <- names(cg)
+  inp <- cfInputs(cao, nns)
+  lev <- rep(-1L, length(inp$samples))
+  bat <- cacoa:::cluster_free_shift_batch(inp$Y, inp$pairs - 1L, length(inp$samples), cao$model$F[inp$samples, ], cao$model$contrast.F, lev, 2L,
+                                          as.integer(inp$gplan$strata), as.integer(inp$gplan$in.set), inp$P, FALSE, TRUE, 1L)
+  res <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = FALSE, smooth = FALSE, n.cores = 3)
+  expect_equal(unname(res$stat), as.numeric(bat$stat), tolerance = 1e-10); expect_equal(unname(res$p.value), as.numeric(bat$p))
+  expect_equal(unname(res$shifts), as.numeric(bat$shift), tolerance = 1e-10)
+  # every whole-type neighbourhood reproduces the cell-type engine's F on the same mean profiles (regression: the
+  # distance builder used to shift 0-based neighbourhoods without cell 0 by one cell, so only the first type matched)
+  for (t in levels(cg)) {
+    prof <- sapply(levels(cao$sample.per.cell), function(s) Matrix::rowMeans(inp$cm[, cg == t & cao$sample.per.cell == s, drop = FALSE]))
+    D <- 1 - cor(log10(1e3 * prof + 1))
+    r <- testPairwiseEffects(list(x = D), cao$model, cao$sample.meta, dist = "cor", n.permutations = 9, seed = 1)
+    expect_equal(unname(res$stat[cg == t][1]), r$results$F, tolerance = 1e-8, info = t)
+  }
+  # explicit index conventions of the pair-distance builder
+  nb <- idx[[2]]                                                     # 0-based ids of the second type: none is 0
+  Y0 <- cacoa:::estimateExpressionShiftsPairsLM(inp$cm, as.integer(cao$sample.per.cell), list(nb), inp$pairs, 1L, "cor", TRUE)
+  Y1 <- cacoa:::estimateExpressionShiftsPairsLM(inp$cm, as.integer(cao$sample.per.cell), list(nb + 1L), inp$pairs, 1L, "cor", TRUE, nn_one_based = TRUE)
+  expect_equal(Y0, Y1)
+  expect_error(cacoa:::estimateExpressionShiftsPairsLM(inp$cm, as.integer(cao$sample.per.cell), list(nb + 1L), inp$pairs, 1L, "cor", TRUE), "out-of-range")   # no silent re-basing
+})

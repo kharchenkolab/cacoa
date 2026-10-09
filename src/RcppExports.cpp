@@ -144,9 +144,38 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cluster_free_shift_stream
+Rcpp::List cluster_free_shift_stream(const Eigen::SparseMatrix<double>& cm, Rcpp::IntegerVector sample_per_cell, Rcpp::List nn_ids, bool nn_one_based, int min_n_obs_per_samp, std::string dist, bool log_vecs, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec, const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset, const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores);
+RcppExport SEXP _cacoa_cluster_free_shift_stream(SEXP cmSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP nn_one_basedSEXP, SEXP min_n_obs_per_sampSEXP, SEXP distSEXP, SEXP log_vecsSEXP, SEXP pairsSEXP, SEXP n_samplesSEXP, SEXP XSEXP, SEXP cvecSEXP, SEXP level_codeSEXP, SEXP min_samp_per_levelSEXP, SEXP stratumSEXP, SEXP insetSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP bias_correctSEXP, SEXP n_coresSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double>& >::type cm(cmSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type sample_per_cell(sample_per_cellSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type nn_ids(nn_idsSEXP);
+    Rcpp::traits::input_parameter< bool >::type nn_one_based(nn_one_basedSEXP);
+    Rcpp::traits::input_parameter< int >::type min_n_obs_per_samp(min_n_obs_per_sampSEXP);
+    Rcpp::traits::input_parameter< std::string >::type dist(distSEXP);
+    Rcpp::traits::input_parameter< bool >::type log_vecs(log_vecsSEXP);
+    Rcpp::traits::input_parameter< const arma::imat& >::type pairs(pairsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_samples(n_samplesSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type cvec(cvecSEXP);
+    Rcpp::traits::input_parameter< const arma::ivec& >::type level_code(level_codeSEXP);
+    Rcpp::traits::input_parameter< int >::type min_samp_per_level(min_samp_per_levelSEXP);
+    Rcpp::traits::input_parameter< const arma::ivec& >::type stratum(stratumSEXP);
+    Rcpp::traits::input_parameter< const arma::uvec& >::type inset(insetSEXP);
+    Rcpp::traits::input_parameter< const arma::imat& >::type P(PSEXP);
+    Rcpp::traits::input_parameter< bool >::type freedman_lane(freedman_laneSEXP);
+    Rcpp::traits::input_parameter< bool >::type bias_correct(bias_correctSEXP);
+    Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
+    rcpp_result_gen = Rcpp::wrap(cluster_free_shift_stream(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores));
+    return rcpp_result_gen;
+END_RCPP
+}
 // estimateExpressionShiftsPairsLM
-arma::mat estimateExpressionShiftsPairsLM(const Eigen::SparseMatrix<double>& cm, Rcpp::IntegerVector sample_per_cell, Rcpp::List nn_ids, const arma::imat& pairs_mat, int min_n_obs_per_samp, std::string dist, bool log_vecs);
-RcppExport SEXP _cacoa_estimateExpressionShiftsPairsLM(SEXP cmSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP pairs_matSEXP, SEXP min_n_obs_per_sampSEXP, SEXP distSEXP, SEXP log_vecsSEXP) {
+arma::mat estimateExpressionShiftsPairsLM(const Eigen::SparseMatrix<double>& cm, Rcpp::IntegerVector sample_per_cell, Rcpp::List nn_ids, const arma::imat& pairs_mat, int min_n_obs_per_samp, std::string dist, bool log_vecs, bool nn_one_based, bool pairs_one_based);
+RcppExport SEXP _cacoa_estimateExpressionShiftsPairsLM(SEXP cmSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP pairs_matSEXP, SEXP min_n_obs_per_sampSEXP, SEXP distSEXP, SEXP log_vecsSEXP, SEXP nn_one_basedSEXP, SEXP pairs_one_basedSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -157,7 +186,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type min_n_obs_per_samp(min_n_obs_per_sampSEXP);
     Rcpp::traits::input_parameter< std::string >::type dist(distSEXP);
     Rcpp::traits::input_parameter< bool >::type log_vecs(log_vecsSEXP);
-    rcpp_result_gen = Rcpp::wrap(estimateExpressionShiftsPairsLM(cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp, dist, log_vecs));
+    Rcpp::traits::input_parameter< bool >::type nn_one_based(nn_one_basedSEXP);
+    Rcpp::traits::input_parameter< bool >::type pairs_one_based(pairs_one_basedSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimateExpressionShiftsPairsLM(cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp, dist, log_vecs, nn_one_based, pairs_one_based));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -466,7 +497,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_mapIds", (DL_FUNC) &_cacoa_mapIds, 2},
     {"_cacoa_clusterFreeGeneMat", (DL_FUNC) &_cacoa_clusterFreeGeneMat, 5},
     {"_cacoa_cluster_free_shift_batch", (DL_FUNC) &_cacoa_cluster_free_shift_batch, 13},
-    {"_cacoa_estimateExpressionShiftsPairsLM", (DL_FUNC) &_cacoa_estimateExpressionShiftsPairsLM, 7},
+    {"_cacoa_cluster_free_shift_stream", (DL_FUNC) &_cacoa_cluster_free_shift_stream, 19},
+    {"_cacoa_estimateExpressionShiftsPairsLM", (DL_FUNC) &_cacoa_estimateExpressionShiftsPairsLM, 9},
     {"_cacoa_applyMedianFilterES", (DL_FUNC) &_cacoa_applyMedianFilterES, 4},
     {"_cacoa_adjustedZScoresMaxStat", (DL_FUNC) &_cacoa_adjustedZScoresMaxStat, 8},
     {"_cacoa_fit_and_randomize", (DL_FUNC) &_cacoa_fit_and_randomize, 22},

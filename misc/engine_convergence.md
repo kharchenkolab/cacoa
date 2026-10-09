@@ -248,6 +248,19 @@ permutation maxima for the max-statistic adjustment; the loop over cells runs on
   `dispersionTermTest()` stay as references (`test-kernel-a.R`: agreement to 1e-9 over 3-group / 2-group /
   4-group cells, block and FL; identity reproduces the observed F and F.disp). Fast suite 785 / 0 failed.
 
+- **Step 4 done (2026-10-09).** `src/cluster_free_shift_kernel.cpp`: `cluster_free_shift_stream()` does per cell, in
+  C++ on the thread pool, the neighbourhood profiles and distances (fused, nothing cells-wide in memory), present
+  samples, estimability, Gower, induced permutations within the plan's cells, observed and permuted F, shift
+  estimate, p, z and the running extremes for the max-statistic; `cluster_free_shift_batch()` (same test on a
+  precomputed pair matrix) and the former R loop (`tests/testthat/helper-reference.R`) are the references
+  (`test-kernel-cf.R`: equality for whole-type and random neighbourhoods with missing samples, block and FL,
+  thread-count invariance). Timing on the simulated object (4,500 cells, 99 permutations, 500 genes): 349 s on
+  16 cores before, 16-20 s now on 1 or 16 cores (the remaining time is outside the kernel; being profiled).
+  Found and fixed on the way: `estimateExpressionShiftsPairsLM()` re-based any 0-based neighbourhood that did not
+  contain cell 0 as if it were 1-based, shifting it by one cell; the object pipeline passes 0-based graph
+  adjacency, so nearly every neighbourhood was off by one. Index conventions are now explicit arguments and the
+  whole-type test checks every cell type. The walkthrough's cluster-free panel must be re-rendered.
+
 ## 6. Scaling the cluster-free tests to ~10^6 cells
 
 The batched kernel of step 4 handles this if two things are built in from the start; the current R loop cannot

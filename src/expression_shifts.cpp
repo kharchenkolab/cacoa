@@ -31,7 +31,9 @@ arma::mat estimateExpressionShiftsPairsLM(
     const arma::imat& pairs_mat,                      // (n_pairs x 2) sample indices (often 1-based)
     int min_n_obs_per_samp = 1,
     std::string dist = "cor",                         // "cor", "cosine", or "js"
-    bool log_vecs = true)
+    bool log_vecs = true,
+    bool nn_one_based = false,                        // nn_ids are 0-based (graph adjacency) unless TRUE
+    bool pairs_one_based = true)                      // pairs_mat as produced by combn() in R
 {
   if (cm.cols() != sample_per_cell.size())
     Rcpp::stop("cm.ncols (%d) must equal length(sample_per_cell) (%d).",
@@ -64,17 +66,10 @@ arma::mat estimateExpressionShiftsPairsLM(
   for (int k = 0; k < n_neigh; ++k) {
     Rcpp::IntegerVector ids_r = nn_ids[k];
     std::vector<int> ids; ids.reserve(ids_r.size());
-    int min_id = std::numeric_limits<int>::max();
-    int max_id = std::numeric_limits<int>::min();
     for (int t = 0; t < ids_r.size(); ++t) {
       int idx = ids_r[t];
       if (Rcpp::IntegerVector::is_na(idx)) continue;
-      min_id = std::min(min_id, idx);
-      max_id = std::max(max_id, idx);
-      ids.push_back(idx);
-    }
-    if (!ids.empty() && (min_id >= 1 || max_id == cm.cols())) {
-      for (int& v : ids) --v; // 1-based -> 0-based
+      ids.push_back(nn_one_based ? idx - 1 : idx);
     }
     for (int v : ids) {
       if (v < 0 || v >= cm.cols())
@@ -86,9 +81,7 @@ arma::mat estimateExpressionShiftsPairsLM(
   // pairs_mat -> 0-based
   arma::imat pairs = pairs_mat;
   if (pairs.n_rows > 0) {
-    int pmin = pairs.min();
-    int pmax = pairs.max();
-    if (pmin >= 1 || pmax >= n_samples) pairs -= 1; //  1-based
+    if (pairs_one_based) pairs -= 1;
     if (pairs.min() < 0 || pairs.max() >= n_samples)
       Rcpp::stop("pairs_mat has indices outside [0, %d) after normalization.", n_samples);
   }

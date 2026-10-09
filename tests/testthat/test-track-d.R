@@ -108,11 +108,12 @@ test_that("cluster-free shifts on the engine: constant within whole-type neighbo
   expect_true(all(res$p.value[is.finite(res$p.value)] < 0.1))                            # planted shift in both types
   expect_equal(unname(res$n.samples[1]), 10)
   # the whole-type neighbourhood statistic equals the cell-type engine's F on the same mean profiles
-  prof <- sapply(levels(cao$sample.per.cell), function(s) Matrix::rowMeans(cm[, cg == "ct1" & cao$sample.per.cell == s, drop = FALSE]))
-  prof <- log10(1e3 * t(prof) + 1)
-  D <- 1 - cor(t(prof))
-  r <- testPairwiseEffects(list(ct1 = D), cao$model, cao$sample.meta, dist = "cor", n.permutations = 19, seed = 1)
-  expect_equal(unname(res$stat[cg == "ct1"][1]), r$results$F, tolerance = 1e-8)
+  for (ct in levels(cg)) {
+    prof <- sapply(levels(cao$sample.per.cell), function(s) Matrix::rowMeans(cm[, cg == ct & cao$sample.per.cell == s, drop = FALSE]))
+    D <- 1 - cor(log10(1e3 * prof + 1))
+    r <- testPairwiseEffects(list(x = D), cao$model, cao$sample.meta, dist = "cor", n.permutations = 19, seed = 1)
+    expect_equal(unname(res$stat[cg == ct][1]), r$results$F, tolerance = 1e-8, info = ct)
+  }
   # smoothing and adjustment can be switched off
   res2 <- clusterFreeExpressionShifts(cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 19, seed = 1, adjust = FALSE, smooth = FALSE)
   expect_null(res2$z.adj); expect_null(res2$shifts.smoothed)

@@ -29,8 +29,12 @@ cluster_free_shift_batch <- function(Y, pairs, n_samples, X, cvec, level_code, m
     .Call(`_cacoa_cluster_free_shift_batch`, Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores)
 }
 
-estimateExpressionShiftsPairsLM <- function(cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp = 1L, dist = "cor", log_vecs = TRUE) {
-    .Call(`_cacoa_estimateExpressionShiftsPairsLM`, cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp, dist, log_vecs)
+cluster_free_shift_stream <- function(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores) {
+    .Call(`_cacoa_cluster_free_shift_stream`, cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores)
+}
+
+estimateExpressionShiftsPairsLM <- function(cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp = 1L, dist = "cor", log_vecs = TRUE, nn_one_based = FALSE, pairs_one_based = TRUE) {
+    .Call(`_cacoa_estimateExpressionShiftsPairsLM`, cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp, dist, log_vecs, nn_one_based, pairs_one_based)
 }
 
 applyMedianFilterES <- function(x, nn_ids, non_zero_ids = NULL, one_based = FALSE) {

@@ -44,15 +44,17 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
   if (length(samples) < 4) stop("fewer than 4 samples shared by the design and the cells")
   spc <- factor(as.character(sample.per.cell[colnames(cm)]), levels = samples)
   keep.cells <- !is.na(spc)
-  if (!all(keep.cells)) { cm <- cm[, keep.cells, drop = FALSE]; spc <- spc[keep.cells] }
+  nn.map <- NULL
+  if (!all(keep.cells)) {                      # cells of samples outside the design are dropped: re-index the neighbourhoods
+    cm <- cm[, keep.cells, drop = FALSE]; spc <- spc[keep.cells]
+    nn.map <- cumsum(keep.cells) - 1L; nn.map[!keep.cells] <- NA_integer_
+  }
   n <- length(samples)
   pairs <- t(utils::combn(n, 2)); storage.mode(pairs) <- "integer"
   m <- length(nns.per.cell)
   nn.list <- lapply(nns.per.cell, as.integer)
-  if (verbose) message(sprintf("Computing neighbourhood sample distances for %d cells (%d samples)...", m, n))
-  Y <- estimateExpressionShiftsPairsLM(cm = cm, sample_per_cell = as.integer(spc), nn_ids = nn.list, pairs_mat = pairs,
-                                       min_n_obs_per_samp = min.n.obs.per.samp, dist = dist, log_vecs = log.vectors)
-  # global permutations over all samples; the per-cell work runs in C++ (cluster_free_shift_batch)
+  if (!is.null(nn.map)) nn.list <- lapply(nn.list, function(v) { w <- nn.map[v + 1L]; w[!is.na(w)] })
+  # global permutations over all samples; neighbourhood profiles, distances and the test per cell run in C++
   meta <- meta[samples, , drop = FALSE]
   des <- design; des$F <- design$F[samples, , drop = FALSE]
   gplan <- permutationPlan(des, meta, samples, scheme = permutation, block.vars = block.vars, n.permutations = n.permutations, max.enumerate = 0)
@@ -63,9 +65,10 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
   lev.var <- if (!is.null(spec) && spec$type %in% c("simple", "marginal") && !grepl(":", spec$term, fixed = TRUE) && spec$term %in% names(meta) && !is.numeric(meta[[spec$term]])) spec$term else NULL
   level.code <- rep(-1L, n)
   if (!is.null(lev.var)) { g <- as.character(meta[[lev.var]]); level.code <- ifelse(is.na(g), -1L, ifelse(g == spec$den, 1L, ifelse(g == spec$num, 2L, 0L))) }
-  if (verbose) message(sprintf("Testing %d cells with %d permutations (%s)...", m, B, gplan$scheme))
-  kr <- cluster_free_shift_batch(Y, pairs - 1L, n, des$F, cF, as.integer(level.code), as.integer(min.samp.per.level), as.integer(gplan$strata), as.integer(gplan$in.set),
-                                 P.global, gplan$scheme == "freedman-lane", TRUE, as.integer(n.cores))
+  if (verbose) message(sprintf("Testing %d cells (%d samples) with %d permutations (%s)...", m, n, B, gplan$scheme))
+  kr <- cluster_free_shift_stream(cm, as.integer(spc), nn.list, FALSE, as.integer(min.n.obs.per.samp), dist, log.vectors,
+                                  pairs - 1L, n, des$F, cF, as.integer(level.code), as.integer(min.samp.per.level), as.integer(gplan$strata), as.integer(gplan$in.set),
+                                  P.global, gplan$scheme == "freedman-lane", TRUE, as.integer(n.cores))
   Fobs <- as.numeric(kr$stat); pval <- as.numeric(kr$p); shifts <- as.numeric(kr$shift); n.samp <- as.integer(kr$n); z <- as.numeric(kr$z)
   mx <- as.numeric(kr$max); mn <- as.numeric(kr$min)
   valid <- which(is.finite(z))

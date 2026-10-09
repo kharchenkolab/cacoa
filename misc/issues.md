@@ -9,6 +9,8 @@ what still has to be built; nothing here is tracked by a test failure (the fast 
 - `impute_weak` in the C++ fitter detached the weak weights from their rows under relabeling (step 1).
 - Max-T p-values used random global draws while per-cell-type p-values were enumerated: `p.fwer` could be
   below the raw p (step 2).
+- The cluster-free pair-distance builder shifted 0-based neighbourhoods lacking cell 0 by one cell (step 4);
+  the walkthrough's cluster-free panel was computed on mis-indexed neighbourhoods and is re-rendered.
 - Numeric tests (`test = "age"`) permuted nothing: the plan marked no sample swappable (step 2). All earlier
   numeric-test p-values from the block scheme were therefore uninformative (p = 1 or NA).
 

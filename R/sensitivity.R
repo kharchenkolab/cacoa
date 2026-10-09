@@ -48,7 +48,7 @@ sensitivityFormulas <- function(model, screen = NULL, meta, top.k = 3, min.resid
 #' @export
 checkSensitivity <- function(D.list, model, meta, formulas = NULL, screen = NULL, influence = NULL, dist = "cor", permutation = "auto",
                              n.permutations = 199, seed = 1, alpha = 0.05, min.samp.per.level = 3, n.cores = 1, top.k = 3, rel.change = 0.5,
-                             influence.rel = 0.2) {
+                             influence.rel = 0.2, robust = "none", na.mode = "drop", robust.k = 1.345) {
   t <- model$tests[[1]]
   if (t$kind != "contrast") stop("sensitivity analysis is defined for contrast tests (two groups or a numeric step)")
   if (is.null(formulas)) formulas <- sensitivityFormulas(model, screen, meta, top.k = top.k)
@@ -61,7 +61,7 @@ checkSensitivity <- function(D.list, model, meta, formulas = NULL, screen = NULL
     m$tests <- m$tests[1]
     r <- expressionShiftsForModel(D.list, m, dist = dist, permutation = permutation, n.permutations = n.permutations, block.vars = model$block.vars,
                                   influence = nm == "current" && is.null(influence), min.samp.per.level = min.samp.per.level, seed = seed, alpha = alpha,
-                                  n.cores = n.cores)
+                                  n.cores = n.cores, robust = robust, na.mode = na.mode, robust.k = robust.k)
     if (!nrow(r$results)) return(NULL)
     rows <- r$results; rows$model <- nm; rows$formula <- paste(deparse(formulas[[nm]]), collapse = "")
     list(rows = rows, res = r)

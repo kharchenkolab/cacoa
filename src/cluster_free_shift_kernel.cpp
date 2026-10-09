@@ -6,6 +6,7 @@
 #include "parallel.h"
 #include "lm_common.h"
 #include "cf_common.h"
+#include "gower_stats.h"
 
 // Batched cluster-free expression-shift kernel (step 4 of the engine convergence).
 //
@@ -57,6 +58,7 @@ struct CellResult { double F = arma::datum::nan, p = arma::datum::nan, shift = a
 struct KernelInputs {
   const arma::imat& pairs; arma::uword n; const arma::mat& X; const arma::vec& cvec; const arma::ivec& level_code; int min_samp_per_level;
   const arma::ivec& stratum; const arma::uvec& inset; const arma::imat& P; bool freedman_lane; bool bias_correct; bool use_levels;
+  int robust; double robust_k;
 };
 
 // one cell: y holds the pair distances (NaN where a sample has too few cells)
@@ -81,7 +83,14 @@ static CellResult test_cell(const arma::vec& y, const KernelInputs& in) {
   arma::mat G = gower(D);
   Hat h = hat_of(Xs);
   arma::vec a = h.A.t() * c; const double cXc = arma::as_scalar(c.t() * h.XtXi * c);
-  const double Fo = contrast_F(G, h.H, a, cXc, h.rank);
+  double Fo = contrast_F(G, h.H, a, cXc, h.rank);
+  arma::vec ones(m, arma::fill::ones), w_obs = ones; const arma::mat Z1(m, 1, arma::fill::ones); const arma::vec z1(1, arma::fill::ones);
+  double shift_w = arma::datum::nan;
+  if (in.robust > 0) {   // robust path: weights re-estimated per relabeling, FL parts from the observed robust weights
+    arma::rowvec o = cacoa_gower::contrast_stats_w(G, Xs, Z1, ones, c, z1, z1, in.bias_correct, true, in.robust, in.robust_k, 5);
+    cacoa_gower::WFitState st; w_obs = cacoa_gower::iterate_weights(G, Xs, ones, in.robust, in.robust_k, 5, 1.0 - 1e-8, st);
+    Fo = o(0); shift_w = o(1);
+  }
   if (!std::isfinite(Fo)) return out;
   std::vector<arma::uvec> blocks;
   {
@@ -90,7 +99,23 @@ static CellResult test_cell(const arma::vec& y, const KernelInputs& in) {
     for (auto& kv : by_stratum) if (kv.second.size() >= 2) blocks.push_back(arma::uvec(kv.second));
   }
   arma::vec Fp(B);
-  if (in.freedman_lane) {
+  if (in.robust > 0) {
+    if (in.freedman_lane) {
+      arma::mat Q, Rq; arma::qr(Q, Rq, c); arma::mat Xr = Xs * Q.cols(1, Q.n_cols - 1);
+      cacoa_gower::WHat hr = cacoa_gower::what_of(Xr, w_obs); arma::mat Rr = -hr.H; Rr.diag() += 1.0;
+      arma::mat K1 = hr.H * G * hr.H.t(), K2 = hr.H * G * Rr.t(), K3 = Rr * G * hr.H.t(), K4 = Rr * G * Rr.t();
+      for (arma::uword b = 0; b < B; ++b) {
+        arma::uvec q = induced_perm(arma::conv_to<arma::uvec>::from(in.P.col(b) - 1), s, blocks);
+        arma::mat Gs = K1 + K2.cols(q) + K3.rows(q) + K4.submat(q, q);
+        Fp[b] = cacoa_gower::contrast_stats_w(Gs, Xs, Z1, ones, c, z1, z1, in.bias_correct, false, in.robust, in.robust_k, 5)(0);
+      }
+    } else {
+      for (arma::uword b = 0; b < B; ++b) {
+        arma::uvec q = induced_perm(arma::conv_to<arma::uvec>::from(in.P.col(b) - 1), s, blocks);
+        Fp[b] = cacoa_gower::contrast_stats_w(G, Xs.rows(q), Z1, ones, c, z1, z1, in.bias_correct, false, in.robust, in.robust_k, 5)(0);
+      }
+    }
+  } else if (in.freedman_lane) {
     arma::mat Q, Rq; arma::qr(Q, Rq, c); arma::mat Xr = Xs * Q.cols(1, Q.n_cols - 1);
     Hat hr = hat_of(Xr); arma::mat Rr = -hr.H; Rr.diag() += 1.0;
     arma::mat K1 = hr.H * G * hr.H, K2 = hr.H * G * Rr, K3 = Rr * G * hr.H, K4 = Rr * G * Rr;
@@ -105,7 +130,7 @@ static CellResult test_cell(const arma::vec& y, const KernelInputs& in) {
       Fp[b] = contrast_F(G, h.H.submat(q, q), a(q), cXc, h.rank);
     }
   }
-  out.ok = true; out.F = Fo; out.n = (int)m; out.shift = shift_estimate(G, Xs, h, c, in.bias_correct);
+  out.ok = true; out.F = Fo; out.n = (int)m; out.shift = (in.robust > 0) ? shift_w : shift_estimate(G, Xs, h, c, in.bias_correct);
   arma::uword ge = 0; for (arma::uword b = 0; b < B; ++b) if (Fp[b] >= Fo - 1e-12) ++ge;
   out.p = (ge + 1.0) / (B + 1.0);
   const double mu = arma::mean(Fp), sdv = arma::stddev(Fp);
@@ -135,10 +160,10 @@ struct Accum {
 // [[Rcpp::export]]
 Rcpp::List cluster_free_shift_batch(const arma::mat& Y, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec,
                                     const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset,
-                                    const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores) {
+                                    const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust = 0, double robust_k = 1.345) {
   const arma::uword m_cells = Y.n_cols, n = (arma::uword)n_samples;
   if ((arma::uword)X.n_rows != n || P.n_rows != n || level_code.n_elem != n || stratum.n_elem != n || inset.n_elem != n) Rcpp::stop("dimension mismatch in cluster_free_shift_batch");
-  KernelInputs in{pairs, n, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, arma::any(level_code >= 0)};
+  KernelInputs in{pairs, n, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, arma::any(level_code >= 0), robust, robust_k};
   Accum acc(m_cells, P.n_cols);
   cacoa::parallelFor(0, (int)m_cells, [&](int k) { acc.add(k, test_cell(Y.col(k), in)); }, n_cores, false);
   return acc.result();
@@ -151,7 +176,7 @@ Rcpp::List cluster_free_shift_stream(const Eigen::SparseMatrix<double>& cm, Rcpp
                                      int min_n_obs_per_samp, std::string dist, bool log_vecs,
                                      const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec,
                                      const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset,
-                                     const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores) {
+                                     const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust = 0, double robust_k = 1.345) {
   const arma::uword n = (arma::uword)n_samples, m_cells = nn_ids.size(), n_pairs = pairs.n_rows;
   if ((arma::uword)X.n_rows != n || P.n_rows != n || level_code.n_elem != n || stratum.n_elem != n || inset.n_elem != n) Rcpp::stop("dimension mismatch in cluster_free_shift_stream");
   if (cm.cols() != sample_per_cell.size()) Rcpp::stop("cm must have one column per cell");
@@ -164,7 +189,7 @@ Rcpp::List cluster_free_shift_stream(const Eigen::SparseMatrix<double>& cm, Rcpp
     for (int t = 0; t < ids.size(); ++t) { if (Rcpp::IntegerVector::is_na(ids[t])) continue; int v = nn_one_based ? ids[t] - 1 : ids[t];
       if (v < 0 || v >= cm.cols()) Rcpp::stop("nn_ids[[%d]] has an index outside the cells", (int)k + 1); nn[k].push_back(v); }
   }
-  KernelInputs in{pairs, n, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, arma::any(level_code >= 0)};
+  KernelInputs in{pairs, n, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, arma::any(level_code >= 0), robust, robust_k};
   Accum acc(m_cells, P.n_cols);
   cacoa::parallelFor(0, (int)m_cells, [&](int k) {
     const auto& ids = nn[k];

@@ -28,11 +28,8 @@ The R / C++ split of fitting and randomization, and the plan to converge on two 
 
 ## 1. Not implemented
 
-- **Robust fitting in the distance engine** (user requirement 2026-10-09): `robust = "huber"` (sample-weight IRLS
-  on leverage-corrected residual distances) and `"winsor"` for shift / var / total, term tests, screen, sensitivity,
-  composition term tests and cluster-free shifts, recomputed under each relabeling; and `na.mode = "impute_weak"`
-  (absent sample kept with a near-zero weight) for the same tests (user decision 2026-10-09); both through the weighted
-  Gower form, see `misc/engine_convergence.md` §8, §10 and step 4b. Not started.
+- **Robust fitting and weak imputation in the distance engine**: implemented 2026-10-09 (step 4b); calibration
+  simulations of the robust and weak-imputation paths are in the slow suite (see `misc/engine_convergence.md`).
 - **Residual-vs-covariate diagnostic for density / cluster-free DE** (parity with `screenCovariates(adjust.for=)`
   on the shift side); see §9 of the same note. Not started.
 
@@ -102,6 +99,9 @@ The R / C++ split of fitting and randomization, and the plan to converge on two 
   expected. Possibly the planted IN-PV genes fall outside the 500 most expressed genes; not investigated.
 
 ## 4. Housekeeping and cleanup candidates
+
+- `private$getTopGenes()` takes 16 s and `getClusterFreeDEInput()` 4.5 s on the 4,500-cell simulated object, now
+  20x the cluster-free kernel itself; both are R-side and worth optimizing.
 
 - `misc/` (plan, this file, `validation/` driver and report) is untracked; decide whether to commit it. It is in
   `.Rbuildignore`.

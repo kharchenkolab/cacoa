@@ -12,7 +12,10 @@ pairwiseEffectsFromDesign(
   dist = c("cor", "l2", "l1"),
   bias.correct = TRUE,
   influence = FALSE,
-  min.samp.per.level = 3
+  min.samp.per.level = 3,
+  robust = "none",
+  na.mode = "drop",
+  robust.k = 1.345
 )
 }
 \arguments{

@@ -184,3 +184,70 @@ arma::mat permuted_term_stats_fl(const arma::mat& K1, const arma::mat& K2, const
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// Weighted path (step 4b): sample weights w (robust down-weighting, weak imputation). Every quantity is recomputed
+// from the (possibly permuted) design because the weights stay with the samples while the labels move, so the
+// hat matrix H_w = X (X'WX)^- X'W is not a re-indexing of the observed one. R references: weightedContrastStats(),
+// weightedTermStats(), flGowerPartsW() in R/weighted_fit.R.
+// ---------------------------------------------------------------------------------------------------------
+
+#include "gower_stats.h"
+using namespace cacoa_gower;
+
+// [[Rcpp::export]]
+arma::mat permuted_contrast_stats_w(const arma::mat& G, const arma::mat& X, const arma::mat& Z, const arma::vec& w, const arma::vec& cvec,
+                                    const arma::vec& znum, const arma::vec& zden, const arma::imat& P, bool freedman_lane, const arma::vec& w_fl,
+                                    bool bias_correct = true, bool need_var = true, int robust = 0, double k = 1.345, int maxit = 5) {
+  const arma::uword n = G.n_rows, B = P.n_cols;
+  if (X.n_rows != n || Z.n_rows != n || w.n_elem != n || P.n_rows != n) Rcpp::stop("dimension mismatch in permuted_contrast_stats_w");
+  arma::mat out(B, 4);
+  if (freedman_lane) {
+    arma::mat Q, Rq; arma::qr(Q, Rq, cvec); arma::mat Xr = X * Q.cols(1, Q.n_cols - 1);
+    WHat hr = what_of(Xr, w_fl); arma::mat Rr = -hr.H; Rr.diag() += 1.0;
+    arma::mat K1 = hr.H * G * hr.H.t(), K2 = hr.H * G * Rr.t(), K3 = Rr * G * hr.H.t(), K4 = Rr * G * Rr.t();
+    for (arma::uword b = 0; b < B; ++b) {
+      arma::uvec p = perm_index(P, b);
+      arma::mat Gs = K1 + K2.cols(p) + K3.rows(p) + K4.submat(p, p);
+      out.row(b) = contrast_stats_w(Gs, X, Z, w, cvec, znum, zden, bias_correct, need_var, robust, k, maxit);
+    }
+  } else {
+    for (arma::uword b = 0; b < B; ++b) {
+      arma::uvec p = perm_index(P, b);
+      out.row(b) = contrast_stats_w(G, X.rows(p), Z.rows(p), w, cvec, znum, zden, bias_correct, need_var, robust, k, maxit);
+    }
+  }
+  return out;
+}
+
+// [[Rcpp::export]]
+arma::mat permuted_term_stats_w(const arma::mat& G, const arma::mat& Xf, const arma::mat& Xr, const arma::mat& Zf, const arma::mat& Zr, const arma::vec& w,
+                                const arma::imat& P, bool freedman_lane, const arma::vec& w_fl, bool need_disp = true, int robust = 0, double k = 1.345, int maxit = 5) {
+  const arma::uword n = G.n_rows, B = P.n_cols;
+  if (Xf.n_rows != n || Xr.n_rows != n || Zf.n_rows != n || Zr.n_rows != n || w.n_elem != n || P.n_rows != n) Rcpp::stop("dimension mismatch in permuted_term_stats_w");
+  arma::mat out(B, 2);
+  if (freedman_lane) {
+    WHat hr = what_of(Xr, w_fl); arma::mat Rr = -hr.H; Rr.diag() += 1.0;
+    arma::mat K1 = hr.H * G * hr.H.t(), K2 = hr.H * G * Rr.t(), K3 = Rr * G * hr.H.t(), K4 = Rr * G * Rr.t();
+    for (arma::uword b = 0; b < B; ++b) {
+      arma::uvec p = perm_index(P, b);
+      arma::mat Gs = K1 + K2.cols(p) + K3.rows(p) + K4.submat(p, p);
+      out.row(b) = term_stats_w(Gs, Xf, Xr, Zf, Zr, w, need_disp, robust, k, maxit);
+    }
+  } else {
+    for (arma::uword b = 0; b < B; ++b) {
+      arma::uvec p = perm_index(P, b);
+      out.row(b) = term_stats_w(G, Xf.rows(p), Xr.rows(p), Zf.rows(p), Zr.rows(p), w, need_disp, robust, k, maxit);
+    }
+  }
+  return out;
+}
+
+// observed weighted fit for one configuration (used by R for the observed statistics and the final weights)
+// [[Rcpp::export]]
+Rcpp::List weighted_contrast_fit(const arma::mat& G, const arma::mat& X, const arma::mat& Z, const arma::vec& base, const arma::vec& cvec,
+                                 const arma::vec& znum, const arma::vec& zden, bool bias_correct = true, int robust = 0, double k = 1.345, int maxit = 5) {
+  WFitState st; arma::vec w = iterate_weights(G, X, base, robust, k, maxit, 1.0 - 1e-8, st);
+  arma::rowvec s = contrast_stats_w(G, X, Z, base, cvec, znum, zden, bias_correct, true, robust, k, maxit);
+  return Rcpp::List::create(Rcpp::_["stats"] = s, Rcpp::_["w"] = w, Rcpp::_["score"] = st.score);
+}

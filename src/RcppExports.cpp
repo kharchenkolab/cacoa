@@ -122,8 +122,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cluster_free_shift_batch
-Rcpp::List cluster_free_shift_batch(const arma::mat& Y, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec, const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset, const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores);
-RcppExport SEXP _cacoa_cluster_free_shift_batch(SEXP YSEXP, SEXP pairsSEXP, SEXP n_samplesSEXP, SEXP XSEXP, SEXP cvecSEXP, SEXP level_codeSEXP, SEXP min_samp_per_levelSEXP, SEXP stratumSEXP, SEXP insetSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP bias_correctSEXP, SEXP n_coresSEXP) {
+Rcpp::List cluster_free_shift_batch(const arma::mat& Y, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec, const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset, const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust, double robust_k);
+RcppExport SEXP _cacoa_cluster_free_shift_batch(SEXP YSEXP, SEXP pairsSEXP, SEXP n_samplesSEXP, SEXP XSEXP, SEXP cvecSEXP, SEXP level_codeSEXP, SEXP min_samp_per_levelSEXP, SEXP stratumSEXP, SEXP insetSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP bias_correctSEXP, SEXP n_coresSEXP, SEXP robustSEXP, SEXP robust_kSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -140,13 +140,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type freedman_lane(freedman_laneSEXP);
     Rcpp::traits::input_parameter< bool >::type bias_correct(bias_correctSEXP);
     Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
-    rcpp_result_gen = Rcpp::wrap(cluster_free_shift_batch(Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores));
+    Rcpp::traits::input_parameter< int >::type robust(robustSEXP);
+    Rcpp::traits::input_parameter< double >::type robust_k(robust_kSEXP);
+    rcpp_result_gen = Rcpp::wrap(cluster_free_shift_batch(Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k));
     return rcpp_result_gen;
 END_RCPP
 }
 // cluster_free_shift_stream
-Rcpp::List cluster_free_shift_stream(const Eigen::SparseMatrix<double>& cm, Rcpp::IntegerVector sample_per_cell, Rcpp::List nn_ids, bool nn_one_based, int min_n_obs_per_samp, std::string dist, bool log_vecs, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec, const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset, const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores);
-RcppExport SEXP _cacoa_cluster_free_shift_stream(SEXP cmSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP nn_one_basedSEXP, SEXP min_n_obs_per_sampSEXP, SEXP distSEXP, SEXP log_vecsSEXP, SEXP pairsSEXP, SEXP n_samplesSEXP, SEXP XSEXP, SEXP cvecSEXP, SEXP level_codeSEXP, SEXP min_samp_per_levelSEXP, SEXP stratumSEXP, SEXP insetSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP bias_correctSEXP, SEXP n_coresSEXP) {
+Rcpp::List cluster_free_shift_stream(const Eigen::SparseMatrix<double>& cm, Rcpp::IntegerVector sample_per_cell, Rcpp::List nn_ids, bool nn_one_based, int min_n_obs_per_samp, std::string dist, bool log_vecs, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec, const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset, const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust, double robust_k);
+RcppExport SEXP _cacoa_cluster_free_shift_stream(SEXP cmSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP nn_one_basedSEXP, SEXP min_n_obs_per_sampSEXP, SEXP distSEXP, SEXP log_vecsSEXP, SEXP pairsSEXP, SEXP n_samplesSEXP, SEXP XSEXP, SEXP cvecSEXP, SEXP level_codeSEXP, SEXP min_samp_per_levelSEXP, SEXP stratumSEXP, SEXP insetSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP bias_correctSEXP, SEXP n_coresSEXP, SEXP robustSEXP, SEXP robust_kSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -169,7 +171,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type freedman_lane(freedman_laneSEXP);
     Rcpp::traits::input_parameter< bool >::type bias_correct(bias_correctSEXP);
     Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
-    rcpp_result_gen = Rcpp::wrap(cluster_free_shift_stream(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores));
+    Rcpp::traits::input_parameter< int >::type robust(robustSEXP);
+    Rcpp::traits::input_parameter< double >::type robust_k(robust_kSEXP);
+    rcpp_result_gen = Rcpp::wrap(cluster_free_shift_stream(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -421,6 +425,75 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// permuted_contrast_stats_w
+arma::mat permuted_contrast_stats_w(const arma::mat& G, const arma::mat& X, const arma::mat& Z, const arma::vec& w, const arma::vec& cvec, const arma::vec& znum, const arma::vec& zden, const arma::imat& P, bool freedman_lane, const arma::vec& w_fl, bool bias_correct, bool need_var, int robust, double k, int maxit);
+RcppExport SEXP _cacoa_permuted_contrast_stats_w(SEXP GSEXP, SEXP XSEXP, SEXP ZSEXP, SEXP wSEXP, SEXP cvecSEXP, SEXP znumSEXP, SEXP zdenSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP w_flSEXP, SEXP bias_correctSEXP, SEXP need_varSEXP, SEXP robustSEXP, SEXP kSEXP, SEXP maxitSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type G(GSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Z(ZSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type w(wSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type cvec(cvecSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type znum(znumSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type zden(zdenSEXP);
+    Rcpp::traits::input_parameter< const arma::imat& >::type P(PSEXP);
+    Rcpp::traits::input_parameter< bool >::type freedman_lane(freedman_laneSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type w_fl(w_flSEXP);
+    Rcpp::traits::input_parameter< bool >::type bias_correct(bias_correctSEXP);
+    Rcpp::traits::input_parameter< bool >::type need_var(need_varSEXP);
+    Rcpp::traits::input_parameter< int >::type robust(robustSEXP);
+    Rcpp::traits::input_parameter< double >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    rcpp_result_gen = Rcpp::wrap(permuted_contrast_stats_w(G, X, Z, w, cvec, znum, zden, P, freedman_lane, w_fl, bias_correct, need_var, robust, k, maxit));
+    return rcpp_result_gen;
+END_RCPP
+}
+// permuted_term_stats_w
+arma::mat permuted_term_stats_w(const arma::mat& G, const arma::mat& Xf, const arma::mat& Xr, const arma::mat& Zf, const arma::mat& Zr, const arma::vec& w, const arma::imat& P, bool freedman_lane, const arma::vec& w_fl, bool need_disp, int robust, double k, int maxit);
+RcppExport SEXP _cacoa_permuted_term_stats_w(SEXP GSEXP, SEXP XfSEXP, SEXP XrSEXP, SEXP ZfSEXP, SEXP ZrSEXP, SEXP wSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP w_flSEXP, SEXP need_dispSEXP, SEXP robustSEXP, SEXP kSEXP, SEXP maxitSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type G(GSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Xf(XfSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Xr(XrSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Zf(ZfSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Zr(ZrSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type w(wSEXP);
+    Rcpp::traits::input_parameter< const arma::imat& >::type P(PSEXP);
+    Rcpp::traits::input_parameter< bool >::type freedman_lane(freedman_laneSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type w_fl(w_flSEXP);
+    Rcpp::traits::input_parameter< bool >::type need_disp(need_dispSEXP);
+    Rcpp::traits::input_parameter< int >::type robust(robustSEXP);
+    Rcpp::traits::input_parameter< double >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    rcpp_result_gen = Rcpp::wrap(permuted_term_stats_w(G, Xf, Xr, Zf, Zr, w, P, freedman_lane, w_fl, need_disp, robust, k, maxit));
+    return rcpp_result_gen;
+END_RCPP
+}
+// weighted_contrast_fit
+Rcpp::List weighted_contrast_fit(const arma::mat& G, const arma::mat& X, const arma::mat& Z, const arma::vec& base, const arma::vec& cvec, const arma::vec& znum, const arma::vec& zden, bool bias_correct, int robust, double k, int maxit);
+RcppExport SEXP _cacoa_weighted_contrast_fit(SEXP GSEXP, SEXP XSEXP, SEXP ZSEXP, SEXP baseSEXP, SEXP cvecSEXP, SEXP znumSEXP, SEXP zdenSEXP, SEXP bias_correctSEXP, SEXP robustSEXP, SEXP kSEXP, SEXP maxitSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type G(GSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Z(ZSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type base(baseSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type cvec(cvecSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type znum(znumSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type zden(zdenSEXP);
+    Rcpp::traits::input_parameter< bool >::type bias_correct(bias_correctSEXP);
+    Rcpp::traits::input_parameter< int >::type robust(robustSEXP);
+    Rcpp::traits::input_parameter< double >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    rcpp_result_gen = Rcpp::wrap(weighted_contrast_fit(G, X, Z, base, cvec, znum, zden, bias_correct, robust, k, maxit));
+    return rcpp_result_gen;
+END_RCPP
+}
 // projdiff
 arma::rowvec projdiff(const arma::mat& mat, const arma::ivec& g1, const arma::ivec& g2);
 RcppExport SEXP _cacoa_projdiff(SEXP matSEXP, SEXP g1SEXP, SEXP g2SEXP) {
@@ -496,8 +569,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_estimateClusterFreeExpressionShiftsC", (DL_FUNC) &_cacoa_estimateClusterFreeExpressionShiftsC, 16},
     {"_cacoa_mapIds", (DL_FUNC) &_cacoa_mapIds, 2},
     {"_cacoa_clusterFreeGeneMat", (DL_FUNC) &_cacoa_clusterFreeGeneMat, 5},
-    {"_cacoa_cluster_free_shift_batch", (DL_FUNC) &_cacoa_cluster_free_shift_batch, 13},
-    {"_cacoa_cluster_free_shift_stream", (DL_FUNC) &_cacoa_cluster_free_shift_stream, 19},
+    {"_cacoa_cluster_free_shift_batch", (DL_FUNC) &_cacoa_cluster_free_shift_batch, 15},
+    {"_cacoa_cluster_free_shift_stream", (DL_FUNC) &_cacoa_cluster_free_shift_stream, 21},
     {"_cacoa_estimateExpressionShiftsPairsLM", (DL_FUNC) &_cacoa_estimateExpressionShiftsPairsLM, 9},
     {"_cacoa_applyMedianFilterES", (DL_FUNC) &_cacoa_applyMedianFilterES, 4},
     {"_cacoa_adjustedZScoresMaxStat", (DL_FUNC) &_cacoa_adjustedZScoresMaxStat, 8},
@@ -509,6 +582,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_permuted_contrast_stats_fl", (DL_FUNC) &_cacoa_permuted_contrast_stats_fl, 17},
     {"_cacoa_permuted_term_stats", (DL_FUNC) &_cacoa_permuted_term_stats, 11},
     {"_cacoa_permuted_term_stats_fl", (DL_FUNC) &_cacoa_permuted_term_stats_fl, 14},
+    {"_cacoa_permuted_contrast_stats_w", (DL_FUNC) &_cacoa_permuted_contrast_stats_w, 15},
+    {"_cacoa_permuted_term_stats_w", (DL_FUNC) &_cacoa_permuted_term_stats_w, 13},
+    {"_cacoa_weighted_contrast_fit", (DL_FUNC) &_cacoa_weighted_contrast_fit, 11},
     {"_cacoa_projdiff", (DL_FUNC) &_cacoa_projdiff, 3},
     {"_cacoa_fit_density_lm", (DL_FUNC) &_cacoa_fit_density_lm, 3},
     {"_cacoa_perm_full_contrast_mat", (DL_FUNC) &_cacoa_perm_full_contrast_mat, 5},

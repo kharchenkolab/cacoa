@@ -16,7 +16,7 @@ covariateColumns <- function(meta, cov) {
 }
 
 # marginal / partial term tests for one Gower matrix and a set of covariates
-screenOneMatrix <- function(G, meta, covariates, mode, adjust.cols = NULL, n.permutations = 0, P = NULL, dispersion = TRUE) {
+screenOneMatrix <- function(G, meta, covariates, mode, adjust.cols = NULL, n.permutations = 0, P = NULL, dispersion = TRUE, robust = "none", robust.k = 1.345) {
   samples <- rownames(G)
   cols <- lapply(covariates, function(v) covariateColumns(meta[samples, , drop = FALSE], v)); names(cols) <- covariates
   base <- cbind(`(Intercept)` = rep(1, length(samples)), if (!is.null(adjust.cols)) adjust.cols[samples, , drop = FALSE])
@@ -36,6 +36,11 @@ screenOneMatrix <- function(G, meta, covariates, mode, adjust.cols = NULL, n.per
     if (!all(ok)) Gk <- gowerCenter(uncenterGower(Gk))
     tt <- termTestGower(Gk, Xf.k, Xr.k)
     dd <- if (dispersion) dispersionTermTest(Gk, Xf.k, Xf.k, Xr.k) else c(F.disp = NA, p.disp = NA, df.disp = NA, nu.disp = NA)
+    w.obs <- rep(1, n.used)
+    if (!identical(robust, "none")) {                         # robust statistics (R2 stays unweighted)
+      wt <- weightedTermStats(Gk, Xf.k, Xr.k, Xf.k, Xr.k, robust = robust, k = robust.k)
+      tt["F"] <- wt$F; tt["p.analytic"] <- NA_real_; if (dispersion) dd["F.disp"] <- wt$F.disp; w.obs <- wt$w
+    }
     r2d <- if (dispersion) dispersionR2(Gk, Xf.k, Xf.k, Xr.k) else NA_real_
     p.perm <- NA_real_; p.disp.perm <- NA_real_; Fp <- NULL; Fdp <- NULL
     if (n.permutations > 0 && is.finite(tt["F"])) {
@@ -43,8 +48,11 @@ screenOneMatrix <- function(G, meta, covariates, mode, adjust.cols = NULL, n.per
       Pk <- if (!is.null(P)) inducePermutationSimple(P, which(ok)) else replicate(n.permutations, sample.int(n.used))
       if (!is.matrix(Pk)) Pk <- matrix(Pk, ncol = 1)
       storage.mode(Pk) <- "integer"; B <- ncol(Pk)
-      k <- termKernelInputs(Xf.k, Xr.k, Xf.k, Xr.k, n.used)          # C++ kernel; R reference: termTestGower / dispersionTermTest loops
-      st <- permuted_term_stats_fl(parts$K1, parts$K2, parts$K3, parts$K4, k$Hf, k$Hr, k$Zf, k$Zr, k$df, k$nu, k$qZf, k$qZr, Pk, dispersion && is.finite(dd["F.disp"]))
+      st <- if (identical(robust, "none")) {                        # C++ kernels; R references: termTestGower / dispersionTermTest / weightedTermStats loops
+        k <- termKernelInputs(Xf.k, Xr.k, Xf.k, Xr.k, n.used)
+        permuted_term_stats_fl(parts$K1, parts$K2, parts$K3, parts$K4, k$Hf, k$Hr, k$Zf, k$Zr, k$df, k$nu, k$qZf, k$qZr, Pk, dispersion && is.finite(dd["F.disp"]))
+      } else permuted_term_stats_w(Gk, Xf.k, Xr.k, Xf.k, Xr.k, rep(1, n.used), Pk, TRUE, w.obs, dispersion && is.finite(dd["F.disp"]),
+                                   c(huber = 1L, winsor = 2L)[[robust]], robust.k, 5L)
       Fp <- st[, 1]; Fdp <- st[, 2]
       p.perm <- (sum(Fp >= tt["F"] - 1e-12) + 1) / (B + 1)
       if (dispersion && is.finite(dd["F.disp"])) p.disp.perm <- (sum(Fdp >= dd["F.disp"] - 1e-12, na.rm = TRUE) + 1) / (sum(is.finite(Fdp)) + 1)
@@ -97,8 +105,8 @@ inducePermutationSimple <- function(P, idx) {
 screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "partial", "marginal"), adjust.for = NULL,
                              dist = c("cor", "l2", "l1"), test.variable = NULL, p.values = c("permutation", "analytic"),
                              n.permutations = 199, min.samples.per.type = 6, max.partial.df = 5, alpha = 0.05, seed = 1,
-                             n.cores = 1, verbose = FALSE) {
-  mode <- match.arg(mode); dist <- match.arg(dist); p.values <- match.arg(p.values)
+                             n.cores = 1, verbose = FALSE, robust = c("none", "huber", "winsor"), robust.k = 1.345) {
+  mode <- match.arg(mode); dist <- match.arg(dist); p.values <- match.arg(p.values); robust <- match.arg(robust)
   desc <- describeMetadata(meta)
   if (is.null(covariates)) covariates <- desc$column[desc$role == "usable"]
   covariates <- unique(covariates)
@@ -132,8 +140,8 @@ screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "
         q.all <- 1 + (if (!is.null(adjust.cols)) ncol(adjust.cols) else 0) + sum(vapply(covariates, function(v) ncol(covariateColumns(meta[samples, , drop = FALSE], v)), integer(1)))
         if (length(samples) - q.all < max.partial.df) { fallback <- TRUE }
       }
-      r <- if (m == "partial" && fallback) screenOneMatrix(G, meta, covariates, "marginal", adjust.cols, nperm, Pk) else
-        screenOneMatrix(G, meta, covariates, m, adjust.cols, nperm, Pk)
+      r <- if (m == "partial" && fallback) screenOneMatrix(G, meta, covariates, "marginal", adjust.cols, nperm, Pk, robust = robust, robust.k = robust.k) else
+        screenOneMatrix(G, meta, covariates, m, adjust.cols, nperm, Pk, robust = robust, robust.k = robust.k)
       tb <- r$table; tb$mode <- m; tb$fallback <- fallback; tb$celltype <- ct
       out[[m]] <- list(table = tb, perm = r$perm)
     }
@@ -182,7 +190,7 @@ screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "
   terms <- unique(c(test.variable, adj.vars, setdiff(sel, over)))
   suggestion <- if (length(terms)) stats::as.formula(paste("~", paste(terms, collapse = " + "))) else NULL
   res <- structure(list(table = tab, global = global, suggestion = suggestion, covariates = covariates, modes = modes,
-                        settings = list(dist = dist, p.values = p.values, n.permutations = nperm, adjust.for = adjust.for, alpha = alpha,
+                        settings = list(dist = dist, p.values = p.values, robust = robust, robust.k = robust.k, n.permutations = nperm, adjust.for = adjust.for, alpha = alpha,
                                         test.variable = test.variable, threshold.types = thr, seed = seed),
                         notes = notes, celltypes = cts, over.adjustment = over),
                    class = c("cacoaCovariateScreen", "list"))

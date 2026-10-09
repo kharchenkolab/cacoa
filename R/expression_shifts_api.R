@@ -54,13 +54,21 @@ pseudobulkPerCellType <- function(cms, cell.groups, sample.per.cell, min.cells.p
 # Term-level effects for one cell type: location F / R2 for the term's columns (full vs reduced design),
 # dispersion F for the term in the dispersion model, partial R^2 per term and the model-implied pairwise
 # table over the term's levels.
-termEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL, dist = c("cor", "l2", "l1"), min.samp.per.level = 3) {
+termEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL, dist = c("cor", "l2", "l1"), min.samp.per.level = 3,
+                                  robust = "none", na.mode = "drop", robust.k = 1.345) {
   dist <- match.arg(dist)
   skip <- function(reason) list(ok = FALSE, reason = reason)
   samples <- intersect(rownames(design$F), rownames(D))
   if (length(samples) < 3) return(skip("fewer than 3 samples with this cell type"))
   v <- design$term.variable
-  G <- gowerCenter(asSquaredDistance(D[samples, samples], dist))
+  present <- samples; w <- NULL
+  D2 <- asSquaredDistance(D[samples, samples], dist)
+  if (identical(na.mode, "impute_weak")) {
+    all.s <- intersect(rownames(design$F), rownames(meta))
+    if (length(samples) < length(all.s)) { imp <- imputeAbsentSamples(D2, samples, all.s); D2 <- imp$D2; w <- imp$w; samples <- all.s }
+  }
+  weighted <- !is.null(w) || !identical(robust, "none")
+  G <- gowerCenter(D2)
   F <- design$F[samples, , drop = FALSE]
   keep <- colSums(abs(F)) > 1e-12
   Xf <- F[, keep, drop = FALSE]
@@ -69,7 +77,7 @@ termEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL, di
   Xr <- Xf[, setdiff(colnames(Xf), tcols), drop = FALSE]
   if (!ncol(Xr)) Xr <- matrix(1, nrow(Xf), 1, dimnames = list(rownames(Xf), "(Intercept)"))
   if (qr(Xf)$rank >= nrow(Xf)) return(skip("no residual degrees of freedom"))
-  g <- as.character(meta[samples, v]); tb <- table(g)
+  g <- as.character(meta[present, v]); tb <- table(g)
   if (sum(tb >= min.samp.per.level) < 2) return(skip(sprintf("fewer than 2 levels of %s with at least %d samples", v, min.samp.per.level)))
   if (is.null(dispersion.formula)) dispersion.formula <- stats::as.formula(paste("~", v))
   Zf.full <- buildFullDesign(dispersion.formula, meta[samples, , drop = FALSE])
@@ -81,6 +89,12 @@ termEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL, di
   if (!ncol(Zr)) Zr <- matrix(1, nrow(Zf), 1, dimnames = list(rownames(Zf), "(Intercept)"))
   loc <- termTestGower(G, Xf, Xr)
   disp <- if (length(zcols)) dispersionTermTest(G, Xf, Zf, Zr) else c(F.disp = NA_real_, p.disp = NA_real_, df.disp = 0, nu.disp = NA_real_)
+  base.w <- w %||% rep(1, nrow(Xf)); w.final <- base.w
+  if (weighted) {                                            # weighted / robust statistics (R2 and the analytic p stay unweighted)
+    wt <- weightedTermStats(G, Xf, Xr, Zf, Zr, w = base.w, robust = robust, k = robust.k)
+    loc["F"] <- wt$F; loc["p.analytic"] <- NA_real_; if (length(zcols)) disp["F.disp"] <- wt$F.disp; w.final <- wt$w
+  }
+  names(base.w) <- names(w.final) <- rownames(Xf)
   disp.r2 <- if (length(zcols)) dispersionR2(G, Xf, Zf, Zr) else NA_real_
   # pairwise table over levels: shift_ab = (x_a - x_b)' M (x_a - x_b), with M bias-corrected
   hi <- hatInfo(Xf); n <- nrow(Xf); R <- diag(n) - hi$H
@@ -103,7 +117,8 @@ termEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL, di
   pair.table$total <- pair.table$shift + pair.table$var / 2
   list(ok = TRUE, kind = "term", variable = v, G = G, X = Xf, Xr = Xr, Z = Zf, Zr = Zr, samples = samples, n = n,
        location = loc, dispersion = disp, R2.disp.adj = disp.r2, cell.table = cell.table, pair.table = pair.table, s.level = s.lev,
-       gamma = gamma, M = M, n.per.level = tb, dispersion.formula = dispersion.formula)
+       gamma = gamma, M = M, n.per.level = tb, dispersion.formula = dispersion.formula,
+       weighted = weighted, base.w = base.w, w = w.final, robust = robust, robust.k = robust.k, na.mode = na.mode, present = present)
 }
 
 # chance-corrected R^2 of the dispersion regression sqrt(v) ~ Zf vs Zr
@@ -133,8 +148,13 @@ termPermutationStats <- function(eff, plan, P) {
   B <- ncol(P); perm <- matrix(NA_real_, B, 2, dimnames = list(NULL, c("F", "F.disp")))
   if (B == 0) return(list(obs = obs, perm = perm))
   need.disp <- is.finite(obs["F.disp"])
-  # C++ kernel (R references: termTestGower() / dispersionTermTest(), looped per relabeling)
   storage.mode(P) <- "integer"
+  if (isTRUE(eff$weighted)) {                   # weighted / robust path (C++; R reference: weightedTermStats())
+    code <- c(none = 0L, huber = 1L, winsor = 2L)[[eff$robust]]
+    perm[, ] <- permuted_term_stats_w(G, Xf, Xr, Zf, Zr, eff$base.w, P, plan$scheme == "freedman-lane", eff$w, need.disp, code, eff$robust.k, 5L)
+    return(list(obs = obs, perm = perm))
+  }
+  # C++ kernel (R references: termTestGower() / dispersionTermTest(), looped per relabeling)
   k <- termKernelInputs(Xf, Xr, Zf, Zr, nrow(G))
   perm[, ] <- if (plan$scheme == "block" || plan$scheme == "huh-jhun") {
     permuted_term_stats(G, k$Hf, k$Hr, k$Zf, k$Zr, k$df, k$nu, k$qZf, k$qZr, P, need.disp)
@@ -162,8 +182,8 @@ termPermutationStats <- function(eff, plan, P) {
 testTermEffects <- function(D.list, design, meta, dispersion.formula = NULL, dist = c("cor", "l2", "l1"),
                             permutation = c("auto", "block", "freedman-lane", "huh-jhun"), n.permutations = 999,
                             block.vars = NULL, min.samp.per.level = 3, seed = NULL, alpha = 0.05, n.cores = 1,
-                            return.perm.stats = FALSE, verbose = FALSE) {
-  dist <- match.arg(dist); permutation <- match.arg(permutation)
+                            return.perm.stats = FALSE, verbose = FALSE, robust = c("none", "huber", "winsor"), na.mode = c("drop", "impute_weak"), robust.k = 1.345) {
+  dist <- match.arg(dist); permutation <- match.arg(permutation); robust <- match.arg(robust); na.mode <- match.arg(na.mode)
   if (permutation == "huh-jhun") { permutation <- "block"; warning("huh-jhun is a contrast-only scheme; using block permutations for the term test") }
   if (is.null(names(D.list))) names(D.list) <- paste0("CT", seq_along(D.list))
   all.samples <- intersect(rownames(design$F), rownames(meta))
@@ -171,7 +191,7 @@ testTermEffects <- function(D.list, design, meta, dispersion.formula = NULL, dis
   gplan <- permutationPlan(design, meta, all.samples, scheme = permutation, block.vars = block.vars, n.permutations = n.permutations)   # enumerated when small
   P.global <- withSeed(seed, drawPermutations(gplan, n.permutations))
   fits <- lapply(D.list, function(D) termEffectsFromDesign(D, design, meta, dispersion.formula = dispersion.formula, dist = dist,
-                                                          min.samp.per.level = min.samp.per.level))
+                                                          min.samp.per.level = min.samp.per.level, robust = robust, na.mode = na.mode, robust.k = robust.k))
   ok <- vapply(fits, function(f) isTRUE(f$ok), logical(1))
   skipped <- data.frame(celltype = names(fits)[!ok], reason = vapply(fits[!ok], function(f) f$reason, character(1)), stringsAsFactors = FALSE, row.names = NULL)
   runOne <- function(ct) {
@@ -299,19 +319,20 @@ effectRowsTerm <- function(res, test.label, test.id) {
 #' @export
 expressionShiftsForModel <- function(D.list, model, dist = "cor", permutation = "auto", n.permutations = 999, block.vars = model$block.vars,
                                      bias.correct = TRUE, influence = TRUE, min.samp.per.level = 3, seed = NULL, alpha = 0.05,
-                                     n.cores = 1, verbose = FALSE, n.cells = NULL) {
+                                     n.cores = 1, verbose = FALSE, n.cells = NULL, robust = "none", na.mode = "drop", robust.k = 1.345) {
   meta <- model$meta
   if (is.null(seed)) seed <- sample.int(.Machine$integer.max, 1L)
   per.test <- lapply(model$tests, function(t) {
     if (t$kind == "contrast") {
       r <- testPairwiseEffects(D.list, t$design, meta, dispersion.formula = model$dispersion.formula, dist = dist, permutation = permutation,
                                n.permutations = n.permutations, block.vars = block.vars, bias.correct = bias.correct, influence = influence,
-                               min.samp.per.level = min.samp.per.level, seed = seed, alpha = alpha, n.cores = n.cores, verbose = verbose)
+                               min.samp.per.level = min.samp.per.level, seed = seed, alpha = alpha, n.cores = n.cores, verbose = verbose,
+                               robust = robust, na.mode = na.mode, robust.k = robust.k)
       r$rows <- effectRowsContrast(r, t$label, t$id)
     } else {
       r <- testTermEffects(D.list, t$design, meta, dispersion.formula = model$dispersion.formula, dist = dist, permutation = permutation,
                            n.permutations = n.permutations, block.vars = block.vars, min.samp.per.level = min.samp.per.level, seed = seed,
-                           alpha = alpha, n.cores = n.cores, verbose = verbose)
+                           alpha = alpha, n.cores = n.cores, verbose = verbose, robust = robust, na.mode = na.mode, robust.k = robust.k)
       r$rows <- effectRowsTerm(r, t$label, t$id)
     }
     r$global$test <- t$label; r$global$test.id <- t$id
@@ -347,7 +368,8 @@ expressionShiftsForModel <- function(D.list, model, dist = "cor", permutation = 
        skipped = skipped, adjusted.distances = lapply(per.test, `[[`, "adjusted.distances"), influence = lapply(per.test, `[[`, "influence"),
        distances = D.list, model = model, notes = unique(unlist(lapply(per.test, `[[`, "notes"))),
        settings = list(dist = dist, permutation = permutation, n.permutations = n.permutations, seed = seed, block.vars = block.vars,
-                       bias.correct = bias.correct, influence = influence, min.samp.per.level = min.samp.per.level, alpha = alpha))
+                       bias.correct = bias.correct, influence = influence, min.samp.per.level = min.samp.per.level, alpha = alpha,
+                       robust = robust, na.mode = na.mode, robust.k = robust.k))
 }
 
 # short settings key for caches

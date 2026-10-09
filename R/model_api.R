@@ -27,7 +27,10 @@ cacoaDefaultOptions <- function() {
     min.samp.per.level = 3,        # minimum samples at each contrasted level per cell type
     dist = "cor",                  # expression distance: gene-centred cosine
     permutation = "auto",          # permutation scheme: auto / block / freedman-lane / huh-jhun
-    numeric.step = 1               # step for numeric tests (per unit); per-SD is reported as well
+    numeric.step = 1,              # step for numeric tests (per unit); per-SD is reported as well
+    robust = "none",               # robust fit of the distance model: none / huber / winsor (samples with outlying residual distances)
+    na.mode = "drop",              # samples absent from a cell type: drop (fit on the present ones) / impute_weak (kept with a near-zero weight)
+    robust.k = 1.345               # robust tuning constant (robust standard deviations of the residual sizes)
   )
 }
 
@@ -44,6 +47,9 @@ checkOptionValues <- function(opts) {
   chk(opts$dist %in% c("cor", "l2", "l1"), "dist must be one of cor, l2, l1")
   chk(opts$permutation %in% c("auto", "block", "freedman-lane", "huh-jhun"), "unknown permutation scheme")
   chk(is.numeric(opts$numeric.step) && opts$numeric.step != 0, "numeric.step must be a non-zero number")
+  chk(opts$robust %in% c("none", "huber", "winsor"), "robust must be one of none, huber, winsor")
+  chk(opts$na.mode %in% c("drop", "impute_weak"), "na.mode must be drop or impute_weak")
+  chk(is.numeric(opts$robust.k) && opts$robust.k > 0, "robust.k must be positive")
   invisible(opts)
 }
 

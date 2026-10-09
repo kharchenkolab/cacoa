@@ -22,7 +22,9 @@ clusterFreeExpressionShifts(
   wins = 0.025,
   log.vectors = TRUE,
   n.cores = 1,
-  verbose = FALSE
+  verbose = FALSE,
+  robust = c("none", "huber", "winsor"),
+  robust.k = 1.345
 )
 }
 \arguments{
@@ -55,6 +57,10 @@ clusterFreeExpressionShifts(
 \item{n.cores}{threads for the per-cell loop (C++)}
 
 \item{verbose}{progress}
+
+\item{robust}{\code{"none"}, \code{"huber"} or \code{"winsor"}: down-weight samples with outlying residual distances (re-estimated under every relabeling)}
+
+\item{robust.k}{robust tuning constant}
 }
 \value{
 list: \code{stat} (shift F per cell), \code{p.value}, \code{z.score} (and \code{z.scores}), \code{z.adj}, \code{shifts} (bias-corrected shift

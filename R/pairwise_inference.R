@@ -300,6 +300,12 @@ permutationStatsForCellType <- function(eff, plan, P, bias.correct = TRUE) {
   if (B == 0) return(list(obs = obs, perm = perm))                       # nothing to permute (a single relabeling)
   storage.mode(P) <- "integer"
   znum <- if (need.var) as.numeric(z.end$num) else numeric(ncol(Z)); zden <- if (need.var) as.numeric(z.end$den) else numeric(ncol(Z))
+  if (isTRUE(eff$weighted)) {                   # weighted / robust path (C++; R reference: weightedContrastStats())
+    obs <- c(F = eff$F.shift, shift = eff$shift, var = if (need.var) eff$var else NA, total = if (need.var) eff$total else NA)
+    code <- c(none = 0L, huber = 1L, winsor = 2L)[[eff$robust]]
+    perm[, ] <- permuted_contrast_stats_w(G, X, Z, eff$base.w, cvec, znum, zden, P, plan$scheme == "freedman-lane", eff$w, bias.correct, need.var, code, eff$robust.k, 5L)
+    return(list(obs = obs, perm = perm))
+  }
   if (plan$scheme == "block") {                 # C++ kernel; R reference: permutedStats()
     perm[, ] <- permuted_contrast_stats(G, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, znum, zden, P, bias.correct, need.var)
   } else if (plan$scheme == "freedman-lane") {
@@ -349,8 +355,9 @@ permutationPValue <- function(obs, perm, alternative = c("greater", "two.sided")
 testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL, dist = c("cor", "l2", "l1"),
                                 permutation = c("auto", "block", "freedman-lane", "huh-jhun"), n.permutations = 999,
                                 block.vars = NULL, bias.correct = TRUE, influence = FALSE, min.samp.per.level = 3,
-                                seed = NULL, alpha = 0.05, n.cores = 1, return.perm.stats = FALSE, verbose = FALSE) {
-  dist <- match.arg(dist); permutation <- match.arg(permutation)
+                                seed = NULL, alpha = 0.05, n.cores = 1, return.perm.stats = FALSE, verbose = FALSE,
+                                robust = c("none", "huber", "winsor"), na.mode = c("drop", "impute_weak"), robust.k = 1.345) {
+  dist <- match.arg(dist); permutation <- match.arg(permutation); robust <- match.arg(robust); na.mode <- match.arg(na.mode)
   if (is.null(names(D.list))) names(D.list) <- paste0("CT", seq_along(D.list))
   all.samples <- intersect(rownames(design$F), rownames(meta))
   if (is.null(seed)) seed <- sample.int(.Machine$integer.max, 1L)
@@ -365,7 +372,7 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
   # effects per cell type
   fits <- lapply(D.list, function(D) pairwiseEffectsFromDesign(D, design, meta, dispersion.formula = dispersion.formula,
                                                                dist = dist, bias.correct = bias.correct, influence = influence,
-                                                               min.samp.per.level = min.samp.per.level))
+                                                               min.samp.per.level = min.samp.per.level, robust = robust, na.mode = na.mode, robust.k = robust.k))
   ok <- vapply(fits, function(f) isTRUE(f$ok), logical(1))
   skipped <- data.frame(celltype = names(fits)[!ok], reason = vapply(fits[!ok], function(f) f$reason, character(1)),
                         stringsAsFactors = FALSE, row.names = NULL)
@@ -441,7 +448,7 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
   if (verbose && length(notes)) message(paste(notes, collapse = "\n"))
   list(results = results, global = global, fits = fits, skipped = skipped, plan = gplan, notes = notes,
        perm.stats = if (return.perm.stats) lapply(runs, `[[`, "perm") else NULL,
-       call.info = list(dist = dist, permutation = permutation, n.permutations = n.permutations, seed = seed,
+       call.info = list(dist = dist, permutation = permutation, n.permutations = n.permutations, seed = seed, robust = robust, na.mode = na.mode, robust.k = robust.k,
                         dispersion.formula = dispersion.formula, block.vars = block.vars, bias.correct = bias.correct))
 }
 

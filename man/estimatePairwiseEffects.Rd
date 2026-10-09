@@ -11,7 +11,10 @@ estimatePairwiseEffects(
   Z = NULL,
   z.end = NULL,
   bias.correct = TRUE,
-  G = NULL
+  G = NULL,
+  w = NULL,
+  robust = "none",
+  robust.k = 1.345
 )
 }
 \arguments{

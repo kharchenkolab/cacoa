@@ -86,7 +86,7 @@ isEstimable <- function(X, cvec, tol = 1e-8) {
 #'   `shift.norm`, `var.norm`, `total.norm`, `M` (q x q), `gamma`, `s` (model-based per-sample dispersion),
 #'   `v` (leverage-corrected per-sample dispersion), `h` (leverage), `n`, `rank`
 #' @export
-estimatePairwiseEffects <- function(D2, X, contrast, Z = NULL, z.end = NULL, bias.correct = TRUE, G = NULL) {
+estimatePairwiseEffects <- function(D2, X, contrast, Z = NULL, z.end = NULL, bias.correct = TRUE, G = NULL, w = NULL, robust = "none", robust.k = 1.345) {
   X <- as.matrix(X); n <- nrow(X)
   if (is.null(G)) G <- gowerCenter(D2)
   if (nrow(G) != n) stop("D2/G and X must have the same number of rows.")
@@ -95,6 +95,13 @@ estimatePairwiseEffects <- function(D2, X, contrast, Z = NULL, z.end = NULL, bia
   if (is.null(z.end)) z.end <- list(num = rep(1, ncol(Z)), den = rep(1, ncol(Z)))
   cvec <- as.numeric(contrast)
   if (length(cvec) != ncol(X)) stop("contrast length must equal ncol(X).")
+  if (!is.null(w) || !identical(robust, "none")) {           # weighted / robust path (R reference of the C++ kernels)
+    wc <- weightedContrastStats(G, X, Z, cvec, z.end, w = w %||% rep(1, n), bias.correct = bias.correct, robust = robust, k = robust.k)
+    names(wc$gamma) <- colnames(Z); names(wc$s) <- names(wc$v) <- names(wc$h) <- names(wc$w) <- names(wc$score) <- rownames(X); dimnames(wc$M) <- list(colnames(X), colnames(X))
+    return(list(shift = wc$shift, var = wc$var, total = wc$total, ratio = 1 + wc$shift / (wc$s.alt + wc$s.ref), s.alt = wc$s.alt, s.ref = wc$s.ref,
+                shift.raw = wc$shift.raw, shift.norm = wc$shift / (wc$s.alt + wc$s.ref), var.norm = log2(wc$s.alt / wc$s.ref), total.norm = wc$total / (2 * wc$s.ref),
+                M = wc$M, gamma = wc$gamma, s = wc$s, v = wc$v, h = wc$h, n = n, rank = wc$rank, w = wc$w, score = wc$score, F.shift = wc$F, weighted = TRUE))
+  }
 
   hi <- hatInfo(X); h <- hi$h
   R <- diag(n) - hi$H
@@ -217,7 +224,7 @@ partialR2PerTerm <- function(G, X, assign, term.labels) {
 # ---- leave-one-sample-out ------------------------------------------------------------------------
 
 # Refit without each sample; returns an n x 3 matrix of (shift, var, total) and jackknife SEs.
-looPairwiseEffects <- function(G, X, contrast, Z, z.end, bias.correct = TRUE, min.n = 4) {
+looPairwiseEffects <- function(G, X, contrast, Z, z.end, bias.correct = TRUE, min.n = 4, w = NULL, robust = "none", robust.k = 1.345) {
   n <- nrow(X)
   eff <- matrix(NA_real_, n, 3, dimnames = list(rownames(X), c("shift", "var", "total")))
   if (n <= min.n) return(list(effects = eff, se = c(shift = NA, var = NA, total = NA)))
@@ -227,7 +234,7 @@ looPairwiseEffects <- function(G, X, contrast, Z, z.end, bias.correct = TRUE, mi
     if (!isEstimable(Xi[, keep, drop = FALSE], contrast[keep]) || any(abs(contrast[!keep]) > 1e-12)) next
     Zi <- Z[-i, , drop = FALSE]
     e <- tryCatch(estimatePairwiseEffects(NULL, Xi[, keep, drop = FALSE], contrast[keep], Zi, z.end, bias.correct,
-                                          G = gowerCenter(uncenterGower(G)[-i, -i])),
+                                          G = gowerCenter(uncenterGower(G)[-i, -i]), w = if (!is.null(w)) w[-i] else NULL, robust = robust, robust.k = robust.k),
                   error = function(err) NULL)
     if (!is.null(e)) eff[i, ] <- c(e$shift, e$var, e$total)
   }
@@ -321,12 +328,17 @@ defaultDispersionFormula <- function(spec) {
 #'   `influence`
 #' @export
 pairwiseEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL, dist = c("cor", "l2", "l1"),
-                                      bias.correct = TRUE, influence = FALSE, min.samp.per.level = 3) {
+                                      bias.correct = TRUE, influence = FALSE, min.samp.per.level = 3, robust = "none", na.mode = "drop", robust.k = 1.345) {
   dist <- match.arg(dist)
   skip <- function(reason) list(ok = FALSE, reason = reason)
   samples <- intersect(rownames(design$F), rownames(D))
   if (length(samples) < 3) return(skip("fewer than 3 samples with this cell type"))
+  present <- samples; w <- NULL
   D2 <- asSquaredDistance(D[samples, samples], dist)
+  if (identical(na.mode, "impute_weak")) {                   # keep absent samples with a near-zero weight
+    all.s <- intersect(rownames(design$F), rownames(meta))
+    if (length(samples) < length(all.s)) { imp <- imputeAbsentSamples(D2, samples, all.s); D2 <- imp$D2; w <- imp$w; samples <- all.s }
+  }
   G <- gowerCenter(D2)
 
   F <- design$F[samples, , drop = FALSE]
@@ -342,7 +354,7 @@ pairwiseEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL
   factor.contrast <- !is.null(spec) && spec$type %in% c("simple", "marginal") && !grepl(":", spec$term, fixed = TRUE) &&
     spec$term %in% names(meta) && !is.numeric(meta[[spec$term]])
   if (factor.contrast) {
-    g <- as.character(meta[samples, spec$term])
+    g <- as.character(meta[present, spec$term])
     n.ref <- sum(g == spec$den); n.alt <- sum(g == spec$num)
     if (min(n.ref, n.alt) < min.samp.per.level)
       return(skip(sprintf("fewer than %d samples in a contrasted level (%s: %d, %s: %d)", min.samp.per.level,
@@ -366,12 +378,13 @@ pairwiseEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL
     z.end <- list(num = rep(NA_real_, ncol(Z)), den = rep(NA_real_, ncol(Z)))   # var/total undefined
   }
 
-  eff <- estimatePairwiseEffects(NULL, X, cvec, Z, z.end, bias.correct = bias.correct, G = G)
+  eff <- estimatePairwiseEffects(NULL, X, cvec, Z, z.end, bias.correct = bias.correct, G = G, w = w, robust = robust, robust.k = robust.k)
   eff$ok <- TRUE; eff$reason <- NULL
+  eff$weighted <- isTRUE(eff$weighted); eff$base.w <- w %||% rep(1, length(samples)); eff$robust <- robust; eff$robust.k <- robust.k; eff$na.mode <- na.mode; eff$present <- present
   eff$G <- G; eff$X <- X; eff$Z <- Z; eff$contrast <- cvec; eff$z.end <- z.end; eff$samples <- samples
   eff$n.ref <- n.ref; eff$n.alt <- n.alt
   eff$dispersion.formula <- dispersion.formula
-  eff$F.shift <- contrastF(G, hatInfo(X), cvec)
+  if (!eff$weighted) eff$F.shift <- contrastF(G, hatInfo(X), cvec)
 
   # partial R^2 per location term
   assign <- attr(design$F, "assign")
@@ -392,6 +405,6 @@ pairwiseEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL
     rownames(Xrows) <- rownames(Zrows) <- levs
     eff$cell.table <- impliedCellTable(eff$M, eff$gamma, Xrows, Zrows)
   }
-  if (influence) eff$influence <- looPairwiseEffects(G, X, cvec, Z, z.end, bias.correct)
+  if (influence) eff$influence <- looPairwiseEffects(G, X, cvec, Z, z.end, bias.correct, w = if (eff$weighted) eff$base.w else NULL, robust = robust, robust.k = robust.k)
   eff
 }

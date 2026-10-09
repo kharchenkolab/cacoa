@@ -19,7 +19,9 @@ screenCovariates(
   alpha = 0.05,
   seed = 1,
   n.cores = 1,
-  verbose = FALSE
+  verbose = FALSE,
+  robust = c("none", "huber", "winsor"),
+  robust.k = 1.345
 )
 }
 \arguments{

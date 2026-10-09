@@ -18,7 +18,10 @@ expressionShiftsForModel(
   alpha = 0.05,
   n.cores = 1,
   verbose = FALSE,
-  n.cells = NULL
+  n.cells = NULL,
+  robust = "none",
+  na.mode = "drop",
+  robust.k = 1.345
 )
 }
 \arguments{

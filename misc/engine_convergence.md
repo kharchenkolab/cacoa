@@ -255,11 +255,27 @@ permutation maxima for the max-statistic adjustment; the loop over cells runs on
   precomputed pair matrix) and the former R loop (`tests/testthat/helper-reference.R`) are the references
   (`test-kernel-cf.R`: equality for whole-type and random neighbourhoods with missing samples, block and FL,
   thread-count invariance). Timing on the simulated object (4,500 cells, 99 permutations, 500 genes): 349 s on
-  16 cores before, 16-20 s now on 1 or 16 cores (the remaining time is outside the kernel; being profiled).
+  16 cores before, the kernel alone now takes 14 s on 1 core and 1.1 s on 16 cores. The R6 wrapper adds 20 s outside the kernel:
+  `getTopGenes()` 15.8 s and the adjacency extraction in `getClusterFreeDEInput()` 4.5 s (cleanup candidate, §5).
   Found and fixed on the way: `estimateExpressionShiftsPairsLM()` re-based any 0-based neighbourhood that did not
   contain cell 0 as if it were 1-based, shifting it by one cell; the object pipeline passes 0-based graph
   adjacency, so nearly every neighbourhood was off by one. Index conventions are now explicit arguments and the
   whole-type test checks every cell type. The walkthrough's cluster-free panel must be re-rendered.
+
+- **Step 4b done, calibration pending (2026-10-09).** Weighted Gower form: `R/weighted_fit.R` (reference:
+  `hatInfoW`, `weightedContrastStats`, `weightedTermStats`, `flGowerPartsW`, `imputeAbsentSamples`,
+  `robustWeights`) and `src/gower_stats.h` (shared by `perm_stats.cpp` and the cluster-free kernel):
+  `permuted_contrast_stats_w`, `permuted_term_stats_w`, `weighted_contrast_fit`. `robust = none / huber / winsor`
+  (sample weights from leverage-corrected residual sizes, iterated, recomputed under every relabeling; FL parts
+  from the observed robust weights) and `na.mode = drop / impute_weak` (absent samples kept at weight 1e-4 with
+  the mean squared distance) are options of `estimateExpressionShiftMagnitudes()`, `testPairwiseEffects()`,
+  `testTermEffects()`, `screenCovariates()` (robust), `checkSensitivity()`, the CoDA term test, and
+  `clusterFreeExpressionShifts()` (robust), with `setOptions(robust =, na.mode =, robust.k =)` defaults and a
+  provenance note on the plot. Tests (`test-weighted.R`, 79 expectations): weights of one reproduce the plain
+  statistics; C++ equals the R reference under relabeling for plain / huber / winsor x unit / weak weights x block /
+  FL for contrasts and terms; a planted outlier is down-weighted and the estimate pulled back; weak imputation
+  reproduces the dropped-sample fit while keeping the full sample set; end-to-end through every entry point;
+  cluster-free robust equals the per-cell weighted reference. Fast suite 903 / 0 failed.
 
 ## 6. Scaling the cluster-free tests to ~10^6 cells
 

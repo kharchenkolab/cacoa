@@ -32,13 +32,16 @@ pairVectorToMatrix <- function(y, pairs, samples) {
 #' @param log.vectors log10(1e3 x + 1) transform of the mean profiles (default TRUE)
 #' @param n.cores threads for the per-cell loop (C++)
 #' @param verbose progress
+#' @param robust `"none"`, `"huber"` or `"winsor"`: down-weight samples with outlying residual distances (re-estimated under every relabeling)
+#' @param robust.k robust tuning constant
 #' @return list: `stat` (shift F per cell), `p.value`, `z.score` (and `z.scores`), `z.adj`, `shifts` (bias-corrected shift
 #'   estimate), `shifts.smoothed`, `n.samples`, `settings`
 #' @export
 clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, design, meta, dist = c("cor", "cosine", "js"), min.n.obs.per.samp = 3,
                                         min.samp.per.level = 2, permutation = "auto", n.permutations = 199, block.vars = NULL, seed = 1,
-                                        adjust = TRUE, smooth = TRUE, wins = 0.025, log.vectors = TRUE, n.cores = 1, verbose = FALSE) {
-  dist <- match.arg(dist)
+                                        adjust = TRUE, smooth = TRUE, wins = 0.025, log.vectors = TRUE, n.cores = 1, verbose = FALSE,
+                                        robust = c("none", "huber", "winsor"), robust.k = 1.345) {
+  dist <- match.arg(dist); robust <- match.arg(robust)
   if (identical(design$contrast_spec$type, "term")) stop("cluster-free shifts need a contrast test (two groups or a numeric step)")
   samples <- intersect(rownames(design$F), levels(droplevels(factor(sample.per.cell))))
   if (length(samples) < 4) stop("fewer than 4 samples shared by the design and the cells")
@@ -68,7 +71,7 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
   if (verbose) message(sprintf("Testing %d cells (%d samples) with %d permutations (%s)...", m, n, B, gplan$scheme))
   kr <- cluster_free_shift_stream(cm, as.integer(spc), nn.list, FALSE, as.integer(min.n.obs.per.samp), dist, log.vectors,
                                   pairs - 1L, n, des$F, cF, as.integer(level.code), as.integer(min.samp.per.level), as.integer(gplan$strata), as.integer(gplan$in.set),
-                                  P.global, gplan$scheme == "freedman-lane", TRUE, as.integer(n.cores))
+                                  P.global, gplan$scheme == "freedman-lane", TRUE, as.integer(n.cores), c(none = 0L, huber = 1L, winsor = 2L)[[robust]], robust.k)
   Fobs <- as.numeric(kr$stat); pval <- as.numeric(kr$p); shifts <- as.numeric(kr$shift); n.samp <- as.integer(kr$n); z <- as.numeric(kr$z)
   mx <- as.numeric(kr$max); mn <- as.numeric(kr$min)
   valid <- which(is.finite(z))
@@ -90,6 +93,6 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
     names(shifts.smoothed) <- cell.names
   }
   list(stat = Fobs, p.value = pval, z.score = z, z.scores = z, z.adj = z.adj, shifts = shifts, shifts.smoothed = shifts.smoothed, n.samples = n.samp,
-       settings = list(dist = dist, permutation = gplan$scheme, n.permutations = B, seed = seed, min.n.obs.per.samp = min.n.obs.per.samp,
+       settings = list(dist = dist, permutation = gplan$scheme, n.permutations = B, seed = seed, min.n.obs.per.samp = min.n.obs.per.samp, robust = robust,
                        adjust = adjust, smooth = smooth, n.cells.tested = length(valid)))
 }

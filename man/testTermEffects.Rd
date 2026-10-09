@@ -18,7 +18,10 @@ testTermEffects(
   alpha = 0.05,
   n.cores = 1,
   return.perm.stats = FALSE,
-  verbose = FALSE
+  verbose = FALSE,
+  robust = c("none", "huber", "winsor"),
+  na.mode = c("drop", "impute_weak"),
+  robust.k = 1.345
 )
 }
 \arguments{

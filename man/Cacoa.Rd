@@ -1119,7 +1119,8 @@ across cell types; a dispersion association is reported alongside. Ends with a s
   name = "covariate.screen",
   verbose = NULL,
   n.cores = NULL,
-  seed = NULL
+  seed = NULL,
+  robust = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -1159,6 +1160,8 @@ across cell types; a dispersion association is reported alongside. Ends with a s
 \item{\code{n.cores}}{defaults from options}
 
 \item{\code{seed}}{defaults from options}
+
+\item{\code{robust}}{\code{"none"} (default, option \code{robust}), \code{"huber"} or \code{"winsor"}: robust location / dispersion statistics}
 }
 \if{html}{\out{</div>}}
 }
@@ -1325,6 +1328,9 @@ a pairwise table over the levels. Unset arguments fall back to the stored option
   name = "expression.shifts",
   verbose = NULL,
   n.cores = NULL,
+  robust = NULL,
+  na.mode = NULL,
+  robust.k = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -1375,6 +1381,14 @@ from dispersion and is discouraged)}
 \item{\code{verbose}}{defaults from options}
 
 \item{\code{n.cores}}{defaults from options}
+
+\item{\code{robust}}{\code{"none"} (default, option \code{robust}), \code{"huber"} or \code{"winsor"}: down-weight samples whose residual distance is
+outlying, re-estimated under every relabeling}
+
+\item{\code{na.mode}}{samples absent from a cell type: \code{"drop"} (default, option \code{na.mode}) fits the present samples; \code{"impute_weak"} keeps
+them with a near-zero weight (same sample set in every cell type, levels stay represented)}
+
+\item{\code{robust.k}}{robust tuning constant (default: option \code{robust.k}, 1.345)}
 
 \item{\code{...}}{deprecated arguments of the previous implementation (\code{dist.type}, \code{perm.method}, \code{pairFormula},
 \code{pairContrast}, \code{alternative}, \code{robust.method}, \code{na.mode}, \code{top.n.genes}, \code{gene.selection}, ...) are
@@ -4226,6 +4240,7 @@ median smoothing over the graph.
   min.edge.weight = 0,
   verbose = NULL,
   n.cores = NULL,
+  robust = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -4274,6 +4289,8 @@ median smoothing over the graph.
 \item{\code{verbose}}{defaults from options (permutations capped at 499)}
 
 \item{\code{n.cores}}{defaults from options (permutations capped at 499)}
+
+\item{\code{robust}}{\code{"none"} (default, option \code{robust}), \code{"huber"} or \code{"winsor"}: robust per-cell shift test}
 
 \item{\code{...}}{deprecated arguments of the previous implementation are accepted and ignored with a message}
 }

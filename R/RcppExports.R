@@ -25,12 +25,12 @@ clusterFreeGeneMat <- function(count_mat, sample_per_cell, nn_ids, min_n_obs_per
     .Call(`_cacoa_clusterFreeGeneMat`, count_mat, sample_per_cell, nn_ids, min_n_obs_per_samp, gi)
 }
 
-cluster_free_shift_batch <- function(Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores) {
-    .Call(`_cacoa_cluster_free_shift_batch`, Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores)
+cluster_free_shift_batch <- function(Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust = 0L, robust_k = 1.345) {
+    .Call(`_cacoa_cluster_free_shift_batch`, Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k)
 }
 
-cluster_free_shift_stream <- function(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores) {
-    .Call(`_cacoa_cluster_free_shift_stream`, cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores)
+cluster_free_shift_stream <- function(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust = 0L, robust_k = 1.345) {
+    .Call(`_cacoa_cluster_free_shift_stream`, cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k)
 }
 
 estimateExpressionShiftsPairsLM <- function(cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp = 1L, dist = "cor", log_vecs = TRUE, nn_one_based = FALSE, pairs_one_based = TRUE) {
@@ -75,6 +75,18 @@ permuted_term_stats <- function(G, Hf, Hr, Zf, Zr, df, nu, qZf, qZr, P, need_dis
 
 permuted_term_stats_fl <- function(K1, K2, K3, K4, Hf, Hr, Zf, Zr, df, nu, qZf, qZr, P, need_disp = TRUE) {
     .Call(`_cacoa_permuted_term_stats_fl`, K1, K2, K3, K4, Hf, Hr, Zf, Zr, df, nu, qZf, qZr, P, need_disp)
+}
+
+permuted_contrast_stats_w <- function(G, X, Z, w, cvec, znum, zden, P, freedman_lane, w_fl, bias_correct = TRUE, need_var = TRUE, robust = 0L, k = 1.345, maxit = 5L) {
+    .Call(`_cacoa_permuted_contrast_stats_w`, G, X, Z, w, cvec, znum, zden, P, freedman_lane, w_fl, bias_correct, need_var, robust, k, maxit)
+}
+
+permuted_term_stats_w <- function(G, Xf, Xr, Zf, Zr, w, P, freedman_lane, w_fl, need_disp = TRUE, robust = 0L, k = 1.345, maxit = 5L) {
+    .Call(`_cacoa_permuted_term_stats_w`, G, Xf, Xr, Zf, Zr, w, P, freedman_lane, w_fl, need_disp, robust, k, maxit)
+}
+
+weighted_contrast_fit <- function(G, X, Z, base, cvec, znum, zden, bias_correct = TRUE, robust = 0L, k = 1.345, maxit = 5L) {
+    .Call(`_cacoa_weighted_contrast_fit`, G, X, Z, base, cvec, znum, zden, bias_correct, robust, k, maxit)
 }
 
 projdiff <- function(mat, g1, g2) {

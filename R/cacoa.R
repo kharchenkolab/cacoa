@@ -497,7 +497,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       infl <- if (!is.null(res$influence[[1]])) list(influence = res$influence[[1]], wide = res$wide[[1]]) else NULL
       out <- checkSensitivity(D.list, model, self$sample.meta, formulas = formulas, screen = screen, influence = infl, dist = res$settings$dist,
                               permutation = res$settings$permutation, n.permutations = n.permutations, seed = seed %||% sample.int(.Machine$integer.max, 1),
-                              alpha = private$opt("alpha"), min.samp.per.level = res$settings$min.samp.per.level, n.cores = n.cores, top.k = top.k)
+                              alpha = private$opt("alpha"), min.samp.per.level = res$settings$min.samp.per.level, n.cores = n.cores, top.k = top.k,
+                              robust = res$settings$robust %||% "none", na.mode = res$settings$na.mode %||% "drop", robust.k = res$settings$robust.k %||% 1.345)
       self$test.results[[name]] <- out
       if (verbose) print(out)
       invisible(out)
@@ -539,11 +540,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' \dontrun{
     #' cao$screenCovariates(); cao$plotCovariateScreen(); cao$plotCovariateSummary()
     #' }
+    #' @param robust `"none"` (default, option `robust`), `"huber"` or `"winsor"`: robust location / dispersion statistics
     screenCovariates = function(covariates = NULL, space = c("expression.shifts", "composition"), mode = c("both", "partial", "marginal"),
                                 adjust.for = NULL, dist = NULL, n.pcs = NULL, cell.groups = self$cell.groups, min.cells.per.sample = 10,
                                 min.gene.frac = 0.01, genes = NULL, min.samples.per.type = 6, p.values = c("permutation", "analytic"),
-                                n.permutations = NULL, name = "covariate.screen", verbose = NULL, n.cores = NULL, seed = NULL) {
-      space <- match.arg(space); mode <- match.arg(mode); p.values <- match.arg(p.values)
+                                n.permutations = NULL, name = "covariate.screen", verbose = NULL, n.cores = NULL, seed = NULL, robust = NULL) {
+      space <- match.arg(space); mode <- match.arg(mode); p.values <- match.arg(p.values); robust <- private$opt("robust", robust)
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores); dist <- private$opt("dist", dist)
       n.permutations <- n.permutations %||% min(private$opt("n.permutations"), 499)
       seed <- if (missing(seed)) private$opt("seed") else seed
@@ -554,7 +556,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       res <- screenCovariates(D.list, self$sample.meta, covariates = covariates, mode = mode, adjust.for = adjust.for, dist = if (space == "composition") "l2" else dist,
                               test.variable = test.variable, p.values = p.values, n.permutations = n.permutations,
                               min.samples.per.type = min.samples.per.type, alpha = private$opt("alpha"), seed = seed %||% sample.int(.Machine$integer.max, 1),
-                              n.cores = n.cores, verbose = verbose)
+                              n.cores = n.cores, verbose = verbose, robust = robust, robust.k = private$opt("robust.k"))
       res$settings$space <- space
       self$test.results[[name]] <- res
       invisible(res)
@@ -668,13 +670,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateExpressionShiftMagnitudes()
     #' cao$plotExpressionShiftMagnitudes()
     #' }
+    #' @param robust `"none"` (default, option `robust`), `"huber"` or `"winsor"`: down-weight samples whose residual distance is
+    #'   outlying, re-estimated under every relabeling
+    #' @param na.mode samples absent from a cell type: `"drop"` (default, option `na.mode`) fits the present samples; `"impute_weak"` keeps
+    #'   them with a near-zero weight (same sample set in every cell type, levels stay represented)
+    #' @param robust.k robust tuning constant (default: option `robust.k`, 1.345)
     estimateExpressionShiftMagnitudes = function(test = NULL, formula = NULL, contrast = NULL, dispersion.formula = NULL,
                                                  dist = NULL, permutation = NULL, n.permutations = NULL, block.vars = NULL,
                                                  cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, n.pcs = NULL,
                                                  min.cells.per.sample = 10, min.samp.per.level = NULL, min.gene.frac = 0.01, genes = NULL,
                                                  bias.correct = TRUE, influence = TRUE, seed = NULL, name = "expression.shifts",
-                                                 verbose = NULL, n.cores = NULL, ...) {
+                                                 verbose = NULL, n.cores = NULL, robust = NULL, na.mode = NULL, robust.k = NULL, ...) {
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
+      robust <- private$opt("robust", robust); na.mode <- private$opt("na.mode", na.mode); robust.k <- private$opt("robust.k", robust.k)
       legacy <- private$legacyShiftArgs(list(...), verbose)
       permutation <- legacy$permutation %||% permutation
       dist <- private$opt("dist", dist); permutation <- private$opt("permutation", permutation)
@@ -697,7 +705,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       res <- expressionShiftsForModel(D.list, model, dist = dist, permutation = permutation, n.permutations = n.permutations,
                                       block.vars = block.vars, bias.correct = bias.correct, influence = influence,
                                       min.samp.per.level = min.samp.per.level, seed = seed, alpha = alpha, n.cores = n.cores,
-                                      verbose = FALSE, n.cells = pb$n.cells)
+                                      verbose = FALSE, n.cells = pb$n.cells, robust = robust, na.mode = na.mode, robust.k = robust.k)
       res$n.cells <- pb$n.cells; res$genes <- pb$genes
       res$settings$n.pcs <- n.pcs; res$settings$min.cells.per.sample <- min.cells.per.sample
       res$settings$temporary.model <- !is.null(formula) || !is.null(test) || !is.null(contrast)
@@ -755,9 +763,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       subtitle <- if (show.provenance) {
         prov <- vapply(unique(df$test.id), function(i) modelProvenance(res$model, i), character(1))
         sc <- unique(df$scheme); fl <- unique(df$p.floor)
-        paste(c(prov, sprintf("dist = %s; %s; significance: %s < %.2g", res$settings$dist,
+        rob <- c(if (!identical(res$settings$robust %||% "none", "none")) sprintf("robust: %s", res$settings$robust),
+                 if (identical(res$settings$na.mode, "impute_weak")) "absent samples weakly imputed")
+        paste(c(prov, sprintf("dist = %s; %s; significance: %s < %.2g%s", res$settings$dist,
                               if (length(sc) == 1) sprintf("%s permutations (%d)", sc, res$settings$n.permutations) else "mixed permutation schemes",
-                              significance, alpha)), collapse = "\n")
+                              significance, alpha, if (length(rob)) paste0("; ", paste(rob, collapse = "; ")) else "")), collapse = "\n")
       } else NULL
       plotEffectsPerCellType(df, normalized = normalized, type = type, order.by = order.by, show.ci = show.ci, significance = significance,
                              alpha = alpha, palette = self$cell.groups.palette, plot.theme = self$plot.theme, subtitle = subtitle,
@@ -2426,7 +2436,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         D <- as.matrix(stats::dist(ilr$ilr))
         tr <- testTermEffects(list(composition = D), sample.model$tests[[1]]$design, sample.model$meta, dispersion.formula = sample.model$dispersion.formula,
                               dist = "l2", permutation = private$opt("permutation"), n.permutations = n.permutations, block.vars = block.vars %||% self$block.vars,
-                              seed = private$opt("seed") %||% sample.int(.Machine$integer.max, 1), alpha = private$opt("alpha"), n.cores = n.cores)
+                              seed = private$opt("seed") %||% sample.int(.Machine$integer.max, 1), alpha = private$opt("alpha"), n.cores = n.cores,
+                              robust = private$opt("robust"), robust.k = private$opt("robust.k"))
         res <- list(kind = "term", results = tr$results, fits = tr$fits, ilr = ilr$ilr, psi = ilr$psi, cnts = cnts, model = sample.model, notes = tr$notes)
         self$test.results[[name]] <- res
         return(invisible(res))
@@ -3720,12 +3731,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.edge.weight minimum graph edge weight between cells of different samples (default 0)
     #' @param ... deprecated arguments of the previous implementation are accepted and ignored with a message
     #' @return list (see [clusterFreeExpressionShifts()]), also stored in `cao$test.results[[name]]`
+    #' @param robust `"none"` (default, option `robust`), `"huber"` or `"winsor"`: robust per-cell shift test
     estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="expression", name="cluster.free.expr.shifts",
                                                  test=NULL, formula=NULL, contrast=NULL, block.vars=NULL,
                                                  min.n.obs.per.samp=3, min.samp.per.level=2, permutation=NULL, n.permutations=NULL, seed=NULL,
                                                  dist=c("cor", "cosine", "js"), adjust=TRUE, smooth=TRUE, wins=0.025, genes=NULL, min.expr.frac=0.0,
-                                                 min.edge.weight=0.0, verbose=NULL, n.cores=NULL, ...) {
-      dist <- match.arg(dist)
+                                                 min.edge.weight=0.0, verbose=NULL, n.cores=NULL, robust=NULL, ...) {
+      dist <- match.arg(dist); robust <- private$opt("robust", robust)
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
       legacy <- private$legacyShiftArgs(list(...), verbose)
       permutation <- private$opt("permutation", legacy$permutation %||% permutation)
@@ -3739,7 +3751,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                             design = model, meta = model$meta, dist = dist, min.n.obs.per.samp = min.n.obs.per.samp,
                                             min.samp.per.level = min.samp.per.level, permutation = permutation, n.permutations = n.permutations,
                                             block.vars = block.vars %||% model$block.vars, seed = seed %||% sample.int(.Machine$integer.max, 1),
-                                            adjust = adjust, smooth = smooth, wins = wins, n.cores = n.cores, verbose = verbose)
+                                            adjust = adjust, smooth = smooth, wins = wins, n.cores = n.cores, verbose = verbose,
+                                            robust = robust, robust.k = private$opt("robust.k"))
       shifts$model <- model
       self$test.results[[name]] <- shifts
       return(invisible(shifts))

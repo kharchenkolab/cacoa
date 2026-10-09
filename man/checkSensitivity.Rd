@@ -20,7 +20,10 @@ checkSensitivity(
   n.cores = 1,
   top.k = 3,
   rel.change = 0.5,
-  influence.rel = 0.2
+  influence.rel = 0.2,
+  robust = "none",
+  na.mode = "drop",
+  robust.k = 1.345
 )
 }
 \arguments{

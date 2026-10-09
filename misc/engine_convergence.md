@@ -368,3 +368,21 @@ within-level mean distance, and give it a near-zero weight. That keeps the sampl
 removed (estimability), and matches kernel B's option set; `na.mode = c("drop", "impute_weak")` is offered
 uniformly (default `"drop"`), with calibration of the weak mode in the slow suite. Partial missingness of single distances does not arise (pseudobulk
 profiles are either present or not), so there is no pairwise-deletion mode to support.
+
+### 10a. Where missing-data awareness lives in the permutation machinery
+
+The source itself is deliberately NA-agnostic: P is drawn once for the test's sample set (after the model's
+listwise deletion of samples with missing covariates). Awareness of what is missing per unit lives in the
+**induction step**, so the kernel interface is not P alone but (P, stratum id per sample, in-set flag per
+sample): for a unit (cell type, NA pattern of columns in kernel B, neighbourhood, covariate subset in the screen)
+the present samples are selected, and within each (stratum x in-set) cell of the present samples the labels are
+reassigned by the ranks of their images under P. This is uniform on the subset's relabelings and coupled with the
+full set, and it is the same code for both kernels (today `inducePermutation()` in R; in the batched kernels it
+runs in C++ with the same inputs). Per unit, the number of distinct induced relabelings can be smaller than the
+global one, so the per-unit `n.perm.distinct` and `p.floor` are reported in the results table rather than assumed
+from the global plan.
+
+Under `impute_weak` no induction is needed: every sample is present, P applies directly, and the near-zero weight
+stays with the sample's response row while the labels move, which is exactly the exchangeability the weak mode is
+meant to preserve. Under Freedman-Lane with `drop`, residualization on the reduced model is done per NA pattern on
+its observed rows before the induced P is applied.

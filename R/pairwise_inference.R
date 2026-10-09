@@ -54,6 +54,12 @@ contrastSampleInfo <- function(design, meta, samples) {
     fixed <- if (spec$type == "simple") (spec$at %||% list()) else list()
     numLab <- spec$num; denLab <- spec$den
   }
+  if (any(vapply(meta[diff.vars], is.numeric, logical(1)))) {
+    # numeric tested variable (slope / step): every sample with a value takes part and all values are distinct labels
+    ok <- stats::complete.cases(meta[, diff.vars, drop = FALSE])
+    return(list(type = "labels", in.set = ok, labels = as.character(seq_len(n)), diff.vars = diff.vars, fixed = fixed,
+                num = numLab, den = denLab, tested.vars = diff.vars))
+  }
   labels <- apply(meta[, diff.vars, drop = FALSE], 1, function(r) paste(as.character(r), collapse = ":"))
   in.set <- labels %in% c(numLab, denLab)
   for (v in names(fixed)) {              # discrete fixed settings must match; numeric ones cannot be matched
@@ -291,17 +297,14 @@ permutationStatsForCellType <- function(eff, plan, P, bias.correct = TRUE) {
   obs <- permutedStats(G, X, Z, cvec, z.end, pre, NULL, bias.correct, need.var)
   B <- ncol(P)
   perm <- matrix(NA_real_, B, 4, dimnames = list(NULL, c("F", "shift", "var", "total")))
-  if (plan$scheme == "block") {
-    if (!need.var) { storage.mode(P) <- "integer"; perm[, "F"] <- permuted_contrast_F(G, pre$a, pre$H, pre$cXc, pre$q, P) }   # C++ kernel
-    else for (b in seq_len(B)) perm[b, ] <- permutedStats(G, X, Z, cvec, z.end, pre, P[, b], bias.correct, need.var)
+  if (B == 0) return(list(obs = obs, perm = perm))                       # nothing to permute (a single relabeling)
+  storage.mode(P) <- "integer"
+  znum <- if (need.var) as.numeric(z.end$num) else numeric(ncol(Z)); zden <- if (need.var) as.numeric(z.end$den) else numeric(ncol(Z))
+  if (plan$scheme == "block") {                 # C++ kernel; R reference: permutedStats()
+    perm[, ] <- permuted_contrast_stats(G, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, znum, zden, P, bias.correct, need.var)
   } else if (plan$scheme == "freedman-lane") {
     parts <- flGowerParts(G, X %*% contrastNullBasis(cvec))
-    if (!need.var) { storage.mode(P) <- "integer"; perm[, "F"] <- permuted_contrast_F_fl(parts$K1, parts$K2, parts$K3, parts$K4, pre$a, pre$H, pre$cXc, pre$q, P) }
-    else for (b in seq_len(B)) {
-      Gs <- flGowerPermute(parts, P[, b])
-      pre.b <- pre; pre.b$trG <- sum(diag(Gs)); pre.b$dG <- diag(Gs)
-      perm[b, ] <- permutedStats(Gs, X, Z, cvec, z.end, pre.b, NULL, bias.correct, need.var)
-    }
+    perm[, ] <- permuted_contrast_stats_fl(parts$K1, parts$K2, parts$K3, parts$K4, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, znum, zden, P, bias.correct, need.var)
   } else {  # huh-jhun: shift only
     hj <- hjPrecompute(G, X, cvec, pre)
     obs["F"] <- hjStat(hj, NULL, pre$n, pre$q)
@@ -352,9 +355,10 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
   all.samples <- intersect(rownames(design$F), rownames(meta))
   if (is.null(seed)) seed <- sample.int(.Machine$integer.max, 1L)
 
-  # global plan and permutations (never exhaustive: shared draws for the max-statistic combination)
+  # global plan and permutations shared by all cell types (enumerated exactly when the design is small, so the
+  # max-statistic p-values rest on the same relabelings as the per-cell-type p-values)
   gplan <- permutationPlan(design, meta, all.samples, scheme = permutation, block.vars = block.vars,
-                           n.permutations = n.permutations, max.enumerate = 0)
+                           n.permutations = n.permutations)
   if (verbose && length(gplan$notes)) message(paste(gplan$notes, collapse = "\n"))
   P.global <- withSeed(seed, drawPermutations(gplan, n.permutations))
 
@@ -371,7 +375,8 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
     plan <- permutationPlan(design, meta, eff$samples, scheme = gplan$scheme, block.vars = block.vars,
                             n.permutations = n.permutations)
     sub <- match(eff$samples, all.samples)
-    P.ind <- apply(P.global, 2, inducePermutation, sub = sub, sub.plan = plan)        # coupled permutations
+    P.ind <- apply(P.global, 2, inducePermutation, sub = sub, sub.plan = plan)
+    if (!is.matrix(P.ind)) P.ind <- matrix(P.ind, ncol = ncol(P.global))          # a single permutation        # coupled permutations
     st.c <- permutationStatsForCellType(eff, plan, P.ind, bias.correct)
     # p-values: exhaustive enumeration when small, otherwise the coupled draws
     st.p <- if (plan$exhaustive) permutationStatsForCellType(eff, plan, drawPermutations(plan), bias.correct) else st.c
@@ -415,8 +420,9 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
       usable <- is.finite(z.obs)
       if (any(usable)) {
         mx <- apply(z.perm[, usable, drop = FALSE], 1, max, na.rm = TRUE)
-        global$p[global$effect == eff] <- (sum(mx >= max(z.obs[usable])) + 1) / (length(mx) + 1)
-        results[[paste0("p.fwer.", eff)]] <- ifelse(usable, (vapply(z.obs, function(z) sum(mx >= z), numeric(1)) + 1) / (length(mx) + 1), NA_real_)
+        add1 <- as.numeric(!gplan$exhaustive)                                  # exhaustive draws include the identity: no +1
+        global$p[global$effect == eff] <- (sum(mx >= max(z.obs[usable]) - 1e-12) + add1) / (length(mx) + add1)
+        results[[paste0("p.fwer.", eff)]] <- ifelse(usable, (vapply(z.obs, function(z) sum(mx >= z - 1e-12), numeric(1)) + add1) / (length(mx) + add1), NA_real_)
       } else results[[paste0("p.fwer.", eff)]] <- NA_real_
     }
     # flags

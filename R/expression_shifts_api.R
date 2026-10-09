@@ -124,6 +124,7 @@ termPermutationStats <- function(eff, plan, P) {
   G <- eff$G; Xf <- eff$X; Xr <- eff$Xr; Zf <- eff$Z; Zr <- eff$Zr
   obs <- c(F = unname(eff$location["F"]), F.disp = unname(eff$dispersion["F.disp"]))
   B <- ncol(P); perm <- matrix(NA_real_, B, 2, dimnames = list(NULL, c("F", "F.disp")))
+  if (B == 0) return(list(obs = obs, perm = perm))
   need.disp <- is.finite(obs["F.disp"])
   if (plan$scheme == "block" || plan$scheme == "huh-jhun") {
     for (b in seq_len(B)) {
@@ -165,7 +166,7 @@ testTermEffects <- function(D.list, design, meta, dispersion.formula = NULL, dis
   if (is.null(names(D.list))) names(D.list) <- paste0("CT", seq_along(D.list))
   all.samples <- intersect(rownames(design$F), rownames(meta))
   if (is.null(seed)) seed <- sample.int(.Machine$integer.max, 1L)
-  gplan <- permutationPlan(design, meta, all.samples, scheme = permutation, block.vars = block.vars, n.permutations = n.permutations, max.enumerate = 0)
+  gplan <- permutationPlan(design, meta, all.samples, scheme = permutation, block.vars = block.vars, n.permutations = n.permutations)   # enumerated when small
   P.global <- withSeed(seed, drawPermutations(gplan, n.permutations))
   fits <- lapply(D.list, function(D) termEffectsFromDesign(D, design, meta, dispersion.formula = dispersion.formula, dist = dist,
                                                           min.samp.per.level = min.samp.per.level))
@@ -176,6 +177,7 @@ testTermEffects <- function(D.list, design, meta, dispersion.formula = NULL, dis
     plan <- permutationPlan(design, meta, eff$samples, scheme = gplan$scheme, block.vars = block.vars, n.permutations = n.permutations)
     sub <- match(eff$samples, all.samples)
     P.ind <- apply(P.global, 2, inducePermutation, sub = sub, sub.plan = plan)
+    if (!is.matrix(P.ind)) P.ind <- matrix(P.ind, ncol = ncol(P.global))          # a single permutation
     st.c <- termPermutationStats(eff, plan, P.ind)
     st.p <- if (plan$exhaustive) termPermutationStats(eff, plan, drawPermutations(plan)) else st.c
     list(plan = plan, obs = st.c$obs, perm.coupled = st.c$perm, perm = st.p$perm)
@@ -206,8 +208,9 @@ testTermEffects <- function(D.list, design, meta, dispersion.formula = NULL, dis
       usable <- is.finite(z.obs)
       if (any(usable)) {
         mx <- apply(z.perm[, usable, drop = FALSE], 1, max, na.rm = TRUE)
-        global$p[global$effect == eff] <- (sum(mx >= max(z.obs[usable])) + 1) / (length(mx) + 1)
-        results[[paste0("p.fwer.", eff)]] <- ifelse(usable, (vapply(z.obs, function(z) sum(mx >= z), numeric(1)) + 1) / (length(mx) + 1), NA_real_)
+        add1 <- as.numeric(!gplan$exhaustive)
+        global$p[global$effect == eff] <- (sum(mx >= max(z.obs[usable]) - 1e-12) + add1) / (length(mx) + add1)
+        results[[paste0("p.fwer.", eff)]] <- ifelse(usable, (vapply(z.obs, function(z) sum(mx >= z - 1e-12), numeric(1)) + add1) / (length(mx) + add1), NA_real_)
       } else results[[paste0("p.fwer.", eff)]] <- NA_real_
     }
     results$flags <- vapply(seq_len(nrow(results)), function(i) {

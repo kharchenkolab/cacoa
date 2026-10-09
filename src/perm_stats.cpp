@@ -52,3 +52,70 @@ arma::vec permuted_contrast_F_fl(const arma::mat& K1, const arma::mat& K2, const
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// Full contrast statistics under a relabeling (step 2 of the engine convergence): F, shift, var, total.
+// R reference: permutedStats() in R/pairwise_inference.R. Pieces (q x n matrix A = (X'X)^- X', hat matrix H,
+// regression weights a = A'c, Z the dispersion design, znum / zden the dispersion-design rows at the contrast
+// endpoints) are precomputed once in R; the relabeling permutes the design (block scheme) or the Gower matrix
+// (Freedman-Lane).
+// ---------------------------------------------------------------------------------------------------------
+
+// statistics for one configuration: Gs (Gower matrix, possibly permuted), Xp / Ap / Zp / Hp / ap (design pieces,
+// possibly row-permuted), dG = diag(Gs), trG = trace(Gs)
+static inline arma::rowvec contrast_stats_one(const arma::mat& Gs, const arma::mat& Xp, const arma::mat& Ap, const arma::mat& Zp,
+                                              const arma::mat& Hp, const arma::vec& ap, const arma::vec& cvec, double cXc, int q,
+                                              const arma::vec& znum, const arma::vec& zden, bool bias_correct, bool need_var) {
+  const arma::uword n = Gs.n_rows;
+  const double df_res = static_cast<double>(n) - q;
+  arma::rowvec out(4); out.fill(arma::datum::nan);
+  const double ss = arma::dot(ap, Gs * ap) / cXc;
+  const double rss = arma::trace(Gs) - arma::accu(Hp % Gs);
+  out(0) = ss / (rss / df_res);
+  if (!need_var) return out;
+  arma::mat AG = Ap * Gs;                                   // q x n
+  arma::mat M = AG * Ap.t();                                // q x q (bias-uncorrected effect matrix)
+  arma::vec hG = arma::sum(Xp % AG.t(), 1);                 // diag(H_p G)
+  arma::vec hGh = arma::sum((Xp * M) % Xp, 1);              // diag(H_p G H_p)
+  arma::vec r = Gs.diag() - 2.0 * hG + hGh;                 // diag(R G R)
+  arma::mat Rp = -Hp; Rp.diag() += 1.0;                     // residual projection under the relabeling
+  arma::mat W = (Rp % Rp) * Zp;                             // E[r] = (R o R) Z gamma
+  arma::vec gamma = arma::pinv(W.t() * W) * (W.t() * r);
+  if (!gamma.is_finite()) return out;
+  arma::vec s = Zp * gamma;
+  if (bias_correct) M -= Ap * (Ap.each_row() % s.t()).t(); // M - A_p diag(s) A_p'
+  const double shift = arma::as_scalar(cvec.t() * M * cvec);
+  const double var = 2.0 * (arma::dot(znum, gamma) - arma::dot(zden, gamma));
+  out(1) = shift; out(2) = var; out(3) = shift + var / 2.0;
+  return out;
+}
+
+// [[Rcpp::export]]
+arma::mat permuted_contrast_stats(const arma::mat& G, const arma::mat& X, const arma::mat& Z, const arma::mat& A, const arma::mat& H,
+                                  const arma::vec& a, const arma::vec& cvec, double cXc, int q, const arma::vec& znum, const arma::vec& zden,
+                                  const arma::imat& P, bool bias_correct = true, bool need_var = true) {
+  const arma::uword n = G.n_rows, B = P.n_cols;
+  if (X.n_rows != n || Z.n_rows != n || A.n_cols != n || H.n_rows != n || a.n_elem != n || P.n_rows != n) Rcpp::stop("dimension mismatch in permuted_contrast_stats");
+  arma::mat out(B, 4);
+  for (arma::uword b = 0; b < B; ++b) {
+    arma::uvec p = perm_index(P, b);
+    out.row(b) = contrast_stats_one(G, X.rows(p), A.cols(p), Z.rows(p), H.submat(p, p), a(p), cvec, cXc, q, znum, zden, bias_correct, need_var);
+  }
+  return out;
+}
+
+// [[Rcpp::export]]
+arma::mat permuted_contrast_stats_fl(const arma::mat& K1, const arma::mat& K2, const arma::mat& K3, const arma::mat& K4,
+                                     const arma::mat& X, const arma::mat& Z, const arma::mat& A, const arma::mat& H, const arma::vec& a,
+                                     const arma::vec& cvec, double cXc, int q, const arma::vec& znum, const arma::vec& zden,
+                                     const arma::imat& P, bool bias_correct = true, bool need_var = true) {
+  const arma::uword n = K1.n_rows, B = P.n_cols;
+  if (X.n_rows != n || Z.n_rows != n || A.n_cols != n || H.n_rows != n || a.n_elem != n || P.n_rows != n) Rcpp::stop("dimension mismatch in permuted_contrast_stats_fl");
+  arma::mat out(B, 4);
+  for (arma::uword b = 0; b < B; ++b) {
+    arma::uvec p = perm_index(P, b);
+    arma::mat Gs = K1 + K2.cols(p) + K3.rows(p) + K4.submat(p, p);
+    out.row(b) = contrast_stats_one(Gs, X, A, Z, H, a, cvec, cXc, q, znum, zden, bias_correct, need_var);
+  }
+  return out;
+}

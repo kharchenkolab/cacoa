@@ -4,6 +4,14 @@ Consolidated from the per-track status notes in `misc/plan.md`. Items are groupe
 what still has to be built; nothing here is tracked by a test failure (the fast suite, the slow suite and
 `R CMD check` are clean).
 
+## 0a. Found and fixed during the engine convergence (2026-10-09)
+
+- `impute_weak` in the C++ fitter detached the weak weights from their rows under relabeling (step 1).
+- Max-T p-values used random global draws while per-cell-type p-values were enumerated: `p.fwer` could be
+  below the raw p (step 2).
+- Numeric tests (`test = "age"`) permuted nothing: the plan marked no sample swappable (step 2). All earlier
+  numeric-test p-values from the block scheme were therefore uninformative (p = 1 or NA).
+
 ## 0. Found and fixed by executing the walkthrough (2026-10-09)
 
 Running the whole workflow as a notebook on the simulated object exposed four defects the unit tests had missed:

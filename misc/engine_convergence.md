@@ -233,6 +233,16 @@ permutation maxima for the max-statistic adjustment; the loop over cells runs on
   equality on complete data, per-NA-pattern induction, impute_weak WLS reference, robust and FL paths consume P,
   exhaustive 2-vs-2 enumeration, only compared levels move, CoDA and shifts share P). Fast suite 728 / 0 failed.
 
+- **Step 2 done (2026-10-09).** `permuted_contrast_stats()` / `_fl()` in `src/perm_stats.cpp` return F, shift, var,
+  total under every relabeling (dispersion refit via (R o R) Z, bias correction, endpoints) and replace the R loop
+  in `permutationStatsForCellType()`; `permutedStats()` stays as the reference (`test-kernel-a.R`: 1e-10 agreement
+  over balanced / unbalanced-dispersion / three-group cells, block and FL, with and without bias correction;
+  F-only mode equals the F kernel; identity reproduces the estimates). Found and fixed on the way: (i) the global
+  permutations for the max-statistic were always random draws even when the per-cell-type ones were enumerated,
+  so `p.fwer` could fall below the raw p (now enumerated together, exhaustive p without the +1); (ii) for a numeric
+  tested variable the plan marked no sample as swappable, so every permutation was the identity (now all samples
+  with a value swap within strata; 5!^2 relabelings for 5 + 5 in two batches). Fast suite 766 / 0 failed.
+
 ## 6. Scaling the cluster-free tests to ~10^6 cells
 
 The batched kernel of step 4 handles this if two things are built in from the start; the current R loop cannot

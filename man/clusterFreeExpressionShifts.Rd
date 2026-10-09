@@ -52,7 +52,7 @@ clusterFreeExpressionShifts(
 
 \item{log.vectors}{log10(1e3 x + 1) transform of the mean profiles (default TRUE)}
 
-\item{n.cores}{cores for the per-cell loop}
+\item{n.cores}{threads for the per-cell loop (C++)}
 
 \item{verbose}{progress}
 }

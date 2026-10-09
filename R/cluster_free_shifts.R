@@ -30,7 +30,7 @@ pairVectorToMatrix <- function(y, pairs, samples) {
 #' @param smooth median-filter the shifts and adjusted z-scores over the graph (default TRUE)
 #' @param wins winsorizing fraction for the adjustment (default 0.025)
 #' @param log.vectors log10(1e3 x + 1) transform of the mean profiles (default TRUE)
-#' @param n.cores cores for the per-cell loop
+#' @param n.cores threads for the per-cell loop (C++)
 #' @param verbose progress
 #' @return list: `stat` (shift F per cell), `p.value`, `z.score` (and `z.scores`), `z.adj`, `shifts` (bias-corrected shift
 #'   estimate), `shifts.smoothed`, `n.samples`, `settings`
@@ -52,59 +52,22 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
   if (verbose) message(sprintf("Computing neighbourhood sample distances for %d cells (%d samples)...", m, n))
   Y <- estimateExpressionShiftsPairsLM(cm = cm, sample_per_cell = as.integer(spc), nn_ids = nn.list, pairs_mat = pairs,
                                        min_n_obs_per_samp = min.n.obs.per.samp, dist = dist, log_vecs = log.vectors)
-  # global permutations over all samples
+  # global permutations over all samples; the per-cell work runs in C++ (cluster_free_shift_batch)
   meta <- meta[samples, , drop = FALSE]
   des <- design; des$F <- design$F[samples, , drop = FALSE]
   gplan <- permutationPlan(des, meta, samples, scheme = permutation, block.vars = block.vars, n.permutations = n.permutations, max.enumerate = 0)
-  P.global <- withSeed(seed, drawPermutations(gplan, n.permutations))
+  P.global <- withSeed(seed, drawPermutations(gplan, n.permutations)); storage.mode(P.global) <- "integer"
   B <- ncol(P.global)
   cF <- design$contrast.F[colnames(des$F)]
   spec <- design$contrast_spec
   lev.var <- if (!is.null(spec) && spec$type %in% c("simple", "marginal") && !grepl(":", spec$term, fixed = TRUE) && spec$term %in% names(meta) && !is.numeric(meta[[spec$term]])) spec$term else NULL
-  plan.cache <- new.env()
-
-  oneCell <- function(k) {
-    out <- list(F = NA_real_, p = NA_real_, shift = NA_real_, n = 0L, perm = NULL)
-    y <- Y[, k]
-    if (all(is.na(y))) return(out)
-    D <- pairVectorToMatrix(y, pairs, samples)
-    s <- rownames(D)
-    if (length(s) < 3) return(out)
-    if (!is.null(lev.var)) { g <- as.character(meta[s, lev.var]); tb <- table(g)[c(spec$den, spec$num)]; if (any(is.na(tb)) || min(tb) < min.samp.per.level) return(out) }
-    X <- des$F[s, , drop = FALSE]; keep <- colSums(abs(X)) > 1e-12
-    if (any(abs(cF[!keep]) > 1e-12)) return(out)
-    X <- X[, keep, drop = FALSE]; cvec <- cF[keep]
-    if (ncol(X) >= nrow(X) || !isEstimable(X, cvec)) return(out)
-    G <- gowerCenter(asSquaredDistance(D, "cor"))
-    pre <- inferencePrecompute(G, X, matrix(1, nrow(X), 1), cvec)
-    eff <- tryCatch(estimatePairwiseEffects(NULL, X, cvec, NULL, NULL, TRUE, G = G), error = function(e) NULL)
-    key <- paste(s, collapse = ";")
-    plan <- plan.cache[[key]]
-    if (is.null(plan)) { plan <- permutationPlan(des, meta, s, scheme = gplan$scheme, block.vars = block.vars, n.permutations = n.permutations, max.enumerate = 0); assign(key, plan, envir = plan.cache) }
-    sub <- match(s, samples)
-    P <- apply(P.global, 2, inducePermutation, sub = sub, sub.plan = plan); storage.mode(P) <- "integer"
-    Fp <- if (gplan$scheme == "freedman-lane") {
-      parts <- flGowerParts(G, X %*% contrastNullBasis(cvec))
-      permuted_contrast_F_fl(parts$K1, parts$K2, parts$K3, parts$K4, pre$a, pre$H, pre$cXc, pre$q, P)
-    } else permuted_contrast_F(G, pre$a, pre$H, pre$cXc, pre$q, P)
-    Fo <- contrastF(G, hatInfo(X), cvec)
-    list(F = Fo, p = (sum(Fp >= Fo - 1e-12) + 1) / (B + 1), shift = if (is.null(eff)) NA_real_ else eff$shift, n = length(s), perm = as.numeric(Fp))
-  }
+  level.code <- rep(-1L, n)
+  if (!is.null(lev.var)) { g <- as.character(meta[[lev.var]]); level.code <- ifelse(is.na(g), -1L, ifelse(g == spec$den, 1L, ifelse(g == spec$num, 2L, 0L))) }
   if (verbose) message(sprintf("Testing %d cells with %d permutations (%s)...", m, B, gplan$scheme))
-  cells <- seq_len(m)
-  res <- if (n.cores > 1) sccore::plapply(cells, oneCell, n.cores = n.cores, progress = verbose, fail.on.error = TRUE) else lapply(cells, oneCell)
-  Fobs <- vapply(res, `[[`, numeric(1), "F"); pval <- vapply(res, `[[`, numeric(1), "p"); shifts <- vapply(res, `[[`, numeric(1), "shift")
-  n.samp <- vapply(res, `[[`, integer(1), "n")
-  valid <- which(is.finite(Fobs))
-  # z-scores per cell and max-statistic extremes per permutation (same scale as z)
-  z <- rep(NA_real_, m); mx <- rep(-Inf, B); mn <- rep(Inf, B)
-  for (k in valid) {
-    Fp <- res[[k]]$perm; mu <- mean(Fp); sdv <- stats::sd(Fp)
-    if (!is.finite(sdv) || sdv == 0) { z[k] <- NA_real_; next }
-    z[k] <- (Fobs[k] - mu) / sdv
-    zp <- (Fp - mu) / sdv
-    mx <- pmax(mx, zp); mn <- pmin(mn, zp)
-  }
+  kr <- cluster_free_shift_batch(Y, pairs - 1L, n, des$F, cF, as.integer(level.code), as.integer(min.samp.per.level), as.integer(gplan$strata), as.integer(gplan$in.set),
+                                 P.global, gplan$scheme == "freedman-lane", TRUE, as.integer(n.cores))
+  Fobs <- as.numeric(kr$stat); pval <- as.numeric(kr$p); shifts <- as.numeric(kr$shift); n.samp <- as.integer(kr$n); z <- as.numeric(kr$z)
+  mx <- as.numeric(kr$max); mn <- as.numeric(kr$min)
   valid <- which(is.finite(z))
   cell.names <- names(nns.per.cell) %||% colnames(cm)
   names(Fobs) <- names(pval) <- names(shifts) <- names(z) <- names(n.samp) <- cell.names

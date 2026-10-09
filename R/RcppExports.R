@@ -25,6 +25,10 @@ clusterFreeGeneMat <- function(count_mat, sample_per_cell, nn_ids, min_n_obs_per
     .Call(`_cacoa_clusterFreeGeneMat`, count_mat, sample_per_cell, nn_ids, min_n_obs_per_samp, gi)
 }
 
+cluster_free_shift_batch <- function(Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores) {
+    .Call(`_cacoa_cluster_free_shift_batch`, Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores)
+}
+
 estimateExpressionShiftsPairsLM <- function(cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp = 1L, dist = "cor", log_vecs = TRUE) {
     .Call(`_cacoa_estimateExpressionShiftsPairsLM`, cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp, dist, log_vecs)
 }

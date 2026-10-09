@@ -21,12 +21,11 @@ one permutation source.
 | 10 | DE per cell type (`estimateDEPerCellType`) | DESeq2 / edgeR / limma | parametric | none | none | - | `de_function.R` |
 | - | unused C++ exports | `fit_density_lm`, `perm_FL_contrast_mat`, `perm_full_contrast_mat` (`projdiff.cpp`); `pca_project`, `estimateCorrelationDistance` (`expression_shifts.cpp`) | | | | | |
 
-Two permutation generators exist and they do **not** draw from the same distribution: the R plan swaps only the
-samples of the compared levels within strata (exact for a two-level contrast with discrete nuisance, and the one
-whose p-value floors and enumeration counts are reported in the model), while `fit_and_randomize` shuffles all
-samples within each `perm_groups` block with its own Mersenne stream. With more than two levels (the simulated
-object has four groups) rows 6, 8 and 9 therefore permute differently from rows 1-5, and their permutations are not
-coupled with the shift tests.
+Two permutation generators exist. Both restrict the swaps to the samples of the compared levels within nuisance
+strata (see §2a), but they are not the same draws: the R plan draws one matrix P per test, shared by all cell
+types and coordinates, enumerates when few relabelings exist and reports the p-value floor in the model; the C++
+fitter draws its own Mersenne stream per response column and never enumerates. Rows 6, 8 and 9 are therefore not
+coupled with the shift tests, nor with each other's columns.
 
 ## 2. Why it diverged
 
@@ -49,14 +48,16 @@ The two generators answer different questions and were written at different time
 **C++ `fit_and_randomize` (rows 6, 8, 9).** The design matrix F and the response matrix Y (n x m) are fixed; for
 each column j a job draws `n_randomizations` permutations and refits. Three properties matter:
 
-1. *Which samples move.* `perm_groups` are the blocks from `makeBlocks()`: the interaction of every discrete
-   nuisance factor in the formula (or `block.vars`). Inside a block **all** rows are shuffled, whatever their level
-   of the tested variable. For a two-level test with discrete nuisance this is the classic restricted permutation.
-   With more levels (the simulated object has four groups and the test is Group2 vs Group1) the shuffle also moves
-   Group3 and Group4 samples, so the fitted Group3/Group4 coefficients change under the null as well. The null
-   being simulated is "no Group effect at all", not "Group2 = Group1 holding the other levels where they are".
-   Under a true global null both are valid; when the other levels do differ (as planted here) the null variance of
-   the Group2 - Group1 contrast is inflated by their differences.
+1. *Which samples move.* `perm_groups` are built by `permutationGroups(blocks, core.rows)`: the blocks are the
+   interaction of the discrete nuisance factors (`makeBlocks()`), and only the **core rows** are placed in them,
+   where `core.rows` marks the samples with non-zero weight in the contrast (Group1 and Group2 for a
+   Group2-vs-Group1 test; verified for a 4 x 2 design: two blocks of 5 + 5 Group1/Group2 samples, one per batch).
+   `generate_permutation()` starts from the identity and shuffles inside each block, so Group3 and Group4 rows keep
+   their labels. The fitter's block scheme is therefore contrast-restricted, like the R plan, and an earlier
+   version of this note claiming otherwise was wrong. For a whole-factor (term) test the fitter has no equivalent
+   (it tests one contrast at a time), and for interaction-cell contrasts the restriction follows the contrast's
+   weights rather than the cell labels, which can differ from the R plan's `in.set`; otherwise the two agree on
+   which samples move.
 2. *One RNG stream per column.* `make_rng(seed, j)` seeds the Mersenne generator with the column index, so
    permutation b of column 1 is not permutation b of column 2. Anything that combines columns at a fixed
    permutation index assumes they were relabelled together, and that assumption is false here:
@@ -93,11 +94,13 @@ integer matrix P (n x B) for the sample set and everything consumes it:
    1/(B+1). Freedman-Lane in Gower form permutes all samples (strata from `block.vars` only) and re-indexes the
    residual kernel; Huh-Jhun is opt-in for the shift.
 
-So the R side is not a reimplementation of the C++ randomization in another language: it is a different and more
-specific null (contrast-restricted, coupled, enumerable), written for statistics the C++ fitter cannot compute.
-The C++ side kept its own because nobody taught the fitter to accept a permutation matrix. Once it does (step 1),
-rows 6, 8 and 9 inherit the contrast-restricted null, the coupling across columns (which fixes the two defects in
-point 2 above), the enumeration and the shared seed, with no change to their statistics.
+So the two sides agree on the restricted set of samples and on the strata for a simple contrast; they differ in
+coupling (one shared P versus one stream per column), in enumeration and reporting (plan before the fit, exact
+p-values when few relabelings exist), in the Freedman-Lane mechanics, and in the seed. The R side was written in R
+because the plan has to exist before any fit and because its statistics are not what the fitter computes; the C++
+side kept its own generator because nobody taught the fitter to accept a permutation matrix. Once it does (step 1),
+rows 6, 8 and 9 inherit the coupling across columns (which fixes the two defects in point 2 above), the enumeration
+and the shared seed, with no change to their statistics.
 
 ## 3. What it costs
 

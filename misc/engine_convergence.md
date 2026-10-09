@@ -337,3 +337,28 @@ candidate covariate per bin / gene, summarized) is a small addition worth making
 Requirement for the convergence work: keep residual outputs first-class in the observed-fit function of kernel B
 and keep `adjusted.distances` in the shift results; the dead cluster-free-shift residual branch in
 `plotClusterFreeExpressionShifts` is removed.
+
+## 10. Missing data in the Gower engine
+
+Today there is one mode, sample-level complete cases per unit:
+
+- Metadata: `buildCacoaModel()` drops samples with a missing value in any model variable (listwise deletion),
+  reported in the model's issues.
+- Pseudobulk: a sample with fewer than `min.cells.per.sample` cells in a cell type is absent from that cell
+  type's distance matrix; the unit is fitted on the samples present (design subset, estimability check,
+  `min.samp.per.level`), skipped with a reason otherwise (`res$skipped`), and its permutations are induced from the
+  shared P on the present samples. The distance matrix itself never holds NA: a sample is either present with all
+  its distances or absent.
+- Screen: per covariate, the samples with complete covariate values are used (`n.used` reported) and the Gower
+  matrix is re-centred on that subset; the shared P is induced likewise.
+- Cluster-free: per cell, samples with fewer than `min.n.obs.per.samp` cells in the neighbourhood are absent,
+  same mechanism.
+
+This is the analogue of kernel B's `na_mode = "drop"`, applied at the sample level because the response of this
+model is a sample's whole distance profile. An analogue of `impute_weak` is possible and falls out of the weighted
+Gower form planned for the robust fit (§8): keep the absent sample in the design, fill its distances with the
+within-level mean distance, and give it a near-zero weight. That keeps the sample set identical across cell types
+(no induced permutations, one P for everything), keeps design levels represented that a dropped sample would have
+removed (estimability), and matches kernel B's option set, so `na.mode = c("drop", "impute_weak")` can be offered
+uniformly once the weighted form exists. Partial missingness of single distances does not arise (pseudobulk
+profiles are either present or not), so there is no pairwise-deletion mode to support.

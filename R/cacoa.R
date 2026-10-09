@@ -455,8 +455,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @return named vector over samples (`NULL` when the test has no variable, e.g. coefficient contrasts)
     getSampleGroups = function(test = NULL, model = self$model) {
       if (is.null(model)) return(NULL)
-      t <- if (is.null(test)) model$tests[[1]] else if (is.numeric(test)) model$tests[[test]] else
-        model$tests[[match(test, vapply(model$tests, `[[`, character(1), "label"))]]
+      t <- model$tests[[matchModelTest(model, test)[1]]]
       if (is.null(t) || is.null(t$variable) || is.na(t$variable)) return(NULL)
       x <- self$sample.meta[[t$variable]]
       if (t$kind == "contrast" && is.null(t$step)) {
@@ -747,7 +746,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.null(res$results) || !nrow(res$results)) stop("no cell type could be tested (see cao$test.results[['", name, "']]$skipped)")
       df <- res$results
       if (!is.null(test)) {
-        keep <- if (is.numeric(test)) df$test.id %in% test else df$test %in% test
+        keep <- df$test.id %in% matchModelTest(res$model, test)
         if (!any(keep)) stop("test not found; available: ", paste(unique(df$test), collapse = ", "))
         df <- df[keep, ]
       }
@@ -1210,6 +1209,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           grDevices::colorRampPalette()
       }
 
+      de <- lapply(de, getResDf)
+      de <- de[!vapply(de, is.null, logical(1))]
+      if (!length(de)) stop("no DE tables in cao$test.results[['", name, "']]")
       if(!(color.var %in% names(de[[1]]))) {
         stop(paste(color.var, 'is not calculated'))
       }
@@ -2542,31 +2544,31 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
 
 
-    #' @description Plot Loadings (old two group comparison)
-    #' @param alpha numeric Transparency (default=0.01)
-    #' @param palette plot palette specification for cell types (default: stored $cell.groups.palette)
-    #' @param font.size numeric Font size (default=NULL)
-    #' @param name character Results slot name (default='coda')
-    #' @param ordering character Must be one of "pvalue", "loadings"  (default='pvalue')
-    #' @param show.pvals boolean Show P values (default=TRUE)
-    #' @param ... additional parameters plotCellLoadings()
-    #' @return A ggplot2 object
+    #' @description Plot the compositional loadings of the contrast per cell type (see [plotCodaLoadings()])
+    #' @param alpha significance threshold on the adjusted per-cell-type p-values (default: option `alpha`)
+    #' @param palette named colours per cell type (default: `cell.groups.palette`)
+    #' @param name name of the `estimateCellLoadings()` result (default: `"coda"`)
+    #' @param ordering `"pvalue"` (default) or `"loading"`
+    #' @param show.pvals add a panel of -log10 p-values (default TRUE)
+    #' @param show.null show the permutation null of each loading as a grey box (default TRUE)
+    #' @param ... passed to [plotCodaLoadings()]
+    #' @return ggplot2 object
     #' @examples
     #' \dontrun{
     #' cao$estimateCellLoadings()
     #' cao$plotCellLoadings()
     #' }
-    plotCellLoadings=function(alpha=0.01, palette=self$cell.groups.palette, font.size=NULL, name='coda',
-                              ordering='pvalue', show.pvals=TRUE, ...) {
-
-      loadings <- private$getResults(name, 'estimateCellLoadings()')
-      p <- loadings %$% plotCellLoadings(
-        loadings, pval=padj, jitter.alpha=alpha, palette=palette, show.pvals=show.pvals,
-        ref.level=self$ref.level, target.level=self$target.level, plot.theme=self$plot.theme,
-        ref.load.level=ref.load.level, ordering=ordering, ...
-      )
-
-      return(p)
+    plotCellLoadings=function(alpha=NULL, palette=self$cell.groups.palette, name='coda', ordering=c('pvalue', 'loading'),
+                              show.pvals=TRUE, show.null=TRUE, ...) {
+      ordering <- match.arg(ordering); alpha <- private$opt("alpha", alpha)
+      res <- private$getResults(name, 'estimateCellLoadings()')
+      if (identical(res$kind, "term")) {
+        stop("the whole-factor composition test has no per-cell-type loadings; see cao$test.results[['", name, "']]$results ",
+             "(location / dispersion R2 and p-values)")
+      }
+      lab <- res$contrast$predicted$labels
+      plotCodaLoadings(res, ref.level = self$ref.level %||% lab$baseline %||% "reference", target.level = self$target.level %||% lab$target %||% "target",
+                       alpha = alpha, palette = palette, ordering = ordering, show.pvals = show.pvals, show.null = show.null, plot.theme = self$plot.theme, ...)
     },
 
     ### Cluster-free cell density

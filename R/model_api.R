@@ -472,10 +472,21 @@ summary.cacoaModel <- function(object, ...) {
   invisible(object)
 }
 
+# index of a test within a model: by position, by label ("Group: Group2 vs Group1", "Group (4 levels)") or by variable name
+matchModelTest <- function(model, test = NULL) {
+  if (is.null(test)) return(1L)
+  labels <- vapply(model$tests, `[[`, character(1), "label")
+  if (is.numeric(test)) { if (any(test < 1 | test > length(labels))) stop("test index out of range (", length(labels), " tests)"); return(as.integer(test)) }
+  vars <- vapply(model$tests, function(t) as.character(t$variable %||% NA_character_)[1], character(1))
+  idx <- unique(c(which(labels %in% test), which(vars %in% test)))
+  if (!length(idx)) stop("test not found; available: ", paste(labels, collapse = ", "))
+  idx
+}
+
 # one-line provenance string for plots (D34)
 modelProvenance <- function(model, test = NULL, extra = NULL) {
   if (is.null(model)) return(NULL)
-  t <- if (is.null(test)) model$tests[[1]] else model$tests[[test]]
+  t <- model$tests[[matchModelTest(model, test)[1]]]
   adj <- setdiff(all.vars(model$formula), t$variable)
   parts <- c(t$label, if (length(adj)) sprintf("adjusted for %s", paste(adj, collapse = ", ")) else "unadjusted",
              if (!is.null(t$permutation)) sprintf("%s permutations%s", t$permutation$scheme,

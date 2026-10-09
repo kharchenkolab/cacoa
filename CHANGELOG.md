@@ -32,6 +32,16 @@
   `expressionShiftsForModel()`, `screenCovariates()`, `checkSensitivity()`, `pseudobulkPerCellType()`,
   `sampleDistanceMatrices()`, `permutationPlan()`, `drawPermutations()`.
 - A testthat suite (fast unit tests, example-dataset tests, slow simulation tests).
+- `plotCodaLoadings()` / `cao$plotCellLoadings()` on the linear-model composition result (observed loadings against
+  their permutation null, reference cell types marked); `vignettes/walkthrough_short.ipynb`, the walkthrough
+  executed on a simulated dataset.
+
+### Fixed
+
+- `plotExpressionShiftMagnitudes(test =)`, `getSampleGroups(test =)` accept a test by label, variable name or index.
+- `plotVolcano()` reads the per-cell-type DE tables (`list(res = ...)`).
+- `estimateDiffCellDensity()` with Freedman-Lane permutations and missing bins failed in the C++ fitter when
+  residuals were not requested.
 
 ### Added (earlier, unreleased)
 

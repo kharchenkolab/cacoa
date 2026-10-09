@@ -698,7 +698,7 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y
     
     // D. Call Fitter
     Rcpp::List res = fit_and_randomize(X_fin, Y_fin, contrast, core_perm_groups, core_pair_indices,
-                                       n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats,
+                                       n_randomizations, alternative, /* return_residuals = */ true, return_sampled_fits, return_sampled_stats,
                                        robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center,
                                        illcond_rcond, pinv_tol, n_cores, seed);
     
@@ -714,11 +714,11 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y
     }
     
     // Fill PartialCore and Resid
-    if (return_residuals || true) {
+    {
       arma::mat Rr = res["residuals"]; 
       for(uword c=0; c < J.size(); ++c) {
         uword col = J[c];
-        Resid.col(col) = Rr.col(c);
+        if (return_residuals) Resid.col(col) = Rr.col(c);   // Resid is empty when residuals are not requested
         
         // For PartialCore: In 'impute' mode, we might want the IMPUTED residual 
         // rather than NaN for plotting? 

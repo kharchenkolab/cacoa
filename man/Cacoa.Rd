@@ -3239,15 +3239,15 @@ A ggplot2 object
 \if{html}{\out{<a id="method-Cacoa-plotCellLoadings"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotCellLoadings}{}}}
 \subsection{Method \code{plotCellLoadings()}}{
-Plot Loadings (old two group comparison)
+Plot the compositional loadings of the contrast per cell type (see \code{\link[=plotCodaLoadings]{plotCodaLoadings()}})
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCellLoadings(
-  alpha = 0.01,
+  alpha = NULL,
   palette = self$cell.groups.palette,
-  font.size = NULL,
   name = "coda",
-  ordering = "pvalue",
+  ordering = c("pvalue", "loading"),
   show.pvals = TRUE,
+  show.null = TRUE,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -3255,24 +3255,24 @@ Plot Loadings (old two group comparison)
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{alpha}}{numeric Transparency (default=0.01)}
+\item{\code{alpha}}{significance threshold on the adjusted per-cell-type p-values (default: option \code{alpha})}
 
-\item{\code{palette}}{plot palette specification for cell types (default: stored $cell.groups.palette)}
+\item{\code{palette}}{named colours per cell type (default: \code{cell.groups.palette})}
 
-\item{\code{font.size}}{numeric Font size (default=NULL)}
+\item{\code{name}}{name of the \code{estimateCellLoadings()} result (default: \code{"coda"})}
 
-\item{\code{name}}{character Results slot name (default='coda')}
+\item{\code{ordering}}{\code{"pvalue"} (default) or \code{"loading"}}
 
-\item{\code{ordering}}{character Must be one of "pvalue", "loadings"  (default='pvalue')}
+\item{\code{show.pvals}}{add a panel of -log10 p-values (default TRUE)}
 
-\item{\code{show.pvals}}{boolean Show P values (default=TRUE)}
+\item{\code{show.null}}{show the permutation null of each loading as a grey box (default TRUE)}
 
-\item{\code{...}}{additional parameters plotCellLoadings()}
+\item{\code{...}}{passed to \code{\link[=plotCodaLoadings]{plotCodaLoadings()}}}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-A ggplot2 object
+ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}

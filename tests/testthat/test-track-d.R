@@ -121,3 +121,40 @@ test_that("cluster-free shifts on the engine: constant within whole-type neighbo
   m3 <- buildCacoaModel(cao$sample.meta, formula = ~ stage, test = "stage")
   expect_error(clusterFreeExpressionShifts(cm, cao$sample.per.cell, nns, m3, cao$sample.meta, n.permutations = 9), "contrast test")
 })
+
+test_that("regressions found by the notebook run: test lookup by variable, CoDA plot, volcano tables, FL fitter without residuals", {
+  cao <- makeToyCacoa(n.per.group = c(A = 5, B = 5), cells.per.sample = 60, n.genes = 80, n.cell.types = 4, shift = 1.5)
+  cao$sample.meta$stage <- factor(rep(c("I", "II", "III"), length.out = 10))
+  cao$setModel(~ group + stage, test = c("group: B vs A", "stage"), verbose = FALSE)
+  res <- cao$estimateExpressionShiftMagnitudes(n.permutations = 19, verbose = FALSE)
+  # a test can be addressed by label, by variable name or by index
+  expect_equal(cacoa:::matchModelTest(cao$model, "stage"), 2L); expect_equal(cacoa:::matchModelTest(cao$model, "stage (3 levels)"), 2L)
+  expect_equal(cacoa:::matchModelTest(cao$model, "group"), 1L); expect_equal(cacoa:::matchModelTest(cao$model, 2), 2L)
+  expect_error(cacoa:::matchModelTest(cao$model, "nothing"), "test not found")
+  expect_s3_class(cao$plotExpressionShiftMagnitudes(test = "stage"), "ggplot")
+  expect_s3_class(cao$plotExpressionShiftMagnitudes(test = 2), "ggplot")
+  expect_equal(as.character(unname(cao$getSampleGroups("stage"))), as.character(cao$sample.meta$stage))
+  # Freedman-Lane fitter: columns with missing values, residuals not requested
+  X <- cbind(1, as.numeric(cao$sample.meta$group == "B")); Y <- matrix(rnorm(30), 10, 3); Y[c(2, 14)] <- NA
+  f <- cacoa:::fl_fwl_cpp(X = X, Z = matrix(0, 0, 0), Y = Y, contrast = c(0, 1), n_randomizations = 9, return_residuals = FALSE, seed = 1L)
+  expect_length(f$stat, 3); expect_true(all(is.finite(f$stat)))
+  cao$embedding <- matrix(rnorm(2 * length(cao$cell.groups)), ncol = 2, dimnames = list(names(cao$cell.groups), c("x", "y")))
+  cao$estimateCellDensity(method = "kde", bins = 20, verbose = FALSE)
+  dd <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 19, adjust = FALSE, verbose = FALSE)   # default perm.method = freedman-lane
+  expect_true(all(is.finite(dd$diff$permutation$raw)))
+  # CoDA loadings plot on the lmCoda structure
+  skip_if_not_installed("coda.base"); skip_if_not_installed("psych")
+  coda <- cao$estimateCellLoadings(n.permutations = 49, verbose = FALSE)
+  expect_equal(dim(coda$contrast$loadings$perm), c(4, 49))
+  expect_s3_class(cao$plotCellLoadings(), "ggplot")
+  expect_s3_class(cao$plotCellLoadings(show.pvals = FALSE, show.null = FALSE, ordering = "loading"), "ggplot")
+  cao$estimateCellLoadings(test = "stage", formula = ~ stage, n.permutations = 19, verbose = FALSE, name = "coda.stage")
+  expect_error(cao$plotCellLoadings(name = "coda.stage"), "no per-cell-type loadings")
+  # volcano plot reads the DE tables (list(res = ...)) and finds CellFrac
+  skip_if_not_installed("limma"); skip_if_not_installed("EnhancedVolcano")
+  cao$setModel(~ group, test = "group", verbose = FALSE)
+  de <- cao$estimateDEPerCellType(test = "limma-voom", verbose = FALSE, min.cell.count = 5)
+  expect_true("CellFrac" %in% names(de$ct1$res))
+  expect_s3_class(cao$plotVolcano(cell.types = "ct1"), "ggplot")
+  expect_true(inherits(cao$plotVolcano(cell.types = c("ct1", "ct2")), "ggplot"))
+})

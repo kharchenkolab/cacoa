@@ -258,7 +258,8 @@ lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), zero.
                                      stat_perm = T.contrast.perm, # permuted var-expl
                                      p = p.contrast.global),
                        loadings = list(obs = ell.contrast.obs, # cell-type loadings (ref-free)
-                                       ref_centered = ell.contrast.ref), 
+                                       ref_centered = ell.contrast.ref,
+                                       perm = ell.contrast.perm), # D x n_perm null loadings
                        per_cell = list(pval = p.contrast.cell, padj = padj.contrast.cell),
                        predicted = predicted,# baseline / target / delta compositions (if available)
                        label = if (!is.null(model$contrast_label)) model$contrast_label else NULL),
@@ -543,6 +544,58 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
               ref.load.level=ref.load.level,
               ref.cell.type=ref.cell.type,
               cell.list=cell.list))
+}
+
+#' Plot compositional loadings of a contrast
+#'
+#' One point per cell type: the loading of the contrast on that cell type, centred on the reference cell types
+#' chosen by `lmCoda()`. Filled points are significant after Benjamini-Hochberg adjustment. The grey box behind
+#' each point is the permutation null of the loading (centred the same way).
+#'
+#' @param res result of `lmCoda()` (as stored by `cao$estimateCellLoadings()`)
+#' @param ref.level,target.level labels for the axis annotation
+#' @param alpha significance threshold on the adjusted per-cell-type p-values (default 0.05)
+#' @param palette named colours per cell type (optional)
+#' @param ordering `"pvalue"` (default) or `"loading"`
+#' @param show.pvals add a panel of -log10 p-values (default TRUE)
+#' @param show.null show the permutation null as grey boxes (default TRUE)
+#' @param plot.theme ggplot2 theme
+#' @return ggplot object (a cowplot grid when `show.pvals`)
+#' @export
+plotCodaLoadings <- function(res, ref.level = "reference", target.level = "target", alpha = 0.05, palette = NULL,
+                             ordering = c("pvalue", "loading"), show.pvals = TRUE, show.null = TRUE, plot.theme = ggplot2::theme_bw()) {
+  ordering <- match.arg(ordering)
+  if (is.null(res$contrast)) stop("not a contrast result of lmCoda()")
+  obs <- res$contrast$loadings$ref_centered
+  pval <- res$contrast$per_cell$pval[names(obs)]; padj <- res$contrast$per_cell$padj[names(obs)]
+  ord <- if (ordering == "pvalue") order(-pval, abs(obs)) else order(abs(obs))
+  cts <- names(obs)[ord]
+  df <- data.frame(celltype = factor(cts, levels = cts), loading = unname(obs[cts]), pval = unname(pval[cts]), padj = unname(padj[cts]),
+                   significant = unname(padj[cts] <= alpha), reference = cts %in% res$reference$celltypes, stringsAsFactors = FALSE)
+  gg <- ggplot2::ggplot(df, ggplot2::aes(y = .data$celltype, x = .data$loading))
+  perm <- res$contrast$loadings$perm
+  if (show.null && !is.null(perm) && length(res$reference$idx)) {
+    perm.c <- perm - rep(colMeans(perm[res$reference$idx, , drop = FALSE]), each = nrow(perm))
+    pd <- data.frame(celltype = factor(rep(rownames(perm.c), ncol(perm.c)), levels = cts), value = as.vector(perm.c))
+    gg <- gg + ggplot2::geom_boxplot(data = pd, ggplot2::aes(y = .data$celltype, x = .data$value), colour = "grey70", fill = "grey92",
+                                     outlier.shape = NA, width = 0.6)
+  }
+  gg <- gg + ggplot2::geom_vline(xintercept = 0, colour = "grey37") +
+    ggplot2::geom_point(ggplot2::aes(colour = .data$celltype, shape = .data$significant), size = 3) +
+    ggplot2::scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1), guide = "none") +
+    ggplot2::labs(x = sprintf("loading   (<- %s   |   %s ->)", ref.level, target.level), y = NULL,
+                  caption = if (any(df$reference)) sprintf("reference cell types: %s", paste(cts[df$reference], collapse = ", ")) else NULL) +
+    plot.theme + ggplot2::theme(legend.position = "none") + ggplot2::scale_y_discrete(position = "right")
+  if (!is.null(palette)) gg <- gg + ggplot2::scale_colour_manual(values = palette)
+  n.sig <- sum(df$significant, na.rm = TRUE)
+  if (ordering == "pvalue" && n.sig > 0) gg <- gg + ggplot2::geom_hline(yintercept = nrow(df) - n.sig + 0.5, colour = "red")
+  if (!show.pvals) return(gg)
+  df$nlp <- -log10(df$pval)
+  gp <- ggplot2::ggplot(df, ggplot2::aes(y = .data$celltype, x = .data$nlp, fill = .data$celltype)) + ggplot2::geom_col() +
+    ggplot2::geom_vline(xintercept = -log10(alpha)) + ggplot2::labs(x = "-log10(p)", y = NULL) + plot.theme +
+    ggplot2::theme(legend.position = "none", axis.text.y = ggplot2::element_blank(), axis.ticks.y = ggplot2::element_blank())
+  if (!is.null(palette)) gp <- gp + ggplot2::scale_fill_manual(values = palette)
+  cowplot::plot_grid(gp, gg, ncol = 2, rel_widths = c(1, 2.5), align = "h")
 }
 
 #' old two-group comparison: reference set selection

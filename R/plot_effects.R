@@ -46,9 +46,9 @@ plotEffectsPerCellType <- function(df, normalized = TRUE, type = c("dot", "bar")
   if (type == "bar") {
     gg <- gg + ggplot2::geom_col(ggplot2::aes(fill = .data$celltype, alpha = .data$significant), width = 0.7, colour = "grey30") +
       ggplot2::scale_alpha_manual(values = c(`FALSE` = 0.35, `TRUE` = 1), guide = "none")
-    if (show.ci) gg <- gg + ggplot2::geom_errorbarh(ggplot2::aes(xmin = .data$lo, xmax = .data$hi), height = 0.3, colour = "grey30", na.rm = TRUE)
+    if (show.ci) gg <- gg + ggplot2::geom_errorbar(ggplot2::aes(xmin = .data$lo, xmax = .data$hi), width = 0.3, colour = "grey30", na.rm = TRUE)
   } else {
-    if (show.ci) gg <- gg + ggplot2::geom_errorbarh(ggplot2::aes(xmin = .data$lo, xmax = .data$hi, colour = .data$celltype), height = 0.3, na.rm = TRUE)
+    if (show.ci) gg <- gg + ggplot2::geom_errorbar(ggplot2::aes(xmin = .data$lo, xmax = .data$hi, colour = .data$celltype), width = 0.3, na.rm = TRUE)
     gg <- gg + ggplot2::geom_point(ggplot2::aes(colour = .data$celltype, fill = .data$celltype, shape = .data$significant), size = 2.6, stroke = 0.8) +
       ggplot2::scale_shape_manual(values = c(`FALSE` = 21, `TRUE` = 19), guide = "none", labels = c("not significant", "significant"))
     gg <- gg + ggplot2::geom_point(data = df[!df$significant, ], ggplot2::aes(colour = .data$celltype), shape = 21, fill = "white", size = 2.6, stroke = 0.8)
@@ -57,7 +57,7 @@ plotEffectsPerCellType <- function(df, normalized = TRUE, type = c("dot", "bar")
     pal <- palette[levels(df$celltype)]; pal[is.na(pal)] <- "grey50"
     gg <- gg + ggplot2::scale_colour_manual(values = pal, guide = "none") + ggplot2::scale_fill_manual(values = pal, guide = "none")
   } else gg <- gg + ggplot2::guides(colour = "none", fill = "none")
-  gg <- gg + (if (n.tests > 1) ggplot2::facet_grid(test ~ effect, scales = "free_x") else ggplot2::facet_wrap(~ effect, nrow = 1, scales = "free_x")) +
+  gg <- gg + (if (n.tests > 1) ggplot2::facet_wrap(~ test + effect, nrow = n.tests, scales = "free_x") else ggplot2::facet_wrap(~ effect, nrow = 1, scales = "free_x")) +
     plot.theme + ggplot2::labs(x = if (val == "estimate.norm") "normalized effect" else "effect", y = NULL, subtitle = subtitle) +
     ggplot2::theme(plot.subtitle = ggplot2::element_text(size = 8, colour = "grey30"))
   gg

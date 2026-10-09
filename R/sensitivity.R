@@ -146,7 +146,7 @@ plotSensitivity <- function(x, effect = "shift", cell.types = NULL, normalized =
   d$panel <- factor(sprintf("%s\n%s", as.character(d$celltype), verd[as.character(d$celltype)]), levels = sprintf("%s\n%s", levels(d$celltype), verd[levels(d$celltype)]))
   ggplot2::ggplot(d, ggplot2::aes(x = .data$value, y = .data$model)) +
     ggplot2::geom_vline(xintercept = 0, linetype = 2, colour = "grey60") +
-    ggplot2::geom_errorbarh(ggplot2::aes(xmin = .data$lo, xmax = .data$hi), height = 0.25, colour = "grey40", na.rm = TRUE) +
+    ggplot2::geom_errorbar(ggplot2::aes(xmin = .data$lo, xmax = .data$hi), width = 0.25, colour = "grey40", na.rm = TRUE) +
     ggplot2::geom_point(ggplot2::aes(shape = .data$sig, colour = .data$current), size = 2.6, fill = "white", stroke = 0.9) +
     ggplot2::scale_shape_manual(values = c(`FALSE` = 21, `TRUE` = 19), labels = c("not significant", "significant"), name = NULL) +
     ggplot2::scale_colour_manual(values = c(`FALSE` = "grey20", `TRUE` = "#d73027"), guide = "none") +

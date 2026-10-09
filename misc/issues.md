@@ -105,9 +105,7 @@ The R / C++ split of fitting and randomization, and the plan to converge on two 
 
 - `misc/` (plan, this file, `validation/` driver and report) is untracked; decide whether to commit it. It is in
   `.Rbuildignore`.
-- `src/projdiff.cpp` exports (`fit_density_lm`, `perm_FL_contrast_mat`, `perm_full_contrast_mat`) and
-  `pca_project` / `estimateCorrelationDistance` in `expression_shifts.cpp` have no R callers; candidates for
-  removal. `lm_fit.cpp` comments still mention OpenMP threads (code uses the sccore pool).
+- (done 2026-10-09) `projdiff.cpp` removed; `estimateCorrelationDistance` is used by cluster-free DE and stays.
 - Pre-existing TODOs in `R/cacoa.R` (overall p-adjustment in ontology plots, z-score adjustment in
   cluster-free DE, binary distance in `plotOntologySimilarities`), `R/ontology.R`, `R/cell_density.R`
   (`findScoreGroupsGraph` deprecated?), `R/de_function.R` (bootstrap resampling use).

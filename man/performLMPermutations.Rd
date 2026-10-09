@@ -113,6 +113,6 @@ out.fl <- performLMPermutations(
 }
 }
 \seealso{
-\code{\link[=buildDesignMatrices]{buildDesignMatrices()}}, \code{cpp_fl()}, \code{fit_and_randomize()}, \code{permutationGroups()}
+\code{\link[=buildDesignMatrices]{buildDesignMatrices()}}, \code{\link[=modelPermutations]{modelPermutations()}}, \code{fit_and_randomize()}
 }
 \keyword{internal}

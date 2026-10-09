@@ -22,13 +22,9 @@
  * 2. Flattened Parallelism:
  * Instead of nesting parallel loops (which causes thread starvation when groups vary in size),
  * the workload is flattened into a single list of (Column, Group) jobs. This ensures 
- * perfect load balancing across OpenMP threads.
  *
  * 3. Unified Randomization Engine:
  * Supports a layered randomization logic to handle complex designs:
- * - Standard Mode: Shuffles rows (observations) directly.
- * - Graph/MRQAP Mode: Shuffles nodes (samples) and maps them to edges (rows) using 
- * a provided topology map ('pair_indices').
  * - Block Constraints: Both modes support stratified permutation (shuffling within 
  * defined blocks, e.g., Batches) via 'perm_groups'.
  *
@@ -179,12 +175,7 @@ static inline arma::vec winsor_fit_free(const arma::mat& X, const arma::vec& y, 
  * This prevents thread starvation when groups vary significantly in size.
  *
  * 3. Unified Randomization Engine:
- * Supports two fundamental modes of permutation, switched automatically by 'pair_indices':
- * - Standard Mode (Row Shuffling): Permutes the rows of the design matrix directly.
  * Used for standard independent sampling designs.
- * - Graph Mode (Node Shuffling): Permutes the underlying biological units (Samples/Nodes)
- * and maps them to the observation rows (Edges/Pairs) using the topology map.
- * Used for pairwise designs (e.g., distance matrices) to preserve geometric dependencies (MRQAP).
  *
  * 4. Stratified Permutation (Blocking):
  * Both modes support restricted randomization via 'perm_groups'.
@@ -203,17 +194,10 @@ static inline arma::vec winsor_fit_free(const arma::mat& X, const arma::vec& y, 
  *
  * @param perm_groups (Rcpp::Nullable<Rcpp::List>)
  * A list of integer vectors defining the blocks of exchangeable units for stratified permutation.
- * - In Standard Mode (pair_indices = NULL): These are ROW indices [1-based].
  * Rows are only swapped with other rows in the same block.
- * - In Graph Mode (pair_indices != NULL): These are SAMPLE indices [1-based].
  * Samples are only swapped with other samples in the same block (e.g., Batch).
- * If NULL, an unrestricted global permutation is performed.
+ * If NULL, every row is in one cell.
  *
- * @param pair_indices (Rcpp::Nullable<arma::umat>)
- * An (N x 2) matrix defining the graph topology (Node -> Edge map).
- * - If provided, the function switches to GRAPH/MRQAP Randomization.
- * - Row 'k' of X/Y corresponds to the pair of samples (pair_indices[k, 0], pair_indices[k, 1]).
- * - Randomization involves shuffling the sample IDs and reconstructing the row order.
  *
  * @param n_randomizations (int)
  * The number of permutations to perform per column.
@@ -242,11 +226,9 @@ static inline arma::vec winsor_fit_free(const arma::mat& X, const arma::vec& y, 
  * @param na_mode (std::string)
  * How to handle missing values (NAs) in Y:
  * - "drop": Rows with NAs are excluded from the fit (exact OLS on subset).
- * *NOTE*: In Graph Mode (if pair_indices != NULL), 'drop' fits the observed statistic on the valid subset,
  * but utilizes a mean-imputed "Clean Y" vector for generating the null distribution
  * to prevent permutations from pulling NAs into valid slots.
  * - "impute_weak": NAs are replaced by the mean (or 0) and assigned a negligible weight ('na_weight').
- * Maintains constant vector size, which is numerically stable for Graph/MRQAP.
  *
  * @param na_weight (double)
  * The weight assigned to imputed observations in "impute_weak" mode (typically 1e-4).
@@ -265,7 +247,6 @@ static inline arma::vec winsor_fit_free(const arma::mat& X, const arma::vec& y, 
  * reproducible for a given seed regardless of n_cores.
  *
  * @param n_cores (int)
- * Number of OpenMP threads to use.
  *
  * @param return_residuals (bool)
  * If TRUE, returns the (n x m) matrix of residuals from the observed fit.
@@ -290,14 +271,12 @@ static inline arma::vec winsor_fit_free(const arma::mat& X, const arma::vec& y, 
 // [[Rcpp::export]]
 Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma::vec& contrast,
                              Rcpp::Nullable<Rcpp::List> perm_groups = R_NilValue,
-                             Rcpp::Nullable<arma::umat> pair_indices = R_NilValue,
                              int n_randomizations = 100,
                              std::string alternative = "two-sided",
                              bool return_residuals = true, bool return_sampled_fits = false, bool return_sampled_stats = false,
                              std::string robust = "none", double huber_k = 1.345, int huber_maxit = 8, double huber_tol = 1e-6,
                              std::string na_mode = "drop", double na_weight = 1e-4, std::string na_center = "mean",
                              double illcond_rcond = 1e-12, double pinv_tol = 0.0, int n_cores = 1,
-                             int seed = 0,
                              Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix = R_NilValue) {
   
   Config cfg; 
@@ -309,16 +288,8 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
   arma::uword n = X.n_rows, p = X.n_cols, m = Y.n_cols;
   if (Y.n_rows != n) stop("X and Y dimension mismatch");
 
-  // 1. Setup Randomization Logic
-  bool is_graph = pair_indices.isNotNull();
-  PairLookup pair_mapper; arma::umat pairs_mat; arma::uword n_units = n;
-  
-  if (is_graph) {
-      pairs_mat = Rcpp::as<arma::umat>(pair_indices);
-      if (pairs_mat.min() > 0) pairs_mat -= 1; // 0-based correction
-      n_units = pairs_mat.max() + 1;           // n_units = n_samples
-      pair_mapper.init(pairs_mat, n_units);
-  }
+  // 1. Permutation cells (stratum x permuted-set groups of rows, 1-based) in which the R-drawn permutations are induced
+  const arma::uword n_units = n;
 
   // Parse Constraints (Blocks)
   std::vector<arma::uvec> blocks;
@@ -329,8 +300,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
       if(ug.max() > 0) ug -= 1; blocks.push_back(std::move(ug));
     }
   } else {
-    // Default: Global shuffling
-    blocks.push_back(arma::regspace<arma::uvec>(0, n_units - 1));
+    blocks.push_back(arma::regspace<arma::uvec>(0, n_units - 1));   // one cell: every row exchangeable
   }
 
   // Permutations supplied from R (drawPermutations): n_units x B, 1-based, design convention (permuted design = X[p, ]).
@@ -338,7 +308,6 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
   const bool has_P = perm_matrix.isNotNull();
   arma::umat Pm;
   if (has_P) {
-    if (is_graph) Rcpp::stop("perm_matrix is not supported together with pair_indices (graph mode)");
     Rcpp::IntegerMatrix pm(perm_matrix);
     if ((arma::uword)pm.nrow() != n_units) Rcpp::stop("perm_matrix must have %d rows (one per unit), got %d", (int)n_units, pm.nrow());
     Pm.set_size(pm.nrow(), pm.ncol());
@@ -348,7 +317,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
       Pm(i, b) = (arma::uword)v;
     }
     n_randomizations = (int)Pm.n_cols; cfg.n_randomizations = n_randomizations;
-  }
+  } else if (n_randomizations > 0) Rcpp::stop("perm_matrix is required for permutations (draw it with drawPermutations())");
 
   // 2. Group Columns by NA Pattern (Optimization)
   std::unordered_map<std::uint64_t, std::vector<arma::uword>> map_mask;
@@ -392,22 +361,14 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
       g.B = g.invXtX * g.Xt; g.valid_design = true;
     }
 
-    // Configure permutation blocks for this NA pattern
-    if (is_graph) {
-        // Graph Mode: Shuffle Samples. NAs handled by subsetting resulting edges.
-        g.perm_blocks = blocks; g.n_units_for_perm = n_units; 
+    // Permutation cells for this NA pattern: drop -> the cells restricted to the observed rows (subset indices);
+    // impute -> all rows. The R-drawn permutation is induced onto these units within the cells.
+    if (is_drop) {
+        g.perm_blocks = subset_blocks(blocks, g.obs_indices, n);
+        if (g.perm_blocks.empty() && g.obs_indices.n_elem > 0) g.perm_blocks.push_back(arma::regspace<arma::uvec>(0, g.obs_indices.n_elem - 1));
+        g.n_units_for_perm = g.obs_indices.n_elem; g.perm_units_global = g.obs_indices;
     } else {
-        if (is_drop) {
-            // Standard Mode + Drop: Map global rows to subset indices to avoid NaN poisoning
-            g.perm_blocks = subset_blocks(blocks, g.obs_indices, n);
-            // Fallback if subsetting leaves no valid blocks
-            if (g.perm_blocks.empty() && g.obs_indices.n_elem > 0) 
-                g.perm_blocks.push_back(arma::regspace<arma::uvec>(0, g.obs_indices.n_elem - 1));
-            g.n_units_for_perm = g.obs_indices.n_elem; g.perm_units_global = g.obs_indices;
-        } else {
-            // Impute Mode: Shuffle full N rows
-            g.perm_blocks = blocks; g.n_units_for_perm = n; g.perm_units_global = arma::regspace<arma::uvec>(0, n - 1);
-        }
+        g.perm_blocks = blocks; g.n_units_for_perm = n; g.perm_units_global = arma::regspace<arma::uvec>(0, n - 1);
     }
   }, n_cores, false);
 
@@ -421,15 +382,12 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
   arma::mat SampledStats; 
   if (cfg.ret_stats && n_randomizations > 0) { SampledStats.set_size(n_randomizations, m); SampledStats.fill(datum::nan); }
 
-  const std::uint64_t seed64 = 0xD1B54A32D192ED03ULL ^ (std::uint64_t)(std::int64_t)seed;
   bool is_huber = (cfg.robust == "huber"), is_winsor = (cfg.robust == "winsor");
 
   cacoa::parallelFor(0, (int)jobs.size(), [&](int k) {
     const Job& job = jobs[k]; const DesignGroup& grp = designs[job.group_idx];
     arma::uword j = job.col_idx;
     if (!grp.valid_design) return;
-
-    std::mt19937_64 rng = make_rng(seed64, j);
 
     // Prepare Vectors
     arma::vec y_raw = Y.col(j);
@@ -479,24 +437,12 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
 
     int ge=0, le=0, ge_abs=0;
     for (int r=0; r<cfg.n_randomizations; ++r) {
-        // Generate indices
-        arma::uvec perm_idx = has_P ? inverse_perm(induced_perm(Pm.col(r), grp.perm_units_global, grp.perm_blocks))
-                                    : generate_permutation(rng, grp.perm_blocks, grp.n_units_for_perm, is_graph, pair_mapper, pairs_mat);
-        
-        // Apply indices to data
+        // relabeling b induced onto this pattern's units (design convention), applied to the response as its inverse
+        arma::uvec perm_idx = inverse_perm(induced_perm(Pm.col(r), grp.perm_units_global, grp.perm_blocks));
         arma::vec y_perm;
         if (cfg.na_mode == "drop") {
-            if (is_graph) {
-                // Graph mode: Global Shuffle -> Subset to Observed. Use 'y_clean' to be safe.
-                // Fix: Breaking chained subsetting for older compilers
-                arma::vec y_global_perm = y_clean.elem(perm_idx);
-                y_perm = y_global_perm.elem(grp.obs_indices); 
-            } else {
-                // Standard mode: Shuffle directly on the observed subset
-                y_perm = y_work.elem(perm_idx);
-            }
+            y_perm = y_work.elem(perm_idx);
         } else {
-            // Impute mode: Shuffle global
             y_perm = y_work.elem(perm_idx);
         }
 
@@ -504,7 +450,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
         double s_perm = 0.0; arma::vec b_perm;
         if (cfg.na_mode != "drop") {
              // impute_weak: the near-zero weights stay with the response rows; permute the design rows instead
-             arma::uvec q = has_P ? induced_perm(Pm.col(r), grp.perm_units_global, grp.perm_blocks) : inverse_perm(perm_idx);
+             arma::uvec q = induced_perm(Pm.col(r), grp.perm_units_global, grp.perm_blocks);
              arma::mat Xq = X.rows(q);
              if (is_huber) b_perm = huber_irls_free(Xq, y_clean, grp.weights, cfg);
              else {
@@ -603,10 +549,8 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
  * but the final fit (Step 4) uses only the specified 'core_rows'.
  *
  * @param perm_groups (Rcpp::Nullable<Rcpp::List>)
- * Passed to fit_and_randomize. Defines randomization blocks (Rows or Samples).
+ * Passed to fit_and_randomize: permutation cells in core-row index space.
  *
- * @param pair_indices (Rcpp::Nullable<arma::umat>)
- * Passed to fit_and_randomize. Defines graph topology for MRQAP.
  *
  * @param na_mode (std::string)
  * Controls how NAs are handled during the Z projection step:
@@ -634,14 +578,12 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
 Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y, const arma::vec& contrast,
                       SEXP core_rows = R_NilValue, 
                       Rcpp::Nullable<Rcpp::List> core_perm_groups = R_NilValue,
-                      Rcpp::Nullable<arma::umat> core_pair_indices = R_NilValue,
                       int n_randomizations = 100,
                       std::string alternative = "two-sided", std::string robust = "none",
                       double huber_k = 1.345, int huber_maxit = 8, double huber_tol = 1e-6,
                       std::string na_mode = "drop", double na_weight = 1e-4, std::string na_center = "mean",
                       double illcond_rcond = 1e-12, double pinv_tol = 0.0, int n_cores = 1,
                       bool return_residuals = true, bool return_sampled_fits = false, bool return_sampled_stats = false,
-                      int seed = 0,
                       Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix = R_NilValue) {
   
   arma::uword n = X.n_rows, m = Y.n_cols;
@@ -672,10 +614,10 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y
   if (Z.n_cols == 0) {
     arma::mat X_sub = X.rows(idx_core);
     arma::mat Y_sub = Y.rows(idx_core);
-    Rcpp::List out = fit_and_randomize(X_sub, Y_sub, contrast, core_perm_groups, core_pair_indices,
+    Rcpp::List out = fit_and_randomize(X_sub, Y_sub, contrast, core_perm_groups,
                                        n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats,
                                        robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center,
-                                       illcond_rcond, pinv_tol, n_cores, seed, inner_P);
+                                       illcond_rcond, pinv_tol, n_cores, inner_P);
     out["partial_core"] = Y_sub;
     return out;
   }
@@ -791,10 +733,10 @@ Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y
     if (!has_data) continue;
     
     // D. Call Fitter
-    Rcpp::List res = fit_and_randomize(X_fin, Y_fin, contrast, core_perm_groups, core_pair_indices,
+    Rcpp::List res = fit_and_randomize(X_fin, Y_fin, contrast, core_perm_groups,
                                        n_randomizations, alternative, /* return_residuals = */ true, return_sampled_fits, return_sampled_stats,
                                        robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center,
-                                       illcond_rcond, pinv_tol, n_cores, seed, inner_P);
+                                       illcond_rcond, pinv_tol, n_cores, inner_P);
     
     // E. Unpack
     arma::mat B = res["coef"];

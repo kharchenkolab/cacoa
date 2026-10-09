@@ -56,7 +56,7 @@ A list with:
 \item{contrast.F, contrast.X}{Contrast vectors aligned to \code{F} and \code{X}.}
 \item{core.rows}{Logical mask of rows with non-negligible activity in \code{X}.}
 \item{qrZ}{QR decomposition of \code{Z} for Freedman-Lane (or \code{NULL}).}
-\item{blocks, perm.groups, diagnostics}{If \code{buildBlocks=TRUE}, auxiliary info.}
+\item{diagnostics}{If \code{buildBlocks=TRUE}, design diagnostics.}
 \item{numeric_ref_used, formula_used, baselines_used, contrast_spec}{Metadata.}
 }
 \description{

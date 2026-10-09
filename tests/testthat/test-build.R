@@ -17,16 +17,17 @@ test_that("estimateCorrelationDistance matches 1 - cor", {
   expect_equal(cacoa:::estimateCorrelationDistance(a, b, FALSE), 1 - sum(a * b) / sqrt(sum(a^2) * sum(b^2)))
 })
 
-test_that("fit_and_randomize is reproducible for a given seed and independent of thread count", {
+test_that("fit_and_randomize is deterministic for a given permutation matrix and independent of thread count", {
   set.seed(2)
   n <- 24; X <- cbind(1, rep(0:1, each = n / 2), rnorm(n)); Y <- matrix(rnorm(n * 6), n, 6)
   ctr <- c(0, 1, 0)
-  run <- function(seed, cores) cacoa:::fit_and_randomize(X, Y, ctr, n_randomizations = 99, return_sampled_stats = TRUE,
-                                                        n_cores = cores, seed = seed)
-  r1 <- run(11L, 1L); r4 <- run(11L, 4L); r2 <- run(12L, 1L)
+  P1 <- replicate(99, sample.int(n)); P2 <- replicate(99, sample.int(n))
+  run <- function(P, cores) cacoa:::fit_and_randomize(X, Y, ctr, n_randomizations = 99, return_sampled_stats = TRUE, n_cores = cores, perm_matrix = P)
+  r1 <- run(P1, 1L); r4 <- run(P1, 4L); r2 <- run(P2, 1L)
   expect_equal(r1$sampled_stats, r4$sampled_stats)
   expect_equal(r1$p_value, r4$p_value)
   expect_false(isTRUE(all.equal(r1$sampled_stats, r2$sampled_stats)))
+  expect_error(cacoa:::fit_and_randomize(X, Y, ctr, n_randomizations = 9), "perm_matrix is required")
   # OLS coefficients agree with lm
   expect_equal(unname(r1$coef[, 1]), unname(coef(lm(Y[, 1] ~ X - 1))), tolerance = 1e-10)
 })

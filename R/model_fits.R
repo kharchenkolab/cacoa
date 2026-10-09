@@ -52,7 +52,7 @@
 #' * For `"freedman-lane"`, if some columns are not estimable under a subset (e.g., too few rows),
 #'   their outputs may be `NA`. 
 #'
-#' @seealso [buildDesignMatrices()], `cpp_fl()`, `fit_and_randomize()`, `permutationGroups()`
+#' @seealso [buildDesignMatrices()], [modelPermutations()], `fit_and_randomize()`
 #'
 #' @examples
 #' \dontrun{
@@ -92,12 +92,13 @@ performLMPermutations <- function(x, y,
   na.mode       <- match.arg(na.mode)
   alternative   <- match.arg(alternative)
   na.center     <- match.arg(na.center)
-  # seed: drawn from R's RNG when not given, so set.seed() makes runs reproducible
+  # seed for the R-drawn permutations: taken from R's RNG when not given, so set.seed() makes runs reproducible
   if (is.null(seed)) seed <- sample.int(.Machine$integer.max, 1L)
   seed <- as.integer(seed)
   # permutations from the model's plan (shared with the distance-based tests) unless given explicitly;
   # the legacy internal generator is used only for designs without metadata
-  if (is.null(P) && !is.null(x$meta) && !is.null(x$F) && n.permutations > 0) {
+  if (is.null(P) && n.permutations > 0) {
+    if (is.null(x$meta) || is.null(x$F)) stop("the design carries no sample metadata: pass P (see modelPermutations()) or build it with buildDesignMatrices() / buildCacoaModel()")
     mp <- modelPermutations(x, scheme = perm.method, n.permutations = n.permutations, block.vars = block.vars, seed = seed)
     P <- mp$P; perm.cells <- mp$cells
   }
@@ -134,8 +135,7 @@ performLMPermutations <- function(x, y,
       X = x$F,
       Y = Y,
       contrast = x$contrast.F,
-      perm_groups = if (!is.null(P)) perm.cells else x$perm.groups$full,
-      pair_indices = x$pairs,
+      perm_groups = perm.cells,
       perm_matrix = P,
       n_randomizations = n.permutations,
       alternative = alternative,
@@ -144,7 +144,7 @@ performLMPermutations <- function(x, y,
       return_sampled_stats = return.sampled.stats,
       robust = robust.method, huber_k = 1.345, huber_maxit = 8, huber_tol = 1e-6,
       na_mode = na.mode, na_weight = 1e-4, na_center = na.center,
-      illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores, seed = seed
+      illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores
     )
   } else if (perm.method == "freedman-lane") {
     # ------------------------------------------------------------
@@ -157,7 +157,6 @@ performLMPermutations <- function(x, y,
       contrast = x$contrast.X,
       core_rows = x$core.rows, 
       core_perm_groups = if (!is.null(P)) coreCells(perm.cells, x$core.rows %||% rep(TRUE, nrow(P))) else NULL,
-      core_pair_indices = if(!is.null(x$pairs) && !is.null(x$core.rows)) x$pairs[x$core.rows, , drop=FALSE] else x$pairs,
       perm_matrix = P,
       n_randomizations = n.permutations,
       alternative = alternative,
@@ -165,7 +164,7 @@ performLMPermutations <- function(x, y,
       huber_k = 1.345, huber_maxit = 8, huber_tol = 1e-6,
       na_mode = na.mode, na_weight = 1e-4, na_center = na.center,
       illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores, return_residuals = return.residuals,
-      return_sampled_fits=return.sampled.fits, return_sampled_stats = return.sampled.stats, seed = seed)
+      return_sampled_fits=return.sampled.fits, return_sampled_stats = return.sampled.stats)
 
     y.resid <- if(return.y.resid) fit$partial_core else NULL
   }

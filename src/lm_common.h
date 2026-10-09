@@ -3,7 +3,6 @@
 
 #include <RcppArmadillo.h>
 #include "parallel.h"
-#include <random>
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -15,42 +14,6 @@ using namespace Rcpp;
 using namespace arma;
 
 // --- SHARED STRUCTS ---
-/**
- * @brief Efficiently maps sample pairs (nodes) to row indices (edges).
- * Used during Graph/MRQAP randomization to translate a shuffled sample vector
- * into the corresponding permutation of the distance/data vector.
- */
-struct PairLookup {
-    std::vector<int> lookup; 
-    arma::uword n_samples;
-    bool active;
-
-    PairLookup() : active(false) {}
-
-    void init(const arma::umat& pairs, arma::uword n) {
-        n_samples = n;
-        lookup.assign(n * n, -1); 
-        for(arma::uword k=0; k < pairs.n_rows; ++k) {
-            arma::uword i = pairs(k, 0);
-            arma::uword j = pairs(k, 1);
-            if (i < n && j < n) {
-                lookup[i * n + j] = k;
-                lookup[j * n + i] = k;
-            }
-        }
-        active = true;
-    }
-
-    void get_row_perm(arma::uvec& row_perm, const arma::umat& pairs, const arma::uvec& sample_perm) {
-        arma::uword N = pairs.n_rows;
-        row_perm.set_size(N);
-        for(arma::uword k=0; k < N; ++k) {
-            int new_idx = lookup[sample_perm[pairs(k,0)] * n_samples + sample_perm[pairs(k,1)]];
-            row_perm[k] = (new_idx >= 0) ? (arma::uword)new_idx : k; 
-        }
-    }
-};
-
 struct Config {
   std::string robust, na_mode;
   double huber_k, huber_tol, na_weight, pinv_tol, illcond_rcond;
@@ -59,47 +22,6 @@ struct Config {
 };
 
 // --- SHARED RANDOMIZATION HELPERS ---
-
-/**
- * @brief Core Randomization Engine.
- * Generates a permutation vector based on the specified constraints and topology.
- *
- * @param rng Thread-local random number generator.
- * @param blocks List of integer vectors defining exchangeable units (Samples or Rows).
- * @param n_units Total number of units to shuffle.
- * @param is_graph_mode If true, shuffles Samples and maps to Rows. If false, shuffles Rows.
- * @param pair_mapper Lookup table for graph mode.
- * @param pairs_mat Topology matrix for graph mode.
- * @return arma::uvec A vector of indices to reorder the data matrix Y.
- */
-template <class URNG>
-inline arma::uvec generate_permutation(
-    URNG& rng,
-    const std::vector<arma::uvec>& blocks, 
-    arma::uword n_units,                   
-    bool is_graph_mode,                    
-    PairLookup& pair_mapper,               
-    const arma::umat& pairs_mat            
-) {
-    arma::uvec p(n_units);
-    for(arma::uword i=0; i<n_units; ++i) p[i] = i;
-
-    for(const auto& blk : blocks) {
-        arma::uvec shuffled_blk = blk; 
-        for (arma::uword i = shuffled_blk.n_elem; i > 1; --i) {
-             std::uniform_int_distribution<arma::uword> dist(0, i - 1);
-             std::swap(shuffled_blk[i-1], shuffled_blk[dist(rng)]);
-        }
-        p.elem(blk) = p.elem(shuffled_blk);
-    }
-
-    if (is_graph_mode) {
-        arma::uvec row_perm;
-        pair_mapper.get_row_perm(row_perm, pairs_mat, p);
-        return row_perm;
-    } 
-    return p;
-}
 
 /**
  * @brief Maps global randomization blocks to specific subset indices.
@@ -154,10 +76,6 @@ static inline arma::uvec inverse_perm(const arma::uvec& q) {
   arma::uvec inv(q.n_elem); for (arma::uword i = 0; i < q.n_elem; ++i) inv[q[i]] = i; return inv;
 }
 
-static inline std::mt19937_64 make_rng(std::uint64_t base, arma::uword j) {
-  return std::mt19937_64(base ^ (0x9e3779b97f4a7c15ULL + j + (j<<6) + (j>>2)));
-}
-
 // --- SHARED MATH HELPERS ---
 
 static inline bool inv_xtx_safe(const arma::mat& X, arma::mat& invXtX, arma::mat& Xt, double pinv_tol) {
@@ -195,17 +113,6 @@ static inline bool qr_basis(const arma::mat& Z, arma::mat& Q, double rank_tol = 
 static inline arma::mat project_out_Q(const arma::mat& Q, const arma::mat& B) {
   if (Q.n_cols == 0) return B;
   return B - Q * (Q.t() * B);
-}
-
-static inline double z_from_p(double p, int alt, double obs, double med) {
-  if (!std::isfinite(p)) return arma::datum::nan;
-  if (p >= 1.0) return 0.0;
-  if (p <= 0.0) p = 1e-16; 
-  if (alt == 0) { // two-sided
-    double z = R::qnorm(1.0 - p/2.0, 0.0, 1.0, 1, 0);
-    return (obs >= med) ? z : -z;
-  } else if (alt == 1) return R::qnorm(1.0 - p, 0.0, 1.0, 1, 0); // greater
-  else return -R::qnorm(1.0 - p, 0.0, 1.0, 1, 0); // less
 }
 
 // Common hash for pattern grouping

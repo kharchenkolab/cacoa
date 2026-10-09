@@ -383,7 +383,7 @@ buildTermDesign <- function(meta, formula, variable, numeric.ref = "auto", block
   cF <- setNames(numeric(ncol(F)), colnames(F)); cF[term.cols] <- 1
   Z <- F[, setdiff(colnames(F), term.cols), drop = FALSE]
   list(F = F, X = F[, term.cols, drop = FALSE], Z = if (ncol(Z)) Z else NULL, contrast.F = cF, contrast.X = cF[term.cols],
-       core.rows = rep(TRUE, nrow(F)), qrZ = if (ncol(Z)) qr(Z) else NULL, blocks = NULL, perm.groups = NULL,
+       core.rows = rep(TRUE, nrow(F)), qrZ = if (ncol(Z)) qr(Z) else NULL,
        diagnostics = NULL, numeric_ref_used = list(), formula_used = formula, contrast_spec = list(type = "term", term = variable),
        baselines_used = NULL, contrast_endpoints_F = NULL, contrast_endpoints_X = NULL, contrast_label = sprintf("%s (term)", variable),
        contrast_endpoint_labels = NULL, contrast_endpoints_at = NULL, term.cols = term.cols, term.variable = variable)

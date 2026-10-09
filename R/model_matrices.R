@@ -92,7 +92,7 @@
 #' \item{contrast.F, contrast.X}{Contrast vectors aligned to `F` and `X`.}
 #' \item{core.rows}{Logical mask of rows with non-negligible activity in `X`.}
 #' \item{qrZ}{QR decomposition of `Z` for Freedman-Lane (or `NULL`).}
-#' \item{blocks, perm.groups, diagnostics}{If `buildBlocks=TRUE`, auxiliary info.}
+#' \item{diagnostics}{If `buildBlocks=TRUE`, design diagnostics.}
 #' \item{numeric_ref_used, formula_used, baselines_used, contrast_spec}{Metadata.}
 #'
 #' @examples
@@ -189,16 +189,7 @@ buildDesignMatrices <- function(data, contrast,
   
   # Optional blocks & permutation groups
  
-  blocks <- NULL; perm.groups <- NULL
-  if (buildBlocks) {
-    nuis.fac <- deriveNuisanceFactors(formula_used, data,
-                                      contrastSpec = if (!inherits(spec, "try-error")) spec else NULL,
-                                      explicit = blockVars)
-    blocks <- makeBlocks(data, nuisance = nuis.fac,
-                         block.vars = if (!is.null(blockVars)) blockVars else NULL)
-    perm.groups <- permutationGroups(blocks = blocks,
-                                     core.rows = if (is.null(sp$core.rows)) rep(TRUE, nrow(F)) else sp$core.rows)
-  }
+  blocks <- NULL                      # permutation cells now come from permutationPlan() / modelPermutations()
   
   # Diagnostics
   diag <- NULL
@@ -221,8 +212,6 @@ buildDesignMatrices <- function(data, contrast,
     contrast.X = sp$contrast.X,
     core.rows = sp$core.rows,
     qrZ = qrZ,
-    blocks = blocks,
-    perm.groups = perm.groups,
     diagnostics = diag,
     numeric_ref_used = attr(cF, "numeric_ref_used") %||% list(),
     formula_used = formula_used,
@@ -964,53 +953,8 @@ splitByContrast <- function(F, cF,
   list(X = X, Z = Z, contrast.F = cF, contrast.X = contrast.X, core.rows = core.rows)
 }
 
-# ---- Old-style helpers (blocks & FL plumbing) ----
 
-makeBlocks <- function(meta, nuisance, block.vars = NULL) {
-  if (!is.null(block.vars) && length(block.vars)) {
-    return(interaction(lapply(meta[block.vars], as.factor), drop = TRUE, lex.order = TRUE))
-  }
-  fac.nuis <- if (length(nuisance)) {
-    nuisance[vapply(meta[nuisance], function(x) is.factor(x) || is.character(x), logical(1))]
-  } else character(0)
-  
-  if (length(fac.nuis)) {
-    interaction(lapply(meta[fac.nuis], as.factor), drop = TRUE, lex.order = TRUE)
-  } else {
-    NULL 
-  }
-}
 
-filterNuisance <- function(meta, nuisance.names) {
-  if (!length(nuisance.names)) return(character(0))
-  keep <- vapply(nuisance.names, function(v) {
-    x <- meta[[v]]
-    if (is.factor(x) || is.character(x)) length(levels(droplevels(factor(x)))) >= 2L
-    else if (is.numeric(x)) length(unique(x[!is.na(x)])) >= 2L
-    else FALSE
-  }, logical(1))
-  nuisance.names[keep]
-}
-
-permutationGroups <- function(blocks, core.rows = NULL) {
-  if (is.null(blocks)) return(NULL) 
-  
-  stopifnot("blocks is not a factor"=is.factor(blocks), "no randomization blocks found"=length(blocks) >= 1L)
-  n <- length(blocks)
-  if (is.null(core.rows)) {
-    core.rows <- rep(TRUE,n)
-    groups.core <- groups.full <- split(seq_len(n), droplevels(blocks), drop = TRUE)
-  } else {
-    stopifnot("core.rows is not logi"=is.logical(core.rows), "core.rows length mismatch"=length(core.rows) == n)
-    groups.full <- split(seq_len(n)[core.rows], droplevels(blocks[core.rows]), drop = TRUE)
-    core.idx    <- which(core.rows)
-    blocks.core <- droplevels(blocks[core.rows])
-    pos.in.core <- integer(n); pos.in.core[core.idx] <- seq_along(core.idx)
-    groups.core <- lapply(split(core.idx, blocks.core, drop = TRUE),
-                          function(ids_full) pos.in.core[ids_full])
-  }
-  list(full = groups.full, core = groups.core)
-}
 
 # ---- Diagnostics ----
 
@@ -1094,85 +1038,7 @@ diagnoseDesign <- function(F = NULL, X = NULL, Z = NULL, qrZ = NULL,
                                               ". Consider collapsing levels or using a single contrast regressor."))
   }
   
-  perm <- NULL
-  if (!is.null(blocks)) {
-    stopifnot(is.factor(blocks), nrow(F) == length(blocks))
-    groups.core <- permutationGroups(blocks, if (is.null(core.rows)) rep(TRUE, nrow(F)) else core.rows)$core
-    
-    permCoreSummary <- function(meta, blocks, core.rows, contrastSpec, groups.core, block.factors, show.top) {
-      labs   <- names(groups.core); if (is.null(labs)) labs <- as.character(seq_along(groups.core))
-      n.core <- vapply(groups.core, length, integer(1))
-      has.fac <- !is.null(contrastSpec) && contrastSpec$type == "simple" &&
-        !grepl(":", contrastSpec$term, fixed = TRUE) &&
-        !is.null(meta) && (contrastSpec$term %in% names(meta))
-      n.levels <- integer(length(groups.core)); comp.str <- character(length(groups.core))
-      if (has.fac) {
-        keep <- c(contrastSpec$num, contrastSpec$den)
-        for (i in seq_along(groups.core)) {
-          ids <- which(core.rows)[groups.core[[i]]]
-          v   <- as.character(meta[[contrastSpec$term]][ids]); v <- v[v %in% keep]
-          tab <- sort(table(v), decreasing = TRUE)
-          n.levels[i] <- length(tab)
-          comp.str[i] <- if (length(tab)) paste(sprintf("%s:%d", names(tab), as.integer(tab)), collapse=",") else ""
-        }
-      } else {
-        n.levels[] <- NA_integer_; comp.str[] <- ""
-      }
-      df <- data.frame(block = labs, n.core = n.core, n.levels = n.levels,
-                       composition = comp.str, stringsAsFactors = FALSE)
-      too.small <- df$n.core < thresholds$min.core.size
-      no.var    <- !is.na(df$n.levels) & (df$n.levels < 2L)
-      prob.idx  <- which(too.small | no.var)
-      
-      comb.df <- NULL
-      if (length(prob.idx) && !is.null(block.factors) && length(block.factors) &&
-          all(block.factors %in% names(meta))) {
-        for (i in prob.idx) {
-          rows.full <- which(blocks == levels(blocks)[match(df$block[i], levels(blocks))])
-          if (length(rows.full)) {
-            vals <- vapply(block.factors, function(v) as.character(meta[[v]][rows.full[1]]), character(1))
-            comb.df <- rbind(comb.df,
-                             data.frame(block = df$block[i],
-                                        n.core = df$n.core[i],
-                                        n.levels = df$n.levels[i],
-                                        composition = df$composition[i],
-                                        combo = paste(paste0(block.factors, "=", vals), collapse = ", "),
-                                        stringsAsFactors = FALSE))
-          }
-        }
-        if (!is.null(comb.df)) {
-          ord <- order(comb.df$n.core, comb.df$n.levels)
-          comb.df <- comb.df[ord, , drop = FALSE]
-          comb.df <- head(comb.df, show.top)
-        }
-      }
-      list(summary = df, prob.idx = prob.idx, comb.df = comb.df)
-    }
-    
-    ps <- permCoreSummary(meta, blocks, core.rows, contrastSpec,
-                          groups.core, block.factors = block.factors, show.top = thresholds$show.top)
-    
-    movable <- ps$summary$n.core[ps$summary$n.core >= thresholds$min.core.size]
-    eff.perm.log <- if (length(movable)) sum(lfactorial(movable)) else 0
-    
-    perm <- list(groups.core = groups.core,
-                 core.summary = ps$summary,
-                 eff.perm.log = eff.perm.log,
-                 problems = ps$prob.idx,
-                 combos = ps$comb.df)
-    
-    too.small <- sum(ps$summary$n.core < thresholds$min.core.size)
-    no.var    <- sum(!is.na(ps$summary$n.levels) & ps$summary$n.levels < 2L)
-    if (too.small > 0)
-      warns <- c(warns, sprintf("%d block(s) have < %d core rows; those rows will be frozen (no permutation).",
-                                too.small, thresholds$min.core.size))
-    if (no.var > 0)
-      warns <- c(warns, sprintf("%d block(s) show no within-block variation in the contrasted variable; those rows will be frozen.",
-                                no.var))
-    if (exp(min(eff.perm.log, 50)) < thresholds$min.eff.perm)
-      warns <- c(warns, sprintf("Effective permutations is small (~exp(%.1f)). Consider relaxing blocks or a wild bootstrap.",
-                                eff.perm.log))
-  }
+  perm <- NULL                      # permutation cells are described by permutationPlan() / modelPermutations()
   
   list(
     rankF = dF, rankX = dX, rankZ = dZ,
@@ -1212,24 +1078,6 @@ reportContrastInfo <- function(F, X, Z, cF, numericRefUsed, tol, verbosity) {
   }
 }
 
-deriveNuisanceFactors <- function(formula, data, contrastSpec, explicit = NULL) {
-  if (!is.null(explicit)) {
-    return(filterNuisance(data, explicit))
-  }
-  mf <- stats::model.frame(formula, data, na.action = stats::na.pass)
-  allVars <- names(mf)
-  isFac <- vapply(mf, function(x) is.factor(x) || is.character(x), logical(1))
-  facVars <- allVars[isFac]
-  coreVars <- character(0)
-  if (!is.null(contrastSpec)) {
-    coreVars <- switch(contrastSpec$type,
-                       simple   = if (grepl(":", contrastSpec$term, fixed=TRUE)) parseTermVars(contrastSpec$term) else contrastSpec$term,
-                       marginal = unique(c(contrastSpec$term, contrastSpec$over)),
-                       lincomb  = parseTermVars(contrastSpec$term),
-                       coef     = character(0))
-  }
-  filterNuisance(data, setdiff(facVars, unique(coreVars)))
-}
 
 # Extract sample-level variable names used by a formula
 varsFromFormula <- function(formula, data, na.action = stats::na.pass) {

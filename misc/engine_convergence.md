@@ -277,6 +277,18 @@ permutation maxima for the max-statistic adjustment; the loop over cells runs on
   reproduces the dropped-sample fit while keeping the full sample set; end-to-end through every entry point;
   cluster-free robust equals the per-cell weighted reference. Fast suite 903 / 0 failed.
 
+- **Step 4b calibration (2026-10-09, slow suite, 120 reps x 99 permutations).** Null rejection within the binomial
+  band for robust = none / huber / winsor on clean data, for huber and winsor with a planted outlying sample
+  (shift 0.033 / 0.033, var 0.067 / 0.058; the plain fit 0.058 / 0.058), for huber under Freedman-Lane with an
+  outlier, and for drop and impute_weak with two samples missing from the unit. Power at a 0.5/gene shift (80 reps):
+  plain 0.59 clean / 0.36 with the outlier; huber 0.56 / 0.54; winsor 0.51 / 0.57.
+- **Step 5 done (2026-10-09).** Removed: graph mode (`pair_indices`, `PairLookup`, node shuffling), the fitter's
+  internal generator (`generate_permutation`, `make_rng`, `seed`), the duplicated z computation, `projdiff.cpp`,
+  the block plumbing of the design builder (`makeBlocks`, `permutationGroups`, `deriveNuisanceFactors`,
+  `filterNuisance`, `blocks` / `perm.groups` fields, the block summary in `diagnoseDesign`), and the dead
+  `plotClusterFreeResiduals()`. `fit_and_randomize()` / `fl_fwl_cpp()` now require `perm_matrix` whenever
+  permutations are requested; `performLMPermutations()` draws it from the design's metadata. Fast suite 905 / 0.
+
 ## 6. Scaling the cluster-free tests to ~10^6 cells
 
 The batched kernel of step 4 handles this if two things are built in from the start; the current R loop cannot

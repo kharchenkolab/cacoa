@@ -46,11 +46,12 @@ test_that("numeric coefficient contrast builds without endpoints", {
   expect_null(d$contrast_endpoints_F)
 })
 
-test_that("blocks and permutation groups come from factor nuisance", {
+test_that("permutation strata come from the factor nuisance and the cells hold only the contrasted samples", {
   meta <- makeMeta()
   des <- cacoa:::buildDesignMatrices(meta, contrast = c("group", "B", "A"), formula = ~ group + batch)
-  expect_true(is.factor(des$blocks))
-  expect_equal(nlevels(des$blocks), 2)
+  plan <- modelPermutations(des, scheme = "block", n.permutations = 5)$plan
+  expect_true(is.factor(plan$strata)); expect_equal(nlevels(plan$strata), 2)
+  expect_equal(as.character(plan$strata), as.character(meta$batch))
   # permutation groups only contain samples of the contrasted levels
-  expect_setequal(unlist(des$perm.groups$full), which(meta$group %in% c("A", "B")))
+  expect_setequal(unlist(modelPermutations(des, scheme = "block", n.permutations = 5)$cells), which(meta$group %in% c("A", "B")))
 })

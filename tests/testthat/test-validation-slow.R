@@ -32,14 +32,17 @@ simScenario <- function(sizes, p = 60, shift = 0, disp.ratio = 1, batch = FALSE,
   list(meta = meta, Y = Y, truth = delta^2, truth.var = 2 * (disp.ratio - 1) * p)
 }
 
-runScenario <- function(R, n.perm = 99, formula, contrast = c("group", "B", "A"), permutation = "auto", ...) {
+runScenario <- function(R, n.perm = 99, formula, contrast = c("group", "B", "A"), permutation = "auto", robust = "none", na.mode = "drop",
+                        outlier = 0, missing = 0, ...) {
   args <- list(...)                      # `...` is not visible inside replicate()'s wrapper function
   skipped <- character(0)
   out <- do.call(rbind, lapply(seq_len(R), function(i) {
     sim <- do.call(simScenario, args)
+    if (outlier > 0) sim$Y[1, ] <- sim$Y[1, ] * outlier                                   # one sample with inflated noise (an outlying sample)
     D <- sampleDistanceMatrices(list(ct = sim$Y), dist = "l2")$ct
+    if (missing > 0) { drop <- sample(nrow(D), missing); D <- D[-drop, -drop] }           # samples absent from this unit
     des <- suppressMessages(suppressWarnings(cacoa:::buildDesignMatrices(sim$meta, contrast = contrast, formula = formula)))
-    res <- testPairwiseEffects(list(ct = D), des, sim$meta, dist = "l2", n.permutations = n.perm, permutation = permutation)
+    res <- testPairwiseEffects(list(ct = D), des, sim$meta, dist = "l2", n.permutations = n.perm, permutation = permutation, robust = robust, na.mode = na.mode)
     r <- res$results
     if (!nrow(r)) { skipped <<- c(skipped, res$skipped$reason); r <- data.frame(shift = NA, var = NA, p.shift = NA, p.var = NA, p.total = NA) }
     c(shift = r$shift, var = r$var, p.shift = r$p.shift, p.var = r$p.var, p.total = r$p.total, truth = sim$truth, truth.var = sim$truth.var)
@@ -163,4 +166,36 @@ test_that("E3: the global max-statistic p-value across cell types is calibrated 
     expect_true(fw >= band[1] && fw <= band[2], info = sprintf("shared %.1f: FWER %.3f", shared, fw))
     expect_gt(mean(out[, "any.raw"] == 1), 0.1)                       # unadjusted "any cell type" is far above 5%
   }
+})
+
+
+test_that("robust and weak-imputation paths are calibrated under the null (with and without an outlying sample, block and FL)", {
+  set.seed(401); R <- 120
+  rates <- list()
+  for (rob in c("none", "huber", "winsor")) {
+    a <- runScenario(R, formula = ~ group, sizes = c(A = 8, B = 8), robust = rob)
+    expect_true(inBand(a[, "p.shift"], R), info = paste("clean", rob)); expect_true(inBand(a[, "p.var"], R), info = paste("clean var", rob))
+    o <- runScenario(R, formula = ~ group, sizes = c(A = 8, B = 8), robust = rob, outlier = 4)
+    rates[[paste("outlier", rob)]] <- c(shift = mean(o[, "p.shift"] < 0.05), var = mean(o[, "p.var"] < 0.05))
+    if (rob != "none") { expect_true(inBand(o[, "p.shift"], R), info = paste("outlier", rob)); expect_true(inBand(o[, "p.var"], R), info = paste("outlier var", rob)) }
+  }
+  f <- runScenario(R, formula = ~ group + age, sizes = c(A = 8, B = 8), age = TRUE, age.eff = 0.3, robust = "huber", outlier = 4)
+  expect_true(inBand(f[, "p.shift"], R), info = "FL huber shift")
+  for (nm in c("drop", "impute_weak")) {
+    m <- runScenario(R, formula = ~ group + batch, sizes = c(A = 9, B = 9), batch = TRUE, batch.eff = 0.4, na.mode = nm, missing = 2)
+    expect_true(inBand(m[, "p.shift"], R), info = paste("missing", nm)); expect_true(inBand(m[, "p.var"], R), info = paste("missing var", nm))
+  }
+  message("null rejection rates with an outlying sample (shift / var): ", paste(names(rates), sapply(rates, function(r) sprintf("%.3f / %.3f", r[1], r[2])), collapse = "; "))
+})
+
+test_that("robust options keep power under clean data and recover it under an outlying sample (reported)", {
+  set.seed(402); R <- 80
+  pw <- sapply(c("none", "huber", "winsor"), function(rob) {
+    clean <- runScenario(R, formula = ~ group, sizes = c(A = 8, B = 8), shift = 0.5, robust = rob)
+    out <- runScenario(R, formula = ~ group, sizes = c(A = 8, B = 8), shift = 0.5, robust = rob, outlier = 4)
+    c(clean = mean(clean[, "p.shift"] < 0.05), outlier = mean(out[, "p.shift"] < 0.05))
+  })
+  message("power (shift, 0.5/gene): ", paste(colnames(pw), apply(pw, 2, function(x) sprintf("clean %.2f / outlier %.2f", x[1], x[2])), collapse = "; "))
+  expect_gte(pw["clean", "huber"], 0.7 * pw["clean", "none"])                     # modest loss under clean data
+  expect_gte(pw["outlier", "huber"], pw["outlier", "none"])                        # no worse than the plain fit under the outlier
 })

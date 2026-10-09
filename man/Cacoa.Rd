@@ -650,7 +650,6 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item \href{#method-Cacoa-plotGeneProgramScores}{\code{Cacoa$plotGeneProgramScores()}}
 \item \href{#method-Cacoa-plotGeneProgramGenes}{\code{Cacoa$plotGeneProgramGenes()}}
 \item \href{#method-Cacoa-plotClusterFreeExpressionShifts}{\code{Cacoa$plotClusterFreeExpressionShifts()}}
-\item \href{#method-Cacoa-plotClusterFreeResiduals}{\code{Cacoa$plotClusterFreeResiduals()}}
 \item \href{#method-Cacoa-plotMostChangedGenes}{\code{Cacoa$plotMostChangedGenes()}}
 \item \href{#method-Cacoa-plotGeneExpressionComparison}{\code{Cacoa$plotGeneExpressionComparison()}}
 \item \href{#method-Cacoa-getConditionPerCell}{\code{Cacoa$getConditionPerCell()}}
@@ -4641,46 +4640,6 @@ cao$plotClusterFreeExpressionShifts()
 
 }
 
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Cacoa-plotClusterFreeResiduals"></a>}}
-\if{latex}{\out{\hypertarget{method-Cacoa-plotClusterFreeResiduals}{}}}
-\subsection{Method \code{plotClusterFreeResiduals()}}{
-Plot cluster-free expression shift residuals
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotClusterFreeResiduals(
-  name = "cluster.free.expr.shifts",
-  palette = brewerPalette("GnBu"),
-  residual.type = c("pearson", "raw"),
-  alpha = 0.2,
-  font.size = c(3, 5),
-  build.panel = TRUE,
-  ...
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{character Results slot name (default='cluster.free.expr.shifts')}
-
-\item{\code{palette}}{(default=brewerPalette("PuOr", rev=FALSE))}
-
-\item{\code{residual.type}}{character Must be one of "pearson" or "raw" (default="pearson")}
-
-\item{\code{alpha}}{numeric (default=0.2)}
-
-\item{\code{font.size}}{size range for cell type labels}
-
-\item{\code{build.panel}}{boolean (default=TRUE)}
-
-\item{\code{...}}{parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-plot of cluster-free expression shift residuals
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-plotMostChangedGenes"></a>}}

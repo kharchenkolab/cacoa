@@ -177,6 +177,12 @@ for the shift F (agreement to 1e-10).
    (shift estimate per cell moves into the kernel too: it is M = A G A' with the dispersion correction, already
    computed for the permuted statistics). Test: identical to the current per-cell results on the toy; timing on
    the simulated object (target: 4,500 cells x 199 permutations in well under a minute).
+4b. **Weighted Gower form** (serves both §8 and §10): weighted centring, H_w = X (X'WX)^- X'W, weighted dispersion
+   fit, in kernel A and its R reference; then `robust = c("none", "huber", "winsor")` and
+   `na.mode = c("drop", "impute_weak")` for every distance-based test, recomputed per relabeling. Tests: weights of
+   one reproduce the unweighted results; a planted outlying sample is down-weighted and the null stays calibrated;
+   weak imputation of an absent sample reproduces the dropped-sample estimates to numerical tolerance while keeping
+   the full sample set. About a day plus the calibration runs.
 5. **Retire**: `projdiff.cpp`, `pca_project`, the unused `estimateCorrelationDistance` export, `makeBlocks` /
    `permutationGroups`, R reference loops out of the namespace, `huh-jhun` either in the kernel or dropped.
 6. Optional: fold `fl_fwl_cpp` into `fit_and_randomize` behind a `scheme` argument so each family has one entry point.
@@ -355,10 +361,10 @@ Today there is one mode, sample-level complete cases per unit:
   same mechanism.
 
 This is the analogue of kernel B's `na_mode = "drop"`, applied at the sample level because the response of this
-model is a sample's whole distance profile. An analogue of `impute_weak` is possible and falls out of the weighted
-Gower form planned for the robust fit (§8): keep the absent sample in the design, fill its distances with the
+model is a sample's whole distance profile. **Decision (2026-10-09): `impute_weak` is added to the Gower fit.** It falls out of
+the weighted Gower form planned for the robust fit (§8): keep the absent sample in the design, fill its distances with the
 within-level mean distance, and give it a near-zero weight. That keeps the sample set identical across cell types
 (no induced permutations, one P for everything), keeps design levels represented that a dropped sample would have
-removed (estimability), and matches kernel B's option set, so `na.mode = c("drop", "impute_weak")` can be offered
-uniformly once the weighted form exists. Partial missingness of single distances does not arise (pseudobulk
+removed (estimability), and matches kernel B's option set; `na.mode = c("drop", "impute_weak")` is offered
+uniformly (default `"drop"`), with calibration of the weak mode in the slow suite. Partial missingness of single distances does not arise (pseudobulk
 profiles are either present or not), so there is no pairwise-deletion mode to support.

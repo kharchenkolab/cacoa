@@ -20,8 +20,9 @@ The R / C++ split of fitting and randomization, and the plan to converge on two 
 
 - **Robust fitting in the distance engine** (user requirement 2026-10-09): `robust = "huber"` (sample-weight IRLS
   on leverage-corrected residual distances) and `"winsor"` for shift / var / total, term tests, screen, sensitivity,
-  composition term tests and cluster-free shifts, recomputed under each relabeling; see
-  `misc/engine_convergence.md` §8. Not started.
+  composition term tests and cluster-free shifts, recomputed under each relabeling; and `na.mode = "impute_weak"`
+  (absent sample kept with a near-zero weight) for the same tests (user decision 2026-10-09); both through the weighted
+  Gower form, see `misc/engine_convergence.md` §8, §10 and step 4b. Not started.
 - **Residual-vs-covariate diagnostic for density / cluster-free DE** (parity with `screenCovariates(adjust.for=)`
   on the shift side); see §9 of the same note. Not started.
 

@@ -292,3 +292,48 @@ internal generator and the duplicated z computation (roughly 250 lines across th
 NA-handling code stays, the OLS path gets the matrix-product form, and the shared induced-permutation / A_P
 helper (~60 lines) is added. `performLMPermutations()` (329 lines) loses the block / core-row plumbing but keeps
 the robust and NA arguments.
+
+## 8. Robust fitting in every test (user decision 2026-10-09)
+
+The user wants `robust` options in all tests, not only in the per-column fitter. For kernel A the unit that can be
+outlying is a sample (its whole distance profile), so robustness acts on samples, and the natural pair of
+options mirrors kernel B:
+
+- `robust = "huber"`: sample weights by IRLS. Each sample's residual size is its leverage-corrected residual
+  distance r_i = diag(RGR)_i (the quantity the dispersion model already fits); Huber weights w_i from r_i scaled
+  by a robust scale (MAD), then the model is refitted with the weighted Gower form (weighted centring, weighted hat
+  matrix H_w = X (X'WX)^- X'W, weighted dispersion fit), iterated a few times. Shift, var, total, the term F and
+  the dispersion F all come out of the weighted fit; the leave-one-out influence is reported alongside as now.
+- `robust = "winsor"`: clip the residual distance contributions (or the off-diagonal entries of the residual
+  kernel RGR) at a quantile before the statistics are formed; a one-step, non-iterative alternative.
+
+Inference: the weights (or clipping) are **recomputed under every relabeling** inside the kernel, exactly as the
+robust path of kernel B refits per permutation; weights frozen from the observed data would make the test
+anti-conservative. Cost: a few IRLS iterations x O(n^2 q) per permutation, so roughly 3-5x the OLS path; acceptable
+for cell-type tests, the screen and sensitivity, and still feasible per cell in the streaming kernel (robust
+cluster-free tests simply take a few times longer). Calibration of both options is added to the slow simulation
+suite (null rejection rates with and without planted outlying samples; power loss under clean data).
+
+Robust options therefore appear uniformly: `estimateExpressionShiftMagnitudes(robust =)`, the whole-factor tests,
+`screenCovariates(robust =)`, `checkSensitivity()` (inherits), composition term tests, cluster-free shifts, and the
+existing `robust.method` of density / cluster-free DE / CoDA contrast through kernel B. Default stays `"none"`.
+
+## 9. Residual diagnostics: what the old residuals did and where that lives now
+
+The pair model exposed Pearson residuals and `plotExpressionShiftResiduals(cov.plot.keys = ...)` plotted them
+against covariates that were not in the model, to spot relevant omitted covariates; residual magnitudes were also
+used to visualize how large an effect was at the sample level. In the Gower engine the residual object is the
+residual kernel G_adj = R G R (stored per cell type as `res$adjusted.distances`), and the same two uses are:
+
+- omitted covariates: `screenCovariates(adjust.for = <model formula>)` tests every remaining covariate against the
+  residual structure (location and dispersion), with `plotCovariateScreen()`; `plotSampleDistances(adjust.for =)`
+  shows the residual sample configuration coloured by a candidate covariate;
+- effect size at the sample level: `plotShiftDetail()` (within / between-group distance distributions and the
+  adjusted sample map) and `plotSampleInfluence()` (leave-one-out change of the estimate).
+
+For density and cluster-free DE the per-sample residuals of kernel B's observed fit stay available
+(`return.residuals`, `plotDiffCellDensityResiduals()`), and a covariate diagnostic on them (residual against
+candidate covariate per bin / gene, summarized) is a small addition worth making for parity with the shift engine.
+Requirement for the convergence work: keep residual outputs first-class in the observed-fit function of kernel B
+and keep `adjusted.distances` in the shift results; the dead cluster-free-shift residual branch in
+`plotClusterFreeExpressionShifts` is removed.

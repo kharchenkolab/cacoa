@@ -188,6 +188,8 @@ for the shift F (agreement to 1e-10).
 6. Optional: fold `fl_fwl_cpp` into `fit_and_randomize` behind a `scheme` argument so each family has one entry point.
 
 Steps 1-3 are each about half a day with tests; step 4 is the largest (a day) and the one with the visible payoff.
+The test plan over the option matrix is in §11; the grid helper is written before step 1 so every step is
+measured against the same matrix.
 ## 3a. Profile of the cluster-free loop
 
 Toy case, 1,000 cells x 10 samples x 500 genes, neighbourhoods of 200 cells, 99 permutations (`Rprof`):
@@ -386,3 +388,54 @@ Under `impute_weak` no induction is needed: every sample is present, P applies d
 stays with the sample's response row while the labels move, which is exactly the exchangeability the weak mode is
 meant to preserve. Under Freedman-Lane with `drop`, residualization on the reduced model is done per NA pattern on
 its observed rows before the induced P is applied.
+
+## 11. Test plan across options and paths
+
+Four classes of tests, run over the full option matrix rather than per feature. Fast classes run in the default
+suite (seconds each); calibration runs under `NOT_CRAN` in `test-validation-slow.R`.
+
+**Option matrix.** kernel {A, B} x scheme {block, Freedman-Lane, Huh-Jhun (A only)} x `robust` {none, huber,
+winsor} x `na.mode` {drop, impute_weak} x test kind {two-level contrast, interaction-cell contrast, numeric step,
+whole-factor term (A only)} x sample set {complete, unit missing samples / NA pattern, exhaustive-enumeration
+small design}. The fast classes are generated over this grid with a helper that builds the toy design once per
+cell of the grid; the slow class samples the grid where behaviour can plausibly differ.
+
+**Class 1: equivalence to the R reference** (fast, 1e-10). For every grid cell the C++ kernel returns the same
+observed and permuted statistics (shift F, shift, var, total, location F, dispersion F; kernel B: contrast
+statistic and coefficient vectors) as the R implementation on identical P, including the robust and weighted paths
+(the R reference gains the weighted / robust / weak-imputation variants first, with their own unit tests against
+closed forms: one-way layout equals the classical estimators, weights of one equal the unweighted fit).
+
+**Class 2: invariants** (fast).
+- identity permutation reproduces the observed statistic; permuting rows and columns of G together leaves
+  everything unchanged; relabelling levels or changing the reference flips signs only where it should;
+- weights of one equal the unweighted fit; `impute_weak` of an absent sample equals `drop` estimates to tolerance and
+  keeps the full sample set; a planted outlying sample has weight < 1 under huber and bounded influence under winsor;
+- the same P produces identical permuted statistics whether passed to kernel A or kernel B on a design where the two
+  statistics coincide (one-way layout, l2 distance versus per-feature OLS: shift F equals the pooled F);
+- induced permutations: uniform on the subset's relabelings (exact enumeration for small n), coupled with the full
+  set, identical whether computed in R or in C++, and the per-unit distinct count matches the enumeration;
+- exhaustive enumeration gives exact p-values and no duplicates; the floor is 1/n.distinct;
+- results do not depend on the number of threads, the chunk size of the streaming loop, or the column order;
+  running maxima equal the maxima of the full permuted-statistic matrix computed separately;
+- NA patterns in kernel B: columns with different patterns get the induced P of their own observed rows; a column
+  with too few rows is skipped with a reason; `impute_weak` uses all rows with the weak weight;
+- Freedman-Lane: the Gower-form re-indexing equals permuting the reduced-model residuals at the feature level
+  (exists) for weighted fits as well; Huh-Jhun reproduces its R reference.
+
+**Class 3: calibration and power** (slow, 200 reps x 199 permutations, binomial band [0.020, 0.080]). Null
+rejection rates for every scheme x robust x na.mode combination on the designs of the Track A study (balanced,
+confounded batch, continuous covariate, three groups, unequal sizes), plus: planted outlying samples (robust
+options must stay within band and the plain fit is allowed to be conservative/liberal as documented); a sample
+missing from some cell types (drop versus impute_weak, both within band; max-T across cell types calibrated under
+induced permutations); CoDA loadings and density max-statistic with coupled P versus the old per-column streams
+(the new null's familywise error within band, the old one documented); power comparison robust versus plain under
+clean data (the loss is reported, not asserted).
+
+**Class 4: scale and regression** (slow). The streaming cluster-free kernel on the simulated object reproduces the
+current per-cell statistics (golden values for a fixed seed) within tolerance, runs under a time budget, and its
+memory does not grow with the number of cells beyond the outputs; golden-value regressions for the SCC paired
+design and the simulated object's planted-strength ordering (exist) are re-run after every step.
+
+Each step of §5 is merged only when classes 1 and 2 pass over the grid cells it touches and the class 3 rows for
+its paths are within band; class 4 gates step 4.

@@ -164,7 +164,9 @@ for the shift F (agreement to 1e-10).
 ## 5. Steps, each independently testable
 
 1. **P hook for kernel B** (`perm_matrix` in `fit_and_randomize` / `fl_fwl_cpp`; `performLMPermutations(P =)`);
-   route CoDA, density and cluster-free DE through `drawPermutations()` of the stored model. Tests: identical
+   route CoDA, density and cluster-free DE through `drawPermutations()` of the stored model. Robust fits and both
+   NA modes are preserved: per NA pattern the global P is induced on the observed rows, then used by the OLS or
+   the iterative robust refit exactly as the internally generated permutation is used today. Tests: identical
    statistics with a given P versus the R block generator restricted to two levels; CoDA and shift tests on one
    object share `P`; exhaustive enumeration respected. Removes the "not coupled" leftover.
 2. **Kernel A, contrast**: extend `permuted_contrast_F` to shift / var / total (port `fitDispersion`); switch the
@@ -270,11 +272,23 @@ per-column loop with per-permutation refits; p-values and winsorized extremes ar
 10^6 columns S is streamed in column chunks). Kernel A is the quadratic analogue, F_b = a[p_b]' G a[p_b], so the two
 kernels share the induced-permutation step and the A_P construction.
 
-User decisions: `robust` (huber / winsor) and `na_mode = "impute_weak"` are exposed by `estimateDiffCellDensity()`
-and cluster-free DE with default "none" / "drop"; keeping them keeps the per-column iterative loop. Residual
-outputs (`residuals`, `residuals.pearson`, `partial_core`) are consumed by plots and are independent of the
-permutations; they stay but belong in a plain fit function, not in the randomization kernel.
+**Kept, by user decision (2026-10-09): robust fitting and missing-data handling are requirements, not options
+to trim.** Kernel B therefore keeps two paths that both consume P:
+- *OLS path* (`robust = "none"`): the matrix-product form above, per NA pattern.
+- *Robust path* (`huber`, `winsor`): per column, per permutation iterative refit (IRLS / winsorized OLS), as now;
+  only the source of the permutation changes.
+Missing data: with `na_mode = "drop"` each NA pattern defines its own observed-row set, and the global P is
+**induced** on that set with the rank trick already used for cell types (this replaces `subset_blocks()`, it
+does not simply delete it); with `impute_weak` all rows take part and P applies directly; Freedman-Lane
+residualizes on the reduced model per pattern before the induced P is applied. Residual outputs (`residuals`,
+`residuals.pearson`, `partial_core`) are consumed by plots and are independent of the permutations; they stay but
+belong in a plain fit function, not in the randomization kernel.
+Open question for kernel A: the distance engine has no robust variant (robustness there comes from the
+leave-one-out influence and the sensitivity report); whether a robust dispersion fit or down-weighting of
+outlying samples is wanted is for the user to decide.
 
-Rough size: `lm_fit.cpp` 749 + `lm_common.h` 207 + `projdiff.cpp` 187 lines today; a P-fed OLS kernel with NA-pattern
-grouping, block and FL schemes and streaming extremes is on the order of 150-200 lines, plus ~60 for the shared
-induced-permutation / A_P helper. `performLMPermutations()` (329 lines) shrinks to argument checking and naming.
+Rough size: `lm_fit.cpp` 749 + `lm_common.h` 207 + `projdiff.cpp` 187 lines today. What goes is graph mode, the
+internal generator and the duplicated z computation (roughly 250 lines across the three files); the robust and
+NA-handling code stays, the OLS path gets the matrix-product form, and the shared induced-permutation / A_P
+helper (~60 lines) is added. `performLMPermutations()` (329 lines) loses the block / core-row plumbing but keeps
+the robust and NA arguments.

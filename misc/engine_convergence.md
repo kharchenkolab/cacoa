@@ -248,3 +248,33 @@ Statistical side: with 10^6 cells the max-statistic adjustment is what controls 
 per-cell p-values floor at 1/(B+1), and the winsorized extremes (`wins`) keep a few extreme cells from dominating
 the null. Cells whose neighbourhood lacks enough cells per sample are skipped per cell (induced permutation on the
 present samples), as now.
+
+## 7. What becomes unnecessary in `fit_and_randomize` once P comes from R
+
+Dead already (no R caller passes it): graph mode. `x$pairs` is never set by `buildDesignMatrices()` any more, so
+`pair_indices` / `core_pair_indices`, `PairLookup`, `subset_blocks()` and the node-shuffling branch of
+`generate_permutation()` can go (`lm_common.h` 23-53, 75-127 and the `is_graph` branches in `lm_fit.cpp`).
+
+Replaced by P: `perm_groups` parsing (`lm_fit.cpp` 280-290), `generate_permutation()`, `make_rng()`, the `seed`
+argument, and on the R side `makeBlocks()`, `deriveNuisanceFactors()`, `filterNuisance()`, `permutationGroups()`,
+`computeCoreRows()` and the `blocks` / `perm.groups` / `core.rows` fields of the design (`model_matrices.R`
+190-202, 950-1010). `core_rows` in `fl_fwl_cpp` and `parse_core_rows()` become the identity part of P.
+
+Duplicated: `z_from_p()` and the `z_score` output; `performLMPermutations()` recomputes z from p in R.
+
+With robust fits dropped, the permutation loop itself collapses. For OLS the permuted contrast is linear in the
+permuted response: stat_b = alpha' y[p_b] with alpha = (X'X)^-1 X' projected on c, so for all columns and all
+permutations at once S = Y' A_P, where A_P (n x B) holds alpha re-indexed by each p_b. Freedman-Lane is the same
+product on the residuals of the reduced model, R_red Y. Per NA pattern that is one BLAS-3 product instead of a
+per-column loop with per-permutation refits; p-values and winsorized extremes are read off S in one pass (and for
+10^6 columns S is streamed in column chunks). Kernel A is the quadratic analogue, F_b = a[p_b]' G a[p_b], so the two
+kernels share the induced-permutation step and the A_P construction.
+
+User decisions: `robust` (huber / winsor) and `na_mode = "impute_weak"` are exposed by `estimateDiffCellDensity()`
+and cluster-free DE with default "none" / "drop"; keeping them keeps the per-column iterative loop. Residual
+outputs (`residuals`, `residuals.pearson`, `partial_core`) are consumed by plots and are independent of the
+permutations; they stay but belong in a plain fit function, not in the randomization kernel.
+
+Rough size: `lm_fit.cpp` 749 + `lm_common.h` 207 + `projdiff.cpp` 187 lines today; a P-fed OLS kernel with NA-pattern
+grouping, block and FL schemes and streaming extremes is on the order of 150-200 lines, plus ~60 for the shared
+induced-permutation / A_P helper. `performLMPermutations()` (329 lines) shrinks to argument checking and naming.

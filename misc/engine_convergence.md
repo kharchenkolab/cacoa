@@ -195,6 +195,11 @@ B = 99) it came to 8.7 minutes on 16 cores through `sccore::plapply`, with the f
 is O(cells x B x n log n) integer operations, which is a fraction of a second in C++; the whole cluster-free step
 should take seconds, dominated by the neighbourhood distances.
 
+Measured on the simulated object (2026-10-09, `cao$estimateClusterFreeExpressionShifts(n.top.genes = 500,
+n.permutations = 99)`, graph neighbourhoods of median 638 cells, 40 samples): 349 s on 16 cores for 3,371 tested
+cells (the rest had too few cells per sample), i.e. about 1.7 core-seconds per cell for 99 permutations of a
+40 x 3 design, against 0.35 ms per cell for the C++ distances.
+
 The batched kernel of step 4 therefore takes: the pair-layout distance matrix Y (pairs x cells, already C++), the
 sample strata and `in.set` flags, the global P, the design X and contrast, and does per cell in C++: square the
 pair column into a distance matrix over the samples present, Gower-centre, induce the sub-permutation by ranks

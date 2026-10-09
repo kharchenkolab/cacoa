@@ -41,6 +41,64 @@ coupled with the shift tests.
   the model object needs it before any fit (distinct-permutation counts, p-value floors); the C++ fitter never
   learned to consume it. That is the "fit_and_randomize hook" left undone.
 
+
+## 2a. Why the randomization logic differs (in detail)
+
+The two generators answer different questions and were written at different times for different statistics.
+
+**C++ `fit_and_randomize` (rows 6, 8, 9).** The design matrix F and the response matrix Y (n x m) are fixed; for
+each column j a job draws `n_randomizations` permutations and refits. Three properties matter:
+
+1. *Which samples move.* `perm_groups` are the blocks from `makeBlocks()`: the interaction of every discrete
+   nuisance factor in the formula (or `block.vars`). Inside a block **all** rows are shuffled, whatever their level
+   of the tested variable. For a two-level test with discrete nuisance this is the classic restricted permutation.
+   With more levels (the simulated object has four groups and the test is Group2 vs Group1) the shuffle also moves
+   Group3 and Group4 samples, so the fitted Group3/Group4 coefficients change under the null as well. The null
+   being simulated is "no Group effect at all", not "Group2 = Group1 holding the other levels where they are".
+   Under a true global null both are valid; when the other levels do differ (as planted here) the null variance of
+   the Group2 - Group1 contrast is inflated by their differences.
+2. *One RNG stream per column.* `make_rng(seed, j)` seeds the Mersenne generator with the column index, so
+   permutation b of column 1 is not permutation b of column 2. Anything that combines columns at a fixed
+   permutation index assumes they were relabelled together, and that assumption is false here:
+   - `lmCoda()` forms the permuted loadings as `psi %*% t(beta.contrast.perm)`, i.e. row b of the permuted ILR
+     coefficients across all K coordinates is back-transformed as one vector. Those K values come from K different
+     relabelings, so the null of each cell-type loading ignores the correlation between ILR coordinates, and the
+     global statistic `T.contrast.perm` (variance explained across coordinates) has the same problem.
+   - `estimateDiffCellDensity()` adjusts z-scores with `adjustZScoresByPermutations(score, permut.scores)`, a
+     max-statistic over bins per permutation row; neighbouring bins are strongly correlated, but the row mixes
+     independent draws, so the max-null is the one for independent bins (conservative when statistics are
+     positively correlated, and in any case not the permutation distribution of the maximum).
+   This is the most consequential difference and the strongest reason for step 1 below.
+3. *No enumeration, no plan.* The fitter always samples with replacement from the relabelings, even when there are
+   only a handful (2 vs 2 in a block gives 6). It cannot report the number of distinct permutations or the smallest
+   attainable p-value, which the model object prints, and the Freedman-Lane variant (`fl_fwl_cpp`) permutes
+   residuals of Y under the reduced model within `core_perm_groups` with the same per-column streams.
+
+**R plan (rows 1-5, 7).** `permutationPlan()` is computed from the metadata before any fit, because the model
+object has to describe the test (scheme, distinct permutations, p-value floor) when it is set. It draws one
+integer matrix P (n x B) for the sample set and everything consumes it:
+
+1. *Which samples move.* `contrastSampleInfo()` marks `in.set`: only the samples whose label is one of the two
+   compared levels (for a cell contrast, the samples matching the fixed settings as well); for a whole-factor test
+   every level of the factor. Strata are all discrete formula variables other than the swapped one, plus
+   `block.vars`. Labels are swapped within (stratum x in.set) cells, so the other levels keep their labels and the
+   null is specific to the contrast.
+2. *Coupling.* P is drawn once per test and shared by all cell types (and by both tests of a two-test model). A
+   cell type missing some samples gets the induced permutation (`inducePermutation()`: within each of its
+   stratum cells the members are reassigned by the ranks of their images under P), which is uniform on the subset's
+   relabelings and coupled with the full set. That is what makes the across-cell-type max-statistic and the global
+   p-value valid. The cluster-free shifts use the same mechanism per neighbourhood.
+3. *Exactness.* When the number of distinct relabelings is at most `n.permutations` (and 20,000) they are
+   enumerated and the p-values are exact (the SCC paired design, 2^8 = 256). Otherwise Monte Carlo with the floor
+   1/(B+1). Freedman-Lane in Gower form permutes all samples (strata from `block.vars` only) and re-indexes the
+   residual kernel; Huh-Jhun is opt-in for the shift.
+
+So the R side is not a reimplementation of the C++ randomization in another language: it is a different and more
+specific null (contrast-restricted, coupled, enumerable), written for statistics the C++ fitter cannot compute.
+The C++ side kept its own because nobody taught the fitter to accept a permutation matrix. Once it does (step 1),
+rows 6, 8 and 9 inherit the contrast-restricted null, the coupling across columns (which fixes the two defects in
+point 2 above), the enumeration and the shared seed, with no change to their statistics.
+
 ## 3. What it costs
 
 Per cell type, n = 40 samples, q = 3 columns, 999 permutations (this machine, single core):
@@ -119,3 +177,27 @@ for the shift F (agreement to 1e-10).
 6. Optional: fold `fl_fwl_cpp` into `fit_and_randomize` behind a `scheme` argument so each family has one entry point.
 
 Steps 1-3 are each about half a day with tests; step 4 is the largest (a day) and the one with the visible payoff.
+## 3a. Profile of the cluster-free loop
+
+Toy case, 1,000 cells x 10 samples x 500 genes, neighbourhoods of 200 cells, 99 permutations (`Rprof`):
+
+| part | time |
+|---|---|
+| C++ `estimateExpressionShiftsPairsLM` (all neighbourhood distances) | 0.35 s total, 0.35 ms per cell |
+| whole `clusterFreeExpressionShifts()` | 31.7 s, 31.7 ms per cell |
+| of which `apply(P.global, 2, inducePermutation)` per cell (split / droplevels / rank / factor / order) | ~90 % |
+| `match.arg`, `pairVectorToMatrix`, `permutationPlan` for unseen subsets, `estimatePairwiseEffects` | most of the rest |
+| C++ `permuted_contrast_F` per cell | not visible in the profile |
+
+The statistic itself is negligible; inducing B sub-permutations in R per cell (B R-level calls each doing a split
+and a rank) is the cost, multiplied by the number of cells, and on the simulated object (4,500 cells, 40 samples,
+B = 99) it came to 8.7 minutes on 16 cores through `sccore::plapply`, with the forking overhead on top. The work
+is O(cells x B x n log n) integer operations, which is a fraction of a second in C++; the whole cluster-free step
+should take seconds, dominated by the neighbourhood distances.
+
+The batched kernel of step 4 therefore takes: the pair-layout distance matrix Y (pairs x cells, already C++), the
+sample strata and `in.set` flags, the global P, the design X and contrast, and does per cell in C++: square the
+pair column into a distance matrix over the samples present, Gower-centre, induce the sub-permutation by ranks
+within stratum cells, compute the observed and permuted shift F (existing kernel), the shift estimate (M = A G A'
+with the dispersion correction, the same quantities), and return stat / p / shift / n per cell plus the per-
+permutation maxima for the max-statistic adjustment; the loop over cells runs on the sccore thread pool.

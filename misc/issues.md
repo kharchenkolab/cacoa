@@ -62,6 +62,16 @@ The R / C++ split of fitting and randomization, and the plan to converge on two 
 
 ## 3. Statistical findings to keep in mind
 
+- **Uncoupled permutations across response columns in the C++ fitter** (`fit_and_randomize`: one RNG stream per
+  column, `make_rng(seed, j)`). `lmCoda()` back-transforms row b of the permuted ILR coefficients as if the K
+  coordinates had been relabelled together, so the per-cell-type loading null and the global composition statistic
+  ignore the correlation between coordinates; `estimateDiffCellDensity()`'s max-statistic adjustment over bins has
+  the same problem. Pre-existing (dev_lm before this work); fixed by feeding the fitter one R-drawn permutation
+  matrix (step 1 of `misc/engine_convergence.md`).
+- With more than two levels of the tested factor, the C++ fitter's block randomization shuffles all levels within a
+  block; the shift engine swaps only the compared levels. The CoDA / density / cluster-free DE null therefore
+  differs from the shift-test null on the same object (same fix).
+
 - Analytic effective-dimension p-values are several-fold liberal at r.eff ≈ 18 (0.012 analytic vs 0.03 by
   permutation in the SCC check); labelled preview only, documented in `screenCovariates()`.
 - Freedman-Lane: shift test conservative (0.02–0.05); var / total mildly liberal at n = 16 with batch + age

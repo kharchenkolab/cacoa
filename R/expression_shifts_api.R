@@ -179,6 +179,8 @@ termPermutationStats <- function(eff, plan, P) {
 #'   `F`, `df`, `r.eff`, `p.location`, `F.disp`, `R2.disp.adj`, `p.dispersion`, adjusted p-values, ...),
 #'   `global`, `fits`, `skipped`, `plan`, `notes`, `call.info`
 #' @export
+#' @param robust,na.mode,robust.k robust fit (`"none"`, `"huber"`, `"winsor"`), treatment of samples absent from a cell type
+#'   (`"drop"`, `"impute_weak"`) and robust tuning constant
 testTermEffects <- function(D.list, design, meta, dispersion.formula = NULL, dist = c("cor", "l2", "l1"),
                             permutation = c("auto", "block", "freedman-lane", "huh-jhun"), n.permutations = 999,
                             block.vars = NULL, min.samp.per.level = 3, seed = NULL, alpha = 0.05, n.cores = 1,
@@ -317,6 +319,8 @@ effectRowsTerm <- function(res, test.label, test.id) {
 #'   `influence` (per test: samples x cell types matrix of the change in shift when the sample is left out),
 #'   `distances`, `model`, `notes`, `settings`
 #' @export
+#' @param robust,na.mode,robust.k robust fit (`"none"`, `"huber"`, `"winsor"`), treatment of samples absent from a cell type
+#'   (`"drop"`, `"impute_weak"`) and robust tuning constant; recorded in `settings`
 expressionShiftsForModel <- function(D.list, model, dist = "cor", permutation = "auto", n.permutations = 999, block.vars = model$block.vars,
                                      bias.correct = TRUE, influence = TRUE, min.samp.per.level = 3, seed = NULL, alpha = 0.05,
                                      n.cores = 1, verbose = FALSE, n.cells = NULL, robust = "none", na.mode = "drop", robust.k = 1.345) {

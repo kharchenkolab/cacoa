@@ -44,6 +44,11 @@ The R / C++ split of fitting and randomization, and the plan to converge on two 
 - **"Later" list from the plan** untouched: Welch-type shift test, robust weights, repeated measures, technical
   noise dispersion covariate, cor-geometry check, metric sensitivity report.
 
+- **Freedman-Lane in the per-column fitter fits the core rows only** (`core.rows` = samples with non-zero contrast
+  weight), a choice inherited from the pair model; the Gower engine fits all samples. Whether density / cluster-free
+  DE should also fit all samples under FL is a modelling decision for the user.
+- **Huh-Jhun with robust weights or weak imputation** falls back to block relabeling (documented in the code).
+
 ## 2. Decisions made autonomously that need the user's confirmation
 
 - **BH is the default significance marking in plots** (`significance = "padj"`); max-T (`"p.fwer"`) and raw `"p"`

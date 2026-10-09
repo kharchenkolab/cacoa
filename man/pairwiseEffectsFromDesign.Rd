@@ -35,6 +35,9 @@ variables)}
 \item{influence}{logical; also compute leave-one-sample-out effects and jackknife SEs}
 
 \item{min.samp.per.level}{minimum number of samples at each contrasted level (for factor contrasts)}
+
+\item{robust, na.mode, robust.k}{robust fit (\code{"none"}, \code{"huber"}, \code{"winsor"}), treatment of samples absent from this cell type
+(\code{"drop"} fits the present samples; \code{"impute_weak"} keeps them with a near-zero weight) and robust tuning constant}
 }
 \value{
 list with \code{ok} (logical), \code{reason} (when skipped), the elements of \code{\link[=estimatePairwiseEffects]{estimatePairwiseEffects()}},

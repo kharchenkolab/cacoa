@@ -32,6 +32,12 @@ intercept-only row (var and total are then 0)}
 \item{bias.correct}{logical; subtract the model-based dispersion term \verb{A diag(s) A'} from \code{M} (default TRUE)}
 
 \item{G}{optional precomputed Gower matrix (\code{gowerCenter(D2)})}
+
+\item{w}{sample weights (\code{NULL}: unweighted); \code{robust} and \code{robust.k}: robust down-weighting of samples with outlying residual
+distances (\code{"none"}, \code{"huber"}, \code{"winsor"}; tuning constant in robust standard deviations). Either switches to the weighted
+reference implementation \code{\link[=weightedContrastStats]{weightedContrastStats()}}}
+
+\item{robust, robust.k}{see \code{w}}
 }
 \value{
 list with \code{shift}, \code{var}, \code{total}, \code{ratio}, \code{s.alt}, \code{s.ref}, \code{shift.raw} (uncorrected),

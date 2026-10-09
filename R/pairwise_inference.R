@@ -352,6 +352,8 @@ permutationPValue <- function(obs, perm, alternative = c("greater", "two.sided")
 #'   `fits` (per cell type), `skipped` (data.frame of skipped cell types and reasons), `plan` (global plan),
 #'   `perm.stats` (optional), `call.info`
 #' @export
+#' @param robust,na.mode,robust.k robust fit (`"none"`, `"huber"`, `"winsor"`), treatment of samples absent from a cell type
+#'   (`"drop"`, `"impute_weak"`) and robust tuning constant; recorded in `call.info`
 testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL, dist = c("cor", "l2", "l1"),
                                 permutation = c("auto", "block", "freedman-lane", "huh-jhun"), n.permutations = 999,
                                 block.vars = NULL, bias.correct = TRUE, influence = FALSE, min.samp.per.level = 3,

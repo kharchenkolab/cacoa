@@ -52,6 +52,9 @@ testTermEffects(
 \item{return.perm.stats}{keep the permutation statistics per cell type}
 
 \item{verbose}{print notes}
+
+\item{robust, na.mode, robust.k}{robust fit (\code{"none"}, \code{"huber"}, \code{"winsor"}), treatment of samples absent from a cell type
+(\code{"drop"}, \code{"impute_weak"}) and robust tuning constant}
 }
 \value{
 list like \code{\link[=testPairwiseEffects]{testPairwiseEffects()}}: \code{results} (one row per cell type: \code{R2}, \code{R2.adj}, \code{R2.partial},

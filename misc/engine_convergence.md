@@ -289,6 +289,14 @@ permutation maxima for the max-statistic adjustment; the loop over cells runs on
   `plotClusterFreeResiduals()`. `fit_and_randomize()` / `fl_fwl_cpp()` now require `perm_matrix` whenever
   permutations are requested; `performLMPermutations()` draws it from the design's metadata. Fast suite 905 / 0.
 
+- **Final state (2026-10-09).** Fast suite 905 / 0; slow suite (validation rows, E1 / E3, robust and weak-imputation
+  calibration, planted-strength ordering, end-to-end workflow on the simulated object) 105 / 0; `R CMD check`
+  0 errors, 2 warnings (vignette build skipped), 3 notes (as before). The walkthrough was re-rendered on the
+  final build; the IN-PV cluster-free panel is unchanged by the index fix, so that observation stands (§ issues).
+  Left for later: step 6 (fold `fl_fwl_cpp` into `fit_and_randomize`), the R6 wrapper overhead of
+  `getTopGenes()` / `getClusterFreeDEInput()`, HJ in the weighted path (falls back to block), and the FL fit on
+  core rows only (a modelling choice inherited from the pair model, see issues).
+
 ## 6. Scaling the cluster-free tests to ~10^6 cells
 
 The batched kernel of step 4 handles this if two things are built in from the start; the current R loop cannot

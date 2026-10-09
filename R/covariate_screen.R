@@ -102,6 +102,8 @@ inducePermutationSimple <- function(P, idx) {
 #'   `global` (per covariate x mode: max-T p, number of significant cell types, median R2.adj), `suggestion`
 #'   (formula), `settings`, `notes`
 #' @export
+#' @param robust,robust.k robust location / dispersion statistics (`"none"`, `"huber"`, `"winsor"`; tuning constant), weights
+#'   re-estimated under every relabeling
 screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "partial", "marginal"), adjust.for = NULL,
                              dist = c("cor", "l2", "l1"), test.variable = NULL, p.values = c("permutation", "analytic"),
                              n.permutations = 199, min.samples.per.type = 6, max.partial.df = 5, alpha = 0.05, seed = 1,

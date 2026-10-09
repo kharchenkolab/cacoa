@@ -86,6 +86,10 @@ isEstimable <- function(X, cvec, tol = 1e-8) {
 #'   `shift.norm`, `var.norm`, `total.norm`, `M` (q x q), `gamma`, `s` (model-based per-sample dispersion),
 #'   `v` (leverage-corrected per-sample dispersion), `h` (leverage), `n`, `rank`
 #' @export
+#' @param w sample weights (`NULL`: unweighted); `robust` and `robust.k`: robust down-weighting of samples with outlying residual
+#'   distances (`"none"`, `"huber"`, `"winsor"`; tuning constant in robust standard deviations). Either switches to the weighted
+#'   reference implementation [weightedContrastStats()]
+#' @param robust,robust.k see `w`
 estimatePairwiseEffects <- function(D2, X, contrast, Z = NULL, z.end = NULL, bias.correct = TRUE, G = NULL, w = NULL, robust = "none", robust.k = 1.345) {
   X <- as.matrix(X); n <- nrow(X)
   if (is.null(G)) G <- gowerCenter(D2)
@@ -327,6 +331,8 @@ defaultDispersionFormula <- function(spec) {
 #'   (model-implied table over the contrasted factor's levels, when applicable), `n.ref`, `n.alt`,
 #'   `influence`
 #' @export
+#' @param robust,na.mode,robust.k robust fit (`"none"`, `"huber"`, `"winsor"`), treatment of samples absent from this cell type
+#'   (`"drop"` fits the present samples; `"impute_weak"` keeps them with a near-zero weight) and robust tuning constant
 pairwiseEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL, dist = c("cor", "l2", "l1"),
                                       bias.correct = TRUE, influence = FALSE, min.samp.per.level = 3, robust = "none", na.mode = "drop", robust.k = 1.345) {
   dist <- match.arg(dist)

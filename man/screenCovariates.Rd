@@ -57,6 +57,9 @@ freedom in a cell type, partial tests fall back to \code{adjust.for} only (defau
 \item{n.cores}{cores for the per-cell-type loop}
 
 \item{verbose}{print the summary}
+
+\item{robust, robust.k}{robust location / dispersion statistics (\code{"none"}, \code{"huber"}, \code{"winsor"}; tuning constant), weights
+re-estimated under every relabeling}
 }
 \value{
 list of class \code{cacoaCovariateScreen}: \code{table} (long: celltype, covariate, mode, n.used, R2, R2.adj,

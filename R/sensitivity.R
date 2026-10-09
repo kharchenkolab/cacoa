@@ -46,6 +46,8 @@ sensitivityFormulas <- function(model, screen = NULL, meta, top.k = 3, min.resid
 #'   `summary` (per cell type: same sign in all models, n significant of m, max relative change, most
 #'   influential sample, verdict), `formulas`, `settings`
 #' @export
+#' @param robust,na.mode,robust.k robust fit (`"none"`, `"huber"`, `"winsor"`), treatment of absent samples (`"drop"`, `"impute_weak"`) and
+#'   robust tuning constant, passed to [expressionShiftsForModel()] (default: the settings of the result being checked)
 checkSensitivity <- function(D.list, model, meta, formulas = NULL, screen = NULL, influence = NULL, dist = "cor", permutation = "auto",
                              n.permutations = 199, seed = 1, alpha = 0.05, min.samp.per.level = 3, n.cores = 1, top.k = 3, rel.change = 0.5,
                              influence.rel = 0.2, robust = "none", na.mode = "drop", robust.k = 1.345) {

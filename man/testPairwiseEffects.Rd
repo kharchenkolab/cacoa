@@ -50,6 +50,9 @@ testPairwiseEffects(
 \item{return.perm.stats}{keep the permutation statistics per cell type}
 
 \item{verbose}{print notes}
+
+\item{robust, na.mode, robust.k}{robust fit (\code{"none"}, \code{"huber"}, \code{"winsor"}), treatment of samples absent from a cell type
+(\code{"drop"}, \code{"impute_weak"}) and robust tuning constant; recorded in \code{call.info}}
 }
 \value{
 list: \code{results} (data.frame, one row per cell type), \code{global} (max-statistic p per effect),

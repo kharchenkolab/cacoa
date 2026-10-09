@@ -48,6 +48,9 @@ current wide table (\code{res$wide[[1]]}), as \code{list(influence =, wide =)}; 
 
 \item{influence.rel}{relative change of the shift estimate when one sample is left out that, together with being
 an outlier among the leave-one-out changes (> 3 MAD), marks the sample as driving the result (default 0.2)}
+
+\item{robust, na.mode, robust.k}{robust fit (\code{"none"}, \code{"huber"}, \code{"winsor"}), treatment of absent samples (\code{"drop"}, \code{"impute_weak"}) and
+robust tuning constant, passed to \code{\link[=expressionShiftsForModel]{expressionShiftsForModel()}} (default: the settings of the result being checked)}
 }
 \value{
 object of class \code{cacoaSensitivity}: \code{table} (model x cell type x effect: estimate, ci, p, padj),

@@ -34,6 +34,9 @@ expressionShiftsForModel(
 \item{permutation, n.permutations, block.vars, bias.correct, influence, min.samp.per.level, seed, alpha, n.cores, verbose}{passed to the engine}
 
 \item{n.cells}{optional cell type x sample table of cell counts (attached to the distance matrices)}
+
+\item{robust, na.mode, robust.k}{robust fit (\code{"none"}, \code{"huber"}, \code{"winsor"}), treatment of samples absent from a cell type
+(\code{"drop"}, \code{"impute_weak"}) and robust tuning constant; recorded in \code{settings}}
 }
 \value{
 list: \code{results} (long table: one row per test x cell type x effect), \code{wide} (per test, the engine's

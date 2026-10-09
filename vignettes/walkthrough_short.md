@@ -114,12 +114,12 @@ scr
 Covariate screen: 5 covariates x 9 cell types, marginal + partial mode, permutation p-values (199 permutations)
 Associated with expression in >= 2 cell types (partial, FDR 5%): Batch (9 types, global p 0.005), Group (7 types, global p 0.005)
 Marginal only (explained by other covariates): ExpLibSize
-Associated with sample dispersion: Batch (3 types), Group (3 types)
+Associated with sample dispersion: Batch (4 types), Group (6 types)
 Suggested model: ~Batch + Group   (not applied; see cao$setModel())
 Covariate screen: 5 covariates x 9 cell types, marginal + partial mode, permutation p-values (199 permutations)
 Associated with expression in >= 2 cell types (partial, FDR 5%): Batch (9 types, global p 0.005), Group (7 types, global p 0.005)
 Marginal only (explained by other covariates): ExpLibSize
-Associated with sample dispersion: Batch (3 types), Group (3 types)
+Associated with sample dispersion: Batch (4 types), Group (6 types)
 Suggested model: ~Batch + Group   (not applied; see cao$setModel())
 ```
 
@@ -375,8 +375,7 @@ cao$plotClusterFreeExpressionShifts(font.size = 2)
 ```
 
 ```
-Computing neighbourhood sample distances for 4500 cells (40 samples)...
-Testing 4500 cells with 99 permutations (block)...
+Testing 4500 cells (40 samples) with 99 permutations (block)...
 ```
 
 ![](walkthrough_short_files/fig-14.png)

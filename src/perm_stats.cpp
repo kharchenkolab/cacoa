@@ -119,3 +119,68 @@ arma::mat permuted_contrast_stats_fl(const arma::mat& K1, const arma::mat& K2, c
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// Whole-factor (term) statistics under a relabeling (step 3): location F of the columns of X_full not in
+// X_reduced, and the dispersion F of the leverage-corrected residual dispersions regressed on Z_full vs Z_reduced.
+// R references: termTestGower() and dispersionTermTest() in R/pairwise_effects.R, looped in
+// termPermutationStats() and screenOneMatrix().
+// ---------------------------------------------------------------------------------------------------------
+
+// rank-based least squares residual sum of squares of v on Z (Z may be rank deficient)
+static inline double rss_ls(const arma::mat& Z, const arma::vec& v) {
+  arma::vec beta = arma::pinv(Z) * v;
+  arma::vec r = v - Z * beta;
+  return arma::dot(r, r);
+}
+
+// statistics for one configuration: Gs (possibly permuted), Hf / Hr hat matrices (possibly permuted), Zf / Zr
+// dispersion designs (possibly row-permuted); df / nu from the ranks (invariant under relabeling)
+static inline arma::rowvec term_stats_one(const arma::mat& Gs, const arma::mat& Hf, const arma::mat& Hr, const arma::mat& Zf, const arma::mat& Zr,
+                                          double df, double nu, int qZf, int qZr, bool need_disp) {
+  arma::rowvec out(2); out.fill(arma::datum::nan);
+  const double trG = arma::trace(Gs);
+  const double ss = arma::accu((Hf - Hr) % Gs);
+  const double rss = trG - arma::accu(Hf % Gs);
+  out(0) = (ss / df) / (rss / nu);
+  if (!need_disp) return out;
+  arma::mat HG = Hf * Gs;
+  arma::vec r = Gs.diag() - 2.0 * arma::sum(Hf % Gs, 1) + arma::sum(HG % Hf, 1);    // diag(R G R)
+  arma::vec h = Hf.diag();
+  arma::uvec ok = arma::find(h < 0.99);
+  const double m = static_cast<double>(ok.n_elem);
+  const double df_d = qZf - qZr, nu_d = m - qZf;
+  if (df_d <= 0 || nu_d <= 0) return out;
+  arma::vec v = arma::sqrt(arma::clamp(r(ok), 0.0, arma::datum::inf) / (1.0 - h(ok)));
+  const double rss_f = rss_ls(Zf.rows(ok), v), rss_r = rss_ls(Zr.rows(ok), v);
+  out(1) = ((rss_r - rss_f) / df_d) / (rss_f / nu_d);
+  return out;
+}
+
+// [[Rcpp::export]]
+arma::mat permuted_term_stats(const arma::mat& G, const arma::mat& Hf, const arma::mat& Hr, const arma::mat& Zf, const arma::mat& Zr,
+                              double df, double nu, int qZf, int qZr, const arma::imat& P, bool need_disp = true) {
+  const arma::uword n = G.n_rows, B = P.n_cols;
+  if (Hf.n_rows != n || Hr.n_rows != n || Zf.n_rows != n || Zr.n_rows != n || P.n_rows != n) Rcpp::stop("dimension mismatch in permuted_term_stats");
+  arma::mat out(B, 2);
+  for (arma::uword b = 0; b < B; ++b) {
+    arma::uvec p = perm_index(P, b);
+    out.row(b) = term_stats_one(G, Hf.submat(p, p), Hr.submat(p, p), Zf.rows(p), Zr.rows(p), df, nu, qZf, qZr, need_disp);
+  }
+  return out;
+}
+
+// [[Rcpp::export]]
+arma::mat permuted_term_stats_fl(const arma::mat& K1, const arma::mat& K2, const arma::mat& K3, const arma::mat& K4,
+                                 const arma::mat& Hf, const arma::mat& Hr, const arma::mat& Zf, const arma::mat& Zr,
+                                 double df, double nu, int qZf, int qZr, const arma::imat& P, bool need_disp = true) {
+  const arma::uword n = K1.n_rows, B = P.n_cols;
+  if (Hf.n_rows != n || Hr.n_rows != n || Zf.n_rows != n || Zr.n_rows != n || P.n_rows != n) Rcpp::stop("dimension mismatch in permuted_term_stats_fl");
+  arma::mat out(B, 2);
+  for (arma::uword b = 0; b < B; ++b) {
+    arma::uvec p = perm_index(P, b);
+    arma::mat Gs = K1 + K2.cols(p) + K3.rows(p) + K4.submat(p, p);
+    out.row(b) = term_stats_one(Gs, Hf, Hr, Zf, Zr, df, nu, qZf, qZr, need_disp);
+  }
+  return out;
+}

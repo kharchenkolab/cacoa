@@ -119,6 +119,13 @@ dispersionR2 <- function(G, Xloc, Zf, Zr) {
   (rr - rf - df * rf / nu) / (rr + rf / nu)
 }
 
+# hat matrices, ranks and degrees of freedom of a term test, as the C++ kernel needs them
+termKernelInputs <- function(Xf, Xr, Zf, Zr, n) {
+  hf <- hatInfo(Xf); hr <- hatInfo(Xr)
+  Zf <- as.matrix(Zf); Zr <- as.matrix(Zr)
+  list(Hf = hf$H, Hr = hr$H, Zf = Zf, Zr = Zr, df = hf$rank - hr$rank, nu = n - hf$rank, qZf = qr(Zf)$rank, qZr = qr(Zr)$rank)
+}
+
 # permutation statistics for a term test: F (location) and F.disp under relabelings
 termPermutationStats <- function(eff, plan, P) {
   G <- eff$G; Xf <- eff$X; Xr <- eff$Xr; Zf <- eff$Z; Zr <- eff$Zr
@@ -126,19 +133,14 @@ termPermutationStats <- function(eff, plan, P) {
   B <- ncol(P); perm <- matrix(NA_real_, B, 2, dimnames = list(NULL, c("F", "F.disp")))
   if (B == 0) return(list(obs = obs, perm = perm))
   need.disp <- is.finite(obs["F.disp"])
-  if (plan$scheme == "block" || plan$scheme == "huh-jhun") {
-    for (b in seq_len(B)) {
-      p <- P[, b]
-      perm[b, "F"] <- termTestGower(G, Xf[p, , drop = FALSE], Xr[p, , drop = FALSE])["F"]
-      if (need.disp) perm[b, "F.disp"] <- dispersionTermTest(G, Xf[p, , drop = FALSE], Zf[p, , drop = FALSE], Zr[p, , drop = FALSE])["F.disp"]
-    }
+  # C++ kernel (R references: termTestGower() / dispersionTermTest(), looped per relabeling)
+  storage.mode(P) <- "integer"
+  k <- termKernelInputs(Xf, Xr, Zf, Zr, nrow(G))
+  perm[, ] <- if (plan$scheme == "block" || plan$scheme == "huh-jhun") {
+    permuted_term_stats(G, k$Hf, k$Hr, k$Zf, k$Zr, k$df, k$nu, k$qZf, k$qZr, P, need.disp)
   } else {   # freedman-lane on the reduced location model
     parts <- flGowerParts(G, Xr)
-    for (b in seq_len(B)) {
-      Gs <- flGowerPermute(parts, P[, b])
-      perm[b, "F"] <- termTestGower(Gs, Xf, Xr)["F"]
-      if (need.disp) perm[b, "F.disp"] <- dispersionTermTest(Gs, Xf, Zf, Zr)["F.disp"]
-    }
+    permuted_term_stats_fl(parts$K1, parts$K2, parts$K3, parts$K4, k$Hf, k$Hr, k$Zf, k$Zr, k$df, k$nu, k$qZf, k$qZr, P, need.disp)
   }
   list(obs = obs, perm = perm)
 }

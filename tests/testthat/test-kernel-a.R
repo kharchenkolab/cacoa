@@ -66,3 +66,50 @@ test_that("a numeric tested variable is permuted across all samples within strat
   expect_true(all(is.finite(sh$p)) && all(sh$p < 1))
   expect_true(all(sh$n.perm == 39))
 })
+
+refTermStats <- function(G, Xf, Xr, Zf, Zr, P, scheme) {
+  if (scheme == "block") return(t(apply(P, 2, function(p) c(cacoa:::termTestGower(G, Xf[p, , drop = FALSE], Xr[p, , drop = FALSE])["F"],
+                                                             cacoa:::dispersionTermTest(G, Xf[p, , drop = FALSE], Zf[p, , drop = FALSE], Zr[p, , drop = FALSE])["F.disp"]))))
+  parts <- cacoa:::flGowerParts(G, Xr)
+  t(apply(P, 2, function(p) { Gs <- cacoa:::flGowerPermute(parts, p); c(cacoa:::termTestGower(Gs, Xf, Xr)["F"], cacoa:::dispersionTermTest(Gs, Xf, Zf, Zr)["F.disp"]) }))
+}
+
+test_that("kernel A term statistics (location F, dispersion F) equal the R reference over the grid", {
+  set.seed(31)
+  for (cell in list(list(groups = c(A = 6, B = 6, C = 6), batch = c("x", "y"), sd = c(1, 1, 2)), list(groups = c(A = 5, B = 8), batch = NULL, sd = c(1, 1.8)),
+                    list(groups = c(A = 4, B = 4, C = 4, D = 4), batch = c("x", "y"), sd = c(1, 1, 1, 1)))) {
+    sim <- simulateIndividualModel(n.per.group = cell$groups, p = 40, group.effect = 0.3, batch.levels = cell$batch, batch.effect = 0.3, group.sd = cell$sd)
+    G <- cacoa:::gowerCenter(sim$D2); n <- nrow(G)
+    Xf <- stats::model.matrix(if (is.null(cell$batch)) ~ group else ~ group + batch, sim$meta)
+    Xr <- stats::model.matrix(if (is.null(cell$batch)) ~ 1 else ~ batch, sim$meta)
+    Zf <- stats::model.matrix(~ group, sim$meta); Zr <- matrix(1, n, 1)
+    P <- replicate(12, sample.int(n))
+    k <- cacoa:::termKernelInputs(Xf, Xr, Zf, Zr, n)
+    for (scheme in c("block", "freedman-lane")) {
+      ref <- refTermStats(G, Xf, Xr, Zf, Zr, P, scheme)
+      cpp <- if (scheme == "block") cacoa:::permuted_term_stats(G, k$Hf, k$Hr, k$Zf, k$Zr, k$df, k$nu, k$qZf, k$qZr, P, TRUE) else {
+        parts <- cacoa:::flGowerParts(G, Xr); cacoa:::permuted_term_stats_fl(parts$K1, parts$K2, parts$K3, parts$K4, k$Hf, k$Hr, k$Zf, k$Zr, k$df, k$nu, k$qZf, k$qZr, P, TRUE) }
+      expect_equal(unname(cpp), unname(ref), tolerance = 1e-9, info = paste(scheme, length(cell$groups)))
+    }
+    obs <- cacoa:::permuted_term_stats(G, k$Hf, k$Hr, k$Zf, k$Zr, k$df, k$nu, k$qZf, k$qZr, cbind(seq_len(n)), TRUE)
+    expect_equal(obs[1, 1], unname(cacoa:::termTestGower(G, Xf, Xr)["F"]), tolerance = 1e-10)
+    expect_equal(obs[1, 2], unname(cacoa:::dispersionTermTest(G, Xf, Zf, Zr)["F.disp"]), tolerance = 1e-10)
+    # screen path: the same kernel with Zf = Xf, Zr = Xr (dispersion on the location design) and a reduced design with an adjustment column
+    noDisp <- cacoa:::permuted_term_stats_fl(cacoa:::flGowerParts(G, Xr)$K1, cacoa:::flGowerParts(G, Xr)$K2, cacoa:::flGowerParts(G, Xr)$K3, cacoa:::flGowerParts(G, Xr)$K4,
+                                            k$Hf, k$Hr, k$Zf, k$Zr, k$df, k$nu, k$qZf, k$qZr, P, FALSE)
+    expect_true(all(is.na(noDisp[, 2])))
+  }
+})
+
+test_that("the screen and the whole-factor test give the same answers as before the kernel switch (structure, calibration-free checks)", {
+  meta <- gridMeta(levels = 3, n.per.level = 5, age = TRUE)
+  set.seed(5); D <- lapply(1:2, function(i) { M <- matrix(rnorm(15 * 30), 15); D <- as.matrix(dist(M)); dimnames(D) <- list(rownames(meta), rownames(meta)); D })
+  names(D) <- c("ct1", "ct2")
+  sc <- screenCovariates(D, meta, covariates = c("group", "batch", "age"), n.permutations = 49, seed = 3)
+  expect_true(all(c("p.perm", "p.disp.perm", "F", "F.disp") %in% names(sc$table)))
+  expect_true(all(is.finite(sc$table$p.perm[sc$table$n.used >= 4])))
+  m <- buildCacoaModel(meta, formula = ~ group + batch, test = "group")
+  tr <- testTermEffects(D, m, meta, dist = "l2", n.permutations = 49, seed = 3)
+  expect_true(all(c("p.location", "p.dispersion") %in% names(tr$results)))
+  expect_true(all(is.finite(tr$results$p.location)))
+})

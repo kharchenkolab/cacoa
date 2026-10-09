@@ -41,12 +41,11 @@ screenOneMatrix <- function(G, meta, covariates, mode, adjust.cols = NULL, n.per
     if (n.permutations > 0 && is.finite(tt["F"])) {
       parts <- flGowerParts(Gk, Xr.k)
       Pk <- if (!is.null(P)) inducePermutationSimple(P, which(ok)) else replicate(n.permutations, sample.int(n.used))
-      B <- ncol(Pk); Fp <- numeric(B); Fdp <- rep(NA_real_, B)
-      for (b in seq_len(B)) {
-        Gs <- flGowerPermute(parts, Pk[, b])
-        Fp[b] <- termTestGower(Gs, Xf.k, Xr.k)["F"]
-        if (dispersion && is.finite(dd["F.disp"])) Fdp[b] <- dispersionTermTest(Gs, Xf.k, Xf.k, Xr.k)["F.disp"]
-      }
+      if (!is.matrix(Pk)) Pk <- matrix(Pk, ncol = 1)
+      storage.mode(Pk) <- "integer"; B <- ncol(Pk)
+      k <- termKernelInputs(Xf.k, Xr.k, Xf.k, Xr.k, n.used)          # C++ kernel; R reference: termTestGower / dispersionTermTest loops
+      st <- permuted_term_stats_fl(parts$K1, parts$K2, parts$K3, parts$K4, k$Hf, k$Hr, k$Zf, k$Zr, k$df, k$nu, k$qZf, k$qZr, Pk, dispersion && is.finite(dd["F.disp"]))
+      Fp <- st[, 1]; Fdp <- st[, 2]
       p.perm <- (sum(Fp >= tt["F"] - 1e-12) + 1) / (B + 1)
       if (dispersion && is.finite(dd["F.disp"])) p.disp.perm <- (sum(Fdp >= dd["F.disp"] - 1e-12, na.rm = TRUE) + 1) / (sum(is.finite(Fdp)) + 1)
     }

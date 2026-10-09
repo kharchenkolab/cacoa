@@ -322,6 +322,51 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// permuted_term_stats
+arma::mat permuted_term_stats(const arma::mat& G, const arma::mat& Hf, const arma::mat& Hr, const arma::mat& Zf, const arma::mat& Zr, double df, double nu, int qZf, int qZr, const arma::imat& P, bool need_disp);
+RcppExport SEXP _cacoa_permuted_term_stats(SEXP GSEXP, SEXP HfSEXP, SEXP HrSEXP, SEXP ZfSEXP, SEXP ZrSEXP, SEXP dfSEXP, SEXP nuSEXP, SEXP qZfSEXP, SEXP qZrSEXP, SEXP PSEXP, SEXP need_dispSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type G(GSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Hf(HfSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Hr(HrSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Zf(ZfSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Zr(ZrSEXP);
+    Rcpp::traits::input_parameter< double >::type df(dfSEXP);
+    Rcpp::traits::input_parameter< double >::type nu(nuSEXP);
+    Rcpp::traits::input_parameter< int >::type qZf(qZfSEXP);
+    Rcpp::traits::input_parameter< int >::type qZr(qZrSEXP);
+    Rcpp::traits::input_parameter< const arma::imat& >::type P(PSEXP);
+    Rcpp::traits::input_parameter< bool >::type need_disp(need_dispSEXP);
+    rcpp_result_gen = Rcpp::wrap(permuted_term_stats(G, Hf, Hr, Zf, Zr, df, nu, qZf, qZr, P, need_disp));
+    return rcpp_result_gen;
+END_RCPP
+}
+// permuted_term_stats_fl
+arma::mat permuted_term_stats_fl(const arma::mat& K1, const arma::mat& K2, const arma::mat& K3, const arma::mat& K4, const arma::mat& Hf, const arma::mat& Hr, const arma::mat& Zf, const arma::mat& Zr, double df, double nu, int qZf, int qZr, const arma::imat& P, bool need_disp);
+RcppExport SEXP _cacoa_permuted_term_stats_fl(SEXP K1SEXP, SEXP K2SEXP, SEXP K3SEXP, SEXP K4SEXP, SEXP HfSEXP, SEXP HrSEXP, SEXP ZfSEXP, SEXP ZrSEXP, SEXP dfSEXP, SEXP nuSEXP, SEXP qZfSEXP, SEXP qZrSEXP, SEXP PSEXP, SEXP need_dispSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type K1(K1SEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type K2(K2SEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type K3(K3SEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type K4(K4SEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Hf(HfSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Hr(HrSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Zf(ZfSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Zr(ZrSEXP);
+    Rcpp::traits::input_parameter< double >::type df(dfSEXP);
+    Rcpp::traits::input_parameter< double >::type nu(nuSEXP);
+    Rcpp::traits::input_parameter< int >::type qZf(qZfSEXP);
+    Rcpp::traits::input_parameter< int >::type qZr(qZrSEXP);
+    Rcpp::traits::input_parameter< const arma::imat& >::type P(PSEXP);
+    Rcpp::traits::input_parameter< bool >::type need_disp(need_dispSEXP);
+    rcpp_result_gen = Rcpp::wrap(permuted_term_stats_fl(K1, K2, K3, K4, Hf, Hr, Zf, Zr, df, nu, qZf, qZr, P, need_disp));
+    return rcpp_result_gen;
+END_RCPP
+}
 // projdiff
 arma::rowvec projdiff(const arma::mat& mat, const arma::ivec& g1, const arma::ivec& g2);
 RcppExport SEXP _cacoa_projdiff(SEXP matSEXP, SEXP g1SEXP, SEXP g2SEXP) {
@@ -406,6 +451,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_permuted_contrast_F_fl", (DL_FUNC) &_cacoa_permuted_contrast_F_fl, 9},
     {"_cacoa_permuted_contrast_stats", (DL_FUNC) &_cacoa_permuted_contrast_stats, 14},
     {"_cacoa_permuted_contrast_stats_fl", (DL_FUNC) &_cacoa_permuted_contrast_stats_fl, 17},
+    {"_cacoa_permuted_term_stats", (DL_FUNC) &_cacoa_permuted_term_stats, 11},
+    {"_cacoa_permuted_term_stats_fl", (DL_FUNC) &_cacoa_permuted_term_stats_fl, 14},
     {"_cacoa_projdiff", (DL_FUNC) &_cacoa_projdiff, 3},
     {"_cacoa_fit_density_lm", (DL_FUNC) &_cacoa_fit_density_lm, 3},
     {"_cacoa_perm_full_contrast_mat", (DL_FUNC) &_cacoa_perm_full_contrast_mat, 5},

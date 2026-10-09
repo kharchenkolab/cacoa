@@ -61,6 +61,14 @@ permuted_contrast_stats_fl <- function(K1, K2, K3, K4, X, Z, A, H, a, cvec, cXc,
     .Call(`_cacoa_permuted_contrast_stats_fl`, K1, K2, K3, K4, X, Z, A, H, a, cvec, cXc, q, znum, zden, P, bias_correct, need_var)
 }
 
+permuted_term_stats <- function(G, Hf, Hr, Zf, Zr, df, nu, qZf, qZr, P, need_disp = TRUE) {
+    .Call(`_cacoa_permuted_term_stats`, G, Hf, Hr, Zf, Zr, df, nu, qZf, qZr, P, need_disp)
+}
+
+permuted_term_stats_fl <- function(K1, K2, K3, K4, Hf, Hr, Zf, Zr, df, nu, qZf, qZr, P, need_disp = TRUE) {
+    .Call(`_cacoa_permuted_term_stats_fl`, K1, K2, K3, K4, Hf, Hr, Zf, Zr, df, nu, qZf, qZr, P, need_disp)
+}
+
 projdiff <- function(mat, g1, g2) {
     .Call(`_cacoa_projdiff`, mat, g1, g2)
 }

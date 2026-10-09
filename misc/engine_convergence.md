@@ -243,6 +243,11 @@ permutation maxima for the max-statistic adjustment; the loop over cells runs on
   tested variable the plan marked no sample as swappable, so every permutation was the identity (now all samples
   with a value swap within strata; 5!^2 relabelings for 5 + 5 in two batches). Fast suite 766 / 0 failed.
 
+- **Step 3 done (2026-10-09).** `permuted_term_stats()` / `_fl()` (location F and dispersion F under relabeling)
+  replace the R loops in `termPermutationStats()` and in the screen (`screenOneMatrix()`); `termTestGower()` /
+  `dispersionTermTest()` stay as references (`test-kernel-a.R`: agreement to 1e-9 over 3-group / 2-group /
+  4-group cells, block and FL; identity reproduces the observed F and F.disp). Fast suite 785 / 0 failed.
+
 ## 6. Scaling the cluster-free tests to ~10^6 cells
 
 The batched kernel of step 4 handles this if two things are built in from the start; the current R loop cannot

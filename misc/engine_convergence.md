@@ -209,3 +209,42 @@ pair column into a distance matrix over the samples present, Gower-centre, induc
 within stratum cells, compute the observed and permuted shift F (existing kernel), the shift estimate (M = A G A'
 with the dispersion correction, the same quantities), and return stat / p / shift / n per cell plus the per-
 permutation maxima for the max-statistic adjustment; the loop over cells runs on the sccore thread pool.
+
+## 6. Scaling the cluster-free tests to ~10^6 cells
+
+The batched kernel of step 4 handles this if two things are built in from the start; the current R loop cannot
+(10^6 cells x 1.7 core-seconds is about 20 core-days, and it keeps every cell's B permuted statistics in memory).
+
+**Stream per cell; never materialize a cells-wide matrix.** The pair-layout distance matrix (pairs x cells) is
+780 x 10^6 doubles = 6 GB for 40 samples, and a B x cells matrix of permuted statistics is 8 GB at B = 999. The
+kernel must fuse the steps per cell: collapse the neighbourhood to sample profiles, distances, Gower matrix,
+induced sub-permutation, observed and permuted statistics, then keep only stat / p / z / shift / n for the cell
+and update running maxima. Memory is then O(cells) for the outputs plus O(n^2 + nB) per thread.
+
+**Accumulate the max-statistic null inside the kernel.** The adjustment needs, per permutation b, the maximum
+(and minimum) z over cells. Each thread keeps its own length-B vectors of running extremes and they are reduced
+at the end; results do not depend on the number of threads because P is shared and fixed.
+
+Cost per cell (n samples, g genes, k neighbourhood cells, B permutations):
+
+| part | flops | n = 40, g = 1000, k = 300, B = 199 |
+|---|---|---|
+| collapse neighbourhood to n profiles | k x nnz per cell | ~ 2 x 10^5 |
+| pairwise distances (n(n-1)/2 pairs x g) | ~ n^2 g / 2 | ~ 8 x 10^5 |
+| Gower centring, precompute a = A'c | n^2 | ~ 2 x 10^3 |
+| permuted F for all b at once (G A_P, BLAS-3) | n^2 B | ~ 3 x 10^5 |
+| induced sub-permutation | B n log n | ~ 4 x 10^4 |
+
+About 1.5 x 10^6 flops per cell, i.e. roughly 1 ms single-threaded; 10^6 cells is 15-20 minutes on one core and
+under a minute on 32 threads, dominated by the distances rather than the test. With n = 200 samples and B = 999 the
+test term grows to n^2 B = 4 x 10^7 per cell (4 x 10^13 in total), still minutes on a many-core machine because it
+is a dense matrix product. Freedman-Lane adds four n x n kernel parts per cell and costs about 4x the block scheme.
+
+The same streaming applies to cell density through kernel B: `fit_and_randomize` already works per column, but it
+returns `sampled_stats` (B x columns) for the max-statistic step; for 10^6 columns the kernel should instead return
+the per-permutation extremes (optionally winsorized) and the per-column z, computed inside the loop.
+
+Statistical side: with 10^6 cells the max-statistic adjustment is what controls the family-wise error, the raw
+per-cell p-values floor at 1/(B+1), and the winsorized extremes (`wins`) keep a few extreme cells from dominating
+the null. Cells whose neighbourhood lacks enough cells per sample are skipped per cell (induced permutation on the
+present samples), as now.

@@ -67,3 +67,15 @@ test_that("streaming kernel equals the batched kernel on a precomputed distance 
   expect_equal(Y0, Y1)
   expect_error(cacoa:::estimateExpressionShiftsPairsLM(inp$cm, as.integer(cao$sample.per.cell), list(nb + 1L), inp$pairs, 1L, "cor", TRUE), "out-of-range")   # no silent re-basing
 })
+
+test_that("a sample with too few cells in a neighbourhood drops itself, not the samples it is paired with", {
+  cao <- makeToyCacoa(n.per.group = c(A = 5, B = 5), cells.per.sample = 40, n.genes = 80, shift = 1.2)
+  cg <- cao$cell.groups; spc <- cao$sample.per.cell
+  thin <- levels(spc)[1]; drop <- which(spc == thin)[-(1:2)]                         # every neighbourhood keeps only two cells of the first sample
+  nns <- lapply(seq_along(cg), function(i) setdiff(seq_along(cg) - 1L, drop - 1L)); names(nns) <- names(cg)
+  res <- clusterFreeExpressionShifts(Matrix::t(cao$data.object), spc, nns, cao$model, cao$sample.meta, n.permutations = 19, seed = 1, adjust = FALSE, smooth = FALSE)
+  expect_true(all(res$n.samples == nlevels(spc) - 1)); expect_true(all(is.finite(res$stat)))
+  # the R helper applies the same rule
+  n <- nlevels(spc); pairs <- t(utils::combn(n, 2)); y <- runif(nrow(pairs)); y[pairs[, 1] == 1 | pairs[, 2] == 1] <- NA
+  expect_equal(rownames(cacoa:::pairVectorToMatrix(y, pairs, levels(spc))), levels(spc)[-1])
+})

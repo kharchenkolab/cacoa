@@ -64,8 +64,19 @@ struct KernelInputs {
 // one cell: y holds the pair distances (NaN where a sample has too few cells)
 static CellResult test_cell(const arma::vec& y, const KernelInputs& in) {
   CellResult out; const arma::uword n = in.n, n_pairs = in.pairs.n_rows, B = in.P.n_cols;
+  // samples with too few cells have every pair distance missing; drop them (and only them) by removing, one at a time,
+  // the sample with the most missing pairs until no missing pair is left among the remaining samples
   arma::uvec bad(n, arma::fill::zeros);
-  for (arma::uword r = 0; r < n_pairs; ++r) if (!std::isfinite(y[r])) { bad[in.pairs(r, 0)] = 1; bad[in.pairs(r, 1)] = 1; }
+  for (;;) {
+    arma::uvec miss(n, arma::fill::zeros);
+    for (arma::uword r = 0; r < n_pairs; ++r) {
+      int a = in.pairs(r, 0), b = in.pairs(r, 1);
+      if (bad[a] || bad[b] || std::isfinite(y[r])) continue;
+      ++miss[a]; ++miss[b];
+    }
+    if (miss.max() == 0) break;
+    bad[miss.index_max()] = 1;
+  }
   arma::uvec s = arma::find(bad == 0); const arma::uword m = s.n_elem;
   if (m < 3) return out;
   if (in.use_levels) {

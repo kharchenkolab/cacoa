@@ -38,10 +38,9 @@ test_that("E2 pattern: the real driver is flagged partially, its proxy only marg
   n.ring <- sum(med.m$padj < 0.05 & med.p$padj >= 0.05) + sum(dis.p$padj >= 0.05 & tb$padj[tb$covariate == "disease" & tb$mode == "marginal"] < 0.05)
   d <- ggplot2::layer_data(gg, 4)
   expect_equal(nrow(d), n.ring)
-  # analytic preview runs instantly and labels itself
-  sa <- screenCovariates(D.list, meta, mode = "partial", dist = "l2", p.values = "analytic")
-  expect_true(all(sa$table$p.source == "analytic"))
-  expect_true(all(is.finite(sa$table$p)))
+  # the analytic preview is gone: permutation p-values only (the effective-dimension F stays in the table as p.analytic)
+  expect_error(screenCovariates(D.list, meta, mode = "partial", dist = "l2", p.values = "analytic"), "unused argument")
+  expect_true(all(sc$table$p.source == "permutation"))
 })
 
 test_that("E1 pattern: a dispersion-only difference is picked up by the dispersion score, not the location score", {
@@ -60,7 +59,7 @@ test_that("E1 pattern: a dispersion-only difference is picked up by the dispersi
 test_that("R2.adj is centred near zero under the null and the variance partition sums to one", {
   set.seed(5); n <- 30; p <- 100
   meta <- data.frame(a = factor(sample(c("u", "v"), n, TRUE)), b = rnorm(n), c = factor(sample(c("p", "q", "r"), n, TRUE)), row.names = sprintf("s%02d", 1:n))
-  vals <- replicate(20, { Y <- matrix(rnorm(n * p), n); screenCovariates(list(ct = distOf(Y)), meta, mode = "marginal", dist = "l2", p.values = "analytic")$table$R2.adj })
+  vals <- replicate(20, { Y <- matrix(rnorm(n * p), n); screenCovariates(list(ct = distOf(Y)), meta, mode = "marginal", dist = "l2", n.permutations = 0)$table$R2.adj })
   expect_lt(abs(mean(vals)), 0.02)
   Y <- outer(meta$a == "v", rnorm(p) * .5) + matrix(rnorm(n * p), n)
   vp <- variancePartition(distOf(Y), meta, c("a", "b"), dist = "l2")

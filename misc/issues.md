@@ -55,12 +55,14 @@ The R / C++ split of fitting and randomization, and the plan to converge on two 
 
 - **Robust fitting and weak imputation in the distance engine**: implemented 2026-10-09 (step 4b); calibration
   simulations of the robust and weak-imputation paths are in the slow suite (see `misc/engine_convergence.md`).
-- **Residual-vs-covariate diagnostic for density / cluster-free DE** (parity with `screenCovariates(adjust.for=)`
-  on the shift side); see §9 of the same note. Not started.
+- **Residual-vs-covariate diagnostic for density / cluster-free DE**: done 2026-10-10 (`screenResidualCovariates()`,
+  `cao$screenResiduals(name)`): residual matrices become sample distances and go through the marginal covariate
+  screen; plotted with `plotCovariateScreen(name = "<result>.residual.screen")`.
 
 - **Cluster-free shifts and density refuse whole-factor (K-level) tests** with a message; only contrasts and
   numeric steps run there.
-- **Analytic p-values** (`p.values = "analytic"` in the screen) remain a labelled preview; see §3.
+- **Analytic p-values**: the `p.values = "analytic"` option was removed 2026-10-10 (liberal; permutation only). The
+  effective-dimension F stays in the table as `p.analytic` for reference.
 - **"Later" list from the plan** untouched: Welch-type shift test, robust weights, repeated measures, technical
   noise dispersion covariate, cor-geometry check, metric sensitivity report.
 
@@ -120,17 +122,21 @@ The R / C++ split of fitting and randomization, and the plan to converge on two 
 - Power at n = 16 for a 0.3/gene shift is modest for every method (0.13–0.20).
 - Global max-T and BH "any significant" are calibrated across cell types; raw "any" is not (expected).
 
-- Notebook observation to review: in the cluster-free shifts on the simulated object (500 top genes, 99 permutations)
-  `IN-PV` shows almost no per-cell shift although its cell-type test is strong and `L2/3` / `IN-SST` light up as
-  expected. Possibly the planted IN-PV genes fall outside the 500 most expressed genes; not investigated.
+- (resolved 2026-10-10) The weak `IN-PV` panel in the cluster-free shifts was a kernel defect: a sample with fewer
+  than `min.n.obs.per.samp` cells in a neighbourhood made every pair involving it missing, and both members of each
+  such pair were flagged, so one thin sample removed all samples. Only 13 % of IN-PV cells were tested (average
+  5 samples) against 100 % for IN-SST; after the fix every cell is tested and IN-PV has the strongest adjusted
+  signal. The former per-cell R loop (`pairVectorToMatrix()`) had the same rule; both now drop one sample at a
+  time, the one with the most missing pairs first. Regression test in `test-kernel-cf.R`.
 
 ## 4. Housekeeping and cleanup candidates
 
-- `private$getTopGenes()` takes 16 s and `getClusterFreeDEInput()` 4.5 s on the 4,500-cell simulated object, now
-  20x the cluster-free kernel itself; both are R-side and worth optimizing.
+- (examined 2026-10-10) `private$getTopGenes()` / `getClusterFreeDEInput()`: the time is the one-off extraction of
+  the joint count matrix from the Conos object (`extractJointCountMatrix`, 8-13 s, in conos), cached afterwards in
+  `cao$cache` (one entry for raw and one for normalized counts); the neighbourhood split costs 3 s. Nothing in
+  cacoa to optimize short of caching the normalized matrix next to the raw one, which already happens on first use.
 
-- `misc/` (plan, this file, `validation/` driver and report) is untracked; decide whether to commit it. It is in
-  `.Rbuildignore`.
+- `misc/` is tracked (plan, notes, validation driver and report, notebook renderer); it is in `.Rbuildignore`.
 - (done 2026-10-09) `projdiff.cpp` removed; `estimateCorrelationDistance` is used by cluster-free DE and stays.
 - Pre-existing TODOs in `R/cacoa.R` (overall p-adjustment in ontology plots, z-score adjustment in
   cluster-free DE, binary distance in `plotOntologySimilarities`), `R/ontology.R`, `R/cell_density.R`

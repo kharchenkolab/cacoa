@@ -12,7 +12,6 @@ screenCovariates(
   adjust.for = NULL,
   dist = c("cor", "l2", "l1"),
   test.variable = NULL,
-  p.values = c("permutation", "analytic"),
   n.permutations = 199,
   min.samples.per.type = 6,
   max.partial.df = 5,
@@ -39,9 +38,6 @@ transform strings such as \code{"log(pmi)"} are allowed}
 \item{dist}{distance type of the matrices}
 
 \item{test.variable}{optional variable the covariates are related to (over-adjustment annotation)}
-
-\item{p.values}{\code{"permutation"} (default) or \code{"analytic"} (instant effective-dimension F preview; liberal at
-moderate effective dimension)}
 
 \item{n.permutations}{number of permutations (default 199)}
 

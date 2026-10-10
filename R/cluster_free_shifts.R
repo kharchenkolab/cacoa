@@ -7,11 +7,18 @@
 ## per-cell z-scores are adjusted by the max-statistic over cells (adjustedZScoresMaxStat) and smoothed over
 ## the graph (applyMedianFilterES).
 
-# square sample distance matrix from one column of the pair layout
+# square sample distance matrix from one column of the pair layout. Samples with missing pair distances (too few
+# cells in the neighbourhood) are dropped one at a time, the one with the most missing pairs first, until no missing
+# pair is left: a thin sample removes itself, not the samples it is paired with (same rule as the C++ kernel).
 pairVectorToMatrix <- function(y, pairs, samples) {
   n <- length(samples); D <- matrix(NA_real_, n, n, dimnames = list(samples, samples)); diag(D) <- 0
   D[pairs] <- y; D[pairs[, 2:1, drop = FALSE]] <- y
-  ok <- rowSums(is.na(D)) == 0
+  ok <- rep(TRUE, n)
+  repeat {
+    miss <- rowSums(is.na(D[ok, ok, drop = FALSE]))
+    if (!length(miss) || max(miss) == 0) break
+    ok[which(ok)[which.max(miss)]] <- FALSE
+  }
   D[ok, ok, drop = FALSE]
 }
 

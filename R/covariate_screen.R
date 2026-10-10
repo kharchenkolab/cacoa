@@ -87,8 +87,6 @@ inducePermutationSimple <- function(P, idx) {
 #' @param adjust.for optional formula of covariates always adjusted for (both modes)
 #' @param dist distance type of the matrices
 #' @param test.variable optional variable the covariates are related to (over-adjustment annotation)
-#' @param p.values `"permutation"` (default) or `"analytic"` (instant effective-dimension F preview; liberal at
-#'   moderate effective dimension)
 #' @param n.permutations number of permutations (default 199)
 #' @param min.samples.per.type cell types with fewer samples are skipped (default 6)
 #' @param max.partial.df when the partial adjustment set would leave fewer than this many residual degrees of
@@ -105,10 +103,10 @@ inducePermutationSimple <- function(P, idx) {
 #' @param robust,robust.k robust location / dispersion statistics (`"none"`, `"huber"`, `"winsor"`; tuning constant), weights
 #'   re-estimated under every relabeling
 screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "partial", "marginal"), adjust.for = NULL,
-                             dist = c("cor", "l2", "l1"), test.variable = NULL, p.values = c("permutation", "analytic"),
+                             dist = c("cor", "l2", "l1"), test.variable = NULL,
                              n.permutations = 199, min.samples.per.type = 6, max.partial.df = 5, alpha = 0.05, seed = 1,
                              n.cores = 1, verbose = FALSE, robust = c("none", "huber", "winsor"), robust.k = 1.345) {
-  mode <- match.arg(mode); dist <- match.arg(dist); p.values <- match.arg(p.values); robust <- match.arg(robust)
+  mode <- match.arg(mode); dist <- match.arg(dist); robust <- match.arg(robust); p.values <- "permutation"
   desc <- describeMetadata(meta)
   if (is.null(covariates)) covariates <- desc$column[desc$role == "usable"]
   covariates <- unique(covariates)
@@ -374,4 +372,46 @@ plotVariancePartition <- function(parts, plot.theme = ggplot2::theme_bw()) {
   ggplot2::ggplot(df, ggplot2::aes(x = .data$celltype, y = .data$value, fill = .data$component)) + ggplot2::geom_col(width = 0.75, colour = "grey30", linewidth = 0.2) +
     ggplot2::scale_fill_manual(values = pal, breaks = comps) + ggplot2::coord_flip() + plot.theme +
     ggplot2::labs(x = NULL, y = "fraction of between-sample variation (chance-corrected)", fill = NULL, title = "Variance partition")
+}
+
+
+#' Screen covariates against the residuals of a per-column test
+#'
+#' Diagnostic for omitted covariates on the cell-density and cluster-free DE results: the residuals of the fitted
+#' model (samples x bins, or one samples x cells matrix per gene) are turned into sample distance matrices and
+#' screened marginally with [screenCovariates()], so a covariate that still structures the residuals shows up with
+#' the same table, global max-statistic p-value and plots as the covariate screen of the expression shifts. The
+#' covariates already in the model carry no residual structure by construction and are excluded.
+#'
+#' @param residuals samples x features residual matrix (rows named by sample), or a named list of such matrices
+#'   (one per gene for cluster-free DE)
+#' @param meta sample metadata (rows named by sample)
+#' @param covariates covariates to screen (default: all usable columns minus `exclude`)
+#' @param exclude covariates not to screen (the model's variables)
+#' @param n.permutations,seed,n.cores,test.variable,robust,robust.k,verbose passed to [screenCovariates()]
+#' @param min.samples matrices with fewer samples carrying finite residuals are skipped (default 4)
+#' @return object of class `cacoaCovariateScreen` (settings `space = "residuals"`)
+#' @export
+screenResidualCovariates <- function(residuals, meta, covariates = NULL, exclude = NULL, n.permutations = 199, seed = 1, n.cores = 1,
+                                     test.variable = NULL, robust = c("none", "huber", "winsor"), robust.k = 1.345, min.samples = 4, verbose = FALSE) {
+  robust <- match.arg(robust)
+  mats <- if (is.matrix(residuals) || is.data.frame(residuals)) list(residuals = as.matrix(residuals)) else residuals
+  if (!length(mats)) stop("no residual matrices given")
+  D.list <- lapply(mats, function(R) {
+    R <- as.matrix(R); if (is.null(rownames(R))) stop("residual matrices must have the samples as row names")
+    R <- R[rowSums(is.finite(R)) > 0, , drop = FALSE]
+    if (nrow(R) < min.samples) return(NULL)
+    as.matrix(stats::dist(R))
+  })
+  D.list <- Filter(Negate(is.null), D.list)
+  if (!length(D.list)) stop("no residual matrix has at least ", min.samples, " samples")
+  desc <- describeMetadata(meta)
+  if (is.null(covariates)) covariates <- desc$column[desc$role == "usable"]
+  covariates <- setdiff(covariates, exclude)
+  if (!length(covariates)) stop("no covariate left to screen (all are in the model)")
+  res <- screenCovariates(D.list, meta, covariates = covariates, mode = "marginal", dist = "l2", test.variable = test.variable,
+                          n.permutations = n.permutations, min.samples.per.type = min.samples, seed = seed, n.cores = n.cores, verbose = verbose,
+                          robust = robust, robust.k = robust.k)
+  res$settings$space <- "residuals"; res$settings$excluded <- exclude
+  res
 }

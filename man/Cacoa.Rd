@@ -62,6 +62,15 @@ cao$screenCovariates(); cao$plotCovariateScreen(); cao$plotCovariateSummary()
 }
 
 ## ------------------------------------------------
+## Method `Cacoa$screenResiduals`
+## ------------------------------------------------
+
+\dontrun{
+cao$estimateDiffCellDensity(return.residuals = TRUE); cao$screenResiduals("cell.density")
+cao$plotCovariateScreen(name = "cell.density.residual.screen")
+}
+
+## ------------------------------------------------
 ## Method `Cacoa$estimateExpressionShiftMagnitudes`
 ## ------------------------------------------------
 
@@ -587,6 +596,7 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item \href{#method-Cacoa-checkSensitivity}{\code{Cacoa$checkSensitivity()}}
 \item \href{#method-Cacoa-plotSensitivity}{\code{Cacoa$plotSensitivity()}}
 \item \href{#method-Cacoa-screenCovariates}{\code{Cacoa$screenCovariates()}}
+\item \href{#method-Cacoa-screenResiduals}{\code{Cacoa$screenResiduals()}}
 \item \href{#method-Cacoa-plotCovariateScreen}{\code{Cacoa$plotCovariateScreen()}}
 \item \href{#method-Cacoa-plotCovariateSummary}{\code{Cacoa$plotCovariateSummary()}}
 \item \href{#method-Cacoa-plotVariancePartition}{\code{Cacoa$plotVariancePartition()}}
@@ -1109,7 +1119,6 @@ across cell types; a dispersion association is reported alongside. Ends with a s
   min.gene.frac = 0.01,
   genes = NULL,
   min.samples.per.type = 6,
-  p.values = c("permutation", "analytic"),
   n.permutations = NULL,
   name = "covariate.screen",
   verbose = NULL,
@@ -1144,8 +1153,6 @@ across cell types; a dispersion association is reported alongside. Ends with a s
 
 \item{\code{min.samples.per.type}}{cell types with fewer samples are skipped (default 6)}
 
-\item{\code{p.values}}{\code{"permutation"} (default) or \code{"analytic"} (instant preview, approximate)}
-
 \item{\code{n.permutations}}{number of permutations (default: option \code{n.permutations}, capped at 499 for the screen)}
 
 \item{\code{name}}{results slot (default "covariate.screen")}
@@ -1157,6 +1164,8 @@ across cell types; a dispersion association is reported alongside. Ends with a s
 \item{\code{seed}}{defaults from options}
 
 \item{\code{robust}}{\code{"none"} (default, option \code{robust}), \code{"huber"} or \code{"winsor"}: robust location / dispersion statistics}
+
+\item{\code{p.values}}{\code{"permutation"} (default) or \code{"analytic"} (instant preview, approximate)}
 }
 \if{html}{\out{</div>}}
 }
@@ -1175,12 +1184,28 @@ cao$screenCovariates(); cao$plotCovariateScreen(); cao$plotCovariateSummary()
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Cacoa-plotCovariateScreen"></a>}}
-\if{latex}{\out{\hypertarget{method-Cacoa-plotCovariateScreen}{}}}
-\subsection{Method \code{plotCovariateScreen()}}{
+\if{html}{\out{<a id="method-Cacoa-screenResiduals"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-screenResiduals}{}}}
+\subsection{Method \code{screenResiduals()}}{
 Heatmap of the covariate screen (see \code{\link[=plotCovariateScreen]{plotCovariateScreen()}})
+
+
+Screen covariates against the residuals of a stored cell-density or cluster-free DE result
+
+The estimator must have been run with \code{return.residuals = TRUE}. Residuals are turned into sample distances
+and screened marginally for every usable covariate that is not in the model (see
+\code{\link[=screenResidualCovariates]{screenResidualCovariates()}}); \verb{plotCovariateScreen(name = <result.name>)} plots the result.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCovariateScreen(name = "covariate.screen", ...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$screenResiduals(
+  name = "cell.density",
+  covariates = NULL,
+  n.permutations = NULL,
+  seed = NULL,
+  n.cores = NULL,
+  verbose = NULL,
+  robust = NULL,
+  result.name = paste0(name, ".residual.screen")
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -1188,12 +1213,55 @@ Heatmap of the covariate screen (see \code{\link[=plotCovariateScreen]{plotCovar
 \describe{
 \item{\code{name}}{results slot (default "covariate.screen")}
 
+\item{\code{name}}{name of the stored result (\code{"cell.density"} or \code{"cluster.free.de"})}
+
+\item{\code{covariates}}{covariates to screen (default: all usable columns not in the model)}
+
+\item{\code{n.permutations}}{number of permutations (default: option, at most 499)}
+
+\item{\code{seed}}{integer seed (default: option)}
+
+\item{\code{n.cores}}{cores (default: option)}
+
+\item{\code{verbose}}{print the summary (default: option)}
+
+\item{\code{robust}}{\code{"none"}, \code{"huber"} or \code{"winsor"} (default: option)}
+
+\item{\code{result.name}}{where to store the screen (default: \verb{<name>.residual.screen})}
+
 \item{\code{...}}{passed to \code{\link[=plotCovariateScreen]{plotCovariateScreen()}} (\code{effect}, \code{mode}, \code{value}, \code{cell.types}, \code{covariates}, \code{cluster}, \code{alpha})}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 ggplot2 object
+}
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
+cao$estimateDiffCellDensity(return.residuals = TRUE); cao$screenResiduals("cell.density")
+cao$plotCovariateScreen(name = "cell.density.residual.screen")
+}
+}
+\if{html}{\out{</div>}}
+
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-plotCovariateScreen"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-plotCovariateScreen}{}}}
+\subsection{Method \code{plotCovariateScreen()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCovariateScreen(name = "covariate.screen", ...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{string Field name where the test results are stored}
+}
+\if{html}{\out{</div>}}
 }
 }
 \if{html}{\out{<hr>}}

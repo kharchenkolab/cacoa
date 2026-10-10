@@ -160,7 +160,7 @@ Test 1: Group: Group2 vs Group1  (reference 'Group1': as requested)
        adjusted for Batch; permutations: block within 2 strata (63,504 distinct)
        shift > 0: Group2 samples differ from Group1 samples in a common direction, beyond within-group variability
 Test 2: Group (4 levels)
-       adjusted for Batch; permutations: block within 2 strata (1.376573e+20 distinct)
+       adjusted for Batch; permutations: block within 2 strata (> 10 million distinct)
        location: the levels of Group differ in where their samples sit (a common direction per level), beyond within-level variability
 Samples: 40 used.   Issues: none
 ```

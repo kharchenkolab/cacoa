@@ -540,9 +540,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param robust `"none"` (default, option `robust`), `"huber"` or `"winsor"`: robust location / dispersion statistics
     screenCovariates = function(covariates = NULL, space = c("expression.shifts", "composition"), mode = c("both", "partial", "marginal"),
                                 adjust.for = NULL, dist = NULL, n.pcs = NULL, cell.groups = self$cell.groups, min.cells.per.sample = 10,
-                                min.gene.frac = 0.01, genes = NULL, min.samples.per.type = 6, p.values = c("permutation", "analytic"),
+                                min.gene.frac = 0.01, genes = NULL, min.samples.per.type = 6,
                                 n.permutations = NULL, name = "covariate.screen", verbose = NULL, n.cores = NULL, seed = NULL, robust = NULL) {
-      space <- match.arg(space); mode <- match.arg(mode); p.values <- match.arg(p.values); robust <- private$opt("robust", robust)
+      space <- match.arg(space); mode <- match.arg(mode); robust <- private$opt("robust", robust)
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores); dist <- private$opt("dist", dist)
       n.permutations <- n.permutations %||% min(private$opt("n.permutations"), 499)
       seed <- if (missing(seed)) private$opt("seed") else seed
@@ -551,7 +551,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       test.variable <- if (!is.null(self$model)) self$model$tests[[1]]$variable else NULL
       if (!is.null(test.variable) && is.na(test.variable)) test.variable <- NULL
       res <- screenCovariates(D.list, self$sample.meta, covariates = covariates, mode = mode, adjust.for = adjust.for, dist = if (space == "composition") "l2" else dist,
-                              test.variable = test.variable, p.values = p.values, n.permutations = n.permutations,
+                              test.variable = test.variable, n.permutations = n.permutations,
                               min.samples.per.type = min.samples.per.type, alpha = private$opt("alpha"), seed = seed %||% sample.int(.Machine$integer.max, 1),
                               n.cores = n.cores, verbose = verbose, robust = robust, robust.k = private$opt("robust.k"))
       res$settings$space <- space
@@ -563,6 +563,44 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param name results slot (default "covariate.screen")
     #' @param ... passed to [plotCovariateScreen()] (`effect`, `mode`, `value`, `cell.types`, `covariates`, `cluster`, `alpha`)
     #' @return ggplot2 object
+    #' @description Screen covariates against the residuals of a stored cell-density or cluster-free DE result
+    #'
+    #' The estimator must have been run with `return.residuals = TRUE`. Residuals are turned into sample distances
+    #' and screened marginally for every usable covariate that is not in the model (see
+    #' [screenResidualCovariates()]); `plotCovariateScreen(name = <result.name>)` plots the result.
+    #' @param name name of the stored result (`"cell.density"` or `"cluster.free.de"`)
+    #' @param covariates covariates to screen (default: all usable columns not in the model)
+    #' @param n.permutations number of permutations (default: option, at most 499)
+    #' @param seed integer seed (default: option)
+    #' @param n.cores cores (default: option)
+    #' @param verbose print the summary (default: option)
+    #' @param robust `"none"`, `"huber"` or `"winsor"` (default: option)
+    #' @param result.name where to store the screen (default: `<name>.residual.screen`)
+    #' @return object of class `cacoaCovariateScreen`
+    #' @examples
+    #' \dontrun{
+    #' cao$estimateDiffCellDensity(return.residuals = TRUE); cao$screenResiduals("cell.density")
+    #' cao$plotCovariateScreen(name = "cell.density.residual.screen")
+    #' }
+    screenResiduals = function(name = "cell.density", covariates = NULL, n.permutations = NULL, seed = NULL, n.cores = NULL, verbose = NULL,
+                               robust = NULL, result.name = paste0(name, ".residual.screen")) {
+      verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores); robust <- private$opt("robust", robust)
+      res <- private$getResults(name, "the estimator with return.residuals = TRUE")
+      if (is.null(res$residuals) && !is.null(res$diff$permutation)) res <- res$diff$permutation     # density results keep the test under $diff
+      resid <- res$residuals
+      if (is.null(resid)) stop("result '", name, "' carries no residuals: re-run the estimator with return.residuals = TRUE")
+      model <- res$model %||% self$model
+      if (is.null(model)) stop("no model is set")
+      tv <- model$tests[[1]]$variable; if (!is.null(tv) && is.na(tv)) tv <- NULL
+      out <- screenResidualCovariates(resid, self$sample.meta, covariates = covariates, exclude = all.vars(model$formula),
+                                      n.permutations = n.permutations %||% min(private$opt("n.permutations"), 499),
+                                      seed = (if (missing(seed)) private$opt("seed") else seed) %||% sample.int(.Machine$integer.max, 1),
+                                      n.cores = n.cores, test.variable = tv, robust = robust, robust.k = private$opt("robust.k"), verbose = verbose)
+      out$settings$source <- name
+      self$test.results[[result.name]] <- out
+      invisible(out)
+    },
+
     plotCovariateScreen = function(name = "covariate.screen", ...) {
       plotCovariateScreen(private$getResults(name, "screenCovariates()"), plot.theme = self$plot.theme, ...)
     },
@@ -3532,7 +3570,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!any(rownames(sample.meta) %in% rownames(p.dists))) stop("The rownames of the sample.meta object don't match any sample names.")
       meta <- sample.meta[intersect(rownames(p.dists), rownames(sample.meta)), , drop = FALSE]
       sc <- screenCovariates(list(joint = p.dists[rownames(meta), rownames(meta)]), meta, covariates = names(meta), mode = mode,
-                             dist = attr(p.dists, "dist.type") %||% "l2", p.values = "permutation", n.permutations = n.permutations,
+                             dist = attr(p.dists, "dist.type") %||% "l2", n.permutations = n.permutations,
                              min.samples.per.type = 4, alpha = pvalue.cutoff, seed = private$opt("seed") %||% sample.int(.Machine$integer.max, 1),
                              n.cores = n.cores, verbose = FALSE)
       tb <- sc$table[sc$table$mode == (if (mode == "both") "marginal" else mode), ]

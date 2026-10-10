@@ -267,8 +267,8 @@ Sensitivity of 'Group: Group2 vs Group1' (shift) across 2 models: unadjusted [~G
   IN-PV                robust (significant in 2 of 2 models)
   IN-SST               robust (significant in 2 of 2 models)
   OPC                  robust (significant in 2 of 2 models)
-  AST-PP               significance depends on adjustment (unadjusted) (significant in 1 of 2 models)
-  AST-FB               significance depends on adjustment (unadjusted) (significant in 1 of 2 models)
+  AST-PP               significance sensitive to the adjustment set (unadjusted) (significant in 1 of 2 models)
+  AST-FB               significance sensitive to the adjustment set (unadjusted) (significant in 1 of 2 models)
   Neu-NRGN             driven by sample Sample_Group2_Batch2_3 (significant in 0 of 2 models)
   Microglia            driven by sample Sample_Group2_Batch1_2 (significant in 0 of 2 models)
 Sensitivity of 'Group: Group2 vs Group1' (shift) across 2 models: unadjusted [~Group]; current [~Group + Batch]
@@ -277,8 +277,8 @@ Sensitivity of 'Group: Group2 vs Group1' (shift) across 2 models: unadjusted [~G
   IN-PV                robust (significant in 2 of 2 models)
   IN-SST               robust (significant in 2 of 2 models)
   OPC                  robust (significant in 2 of 2 models)
-  AST-PP               significance depends on adjustment (unadjusted) (significant in 1 of 2 models)
-  AST-FB               significance depends on adjustment (unadjusted) (significant in 1 of 2 models)
+  AST-PP               significance sensitive to the adjustment set (unadjusted) (significant in 1 of 2 models)
+  AST-FB               significance sensitive to the adjustment set (unadjusted) (significant in 1 of 2 models)
   Neu-NRGN             driven by sample Sample_Group2_Batch2_3 (significant in 0 of 2 models)
   Microglia            driven by sample Sample_Group2_Batch1_2 (significant in 0 of 2 models)
 ```

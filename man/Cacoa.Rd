@@ -1031,7 +1031,7 @@ Robustness of the expression-shift result: alternative covariate sets and single
 Reruns the first test of the stored model under alternative adjustment sets (unadjusted; current; current
 minus each covariate; current plus each of the top screened covariates not yet in the model; all screened,
 if the degrees of freedom allow) on the cached distances, and reads the leave-one-sample-out influence of
-the current result. Prints one verdict per cell type: "robust", "sign / significance depends on adjustment",
+the current result. Prints one verdict per cell type: "robust", "sign / significance sensitive to the adjustment set",
 "estimate changes by x\%", or "driven by sample S".
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$checkSensitivity(

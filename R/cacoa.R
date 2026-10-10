@@ -468,7 +468,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' Reruns the first test of the stored model under alternative adjustment sets (unadjusted; current; current
     #' minus each covariate; current plus each of the top screened covariates not yet in the model; all screened,
     #' if the degrees of freedom allow) on the cached distances, and reads the leave-one-sample-out influence of
-    #' the current result. Prints one verdict per cell type: "robust", "sign / significance depends on adjustment",
+    #' the current result. Prints one verdict per cell type: "robust", "sign / significance sensitive to the adjustment set",
     #' "estimate changes by x%", or "driven by sample S".
     #' @param covariate.sets `"auto"` (default, see above) or a named list of location formulas
     #' @param screen.name results slot of a covariate screen used to propose additions (default "covariate.screen")

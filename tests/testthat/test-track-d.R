@@ -55,7 +55,7 @@ test_that("sensitivity verdicts: robust under a null covariate, dependent under 
   # adjusting for the (near-collinear) proxy changes the answer: no cell type is "robust"
   sh <- sens$table[sens$table$effect == "shift", ]
   expect_equal(nrow(sh), 6)
-  expect_true(all(grepl("depends on adjustment|changes by", sens$summary$verdict)))
+  expect_true(all(grepl("sensitive to the adjustment set|changes by", sens$summary$verdict)))
   expect_output(print(sens), "Sensitivity of")
   expect_s3_class(cao$plotSensitivity(), "ggplot")
   # automatic covariate sets: unadjusted, current, minus nuisance (duplicates removed), plus screened candidates

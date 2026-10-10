@@ -98,8 +98,8 @@ checkSensitivity <- function(D.list, model, meta, formulas = NULL, screen = NULL
       }
     }
     verdict <- if (!is.na(infl.sample)) sprintf("driven by sample %s", infl.sample)
-      else if (!same.sign) "sign depends on adjustment"
-      else if (!is.na(sig.change) && sig.change) sprintf("significance depends on adjustment (%s)", flipped.by)
+      else if (!same.sign) "sign sensitive to the adjustment set"
+      else if (!is.na(sig.change) && sig.change) sprintf("significance sensitive to the adjustment set (%s)", flipped.by)
       else if (is.finite(max.rel) && max.rel > rel.change) sprintf("estimate changes by %.0f%% (%s)", 100 * max.rel, as.character(worst))
       else "robust"
     data.frame(celltype = d$celltype[1], estimate.current = est0, same.sign = same.sign, n.significant = n.sig, n.models = m,

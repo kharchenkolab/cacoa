@@ -89,9 +89,9 @@ The R / C++ split of fitting and randomization, and the plan to converge on two 
   the toy and SCC designs.
 - **Sensitivity verdicts:** "driven by sample S" when a leave-one-out change is both a > 3 MAD outlier and > 20 %
   of the estimate (`influence.rel = 0.2`); "estimate changes by x %" when the model-set spread exceeds 50 %
-  (`rel.change = 0.5`); "depends on adjustment" when the sign or BH significance differs across models. These
-  thresholds are guesses. The near-collinear proxy covariate in the toy test makes every cell type "depends on
-  adjustment", which is intended but the wording may read as a defect of the method rather than of the covariate.
+  (`rel.change = 0.5`); "sensitive to the adjustment set" when the sign or BH significance differs across models (reworded 2026-10-10 from "depends on adjustment"). These
+  thresholds are guesses. The near-collinear proxy covariate in the toy test makes every cell type "sensitive to the
+  adjustment set", which is intended but the wording may read as a defect of the method rather than of the covariate.
 - **Over-adjustment is exposed, not prevented:** covariates strongly tied to the test variable are allowed with a
   warning and an annotation in the screen; no automatic exclusion.
 - **`estimateMetadataSeparation()` changed semantics:** it is now the marginal covariate screen on the joint

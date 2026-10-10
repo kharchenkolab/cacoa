@@ -1995,7 +1995,7 @@ plotVolcanoSimple <- function(de.df, p.name = "padj", color.var = "CellFrac", pa
   if (is.null(sel.labels)) {
     sig <- df[[p.name]] <= p.cutoff & abs(df$log2FoldChange) >= lf.cutoff
     if (has.col && color.var == "CellFrac") sig <- sig & df$CellFrac >= cell.frac.cutoff
-    sel.labels <- df$Gene[sig][order(df[[p.name]][sig])]
+    sel.labels <- unique(c(df$Gene[sig][order(df[[p.name]][sig])], df$Gene[order(df[[p.name]])][1:min(10, nrow(df))]))
   }
   sel.labels <- utils::head(sel.labels, max.labels)
   df$label <- ifelse(df$Gene %in% sel.labels, df$Gene, "")
@@ -2008,5 +2008,5 @@ plotVolcanoSimple <- function(de.df, p.name = "padj", color.var = "CellFrac", pa
       guides(color = guide_colorbar(title = "Expr. frac"))
   } else gg <- gg + geom_point(size = mean(size), colour = "grey40", alpha = 0.8)
   gg + ggrepel::geom_text_repel(aes(label = .data$label), size = lab.size, max.overlaps = Inf, min.segment.length = 0, segment.colour = "grey50") +
-    labs(x = "log2 fold change", y = sprintf("-log10 %s", p.name)) + plot.theme + theme_legend_position(legend.pos)
+    labs(x = "log2 fold change", y = sprintf("-log10 %s", p.name)) + plot.theme + theme_legend_position(if (legend.pos == "none") "right" else legend.pos)
 }

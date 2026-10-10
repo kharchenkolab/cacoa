@@ -186,7 +186,17 @@ checkDesign <- function(meta, model = NULL, test.variable = NULL, covariates = N
     dfinfo <- list(n = n, parameters = NA_integer_, residual = NA_integer_)
   }
   excl <- desc[desc$role != "usable" & desc$column %in% covariates, ]
-  for (i in seq_len(nrow(excl))) add("note", sprintf("'%s' is %s", excl$column[i], excl$role[i]), "not suitable as a covariate")
+  for (i in seq_len(nrow(excl))) {
+    v <- excl$column[i]; x <- meta[[v]]; pairing <- FALSE
+    if (!is.null(test.variable) && isDiscreteVar(x) && isDiscreteVar(meta[[test.variable]])) {   # a pairing factor is a block, not a nuisance
+      tb <- table(meta[[test.variable]], x, useNA = "no")
+      pairing <- ncol(tb) >= 2 && all(tb <= 1) && mean(colSums(tb > 0) >= 2) >= 0.5
+    }
+    if (pairing) add("note", sprintf("'%s' pairs the samples across '%s' (%d of %d %ss have a sample at more than one level): a blocking factor",
+                                     v, test.variable, sum(colSums(table(meta[[test.variable]], x) > 0) >= 2), nlevels(factor(x)), v),
+                     sprintf("use block.vars = \"%s\" (permutations within %s), or add it to the model if the degrees of freedom allow", v, v))
+    else add("note", sprintf("'%s' is %s", v, excl$role[i]), "not suitable as a covariate")
+  }
 
   issues <- if (length(iss)) do.call(rbind, iss) else data.frame(severity = character(0), message = character(0), suggestion = character(0), stringsAsFactors = FALSE)
   issues$severity <- factor(issues$severity, levels = c("error", "warning", "note"))

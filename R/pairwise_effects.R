@@ -42,10 +42,16 @@ hatInfo <- function(X) {
     n <- nrow(X)
     return(list(XtXi = matrix(0, 0, 0), A = matrix(0, 0, n), H = matrix(0, n, n), h = rep(0, n), rank = 0L))
   }
-  XtXi <- MASS::ginv(crossprod(X))
-  A <- XtXi %*% t(X)                       # q x n: maps responses to coefficients
-  H <- X %*% A
-  list(XtXi = XtXi, A = A, H = H, h = pmin(diag(H), 1), rank = qr(X)$rank)
+  # pseudo-inverse on unit-norm columns: covariates in large units (UMI counts) must not look rank-deficient
+  sc <- sqrt(colSums(X^2)); sc[sc == 0] <- 1
+  sv <- svd(sweep(X, 2, sc, "/")); keep <- sv$d > 1e-9 * sv$d[1]; r <- sum(keep)
+  U <- sv$u[, keep, drop = FALSE]; V <- sv$v[, keep, drop = FALSE]; d <- sv$d[keep]
+  A <- (V %*% (t(U) / d)) / sc             # q x n: maps responses to coefficients, (X'X)^+ X'
+  XtXi <- (V %*% (t(V) / d^2)) / sc; XtXi <- t(t(XtXi) / sc)    # (X'X)^+
+  H <- U %*% t(U)
+  dimnames(H) <- list(rownames(X), rownames(X)); dimnames(A) <- list(colnames(X), rownames(X)); dimnames(XtXi) <- list(colnames(X), colnames(X))
+  h <- pmin(diag(H), 1); names(h) <- rownames(X)
+  list(XtXi = XtXi, A = A, H = H, h = h, rank = r)
 }
 
 # Orthonormal basis of {b : c'b = 0}; X %*% contrastNullBasis(c) is the reduced design with c'beta = 0 imposed

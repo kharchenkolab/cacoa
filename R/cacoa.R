@@ -492,7 +492,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       screen <- self$test.results[[screen.name]]
       formulas <- if (identical(covariate.sets, "auto")) NULL else covariate.sets
       infl <- if (!is.null(res$influence[[1]])) list(influence = res$influence[[1]], wide = res$wide[[1]]) else NULL
-      out <- checkSensitivity(D.list, model, self$sample.meta, formulas = formulas, screen = screen, influence = infl, dist = res$settings$dist,
+      cur <- res$results[res$results$test.id == res$results$test.id[1], ]        # the stored result stands in for the "current" model
+      out <- checkSensitivity(D.list, model, self$sample.meta, formulas = formulas, screen = screen, influence = infl, current.rows = cur, dist = res$settings$dist,
                               permutation = res$settings$permutation, n.permutations = n.permutations, seed = seed %||% sample.int(.Machine$integer.max, 1),
                               alpha = private$opt("alpha"), min.samp.per.level = res$settings$min.samp.per.level, n.cores = n.cores, top.k = top.k,
                               robust = res$settings$robust %||% "none", na.mode = res$settings$na.mode %||% "drop", robust.k = res$settings$robust.k %||% 1.345)
@@ -1281,7 +1282,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (length(cell.types) == 1) {
-        return(plotVolcano(de[[cell.types]], color.var=color.var, palette=palette, plot.theme=self$plot.theme, ...))
+        return(plotVolcano(de[[cell.types]], color.var=color.var, palette=palette, plot.theme=self$plot.theme, ...) + ggtitle(cell.types))
       } else if (length(cell.types) == 2) {
         n.col <- 2
       }
@@ -1366,10 +1367,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           params$groups <- setNames(self$sample.meta[as.character(self$sample.per.cell), color.by], names(self$sample.per.cell))
           if (is.null(params$show.legend)) params$show.legend <- TRUE
           if (is.null(params$legend.title)) params$legend.title <- color.by
+          legend.keys <- TRUE                                             # readable keys for small, transparent points
           if (is.null(params$palette) && !is.null(names(self$sample.groups.palette)) && all(unique(stats::na.omit(as.character(params$groups))) %in% names(self$sample.groups.palette)))
             params$palette <- self$sample.groups.palette
         } else {
-          stop("Unknown color.by option: '", color.by, "'. It must be 'cell.groups', 'sample', or a column in self$sample.meta.")
+          stop("Unknown color.by option: '", color.by, "'. It must be 'cell.groups', 'sample', or a column in self$sample.meta",
+               if (is.null(self$model)) " (no model is set: name the metadata column directly)" else "", ".")
         }
       }
 
@@ -1379,7 +1382,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         params$show.legend <- !is.null(params$colors)
       }
 
-      rlang::exec(sccore::embeddingPlot, !!!params)
+      gg <- rlang::exec(sccore::embeddingPlot, !!!params)
+      if (exists("legend.keys", inherits = FALSE) && isTRUE(params$show.legend)) gg <- gg + guides(colour = guide_legend(override.aes = list(size = 3, alpha = 1)))
+      gg
     },
 
     #' @description Estimate ontology terms based on DEs

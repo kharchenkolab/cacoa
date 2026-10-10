@@ -218,7 +218,7 @@ print.cacoaCovariateScreen <- function(x, ...) {
     nf <- length(unique(x$table$celltype[x$table$mode == "partial" & x$table$fallback]))
     if (nf) cat(sprintf("  partial mode fell back to marginal in %d of %d cell types (too few residual degrees of freedom for the full covariate set)\n", nf, length(x$celltypes)))
   }
-  for (nt in x$notes) cat("  note: ", nt, "\n", sep = "")
+
   hit <- g[g$n.sig >= x$settings$threshold.types, ]
   if (nrow(hit)) cat(sprintf("Associated with expression in >= %d cell types (%s, FDR %.0f%%): %s\n", x$settings$threshold.types, sm, 100 * a,
                              paste(sprintf("%s (%d types, global p %.3g)", hit$covariate, hit$n.sig, hit$p.global), collapse = ", ")))
@@ -265,8 +265,10 @@ variancePartition <- function(G, meta, covariates, dist = NULL) {
     c(r2 = ss / tss, q = hi$rank - 1)
   }
   full <- r2(covariates)
+  if (n - 1 - full[["q"]] < 1) return(NULL)                    # no residual degrees of freedom: nothing to partition
   adj <- function(ss.frac, q) { # omega^2-type correction with the full model's residual mean square
     rss <- tss * (1 - full[["r2"]]); nu <- n - 1 - full[["q"]]
+    if (nu < 1) return(NA_real_)
     (ss.frac * tss - q * rss / nu) / (tss + rss / nu)
   }
   uniq.raw <- vapply(covariates, function(v) { red <- r2(setdiff(covariates, v)); full[["r2"]] - red[["r2"]] }, numeric(1))

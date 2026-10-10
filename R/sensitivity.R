@@ -43,6 +43,7 @@ sensitivityFormulas <- function(model, screen = NULL, meta, top.k = 3, min.resid
 #'   current wide table (`res$wide[[1]]`), as `list(influence =, wide =)`; when `NULL` they are recomputed
 #' @param dist,permutation,n.permutations,seed,alpha,min.samp.per.level,n.cores engine settings
 #' @param top.k number of screened covariates to try adding
+#' @param current.rows optional long results table of the stored model (`res$results`), used for the "current" model instead of a refit
 #' @param rel.change relative change of the shift estimate across models that counts as "sensitive" (default 0.5)
 #' @param influence.rel relative change of the shift estimate when one sample is left out that, together with being
 #'   an outlier among the leave-one-out changes (> 3 MAD), marks the sample as driving the result (default 0.2)
@@ -54,7 +55,7 @@ sensitivityFormulas <- function(model, screen = NULL, meta, top.k = 3, min.resid
 #'   robust tuning constant, passed to [expressionShiftsForModel()] (default: the settings of the result being checked)
 checkSensitivity <- function(D.list, model, meta, formulas = NULL, screen = NULL, influence = NULL, dist = "cor", permutation = "auto",
                              n.permutations = 199, seed = 1, alpha = 0.05, min.samp.per.level = 3, n.cores = 1, top.k = 3, rel.change = 0.5,
-                             influence.rel = 0.2, robust = "none", na.mode = "drop", robust.k = 1.345) {
+                             influence.rel = 0.2, robust = "none", na.mode = "drop", robust.k = 1.345, current.rows = NULL) {
   t <- model$tests[[1]]
   if (t$kind != "contrast") stop("sensitivity analysis is defined for contrast tests (two groups or a numeric step)")
   if (is.null(formulas)) formulas <- sensitivityFormulas(model, screen, meta, top.k = top.k)
@@ -74,6 +75,11 @@ checkSensitivity <- function(D.list, model, meta, formulas = NULL, screen = NULL
   })
   names(runs) <- names(formulas)
   runs <- Filter(Negate(is.null), runs)
+  if (!is.null(current.rows) && "current" %in% names(runs) && setequal(current.rows$celltype, runs[["current"]]$rows$celltype)) {
+    rows <- current.rows[, intersect(names(runs[["current"]]$rows), names(current.rows))]   # the main result's estimates and p-values
+    rows$model <- "current"; rows$formula <- paste(deparse(formulas[["current"]]), collapse = "")
+    runs[["current"]]$rows <- rows
+  }
   dropped <- setdiff(names(formulas), names(runs))
   if (!length(runs)) stop("no alternative model could be fitted")
   tab <- do.call(rbind, lapply(runs, `[[`, "rows")); rownames(tab) <- NULL

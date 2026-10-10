@@ -23,7 +23,8 @@ checkSensitivity(
   influence.rel = 0.2,
   robust = "none",
   na.mode = "drop",
-  robust.k = 1.345
+  robust.k = 1.345,
+  current.rows = NULL
 )
 }
 \arguments{
@@ -51,6 +52,8 @@ an outlier among the leave-one-out changes (> 3 MAD), marks the sample as drivin
 
 \item{robust, na.mode, robust.k}{robust fit (\code{"none"}, \code{"huber"}, \code{"winsor"}), treatment of absent samples (\code{"drop"}, \code{"impute_weak"}) and
 robust tuning constant, passed to \code{\link[=expressionShiftsForModel]{expressionShiftsForModel()}} (default: the settings of the result being checked)}
+
+\item{current.rows}{optional long results table of the stored model (\code{res$results}), used for the "current" model instead of a refit}
 }
 \value{
 object of class \code{cacoaSensitivity}: \code{table} (model x cell type x effect: estimate, ci, p, padj),

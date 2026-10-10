@@ -429,7 +429,7 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
     results <- results[order(results$shift, decreasing = TRUE), ]
     rownames(results) <- NULL
   }
-  notes <- unique(unlist(c(gplan$notes, lapply(runs, function(r) r$plan$notes))))
+  notes <- unique(unlist(c(gplan$notes, lapply(cts, function(ct) { nt <- setdiff(runs[[ct]]$plan$notes, gplan$notes); if (length(nt)) sprintf("%s: %s", ct, nt) }))))
   if (verbose && length(notes)) message(paste(notes, collapse = "\n"))
   list(results = results, global = global, fits = fits, skipped = skipped, plan = gplan, notes = notes,
        perm.stats = if (return.perm.stats) lapply(runs, `[[`, "perm") else NULL,

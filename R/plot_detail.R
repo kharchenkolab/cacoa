@@ -42,7 +42,10 @@ plotShiftDetailPanels <- function(eff, adjusted = NULL, groups = NULL, dist = "c
   if (is.two) {
     pt <- pairDistanceTable(D2, grp)
     ann <- sprintf("shift = %.3g   var = %.3g   total = %.3g", eff$shift, eff$var, eff$total)
+    kind.cols <- c("grey70", "grey70", "grey40"); names(kind.cols) <- levels(pt$kind)
+    if (!is.null(palette) && all(levels(grp) %in% names(palette))) kind.cols[1:2] <- unname(palette[levels(grp)])
     gg.b <- ggplot2::ggplot(pt, ggplot2::aes(x = .data$kind, y = .data$d2, fill = .data$kind)) + ggplot2::geom_boxplot(outlier.shape = NA, alpha = 0.6) +
+      ggplot2::scale_fill_manual(values = kind.cols) +
       ggplot2::geom_jitter(width = 0.15, size = 1, alpha = 0.5) + plot.theme + ggplot2::guides(fill = "none") +
       ggplot2::labs(x = NULL, y = "adjusted squared distance", title = "pair distances", subtitle = ann) +
       ggplot2::theme(plot.subtitle = ggplot2::element_text(size = 8))

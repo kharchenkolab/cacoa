@@ -199,3 +199,17 @@ test_that("estimability is judged on column-scaled designs", {
   expect_true(cacoa:::isEstimable(X, c(0, 1, 0, 0)))
   expect_false(cacoa:::isEstimable(cbind(1, g, x1, 2 * x1), c(0, 0, 0, 1)))           # truly aliased
 })
+
+test_that("the fit is invariant to the units of a numeric covariate", {
+  set.seed(5); n <- 12
+  X1 <- cbind(1, rep(0:1, each = 6), 5000 + 1000 * rnorm(n)); X2 <- X1; X2[, 3] <- X2[, 3] / 1e4
+  h1 <- cacoa:::hatInfo(X1); h2 <- cacoa:::hatInfo(X2)
+  expect_equal(h1$H, h2$H, tolerance = 1e-10); expect_equal(h1$rank, 3L)
+  expect_equal(h1$A[2, ], h2$A[2, ], tolerance = 1e-10)                       # the group coefficient does not depend on the covariate's units
+  cao <- makeToyCacoa(n.per.group = c(A = 6, B = 6), cells.per.sample = 40, n.genes = 80, shift = 1)
+  cao$sample.meta$umi <- 5000 + 1000 * rnorm(12); cao$sample.meta$umi.k <- cao$sample.meta$umi / 1e4
+  r1 <- cao$estimateExpressionShiftMagnitudes(formula = ~ group + umi, test = "group", n.permutations = 19, verbose = FALSE)
+  r2 <- cao$estimateExpressionShiftMagnitudes(formula = ~ group + umi.k, test = "group", n.permutations = 19, verbose = FALSE)
+  expect_equal(r1$wide[[1]]$shift, r2$wide[[1]]$shift, tolerance = 1e-6)
+  expect_true(all(r1$wide[[1]]$shift > 0.05))
+})

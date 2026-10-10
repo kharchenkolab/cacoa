@@ -69,3 +69,15 @@ test_that("Cacoa$checkDesign and plotDesign work with and without a stored model
   expect_s3_class(cao$plotDesign("associations"), "ggplot")
   expect_true(inherits(cao$plotDesign("balance"), "ggplot"))
 })
+
+test_that("design check warns about an excluded factor column nested in the test variable", {
+  m <- data.frame(condition = factor(rep(c("AD", "Ct"), each = 6)), batch = factor(rep(sprintf("b%d", 1:6), each = 2)),
+                  sex = factor(rep(c("F", "M"), 6)), row.names = sprintf("s%02d", 1:12))
+  chk <- checkDesign(m, test.variable = "condition")
+  expect_false("batch" %in% chk$covariates)                      # high-cardinality: not a usable covariate
+  expect_true(any(chk$issues$severity == "warning" & grepl("'batch' .* nested in 'condition'", chk$issues$message)))
+  expect_output(print(chk), "association with 'condition': sex")  # a single association is still named
+  # a crossed batch is not flagged
+  m2 <- m; m2$batch <- factor(rep(sprintf("b%d", 1:6), 2))
+  expect_false(any(grepl("nested", checkDesign(m2, test.variable = "condition")$issues$message)))
+})

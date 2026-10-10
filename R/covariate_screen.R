@@ -211,7 +211,7 @@ print.cacoaCovariateScreen <- function(x, ...) {
   if ("marginal" %in% x$modes && "partial" %in% x$modes) {
     gm <- x$global[x$global$mode == "marginal", ]; gp <- x$global[x$global$mode == "partial", ]
     only <- gm$covariate[gm$n.sig >= x$settings$threshold.types & gp$n.sig[match(gm$covariate, gp$covariate)] < x$settings$threshold.types]
-    if (length(only)) cat(sprintf("Marginal only (explained by other covariates): %s\n", paste(only, collapse = ", ")))
+    if (length(only)) cat(sprintf("Marginal only (not separable from the other covariates): %s\n", paste(only, collapse = ", ")))
   }
   dsp <- g[g$n.sig.disp >= x$settings$threshold.types, ]
   if (nrow(dsp)) cat(sprintf("Associated with sample dispersion: %s\n", paste(sprintf("%s (%d types)", dsp$covariate, dsp$n.sig.disp), collapse = ", ")))
@@ -239,6 +239,7 @@ variancePartition <- function(G, meta, covariates, dist = NULL) {
   samples <- rownames(G); meta <- meta[samples, , drop = FALSE]
   cols <- lapply(covariates, function(v) covariateColumns(meta, v)); names(cols) <- covariates
   ok <- stats::complete.cases(do.call(cbind, cols))
+  if (sum(ok) < 6 || any(vapply(cols, function(x) all(apply(x[ok, , drop = FALSE], 2, function(z) length(unique(z)) < 2)), logical(1)))) return(NULL)
   G <- gowerCenter(uncenterGower(G[ok, ok])); n <- sum(ok); one <- rep(1, n); tss <- sum(diag(G))
   r2 <- function(vs) {
     if (!length(vs)) return(c(r2 = 0, q = 0))

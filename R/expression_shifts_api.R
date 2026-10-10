@@ -390,7 +390,9 @@ print.cacoaExpressionShifts <- function(x, digits = 2, ...) {
   for (t in unique(x$results$test.id)) {
     d <- x$results[x$results$test.id == t, ]
     effs <- intersect(effectOrder, unique(d$effect))
-    prov <- sub("([a-z-]+) permutations", sprintf("%d \\1 permutations", s$n.permutations), modelProvenance(x$model, t, extra = sprintf("distance %s", s$dist)))
+    prov <- sub("([a-z-]+) permutations", sprintf("%d %s\\1 permutations", max(d$n.perm, na.rm = TRUE),
+                                                  if (all(d$n.perm == d$n.perm.distinct, na.rm = TRUE)) "exact " else ""),
+                modelProvenance(x$model, t, extra = sprintf("distance %s", s$dist)))
     cat(sprintf("Expression shifts: %s\n", prov))
     cts <- unique(d$celltype)
     tab <- data.frame(celltype = cts, n = d$n[match(cts, d$celltype)], stringsAsFactors = FALSE)

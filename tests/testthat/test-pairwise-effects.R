@@ -190,3 +190,12 @@ test_that("dispersion fit is unbiased with a continuous covariate and unequal di
   expect_lt(abs(mean(est["s.ref", ]) - p) / p, 0.06)
   expect_lt(abs(mean(est["s.alt", ]) - 2 * p) / (2 * p), 0.06)
 })
+
+test_that("estimability is judged on column-scaled designs", {
+  set.seed(3); n <- 12
+  g <- rep(0:1, each = 6); x1 <- 5000 + 1000 * rnorm(n); x2 <- 0.7 * x1 + rnorm(n)   # covariates in large units, nearly collinear
+  X <- cbind(1, g, x1, x2)
+  expect_gt(kappa(X), 1e4)
+  expect_true(cacoa:::isEstimable(X, c(0, 1, 0, 0)))
+  expect_false(cacoa:::isEstimable(cbind(1, g, x1, 2 * x1), c(0, 0, 0, 1)))           # truly aliased
+})

@@ -50,7 +50,7 @@ plotShiftDetailPanels <- function(eff, adjusted = NULL, groups = NULL, dist = "c
   }
   # (c) per-sample dispersion by group
   if (!is.null(eff$v)) {
-    dv <- data.frame(sample = names(eff$v), v = eff$v, group = if (is.null(grp)) "all" else as.character(grp[names(eff$v)]), stringsAsFactors = FALSE)
+    dv <- data.frame(sample = names(eff$v), v = eff$v, group = if (is.null(grp)) "all" else factor(as.character(grp[names(eff$v)]), levels = levels(grp)), stringsAsFactors = FALSE)
     dv <- dv[is.finite(dv$v), ]
     med <- stats::median(dv$v); madv <- stats::mad(dv$v)
     dv$label <- ifelse(abs(dv$v - med) > 3 * madv & madv > 0, dv$sample, "")

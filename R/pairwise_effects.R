@@ -57,9 +57,13 @@ contrastNullBasis <- function(cvec) {
 # Is the contrast c estimable for design X (c in the row space of X)?
 isEstimable <- function(X, cvec, tol = 1e-8) {
   if (!length(cvec) || all(abs(cvec) < tol)) return(FALSE)
-  XtX <- crossprod(as.matrix(X))
-  P <- MASS::ginv(XtX) %*% XtX
-  sqrt(sum((drop(P %*% cvec) - cvec)^2)) <= tol * max(1, sqrt(sum(cvec^2)))
+  X <- as.matrix(X)
+  sc <- sqrt(colSums(X^2)); sc[sc == 0] <- 1          # unit column norms: conditioning from units is not rank deficiency
+  Xs <- sweep(X, 2, sc, "/"); cs <- cvec / sc
+  sv <- svd(Xs, nu = 0); r <- sum(sv$d > 1e-9 * sv$d[1])          # row-space projector from the SVD (no squaring of the condition number)
+  V <- sv$v[, seq_len(r), drop = FALSE]
+  proj <- drop(V %*% crossprod(V, cs))
+  sqrt(sum((proj - cs)^2)) <= tol * max(1, sqrt(sum(cs^2)))
 }
 
 #' Pairwise effects (shift / var / total) from a squared-distance matrix and individual-level designs

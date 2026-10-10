@@ -218,7 +218,7 @@ estimateDEPerCellTypeInner_model <- function(raw.mats, cell.groups = NULL, sampl
                                              common.genes = FALSE, cooks.cutoff = FALSE, min.cell.count = 10,
                                              max.cell.count = Inf, independent.filtering = TRUE, n.cores = 1,
                                              return.matrix = TRUE, fix.n.samples = NULL, max.resample.tries = 50,
-                                             verbose = TRUE, test = "Wald", gene.filter = NULL) {
+                                             verbose = TRUE, test = "Wald", gene.filter = NULL, min.samp.per.level = 3L) {
     validateDEPerCellTypeParams(raw.mats, cell.groups, model)
     
     tmp <- tolower(strsplit(test, split = "\\.")[[1]])
@@ -390,6 +390,15 @@ estimateDEPerCellTypeInner_model <- function(raw.mats, cell.groups = NULL, sampl
         if (is.null(model.ct)) {
           warning("Contrast not estimable for cell type ", l, " (a compared level is absent or confounded there); skipping")
           return(NULL)
+        }
+        info <- tryCatch(contrastSampleInfo(model.ct, sample.meta[samp.ct, , drop = FALSE], samp.ct), error = function(e) NULL)
+        if (!is.null(info) && identical(info$type, "labels") && !is.na(info$num) && length(unique(info$labels[info$in.set])) == 2) {
+          n.lev <- table(factor(info$labels[info$in.set], levels = c(info$den, info$num)))
+          if (any(n.lev < min.samp.per.level)) {
+            if (verbose) message("Skipping cell type ", l, ": fewer than ", min.samp.per.level, " samples at a compared level (",
+                                 paste(sprintf("%s %d", names(n.lev), n.lev), collapse = ", "), ")")
+            return(NULL)
+          }
         }
         meta.ct <- if (!is.null(sample.meta)) {
           sample.meta[samp.ct, , drop = FALSE]

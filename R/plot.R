@@ -556,7 +556,10 @@ plotOntologyFamily <- function(fam, data, plot.type="complete", show.ids=FALSE, 
 plotVolcano <- function(de.df, p.name='padj', color.var = 'CellFrac', legend.pos="none", palette=brewerPalette("RdYlBu"), lf.cutoff=1.5, p.cutoff=0.05,
                         cell.frac.cutoff=0.2, size=c(0.1, 1.0), lab.size=2, draw.connectors=TRUE, sel.labels=NULL, plot.theme=theme_get(), ...) {
 
-  checkPackageInstalled("EnhancedVolcano", bioc=TRUE)
+  if (!requireNamespace("EnhancedVolcano", quietly = TRUE))
+    return(plotVolcanoSimple(de.df, p.name = p.name, color.var = color.var, palette = palette, lf.cutoff = lf.cutoff, p.cutoff = p.cutoff,
+                             cell.frac.cutoff = cell.frac.cutoff, size = size, lab.size = lab.size, sel.labels = sel.labels, plot.theme = plot.theme,
+                             legend.pos = legend.pos))
   if (is.null(sel.labels) && (color.var == 'CellFrac')) {
     sel.labels <- de.df %$%
       Gene[(.[[p.name]] <= p.cutoff) & (abs(log2FoldChange) >= lf.cutoff) & (CellFrac >= cell.frac.cutoff)]
@@ -679,7 +682,7 @@ transferLabelLayer <- function(gg.target, gg.source, font.size) {
 getScaledZGradient <- function(min.z, palette, color.range) {
   if (length(color.range) == 1) {
     if (min.z > (color.range - 1e-10))
-      return(scale_color_gradientn(colors=palette(21)[1], limits=c(0, color.range)))
+      return(scale_color_gradientn(colors="grey80", limits=c(0, max(color.range, 1e-10))))
 
     col.vals <- c(0, seq(min.z, color.range, length.out=20))
     color.range <- c(0, color.range)
@@ -764,11 +767,7 @@ plotSampleDistanceMatrix <- function(p.dists, sample.labels=NULL, n.cells.per.sa
                   }
                 }
       # apply legend titles
-      if (is.cont) {
-        gg <- gg + labs(color = color.title)
-        } else {
-          gg <- gg + labs(color = color.title, shape = shape.title)
-          }
+      gg <- gg + labs(color = color.title, shape = shape.title)
 
       # Apply palette only when it is valid for the data type
       if (is.cont) {
@@ -1982,3 +1981,31 @@ innodePosFromHclust <- function(h) {
 
 
 
+
+# ggplot2 volcano used when EnhancedVolcano is not installed
+plotVolcanoSimple <- function(de.df, p.name = "padj", color.var = "CellFrac", palette = brewerPalette("RdYlBu"), lf.cutoff = 1.5, p.cutoff = 0.05,
+                              cell.frac.cutoff = 0.2, size = c(0.1, 1.0), lab.size = 2, sel.labels = NULL, plot.theme = theme_get(), legend.pos = "none",
+                              max.labels = 30) {
+  df <- as.data.frame(de.df)
+  if (!"Gene" %in% names(df)) df$Gene <- rownames(df)
+  df <- df[is.finite(df$log2FoldChange) & is.finite(df[[p.name]]), ]
+  df$nlp <- -log10(pmax(df[[p.name]], 1e-300))
+  has.col <- color.var %in% names(df) && is.numeric(df[[color.var]])
+  if (is.null(sel.labels)) {
+    sig <- df[[p.name]] <= p.cutoff & abs(df$log2FoldChange) >= lf.cutoff
+    if (has.col && color.var == "CellFrac") sig <- sig & df$CellFrac >= cell.frac.cutoff
+    sel.labels <- df$Gene[sig][order(df[[p.name]][sig])]
+  }
+  sel.labels <- utils::head(sel.labels, max.labels)
+  df$label <- ifelse(df$Gene %in% sel.labels, df$Gene, "")
+  gg <- ggplot(df, aes(x = .data$log2FoldChange, y = .data$nlp)) +
+    geom_vline(xintercept = c(-lf.cutoff, lf.cutoff), linetype = 2, colour = "grey60") +
+    geom_hline(yintercept = -log10(p.cutoff), linetype = 2, colour = "grey60")
+  if (has.col) {
+    gg <- gg + geom_point(aes(colour = .data[[color.var]], size = .data[[color.var]]), alpha = 0.8) +
+      scale_size_continuous(range = size, name = "Expr. frac", limits = c(0, 1)) + val2ggcol(df[[color.var]], palette = palette, color.range = c(0, 1)) +
+      guides(color = guide_colorbar(title = "Expr. frac"))
+  } else gg <- gg + geom_point(size = mean(size), colour = "grey40", alpha = 0.8)
+  gg + ggrepel::geom_text_repel(aes(label = .data$label), size = lab.size, max.overlaps = Inf, min.segment.length = 0, segment.colour = "grey50") +
+    labs(x = "log2 fold change", y = sprintf("-log10 %s", p.name)) + plot.theme + theme_legend_position(legend.pos)
+}

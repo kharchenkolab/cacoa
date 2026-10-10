@@ -24,7 +24,8 @@ estimateDEPerCellTypeInner_model(
   max.resample.tries = 50,
   verbose = TRUE,
   test = "Wald",
-  gene.filter = NULL
+  gene.filter = NULL,
+  min.samp.per.level = 3L
 )
 }
 \description{

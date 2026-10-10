@@ -62,6 +62,11 @@ test_that("sensitivity verdicts: robust under a null covariate, dependent under 
   cao$screenCovariates(n.permutations = 29, verbose = FALSE)
   sens2 <- cao$checkSensitivity(n.permutations = 29, verbose = FALSE)
   expect_true(all(c("unadjusted", "current") %in% names(sens2$formulas)))
+  expect_equal(sens2$dropped, character(0))
+  # an unadjusted current model keeps the "current" label when it coincides with the unadjusted set
+  cao$setModel(~ group, test = "group", verbose = FALSE)
+  f <- cacoa:::sensitivityFormulas(cao$model, NULL, cao$sample.meta)
+  expect_equal(names(f), "current")
   # a planted outlier sample is flagged as influential
   cao2 <- makeToyCacoa(n.per.group = c(A = 6, B = 6), cells.per.sample = 40, n.genes = 80, shift = 0.4, seed = 9)
   res0 <- cao2$estimateExpressionShiftMagnitudes(n.permutations = 29, verbose = FALSE)

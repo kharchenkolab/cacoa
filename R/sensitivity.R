@@ -24,8 +24,10 @@ sensitivityFormulas <- function(model, screen = NULL, meta, top.k = 3, min.resid
       if (n - q >= min.resid.df) out[["all screened"]] <- f.all
     }
   }
-  keep <- !duplicated(vapply(out, function(f) paste(sort(all.vars(f)), collapse = "+"), character(1)))
-  out[keep]
+  keys <- vapply(out, function(f) paste(sort(all.vars(f)), collapse = "+"), character(1))
+  out <- out[setdiff(names(out), names(out)[names(out) != "current" & keys == keys[["current"]]])]   # "current" wins over duplicates
+  keys <- keys[names(out)]
+  out[!duplicated(keys)]
 }
 
 #' Sensitivity of expression-shift effects to the covariate set and to single samples
@@ -70,6 +72,7 @@ checkSensitivity <- function(D.list, model, meta, formulas = NULL, screen = NULL
   })
   names(runs) <- names(formulas)
   runs <- Filter(Negate(is.null), runs)
+  dropped <- setdiff(names(formulas), names(runs))
   if (!length(runs)) stop("no alternative model could be fitted")
   tab <- do.call(rbind, lapply(runs, `[[`, "rows")); rownames(tab) <- NULL
   tab$model <- factor(tab$model, levels = names(formulas)[names(formulas) %in% unique(tab$model)])
@@ -107,7 +110,7 @@ checkSensitivity <- function(D.list, model, meta, formulas = NULL, screen = NULL
                influence.rel = infl.rel, verdict = verdict, stringsAsFactors = FALSE)
   }))
   rownames(summ) <- NULL
-  structure(list(table = tab, summary = summ, formulas = formulas, test = t$label,
+  structure(list(table = tab, summary = summ, formulas = formulas, dropped = dropped, test = t$label,
                  settings = list(dist = dist, permutation = permutation, n.permutations = n.permutations, alpha = alpha, rel.change = rel.change, influence.rel = influence.rel)),
             class = c("cacoaSensitivity", "list"))
 }
@@ -126,6 +129,7 @@ shortVerdict <- function(v) {
 print.cacoaSensitivity <- function(x, ...) {
   cat(sprintf("Sensitivity of '%s' (shift) across %d models: %s\n", x$test, length(x$formulas),
               paste(sprintf("%s [%s]", names(x$formulas), vapply(x$formulas, function(f) paste(deparse(f), collapse = ""), character(1))), collapse = "; ")))
+  if (length(x$dropped)) cat(sprintf("  not fitted: %s (no cell type could be tested with that covariate set)\n", paste(x$dropped, collapse = "; ")))
   s <- x$summary; s <- s[order(s$verdict != "robust", -abs(s$estimate.current)), ]
   for (i in seq_len(nrow(s))) cat(sprintf("  %-20s %s (significant in %d of %d models)\n", s$celltype[i], s$verdict[i], s$n.significant[i], s$n.models[i]))
   invisible(x)
@@ -164,6 +168,7 @@ plotSensitivity <- function(x, effect = "shift", cell.types = NULL, normalized =
     ggplot2::scale_colour_manual(values = c(`FALSE` = "grey20", `TRUE` = "#d73027"), guide = "none") +
     ggplot2::facet_wrap(~ panel, scales = "free_x") + plot.theme +
     ggplot2::labs(x = if (normalized) sprintf("normalized %s", effect) else effect, y = NULL, title = sprintf("Sensitivity of %s to the covariate set", effect),
-                  subtitle = "red: current model; intervals: jackknife 95%") +
+                  subtitle = paste(c(if (any(d$current)) "red: current model", if (any(is.finite(d$se.jk))) "intervals: jackknife 95%",
+                                     "filled: significant"), collapse = "; ")) +
     ggplot2::theme(plot.subtitle = ggplot2::element_text(size = 8, colour = "grey30"), strip.text = ggplot2::element_text(size = 7))
 }

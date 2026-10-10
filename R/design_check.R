@@ -145,6 +145,18 @@ checkDesign <- function(meta, model = NULL, test.variable = NULL, covariates = N
     }
   }
 
+  if (!is.null(test.variable) && isDiscreteVar(meta[[test.variable]])) {   # excluded factor columns nested in the test variable
+    excl <- desc$column[desc$role %in% c("high-cardinality", "id-like") & !desc$column %in% covariates]
+    for (v in excl) {
+      x <- meta[[v]]; if (!isDiscreteVar(x)) next
+      tb <- table(meta[[test.variable]], x, useNA = "no")
+      if (ncol(tb) >= 2 && ncol(tb) < sum(!is.na(x)) && all(colSums(tb > 0) <= 1) && any(rowSums(tb > 0) > 1))
+        add("warning", sprintf("'%s' (%s, not used as a covariate) is nested in '%s': each %s holds one %s, so a %s effect cannot be separated from the %s effect",
+                               v, desc$role[desc$column == v], test.variable, v, test.variable, v, test.variable),
+            sprintf("report this limitation; '%s' can serve as a permutation block only if it crosses '%s'", v, test.variable))
+    }
+  }
+
   dfinfo <- NULL; gvif <- numeric(0)
   if (!is.null(model)) {
     F <- model$F; q <- qr(F)$rank

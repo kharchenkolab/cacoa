@@ -630,6 +630,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       D.list <- private$distancesForSpace(space, dist = dist, n.pcs = n.pcs, cell.groups = self$cell.groups, verbose = FALSE)
       if (!is.null(cell.types)) D.list <- D.list[intersect(cell.types, names(D.list))]
       parts <- lapply(D.list, function(D) variancePartition(D, self$sample.meta, covariates, dist = if (space == "composition") "l2" else dist))
+      skipped <- names(parts)[vapply(parts, is.null, logical(1))]; parts <- Filter(Negate(is.null), parts)
+      if (length(skipped)) message("skipped (fewer than 6 samples or a constant covariate): ", paste(skipped, collapse = ", "))
+      if (!length(parts)) stop("no cell type could be partitioned")
       if (return.table) return(do.call(rbind, parts))
       plotVariancePartition(parts, plot.theme = self$plot.theme)
     },
@@ -800,7 +803,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(cell.types)) df <- df[df$celltype %in% cell.types, ]
       subtitle <- if (show.provenance) {
         prov <- vapply(unique(df$test.id), function(i) modelProvenance(res$model, i), character(1))
-        prov <- sub("([a-z-]+) permutations", sprintf("%d \\1 permutations", res$settings$n.permutations), prov)
+        prov <- sub("([a-z-]+) permutations", sprintf("%d %s\\1 permutations", max(df$n.perm, na.rm = TRUE),
+                                                      if (all(df$n.perm == df$n.perm.distinct, na.rm = TRUE)) "exact " else ""), prov)
         sc <- unique(df$scheme); fl <- unique(df$p.floor)
         rob <- c(if (!identical(res$settings$robust %||% "none", "none")) sprintf("robust: %s", res$settings$robust),
                  if (identical(res$settings$na.mode, "impute_weak")) "absent samples weakly imputed")
@@ -1359,6 +1363,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         } else if(color.by %in% colnames(self$sample.meta)) {
           # map from sample values to cells
           params$groups <- setNames(self$sample.meta[as.character(self$sample.per.cell), color.by], names(self$sample.per.cell))
+          if (is.null(params$show.legend)) params$show.legend <- TRUE
+          if (is.null(params$palette) && !is.null(names(self$sample.groups.palette)) && all(unique(stats::na.omit(as.character(params$groups))) %in% names(self$sample.groups.palette)))
+            params$palette <- self$sample.groups.palette
         } else {
           stop("Unknown color.by option: '", color.by, "'. It must be 'cell.groups', 'sample', or a column in self$sample.meta.")
         }
@@ -3423,6 +3430,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         color.title <- color.by
         }
       if (is.null(shape.title) && !is.null(shape.by)) shape.title <- shape.by
+      if (is.null(palette) && !is.null(color.by) && !is.null(self$model) && (identical(color.by, "test") || identical(color.by, private$testVariable())) &&
+          !is.null(names(self$sample.groups.palette))) palette <- self$sample.groups.palette
 
       if (is.null(title)) title <- space
 
@@ -4064,6 +4073,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       shifts <- if (smooth) shifts$shifts.smoothed else shifts$shifts
 
       shifts %<>% na.omit()
+      if (!any(abs(z.scores) >= min.z, na.rm = TRUE))
+        message(sprintf("no cell reaches |z| >= %.2f (%s z-scores): the z-score panel is uniform", min.z, if (adjusted) "adjusted" else "unadjusted"))
       color.range %<>% parseLimitRange(shifts)
       shifts %<>% pmax(color.range[1]) %>% pmin(color.range[2])
 

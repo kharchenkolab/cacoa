@@ -64,6 +64,23 @@ Design object after the change (what consumers read): `F`, `contrast.F`, `X`, `Z
 `contrast_label`, `contrast_endpoint_labels`, `term.contrast` (matrix, term tests), `term.variable`, `notes`.
 Dropped: `contrast_endpoints_X` (CoDA no longer needs it), `term.cols`, `qrZ`, `diagnostics`, `baselines_used`.
 
+## 1b. Contrast handling (settled 2026-10-10)
+
+One model answers one question: `setModel(formula, test)` names one primary contrast and every method runs on
+it; further tests remain possible as an explicit list (first = primary) but are not the default presentation.
+Guess where the guess is safe, ask where it is not:
+- two-level factor: compare alt vs ref, reference by the existing rules; the printout states the guess, its reason
+  and the override syntax (`"Diagnosis: IPF vs Control"`);
+- factor with more than two levels and no comparison given: stop with a message listing the levels, the proposed
+  reference, the comparison syntax and the whole-factor syntax (`"Group: all"`); no silent term test;
+- numeric variable: slope per unit (per SD reported alongside), stated in the printout;
+- interaction models with the plain grammar: marginal comparison with equal weights (factor x factor), anchor at
+  the covariate mean (factor x numeric), slope averaged over the factor's levels (numeric x factor); recorded as a
+  note with the `at` / `over` overrides;
+- structured contrasts (`at`, `over`, coefficient weights) stay the expert path; `lincomb` is dropped.
+Open points of §1 decided: numeric slope averaged over an interacting factor; `lincomb` dropped; a term test under an
+interaction model is the main effect at the reference setting of the interacting covariates (note recorded).
+
 ## 2. Steps, each with its OODA checkpoint
 
 **Step 0: freeze what is right.** Turn `misc/scripts/model_scenarios*.R` into `tests/testthat/test-model-builder.R`

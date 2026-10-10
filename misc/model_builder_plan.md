@@ -110,6 +110,28 @@ docs, `misc/issues.md`, notebook re-render, `R CMD check`. Checkpoint: T12.
 Order of commits: one per step, one-line messages. Each step ends with the fast suite; steps 3 and 4 with the
 slow suite and the check.
 
+## 2b. Progress log
+
+- 2026-10-10, step 0 (`2950779`): `test-model-builder.R` with the hand-coded oracle; 107 expectations green on the old code.
+- step 1 (`8dc4f25`): `buildDesignMatrices()` rewritten (level-means coding of the tested factor, reference first,
+  direction split `X = F c / c'c`, `Z = F N`; `termContrastMatrix()` and the term design on the same split;
+  `subsetDesign()`); consumers adapted (fitter wrapper, CoDA on F with OLS coefficients, cluster-free DE
+  membership from F, term engine's reduced design from the level contrasts, DE term tests via contrast
+  matrices, per-term partial R2 with an intercept, adjusted-ILR plot on F). `chooseBaselinesForSpec()`,
+  `splitByContrast()`, `diagnoseDesign()`, `emitDiagnostics()`, `reportContrastInfo()`, `lincomb`, `qrZ`,
+  `baselines_used`, `contrast_endpoints_X`, `term.cols` gone. Fast suite 1123 / 0.
+- step 2 (`7645acc`): multi-level factor without a comparison errors with the levels, the proposed reference and
+  the two syntaxes; `"var: all"` requests the whole-factor test (`test = "all"` does it for multi-level factors);
+  interaction defaults (marginal over factors, anchors for numerics, averaged slope) with notes; dropped constant
+  terms are notes; random-effect terms are errors; printout shows the reference guess with the override syntax
+  and the notes; snapshots. Fast suite 1144 / 0 (one bare-name term test fixed afterwards).
+- step 3: `fit_and_randomize()` fits rank-deficient subset designs by pseudo-inverse when the contrast is
+  estimable (vanishing columns zeroed first, df from the rank); `subsetDesign()` does the pivot reduction with the
+  contrast re-expressed (`w = F_k' (F_s^+)' c`) and replaces `repairDesignAfterRowSubset()` in DE
+  (`restrictModelToSamples()`, which also rebuilds Z and the term contrasts).
+- step 4: `estimateClusterFreeDE()` through `resolveModel()` (gains `test`, loses `sample.metadata`); R6 fields
+  `formula` / `contrast` and the `pair.set` plot argument removed; `private$testVariable()` for the legacy plots.
+
 ## 3. Test plan
 
 | id | what | how | where |

@@ -150,7 +150,7 @@ test_that("Cacoa constructor: optional model, setModel after exploration, legacy
   # changing the model after exploration
   cao0$setModel(~ group + batch, test = "group: A vs B", verbose = FALSE)
   expect_equal(cao0$ref.level, "B"); expect_equal(cao0$target.level, "A")
-  expect_true("batch" %in% all.vars(cao0$formula))
+  expect_true("batch" %in% all.vars(cao0$model$formula))
   # the old two-group constructor (vignette) still runs
   sg.old <- setNames(rep(c("ctrl", "dis"), each = 4), rownames(cao$sample.meta))
   expect_warning(cao.old <- makeToyCacoa(contrast = NULL, sample.groups = sg.old, ref.level = "ctrl", target.level = "dis", suppress.warnings = FALSE), "deprecated")

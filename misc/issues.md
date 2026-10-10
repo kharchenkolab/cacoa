@@ -4,6 +4,18 @@ Consolidated from the per-track status notes in `misc/plan.md`. Items are groupe
 what still has to be built; nothing here is tracked by a test failure (the fast suite, the slow suite and
 `R CMD check` are clean).
 
+## 0c. Model builder rewrite (2026-10-10, misc/model_builder_plan.md)
+
+- Logical test variables failed in the design builder; a constant covariate was pruned silently; the plain grammar
+  errored on interaction models; the per-column fitter returned NaN for columns whose observed samples lacked a
+  nuisance level although the contrast was estimable; Freedman-Lane in the fitter residualized on a column split
+  that omitted the non-tested direction of a multi-level factor. All fixed by the rewrite (level-means coding,
+  direction split, estimability by pseudo-inverse, formula notes, interaction defaults).
+- Behaviour changes to know: a factor with more than two levels must be tested with an explicit comparison
+  (`"Group: G2 vs G1"`) or `"Group: all"`; coefficient names of the per-column fitter and of CoDA are level
+  means (`groupA, groupB`) instead of `(Intercept), groupB`; `lincomb` contrasts are gone; `cao$formula` /
+  `cao$contrast` are gone (use `cao$model`).
+
 ## 0b. Found and fixed while reviewing the open decisions (2026-10-10)
 
 - **Freedman-Lane in the per-column fitter fitted the target-level samples only** for a two-level test with a

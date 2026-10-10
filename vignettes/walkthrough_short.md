@@ -74,14 +74,10 @@ chk
 
 ```
 Design check: 40 samples, 5 covariates, test variable 'Group'
-  model: 4 parameters, 36 residual degrees of freedom
-  permutations for 'Group (4 levels)': block, 4.705361e+21 distinct (smallest p 0.002)
   association with 'Group': ExpLibSize 0.81, sizeFactor 0.24, age 0.17, Batch 0.00
   Warning (1):
     - 'ExpLibSize' is strongly associated with 'Group' (0.81): adjusting for it estimates the Group effect not explained by ExpLibSize -> consider reporting both models (cao$checkSensitivity())
 Design check: 40 samples, 5 covariates, test variable 'Group'
-  model: 4 parameters, 36 residual degrees of freedom
-  permutations for 'Group (4 levels)': block, 4.705361e+21 distinct (smallest p 0.002)
   association with 'Group': ExpLibSize 0.81, sizeFactor 0.24, age 0.17, Batch 0.00
   Warning (1):
     - 'ExpLibSize' is strongly associated with 'Group' (0.81): adjusting for it estimates the Group effect not explained by ExpLibSize -> consider reporting both models (cao$checkSensitivity())
@@ -150,12 +146,12 @@ cao$plotVariancePartition(c("Group", "Batch"))
 
 ## Set the model
 
-`test` accepts a variable name (two levels: a contrast with an automatically chosen reference; more levels: a whole-factor test; numeric: a slope per unit), an explicit comparison such as `"Group: Group2 vs Group1"`, several variables, `"all"`, or a structured contrast. The printout states the reference level and how it was chosen, the adjustment set, the permutation scheme and the number of distinct permutations.
+`test` accepts a variable name (two levels: a contrast with an automatically chosen reference; numeric: a slope per unit; a factor with more levels needs the comparison, e.g. `"Group: Group2 vs Group1"`, or `"Group: all"` for a whole-factor test), an explicit comparison such as `"Group: Group2 vs Group1"`, several variables, `"all"`, or a structured contrast. The printout states the reference level and how it was chosen, the adjustment set, the permutation scheme and the number of distinct permutations.
 
 Here two tests are set: the planted contrast `Group2 vs Group1`, and the whole-factor test of `Group` over all four groups. Both are adjusted for `Batch`.
 
 ```r
-cao$setModel(~ Group + Batch, test = c("Group: Group2 vs Group1", "Group"))
+cao$setModel(~ Group + Batch, test = c("Group: Group2 vs Group1", "Group: all"))
 ```
 
 ```
@@ -317,9 +313,9 @@ sapply(de, function(d) sum(d$res$padj < 0.05, na.rm = TRUE))             # DE ge
 
 ```
    AST-FB    AST-PP     IN-PV    IN-SST      L2/3   L5/6-CC Microglia  Neu-NRGN 
-        1        38       207       192       186       177         1         1 
+        1        32       180       155       195       194         0         1 
       OPC 
-       59 
+       42 
 ```
 
 ```
@@ -336,14 +332,14 @@ head(r, 8)
 
 ```
              Gene log2FoldChange     stat       pvalue         padj CellFrac
-Gene2526 Gene2526       4.375769 21.22656 6.923330e-25 2.124078e-21        1
-Gene2406 Gene2406       4.561623 18.03710 4.581054e-22 7.027338e-19        1
-Gene3095 Gene3095       3.455485 17.20878 2.862652e-21 1.919215e-18        1
-Gene3646 Gene3646       3.237676 17.20171 2.908600e-21 1.919215e-18        1
-Gene2241 Gene2241       1.934041 17.16948 3.127794e-21 1.919215e-18        1
-Gene2438 Gene2438       2.360611 14.92673 6.376640e-19 2.944800e-16        1
-Gene1018 Gene1018       2.767814 14.90576 6.718905e-19 2.944800e-16        1
-Gene4185 Gene4185       2.426095 14.42450 2.261290e-18 8.672047e-16        1
+Gene2526 Gene2526       4.375769 27.16084 2.629970e-29 8.068748e-26        1
+Gene2406 Gene2406       4.561623 23.05506 2.377341e-26 3.646841e-23        1
+Gene2241 Gene2241       1.934041 20.52814 2.675029e-24 2.735663e-21        1
+Gene900   Gene900       3.545056 15.18251 3.383617e-19 2.595234e-16        1
+Gene1104 Gene1104       3.076600 14.71285 1.089375e-18 6.684404e-16        1
+Gene303   Gene303       3.536437 14.44891 2.124928e-18 1.086546e-15        1
+Gene3095 Gene3095       3.455485 14.25701 3.471353e-18 1.521445e-15        1
+Gene3646 Gene3646       3.237676 14.02310 6.351357e-18 2.435745e-15        1
 ```
 
 ```r

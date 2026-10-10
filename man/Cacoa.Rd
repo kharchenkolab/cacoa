@@ -542,10 +542,6 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 
 \item{\code{sample.per.cell}}{Named factor with cell names (default=NULL)}
 
-\item{\code{formula}}{Design formula for the analysis (default=NULL)}
-
-\item{\code{contrast}}{Character vector c(var, alt, ref) specifying contrasts for the analysis (default=NULL)}
-
 \item{\code{model.matrices}}{Design model matrices for the analysis (default=NULL)}
 
 \item{\code{ref.level}}{Reference level for sample.group vector (default=NULL)}
@@ -3772,7 +3768,6 @@ Plot inter-sample expression distance. The inputs to this function are the resul
   space = c("expression.shifts", "coda", "pseudo.bulk"),
   values = c("unadjusted", "adjusted"),
   cell.type = NULL,
-  pair.set = c("all", "core"),
   dist = NULL,
   name = NULL,
   verbose = self$verbose,
@@ -3790,8 +3785,6 @@ Plot inter-sample expression distance. The inputs to this function are the resul
 \item{\code{values}}{character One of "unadjusted" (observed raw distances), "adjusted" (core/partial fit covariate-adjusted) (default="unadjusted")}
 
 \item{\code{cell.type}}{character Cell type reference for distancing (default=NULL)}
-
-\item{\code{pair.set}}{character samples to be included; "all" (all pairs), "core" (core pairs only) (default="all")}
 
 \item{\code{dist}}{character Must be one of "cor", "l1" (manhattan), "l2" (euclidian) (default=NULL)}
 
@@ -4049,8 +4042,8 @@ Estimate differential expression Z-scores between two conditions per individual 
   min.expr.frac = 0.01,
   min.n.samp.per.cond = 2,
   sample.per.cell = self$sample.per.cell,
-  sample.metadata = self$sample.meta,
   formula = NULL,
+  test = NULL,
   contrast = NULL,
   perm.method = "freedman-lane",
   statistic = c("t", "coef"),
@@ -4089,9 +4082,9 @@ Estimate differential expression Z-scores between two conditions per individual 
 
 \item{\code{sample.per.cell}}{named factor of sample per cell (default: stored)}
 
-\item{\code{sample.metadata}}{sample metadata (default: stored)}
-
 \item{\code{formula}}{optional location formula for a temporary model (see \code{estimateExpressionShiftMagnitudes()})}
+
+\item{\code{test}}{optional test for a temporary model (see \code{Cacoa$new()}); the test must be a contrast (two groups or a numeric step)}
 
 \item{\code{contrast}}{optional contrast for a temporary model (expert synonym of \code{test})}
 

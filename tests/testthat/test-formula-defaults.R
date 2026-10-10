@@ -64,21 +64,15 @@ test_that("endpoint settings reproduce the endpoint rows on the location design"
   expect_equal(unname(rows$num - rows$den), c(0, 1, 0))
 })
 
-test_that("varsFromFormula has a single definition returning numeric/factors/all", {
-  meta <- makeMeta2()
-  v <- cacoa:::varsFromFormula(~ group + age, meta)
-  expect_named(v, c("numeric", "factors", "all"))
-  expect_equal(v$factors, "group"); expect_equal(v$numeric, "age")
-})
-
-test_that("Cacoa object stores the formula actually used and numeric.ref (B11, B20)", {
+test_that("Cacoa object stores the model actually used and numeric.ref (B11, B20)", {
   cao <- makeToyCacoa()
   expect_s3_class(cao, "Cacoa")
-  expect_true(inherits(cao$formula, "formula"))
-  expect_equal(all.vars(cao$formula), "group")
+  expect_true(inherits(cao$model$formula, "formula"))
+  expect_equal(all.vars(cao$model$formula), "group")
   expect_equal(cao$numeric.ref, "auto")
-  expect_equal(cao$contrast, c("group", "B", "A"))
+  expect_equal(cao$model$tests[[1]]$contrast, c("group", "B", "A"))
+  expect_null(cao$formula); expect_null(cao$contrast)                        # legacy fields are gone; the model holds them
   cao2 <- makeToyCacoa(formula = ~ group + batch, numeric.ref = list(age = 40))
-  expect_setequal(all.vars(cao2$formula), c("group", "batch"))
+  expect_setequal(all.vars(cao2$model$formula), c("group", "batch"))
   expect_equal(cao2$numeric.ref, list(age = 40))
 })

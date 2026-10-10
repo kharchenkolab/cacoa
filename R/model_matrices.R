@@ -652,18 +652,3 @@ termContrastMatrix <- function(F, data, variable, levels, numericRef = list()) {
   C[abs(C) < 1e-12] <- 0
   C
 }
-
-# Extract sample-level variable names used by a formula
-varsFromFormula <- function(formula, data, na.action = stats::na.pass) {
-  f  <- if (inherits(formula, "formula")) formula else as.formula(formula)
-  mf <- stats::model.frame(f, data, na.action = na.action)
-  
-  # RHS-only variables (no response in our use, but keep it robust)
-  rhs_vars <- names(mf)
-  
-  # classify by *sample-level* types
-  isNum <- rhs_vars[vapply(rhs_vars, function(v) is.numeric(data[[v]]) && !is.matrix(data[[v]]), logical(1))]
-  isFac <- rhs_vars[vapply(rhs_vars, function(v) is.factor(data[[v]]) || is.character(data[[v]]), logical(1))]
-  list(numeric = isNum, factors = isFac, all = rhs_vars)
-}
-

@@ -70,11 +70,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field sample.per.cell Named factor with cell names (default=NULL)
     sample.per.cell = NULL,
 
-    #' @field formula Design formula for the analysis (default=NULL)
-    formula = NULL,
 
-    #' @field contrast Character vector c(var, alt, ref) specifying contrasts for the analysis (default=NULL)
-    contrast = NULL,
 
     #' @field model.matrices Design model matrices for the analysis (default=NULL)
     model.matrices = NULL,
@@ -2157,10 +2153,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         y.lab <- "Num. cells per sample"
       }
       
-      # Infer grouping variable from the new contrast/metadata model
-      if (is.null(condition)) {
-        condition <- if (!is.null(self$contrast)) self$contrast[1] else colnames(self$sample.meta)[1]
-      }
+      # grouping variable: the primary test's variable
+      if (is.null(condition)) condition <- private$testVariable()
       
       df.melt <- as.data.frame(df.melt)
       df.melt$group <- self$sample.meta[rownames(df.melt), condition]
@@ -3142,10 +3136,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       values <- match.arg(values)
       clust.info <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
       
-      # Determine grouping variable from new model
-      if (is.null(condition)) {
-        condition <- if (!is.null(self$contrast)) self$contrast[1] else colnames(self$sample.meta)[1]
-      }
+      # grouping variable: the primary test's variable
+      if (is.null(condition)) condition <- private$testVariable()
       if (is.null(palette)) palette <- self$sample.groups.palette
       
       # Helper to melt square matrix and filter for within-group distances
@@ -3220,7 +3212,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param space character One of 'expression.shifts', 'coda', 'pseudo.bulk' (default="expression.shifts")
     #' @param values character One of "unadjusted" (observed raw distances), "adjusted" (core/partial fit covariate-adjusted) (default="unadjusted")
     #' @param cell.type character Cell type reference for distancing (default=NULL)
-    #' @param pair.set character samples to be included; "all" (all pairs), "core" (core pairs only) (default="all")
     #' @param dist character Must be one of "cor", "l1" (manhattan), "l2" (euclidian) (default=NULL)
     #' @param name character Results slot name (default=NULL)
     #' @param verbose boolean Print messages (default=self$verbose)
@@ -3233,11 +3224,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param sample.subset optional subset of samples
     #' @param adjust.for optional formula of covariates regressed out of the distances before use (G_adj = R G R)
     getSampleDistanceMatrix=function(space=c('expression.shifts', 'coda', 'pseudo.bulk'), values = c("unadjusted", "adjusted"), 
-                                     cell.type=NULL, pair.set=c("all", "core"), dist=NULL, name=NULL, verbose=self$verbose, sample.subset=NULL,
+                                     cell.type=NULL, dist=NULL, name=NULL, verbose=self$verbose, sample.subset=NULL,
                                      adjust.for=NULL, ...) {
       space <- match.arg(space)
       values <- match.arg(values)
-      pair.set <- match.arg(pair.set)
       extra <- setdiff(names(list(...)), "test")
       if ((space != 'pseudo.bulk') && length(extra)) stop("Unexpected arguments: ", paste(extra, collapse = ", "))
 
@@ -3245,7 +3235,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (is.null(name)) name <- 'expression.shifts'
         res <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
         if (is.null(res$distances)) stop("Result '", name, "' has no sample distances; re-run estimateExpressionShiftMagnitudes().")
-        if (pair.set != "all") message("`pair.set` is deprecated and ignored: distances are per sample, not per pair")
         mats <- if (values == "unadjusted") res$distances else {
           tst <- list(...)$test
           adj <- if (is.null(tst)) res$adjusted.distances[[1]] else if (is.numeric(tst)) res$adjusted.distances[[tst]] else res$adjusted.distances[[tst]]
@@ -3608,8 +3597,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateClusterFreeDE()
     #' }
     #' @param sample.per.cell named factor of sample per cell (default: stored)
-    #' @param sample.metadata sample metadata (default: stored)
     #' @param formula optional location formula for a temporary model (see `estimateExpressionShiftMagnitudes()`)
+    #' @param test optional test for a temporary model (see `Cacoa$new()`); the test must be a contrast (two groups or a numeric step)
     #' @param contrast optional contrast for a temporary model (expert synonym of `test`)
     #' @param perm.method permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'
     #' @param statistic test statistic of the fitter: `"t"` (studentized contrast, default) or `"coef"` (raw contrast estimate)
@@ -3620,7 +3609,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param block.vars metadata columns defining permutation strata (default: stored)
     #' @param ... further arguments passed to the underlying function
     estimateClusterFreeDE=function(n.top.genes=Inf, genes=NULL, max.z=20, min.expr.frac=0.01, min.n.samp.per.cond=2,
-                                   sample.per.cell=self$sample.per.cell, sample.metadata=self$sample.meta, formula=NULL, contrast=NULL,
+                                   sample.per.cell=self$sample.per.cell, formula=NULL, test=NULL, contrast=NULL,
                                    perm.method = "freedman-lane", statistic = c("t", "coef"), robust.method = "none", na.mode = "drop", alternative = "two-sided",
                                    min.n.obs.per.samp=2, adjust.pvalues=FALSE, keep.means=FALSE, robust=FALSE,
                                    smooth=TRUE, wins=0.01, n.permutations=200, lfc.pseudocount=1e-5, block.vars=NULL,
@@ -3631,11 +3620,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         genes <- private$getTopGenes(n.top.genes, gene.selection="expression", min.expr.frac=min.expr.frac)
       }
 
-      if(!is.null(formula) || !is.null(contrast)) { # rebuild sample-level model
-        sample.model <- buildDesignMatrices(data = sample.metadata, contrast = contrast %||% self$contrast, formula= formula %||% self$formula, blockVars = block.vars %||% self$block.vars, numericRef = self$numeric.ref)
-        } else {
-        sample.model <- self$model
-        }
+      sample.model <- private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose, what = "estimateClusterFreeDE()")
+      if (identical(sample.model$contrast_spec$type, "term")) stop("cluster-free DE needs a contrast test (two groups or a numeric step), not a whole-factor test")
 
       if (verbose)
         message("Estimating cluster-free Z-scores for ", length(genes), " most expressed genes")
@@ -4406,13 +4392,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       m
     },
 
-    # legacy two-group fields (ref.level, target.level, sample.groups, contrast, palette names) from the primary test
+    # the variable of the primary test (first metadata column when no model is set)
+    testVariable = function() {
+      v <- if (!is.null(self$model)) self$model$tests[[1]]$variable else NULL
+      if (is.null(v) || is.na(v)) colnames(self$sample.meta)[1] else v
+    },
+
+    # legacy two-group fields (ref.level, target.level, sample.groups, palette names) from the primary test
     syncLegacyFields = function() {
       m <- self$model
       self$ref.level <- self$target.level <- self$sample.groups <- NULL
-      self$formula <- m$formula
       t <- m$tests[[1]]
-      self$contrast <- if (is.character(t$contrast) && length(t$contrast) == 3) t$contrast else t$contrast
       if (t$kind == "contrast" && is.null(t$step) && !is.null(t$variable) && !is.na(t$variable) && all(!is.na(t$levels))) {
         self$ref.level <- unname(t$levels[["ref"]]); self$target.level <- unname(t$levels[["alt"]])
         self$sample.groups <- self$getSampleGroups()
@@ -4601,9 +4591,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         return(d.counts)
       }
       
-      # Adapt to the new metadata and contrast model
-      condition <- if (!is.null(self$contrast)) self$contrast[1] else colnames(self$sample.meta)[1]
-      target <- if (!is.null(self$contrast)) self$contrast[2] else self$target.level
+      # grouping variable and target level of the primary test
+      condition <- private$testVariable()
+      target <- self$target.level
       
       sample.groups <- setNames(self$sample.meta[[condition]], rownames(self$sample.meta))
       

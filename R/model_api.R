@@ -486,7 +486,7 @@ format.cacoaModel <- function(x, ...) {
     pl <- t$permutation
     perm.txt <- if (is.null(pl)) "" else sprintf("permutations: %s%s%s", pl$scheme,
                                                    if (pl$scheme == "block" && pl$n.strata > 1) sprintf(" within %d strata", pl$n.strata) else "",
-                                                   if (is.finite(pl$n.distinct)) sprintf(" (%s distinct)", format(round(pl$n.distinct), big.mark = ",")) else "")
+                                                   if (is.finite(pl$n.distinct)) sprintf(" (%s distinct)", if (pl$n.distinct < 1e7) format(round(pl$n.distinct), big.mark = ",") else "> 10 million") else "")
     guessed <- !is.null(t$reference.reason) && !is.na(t$reference.reason) && t$kind == "contrast" && is.null(t$step) && t$reference.reason != "user"
     ref.txt <- if (!is.null(t$reference.reason) && !is.na(t$reference.reason) && t$kind == "contrast" && is.null(t$step))
       sprintf("  (reference '%s': %s%s)", t$levels[["ref"]], referenceReason(t$reference.reason),

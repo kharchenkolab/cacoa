@@ -803,8 +803,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(cell.types)) df <- df[df$celltype %in% cell.types, ]
       subtitle <- if (show.provenance) {
         prov <- vapply(unique(df$test.id), function(i) modelProvenance(res$model, i), character(1))
-        prov <- sub("([a-z-]+) permutations", sprintf("%d %s\\1 permutations", max(df$n.perm, na.rm = TRUE),
-                                                      if (all(df$n.perm == df$n.perm.distinct, na.rm = TRUE)) "exact " else ""), prov)
+        prov <- permutationPhrase(prov, df)
         sc <- unique(df$scheme); fl <- unique(df$p.floor)
         rob <- c(if (!identical(res$settings$robust %||% "none", "none")) sprintf("robust: %s", res$settings$robust),
                  if (identical(res$settings$na.mode, "impute_weak")) "absent samples weakly imputed")

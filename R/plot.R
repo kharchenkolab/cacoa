@@ -682,7 +682,7 @@ transferLabelLayer <- function(gg.target, gg.source, font.size) {
 getScaledZGradient <- function(min.z, palette, color.range) {
   if (length(color.range) == 1) {
     if (min.z > (color.range - 1e-10))
-      return(scale_color_gradientn(colors="grey80", limits=c(0, max(color.range, 1e-10))))
+      return(scale_color_gradientn(colors="grey80", limits=c(0, max(color.range, 1e-10)), guide="none"))
 
     col.vals <- c(0, seq(min.z, color.range, length.out=20))
     color.range <- c(0, color.range)

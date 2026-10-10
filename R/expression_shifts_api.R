@@ -390,9 +390,7 @@ print.cacoaExpressionShifts <- function(x, digits = 2, ...) {
   for (t in unique(x$results$test.id)) {
     d <- x$results[x$results$test.id == t, ]
     effs <- intersect(effectOrder, unique(d$effect))
-    prov <- sub("([a-z-]+) permutations", sprintf("%d %s\\1 permutations", max(d$n.perm, na.rm = TRUE),
-                                                  if (all(d$n.perm == d$n.perm.distinct, na.rm = TRUE)) "exact " else ""),
-                modelProvenance(x$model, t, extra = sprintf("distance %s", s$dist)))
+    prov <- permutationPhrase(modelProvenance(x$model, t, extra = sprintf("distance %s", s$dist)), d)
     cat(sprintf("Expression shifts: %s\n", prov))
     cts <- unique(d$celltype)
     tab <- data.frame(celltype = cts, n = d$n[match(cts, d$celltype)], stringsAsFactors = FALSE)
@@ -410,4 +408,12 @@ print.cacoaExpressionShifts <- function(x, digits = 2, ...) {
   if (!is.null(x$skipped) && nrow(x$skipped)) cat(sprintf("  not tested: %s\n", paste(unique(x$skipped$celltype), collapse = ", ")))
   cat("  (normalized effects; full tables in $results and $wide)\n")
   invisible(x)
+}
+
+# replace the model-level permutation phrase of a provenance string by what the results actually used
+permutationPhrase <- function(prov, d) {
+  np <- max(d$n.perm, na.rm = TRUE)
+  exact <- all(abs(d$n.perm - d$n.perm.distinct) < 0.5, na.rm = TRUE)
+  prov <- sub(" \\(floor [^)]*\\)", "", prov)
+  sub("([a-z-]+) permutations", sprintf("%d %s\\1 permutations (smallest p %.2g)", np, if (exact) "exact " else "", max(d$p.floor, na.rm = TRUE)), prov)
 }

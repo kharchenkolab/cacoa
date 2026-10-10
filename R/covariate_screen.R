@@ -118,6 +118,7 @@ screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "
   covariates <- setdiff(covariates, adj.vars)
   modes <- if (mode == "both") c("marginal", "partial") else mode
   all.samples <- rownames(meta)
+  skipped.types <- names(D.list)[vapply(D.list, function(D) is.null(D) || nrow(D) < min.samples.per.type, logical(1))]
   D.list <- Filter(function(D) !is.null(D) && nrow(D) >= min.samples.per.type, D.list)
   if (!length(D.list)) stop("no cell type has at least ", min.samples.per.type, " samples")
   if (any(vapply(D.list, function(D) is.null(rownames(D)) || !all(rownames(D) %in% all.samples), logical(1))))
@@ -191,8 +192,9 @@ screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "
   suggestion <- if (length(terms)) stats::as.formula(paste("~", paste(terms, collapse = " + "))) else NULL
   res <- structure(list(table = tab, global = global, suggestion = suggestion, covariates = covariates, modes = modes,
                         settings = list(dist = dist, p.values = p.values, robust = robust, robust.k = robust.k, n.permutations = nperm, adjust.for = adjust.for, alpha = alpha,
+                                        min.samples.per.type = min.samples.per.type,
                                         test.variable = test.variable, threshold.types = thr, seed = seed),
-                        notes = notes, celltypes = cts, over.adjustment = over),
+                        notes = notes, celltypes = cts, skipped = skipped.types, over.adjustment = over),
                    class = c("cacoaCovariateScreen", "list"))
   if (verbose) print(res)
   res
@@ -204,6 +206,7 @@ print.cacoaCovariateScreen <- function(x, ...) {
   g <- x$global[x$global$mode == sm, ]; g <- g[order(-g$n.sig, g$p.global), ]
   cat(sprintf("Covariate screen: %d covariates x %d cell types, %s mode, %s p-values%s\n", length(x$covariates), length(x$celltypes), paste(x$modes, collapse = " + "),
               x$settings$p.values, if (x$settings$p.values == "analytic") " (approximate)" else sprintf(" (%d permutations)", x$settings$n.permutations)))
+  if (length(x$skipped)) cat(sprintf("  not screened (fewer than %d samples): %s\n", x$settings$min.samples.per.type %||% 6, paste(x$skipped, collapse = ", ")))
   hit <- g[g$n.sig >= x$settings$threshold.types, ]
   if (nrow(hit)) cat(sprintf("Associated with expression in >= %d cell types (%s, FDR %.0f%%): %s\n", x$settings$threshold.types, sm, 100 * a,
                              paste(sprintf("%s (%d types, global p %.3g)", hit$covariate, hit$n.sig, hit$p.global), collapse = ", ")))
@@ -237,6 +240,8 @@ print.cacoaCovariateScreen <- function(x, ...) {
 variancePartition <- function(G, meta, covariates, dist = NULL) {
   if (!is.null(dist)) G <- gowerCenter(asSquaredDistance(G, dist))
   samples <- rownames(G); meta <- meta[samples, , drop = FALSE]
+  const <- vapply(covariates, function(v) { x <- meta[[all.vars(str2lang(v))[1]]]; length(unique(stats::na.omit(x))) < 2 }, logical(1))
+  if (nrow(meta) < 6 || any(const)) return(NULL)
   cols <- lapply(covariates, function(v) covariateColumns(meta, v)); names(cols) <- covariates
   ok <- stats::complete.cases(do.call(cbind, cols))
   if (sum(ok) < 6 || any(vapply(cols, function(x) all(apply(x[ok, , drop = FALSE], 2, function(z) length(unique(z)) < 2)), logical(1)))) return(NULL)

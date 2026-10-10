@@ -77,21 +77,11 @@ lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), zero.
   D <- nrow(psi)
   cell.types <- rownames(psi)
   
-  ## 1b) Choose the *design space* based on perm.method
-  ##     - block         -> full F
-  ##     - freedman-lane -> core X
-  if (perm.method == "freedman-lane") {
-    design <- model$X
-    contrast.vec <- model$contrast.X
-    endpoints <- model$contrast_endpoints_X
-  } else {  # "block"
-    design <- model$F
-    contrast.vec <- model$contrast.F
-    endpoints <- model$contrast_endpoints_F
-  }
-  
-  if (is.null(design))
-    stop("Design matrix for perm.method='", perm.method, "' is missing in model.")
+  ## 1b) Design space: the full design F (level means for the tested factor); the contrast scheme only affects the permutations
+  design <- model$F
+  contrast.vec <- model$contrast.F
+  endpoints <- model$contrast_endpoints_F
+  if (is.null(design)) stop("Design matrix F is missing in model.")
   if (nrow(design) != nrow(B.ilr))
     stop("Row counts of design matrix and ILR matrix do not match.")
   
@@ -102,17 +92,17 @@ lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), zero.
   ## 2) Linear model + permutations in ILR space
   fit <- performLMPermutations(model, B.ilr, perm.method = perm.method,
                                return.sampled.stats = TRUE,
-                               return.sampled.fits  = TRUE, ...)
+                               return.sampled.fits  = FALSE, ...)
   
-  coef.mat     <- fit$coef          # n_coef × K, aligned with chosen design
+  # coefficients in F space (level means of the tested factor in ILR coordinates) for predictions and adjusted ILR
+  coef.mat <- qr.coef(qr(design), B.ilr); coef.mat[is.na(coef.mat)] <- 0
+  dimnames(coef.mat) <- list(colnames(design), colnames(B.ilr))
+  fit$coef <- coef.mat
   stat.obs     <- as.numeric(fit$effect)        # length K: contrast effect in ILR space (the loadings are built from effects, not from the test statistic)
   stats.perm   <- as.matrix(fit$effects.perm)   # n_perm × K: the same under relabeling
-  sampled.fits <- fit$sampled.fits          # list length K
   
   n.coef     <- nrow(coef.mat)
   n.perm     <- nrow(stats.perm)
-  coef.names <- rownames(coef.mat)
-  ilr.names  <- colnames(coef.mat)
   
   ## --------------------------------------------------------
   ## 3) USER-DEFINED CONTRAST
@@ -204,51 +194,6 @@ lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), zero.
   }
   
   ## --------------------------------------------------------
-  ## 4) PER-COEFFICIENT EFFECTS (each design parameter)
-  ##     Uses the chosen 'design' (F or X) for var-expl scaling
-  ## --------------------------------------------------------
-  coef.results <- vector("list", length = n.coef)
-  names(coef.results) <- coef.names
-  
-  for (j in seq_len(n.coef)) {
-    # ILR-space coefficient for j
-    beta.j.obs <- coef.mat[j, ]             # length K
-    
-    # Permuted ILR-space coefficients for j: n_perm × K
-    # each element of sampled.fits[[k]] is n_perm × n_coef
-    beta.j.perm <- sapply(sampled.fits, function(mat) mat[, j])
-    # sapply gives n_perm × K with columns matching ILR dims
-    
-    ## Global stat for coefficient j = variance explained
-    x.j    <- design[, j]
-    sum.x2 <- sum(x.j^2)
-    scale.j <- sum.x2 / total.ss
-    
-    T.j.obs  <- scale.j * sum(beta.j.obs^2)
-    T.j.perm <- scale.j * rowSums(beta.j.perm^2)
-    p.j.global <- (sum(T.j.perm >= T.j.obs) + 1) / (length(T.j.perm) + 1)
-    
-    # Map to cell-type loadings
-    ell.j.obs  <- drop(psi %*% beta.j.obs)    # D
-    ell.j.perm <- psi %*% t(beta.j.perm)      # D × n_perm
-    rownames(ell.j.perm) <- cell.types
-    
-    # Per-cell p-values for coefficient j
-    p.j.cell <- (rowSums(abs(ell.j.perm) >= abs(ell.j.obs)) + 1) /
-                (n.perm + 1)
-    names(p.j.cell) <- cell.types
-    padj.j.cell <- p.adjust(p.j.cell, method = "fdr")
-    
-    coef.results[[j]] <- list(beta_ilr  = beta.j.obs, # ILR effect vector for coefficient j
-                              global = list(stat = T.j.obs, # variance explained by coefficient j
-                       stat_perm = T.j.perm, # background
-                       p = p.j.global),
-      loadings  = ell.j.obs,       # cell-type loadings (ref-free)
-      pval_cell = p.j.cell,
-      padj_cell = padj.j.cell)
-  }
-  
-  ## --------------------------------------------------------
   ## 5) Final result structure
   ## --------------------------------------------------------
   list(ilr = B.ilr, psi = psi, freqs = freqs,
@@ -263,8 +208,7 @@ lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), zero.
                        per_cell = list(pval = p.contrast.cell, padj = padj.contrast.cell),
                        predicted = predicted,# baseline / target / delta compositions (if available)
                        label = if (!is.null(model$contrast_label)) model$contrast_label else NULL),
-   
-       coefficients = coef.results,  # Per-coefficient results
+       coef = coef.mat,              # F-space coefficients (level means in ILR space)
        reference = ref)
 }
 

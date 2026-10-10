@@ -108,7 +108,8 @@ test_that("buildCacoaModel builds designs per test, drops incomplete samples and
   m5 <- buildCacoaModel(meta, formula = ~ condition + stage + batch, test = c("condition", "stage"))
   expect_length(m5$tests, 2)
   expect_equal(m5$tests[[2]]$kind, "term")
-  expect_equal(m5$tests[[2]]$design$term.cols, c("stageII", "stageIII"))
+  expect_equal(colnames(m5$tests[[2]]$design$term.contrast), c("II vs I", "III vs I"))
+  expect_equal(colnames(m5$tests[[2]]$design$F)[1:3], c("stageI", "stageII", "stageIII"))
   # ID-like column in the formula is an error
   expect_error(buildCacoaModel(meta, formula = ~ condition + sample_id, test = "condition"), "unique value per sample")
   # aliasing: condition fully determined by a nested covariate

@@ -72,13 +72,15 @@ termEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL, di
   F <- design$F[samples, , drop = FALSE]
   keep <- colSums(abs(F)) > 1e-12
   Xf <- F[, keep, drop = FALSE]
-  tcols <- intersect(design$term.cols, colnames(Xf))
-  if (!length(tcols)) return(skip("no level of the tested term varies in this cell type"))
-  Xr <- Xf[, setdiff(colnames(Xf), tcols), drop = FALSE]
-  if (!ncol(Xr)) Xr <- matrix(1, nrow(Xf), 1, dimnames = list(rownames(Xf), "(Intercept)"))
-  if (qr(Xf)$rank >= nrow(Xf)) return(skip("no residual degrees of freedom"))
   g <- as.character(meta[present, v]); tb <- table(g)
   if (sum(tb >= min.samp.per.level) < 2) return(skip(sprintf("fewer than 2 levels of %s with at least %d samples", v, min.samp.per.level)))
+  # reduced model: the full design without the level differences of the levels present (reference first)
+  levs.present <- intersect(design$term.levels %||% names(tb), names(tb))
+  if (length(levs.present) < 2) return(skip("no level of the tested term varies in this cell type"))
+  Ck <- termContrastMatrix(design$F, meta[samples, , drop = FALSE], v, levs.present, design$numeric_ref_used)[keep, , drop = FALSE]
+  if (!all(apply(Ck, 2, function(cv) isEstimable(Xf, cv)))) return(skip("term contrasts not estimable for this cell type's design"))
+  Xr <- Xf %*% nullBasis(Ck); colnames(Xr) <- paste0("r", seq_len(ncol(Xr))); rownames(Xr) <- rownames(Xf)
+  if (qr(Xf)$rank >= nrow(Xf)) return(skip("no residual degrees of freedom"))
   if (is.null(dispersion.formula)) dispersion.formula <- stats::as.formula(paste("~", v))
   Zf.full <- buildFullDesign(dispersion.formula, meta[samples, , drop = FALSE])
   zk <- colSums(abs(Zf.full)) > 1e-12; Zf <- Zf.full[, zk, drop = FALSE]

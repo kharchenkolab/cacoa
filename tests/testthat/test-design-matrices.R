@@ -8,16 +8,20 @@ makeMeta <- function(n = 24, seed = 10) {
              row.names = sprintf("s%02d", seq_len(n)))
 }
 
-test_that("triple contrast builds X/Z split with endpoints", {
+test_that("triple contrast: level-means coding, contrast = endpoint difference, split by direction", {
   meta <- makeMeta()
   des <- cacoa:::buildDesignMatrices(meta, contrast = c("group", "B", "A"), formula = ~ group + batch + age)
   expect_equal(nrow(des$F), nrow(meta))
-  expect_setequal(names(des$contrast.F), colnames(des$F))
+  expect_equal(colnames(des$F), c("groupA", "groupB", "groupC", "batchb2", "age"))
+  expect_equal(names(des$contrast.F), colnames(des$F)); expect_equal(unname(des$contrast.F), c(-1, 1, 0, 0, 0))
   expect_true(all(c("num", "den") %in% names(des$contrast_endpoints_F)))
   expect_equal(unname(des$contrast_endpoints_F$num - des$contrast_endpoints_F$den), unname(des$contrast.F))
-  # nuisance columns carry zero contrast weight
-  expect_true(all(abs(des$contrast.F[colnames(des$Z)]) < 1e-12))
-  # no core-row mask any more: every sample takes part in the fit
+  # X = F c / c'c carries the contrast, Z the rest; together they span F
+  expect_equal(colnames(des$X), "contrast"); expect_equal(ncol(des$Z), 4)
+  set.seed(1); y <- rnorm(nrow(meta))
+  b <- qr.coef(qr(cbind(des$X, des$Z)), y)
+  expect_equal(unname(b[1]), unname(coef(lm(y ~ group + batch + age, meta))["groupB"]), tolerance = 1e-10)
+  expect_equal(unname(qr.coef(qr(des$F), y)), unname(coef(lm(y ~ 0 + group + batch + age, meta))), tolerance = 1e-10)
   expect_null(des$core.rows)
 })
 

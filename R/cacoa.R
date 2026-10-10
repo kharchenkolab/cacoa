@@ -3282,9 +3282,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           if (is.null(coda.info$fit) || is.null(coda.info$fit$coef))
         stop("Missing coda.info$fit$coef.")
 
-          perm.method <- coda.info$perm.method %||% "freedman-lane"
-          design <- if (perm.method == "freedman-lane") coda.info$model$X else coda.info$model$F
-          if (is.null(design)) stop("Design matrix missing for perm.method='", perm.method, "'.")
+          design <- coda.info$model$F                      # coefficients are in F space (level means in ILR coordinates)
+          if (is.null(design)) stop("Design matrix F missing in coda.info$model.")
 
           # Align design rows to ilr rows by sample id
           s <- intersect(rownames(coda.info$ilr), rownames(design))

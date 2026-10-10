@@ -585,6 +585,17 @@ isContrastNonzero <- function(contrast, tol = 1e-12) {
     any(abs(contrast) > tol)
 }
 
+# term-test contrast matrix (level differences) aligned to the columns of a possibly repaired design; NULL for contrast tests
+#' @keywords internal
+termContrastForDesign <- function(model, design) {
+  C <- model$term.contrast
+  if (is.null(C)) return(NULL)
+  Cm <- matrix(0, ncol(design), ncol(C), dimnames = list(colnames(design), colnames(C)))
+  common <- intersect(rownames(C), colnames(design))
+  Cm[common, ] <- C[common, , drop = FALSE]
+  Cm[, colSums(abs(Cm)) > 1e-12, drop = FALSE]
+}
+
 
 #' @keywords internal
 coerceDEResultToDF <- function(res) {
@@ -893,18 +904,18 @@ estimateDEForTypeEdgeR <- function(cm, model) {
         stop("Row names of model$F (samples) must match column names of cm (samples).")
     }
     # Sanity check for contrast (not needed for whole-term tests)
-    if (is.null(model$term.cols) && !identical(names(contrast), colnames(design))) {
+    if (is.null(model$term.contrast) && !identical(names(contrast), colnames(design))) {
         stop("names(model$contrast.F) must exactly match colnames(model$F).")
     }
-    term.cols <- intersect(model$term.cols %||% character(0), colnames(design))
+    Cm <- termContrastForDesign(model, design)
     # edgeR pipeline
     dge <- edgeR::DGEList(counts = cm)
     dge <- edgeR::calcNormFactors(dge)
     dge <- edgeR::estimateDisp(dge, design = design)
     fit <- edgeR::glmQLFit(dge, design = design)
     
-    # Test the supplied contrast (or the whole term: F-test on its columns)
-    qlf <- if (length(term.cols)) edgeR::glmQLFTest(fit, coef = term.cols) else edgeR::glmQLFTest(fit, contrast = contrast)
+    # Test the supplied contrast (or the whole term: F-test on its level-difference contrasts)
+    qlf <- if (!is.null(Cm)) edgeR::glmQLFTest(fit, contrast = Cm) else edgeR::glmQLFTest(fit, contrast = contrast)
     
     # --- Compute per-gene stats (already in qlf$table)
     tab <- qlf$table
@@ -957,7 +968,7 @@ estimateDEForTypeLimma <- function(cm, model) {
         stop("Row names of model$F (samples) must match column names of cm (samples).")
     }
     # Sanity check for contrast (not needed for whole-term tests)
-    if (is.null(model$term.cols) && !identical(names(contrast), colnames(design))) {
+    if (is.null(model$term.contrast) && !identical(names(contrast), colnames(design))) {
         stop("names(model$contrast.F) must exactly match colnames(model$F).")
     }
     
@@ -967,11 +978,15 @@ estimateDEForTypeLimma <- function(cm, model) {
     v   <- limma::voom(dge, design = design, plot = FALSE)
     
     fit <- limma::lmFit(v, design = design)
-    term.cols <- intersect(model$term.cols %||% character(0), colnames(design))
-    if (length(term.cols)) {   # whole-factor test: moderated F over the term's columns
-      fit2 <- limma::eBayes(fit)
-      tt <- limma::topTable(fit2, coef = term.cols, sort.by = "F", n = Inf)
-      lfc <- apply(as.matrix(tt[, term.cols, drop = FALSE]), 1, function(x) x[which.max(abs(x))])
+    Cm <- termContrastForDesign(model, design)
+    if (!is.null(Cm)) {   # whole-factor test: moderated F over the level-difference contrasts
+      fit2 <- limma::eBayes(limma::contrasts.fit(fit, Cm))
+      if (ncol(Cm) == 1) {
+        tt <- limma::topTable(fit2, coef = 1, sort.by = "P", n = Inf)
+        return(data.frame(log2FoldChange = tt$logFC, AveExpr = tt$AveExpr, stat = tt$t, pvalue = tt$P.Value, padj = tt$adj.P.Val, row.names = rownames(tt)))
+      }
+      tt <- limma::topTable(fit2, coef = seq_len(ncol(Cm)), sort.by = "F", n = Inf)
+      lfc <- apply(as.matrix(fit2$coefficients[rownames(tt), , drop = FALSE]), 1, function(x) x[which.max(abs(x))])   # largest level difference
       return(data.frame(log2FoldChange = lfc, AveExpr = tt$AveExpr, stat = tt$F, pvalue = tt$P.Value, padj = tt$adj.P.Val, row.names = rownames(tt)))
     }
   

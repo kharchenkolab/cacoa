@@ -171,3 +171,37 @@ test_that("listwise deletion and design issues are recorded", {
   m <- buildCacoaModel(mm, ~ group + copy, test = "group")
   expect_true(any(m$issues$severity == "error")); expect_match(m$issues$message[m$issues$severity == "error"], "fully determined")
 })
+
+test_that("coding: the tested factor is coded as level means (reference first) and names are stable across tests", {
+  meta <- mbMeta(); meta3 <- mbMeta3()
+  d <- buildCacoaModel(meta, ~ group + batch, test = "group")$tests[[1]]$design
+  expect_equal(colnames(d$F), c("groupA", "groupB", "batchb2"))
+  expect_equal(unname(d$contrast.F), c(-1, 1, 0)); expect_equal(colnames(d$X), "contrast"); expect_equal(ncol(d$Z), 2)
+  set.seed(1); y <- rnorm(12); mm <- meta; mm$group <- factor(mm$group); mm$batch <- factor(mm$batch)
+  expect_equal(unname(qr.coef(qr(d$F), y)), unname(coef(lm(y ~ 0 + group + batch, mm))), tolerance = 1e-10)
+  b <- qr.coef(qr(cbind(d$X, d$Z)), y)
+  expect_equal(unname(b[1]), unname(coef(lm(y ~ group + batch, mm))["groupB"]), tolerance = 1e-10)
+  # three-level factor: the same columns for every test of one model; level differences for the term test
+  m <- buildCacoaModel(meta3, ~ Group + Batch, test = c("Group: G2 vs G1", "Group: G3 vs G1", "Group"))
+  cn <- lapply(m$tests, function(t) colnames(t$design$F))
+  expect_true(all(vapply(cn, identical, logical(1), cn[[1]]))); expect_equal(cn[[1]], c("GroupG1", "GroupG2", "GroupG3", "Batchb2"))
+  expect_equal(unname(m$tests[[1]]$design$contrast.F), c(-1, 1, 0, 0)); expect_equal(unname(m$tests[[2]]$design$contrast.F), c(-1, 0, 1, 0))
+  expect_equal(colnames(m$tests[[3]]$design$term.contrast), c("G2 vs G1", "G3 vs G1"))
+  expect_equal(unname(m$tests[[3]]$design$term.contrast[, 1]), c(-1, 1, 0, 0))
+  # the reference level comes first even when it is not the first level alphabetically
+  mm2 <- meta; mm2$cond <- rep(c("disease", "control"), each = 6)
+  expect_equal(colnames(buildCacoaModel(mm2, test = "cond")$tests[[1]]$design$F), c("condcontrol", "conddisease"))
+  # logical test variable
+  mm2$treated <- rep(c(FALSE, TRUE), each = 6)
+  dl <- buildCacoaModel(mm2, test = "treated")$tests[[1]]$design
+  expect_equal(colnames(dl$F), c("treatedFALSE", "treatedTRUE")); expect_equal(unname(dl$contrast.F), c(-1, 1))
+  # numeric test variable keeps the intercept; interaction model stays full rank; explicit no-intercept formula; factor() wrapper
+  expect_equal(colnames(buildCacoaModel(meta, ~ age + batch, test = "age")$tests[[1]]$design$F), c("(Intercept)", "age", "batchb2"))
+  di <- buildCacoaModel(meta, ~ group * batch, test = list(type = "marginal", term = "group", num = "B", den = "A", over = "batch"))$tests[[1]]$design
+  expect_equal(colnames(di$F), c("groupA", "groupB", "batchb2", "groupB:batchb2")); expect_equal(qr(di$F)$rank, 4)
+  expect_equal(colnames(buildCacoaModel(meta, ~ 0 + batch + group, test = "group")$tests[[1]]$design$F), c("groupA", "groupB", "batchb2"))
+  mm3 <- meta; mm3$batch <- rep(1:2, 6)
+  expect_equal(colnames(buildCacoaModel(mm3, ~ group + factor(batch), test = "group")$tests[[1]]$design$F), c("groupA", "groupB", "factor(batch)2"))
+  # the default formula of the expert constructor gives the same coding
+  expect_equal(colnames(suppressMessages(buildDesignMatrices(meta, contrast = c("group", "B", "A")))$F), c("groupA", "groupB"))
+})

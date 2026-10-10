@@ -216,9 +216,13 @@ dispersionTermTest <- function(G, Xloc, Zf, Zr) {
 partialR2PerTerm <- function(G, X, assign, term.labels) {
   X <- as.matrix(X); hf <- hatInfo(X)
   out <- setNames(rep(NA_real_, length(term.labels)), term.labels)
+  one <- rep(1, nrow(X))
   for (k in seq_along(term.labels)) {
     keep <- assign != k
-    hr <- hatInfo(X[, keep, drop = FALSE])
+    Xr <- X[, keep, drop = FALSE]
+    # a factor coded as level means has no intercept column: removing its columns must not remove the mean
+    if (!ncol(Xr) || sqrt(sum(qr.resid(qr(Xr), one)^2)) > 1e-8) Xr <- cbind(`(Intercept)` = one, Xr)
+    hr <- hatInfo(Xr)
     num <- sum((hf$H - hr$H) * G); den <- sum(diag(G)) - sum(hr$H * G)
     out[k] <- if (den > 0) num / den else NA_real_
   }
@@ -305,7 +309,6 @@ defaultDispersionFormula <- function(spec) {
   vars <- switch(spec$type,
                  simple   = parseTermVars(spec$term),
                  marginal = spec$term,
-                 lincomb  = parseTermVars(spec$term),
                  coef     = character(0))
   if (!length(vars)) return(~ 1)
   stats::as.formula(paste("~", paste(unique(vars), collapse = " + ")))

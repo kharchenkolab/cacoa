@@ -235,7 +235,7 @@ resolveTests <- function(test = NULL, contrast = NULL, meta, formula = NULL, num
   if (is.list(spec) && !is.data.frame(spec)) {                       # structured contrast (expert)
     if (!is.null(spec$type)) {
       sp <- normalizeContrastSpec(spec)
-      v <- switch(sp$type, simple = parseTermVars(sp$term)[1], marginal = sp$term, lincomb = parseTermVars(sp$term)[1], coef = NA_character_)
+      v <- switch(sp$type, simple = parseTermVars(sp$term)[1], marginal = sp$term, coef = NA_character_)
       add(list(kind = "contrast", variable = v, contrast = spec, levels = c(ref = as.character(sp$den %||% NA), alt = as.character(sp$num %||% NA)),
                label = contrastLabel(sp), reference.reason = "user"))
     } else {
@@ -267,7 +267,6 @@ contrastLabel <- function(sp) {
          simple = sprintf("%s: %s vs %s%s", sp$term, sp$num, sp$den,
                           if (length(sp$at)) sprintf(" at %s", paste(sprintf("%s = %s", names(sp$at), unlist(sp$at)), collapse = ", ")) else ""),
          marginal = sprintf("%s: %s vs %s (averaged over %s)", sp$term, sp$num, sp$den, paste(sp$over, collapse = ", ")),
-         lincomb = sprintf("%s: %s", sp$term, paste(sprintf("%+g*%s", sp$cells, names(sp$cells)), collapse = " ")),
          coef = paste(sprintf("%+g*%s", sp$coefs, names(sp$coefs)), collapse = " "))
 }
 
@@ -351,7 +350,7 @@ buildCacoaModel <- function(meta, formula = NULL, test = NULL, contrast = NULL, 
       d <- buildDesignMatrices(meta.used, contrast = t$contrast, formula = formula, numericRef = numeric.ref,
                                blockVars = block.vars, verbosity = verbosity)
     } else {   # term: design with an all-zero contrast on the term's columns marks the tested columns
-      d <- buildTermDesign(meta.used, formula, t$variable, numeric.ref, block.vars)
+      d <- buildTermDesign(meta.used, formula, t$variable, numeric.ref, block.vars, ref = t$levels[["ref"]])
     }
     t$design <- d
     plan <- tryCatch(permutationPlan(d, meta.used, scheme = permutation, block.vars = block.vars, n.permutations = n.permutations, max.enumerate = 0),
@@ -372,21 +371,33 @@ buildCacoaModel <- function(meta, formula = NULL, test = NULL, contrast = NULL, 
   m
 }
 
-# Design for a term test: the full location design plus `term.cols` (which columns belong to the tested
-# variable) and a contrast carrying the term's columns (used only to locate them).
-buildTermDesign <- function(meta, formula, variable, numeric.ref = "auto", block.vars = NULL) {
-  F <- buildFullDesign(formula, meta)
-  assign <- attr(F, "assign"); tl <- attr(attr(F, "terms"), "term.labels")
-  in.term <- vapply(tl, function(t) variable %in% all.vars(str2lang(t)), logical(1))
-  term.cols <- colnames(F)[assign %in% which(in.term)]
-  if (!length(term.cols)) stop(sprintf("'%s' is not a term of the formula", variable))
-  cF <- setNames(numeric(ncol(F)), colnames(F)); cF[term.cols] <- 1
-  Z <- F[, setdiff(colnames(F), term.cols), drop = FALSE]
-  list(F = F, X = F[, term.cols, drop = FALSE], Z = if (ncol(Z)) Z else NULL, contrast.F = cF, contrast.X = cF[term.cols],
-       qrZ = if (ncol(Z)) qr(Z) else NULL,
-       diagnostics = NULL, numeric_ref_used = list(), formula_used = formula, contrast_spec = list(type = "term", term = variable),
-       baselines_used = NULL, contrast_endpoints_F = NULL, contrast_endpoints_X = NULL, contrast_label = sprintf("%s (term)", variable),
-       contrast_endpoint_labels = NULL, contrast_endpoints_at = NULL, term.cols = term.cols, term.variable = variable)
+# Design for a term test: the tested factor coded as level means (reference first), the K - 1 level-difference
+# contrasts `term.contrast` (main effect at the reference setting of the other covariates), and the split
+# X = F C (C'C)^-1 (coefficients = the level differences), Z = F N (everything the term does not test).
+buildTermDesign <- function(meta, formula, variable, numeric.ref = "auto", block.vars = NULL, ref = NULL) {
+  formula <- stats::as.formula(checkFormula(formula))
+  formula_used <- pruneFormulaByData(formula, meta)
+  x <- meta[[variable]]
+  levs <- if (is.logical(x)) c("FALSE", "TRUE") else if (is.factor(x)) levels(droplevels(x)) else sort(unique(as.character(x[!is.na(x)])))
+  if (is.null(ref) || !ref %in% levs) ref <- levs[1]
+  levs <- c(ref, setdiff(levs, ref))
+  coding <- designCoding(formula_used, meta, tested = variable, ref = ref)
+  F <- buildFullDesign(coding$formula, meta, baselines = coding$baselines)
+  if (!any(attr(stats::terms(coding$formula, data = meta), "term.labels") == variable) &&
+      !any(vapply(attr(stats::terms(coding$formula, data = meta), "term.labels"), function(t) variable %in% all.vars(str2lang(t)), logical(1))))
+    stop(sprintf("'%s' is not a term of the formula", variable))
+  numRef <- if (is.list(numeric.ref)) numeric.ref else list()
+  C <- termContrastMatrix(F, meta, variable, levs, numRef)
+  X <- F %*% C %*% solve(crossprod(C)); colnames(X) <- colnames(C); rownames(X) <- rownames(F)
+  N <- nullBasis(C); Z <- if (ncol(N)) F %*% N else NULL
+  if (!is.null(Z)) { colnames(Z) <- paste0("nuisance", seq_len(ncol(Z))); rownames(Z) <- rownames(F) }
+  cF <- stats::setNames(as.numeric(rowSums(abs(C)) > 1e-12), colnames(F))      # marks the columns the term's contrasts involve
+  list(F = F, X = X, Z = Z, contrast.F = cF, contrast.X = NULL, meta = meta,
+       formula_used = formula_used, formula_coded = coding$formula,
+       contrast_spec = list(type = "term", term = variable), term.contrast = C, term.variable = variable, term.levels = levs,
+       numeric_ref_used = numRef, contrast_endpoints_F = NULL, contrast_endpoints_at = NULL,
+       contrast_label = sprintf("%s (term)", variable), contrast_endpoint_labels = NULL,
+       tested.variable = variable, reference = ref, notes = character(0))
 }
 
 # Issues of a model: structural (aliasing of the test term), warnings (small levels, df budget, permutation
@@ -400,6 +411,10 @@ designIssues <- function(tests, meta, formula, dropped = character(0)) {
   F <- tests[[1]]$design$F
   q <- qr(F)$rank
   if (q < ncol(F)) add("warning", sprintf("design is rank-deficient (rank %d < %d columns)", q, ncol(F)), "remove redundant covariates")
+  else {
+    sv <- svd(F, nu = 0, nv = 0)$d; kappa <- if (length(sv) && min(sv) > 0) max(sv) / min(sv) else Inf
+    if (kappa > 1e4) add("note", sprintf("design is ill-conditioned (condition number %.2g)", kappa), "check for nearly collinear covariates (cao$checkDesign())")
+  }
   if (n - q < 10) add(if (n - q < 1) "error" else "warning", sprintf("only %d residual degrees of freedom (n = %d, %d parameters)", n - q, n, q),
                       "fewer covariates, or restrict to the test variable")
   for (t in tests) {

@@ -1,232 +1,163 @@
-#' Prepare core/nuisance design matrices from metadata and a linear contrast
+#' Sample-level design and contrast for one test
 #'
 #' @description
-#' **`buildDesignMatrices()`** takes a sample-level metadata table, an optional
-#' model formula, and a *synthetic* linear contrast, and returns:
-#' - the **full model matrix** `F`,
-#' - a **core** sub-matrix `X` containing the columns used by the contrast,
-#' - a **nuisance** sub-matrix `Z` containing the remaining columns,
-#' - the contrast vector in coefficient space (`contrast.F` and `contrast.X`),
-#' - optional **FL plumbing** (`qrZ`) and **permutation blocks** diagnostics.
+#' Builds the design matrix `F` of a sample-level model and the contrast vector `contrast.F` that every engine of
+#' cacoa tests, from the sample metadata, a formula and a contrast specification. The workflow entry point is
+#' [buildCacoaModel()] (which calls this for every test); this function is the expert constructor for one contrast.
 #'
-#' ### What happens if `formula` is not supplied?
-#' If `formula` is `NULL`, a safe default is built from the supplied `data`:
+#' ## Coding
+#' When the tested variable is a factor it is coded without an intercept and placed first, so its coefficients are
+#' the level means at the reference setting of the other covariates (`~ 0 + group + batch` gives
+#' `groupA, groupB, batchb2`). The reference level comes first. Other factors keep treatment coding; a numeric
+#' tested variable keeps the intercept. Character and logical columns are treated as factors.
 #'
-#' - If **any factor/character** column is present: a **saturated** design
-#'   is used (no intercept): `~ 0 + col1 + col2 + ...` so every factor level
-#'   has its own dummy column and no level is dropped.
-#' - If **all columns are numeric**: an **intercept-included** design is used:
-#'   `~ col1 + col2 + ...` (i.e., includes `(Intercept)`).
+#' ## Contrast
+#' The contrast is the difference of two design rows (`row(alt) - row(ref)`), each evaluated with the other
+#' factors at their reference level and the other numeric covariates at their anchors (`numericRef`: `"auto"` =
+#' sample means, or a named list), so transformed covariates (`log(age)`, `poly(age, 2)`) and interactions are
+#' handled uniformly. Forms:
+#' - a triple `c("group", "B", "A")`: group B against group A; with interactions of `group` in the model, use
+#'   one of the structured forms below;
+#' - `list(type = "simple", term = "group", num = "B", den = "A", at = list(batch = "b2"))`: the comparison at a
+#'   fixed setting of other factors; `term = "group:batch"` with `num = "B:b2"` compares interaction cells;
+#' - `list(type = "marginal", term = "group", num = "B", den = "A", over = "batch", weights = "equal")`: the
+#'   comparison averaged over the levels of other factors (`"equal"`, `"proportional"` or named weights);
+#' - a named numeric vector over `colnames(F)`: coefficient weights (expert).
 #'
-#' After that, the formula is **pruned** to drop non-varying variables and any
-#' interaction terms that depend on them (safe to call on arbitrary metadata).
+#' ## Split for the per-column fitter
+#' `X = F c / c'c` (one column whose coefficient is the contrast) and `Z = F N` with `N` an orthonormal basis of
+#' the null space of `c`; `[X, Z]` spans the same space as `F`. Freedman-Lane permutations residualize on `Z`.
 #'
-#' ### How the split into `X` and `Z` works
-#' The user-provided `contrast` is converted into a named numeric vector over
-#' `colnames(F)` (synthetic; no data-weighting). Columns with
-#' `|contrast.F| > tol` form **`X`** and the rest form **`Z`**.
-#'
-#' **No-nuisance promotion:** if `Z` is empty or only the intercept, we promote
-#' to a full-core fit: `X <- F`, `Z <- NULL`, `qrZ <- NULL`. This guarantees the
-#' intended design when there is nothing to adjust for.
-#'
-#' ### Numeric anchors (for interactions)
-#' When your contrast involves *interactions with numerics*, those numeric
-#' variables are evaluated at **means** (overall or within `numericRefRows`), or
-#' you can provide fixed anchors via `numericRef = list(age=35, bmi=22)`.
-#'
-#' ### Supported contrast specifications
-#' All contrasts must be **linear in coefficients**. Supported forms:
-#'
-#' 1) **DESeq2 triple** (single factor)
-#' ```r
-#' contrast <- c("group","B","A")  # mu(group=B) - mu(group=A)
-#' ```
-#'
-#' 2) **Simple triple on an interaction**
-#' ```r
-#' contrast <- list(type="simple", term="group:batch", num="B:1", den="A:1")
-#' ```
-#'
-#' 3) **Marginal contrast** (average over other factor(s))
-#' ```r
-#' contrast <- list(type="marginal", term="group", num="B", den="A",
-#'                  over="batch", weights="equal")        # or "proportional" / named numeric
-#' ```
-#'
-#' 4) **Linear combination over cells of a term**
-#' ```r
-#' contrast <- list(type="lincomb", term="group:batch",
-#'                  cells=c("B:1"=1, "A:1"=-1, "A:2"=-0.5))
-#' ```
-#'
-#' 5) **Direct coefficient-space weights** (named numeric over `colnames(F)`)
-#' ```r
-#' contrast <- c("(Intercept)"=0, "groupB"=1, "age"=-0.01, "groupB:age"=0.02)
-#' ```
-#'
-#' **Ambiguous triples:** a plain triple like `c("group","B","A")` is ambiguous
-#' if the model contains interactions with `group`. In that case, use
-#' `type="simple"` with `at=` to fix other factor levels or `type="marginal"`
-#' with `over=` to average across them.
-#'
-#' @param data A `data.frame` of sample-level covariates (factor/character/numeric).
-#' @param contrast A linear contrast (see "Supported contrast specifications").
-#' @param formula RHS formula for the design (`~ ...`). If `NULL`, a default
-#'   is constructed as described above.
-#' @param na.action NA handler for `model.frame`.
-#' @param numericRef `"auto"` or named list of numeric anchors (e.g., `list(age=35)`).
-#' @param numericRefRows Optional row indices / logical mask to compute mean anchors.
-#' @param tol Numeric; threshold for selecting non-zero contrast columns into `X`.
-#' @param validate Logical; compute diagnostics (rank, aliasing, VIF, permutation checks).
-#' @param verbosity `"none"|"warn"|"info"|"debug"`.
-#' @param computeQrZ Logical; if `TRUE` return `qrZ` of `Z` for Freedman-Lane.
-#' @param blockVars Optional character vector of factor names to define permutation blocks.
-#' @param buildBlocks Logical; if `TRUE` compute `blocks`, permutation groups, and diagnostics.
-#'
-#' @return A list with:
-#' \item{F}{Full model matrix (with attributes `terms`, `xlevels`, `contrasts`).}
-#' \item{X}{Core submatrix (or `F` if no nuisance).}
-#' \item{Z}{Nuisance submatrix (or `NULL` if none).}
-#' \item{contrast.F, contrast.X}{Contrast vectors aligned to `F` and `X`.}
-#' \item{qrZ}{QR decomposition of `Z` for Freedman-Lane (or `NULL`).}
-#' \item{diagnostics}{If `buildBlocks=TRUE`, design diagnostics.}
-#' \item{numeric_ref_used, formula_used, baselines_used, contrast_spec}{Metadata.}
-#'
-#' @examples
-#' # 1) Simple factor triple (no interactions); default formula is saturated:
-#' # out <- buildDesignMatrices(data=df, contrast=c("group","B","A"))
-#'
-#' # 2) Interaction triple (fix other factor):
-#' # ctr <- list(type="simple", term="group:batch", num="B:1", den="A:1")
-#' # out <- buildDesignMatrices(~ group*batch + age, data=df, contrast=ctr)
-#'
-#' # 3) Marginal across batch with proportional weights:
-#' # ctr <- list(type="marginal", term="group", num="B", den="A",
-#' #             over="batch", weights="proportional")
-#' # out <- buildDesignMatrices(~ group*batch + age, data=df, contrast=ctr, buildBlocks=TRUE)
-#'
+#' @param data data.frame of sample-level covariates (rows = samples)
+#' @param contrast contrast specification (see above)
+#' @param formula right-hand-side formula; default `~ <contrast variables> + <blockVars>`
+#' @param numericRef `"auto"` or a named list of numeric anchors
+#' @param na.action NA handler for `model.frame`
+#' @param verbosity `"none"`, `"warn"`, `"info"` or `"debug"`
+#' @param blockVars metadata columns added to the default formula
+#' @param ... deprecated arguments (`numericRefRows`, `tol`, `validate`, `computeQrZ`, `buildBlocks`), accepted and ignored
+#' @return list: `F`, `contrast.F`, `X`, `Z`, `contrast.X`, `meta`, `formula_used` (the formula after pruning
+#'   non-varying terms), `formula_coded` (with the coding applied), `contrast_spec`, `contrast_endpoints_F`,
+#'   `contrast_endpoints_at`, `numeric_ref_used`, `contrast_label`, `contrast_endpoint_labels`, `tested.variable`,
+#'   `reference`, `notes`
 #' @export
-buildDesignMatrices <- function(data, contrast, 
-                                formula = NULL,
-                                numericRef = "auto",
-                                numericRefRows = NULL,
-                                tol = 1e-12,
-                                na.action = stats::na.pass,
-                                validate = TRUE,
-                                verbosity = c("none","warn","info","debug"),
-                                computeQrZ = TRUE,
-                                blockVars = NULL,
-                                buildBlocks = TRUE) {
+buildDesignMatrices <- function(data, contrast, formula = NULL, numericRef = "auto", na.action = stats::na.pass,
+                                verbosity = c("none", "warn", "info", "debug"), blockVars = NULL, ...) {
   verbosity <- match.arg(verbosity)
-  
-  # Default formula
+  dots <- list(...)
+  dep <- intersect(names(dots), c("numericRefRows", "tol", "validate", "computeQrZ", "buildBlocks"))
+  if (length(dep)) message("buildDesignMatrices(): argument(s) ", paste(dep, collapse = ", "), " are deprecated and ignored")
+  unknown <- setdiff(names(dots), dep)
+  if (length(unknown)) stop("unknown argument(s): ", paste(unknown, collapse = ", "))
+  stopifnot(is.data.frame(data))
+
   if (is.null(formula)) {
     formula <- buildDefaultFormula(data, contrast = contrast, block.vars = blockVars)
     message("No formula supplied; using ", deparse(formula),
-            " (contrast variables", if (length(blockVars)) " and block.vars" else "", "). ",
-            "Pass `formula` to adjust for other covariates.")
-  } else { # check for mixed effect models
-    formula <- checkFormula(formula)
-  }
-  
-  # Prune non-varying terms
+            " (contrast variables", if (length(blockVars)) " and block.vars" else "", "). Pass `formula` to adjust for other covariates.")
+  } else formula <- checkFormula(formula)
   formula_used <- pruneFormulaByData(formula, data, na.action = na.action, verbosity = verbosity)
-  
-  spec <- try(normalizeContrastSpec(contrast), silent = TRUE)
-  
-  # Pick baselines so contrasted levels are not dropped (when intercept is present)
-  baselines <- chooseBaselinesForSpec(formula_used, data, spec)
-  
-  # Build F
-  F <- buildFullDesign(formula_used, data, na.action = na.action, baselines = baselines)
-  
-  # Synthetic contrast over F
-  cF <- buildSyntheticContrast(F, data, contrast,
-                               numericRef = numericRef,
-                               numericRefRows = numericRefRows)
-  
-  # Split by contrast (+ auto-promotion when no nuisance)
-  sp <- splitByContrast(F, cF, tol = tol, promoteIfNoNuisance = TRUE)
-  X <- sp$X; Z <- sp$Z
-  
-  ## extract endpoints in F-space, if present
-  endpoints_F <- attr(cF, "endpoints_F") %||% NULL
-  ## endpoints in X-space (restricted to core design columns)
-  endpoints_X <- NULL
-  if (!is.null(endpoints_F) && !is.null(sp$contrast.X)) {
-    endpoints_X <- lapply(endpoints_F, function(v) v[colnames(X)])
-  }
-  
-  ## human-readable labels for contrast and endpoints
+  spec <- normalizeContrastSpec(contrast)
+
+  # coding: the tested factor first and without an intercept, its reference level first
+  tv <- testedVariable(spec, data)
+  coding <- designCoding(formula_used, data, tested = tv$variable, ref = tv$ref)
+  F <- buildFullDesign(coding$formula, data, na.action = na.action, baselines = coding$baselines)
+
+  cF <- buildSyntheticContrast(F, data, contrast, numericRef = numericRef)
+  if (all(abs(cF) < 1e-12)) stop("the contrast is zero on this design (the compared settings coincide)")
+  sp <- splitByDirection(F, cF)
+
   contrast_label <- NULL
-  contrast_endpoint_labels <- list(
-    baseline = "baseline",
-    target   = "target"
-  )
-  if (!inherits(spec, "try-error") && !is.null(spec)) {
-    if (is.list(spec) &&
-        spec$type %in% c("simple", "marginal") &&
-        !grepl(":", spec$term, fixed = TRUE)) {
-      
-      var <- spec$term
-      num <- spec$num
-      den <- spec$den
-      
-      contrast_label <- paste0(var, ": ", num, " vs ", den)
-      contrast_endpoint_labels <- list(
-        baseline = paste0(var, " = ", den),
-        target   = paste0(var, " = ", num)
-      )
-    }
+  contrast_endpoint_labels <- list(baseline = "baseline", target = "target")
+  if (spec$type %in% c("simple", "marginal") && !grepl(":", spec$term, fixed = TRUE)) {
+    contrast_label <- paste0(spec$term, ": ", spec$num, " vs ", spec$den)
+    contrast_endpoint_labels <- list(baseline = paste0(spec$term, " = ", spec$den), target = paste0(spec$term, " = ", spec$num))
   }
-  
-  # qrZ for FL
-  qrZ <- if (computeQrZ && !is.null(Z)) qr(as.matrix(Z)) else NULL
-  
-  # Optional blocks & permutation groups
- 
-  blocks <- NULL                      # permutation cells now come from permutationPlan() / modelPermutations()
-  
-  # Diagnostics
-  diag <- NULL
-  if (validate) {
-    diag <- diagnoseDesign(F = F, X = X, Z = Z, qrZ = qrZ,
-                           meta = data, blocks = blocks,
-                           contrastSpec = if (!inherits(spec, "try-error")) spec else NULL,
-                           tol = tol)
-    emitDiagnostics(diag, verbosity)
+  if (verbosity %in% c("info", "debug")) {
+    message("Design: n=", nrow(F), ", p=", ncol(F), "; columns: ", prettyJoin(colnames(F)))
+    nr <- attr(cF, "numeric_ref_used") %||% list()
+    if (length(nr)) message("Numeric anchors: ", paste(sprintf("%s=%s", names(nr), format(unlist(nr), digits = 6)), collapse = ", "))
   }
-  
-  # Report
-  reportContrastInfo(F, X, Z, sp$contrast.F,
-                     numericRefUsed = attr(cF, "numeric_ref_used") %||% list(),
-                     tol = tol, verbosity = verbosity)
-  
   list(
-    F = F, X = X, Z = Z,
-    contrast.F = sp$contrast.F,
-    contrast.X = sp$contrast.X,
-    qrZ = qrZ,
-    diagnostics = diag,
-    numeric_ref_used = attr(cF, "numeric_ref_used") %||% list(),
-    formula_used = formula_used,
-    contrast_spec = if (!inherits(spec, "try-error")) spec else NULL,
-    baselines_used = baselines,
-    contrast_endpoints_F = endpoints_F,
-    contrast_endpoints_X = endpoints_X,
+    F = F, contrast.F = sp$contrast.F, X = sp$X, Z = sp$Z, contrast.X = sp$contrast.X,
+    meta = data,                      # sample metadata (rows = samples of F), used by modelPermutations()
+    formula_used = formula_used, formula_coded = coding$formula,
+    contrast_spec = spec,
+    contrast_endpoints_F = attr(cF, "endpoints_F") %||% NULL,
     contrast_endpoints_at = attr(cF, "endpoints_at") %||% NULL,
-    contrast_label = contrast_label,
-    contrast_endpoint_labels = contrast_endpoint_labels,
-    meta = data                      # sample metadata (rows = samples of F), used by modelPermutations()
+    numeric_ref_used = attr(cF, "numeric_ref_used") %||% list(),
+    contrast_label = contrast_label, contrast_endpoint_labels = contrast_endpoint_labels,
+    tested.variable = tv$variable, reference = tv$ref, notes = character(0)
   )
 }
 
+# The factor whose levels a contrast compares (NULL for numeric, coefficient-level or multi-variable cell contrasts),
+# with its reference level (the denominator).
+testedVariable <- function(spec, data) {
+  none <- list(variable = NULL, ref = NULL)
+  if (!spec$type %in% c("simple", "marginal")) return(none)
+  if (grepl(":", spec$term, fixed = TRUE)) {
+    vars <- parseTermVars(spec$term); numc <- parseCell(spec$num, vars); denc <- parseCell(spec$den, vars)
+    diff <- vars[unlist(numc) != unlist(denc)]
+    if (length(diff) != 1 || !diff %in% names(data) || is.numeric(data[[diff]])) return(none)
+    return(list(variable = diff, ref = as.character(denc[[diff]])))
+  }
+  v <- spec$term
+  if (!v %in% names(data) || is.numeric(data[[v]])) return(none)
+  list(variable = v, ref = as.character(spec$den))
+}
 
+# Coding of the design for a tested factor: its main-effect term first, no intercept, reference level first.
+# Other variables keep their coding. Numeric tested variables (or none) leave the formula unchanged.
+designCoding <- function(formula, data, tested = NULL, ref = NULL) {
+  f <- if (inherits(formula, "formula")) formula else stats::as.formula(formula)
+  baselines <- list()
+  if (is.null(tested) || !tested %in% names(data) || is.numeric(data[[tested]])) return(list(formula = f, baselines = baselines))
+  if (!is.null(ref)) baselines[[tested]] <- ref
+  trm <- stats::terms(f, data = data); tl <- attr(trm, "term.labels")
+  main <- which(tl == tested)
+  if (!length(main)) return(list(formula = f, baselines = baselines))      # tested variable only inside functions / interactions
+  tl2 <- c(tl[main], tl[-main])
+  f2 <- stats::as.formula(paste("~ 0 +", paste(tl2, collapse = " + ")), env = environment(f))
+  list(formula = f2, baselines = baselines)
+}
 
-# =====================================================================
-# Helpers (shared by the two public constructors)
-# =====================================================================
+# Orthonormal basis of the null space of C' (C: p x k): the directions of the coefficient space that C does not test.
+nullBasis <- function(C) {
+  C <- as.matrix(C); p <- nrow(C)
+  q <- qr(C); r <- q$rank
+  if (r >= p) return(matrix(0, p, 0))
+  Q <- qr.Q(q, complete = TRUE)
+  Q[, seq.int(r + 1, p), drop = FALSE]
+}
+
+# Split of the design by the contrast direction: X = F c / c'c (coefficient = c'beta), Z = F N (the rest).
+splitByDirection <- function(F, cF, name = "contrast") {
+  cF <- cF[colnames(F)]
+  X <- F %*% matrix(cF / sum(cF^2), ncol = 1); colnames(X) <- name; rownames(X) <- rownames(F)
+  N <- nullBasis(matrix(cF, ncol = 1))
+  Z <- if (ncol(N)) F %*% N else NULL
+  if (!is.null(Z)) { colnames(Z) <- paste0("nuisance", seq_len(ncol(Z))); rownames(Z) <- rownames(F) }
+  list(X = X, Z = Z, contrast.F = stats::setNames(as.numeric(cF), colnames(F)), contrast.X = stats::setNames(1, name))
+}
+
+# Design restricted to a set of rows: columns that are all zero or constant among them are dropped (apart from the
+# intercept), and the contrast (vector or matrix) must stay estimable. Returns NULL when it is not.
+subsetDesign <- function(F, C, rows, tol = 1e-8) {
+  Fs <- F[rows, , drop = FALSE]; C <- as.matrix(C)
+  rng <- apply(Fs, 2, function(x) if (all(is.finite(x))) max(x) - min(x) else NA_real_)
+  zero <- colSums(abs(Fs)) < tol
+  const <- rng < tol & !zero
+  keep <- !zero
+  if (any(const)) {                                                  # keep one constant column (an intercept) if the span needs it
+    ic <- which(const)[1]; keep[const] <- FALSE; keep[ic] <- TRUE
+  }
+  Fs <- Fs[, keep, drop = FALSE]; Ck <- C[keep, , drop = FALSE]
+  ok <- apply(Ck, 2, function(cv) isEstimable(Fs, cv, tol))
+  if (!all(ok)) return(NULL)
+  list(F = Fs, C = Ck, keep = keep)
+}
 
 # ---- Defaults & pruning ----
 
@@ -267,8 +198,7 @@ checkFormula <- function(formula) {
 }
 
 # Default sample-level formula: the variables named by the contrast plus block.vars (never every
-# metadata column, which would pull in ID-like columns). Uses `~ 0 + ...` coding when a factor is present,
-# as the previous default did.
+# metadata column, which would pull in ID-like columns).
 buildDefaultFormula <- function(data, contrast = NULL, block.vars = NULL) {
   stopifnot(is.data.frame(data))
   spec <- if (is.null(contrast)) NULL else normalizeContrastSpec(contrast)
@@ -277,19 +207,13 @@ buildDefaultFormula <- function(data, contrast = NULL, block.vars = NULL) {
     vars <- switch(spec$type,
                    simple   = c(parseTermVars(spec$term), names(spec$at)),
                    marginal = c(spec$term, spec$over, names(spec$at)),
-                   lincomb  = c(parseTermVars(spec$term), names(spec$at)),
                    coef     = stop("Cannot derive a default formula from a coefficient-level contrast; please supply `formula`."))
   }
   vars <- unique(c(vars, block.vars))
   miss <- setdiff(vars, names(data))
   if (length(miss)) stop("Variable(s) not found in sample metadata: ", paste(miss, collapse = ", "))
   if (!length(vars)) return(as.formula("~ 1"))
-  anyFac <- any(vapply(data[vars], function(x) is.factor(x) || is.character(x), logical(1)))
-  if (anyFac) {
-    as.formula(paste("~ 0 +", paste(vars, collapse = " + ")))
-  } else {
-    as.formula(paste("~", paste(vars, collapse = " + ")))
-  }
+  as.formula(paste("~", paste(vars, collapse = " + ")))          # the tested factor's coding is applied by designCoding()
 }
 
 pruneFormulaByData <- function(formula, data, na.action = stats::na.pass, verbosity = c("none","warn","info","debug")) {
@@ -376,12 +300,7 @@ normalizeContrastSpec <- function(contrast) {
       if (!is.numeric(co) || is.null(names(co))) stop("'coefs' must be named numeric.")
       return(list(type="coef", coefs=co))
     }
-    if (t == "lincomb") {
-      term  <- contrast$term  %||% stop("type='lincomb' needs 'term', e.g. 'group:batch'.")
-      cells <- contrast$cells %||% stop("type='lincomb' needs named numeric 'cells'.")
-      if (!is.numeric(cells) || is.null(names(cells))) stop("'cells' must be named numeric.")
-      return(list(type="lincomb", term=term, cells=cells, at=contrast$at %||% list()))
-    }
+    if (t == "lincomb") stop("contrast type 'lincomb' is no longer supported: use type = 'marginal' with numeric weights, or named coefficient weights")
     if (t %in% c("simple","marginal")) {
       term <- contrast$term %||% stop("Field 'term' is required.")
       num  <- contrast$num  %||% stop("Field 'num' is required.")
@@ -395,184 +314,6 @@ normalizeContrastSpec <- function(contrast) {
   }
   stop("Unsupported contrast format.")
 }
-
-chooseBaselinesForSpec <- function(formula, data, spec) {
-  if (inherits(spec, "try-error")) return(list())
-  
-  # If the model is already saturated (~0 + ...), there is no intercept,
-  # so we do NOT need to pick baselines at all.
-  trm <- stats::terms(
-    if (inherits(formula,"formula")) formula else as.formula(formula),
-    data = data
-  )
-  if (attr(trm, "intercept", exact = TRUE) == 0L) {
-    return(list())
-  }
-  
-  # helper accessors
-  vars_in_model <- all.vars(trm)
-  levels_in_data <- lapply(
-    intersect(vars_in_model, names(data)),
-    function(v) {
-      x <- data[[v]]
-      if (is.factor(x) || is.character(x))
-        levels(droplevels(factor(x)))
-      else
-        NULL
-    }
-  )
-  names(levels_in_data) <- intersect(vars_in_model, names(data))
-  
-  isFacVar  <- function(v) !is.null(levels_in_data[[v]])
-  varLevels <- function(v) levels_in_data[[v]] %||% character(0)
-  
-  # choose a baseline that:
-  #  1. is NOT one of the contrasted levels if possible,
-  #  2. otherwise falls back to old heuristic (den, or "not num", etc.).
-  chooseBaselineAvoiding <- function(v, avoid_levels, fallback_first = NULL, fallback_not = NULL) {
-    L <- varLevels(v)
-    if (!length(L)) return(NULL)
-    
-    # First preference: any level not involved in the contrast at all
-    cand <- setdiff(L, avoid_levels)
-    if (length(cand)) return(cand[1])
-    
-    # Second preference: caller-supplied "fallback_first" (often denominator)
-    if (!is.null(fallback_first) && fallback_first %in% L) {
-      return(fallback_first)
-    }
-    
-    # Third preference: "anything not fallback_not"
-    if (!is.null(fallback_not)) {
-      cand2 <- setdiff(L, fallback_not)
-      if (length(cand2)) return(cand2[1])
-    }
-    
-    # Last resort: just take the first level
-    L[1]
-  }
-  
-  bases <- list()
-  
-  # ---- Case 1: simple single-factor contrast (no ":")
-  # contrast like list(type="simple", term="Group", num="Group2", den="Group1")
-  # or DESeq2 style c("Group","Group2","Group1")
-  if (is.list(spec) &&
-      spec$type == "simple" &&
-      !grepl(":", spec$term, fixed = TRUE)) {
-    
-    v <- spec$term
-    if (isFacVar(v)) {
-      # avoid BOTH contrasted levels so both show up explicitly
-      avoid_levels <- unique(c(spec$num, spec$den))
-      bases[[v]] <- chooseBaselineAvoiding(
-        v,
-        avoid_levels = avoid_levels,
-        fallback_first = spec$den,   # old behavior fallback
-        fallback_not   = spec$num
-      )
-    }
-    return(bases)
-  }
-  
-  # ---- Case 2: simple contrast on an interaction (term contains ":")
-  # e.g. list(type="simple", term="Group:Batch",
-  #           num="Group2:Batch1", den="Group1:Batch1")
-  if (is.list(spec) &&
-      spec$type == "simple" &&
-      grepl(":", spec$term, fixed = TRUE)) {
-    
-    vs <- parseTermVars(spec$term)         # c("Group","Batch")
-    numC <- parseCell(spec$num, vs)        # list(Group="Group2", Batch="Batch1")
-    denC <- parseCell(spec$den, vs)        # list(Group="Group1", Batch="Batch1")
-    
-    for (v in vs) {
-      if (isFacVar(v)) {
-        # avoid BOTH numerator and denominator levels for this variable
-        avoid_levels <- unique(c(numC[[v]], denC[[v]]))
-        bases[[v]] <- chooseBaselineAvoiding(
-          v,
-          avoid_levels = avoid_levels,
-          # fallbacks: pick denominator level first if needed
-          fallback_first = denC[[v]],
-          fallback_not   = numC[[v]]
-        )
-      }
-    }
-    return(bases)
-  }
-  
-  # ---- Case 3: marginal contrast on a single factor
-  # e.g. list(type="marginal", term="Group", num="Group2", den="Group1", over="Batch", ...)
-  # For baseline purposes, 'marginal' is conceptually still "Group2 vs Group1".
-  if (is.list(spec) &&
-      spec$type == "marginal" &&
-      !grepl(":", spec$term, fixed = TRUE)) {
-    
-    v <- spec$term
-    if (isFacVar(v)) {
-      avoid_levels <- unique(c(spec$num, spec$den))
-      bases[[v]] <- chooseBaselineAvoiding(
-        v,
-        avoid_levels = avoid_levels,
-        fallback_first = spec$den,
-        fallback_not   = spec$num
-      )
-    }
-    return(bases)
-  }
-  
-  # ---- Case 4: lincomb
-  # lincomb can hit multiple cells of something like "Group:Batch".
-  # We'll keep your previous heuristic: pick the "largest-weight" cell,
-  # then avoid that level for each factor. This is already decent.
-  if (is.list(spec) && spec$type == "lincomb") {
-    vs <- parseTermVars(spec$term)
-    w  <- spec$cells
-    pick <- if (any(w > 0)) {
-      names(w)[which.max(w)]
-    } else {
-      names(w)[which.max(abs(w))]
-    }
-    if (length(pick)) {
-      pickC <- parseCell(pick, vs)
-      for (v in vs) {
-        if (isFacVar(v)) {
-          bases[[v]] <- chooseBaselineAvoiding(
-            v,
-            avoid_levels  = pickC[[v]],
-            fallback_first = pickC[[v]],
-            fallback_not   = NULL
-          )
-        }
-      }
-    }
-    return(bases)
-  }
-  
-  # ---- Case 5: marginal on interaction or other exotic structures
-  # (No clear "two-level focus" to protect. Fall back to old behavior that
-  #  nudges baselines away from the numerator if we can.)
-  if (is.list(spec) && spec$type == "marginal") {
-    v <- spec$term
-    if (isFacVar(v)) {
-      avoid_levels <- unique(c(spec$num, spec$den))
-      bases[[v]] <- chooseBaselineAvoiding(
-        v,
-        avoid_levels = avoid_levels,
-        fallback_first = spec$den,
-        fallback_not   = spec$num
-      )
-    }
-    return(bases)
-  }
-  
-  # ---- Coef-style and anything else:
-  # coef-style directly names columns; there is no concept of "baseline".
-  # return empty -> let model.matrix pick defaults.
-  list()
-}
-
 
 buildFullDesign <- function(formula, data, na.action = stats::na.pass,
                             contrasts.arg = NULL, baselines = NULL) {
@@ -593,11 +334,12 @@ buildFullDesign <- function(formula, data, na.action = stats::na.pass,
   F
 }
 
-# Character columns become factors and requested baselines are applied, on the raw data so that
+# Character and logical columns become factors and requested baselines are applied, on the raw data so that
 # transformed terms (log(age), poly(age, 2), factor(batch), ...) can still be evaluated from it.
 prepareDesignData <- function(data, baselines = NULL) {
   for (v in names(data)) {
     if (is.character(data[[v]])) data[[v]] <- droplevels(factor(data[[v]]))
+    else if (is.logical(data[[v]])) data[[v]] <- factor(data[[v]], levels = c("FALSE", "TRUE"))
   }
   for (v in names(baselines)) {
     x <- data[[v]]
@@ -624,7 +366,6 @@ resolveNumericRef <- function(F, data, contrast, numericRef = "auto", numericRef
   termVars <- switch(spec$type,
                      simple   = if (grepl(":", spec$term, fixed=TRUE)) parseTermVars(spec$term) else spec$term,
                      marginal = spec$term,
-                     lincomb  = parseTermVars(spec$term),
                      coef     = character(0))
   termVars <- unique(termVars)
   
@@ -785,21 +526,6 @@ buildSyntheticContrast <- function(F, data, contrast,
   }
   
   ## ------------------------------------------------------------
-  ## 3) General linear combination of cells (no canonical endpoints)
-  ## ------------------------------------------------------------
-  if (spec$type == "lincomb") {
-    vars <- parseTermVars(spec$term)
-    for (nm in names(spec$cells)) {
-      at_i <- utils::modifyList(spec$at %||% list(), parseCell(nm, vars))
-      cF   <- cF + as.numeric(spec$cells[[nm]]) * one(at_i)
-    }
-    attr(cF, "numeric_ref_used") <- numRef
-    attr(cF, "endpoints_F")      <- NULL
-    attr(cF, "endpoints_at")     <- NULL
-    return(cF)
-  }
-  
-  ## ------------------------------------------------------------
   ## 4) Simple contrasts
   ##    - Either single factor:   term = "Group", num="B", den="A"
   ##    - Or interaction cell:    term = "Group:Batch", num="B:Batch1", ...
@@ -911,158 +637,19 @@ buildSyntheticContrast <- function(F, data, contrast,
 }
 
 
-# ---- Split by contrast (+ promotion) ----
 
-splitByContrast <- function(F, cF,
-                            tol    = 1e-12,
-                            promoteIfNoNuisance = TRUE,
-                            interceptName = "(Intercept)") {
-  if (!all(colnames(F) %in% names(cF)))
-    stop("F has columns absent from contrast vector: ",
-         paste(setdiff(colnames(F), names(cF)), collapse = ", "))
-  cF <- cF[colnames(F)]
-  
-  S  <- which(abs(cF) > tol)
-  X  <- if (length(S)) F[, S, drop = FALSE] else F[, 0, drop = FALSE]
-  Z  <- F[, setdiff(seq_len(ncol(F)), S), drop = FALSE]
-  contrast.X <- cF[colnames(X)]
-  
-  if (promoteIfNoNuisance) {
-    noNuisance <- (ncol(Z) == 0L) || (length(setdiff(colnames(Z), interceptName)) == 0L)
-    if (noNuisance) {
-      X <- F
-      Z <- NULL
-      contrast.X <- cF[colnames(X)]
-    }
-  }
-  
-  list(X = X, Z = Z, contrast.F = cF, contrast.X = contrast.X)
+# Level-difference contrasts of a factor on a design: K - 1 columns row(level_k) - row(ref), evaluated with the other
+# factors at their reference level and the numeric covariates at their anchors (the main effect at the reference
+# setting). `levels` orders the levels (reference first).
+termContrastMatrix <- function(F, data, variable, levels, numericRef = list()) {
+  trm <- attr(F, "terms"); xlv <- attr(F, "xlevels"); ctr <- attr(F, "contrasts")
+  one <- function(l) .oneRowFromFormula(trm, xlv, ctr, colnames(F), data, stats::setNames(list(l), variable), numericRef)
+  rows <- t(sapply(levels, one)); if (length(levels) == 1) rows <- matrix(rows, 1, dimnames = list(levels, colnames(F)))
+  C <- t(rows[-1, , drop = FALSE] - matrix(rows[1, ], nrow(rows) - 1, ncol(rows), byrow = TRUE))
+  dimnames(C) <- list(colnames(F), paste(levels[-1], "vs", levels[1]))
+  C[abs(C) < 1e-12] <- 0
+  C
 }
-
-
-
-
-# ---- Diagnostics ----
-
-diagnoseDesign <- function(F = NULL, X = NULL, Z = NULL, qrZ = NULL,
-                           meta = NULL, blocks = NULL,
-                           contrastSpec = NULL,
-                           block.factors = NULL,
-                           thresholds = list(
-                             alias.tol     = 1e-8,
-                             kappa.warn    = 1e3,
-                             vif.warn      = 10,
-                             show.top      = 10,
-                             min.eff.perm  = 100
-                           ),
-                           tol = 1e-12) {
-  qrRankDiag <- function(M, name="F") {
-    if (is.null(M) || !is.matrix(M) || !ncol(M)) {
-      return(list(name=name, rank=0L, p=0L, dep=character(0), kappa=NA_real_))
-    }
-    q  <- qr(M, LAPACK = TRUE); p <- ncol(M); r <- q$rank
-    dep <- if (r < p) colnames(M)[q$pivot[(r+1):p]] else character(0)
-    s <- svd(M, nu=0, nv=0)$d
-    k <- if (length(s)) (max(s) / max(1e-12, min(s))) else NA_real_
-    list(name=name, rank=r, p=p, dep=dep, kappa=k)
-  }
-  aliasXbyZ <- function(X, Z, qrZ=NULL, tol=1e-8) {
-    if (is.null(X) || !is.matrix(X) || !ncol(X) || is.null(Z) || !ncol(Z))
-      return(list(aliased=character(0), X.r=X))
-    if (is.null(qrZ)) qrZ <- qr(as.matrix(Z))
-    Xr <- qr.resid(qrZ, as.matrix(X))
-    rn <- sqrt(colSums(Xr^2)); xn <- sqrt(colSums(as.matrix(X)^2)) + 1e-15
-    aliased <- colnames(X)[rn / xn < tol]
-    list(aliased = aliased, X.r = Xr)
-  }
-  pinvSym <- function(A, eps=1e-8) {
-    ev <- eigen(A, symmetric=TRUE); d <- ev$values; V <- ev$vectors
-    di <- ifelse(d > eps * max(1, d[1]), 1/d, 0)
-    V %*% (diag(di, nrow=length(di))) %*% t(V)
-  }
-  vif <- function(Xr, interceptName="(Intercept)", varTol=1e-12) {
-    if (is.null(Xr) || !is.matrix(Xr)) return(numeric(0))
-    if (ncol(Xr) <= 1) return(numeric(0))
-    keep <- setdiff(colnames(Xr), interceptName)
-    if (!length(keep)) return(numeric(0))
-    Xk <- Xr[, keep, drop = FALSE]
-    sds <- apply(Xk, 2, sd, na.rm = TRUE)
-    keep <- keep[is.finite(sds) & sds > varTol]
-    if (length(keep) < 2) return(numeric(0))
-    Xc <- scale(Xr[, keep, drop = FALSE], center = TRUE, scale = TRUE)
-    R  <- stats::cor(Xc)
-    if (any(!is.finite(R))) return(numeric(0))
-    VIF <- tryCatch(diag(solve(R)), error=function(e) diag(pinvSym(R)))
-    setNames(as.numeric(VIF), keep)
-  }
-  
-  msgs <- character(0); warns <- character(0)
-  
-  if (is.null(F) || !ncol(F)) stop("F has 0 columns.")
-  if (!nrow(F)) stop("F has 0 rows.")
-  if (!is.null(Z) && ncol(Z) == 0) warns <- c(warns, "Z has 0 columns (no nuisance predictors).")
-  if (!is.null(X) && ncol(X) == 0) warns <- c(warns, "X has 0 columns (contrast is all zeros at the given tolerance).")
-  
-  if (!is.null(Z) && ncol(Z) > 0 && "(Intercept)" %in% colnames(F) && "(Intercept)" %in% colnames(X))
-    warns <- c(warns, "Intercept is in X (usually you want it in Z).")
-  
-  dF  <- qrRankDiag(F, name="F")
-  dX  <- qrRankDiag(X, name="X")
-  dZ  <- qrRankDiag(Z, name="Z")
-  if (dF$rank < dF$p) warns <- c(warns, sprintf("F is rank-deficient: rank %d < %d. Dependent: %s", dF$rank, dF$p, prettyJoin(dF$dep)))
-  if (is.finite(dF$kappa) && dF$kappa >= thresholds$kappa.warn)
-    warns <- c(warns, sprintf("F ill-conditioned (kappa=%.2e). Estimates may be unstable.", dF$kappa))
-  
-  aXZ <- aliasXbyZ(X, Z, qrZ = qrZ, tol = thresholds$alias.tol)
-  if (length(aXZ$aliased)) warns <- c(warns, paste0("Core columns aliased by Z (not estimable after adjustment): ", prettyJoin(aXZ$aliased)))
-  vifs <- vif(aXZ$X.r)
-  if (length(vifs)) {
-    bad <- vifs[vifs >= thresholds$vif.warn]
-    if (length(bad)) warns <- c(warns, paste0("High VIFs in core after Z: ",
-                                              paste(sprintf("%s=%.1f", names(bad), bad), collapse = ", "),
-                                              ". Consider collapsing levels or using a single contrast regressor."))
-  }
-  
-  perm <- NULL                      # permutation cells are described by permutationPlan() / modelPermutations()
-  
-  list(
-    rankF = dF, rankX = dX, rankZ = dZ,
-    aliased.by.Z = aXZ$aliased,
-    vif = vifs,
-    permutation = perm,
-    warnings = warns,
-    messages = msgs
-  )
-}
-
-emitDiagnostics <- function(diag, verbosity) {
-  if (verbosity %in% c("warn","info","debug")) {
-    if (length(diag$warnings)) warning(paste(diag$warnings, collapse = "\n"), call. = FALSE)
-  }
-  invisible(NULL)
-}
-
-reportContrastInfo <- function(F, X, Z, cF, numericRefUsed, tol, verbosity) {
-  if (verbosity %in% c("none","warn")) return(invisible(NULL))
-  ncolZ <- if (is.null(Z)) 0L else ncol(Z)
-  dims <- sprintf("n=%d, pF=%d, pX=%d, pZ=%d", nrow(F), ncol(F), ncol(X), ncolZ)
-  if (length(numericRefUsed)) {
-    message("Numeric anchors (auto): ",
-            paste(sprintf("%s=%s", names(numericRefUsed),
-                          format(unlist(numericRefUsed), digits=6)), collapse = ", "))
-  }
-  message("Design split: ", dims)
-  message("X columns: ", prettyJoin(colnames(X)))
-  message("Z columns: ", prettyJoin(if (is.null(Z)) character(0) else colnames(Z)))
-  nz <- cF[abs(cF) > tol]; nz <- nz[order(abs(nz), decreasing = TRUE)]
-  if (verbosity == "debug" && length(nz)) {
-    top <- head(nz, 30)
-    message("Non-zero contrast weights (top 30 by |weight|):")
-    message(paste(sprintf("  %-30s % .6g", names(top), unclass(top)), collapse = "\n"))
-    if (length(nz) > 30) message(sprintf("  ... (+%d more)", length(nz) - 30))
-  }
-}
-
 
 # Extract sample-level variable names used by a formula
 varsFromFormula <- function(formula, data, na.action = stats::na.pass) {

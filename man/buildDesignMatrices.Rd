@@ -2,155 +2,74 @@
 % Please edit documentation in R/model_matrices.R
 \name{buildDesignMatrices}
 \alias{buildDesignMatrices}
-\title{Prepare core/nuisance design matrices from metadata and a linear contrast}
+\title{Sample-level design and contrast for one test}
 \usage{
 buildDesignMatrices(
   data,
   contrast,
   formula = NULL,
   numericRef = "auto",
-  numericRefRows = NULL,
-  tol = 1e-12,
   na.action = stats::na.pass,
-  validate = TRUE,
   verbosity = c("none", "warn", "info", "debug"),
-  computeQrZ = TRUE,
   blockVars = NULL,
-  buildBlocks = TRUE
+  ...
 )
 }
 \arguments{
-\item{data}{A \code{data.frame} of sample-level covariates (factor/character/numeric).}
+\item{data}{data.frame of sample-level covariates (rows = samples)}
 
-\item{contrast}{A linear contrast (see "Supported contrast specifications").}
+\item{contrast}{contrast specification (see above)}
 
-\item{formula}{RHS formula for the design (\code{~ ...}). If \code{NULL}, a default
-is constructed as described above.}
+\item{formula}{right-hand-side formula; default \verb{~ <contrast variables> + <blockVars>}}
 
-\item{numericRef}{\code{"auto"} or named list of numeric anchors (e.g., \code{list(age=35)}).}
+\item{numericRef}{\code{"auto"} or a named list of numeric anchors}
 
-\item{numericRefRows}{Optional row indices / logical mask to compute mean anchors.}
+\item{na.action}{NA handler for \code{model.frame}}
 
-\item{tol}{Numeric; threshold for selecting non-zero contrast columns into \code{X}.}
+\item{verbosity}{\code{"none"}, \code{"warn"}, \code{"info"} or \code{"debug"}}
 
-\item{na.action}{NA handler for \code{model.frame}.}
+\item{blockVars}{metadata columns added to the default formula}
 
-\item{validate}{Logical; compute diagnostics (rank, aliasing, VIF, permutation checks).}
-
-\item{verbosity}{\code{"none"|"warn"|"info"|"debug"}.}
-
-\item{computeQrZ}{Logical; if \code{TRUE} return \code{qrZ} of \code{Z} for Freedman-Lane.}
-
-\item{blockVars}{Optional character vector of factor names to define permutation blocks.}
-
-\item{buildBlocks}{Logical; if \code{TRUE} compute \code{blocks}, permutation groups, and diagnostics.}
+\item{...}{deprecated arguments (\code{numericRefRows}, \code{tol}, \code{validate}, \code{computeQrZ}, \code{buildBlocks}), accepted and ignored}
 }
 \value{
-A list with:
-\item{F}{Full model matrix (with attributes \code{terms}, \code{xlevels}, \code{contrasts}).}
-\item{X}{Core submatrix (or \code{F} if no nuisance).}
-\item{Z}{Nuisance submatrix (or \code{NULL} if none).}
-\item{contrast.F, contrast.X}{Contrast vectors aligned to \code{F} and \code{X}.}
-\item{qrZ}{QR decomposition of \code{Z} for Freedman-Lane (or \code{NULL}).}
-\item{diagnostics}{If \code{buildBlocks=TRUE}, design diagnostics.}
-\item{numeric_ref_used, formula_used, baselines_used, contrast_spec}{Metadata.}
+list: \code{F}, \code{contrast.F}, \code{X}, \code{Z}, \code{contrast.X}, \code{meta}, \code{formula_used} (the formula after pruning
+non-varying terms), \code{formula_coded} (with the coding applied), \code{contrast_spec}, \code{contrast_endpoints_F},
+\code{contrast_endpoints_at}, \code{numeric_ref_used}, \code{contrast_label}, \code{contrast_endpoint_labels}, \code{tested.variable},
+\code{reference}, \code{notes}
 }
 \description{
-\strong{\code{buildDesignMatrices()}} takes a sample-level metadata table, an optional
-model formula, and a \emph{synthetic} linear contrast, and returns:
+Builds the design matrix \code{F} of a sample-level model and the contrast vector \code{contrast.F} that every engine of
+cacoa tests, from the sample metadata, a formula and a contrast specification. The workflow entry point is
+\code{\link[=buildCacoaModel]{buildCacoaModel()}} (which calls this for every test); this function is the expert constructor for one contrast.
+\subsection{Coding}{
+
+When the tested variable is a factor it is coded without an intercept and placed first, so its coefficients are
+the level means at the reference setting of the other covariates (\code{~ 0 + group + batch} gives
+\verb{groupA, groupB, batchb2}). The reference level comes first. Other factors keep treatment coding; a numeric
+tested variable keeps the intercept. Character and logical columns are treated as factors.
+}
+
+\subsection{Contrast}{
+
+The contrast is the difference of two design rows (\code{row(alt) - row(ref)}), each evaluated with the other
+factors at their reference level and the other numeric covariates at their anchors (\code{numericRef}: \code{"auto"} =
+sample means, or a named list), so transformed covariates (\code{log(age)}, \code{poly(age, 2)}) and interactions are
+handled uniformly. Forms:
 \itemize{
-\item the \strong{full model matrix} \code{F},
-\item a \strong{core} sub-matrix \code{X} containing the columns used by the contrast,
-\item a \strong{nuisance} sub-matrix \code{Z} containing the remaining columns,
-\item the contrast vector in coefficient space (\code{contrast.F} and \code{contrast.X}),
-\item optional \strong{FL plumbing} (\code{qrZ}) and \strong{permutation blocks} diagnostics.
-}
-\subsection{What happens if \code{formula} is not supplied?}{
-
-If \code{formula} is \code{NULL}, a safe default is built from the supplied \code{data}:
-\itemize{
-\item If \strong{any factor/character} column is present: a \strong{saturated} design
-is used (no intercept): \code{~ 0 + col1 + col2 + ...} so every factor level
-has its own dummy column and no level is dropped.
-\item If \strong{all columns are numeric}: an \strong{intercept-included} design is used:
-\code{~ col1 + col2 + ...} (i.e., includes \code{(Intercept)}).
-}
-
-After that, the formula is \strong{pruned} to drop non-varying variables and any
-interaction terms that depend on them (safe to call on arbitrary metadata).
-}
-
-\subsection{How the split into \code{X} and \code{Z} works}{
-
-The user-provided \code{contrast} is converted into a named numeric vector over
-\code{colnames(F)} (synthetic; no data-weighting). Columns with
-\verb{|contrast.F| > tol} form \strong{\code{X}} and the rest form \strong{\code{Z}}.
-
-\strong{No-nuisance promotion:} if \code{Z} is empty or only the intercept, we promote
-to a full-core fit: \code{X <- F}, \code{Z <- NULL}, \code{qrZ <- NULL}. This guarantees the
-intended design when there is nothing to adjust for.
-}
-
-\subsection{Numeric anchors (for interactions)}{
-
-When your contrast involves \emph{interactions with numerics}, those numeric
-variables are evaluated at \strong{means} (overall or within \code{numericRefRows}), or
-you can provide fixed anchors via \code{numericRef = list(age=35, bmi=22)}.
-}
-
-\subsection{Supported contrast specifications}{
-
-All contrasts must be \strong{linear in coefficients}. Supported forms:
-\enumerate{
-\item \strong{DESeq2 triple} (single factor)
-}
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{contrast <- c("group","B","A")  # mu(group=B) - mu(group=A)
-}\if{html}{\out{</div>}}
-\enumerate{
-\item \strong{Simple triple on an interaction}
-}
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{contrast <- list(type="simple", term="group:batch", num="B:1", den="A:1")
-}\if{html}{\out{</div>}}
-\enumerate{
-\item \strong{Marginal contrast} (average over other factor(s))
-}
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{contrast <- list(type="marginal", term="group", num="B", den="A",
-                 over="batch", weights="equal")        # or "proportional" / named numeric
-}\if{html}{\out{</div>}}
-\enumerate{
-\item \strong{Linear combination over cells of a term}
-}
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{contrast <- list(type="lincomb", term="group:batch",
-                 cells=c("B:1"=1, "A:1"=-1, "A:2"=-0.5))
-}\if{html}{\out{</div>}}
-\enumerate{
-\item \strong{Direct coefficient-space weights} (named numeric over \code{colnames(F)})
-}
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{contrast <- c("(Intercept)"=0, "groupB"=1, "age"=-0.01, "groupB:age"=0.02)
-}\if{html}{\out{</div>}}
-
-\strong{Ambiguous triples:} a plain triple like \code{c("group","B","A")} is ambiguous
-if the model contains interactions with \code{group}. In that case, use
-\code{type="simple"} with \verb{at=} to fix other factor levels or \code{type="marginal"}
-with \verb{over=} to average across them.
+\item a triple \code{c("group", "B", "A")}: group B against group A; with interactions of \code{group} in the model, use
+one of the structured forms below;
+\item \code{list(type = "simple", term = "group", num = "B", den = "A", at = list(batch = "b2"))}: the comparison at a
+fixed setting of other factors; \code{term = "group:batch"} with \code{num = "B:b2"} compares interaction cells;
+\item \code{list(type = "marginal", term = "group", num = "B", den = "A", over = "batch", weights = "equal")}: the
+comparison averaged over the levels of other factors (\code{"equal"}, \code{"proportional"} or named weights);
+\item a named numeric vector over \code{colnames(F)}: coefficient weights (expert).
 }
 }
-\examples{
-# 1) Simple factor triple (no interactions); default formula is saturated:
-# out <- buildDesignMatrices(data=df, contrast=c("group","B","A"))
 
-# 2) Interaction triple (fix other factor):
-# ctr <- list(type="simple", term="group:batch", num="B:1", den="A:1")
-# out <- buildDesignMatrices(~ group*batch + age, data=df, contrast=ctr)
+\subsection{Split for the per-column fitter}{
 
-# 3) Marginal across batch with proportional weights:
-# ctr <- list(type="marginal", term="group", num="B", den="A",
-#             over="batch", weights="proportional")
-# out <- buildDesignMatrices(~ group*batch + age, data=df, contrast=ctr, buildBlocks=TRUE)
-
+\verb{X = F c / c'c} (one column whose coefficient is the contrast) and \verb{Z = F N} with \code{N} an orthonormal basis of
+the null space of \code{c}; \verb{[X, Z]} spans the same space as \code{F}. Freedman-Lane permutations residualize on \code{Z}.
+}
 }

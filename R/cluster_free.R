@@ -137,15 +137,9 @@ estimateClusterFreeDE_LM <- function(genes, de.inp, sample.per.cell, design, per
   ## contrast-aware group membership (binary vs continuous)
    tol <- 1e-8
 
-  ## Matrix used for contrast score in this perm.method branch
-  A <- if (perm.method == "block") design$F else design$X
-
-  ## Contrast score per sample (what you already do)
-  g.act <- if (perm.method == "block") {
-    as.numeric(design$F %*% matrix(design$contrast.F, ncol = 1L))
-  } else {
-    as.numeric(design$X %*% matrix(design$contrast.X, ncol = 1L))
-  }
+  ## contrast score per sample on the full design (the scheme only affects the permutations)
+  A <- design$F
+  g.act <- as.numeric(design$F %*% matrix(design$contrast.F, ncol = 1L))
 
   ## Determine whether g.act is effectively binary (two unique values up to tolerance)
   g.act.round <- round(g.act / tol) * tol
@@ -158,7 +152,7 @@ estimateClusterFreeDE_LM <- function(genes, de.inp, sample.per.cell, design, per
 
   if (contrast.is.binary) {
     ## Try endpoints first (preferred)
-    end <- if (perm.method == "block") design$contrast_endpoints_F else design$contrast_endpoints_X
+    end <- design$contrast_endpoints_F
     
       num.hat <- as.numeric(A %*% matrix(end$num, ncol = 1L))
       den.hat <- as.numeric(A %*% matrix(end$den, ncol = 1L))

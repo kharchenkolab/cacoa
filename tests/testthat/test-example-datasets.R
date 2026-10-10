@@ -122,7 +122,7 @@ test_that("simulated objects: the whole workflow runs end to end on a conos-back
   expect_gt(g$p.global[g$covariate == "age"], 0.05)                            # the unrelated covariate is not
   expect_s3_class(cao$plotCovariateScreen(), "ggplot")
   # 3. model: two-level contrast adjusted for batch; whole-factor test of Group as a second test
-  cao$setModel(~ Group + Batch, test = c("Group: Group2 vs Group1", "Group"))
+  cao$setModel(~ Group + Batch, test = c("Group: Group2 vs Group1", "Group: all"))
   expect_length(cao$model$tests, 2); expect_equal(cao$model$tests[[2]]$kind, "term")
   expect_equal(cao$ref.level, "Group1")
   res <- cao$estimateExpressionShiftMagnitudes()

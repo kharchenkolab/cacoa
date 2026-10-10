@@ -420,7 +420,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' }
     checkDesign = function(formula = NULL, test = NULL, contrast = NULL, covariates = NULL, block.vars = NULL, verbose = NULL) {
       verbose <- private$opt("verbose", verbose)
-      model <- if (!is.null(formula) || !is.null(test) || !is.null(contrast)) {
+      bare <- is.null(formula) && is.null(contrast) && is.character(test) && length(test) == 1 && test %in% names(self$sample.meta)
+      model <- if (bare) NULL else if (!is.null(formula) || !is.null(test) || !is.null(contrast)) {
         tryCatch(private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = FALSE, what = "checkDesign()"),
                  error = function(e) { if (verbose) message("Model could not be built: ", conditionMessage(e)); NULL })
       } else self$model

@@ -13,8 +13,10 @@ resolveTests(
 )
 }
 \arguments{
-\item{test}{variable name(s), \code{"all"}, \code{"var: alt vs ref"}, a \code{c(var, alt, ref)} triple, or a structured
-contrast list (see \code{\link[=buildDesignMatrices]{buildDesignMatrices()}})}
+\item{test}{variable name(s), \code{"all"}, \code{"var: alt vs ref"}, \code{"var: all"} (whole-factor test of a multi-level
+factor), a \code{c(var, alt, ref)} triple, or a structured contrast list (see \code{\link[=buildDesignMatrices]{buildDesignMatrices()}}). A two-level
+factor or a numeric variable is tested by name; a factor with more than two levels needs the comparison
+(\code{"stage: II vs I"}) or \code{"stage: all"}.}
 
 \item{contrast}{expert synonym of \code{test} (a triple or structured contrast); either may be given}
 

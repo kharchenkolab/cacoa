@@ -170,10 +170,13 @@ referenceReason <- function(reason) switch(reason,
 
 # ---- test grammar (D23, §4.4) ---------------------------------------------------------------------
 
-# "condition: IPF vs control" -> c("condition", "IPF", "control"); NULL when not of that form
+# "condition: IPF vs control" -> list(var = "condition", alt = "IPF", ref = "control");
+# "stage: all" -> list(var = "stage", term = TRUE) (whole-factor test); NULL when not of either form
 parseTestString <- function(s) {
   m <- regmatches(s, regexec("^\\s*([^:]+?)\\s*:\\s*(.+?)\\s+vs\\.?\\s+(.+?)\\s*$", s))[[1]]
-  if (length(m) == 4) return(c(m[2], m[3], m[4]))
+  if (length(m) == 4) return(list(var = m[2], alt = m[3], ref = m[4], term = FALSE))
+  m <- regmatches(s, regexec("^\\s*([^:]+?)\\s*:\\s*(all|any|term)\\s*$", s, ignore.case = TRUE))[[1]]
+  if (length(m) == 3) return(list(var = m[2], alt = NA, ref = NA, term = TRUE))
   NULL
 }
 
@@ -186,8 +189,10 @@ mainEffectTerms <- function(formula, meta) {
 
 #' Resolve what to test from the `test` / `contrast` grammar
 #'
-#' @param test variable name(s), `"all"`, `"var: alt vs ref"`, a `c(var, alt, ref)` triple, or a structured
-#'   contrast list (see [buildDesignMatrices()])
+#' @param test variable name(s), `"all"`, `"var: alt vs ref"`, `"var: all"` (whole-factor test of a multi-level
+#'   factor), a `c(var, alt, ref)` triple, or a structured contrast list (see [buildDesignMatrices()]). A two-level
+#'   factor or a numeric variable is tested by name; a factor with more than two levels needs the comparison
+#'   (`"stage: II vs I"`) or `"stage: all"`.
 #' @param contrast expert synonym of `test` (a triple or structured contrast); either may be given
 #' @param meta sample metadata
 #' @param formula the location formula (needed for `"all"` and to check variables)
@@ -202,14 +207,15 @@ resolveTests <- function(test = NULL, contrast = NULL, meta, formula = NULL, num
   spec <- if (!is.null(test)) test else contrast
   out <- list()
   add <- function(t) { t$id <- length(out) + 1L; out[[length(out) + 1L]] <<- t }
-  fromVariable <- function(v, ref = NULL, alt = NULL) {
+  fromVariable <- function(v, ref = NULL, alt = NULL, term = FALSE) {
     if (!v %in% names(meta)) stop(sprintf("test variable '%s' is not a column of the sample metadata", v))
     x <- meta[[v]]
     if (is.numeric(x) && !is.matrix(x)) {
+      if (term) stop(sprintf("'%s' is numeric: a whole-factor test needs a factor; test = \"%s\" tests its slope", v, v))
       xx <- x[!is.na(x)]; m <- mean(xx); step <- numeric.step
       if (!is.null(ref) || !is.null(alt)) { ref <- as.numeric(ref); alt <- as.numeric(alt); step <- alt - ref; m <- ref }
       return(list(kind = "contrast", variable = v, step = step, sd = stats::sd(xx),
-                  contrast = list(type = "simple", term = v, num = m + step, den = m),
+                  contrast = list(type = "simple", term = v, num = m + step, den = m, at = list(), plain = TRUE),
                   levels = c(ref = format(m, digits = 4), alt = format(m + step, digits = 4)),
                   label = sprintf("%s: per %s unit%s", v, format(step, digits = 3), if (step == 1) "" else "s"),
                   reference.reason = NA_character_))
@@ -222,13 +228,19 @@ resolveTests <- function(test = NULL, contrast = NULL, meta, formula = NULL, num
       return(list(kind = "contrast", variable = v, contrast = c(v, alt, ref), levels = c(ref = ref, alt = alt),
                   label = sprintf("%s: %s vs %s", v, alt, ref), reference.reason = "user"))
     }
-    if (length(levs) == 2) {
-      r <- chooseReferenceLevel(x); alt <- setdiff(levs, r$level)
+    if (length(levs) < 2) stop(sprintf("'%s' has fewer than two observed levels", v))
+    r <- chooseReferenceLevel(x)
+    if (length(levs) == 2 && !term) {
+      alt <- setdiff(levs, r$level)
       return(list(kind = "contrast", variable = v, contrast = c(v, alt, r$level), levels = c(ref = r$level, alt = alt),
                   label = sprintf("%s: %s vs %s", v, alt, r$level), reference.reason = r$reason))
     }
-    if (length(levs) < 2) stop(sprintf("'%s' has fewer than two observed levels", v))
-    r <- chooseReferenceLevel(x)
+    if (!term) {                                   # more than two levels and no comparison given: ask rather than guess
+      alt <- setdiff(levs, r$level)[1]
+      stop(sprintf(paste0("'%s' has %d levels (%s). Say which comparison to test, e.g. test = \"%s: %s vs %s\" ",
+                          "(reference '%s': %s), or test = \"%s: all\" for a whole-factor test (location and dispersion)."),
+                   v, length(levs), paste(levs, collapse = ", "), v, alt, r$level, r$level, referenceReason(r$reason), v), call. = FALSE)
+    }
     list(kind = "term", variable = v, contrast = NULL, levels = c(ref = r$level, alt = NA), n.levels = length(levs),
          all.levels = levs, label = sprintf("%s (%d levels)", v, length(levs)), reference.reason = r$reason)
   }
@@ -246,15 +258,20 @@ resolveTests <- function(test = NULL, contrast = NULL, meta, formula = NULL, num
     add(list(kind = "contrast", variable = NA_character_, contrast = spec, levels = c(ref = NA, alt = NA),
              label = paste(sprintf("%+g*%s", spec, names(spec)), collapse = " "), reference.reason = "user"))
   } else if (is.character(spec)) {
-    if (length(spec) == 1 && identical(spec, "all")) {
+    if (length(spec) == 1 && identical(spec, "all")) {               # every main effect; multi-level factors as whole-factor tests
       if (is.null(formula)) stop("test = \"all\" needs a formula")
-      for (v in mainEffectTerms(formula, meta)) add(fromVariable(v))
+      for (v in mainEffectTerms(formula, meta)) {
+        x <- meta[[v]]; nl <- if (is.numeric(x)) 2L else length(unique(as.character(x[!is.na(x)])))
+        add(fromVariable(v, term = nl > 2))
+      }
     } else if (length(spec) == 3 && spec[1] %in% names(meta) && !all(spec %in% names(meta))) {
       add(fromVariable(spec[1], ref = spec[3], alt = spec[2]))         # c(var, alt, ref)
     } else {
       for (s in spec) {
         p <- parseTestString(s)
-        if (!is.null(p)) add(fromVariable(p[1], ref = p[3], alt = p[2])) else add(fromVariable(trimws(s)))
+        if (is.null(p)) add(fromVariable(trimws(s)))
+        else if (isTRUE(p$term)) add(fromVariable(p$var, term = TRUE))
+        else add(fromVariable(p$var, ref = p$ref, alt = p$alt))
       }
     }
   } else stop("unsupported `test` specification")
@@ -435,6 +452,7 @@ designIssues <- function(tests, meta, formula, dropped = character(0)) {
       if (length(tb) && min(tb) < 3) add("warning", sprintf("'%s' has only %d sample(s) at level %s", t$variable, min(tb), names(tb)[which.min(tb)]),
                                          "cell types with fewer than min.samp.per.level samples per level are skipped")
     }
+    for (nt in d$notes %||% character(0)) add("note", sprintf("test '%s': %s", t$label, nt))
     if (!is.null(t$permutation)) {
       if (is.finite(t$permutation$n.distinct) && t$permutation$n.distinct < 200)
         add("warning", sprintf("test '%s': only %d distinct permutations; the smallest attainable p-value is %.3g", t$label,
@@ -469,11 +487,14 @@ format.cacoaModel <- function(x, ...) {
     perm.txt <- if (is.null(pl)) "" else sprintf("permutations: %s%s%s", pl$scheme,
                                                    if (pl$scheme == "block" && pl$n.strata > 1) sprintf(" within %d strata", pl$n.strata) else "",
                                                    if (is.finite(pl$n.distinct)) sprintf(" (%s distinct)", format(round(pl$n.distinct), big.mark = ",")) else "")
+    guessed <- !is.null(t$reference.reason) && !is.na(t$reference.reason) && t$kind == "contrast" && is.null(t$step) && t$reference.reason != "user"
     ref.txt <- if (!is.null(t$reference.reason) && !is.na(t$reference.reason) && t$kind == "contrast" && is.null(t$step))
-      sprintf("  (reference '%s': %s)", t$levels[["ref"]], referenceReason(t$reference.reason)) else ""
+      sprintf("  (reference '%s': %s%s)", t$levels[["ref"]], referenceReason(t$reference.reason),
+              if (guessed) sprintf("; to change: test = \"%s: %s vs %s\"", t$variable, t$levels[["ref"]], t$levels[["alt"]]) else "") else ""
     lines <- c(lines, sprintf("Test%s: %s%s", if (length(x$tests) > 1) sprintf(" %d", t$id) else "", t$label, ref.txt))
     lines <- c(lines, sprintf("       %s%s", if (length(adj)) sprintf("adjusted for %s; ", paste(adj, collapse = ", ")) else "unadjusted; ", perm.txt))
     lines <- c(lines, paste0("       ", t$interpretation[1]))
+    for (nt in t$design$notes %||% character(0)) lines <- c(lines, paste0("       note: ", nt))
   }
   dr <- x$samples$dropped
   iss <- x$issues

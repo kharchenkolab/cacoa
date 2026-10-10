@@ -127,7 +127,7 @@ test_that("robust and na.mode options run end to end: contrast and whole-factor 
   cao$setOptions(robust = "none", na.mode = "drop")
   # whole-factor test with robust weights and weak imputation
   cao$sample.meta$stage <- factor(rep(c("I", "II", "III"), length.out = 12))
-  m3 <- buildCacoaModel(cao$sample.meta, formula = ~ stage, test = "stage")
+  m3 <- buildCacoaModel(cao$sample.meta, formula = ~ stage, test = "stage: all")
   t0 <- testTermEffects(D, m3, cao$sample.meta, n.permutations = 29, seed = 2)
   t1 <- testTermEffects(D, m3, cao$sample.meta, n.permutations = 29, seed = 2, robust = "huber", na.mode = "impute_weak")
   expect_true(all(is.finite(t1$results$p.location))); expect_equal(t1$results$n[2], 12); expect_equal(t0$results$n[2], 11)

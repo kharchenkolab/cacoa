@@ -86,9 +86,10 @@ The screen ends with a suggested model. It is not applied automatically.
 cao$setModel(~ Diagnosis + Sample_Source, test = "Diagnosis")
 ```
 
-`test` accepts a variable name (two levels: a contrast with an automatically chosen reference; more levels: a
-whole-factor test; numeric: a slope per unit), an explicit comparison such as `"Diagnosis: IPF vs Control"`, several
-variables, `"all"`, or a structured contrast. The printout states the reference level and how it was chosen, the
+`test` accepts a variable name (two levels: a contrast with an automatically chosen reference; numeric: a slope per
+unit; a factor with more levels needs the comparison, e.g. `"Group: G2 vs G1"`, or `"Group: all"` for a whole-factor
+test), an explicit comparison such as `"Diagnosis: IPF vs Control"`, several variables, `"all"`, or a structured
+contrast. The printout states the reference level and how it was chosen, the
 adjustment set, the permutation scheme and the number of distinct permutations.
 
 Options shared by all methods are set once:

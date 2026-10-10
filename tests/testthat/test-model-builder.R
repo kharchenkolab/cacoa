@@ -151,7 +151,7 @@ test_that("engine invariance: the builder's design and a hand-coded design give 
 
 test_that("term test: location F equals the partial ANOVA F for a one-dimensional response", {
   meta3 <- mbMeta3(); set.seed(9); y <- rnorm(18) + 0.8 * (meta3$Group == "G2")
-  m <- buildCacoaModel(meta3, ~ Group + Batch, test = "Group"); d <- m$tests[[1]]$design
+  m <- buildCacoaModel(meta3, ~ Group + Batch, test = "Group: all"); d <- m$tests[[1]]$design
   expect_equal(m$tests[[1]]$kind, "term")
   D <- as.matrix(dist(y)); rownames(D) <- colnames(D) <- rownames(meta3)
   r <- testTermEffects(list(ct = D), d, meta3, dist = "l2", n.permutations = 19, seed = 1)
@@ -182,7 +182,7 @@ test_that("coding: the tested factor is coded as level means (reference first) a
   b <- qr.coef(qr(cbind(d$X, d$Z)), y)
   expect_equal(unname(b[1]), unname(coef(lm(y ~ group + batch, mm))["groupB"]), tolerance = 1e-10)
   # three-level factor: the same columns for every test of one model; level differences for the term test
-  m <- buildCacoaModel(meta3, ~ Group + Batch, test = c("Group: G2 vs G1", "Group: G3 vs G1", "Group"))
+  m <- buildCacoaModel(meta3, ~ Group + Batch, test = c("Group: G2 vs G1", "Group: G3 vs G1", "Group: all"))
   cn <- lapply(m$tests, function(t) colnames(t$design$F))
   expect_true(all(vapply(cn, identical, logical(1), cn[[1]]))); expect_equal(cn[[1]], c("GroupG1", "GroupG2", "GroupG3", "Batchb2"))
   expect_equal(unname(m$tests[[1]]$design$contrast.F), c(-1, 1, 0, 0)); expect_equal(unname(m$tests[[2]]$design$contrast.F), c(-1, 0, 1, 0))
@@ -204,4 +204,63 @@ test_that("coding: the tested factor is coded as level means (reference first) a
   expect_equal(colnames(buildCacoaModel(mm3, ~ group + factor(batch), test = "group")$tests[[1]]$design$F), c("groupA", "groupB", "factor(batch)2"))
   # the default formula of the expert constructor gives the same coding
   expect_equal(colnames(suppressMessages(buildDesignMatrices(meta, contrast = c("group", "B", "A")))$F), c("groupA", "groupB"))
+})
+
+test_that("grammar: a multi-level factor must name its comparison; 'var: all' asks for the whole-factor test", {
+  meta3 <- mbMeta3()
+  expect_error(buildCacoaModel(meta3, ~ Group + Batch, test = "Group"), "has 3 levels \\(G1, G2, G3\\)")
+  expect_error(buildCacoaModel(meta3, ~ Group + Batch, test = "Group"), 'test = "Group: G2 vs G1"')
+  expect_error(buildCacoaModel(meta3, ~ Group + Batch, test = "Group"), 'test = "Group: all"')
+  m <- buildCacoaModel(meta3, ~ Group + Batch, test = "Group: all")
+  expect_equal(m$tests[[1]]$kind, "term"); expect_equal(m$tests[[1]]$label, "Group (3 levels)")
+  expect_equal(buildCacoaModel(meta3, ~ Group + Batch, test = "Group: any")$tests[[1]]$kind, "term")
+  expect_error(buildCacoaModel(meta3, ~ Group + age, test = "age: all"), "is numeric")
+  # test = "all" takes multi-level factors as whole-factor tests
+  labs <- vapply(buildCacoaModel(meta3, ~ Group + Batch + age, test = "all")$tests, `[[`, character(1), "label")
+  expect_equal(labs, c("Group (3 levels)", "Batch: b2 vs b1", "age: per 1 unit"))
+})
+
+test_that("interaction models: the plain grammar gets a documented default and a note", {
+  meta <- mbMeta()
+  m <- buildCacoaModel(meta, ~ group * batch, test = "group"); d <- m$tests[[1]]$design
+  ms <- buildCacoaModel(meta, ~ group * batch, test = list(type = "marginal", term = "group", num = "B", den = "A", over = "batch"))
+  expect_equal(d$contrast.F, ms$tests[[1]]$design$contrast.F)
+  expect_true(any(grepl("compared marginally", m$issues$message[m$issues$severity == "note"])))
+  expect_output(print(m), "note: group interacts with batch")
+  # factor x numeric: the comparison at the covariate's mean equals the structured simple contrast (anchors at the mean)
+  m2 <- buildCacoaModel(meta, ~ group * age, test = "group"); d2 <- m2$tests[[1]]$design
+  s2 <- buildCacoaModel(meta, ~ group * age, test = list(type = "simple", term = "group", num = "B", den = "A"))$tests[[1]]$design
+  expect_equal(d2$contrast.F, s2$contrast.F); expect_true(any(grepl("compared at age = ", m2$issues$message[m2$issues$severity == "note"])))
+  # numeric x factor: the slope averaged over the factor's levels
+  m3 <- buildCacoaModel(meta, ~ age * group, test = "age"); d3 <- m3$tests[[1]]$design
+  mm <- meta; mm$group <- factor(mm$group)
+  set.seed(2); y <- rnorm(12); fit <- lm(y ~ age * group, mm)
+  slope.avg <- unname(coef(fit)["age"] + 0.5 * coef(fit)["age:groupB"])
+  expect_equal(unname(drop(regressionWeights(d3) %*% y)), slope.avg, tolerance = 1e-9)
+  # explicit at = / over = override the default and leave no note
+  m4 <- buildCacoaModel(meta, ~ group * batch, test = list(type = "simple", term = "group", num = "B", den = "A", at = list(batch = "b2")))
+  expect_false(any(grepl("interacts", m4$issues$message)))
+  # a term test under an interaction model is the main effect at the reference setting
+  m5 <- buildCacoaModel(mbMeta3(), ~ Group * Batch, test = "Group: all"); C <- m5$tests[[1]]$design$term.contrast
+  expect_equal(rownames(C)[1:3], c("GroupG1", "GroupG2", "GroupG3")); expect_true(all(C[grepl(":", rownames(C)), ] == 0))
+})
+
+test_that("formula hygiene: dropped constant terms are notes, random effects and lincomb are errors", {
+  meta <- mbMeta(); meta$site <- "x"
+  m <- buildCacoaModel(meta, ~ group + site + batch, test = "group")
+  expect_true(any(grepl("site dropped", m$issues$message[m$issues$severity == "note"])))
+  expect_equal(deparse(m$tests[[1]]$design$formula_used), "~group + batch")
+  expect_output(print(m), "note: term site dropped")
+  expect_error(buildCacoaModel(meta, ~ group + (1 | batch), test = "group"), "random-effect terms")
+  expect_error(buildCacoaModel(meta, ~ group + batch, test = list(type = "lincomb", term = "group", cells = c(A = 1))), "no longer supported")
+})
+
+test_that("model printout snapshots", {
+  meta <- mbMeta(); meta3 <- mbMeta3()
+  expect_snapshot(print(buildCacoaModel(meta, ~ group + batch, test = "group")))
+  expect_snapshot(print(buildCacoaModel(meta3, ~ Group + Batch, test = "Group: G2 vs G1")))
+  expect_snapshot(print(buildCacoaModel(meta3, ~ Group + Batch, test = "Group: all")))
+  expect_snapshot(print(buildCacoaModel(meta, ~ group * batch, test = "group")))
+  expect_snapshot(print(buildCacoaModel(meta, ~ age + batch, test = "age")))
+  mm <- meta; mm$site <- "x"; expect_snapshot(print(buildCacoaModel(mm, ~ group + site + batch, test = "group")))
 })

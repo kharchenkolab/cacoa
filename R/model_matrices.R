@@ -57,7 +57,14 @@ buildDesignMatrices <- function(data, contrast, formula = NULL, numericRef = "au
             " (contrast variables", if (length(blockVars)) " and block.vars" else "", "). Pass `formula` to adjust for other covariates.")
   } else formula <- checkFormula(formula)
   formula_used <- pruneFormulaByData(formula, data, na.action = na.action, verbosity = verbosity)
+  notes <- character(0)
+  dropped <- attr(formula_used, "dropped") %||% character(0)
+  if (length(dropped)) notes <- c(notes, sprintf("term%s %s dropped from the formula: constant in the samples used", if (length(dropped) > 1) "s" else "", prettyJoin(dropped)))
   spec <- normalizeContrastSpec(contrast)
+  # a plain test variable that interacts with other covariates: compare marginally over interacting factors and at
+  # the anchors of interacting numeric covariates (structured contrasts with at = / over = are taken as given)
+  idef <- interactionDefault(spec, formula_used, data)
+  spec <- idef$spec; contrast <- spec
 
   # coding: the tested factor first and without an intercept, its reference level first
   tv <- testedVariable(spec, data)
@@ -67,6 +74,16 @@ buildDesignMatrices <- function(data, contrast, formula = NULL, numericRef = "au
   cF <- buildSyntheticContrast(F, data, contrast, numericRef = numericRef)
   if (all(abs(cF) < 1e-12)) stop("the contrast is zero on this design (the compared settings coincide)")
   sp <- splitByDirection(F, cF)
+  nr <- attr(cF, "numeric_ref_used") %||% list()
+  if (length(idef$numeric)) {
+    anchors <- vapply(idef$numeric, function(v) format(nr[[v]] %||% mean(data[[v]], na.rm = TRUE), digits = 4), character(1))
+    notes <- c(notes, sprintf("%s interacts with %s: compared at %s (%s); use a structured test with at = to change",
+                              idef$term, paste(idef$numeric, collapse = ", "), paste(sprintf("%s = %s", idef$numeric, anchors), collapse = ", "),
+                              if (is.list(numericRef)) "given anchors" else "the mean"))
+  }
+  if (length(idef$factors))
+    notes <- c(notes, sprintf("%s interacts with %s: compared marginally (equal weights over %s levels); use a structured test with at = or over = to change",
+                              idef$term, paste(idef$factors, collapse = ", "), paste(idef$factors, collapse = " x ")))
 
   contrast_label <- NULL
   contrast_endpoint_labels <- list(baseline = "baseline", target = "target")
@@ -88,8 +105,28 @@ buildDesignMatrices <- function(data, contrast, formula = NULL, numericRef = "au
     contrast_endpoints_at = attr(cF, "endpoints_at") %||% NULL,
     numeric_ref_used = attr(cF, "numeric_ref_used") %||% list(),
     contrast_label = contrast_label, contrast_endpoint_labels = contrast_endpoint_labels,
-    tested.variable = tv$variable, reference = tv$ref, notes = character(0)
+    tested.variable = tv$variable, reference = tv$ref, notes = notes
   )
+}
+
+# Default comparison for a plain test variable (grammar: a name, a triple, "var: a vs b", or a numeric step) whose
+# term interacts with other covariates: marginal with equal weights over the interacting factors; interacting numeric
+# covariates sit at their anchors (which the endpoint rows do already). Returns the (possibly rewritten) spec and the
+# interacting variables for the notes.
+interactionDefault <- function(spec, formula, data) {
+  out <- list(spec = spec, term = NULL, factors = character(0), numeric = character(0))
+  if (!identical(spec$type, "simple") || !isTRUE(spec$plain_triple %||% spec$plain)) return(out)
+  if (grepl(":", spec$term, fixed = TRUE) || length(spec$at %||% list())) return(out)
+  tl <- attr(stats::terms(stats::as.formula(formula), data = data), "term.labels")
+  ints <- tl[grepl(":", tl, fixed = TRUE) & vapply(tl, function(t) spec$term %in% all.vars(str2lang(t)), logical(1))]
+  if (!length(ints)) return(out)
+  partners <- setdiff(unique(unlist(lapply(ints, function(t) all.vars(str2lang(t))))), spec$term)
+  partners <- intersect(partners, names(data))
+  facs <- partners[vapply(partners, function(v) !is.numeric(data[[v]]), logical(1))]
+  nums <- setdiff(partners, facs)
+  sp <- spec; sp$plain_triple <- NULL; sp$plain <- NULL
+  if (length(facs)) sp <- list(type = "marginal", term = spec$term, num = spec$num, den = spec$den, at = list(), over = facs, weights = "equal")
+  list(spec = sp, term = spec$term, factors = facs, numeric = nums)
 }
 
 # The factor whose levels a contrast compares (NULL for numeric, coefficient-level or multi-variable cell contrasts),
@@ -174,27 +211,13 @@ checkFormula <- function(formula) {
     stop("Design formula must contain a '~' to separate response and predictors.")
   }
   
-  # Demote random effects to fixed, preserving variables
-  containsRandomEffects <- grepl("\\([^\\|]*\\|[^\\)]*\\)", formula.str)
-  if (containsRandomEffects) {
-    rand.eff.vars <- unlist(regmatches(formula.str, gregexpr("(?<=\\|)[^\\)]+", formula.str, perl = TRUE)))
-    rand.eff.vars <- trimws(rand.eff.vars)
-    warning(sprintf(
-      "Random effects (terms with '|') are not supported in this workflow. The variable(s) '%s' will be treated as fixed effects.",
-      paste(rand.eff.vars, collapse = ", ")
-    ))
-    formula.str <- gsub("\\([^\\|]*\\|[^\\)]*\\)", "", formula.str)
-    rhs <- gsub("~", "", formula.str)
-    rhs <- gsub("\\++", "+", rhs)
-    rhs <- gsub("^\\s*\\+|\\+\\s*$", "", rhs)
-    rhs <- trimws(rhs)
-    rhs.terms <- trimws(unlist(strsplit(rhs, "\\+")))
-    rhs.terms <- unique(c(rhs.terms, rand.eff.vars))
-    rhs.terms <- rhs.terms[rhs.terms != ""]
-    return( paste("~", paste(rhs.terms, collapse = " + ")) )
-  } else {
-    return(formula.str)
+  # random-effect terms are not supported: say so instead of rewriting the formula
+  if (grepl("|", formula.str, fixed = TRUE)) {
+    rand.eff.vars <- trimws(unlist(regmatches(formula.str, gregexpr("(?<=\\|)[^\\)]+", formula.str, perl = TRUE))))
+    stop(sprintf("random-effect terms (with '|') are not supported: use %s as a fixed effect in the formula or as block.vars (permutation strata)",
+                 paste(sQuote(rand.eff.vars), collapse = ", ")), call. = FALSE)
   }
+  formula.str
 }
 
 # Default sample-level formula: the variables named by the contrast plus block.vars (never every
@@ -249,12 +272,13 @@ pruneFormulaByData <- function(formula, data, na.action = stats::na.pass, verbos
   
   rhs <- if (length(kept)) paste(kept, collapse = " + ") else if (intercept == 0L) "0" else "1"
   if (length(kept) && intercept == 0L) rhs <- paste("0 +", rhs)
-  f2 <- as.formula(paste("~", rhs))
+  f2 <- as.formula(paste("~", rhs), env = environment(f))
   
   if (length(dropped)) {
     msg <- paste0("Dropping non-varying term(s) from formula: ", prettyJoin(dropped))
     if (verbosity %in% c("warn")) warning(msg, call. = FALSE)
     if (verbosity %in% c("info","debug")) message(msg)
+    attr(f2, "dropped") <- dropped                  # recorded as a model note by the builders
   }
   f2
 }
@@ -306,7 +330,7 @@ normalizeContrastSpec <- function(contrast) {
       num  <- contrast$num  %||% stop("Field 'num' is required.")
       den  <- contrast$den  %||% stop("Field 'den' is required.")
       at   <- contrast$at   %||% list()
-      if (t == "simple") return(list(type="simple", term=term, num=num, den=den, at=at))
+      if (t == "simple") return(list(type="simple", term=term, num=num, den=den, at=at, plain=isTRUE(contrast$plain)))
       over <- as.character(contrast$over %||% stop("type='marginal' needs 'over'."))
       w    <- contrast$weights %||% "equal"
       return(list(type="marginal", term=term, num=num, den=den, at=at, over=over, weights=w))
@@ -470,22 +494,13 @@ endpointRowsFromDesign <- function(F, data, endpoints_at, numericRef = list()) {
 
 buildSyntheticContrast <- function(F, data, contrast,
                                    numericRef = "auto",
-                                   numericRefRows = NULL,
-                                   stopOnAmbiguousTriple = TRUE) {
+                                   numericRefRows = NULL) {
   spec <- normalizeContrastSpec(contrast)
   trm  <- attr(F, "terms")
   xlv  <- attr(F, "xlevels")
   ctr  <- attr(F, "contrasts")
   if (is.null(trm) || is.null(xlv))
     stop("F must carry 'terms' and 'xlevels' (use buildFullDesign()).")
-  
-  tlabels <- attr(trm, "term.labels")
-  hasIntWith <- function(var) {
-    any(
-      grepl(":", tlabels) &
-        grepl(paste0("(^|:)", var, "(:|$)"), tlabels)
-    )
-  }
   
   numRef <- resolveNumericRef(
     F, data, contrast,
@@ -510,19 +525,6 @@ buildSyntheticContrast <- function(F, data, contrast,
     attr(cF, "endpoints_F")      <- NULL
     attr(cF, "endpoints_at")     <- NULL
     return(cF)
-  }
-  
-  ## ------------------------------------------------------------
-  ## 2) Ambiguous triple guard (simple DESeq2-style triple with interactions)
-  ## ------------------------------------------------------------
-  if (identical(spec$plain_triple, TRUE) &&
-      stopOnAmbiguousTriple &&
-      hasIntWith(spec$term)) {
-    stop(sprintf(
-      "Ambiguous triple: interactions with '%s' present; ",
-      spec$term
-    ),
-    "please specify type='simple' (add at=) or type='marginal' (add over=).")
   }
   
   ## ------------------------------------------------------------

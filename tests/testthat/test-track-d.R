@@ -79,17 +79,17 @@ test_that("DE and CoDA run on the model object, including whole-factor tests", {
   expect_true(all(c("ct1", "ct2") %in% names(de)))
   expect_true(any(de$ct1$res$padj < 0.1))
   cao$sample.meta$stage <- factor(rep(c("I", "II", "III"), length.out = 10))
-  de3 <- suppressWarnings(cao$estimateDEPerCellType(test = "limma-voom", test.spec = "stage", formula = ~ stage, verbose = FALSE, name = "de.stage", min.cell.count = 5))
+  de3 <- suppressWarnings(cao$estimateDEPerCellType(test = "limma-voom", test.spec = "stage: all", formula = ~ stage, verbose = FALSE, name = "de.stage", min.cell.count = 5))
   expect_true(all(c("stat", "pvalue", "padj") %in% names(de3$ct1$res)))
   expect_equal(attr(de3, "model")$tests[[1]]$kind, "term")
-  de4 <- suppressWarnings(cao$estimateDEPerCellType(test = "edgeR", test.spec = "stage", formula = ~ stage, verbose = FALSE, name = "de.stage2", min.cell.count = 5))
+  de4 <- suppressWarnings(cao$estimateDEPerCellType(test = "edgeR", test.spec = "stage: all", formula = ~ stage, verbose = FALSE, name = "de.stage2", min.cell.count = 5))
   expect_true(all(de4$ct1$res$pvalue >= 0 & de4$ct1$res$pvalue <= 1))
-  expect_error(cao$estimateDEPerCellType(test = "Wilcoxon", test.spec = "stage", formula = ~ stage, verbose = FALSE), "two-group")
+  expect_error(cao$estimateDEPerCellType(test = "Wilcoxon", test.spec = "stage: all", formula = ~ stage, verbose = FALSE), "two-group")
   # CoDA: contrast path unchanged, term path through the distance engine
   skip_if_not_installed("coda.base"); skip_if_not_installed("psych")
   coda <- cao$estimateCellLoadings(n.permutations = 49, verbose = FALSE)
   expect_s3_class(coda$model, "cacoaModel")
-  coda3 <- cao$estimateCellLoadings(test = "stage", formula = ~ stage, n.permutations = 49, verbose = FALSE, name = "coda.stage")
+  coda3 <- cao$estimateCellLoadings(test = "stage: all", formula = ~ stage, n.permutations = 49, verbose = FALSE, name = "coda.stage")
   expect_equal(coda3$kind, "term")
   expect_true(all(c("R2.adj", "p.location", "p.dispersion") %in% names(coda3$results)))
 })
@@ -119,14 +119,14 @@ test_that("cluster-free shifts on the engine: constant within whole-type neighbo
   expect_null(res2$z.adj); expect_null(res2$shifts.smoothed)
   # a whole-factor model is refused
   cao$sample.meta$stage <- factor(rep(c("I", "II", "III"), length.out = 10))
-  m3 <- buildCacoaModel(cao$sample.meta, formula = ~ stage, test = "stage")
+  m3 <- buildCacoaModel(cao$sample.meta, formula = ~ stage, test = "stage: all")
   expect_error(clusterFreeExpressionShifts(cm, cao$sample.per.cell, nns, m3, cao$sample.meta, n.permutations = 9), "contrast test")
 })
 
 test_that("regressions found by the notebook run: test lookup by variable, CoDA plot, volcano tables, FL fitter without residuals", {
   cao <- makeToyCacoa(n.per.group = c(A = 5, B = 5), cells.per.sample = 60, n.genes = 80, n.cell.types = 4, shift = 1.5)
   cao$sample.meta$stage <- factor(rep(c("I", "II", "III"), length.out = 10))
-  cao$setModel(~ group + stage, test = c("group: B vs A", "stage"), verbose = FALSE)
+  cao$setModel(~ group + stage, test = c("group: B vs A", "stage: all"), verbose = FALSE)
   res <- cao$estimateExpressionShiftMagnitudes(n.permutations = 19, verbose = FALSE)
   # a test can be addressed by label, by variable name or by index
   expect_equal(cacoa:::matchModelTest(cao$model, "stage"), 2L); expect_equal(cacoa:::matchModelTest(cao$model, "stage (3 levels)"), 2L)
@@ -149,7 +149,7 @@ test_that("regressions found by the notebook run: test lookup by variable, CoDA 
   expect_equal(dim(coda$contrast$loadings$perm), c(4, 49))
   expect_s3_class(cao$plotCellLoadings(), "ggplot")
   expect_s3_class(cao$plotCellLoadings(show.pvals = FALSE, show.null = FALSE, ordering = "loading"), "ggplot")
-  cao$estimateCellLoadings(test = "stage", formula = ~ stage, n.permutations = 19, verbose = FALSE, name = "coda.stage")
+  cao$estimateCellLoadings(test = "stage: all", formula = ~ stage, n.permutations = 19, verbose = FALSE, name = "coda.stage")
   expect_error(cao$plotCellLoadings(name = "coda.stage"), "no per-cell-type loadings")
   # volcano plot reads the DE tables (list(res = ...)) and finds CellFrac
   skip_if_not_installed("limma"); skip_if_not_installed("EnhancedVolcano")

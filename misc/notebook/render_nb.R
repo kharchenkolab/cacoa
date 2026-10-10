@@ -61,11 +61,11 @@ md("Variance partition: how much of the sample-level variation is explained uniq
 code('cao$plotVariancePartition(c("Group", "Batch"))', fig = c(8, 3.5))
 
 md("## Set the model\n\n",
-   "`test` accepts a variable name (two levels: a contrast with an automatically chosen reference; more levels: a whole-factor test; numeric: a slope per unit), ",
+   "`test` accepts a variable name (two levels: a contrast with an automatically chosen reference; numeric: a slope per unit; a factor with more levels needs the comparison, e.g. `\"Group: Group2 vs Group1\"`, or `\"Group: all\"` for a whole-factor test), ",
    "an explicit comparison such as `\"Group: Group2 vs Group1\"`, several variables, `\"all\"`, or a structured contrast. ",
    "The printout states the reference level and how it was chosen, the adjustment set, the permutation scheme and the number of distinct permutations.\n\n",
    "Here two tests are set: the planted contrast `Group2 vs Group1`, and the whole-factor test of `Group` over all four groups. Both are adjusted for `Batch`.")
-code('cao$setModel(~ Group + Batch, test = c("Group: Group2 vs Group1", "Group"))')
+code('cao$setModel(~ Group + Batch, test = c("Group: Group2 vs Group1", "Group: all"))')
 
 md("## Expression shifts per cell type\n\n",
    "The expression shift is estimated with an individual-level model fitted to the sample-sample distances of each cell type. Three effects are reported for a contrast:\n\n",

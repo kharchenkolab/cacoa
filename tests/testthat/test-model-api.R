@@ -38,7 +38,7 @@ test_that("every row of the test grammar resolves as specified", {
   expect_equal(unname(t$levels), c("control", "disease")); expect_equal(t$reference.reason, "control-like")
   expect_match(t$label, "disease vs control")
   expect_match(t$interpretation[["shift"]], "disease samples differ from control samples")
-  t <- one("stage")[[1]]
+  t <- one("stage: all")[[1]]; expect_error(one("stage"), "has 3 levels")
   expect_equal(t$kind, "term"); expect_equal(t$n.levels, 3)
   t <- one("age")[[1]]
   expect_equal(t$kind, "contrast"); expect_equal(t$step, 1)
@@ -105,7 +105,7 @@ test_that("buildCacoaModel builds designs per test, drops incomplete samples and
   expect_equal(length(m4$samples$dropped), 9)
   expect_true(any(grepl("dropped", m4$issues$message)))
   # multiple tests and a term test
-  m5 <- buildCacoaModel(meta, formula = ~ condition + stage + batch, test = c("condition", "stage"))
+  m5 <- buildCacoaModel(meta, formula = ~ condition + stage + batch, test = c("condition", "stage: all"))
   expect_length(m5$tests, 2)
   expect_equal(m5$tests[[2]]$kind, "term")
   expect_equal(colnames(m5$tests[[2]]$design$term.contrast), c("II vs I", "III vs I"))

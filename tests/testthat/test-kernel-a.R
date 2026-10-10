@@ -108,7 +108,7 @@ test_that("the screen and the whole-factor test give the same answers as before 
   sc <- screenCovariates(D, meta, covariates = c("group", "batch", "age"), n.permutations = 49, seed = 3)
   expect_true(all(c("p.perm", "p.disp.perm", "F", "F.disp") %in% names(sc$table)))
   expect_true(all(is.finite(sc$table$p.perm[sc$table$n.used >= 4])))
-  m <- buildCacoaModel(meta, formula = ~ group + batch, test = "group")
+  m <- buildCacoaModel(meta, formula = ~ group + batch, test = "group: all")
   tr <- testTermEffects(D, m, meta, dist = "l2", n.permutations = 49, seed = 3)
   expect_true(all(c("p.location", "p.dispersion") %in% names(tr$results)))
   expect_true(all(is.finite(tr$results$p.location)))

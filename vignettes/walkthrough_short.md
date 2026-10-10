@@ -27,7 +27,7 @@ library(cowplot)
 `sample.metadata` is a data frame with one row per sample (row names are the sample names) and one column per covariate. Here it has the group, the batch and two technical columns from the simulation. A random `age` column is added to show how an unrelated covariate is treated.
 
 ```r
-sim <- readRDS("/home/pkharchenko/cacoa-dev/test/shifts_sim_objects.rds")$with_batch                      # a Cacoa object from an earlier version
+sim <- readRDS("../test/shifts_sim_objects.rds")$with_batch                      # a Cacoa object from an earlier version
 con <- sim$data.object                                 # the Conos object inside it
 sample.meta <- con$misc$sample_meta
 set.seed(1); sample.meta$age <- round(rnorm(nrow(sample.meta), 55, 8))   # unrelated to the groups, for illustration

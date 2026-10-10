@@ -548,7 +548,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       seed <- if (missing(seed)) private$opt("seed") else seed
       D.list <- private$distancesForSpace(space, dist = dist, n.pcs = n.pcs, cell.groups = cell.groups, min.cells.per.sample = min.cells.per.sample,
                                           min.gene.frac = min.gene.frac, genes = genes, verbose = verbose)
-      test.variable <- if (!is.null(self$model)) self$model$tests[[1]]$variable else NULL
+      test.variable <- if (!is.null(self$model)) self$model$tests[[1]]$variable else self$cache$design.check$test.variable
       if (!is.null(test.variable) && is.na(test.variable)) test.variable <- NULL
       res <- screenCovariates(D.list, self$sample.meta, covariates = covariates, mode = mode, adjust.for = adjust.for, dist = if (space == "composition") "l2" else dist,
                               test.variable = test.variable, n.permutations = n.permutations,
@@ -1234,6 +1234,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (is.null(d) || !(p.col %in% colnames(d))) return(data.frame(value = NA_real_))
         data.frame(value = sum(d[[p.col]] <= pvalue.cutoff, na.rm = TRUE))
       }) %>% dplyr::bind_rows(.id = "Type")
+      df$Type <- sub("\\.initial$", "", df$Type)                     # cell type labels without the resampling suffix
+      df$Type <- sub("\\.resample\\.[0-9]+$", "", df$Type)
 
       plotMeanMedValuesPerCellType(
         df, show.jitter=show.jitter, jitter.alpha=jitter.alpha, notch=notch, type=type,
@@ -1363,6 +1365,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           # map from sample values to cells
           params$groups <- setNames(self$sample.meta[as.character(self$sample.per.cell), color.by], names(self$sample.per.cell))
           if (is.null(params$show.legend)) params$show.legend <- TRUE
+          if (is.null(params$legend.title)) params$legend.title <- color.by
           if (is.null(params$palette) && !is.null(names(self$sample.groups.palette)) && all(unique(stats::na.omit(as.character(params$groups))) %in% names(self$sample.groups.palette)))
             params$palette <- self$sample.groups.palette
         } else {
@@ -2925,6 +2928,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         res$residuals <- perm.res$residuals
         res$residuals.pearson <- perm.res$residuals.pearson
       }
+      if (verbose && adjust) {
+        n.adj <- sum(abs(res$adj) >= stats::qnorm(0.9), na.rm = TRUE)
+        message(sprintf("%d of %d cells keep |adjusted z| >= %.2f%s", n.adj, sum(is.finite(res$adj)), stats::qnorm(0.9),
+                        if (n.adj == 0) " (none: more permutations, or plotDiffCellDensity(adjust = FALSE) for the raw scores)" else ""))
+      }
 
       self$test.results[[name]]$diff[[type]] <- res
 
@@ -3432,7 +3440,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.null(palette) && !is.null(color.by) && !is.null(self$model) && (identical(color.by, "test") || identical(color.by, private$testVariable())) &&
           !is.null(names(self$sample.groups.palette))) palette <- self$sample.groups.palette
 
-      if (is.null(title)) title <- space
+      if (is.null(title)) title <- if (space == "expression.shifts") "all cell types" else space
+      if (values == "both" && !is.null(self$model) && !length(setdiff(all.vars(self$model$formula), private$testVariable()))) {
+        message("the model has no covariates to adjust for: showing the unadjusted distances")
+        values <- "unadjusted"
+      }
 
       if (values == "both") {
         checkPackageInstalled("cowplot", cran=TRUE, details="for values='both'")
@@ -4072,7 +4084,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       shifts <- if (smooth) shifts$shifts.smoothed else shifts$shifts
 
       shifts %<>% na.omit()
-      if (!any(abs(z.scores) >= min.z, na.rm = TRUE))
+      z.degenerate <- !any(abs(z.scores) >= min.z, na.rm = TRUE)
+      if (z.degenerate)
         message(sprintf("no cell reaches |z| >= %.2f (%s z-scores): the z-score panel is uniform", min.z, if (adjusted) "adjusted" else "unadjusted"))
       color.range %<>% parseLimitRange(shifts)
       shifts %<>% pmax(color.range[1]) %>% pmin(color.range[2])
@@ -4109,6 +4122,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(cell.groups)) {
         ggs %<>% lapply(transferLabelLayer, self$plotEmbedding(groups=cell.groups), font.size=font.size)
       }
+      if (z.degenerate) ggs[[2]] <- ggs[[2]] + theme(legend.position = "none")
 
       if (!is.null(adj.list)) ggs %<>% lapply(`+`, adj.list)
       if (build.panel) {

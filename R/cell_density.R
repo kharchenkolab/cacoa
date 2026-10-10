@@ -227,6 +227,7 @@ diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c
     }
     res.diff <- list()
     Y <- t(density.mat)
+    if (is.null(rownames(Y))) stop("density.mat must have sample names as column names")
     
     ## ---- fit & permutations ----
     res <- performLMPermutations(x = sample.model, y = Y, n.permutations = n.permutations, perm.method = perm.method,

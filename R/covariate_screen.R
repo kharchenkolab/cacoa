@@ -110,9 +110,10 @@ screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "
   desc <- describeMetadata(meta)
   if (is.null(covariates)) covariates <- desc$column[desc$role == "usable"]
   covariates <- unique(covariates)
-  bad <- intersect(covariates, desc$column[desc$role != "usable"])
+  bad <- intersect(covariates, desc$column[desc$role %in% c("constant", "mostly-missing", "id-like")])
   notes <- character(0)
   if (length(bad)) { notes <- c(notes, sprintf("excluded: %s", paste(sprintf("%s (%s)", bad, desc$role[match(bad, desc$column)]), collapse = ", "))); covariates <- setdiff(covariates, bad) }
+  # (a high-cardinality factor named explicitly, e.g. a pairing factor, stays: it is the caller's choice)
   if (!length(covariates)) stop("no covariates to screen")
   adj.vars <- if (!is.null(adjust.for)) intersect(all.vars(stats::as.formula(adjust.for)), names(meta)) else character(0)
   covariates <- setdiff(covariates, adj.vars)
@@ -134,15 +135,18 @@ screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "
     Pk <- if (!is.null(P)) P[samples, , drop = FALSE] else NULL
     if (!is.null(Pk)) Pk <- apply(Pk, 2, rank, ties.method = "first")
     out <- list()
+    const <- vapply(covariates, function(v) length(unique(stats::na.omit(meta[samples, all.vars(str2lang(v))[1]]))) < 2, logical(1))
+    covs.ct <- covariates[!const]                       # covariates constant among this cell type's samples are not testable there
+    out$dropped <- covariates[const]
+    if (!length(covs.ct)) return(out)
     for (m in modes) {
       fallback <- FALSE
-      covs.m <- covariates
       if (m == "partial") {
-        q.all <- 1 + (if (!is.null(adjust.cols)) ncol(adjust.cols) else 0) + sum(vapply(covariates, function(v) ncol(covariateColumns(meta[samples, , drop = FALSE], v)), integer(1)))
+        q.all <- 1 + (if (!is.null(adjust.cols)) ncol(adjust.cols) else 0) + sum(vapply(covs.ct, function(v) ncol(covariateColumns(meta[samples, , drop = FALSE], v)), integer(1)))
         if (length(samples) - q.all < max.partial.df) { fallback <- TRUE }
       }
-      r <- if (m == "partial" && fallback) screenOneMatrix(G, meta, covariates, "marginal", adjust.cols, nperm, Pk, robust = robust, robust.k = robust.k) else
-        screenOneMatrix(G, meta, covariates, m, adjust.cols, nperm, Pk, robust = robust, robust.k = robust.k)
+      r <- if (m == "partial" && fallback) screenOneMatrix(G, meta, covs.ct, "marginal", adjust.cols, nperm, Pk, robust = robust, robust.k = robust.k) else
+        screenOneMatrix(G, meta, covs.ct, m, adjust.cols, nperm, Pk, robust = robust, robust.k = robust.k)
       tb <- r$table; tb$mode <- m; tb$fallback <- fallback; tb$celltype <- ct
       out[[m]] <- list(table = tb, perm = r$perm)
     }
@@ -151,6 +155,9 @@ screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "
   cts <- names(G.list)
   runs <- if (n.cores > 1 && length(cts) > 1) sccore::plapply(cts, runOne, n.cores = n.cores, progress = verbose, fail.on.error = TRUE) else lapply(cts, runOne)
   names(runs) <- cts
+  dropped <- unlist(lapply(cts, function(ct) if (length(runs[[ct]]$dropped)) sprintf("%s in %s", paste(runs[[ct]]$dropped, collapse = "/"), ct)))
+  if (length(dropped)) notes <- c(notes, sprintf("constant within a cell type (not tested there): %s", paste(dropped, collapse = "; ")))
+  runs <- lapply(runs, function(r) r[setdiff(names(r), "dropped")])
   tab <- do.call(plyr::rbind.fill, unlist(lapply(runs, function(r) lapply(r, `[[`, "table")), recursive = FALSE))
   tab$p <- if (p.values == "permutation") tab$p.perm else tab$p.analytic
   tab$p.disp <- if (p.values == "permutation") tab$p.disp.perm else tab$p.disp.analytic
@@ -207,6 +214,11 @@ print.cacoaCovariateScreen <- function(x, ...) {
   cat(sprintf("Covariate screen: %d covariates x %d cell types, %s mode, %s p-values%s\n", length(x$covariates), length(x$celltypes), paste(x$modes, collapse = " + "),
               x$settings$p.values, if (x$settings$p.values == "analytic") " (approximate)" else sprintf(" (%d permutations)", x$settings$n.permutations)))
   if (length(x$skipped)) cat(sprintf("  not screened (fewer than %d samples): %s\n", x$settings$min.samples.per.type %||% 6, paste(x$skipped, collapse = ", ")))
+  if ("partial" %in% x$modes && "fallback" %in% names(x$table)) {
+    nf <- length(unique(x$table$celltype[x$table$mode == "partial" & x$table$fallback]))
+    if (nf) cat(sprintf("  partial mode fell back to marginal in %d of %d cell types (too few residual degrees of freedom for the full covariate set)\n", nf, length(x$celltypes)))
+  }
+  for (nt in x$notes) cat("  note: ", nt, "\n", sep = "")
   hit <- g[g$n.sig >= x$settings$threshold.types, ]
   if (nrow(hit)) cat(sprintf("Associated with expression in >= %d cell types (%s, FDR %.0f%%): %s\n", x$settings$threshold.types, sm, 100 * a,
                              paste(sprintf("%s (%d types, global p %.3g)", hit$covariate, hit$n.sig, hit$p.global), collapse = ", ")))
@@ -330,7 +342,8 @@ plotCovariateScreen <- function(x, effect = c("location", "dispersion"), mode = 
     ggplot2::geom_point(data = df[df$sig & df$celltype == "global", ], ggplot2::aes(y = .data$covariate), x = length(ord.ct) + 1.4, size = 1.8, colour = "black") +
     ggplot2::scale_fill_gradient(low = "white", high = "#2c7fb8", na.value = "grey95", name = if (value == "neglog10p") "-log10 p" else if (effect == "dispersion") "adj. R2 (disp.)" else value) +
     plot.theme + ggplot2::labs(x = NULL, y = NULL, title = sprintf("Covariate screen: %s (%s)", effect, paste(modes, collapse = " / ")),
-                               subtitle = sprintf("dot: FDR < %.2g; ring: marginal only; grey: negative adj. R2; 'global' column: max-statistic p across cell types", alpha)) +
+                               subtitle = sprintf("dot: FDR < %.2g; ring: marginal only; grey: negative adj. R2; 'global' column: max-statistic p across cell types%s", alpha,
+                                                  if ("fallback" %in% names(tb) && any(tb$fallback)) sprintf("\npartial mode fell back to marginal in %d cell types", length(unique(tb$celltype[tb$fallback]))) else "")) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1), plot.subtitle = ggplot2::element_text(size = 8, colour = "grey30"))
   if (length(modes) > 1) gg <- gg + ggplot2::facet_wrap(~ mode, nrow = 1)
   gg
@@ -369,7 +382,11 @@ plotCovariateSummary <- function(x, mode = NULL, plot.theme = ggplot2::theme_bw(
 #' @return ggplot2 object
 #' @export
 plotVariancePartition <- function(parts, plot.theme = ggplot2::theme_bw()) {
-  df <- do.call(rbind, lapply(names(parts), function(ct) data.frame(celltype = ct, component = names(parts[[ct]]), value = pmax(as.numeric(parts[[ct]]), 0), stringsAsFactors = FALSE)))
+  df <- do.call(rbind, lapply(names(parts), function(ct) {
+    v <- pmax(as.numeric(parts[[ct]]), 0); names(v) <- names(parts[[ct]])
+    v["residual"] <- max(0, 1 - sum(v[names(v) != "residual"]))          # negative (chance-corrected) components are drawn as 0
+    data.frame(celltype = ct, component = names(v), value = unname(v), stringsAsFactors = FALSE)
+  }))
   comps <- unique(df$component); comps <- c(setdiff(comps, c("shared", "residual")), "shared", "residual")
   df$component <- factor(df$component, levels = rev(comps))
   ord <- names(parts)[order(vapply(parts, function(p) 1 - p[["residual"]], numeric(1)))]

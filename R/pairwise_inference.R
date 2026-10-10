@@ -380,12 +380,13 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
   # per-cell-type p-values
   rows <- lapply(cts, function(ct) {
     r <- runs[[ct]]; e <- fits[[ct]]; ex <- r$plan$exhaustive
-    data.frame(celltype = ct, shift = e$shift, var = e$var, total = e$total, ratio = e$ratio,
-               shift.norm = e$shift.norm, var.norm = e$var.norm, total.norm = e$total.norm,
-               s.ref = e$s.ref, s.alt = e$s.alt, F = unname(r$obs["F"]),
+    di <- is.null(e$disp.identifiable) || isTRUE(e$disp.identifiable)   # arm dispersions identifiable under the location model
+    data.frame(celltype = ct, shift = e$shift, var = if (di) e$var else NA_real_, total = if (di) e$total else NA_real_, ratio = e$ratio,
+               shift.norm = e$shift.norm, var.norm = if (di) e$var.norm else NA_real_, total.norm = if (di) e$total.norm else NA_real_,
+               s.ref = e$s.ref, s.alt = e$s.alt, F = unname(r$obs["F"]), disp.identifiable = di,
                p.shift = permutationPValue(r$obs["F"], r$perm[, "F"], "greater", ex),
-               p.var = permutationPValue(r$obs["var"], r$perm[, "var"], "two.sided", ex),
-               p.total = permutationPValue(r$obs["total"], r$perm[, "total"], "two.sided", ex),
+               p.var = if (di) permutationPValue(r$obs["var"], r$perm[, "var"], "two.sided", ex) else NA_real_,
+               p.total = if (di) permutationPValue(r$obs["total"], r$perm[, "total"], "two.sided", ex) else NA_real_,
                n = e$n, n.ref = e$n.ref, n.alt = e$n.alt,
                se.shift = if (!is.null(e$influence)) unname(e$influence$se["shift"]) else NA_real_,
                se.var = if (!is.null(e$influence)) unname(e$influence$se["var"]) else NA_real_,
@@ -422,6 +423,7 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
           max(r$n.ref, r$n.alt) > 2 * min(r$n.ref, r$n.alt)) f <- c(f, "unbalanced+dispersion")
       if (r$p.floor > alpha / 10) f <- c(f, "few-permutations")
       if (r$scheme == "freedman-lane") f <- c(f, "approximate-scheme")
+      if (isFALSE(r$disp.identifiable)) f <- c(f, "dispersion-not-identifiable")
       paste(f, collapse = ";")
     }, character(1))
     results <- results[order(results$shift, decreasing = TRUE), ]

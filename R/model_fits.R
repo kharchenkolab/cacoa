@@ -57,6 +57,12 @@ performLMPermutations <- function(x, y,
   na.center     <- match.arg(na.center)
   statistic     <- match.arg(statistic)
   alternative   <- match.arg(alternative)
+  # responses are matched to the design's samples by name whenever both are named (positional pairing is unsafe)
+  if (is.matrix(y) && !is.null(rownames(y)) && !is.null(rownames(x$F))) {
+    miss <- setdiff(rownames(x$F), rownames(y))
+    if (length(miss)) stop("response rows missing for sample(s): ", paste(utils::head(miss, 5), collapse = ", "))
+    y <- y[rownames(x$F), , drop = FALSE]
+  }
   # seed for the R-drawn permutations: taken from R's RNG when not given, so set.seed() makes runs reproducible
   if (is.null(seed)) seed <- sample.int(.Machine$integer.max, 1L)
   seed <- as.integer(seed)

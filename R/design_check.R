@@ -154,6 +154,10 @@ checkDesign <- function(meta, model = NULL, test.variable = NULL, covariates = N
         add("warning", sprintf("'%s' (%s, not used as a covariate) is nested in '%s': each %s holds one %s, so a %s effect cannot be separated from the %s effect",
                                v, desc$role[desc$column == v], test.variable, v, test.variable, v, test.variable),
             sprintf("report this limitation; '%s' can serve as a permutation block only if it crosses '%s'", v, test.variable))
+      else if (ncol(tb) >= 2 && all(tb <= 1) && mean(colSums(tb > 0) >= 2) >= 0.5)
+        add("note", sprintf("'%s' pairs the samples across '%s' (%d of %d %ss have a sample at more than one level): a blocking factor",
+                            v, test.variable, sum(colSums(tb > 0) >= 2), ncol(tb), v),
+            sprintf("use block.vars = \"%s\" (permutations within %s), or add it to the model if the degrees of freedom allow", v, v))
     }
   }
 

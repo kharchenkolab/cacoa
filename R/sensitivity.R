@@ -16,7 +16,9 @@ sensitivityFormulas <- function(model, screen = NULL, meta, top.k = 3, min.resid
     g <- screen$global[screen$global$mode == sm, ]
     g <- g[!g$covariate %in% c(tv, adj) & is.finite(g$p.global), ]
     g <- g[order(-g$n.sig, g$p.global), ]
-    cand <- utils::head(g$covariate[g$n.sig > 0], top.k)
+    cand <- g$covariate[g$n.sig > 0]
+    assoc <- vapply(cand, function(v) { a <- tryCatch(covariateAssociation(meta[[tv]], meta[[all.vars(str2lang(v))[1]]]), error = function(e) NA_real_); if (is.na(a)) 0 else a }, numeric(1))
+    cand <- utils::head(cand[assoc < 0.95], top.k)       # a covariate aliased with the test variable cannot be adjusted for
     for (v in cand) out[[paste("plus", v)]] <- stats::as.formula(paste("~", paste(c(tv, adj, v), collapse = " + ")))
     if (length(cand) > 1) {
       f.all <- stats::as.formula(paste("~", paste(c(tv, adj, cand), collapse = " + ")))
@@ -166,7 +168,8 @@ plotSensitivity <- function(x, effect = "shift", cell.types = NULL, normalized =
     ggplot2::geom_point(ggplot2::aes(shape = .data$sig, colour = .data$current), size = 2.6, fill = "white", stroke = 0.9) +
     ggplot2::scale_shape_manual(values = c(`FALSE` = 21, `TRUE` = 19), labels = c("not significant", "significant"), name = NULL) +
     ggplot2::scale_colour_manual(values = c(`FALSE` = "grey20", `TRUE` = "#d73027"), guide = "none") +
-    ggplot2::facet_wrap(~ panel, scales = "free_x") + plot.theme +
+    ggplot2::facet_wrap(~ panel, scales = "free_x") + ggplot2::scale_x_continuous(n.breaks = 4) + plot.theme +
+    ggplot2::theme(panel.spacing.x = grid::unit(1.2, "lines")) +
     ggplot2::labs(x = if (normalized) sprintf("normalized %s", effect) else effect, y = NULL, title = sprintf("Sensitivity of %s to the covariate set", effect),
                   subtitle = paste(c(if (any(d$current)) "red: current model", if (any(is.finite(d$se.jk))) "intervals: jackknife 95%",
                                      "filled: significant"), collapse = "; ")) +

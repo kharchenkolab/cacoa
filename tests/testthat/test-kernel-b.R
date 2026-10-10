@@ -178,3 +178,13 @@ test_that("performLMPermutations draws from the model's plan: exhaustive small d
   expect_equal(unname(coda$fit$P), unname(modelPermutations(cao$model, scheme = "block", n.permutations = 49, seed = 11)$P))
   expect_true(all(c("P", "perm.cells") %in% names(coda$fit)))
 })
+
+test_that("responses are matched to the design samples by name", {
+  meta <- data.frame(group = factor(rep(c("A", "B"), each = 5)), row.names = sprintf("s%02d", 1:10))
+  des <- cacoa:::buildDesignMatrices(meta, contrast = c("group", "B", "A"), formula = ~ group)
+  set.seed(1); y <- matrix(rnorm(30), 10, 3, dimnames = list(rownames(meta), NULL)); y[6:10, 1] <- y[6:10, 1] + 3
+  f1 <- cacoa:::performLMPermutations(des, y, n.permutations = 19, seed = 1)
+  f2 <- cacoa:::performLMPermutations(des, y[sample(10), ], n.permutations = 19, seed = 1)
+  expect_equal(f1$effect, f2$effect); expect_equal(f1$pval, f2$pval)
+  expect_error(cacoa:::performLMPermutations(des, y[1:8, ], n.permutations = 0), "missing")
+})

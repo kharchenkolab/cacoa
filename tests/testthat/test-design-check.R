@@ -81,3 +81,11 @@ test_that("design check warns about an excluded factor column nested in the test
   m2 <- m; m2$batch <- factor(rep(sprintf("b%d", 1:6), 2))
   expect_false(any(grepl("nested", checkDesign(m2, test.variable = "condition")$issues$message)))
 })
+
+test_that("design check recognizes a pairing factor and the screen keeps a requested high-cardinality covariate", {
+  m <- data.frame(condition = factor(rep(c("Normal", "Tumor"), 9)), patient = factor(rep(sprintf("P%d", 1:9), each = 2)),
+                  row.names = sprintf("s%02d", 1:18))
+  chk <- checkDesign(m, test.variable = "condition")
+  expect_true(any(chk$issues$severity == "note" & grepl("'patient' pairs the samples", chk$issues$message)))
+  expect_false(any(grepl("nested", chk$issues$message)))
+})

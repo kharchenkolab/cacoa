@@ -247,7 +247,7 @@ testTermEffects <- function(D.list, design, meta, dispersion.formula = NULL, dis
     }, character(1))
     results <- results[order(results$R2.adj, decreasing = TRUE), ]; rownames(results) <- NULL
   }
-  notes <- unique(unlist(c(gplan$notes, lapply(runs, function(r) r$plan$notes))))
+  notes <- unique(unlist(c(gplan$notes, lapply(names(runs), function(ct) if (length(runs[[ct]]$plan$notes)) sprintf("%s: %s", ct, runs[[ct]]$plan$notes)))))
   list(results = results, global = global, fits = fits, skipped = skipped, plan = gplan, notes = notes,
        perm.stats = if (return.perm.stats) lapply(runs, `[[`, "perm") else NULL,
        call.info = list(dist = dist, permutation = permutation, n.permutations = n.permutations, seed = seed,
@@ -415,5 +415,7 @@ permutationPhrase <- function(prov, d) {
   np <- max(d$n.perm, na.rm = TRUE)
   exact <- all(abs(d$n.perm - d$n.perm.distinct) < 0.5, na.rm = TRUE)
   prov <- sub(" \\(floor [^)]*\\)", "", prov)
-  sub("([a-z-]+) permutations", sprintf("%d %s\\1 permutations (smallest p %.2g)", np, if (exact) "exact " else "", max(d$p.floor, na.rm = TRUE)), prov)
+  fl <- range(d$p.floor, na.rm = TRUE)
+  fl.txt <- if (diff(fl) > 1e-12) sprintf("%.2g-%.2g", fl[1], fl[2]) else sprintf("%.2g", fl[1])
+  sub("([a-z-]+) permutations", sprintf("%s %s\\1 permutations (smallest p %s)", if (exact && length(unique(d$n.perm)) > 1) paste0("up to ", np) else np, if (exact) "exact " else "", fl.txt), prov)
 }

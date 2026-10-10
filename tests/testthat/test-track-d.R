@@ -164,3 +164,18 @@ test_that("regressions found by the notebook run: test lookup by variable, CoDA 
   expect_s3_class(cao$plotVolcano(cell.types = "ct1"), "ggplot")
   expect_true(inherits(cao$plotVolcano(cell.types = c("ct1", "ct2")), "ggplot"))
 })
+
+test_that("a paired location model makes the arm dispersions non-identifiable: var is NA and flagged", {
+  cao <- makeToyCacoa(n.per.group = c(A = 8, B = 8), cells.per.sample = 40, n.genes = 80, shift = 1)
+  cao$sample.meta$patient <- factor(rep(sprintf("p%d", 1:8), 2))
+  res <- cao$estimateExpressionShiftMagnitudes(formula = ~ group + patient, test = "group", n.permutations = 29, verbose = FALSE)
+  v <- res$results[res$results$effect == "var", ]
+  expect_true(all(is.na(v$estimate))); expect_true(all(is.na(v$p)))
+  expect_true(all(grepl("dispersion-not-identifiable", v$flags)))
+  sh <- res$results[res$results$effect == "shift", ]
+  expect_true(all(is.finite(sh$estimate)))
+  expect_output(print(res), "Expression shifts")
+  # the unpaired model keeps the dispersion effect
+  res0 <- cao$estimateExpressionShiftMagnitudes(formula = ~ group, test = "group", n.permutations = 29, verbose = FALSE)
+  expect_true(all(is.finite(res0$results$estimate[res0$results$effect == "var"])))
+})

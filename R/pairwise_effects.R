@@ -120,7 +120,7 @@ estimatePairwiseEffects <- function(D2, X, contrast, Z = NULL, z.end = NULL, bia
   M <- hi$A %*% G %*% t(hi$A)                    # = Bhat Bhat' for Euclidean data
   shift.raw <- drop(crossprod(cvec, M %*% cvec))
   # dispersion model: E[r] = (R o R) s with s = Z gamma  ->  unbiased gamma for any dispersion pattern
-  gamma <- fitDispersion(R, Z, r)
+  gamma <- fitDispersion(R, Z, r); disp.identifiable <- isTRUE(attr(gamma, "identifiable"))
   names(gamma) <- colnames(Z)
   s <- drop(Z %*% gamma); names(s) <- rownames(X)
   if (bias.correct) M <- M - hi$A %*% (s * t(hi$A))     # E[A G A'] = M + A diag(s) A'
@@ -134,14 +134,21 @@ estimatePairwiseEffects <- function(D2, X, contrast, Z = NULL, z.end = NULL, bia
        ratio = 1 + shift / (s.alt + s.ref),
        s.alt = s.alt, s.ref = s.ref, shift.raw = shift.raw,
        shift.norm = shift / (s.alt + s.ref), var.norm = log2(s.alt / s.ref), total.norm = total / (2 * s.ref),
-       M = M, gamma = gamma, s = s, v = v, h = h, n = n, rank = hi$rank)
+       M = M, gamma = gamma, s = s, v = v, h = h, n = n, rank = hi$rank, disp.identifiable = disp.identifiable)
 }
 
 # Least-squares fit of the dispersion model through E[r] = (R o R) Z gamma. Falls back to the intercept-only
 # solution when the regressor matrix is rank deficient.
 fitDispersion <- function(R, Z, r) {
   W <- (R * R) %*% Z
-  g <- tryCatch(drop(MASS::ginv(crossprod(W)) %*% crossprod(W, r)), error = function(e) rep(NA_real_, ncol(Z)))
+  # identifiability: the columns of (R o R) Z must be linearly independent (a paired location model makes the two
+  # arms' columns coincide: the arm dispersions cannot be told apart from the residual distances)
+  sc <- sqrt(colSums(W^2)); sc[sc == 0] <- 1
+  sv <- svd(sweep(W, 2, sc, "/"), nu = 0, nv = 0)$d
+  identifiable <- ncol(W) == 1 || (length(sv) == ncol(W) && sv[length(sv)] > 1e-6 * sv[1])
+  g <- if (identifiable) tryCatch(drop(MASS::ginv(crossprod(W)) %*% crossprod(W, r)), error = function(e) rep(NA_real_, ncol(Z)))
+       else { w1 <- rowSums(W); rep(sum(w1 * r) / sum(w1^2), ncol(Z)) }      # pooled dispersion, no arm difference
+  attr(g, "identifiable") <- identifiable
   g
 }
 

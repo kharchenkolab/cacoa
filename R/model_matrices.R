@@ -179,21 +179,21 @@ splitByDirection <- function(F, cF, name = "contrast") {
   list(X = X, Z = Z, contrast.F = stats::setNames(as.numeric(cF), colnames(F)), contrast.X = stats::setNames(1, name))
 }
 
-# Design restricted to a set of rows: columns that are all zero or constant among them are dropped (apart from the
-# intercept), and the contrast (vector or matrix) must stay estimable. Returns NULL when it is not.
+# Design restricted to a set of samples and kept full rank: columns that vanish on those samples are dropped,
+# dependent columns are removed by QR pivoting, and the contrast (vector or matrix) is re-expressed on the kept
+# columns (w = F_k' (F_s^+)' c gives the same estimate as c on the full design for every response). NULL when a
+# contrast is not estimable on the subset (a compared level absent, or confounded with a covariate there).
 subsetDesign <- function(F, C, rows, tol = 1e-8) {
   Fs <- F[rows, , drop = FALSE]; C <- as.matrix(C)
-  rng <- apply(Fs, 2, function(x) if (all(is.finite(x))) max(x) - min(x) else NA_real_)
-  zero <- colSums(abs(Fs)) < tol
-  const <- rng < tol & !zero
-  keep <- !zero
-  if (any(const)) {                                                  # keep one constant column (an intercept) if the span needs it
-    ic <- which(const)[1]; keep[const] <- FALSE; keep[ic] <- TRUE
-  }
-  Fs <- Fs[, keep, drop = FALSE]; Ck <- C[keep, , drop = FALSE]
-  ok <- apply(Ck, 2, function(cv) isEstimable(Fs, cv, tol))
-  if (!all(ok)) return(NULL)
-  list(F = Fs, C = Ck, keep = keep)
+  if (is.null(colnames(C))) colnames(C) <- paste0("c", seq_len(ncol(C)))
+  if (!all(apply(C, 2, function(cv) isEstimable(Fs, cv, tol)))) return(NULL)
+  keep <- colSums(abs(Fs)) > tol
+  q <- qr(Fs[, keep, drop = FALSE]); r <- q$rank
+  if (r < sum(keep)) { piv <- colnames(Fs)[keep][q$pivot[seq_len(r)]]; keep <- colnames(Fs) %in% piv }
+  Fk <- Fs[, keep, drop = FALSE]
+  Ck <- t(Fk) %*% t(MASS::ginv(Fs)) %*% C
+  dimnames(Ck) <- list(colnames(Fk), colnames(C)); Ck[abs(Ck) < 1e-10] <- 0
+  list(F = Fk, C = Ck, keep = keep)
 }
 
 # ---- Defaults & pruning ----

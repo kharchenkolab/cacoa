@@ -264,3 +264,47 @@ test_that("model printout snapshots", {
   expect_snapshot(print(buildCacoaModel(meta, ~ age + batch, test = "age")))
   mm <- meta; mm$site <- "x"; expect_snapshot(print(buildCacoaModel(mm, ~ group + site + batch, test = "group")))
 })
+
+test_that("subsetDesign keeps the design full rank and the contrast equivalent; refuses non-estimable contrasts", {
+  meta3 <- mbMeta3(); set.seed(3); y <- rnorm(18)
+  d <- buildCacoaModel(meta3, ~ Group + Batch, test = "Group: G2 vs G1")$tests[[1]]$design
+  rows <- rownames(meta3)[meta3$Group != "G3"]                                 # a cell type without G3 samples
+  sd <- cacoa:::subsetDesign(d$F, d$contrast.F, rows)
+  expect_equal(colnames(sd$F), c("GroupG1", "GroupG2", "Batchb2")); expect_equal(unname(sd$C[, 1]), c(-1, 1, 0))
+  expect_null(cacoa:::subsetDesign(d$F, buildCacoaModel(meta3, ~ Group + Batch, test = "Group: G3 vs G1")$tests[[1]]$design$contrast.F, rows))
+  # a dependent column is dropped and the contrast re-expressed: same estimate for any response
+  rows2 <- rownames(meta3)[meta3$Batch == "b2"]                                # batch constant: Batchb2 = sum of the level columns
+  sd2 <- cacoa:::subsetDesign(d$F, d$contrast.F, rows2)
+  expect_equal(ncol(sd2$F), 3); expect_equal(qr(sd2$F)$rank, 3)
+  est.full <- drop(t(d$contrast.F) %*% MASS::ginv(d$F[rows2, ]) %*% y[match(rows2, rownames(meta3))])
+  est.sub <- drop(t(sd2$C[, 1]) %*% MASS::ginv(sd2$F) %*% y[match(rows2, rownames(meta3))])
+  expect_equal(est.sub, est.full, tolerance = 1e-10)
+  # confounded within the subset (group = batch): not estimable
+  meta <- mbMeta(); meta$batch <- ifelse(meta$group == "A", "b1", "b2"); meta$batch[c(1, 12)] <- c("b2", "b1")
+  d2 <- buildCacoaModel(meta, ~ group + batch, test = "group")$tests[[1]]$design
+  expect_null(cacoa:::subsetDesign(d2$F, d2$contrast.F, rownames(meta)[-c(1, 12)]))
+  expect_false(is.null(cacoa:::subsetDesign(d2$F, d2$contrast.F, rownames(meta))))
+  # term contrasts on a subset lacking a level
+  dt <- buildCacoaModel(meta3, ~ Group + Batch, test = "Group: all")$tests[[1]]$design
+  expect_null(cacoa:::subsetDesign(dt$F, dt$term.contrast, rows))             # "G3 vs G1" is not estimable without G3
+  m.sub <- cacoa:::restrictModelToSamples(buildCacoaModel(meta3, ~ Group + Batch, test = "Group: G2 vs G1")$tests[[1]]$design, rows)
+  expect_equal(rownames(m.sub$F), rows); expect_equal(ncol(m.sub$Z), 2)
+})
+
+test_that("per-column fitter: a rank-deficient subset design is fitted when the contrast is estimable", {
+  meta <- mbMeta(); set.seed(4); n <- 12
+  d <- buildCacoaModel(meta, ~ group + batch, test = "group")$tests[[1]]$design
+  Y <- cbind(full = rnorm(n), nob2 = rnorm(n), noB = rnorm(n))
+  Y[meta$batch == "b2", "nob2"] <- NA                                           # batch level absent: estimable
+  Y[meta$group == "B", "noB"] <- NA                                             # contrasted level absent: not estimable
+  for (sch in c("block", "freedman-lane")) {
+    r <- suppressWarnings(cacoa:::performLMPermutations(d, Y, perm.method = sch, n.permutations = 29, seed = 1))
+    obs <- meta$batch == "b1"; mm <- meta[obs, ]; mm$group <- factor(mm$group)
+    ref <- summary(lm(Y[obs, "nob2"] ~ group, mm))$coefficients["groupB", ]
+    expect_equal(unname(c(r$effect[["nob2"]], r$se[["nob2"]], r$stat.obs[["nob2"]])), unname(ref[1:3]), tolerance = 1e-8, info = sch)
+    expect_equal(unname(r$df[["nob2"]]), 4L, info = sch)
+    expect_true(is.finite(r$pval[["nob2"]]), info = sch)
+    expect_true(is.na(r$pval[["noB"]]) && is.na(r$stat.obs[["noB"]]), info = sch)
+    expect_true(is.finite(r$pval[["full"]]), info = sch)
+  }
+})

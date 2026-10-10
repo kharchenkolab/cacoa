@@ -361,20 +361,8 @@ estimateDEPerCellTypeInner_model <- function(raw.mats, cell.groups = NULL, sampl
 
           cm.try <- cm[, keep.all, drop = FALSE]
 
-        # subset design rows to match kept samples
-        F.sub <- model$F[match(keep.all, rownames(model$F)), , drop = FALSE]
-        if (!identical(rownames(F.sub), keep.all)) next
-
-          rep <- tryCatch(
-            repairDesignAfterRowSubset(F.sub, model$contrast.F),
-            error = function(e) NULL)
-          if (is.null(rep)) next
-
-          if (!isContrastNonzero(rep$contrast)) next
-
-          model.try <- model
-          model.try$F <- rep$F
-          model.try$contrast.F <- rep$contrast
+          model.try <- restrictModelToSamples(model, keep.all)
+          if (is.null(model.try)) next
 
           found <- TRUE
           keep.core <- keep.core.try
@@ -394,25 +382,15 @@ estimateDEPerCellTypeInner_model <- function(raw.mats, cell.groups = NULL, sampl
           return(NULL)
         }
       } else {
-        F.sub <- model$F[match(samp.ct, rownames(model$F)), ,
-                         drop = FALSE]
-        if (!identical(rownames(F.sub), samp.ct)) {
-          warning("Failed to align model$F rows to cm columns for ",
-                  "cell type ", l)
+        if (!all(samp.ct %in% rownames(model$F))) {
+          warning("Samples of cell type ", l, " are missing from model$F; skipping")
           return(NULL)
         }
-
-        rep <- tryCatch(
-          repairDesignAfterRowSubset(F.sub, model$contrast.F),
-          error = function(e) NULL)
-        if (is.null(rep) || !isContrastNonzero(rep$contrast)) {
-          warning("Contrast not estimable after design repair for ",
-                  "cell type ", l)
+        model.ct <- restrictModelToSamples(model, samp.ct)
+        if (is.null(model.ct)) {
+          warning("Contrast not estimable for cell type ", l, " (a compared level is absent or confounded there); skipping")
           return(NULL)
         }
-
-        model.ct$F <- rep$F
-        model.ct$contrast.F <- rep$contrast
         meta.ct <- if (!is.null(sample.meta)) {
           sample.meta[samp.ct, , drop = FALSE]
         } else {
@@ -539,50 +517,27 @@ estimateDEPerCellTypeInner_model <- function(raw.mats, cell.groups = NULL, sampl
   de.res
 }
 
-# keep-or-drop columns that break rank after row subsetting
-# returns list(F = ..., contrast = ...)
+# The model restricted to the samples of one cell type (rows of F in the order of `samples`): full-rank design,
+# contrast (or term contrasts) re-expressed on the kept columns, reduced design Z recomputed. NULL when the
+# contrast is not estimable there.
 #' @keywords internal
-repairDesignAfterRowSubset <- function(F, contrast, tol = 1e-12) {
-    
-    if (is.null(F) || nrow(F) == 0L) stop("F is empty")
-    if (is.null(contrast)) stop("contrast is NULL")
-    
-    # align contrast to design columns
-    contrast <- contrast[colnames(F)]
-    contrast[is.na(contrast)] <- 0
-    
-    # drop columns that are all-zero or constant
-    is.zero <- apply(F, 2, function(x) all(abs(x) < tol))
-    is.const <- apply(F, 2, function(x) max(x) - min(x) < tol)
-    
-    keep <- !(is.zero | is.const)
-    # keep intercept even if constant? Usually intercept is constant by definition.
-    # If you have (Intercept), do NOT drop it just because it's constant.
-    if ("(Intercept)" %in% colnames(F)) keep[colnames(F) == "(Intercept)"] <- TRUE
-    
-    F <- F[, keep, drop = FALSE]
-    contrast <- contrast[colnames(F)]
-    
-    if (ncol(F) == 0L) stop("All columns dropped from design after repair")
-    
-    # ensure full rank by dropping dependent columns using QR pivoting
-    qrF <- qr(F)
-    rnk <- qrF$rank
-    
-    if (rnk < ncol(F)) {
-        piv <- qrF$pivot[seq_len(rnk)]
-        F <- F[, piv, drop = FALSE]
-        contrast <- contrast[colnames(F)]
-    }
-    
-    list(F = F, contrast = contrast)
-}
-
-# check whether contrast is usable in this repaired design
-# if contrast is all zeros after repair -> nothing to test
-#' @keywords internal
-isContrastNonzero <- function(contrast, tol = 1e-12) {
-    any(abs(contrast) > tol)
+restrictModelToSamples <- function(model, samples) {
+  term <- !is.null(model$term.contrast)
+  C <- if (term) model$term.contrast else cbind(contrast = model$contrast.F[colnames(model$F)])
+  sd <- subsetDesign(model$F, C, samples)
+  if (is.null(sd)) return(NULL)
+  m <- model; m$F <- sd$F
+  if (term) {
+    m$term.contrast <- sd$C
+    m$contrast.F <- stats::setNames(as.numeric(rowSums(abs(sd$C)) > 1e-12), colnames(sd$F))
+  } else {
+    m$contrast.F <- stats::setNames(as.numeric(sd$C[, 1]), colnames(sd$F))
+    if (all(abs(m$contrast.F) < 1e-12)) return(NULL)
+  }
+  N <- nullBasis(sd$C)
+  m$Z <- if (ncol(N)) { Z <- sd$F %*% N; dimnames(Z) <- list(rownames(sd$F), paste0("nuisance", seq_len(ncol(Z)))); Z } else NULL
+  m$X <- NULL
+  m
 }
 
 # term-test contrast matrix (level differences) aligned to the columns of a possibly repaired design; NULL for contrast tests

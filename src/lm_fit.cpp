@@ -41,7 +41,8 @@ struct DesignGroup {
   arma::mat X_full;                    // impute_weak: unscaled (residualized) design over all rows, permuted row-wise under relabeling
   arma::mat Qz;                        // orthonormal basis of Z over the units (empty without Z)
   arma::vec weights;                   // impute_weak: 1 for observed rows, na_weight for missing ones
-  int df = 0;                          // residual degrees of freedom: n_obs - p - rank(Z)
+  int df = 0;                          // residual degrees of freedom: n_obs - rank(X) - rank(Z)
+  int rank = 0;                        // rank of the design over the units (may be below p when a level is absent)
   std::vector<arma::uvec> perm_blocks; // permutation cells in unit index space
   arma::uvec perm_units_global;        // global row ids of the units (for perm_matrix induction)
 };
@@ -235,14 +236,14 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
     DesignGroup& g = designs[i]; const RawGroup& raw = raw_groups[i];
     g.obs_indices = raw.obs;
     arma::uword qz = 0;
-    if (raw.obs.n_elem < p + 1) return;
+    if (raw.obs.n_elem < 2) return;
 
     if (is_drop) {
       g.X_sub = X.rows(raw.obs);
       if (has_Z) {
         if (!qr_basis(Zm.rows(raw.obs), g.Qz)) return;
         qz = g.Qz.n_cols;
-        if (raw.obs.n_elem < p + qz + 1) return;
+        if (raw.obs.n_elem <= qz + 1) return;
         g.X_sub = project_out_Q(g.Qz, g.X_sub);
       }
       g.perm_blocks = subset_blocks(blocks, g.obs_indices, n);
@@ -254,19 +255,35 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
       if (has_Z) {
         if (!qr_basis(Zm, g.Qz)) return;
         qz = g.Qz.n_cols;
-        if (raw.obs.n_elem < p + qz + 1) return;
+        if (raw.obs.n_elem <= qz + 1) return;
         g.X_full = project_out_Q(g.Qz, X);
       }
       g.X_sub = g.X_full.each_col() % arma::sqrt(g.weights);
       g.perm_blocks = blocks; g.perm_units_global = arma::regspace<arma::uvec>(0, n - 1);
     }
     g.can_permute = (raw.obs.n_elem >= 2);
-    g.df = (int)raw.obs.n_elem - (int)p - (int)qz;
 
-    if (g.X_sub.n_rows > 0 && !is_ill_conditioned(g.X_sub, cfg.illcond_rcond) &&
-        inv_xtx_safe(g.X_sub, g.invXtX, g.Xt, cfg.pinv_tol)) {
-      g.B = g.invXtX * g.Xt; g.valid_design = true;
+    // columns that vanish on these units (an absent level, or a direction entirely absorbed by Z) are made exactly zero,
+    // so that the estimability check below sees them as missing rather than as numerical noise
+    { double sc = 1e-300; for (arma::uword k = 0; k < p; ++k) sc = std::max(sc, arma::norm(X.col(k)));
+      for (arma::uword k = 0; k < p; ++k) if (arma::norm(g.X_sub.col(k)) <= 1e-8 * sc) g.X_sub.col(k).zeros(); }
+
+    // Factorization. A full-rank design uses (X'X)^-1; a rank-deficient one (a factor level or a covariate pattern
+    // absent among this pattern's units) uses the pseudo-inverse, provided the contrast stays estimable (c in the
+    // row space of X): then c'beta is unique and c' (X'X)^+ c is its variance.
+    if (g.X_sub.n_rows == 0) return;
+    if (!is_ill_conditioned(g.X_sub, cfg.illcond_rcond) && inv_xtx_safe(g.X_sub, g.invXtX, g.Xt, cfg.pinv_tol)) {
+      g.B = g.invXtX * g.Xt; g.rank = (int)p; g.valid_design = true;
+    } else {
+      arma::mat Xp;
+      if (!arma::pinv(Xp, g.X_sub) || !Xp.is_finite()) return;
+      arma::mat Proj = Xp * g.X_sub;                                   // projector onto the row space of X
+      double cn = arma::norm(contrast);
+      if (cn <= 0.0 || arma::norm(contrast - Proj * contrast) > 1e-8 * cn) return;   // not estimable
+      g.B = Xp; g.Xt = g.X_sub.t(); g.invXtX = Xp * Xp.t(); g.rank = (int)arma::rank(g.X_sub); g.valid_design = true;
     }
+    g.df = (int)raw.obs.n_elem - g.rank - (int)qz;
+    if (g.df < 1) { g.valid_design = false; return; }
   }, n_cores, false);
 
   // 4. Fits and permutations (flattened parallelism over columns)

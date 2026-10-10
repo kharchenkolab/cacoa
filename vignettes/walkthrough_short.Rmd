@@ -15,7 +15,7 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, purl=FALSE}
 # The walkthrough runs on a simulated dataset that is not shipped with the package (misc/notebook/prepare_sim_dataset.R
 # builds it). The chunks are evaluated only when that file is given (misc/notebook/render_walkthrough.sh renders the
 # executed Markdown copy in vignettes/); the vignette build evaluates nothing.
@@ -44,7 +44,7 @@ is the same in both arms. A sample `age` was added as a covariate: the treated a
 no effect on expression in the simulation. The same code runs on any Conos or Seurat object with a sample metadata
 table.
 
-```{r libs}
+```{r libs, purl=FALSE}
 library(cacoa)
 library(ggplot2)
 ```
@@ -54,12 +54,12 @@ library(ggplot2)
 The sample metadata is a data frame with one row per sample (row names are the sample names) and one column per
 covariate.
 
-```{r load}
+```{r load, purl=FALSE}
 sim <- readRDS(params$sim.file)
 head(sim$sample.meta)
 ```
 
-```{r construct, message=TRUE}
+```{r construct, message=TRUE, purl=FALSE}
 cao <- Cacoa$new(sim$con, sample.metadata = sim$sample.meta, cell.groups = sim$cell.groups, sample.per.cell = sim$sample.per.cell,
                  n.cores = params$n.cores)
 ```
@@ -68,7 +68,7 @@ The constructor reports which metadata columns can serve as covariates and which
 constant or mostly missing columns, too many levels). Options shared by all methods are set once; explicit arguments
 of a method call still win. `plot.params` holds defaults for the embedding plots.
 
-```{r options}
+```{r options, purl=FALSE}
 cao$setOptions(n.permutations = 499, seed = 1)
 cao$plot.params <- list(size = 0.3, alpha = 0.3, font.size = 3)
 ```
@@ -79,11 +79,11 @@ Before fitting anything, the metadata alone tells whether the comparison can be 
 associations between covariates, balance of the arms over them, aliasing, degrees of freedom and the number of
 distinct permutations the design allows.
 
-```{r check-design}
+```{r check-design, purl=FALSE}
 cao$checkDesign(test = "treatment")
 ```
 
-```{r plot-design-balance, fig.width=4, fig.height=3.5}
+```{r plot-design-balance, fig.width=4, fig.height=3.5, purl=FALSE}
 cao$plotDesign("balance")
 ```
 
@@ -96,15 +96,15 @@ The screen tests every usable covariate against the sample-to-sample expression 
 (marginal) and adjusted for the other covariates (partial). The last column is a global test over all cell types.
 The screen ends with a suggested model; it is not applied automatically.
 
-```{r screen}
+```{r screen, purl=FALSE}
 cao$screenCovariates(n.permutations = 199)
 ```
 
-```{r plot-screen, fig.width=8, fig.height=3}
+```{r plot-screen, fig.width=8, fig.height=3, purl=FALSE}
 cao$plotCovariateScreen()
 ```
 
-```{r plot-varpart, fig.width=8, fig.height=3.5}
+```{r plot-varpart, fig.width=8, fig.height=3.5, purl=FALSE}
 cao$plotVariancePartition(c("treatment", "age"))
 ```
 
@@ -117,7 +117,7 @@ and `Neu-NRGN`; age explains nothing, as simulated.
 is chosen automatically (here `control`, matched by name) and `test = "treatment: control vs treated"` would reverse
 it. The printout states the contrast, the adjustment set and the permutation scheme.
 
-```{r set-model}
+```{r set-model, purl=FALSE}
 cao$setModel(~ treatment + age, test = "treatment")
 ```
 
@@ -136,12 +136,12 @@ The effects are reported on a normalized scale: `shift` relative to the within-a
 ratio of the arm dispersions. P-values come from permutations and are adjusted across cell types
 (Benjamini-Hochberg `padj`, and the familywise `p.fwer`); a global p-value per effect summarizes all cell types.
 
-```{r shifts}
+```{r shifts, purl=FALSE}
 res <- cao$estimateExpressionShiftMagnitudes()
 res
 ```
 
-```{r plot-shifts, fig.width=9, fig.height=4}
+```{r plot-shifts, fig.width=9, fig.height=4, purl=FALSE}
 cao$plotExpressionShiftMagnitudes()
 ```
 
@@ -153,14 +153,14 @@ types. The planted ordering is recovered: the three strong cell types on top, th
 `plotShiftDetail()` shows the sample-level picture for one cell type: the samples in the adjusted distance space,
 the distribution of pair distances within and between the arms, and the per-sample dispersion.
 
-```{r plot-shift-detail, fig.width=12, fig.height=3.8}
+```{r plot-shift-detail, fig.width=12, fig.height=3.8, purl=FALSE}
 cao$plotShiftDetail("IN-SST")
 ```
 
 `plotSampleInfluence()` shows how much each sample changes the shift estimate of each cell type when it is left out,
 in units of the jackknife standard error.
 
-```{r plot-influence, fig.width=8, fig.height=4.5}
+```{r plot-influence, fig.width=8, fig.height=4.5, purl=FALSE}
 cao$plotSampleInfluence()
 ```
 
@@ -170,11 +170,11 @@ The shifts are re-estimated without adjustment, with the current model, and with
 screen. Per cell type, one verdict summarizes the comparison: robust, sign or significance depends on the model, the
 estimate changes by more than half, or the result is driven by one sample.
 
-```{r sensitivity}
+```{r sensitivity, purl=FALSE}
 cao$checkSensitivity(n.permutations = 199)
 ```
 
-```{r plot-sensitivity, fig.width=9, fig.height=5}
+```{r plot-sensitivity, fig.width=9, fig.height=5, purl=FALSE}
 cao$plotSensitivity()
 ```
 
@@ -186,7 +186,7 @@ sample: their estimates are at zero and a single sample decides the sign.
 The sample distances of one cell type can be shown before and after the model adjustment, coloured by the tested
 variable or by any covariate.
 
-```{r plot-sample-distances, fig.width=9, fig.height=3.8}
+```{r plot-sample-distances, fig.width=9, fig.height=3.8, purl=FALSE}
 cao$plotSampleDistances(cell.type = "IN-SST", color.by = "test")
 ```
 
@@ -195,19 +195,19 @@ cao$plotSampleDistances(cell.type = "IN-SST", color.by = "test")
 The stored model is used by the per-cell-type differential expression, by the compositional analysis and by the
 cell density analysis, and is recorded with each result.
 
-```{r de}
+```{r de, purl=FALSE}
 de <- cao$estimateDEPerCellType(test = "limma-voom", min.cell.count = 5)
 head(de[["IN-SST"]]$res[, c("Gene", "log2FoldChange", "pvalue", "padj", "CellFrac")])
 ```
 
-```{r plot-n-de, fig.width=7, fig.height=3.5}
+```{r plot-n-de, fig.width=7, fig.height=3.5, purl=FALSE}
 cao$plotNumberOfDEGenes()
 ```
 
 Compositional changes are tested on the same contrast (cell-type loadings of the treated versus the control arm;
 here none were planted):
 
-```{r loadings, fig.width=5, fig.height=5}
+```{r loadings, fig.width=5, fig.height=5, purl=FALSE}
 cao$estimateCellLoadings()
 cao$plotCellLoadings(show.pvals = FALSE)
 ```
@@ -217,7 +217,7 @@ cao$plotCellLoadings(show.pvals = FALSE)
 Cell density is compared between the arms in every neighbourhood of the cell graph, with the same adjustment, and
 the cluster-free expression shifts test the contrast in every cell's neighbourhood.
 
-```{r density, fig.width=10, fig.height=4.5}
+```{r density, fig.width=10, fig.height=4.5, purl=FALSE}
 cao$estimateCellDensity(method = "graph")
 cao$estimateDiffCellDensity(type = "permutation")
 cowplot::plot_grid(cao$plotEmbedding(color.by = "cell.groups"), cao$plotDiffCellDensity(), ncol = 2)
@@ -226,13 +226,13 @@ cowplot::plot_grid(cao$plotEmbedding(color.by = "cell.groups"), cao$plotDiffCell
 No density differences were simulated and none are found. The expression shifts, on the other hand, show the planted
 cell types:
 
-```{r cluster-free-shifts, fig.width=9, fig.height=4}
+```{r cluster-free-shifts, fig.width=9, fig.height=4, purl=FALSE}
 cao$estimateClusterFreeExpressionShifts(n.top.genes = 500, n.permutations = 99)
 cao$plotClusterFreeExpressionShifts()
 ```
 
 ## Session info
 
-```{r session-info}
+```{r session-info, purl=FALSE}
 sessionInfo()
 ```

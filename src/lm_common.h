@@ -125,19 +125,4 @@ static inline std::uint64_t hash_vec_mask(const arma::vec& v) {
   return h;
 }
 
-// Helper to parse R arguments for core rows
-static inline arma::uvec parse_core_rows(SEXP core_rows, arma::uword n) {
-  if (Rf_isNull(core_rows)) return arma::regspace<arma::uvec>(0, n - 1);
-  if (Rf_isLogical(core_rows)) {
-    Rcpp::LogicalVector L(core_rows);
-    std::vector<arma::uword> v; 
-    for(int i=0; i<L.size(); ++i) if(L[i]) v.push_back(i);
-    return arma::uvec(v);
-  }
-  Rcpp::IntegerVector I(core_rows);
-  std::vector<arma::uword> v; 
-  for(int i : I) if(i >= 1 && i <= (int)n) v.push_back(i-1);
-  return arma::uvec(v);
-}
-
 #endif

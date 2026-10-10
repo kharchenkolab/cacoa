@@ -693,22 +693,17 @@ subsampleCellsPerTypePerSample <- function(raw.mats.sub, cell.groups, sample.per
     raw.mats.sub
 }
 
-#' Get core samples from model
-#' @param model list returned by buildDesignMatrices (must contain F and core.rows)
+#' Core samples of a model: the samples whose labels the test compares (both levels of a contrast; every sample for
+#' a numeric or whole-factor test), as decided by `contrastSampleInfo()`
+#' @param model design from buildDesignMatrices() / a test design of buildCacoaModel()
 #' @param samples character vector of sample IDs
 #' @return character vector of core sample IDs
 #' @keywords internal
 getCoreSamples <- function(model, samples) {
     all.samples <- rownames(model$F)
-    if (is.null(all.samples)) return(samples)
-    
-    core.mask <- rep(TRUE, length(all.samples)); names(core.mask) <- all.samples
-    if (!is.null(model$core.rows)) {
-        core.mask <- as.logical(model$core.rows)
-        names(core.mask) <- all.samples
-    }
-    core.samples <- names(core.mask)[core.mask]
-    intersect(samples, core.samples)
+    if (is.null(all.samples) || is.null(model$meta)) return(samples)
+    info <- contrastSampleInfo(model, model$meta, all.samples)
+    intersect(samples, all.samples[info$in.set])
 }
 
 #' @keywords internal

@@ -10,7 +10,7 @@ testTermEffects(
   meta,
   dispersion.formula = NULL,
   dist = c("cor", "l2", "l1"),
-  permutation = c("auto", "block", "freedman-lane", "huh-jhun"),
+  permutation = c("auto", "block", "freedman-lane"),
   n.permutations = 999,
   block.vars = NULL,
   min.samp.per.level = 3,
@@ -35,7 +35,7 @@ testTermEffects(
 
 \item{dist}{distance type of the matrices}
 
-\item{permutation}{\code{"auto"}, \code{"block"}, \code{"freedman-lane"} or \code{"huh-jhun"} (see \code{\link[=permutationPlan]{permutationPlan()}})}
+\item{permutation}{\code{"auto"}, \code{"block"} or \code{"freedman-lane"} (see \code{\link[=permutationPlan]{permutationPlan()}})}
 
 \item{n.permutations}{number of permutations}
 

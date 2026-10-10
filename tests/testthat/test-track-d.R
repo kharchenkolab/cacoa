@@ -137,7 +137,7 @@ test_that("regressions found by the notebook run: test lookup by variable, CoDA 
   expect_equal(as.character(unname(cao$getSampleGroups("stage"))), as.character(cao$sample.meta$stage))
   # Freedman-Lane fitter: columns with missing values, residuals not requested
   X <- cbind(1, as.numeric(cao$sample.meta$group == "B")); Y <- matrix(rnorm(30), 10, 3); Y[c(2, 14)] <- NA
-  f <- cacoa:::fl_fwl_cpp(X = X, Z = matrix(0, 0, 0), Y = Y, contrast = c(0, 1), n_randomizations = 9, return_residuals = FALSE, perm_matrix = replicate(9, sample.int(10)))
+  f <- cacoa:::fit_and_randomize(X = X, Y = Y, contrast = c(0, 1), n_randomizations = 9, return_residuals = FALSE, perm_matrix = replicate(9, sample.int(10)))
   expect_length(f$stat, 3); expect_true(all(is.finite(f$stat)))
   cao$embedding <- matrix(rnorm(2 * length(cao$cell.groups)), ncol = 2, dimnames = list(names(cao$cell.groups), c("x", "y")))
   cao$estimateCellDensity(method = "kde", bins = 20, verbose = FALSE)

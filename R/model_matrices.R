@@ -78,7 +78,6 @@
 #' @param numericRef `"auto"` or named list of numeric anchors (e.g., `list(age=35)`).
 #' @param numericRefRows Optional row indices / logical mask to compute mean anchors.
 #' @param tol Numeric; threshold for selecting non-zero contrast columns into `X`.
-#' @param tolRow Per-row activity threshold used to compute `core.rows`.
 #' @param validate Logical; compute diagnostics (rank, aliasing, VIF, permutation checks).
 #' @param verbosity `"none"|"warn"|"info"|"debug"`.
 #' @param computeQrZ Logical; if `TRUE` return `qrZ` of `Z` for Freedman-Lane.
@@ -90,7 +89,6 @@
 #' \item{X}{Core submatrix (or `F` if no nuisance).}
 #' \item{Z}{Nuisance submatrix (or `NULL` if none).}
 #' \item{contrast.F, contrast.X}{Contrast vectors aligned to `F` and `X`.}
-#' \item{core.rows}{Logical mask of rows with non-negligible activity in `X`.}
 #' \item{qrZ}{QR decomposition of `Z` for Freedman-Lane (or `NULL`).}
 #' \item{diagnostics}{If `buildBlocks=TRUE`, design diagnostics.}
 #' \item{numeric_ref_used, formula_used, baselines_used, contrast_spec}{Metadata.}
@@ -115,7 +113,6 @@ buildDesignMatrices <- function(data, contrast,
                                 numericRefRows = NULL,
                                 tol = 1e-12,
                                 na.action = stats::na.pass,
-                                tolRow = sqrt(.Machine$double.eps),
                                 validate = TRUE,
                                 verbosity = c("none","warn","info","debug"),
                                 computeQrZ = TRUE,
@@ -150,7 +147,7 @@ buildDesignMatrices <- function(data, contrast,
                                numericRefRows = numericRefRows)
   
   # Split by contrast (+ auto-promotion when no nuisance)
-  sp <- splitByContrast(F, cF, tol = tol, tolRow = tolRow, promoteIfNoNuisance = TRUE)
+  sp <- splitByContrast(F, cF, tol = tol, promoteIfNoNuisance = TRUE)
   X <- sp$X; Z <- sp$Z
   
   ## extract endpoints in F-space, if present
@@ -195,7 +192,7 @@ buildDesignMatrices <- function(data, contrast,
   diag <- NULL
   if (validate) {
     diag <- diagnoseDesign(F = F, X = X, Z = Z, qrZ = qrZ,
-                           meta = data, blocks = blocks, core.rows = sp$core.rows,
+                           meta = data, blocks = blocks,
                            contrastSpec = if (!inherits(spec, "try-error")) spec else NULL,
                            tol = tol)
     emitDiagnostics(diag, verbosity)
@@ -210,7 +207,6 @@ buildDesignMatrices <- function(data, contrast,
     F = F, X = X, Z = Z,
     contrast.F = sp$contrast.F,
     contrast.X = sp$contrast.X,
-    core.rows = sp$core.rows,
     qrZ = qrZ,
     diagnostics = diag,
     numeric_ref_used = attr(cF, "numeric_ref_used") %||% list(),
@@ -917,16 +913,8 @@ buildSyntheticContrast <- function(F, data, contrast,
 
 # ---- Split by contrast (+ promotion) ----
 
-computeCoreRows <- function(X, tolRow = sqrt(.Machine$double.eps)) {
-  if (!ncol(X)) return(rep(FALSE, nrow(X)))
-  colScale <- pmax(1, apply(abs(X), 2, max, na.rm = TRUE))
-  thr <- matrix(tolRow * colScale, nrow(X), ncol(X), byrow = TRUE)
-  rowSums(abs(X) > thr) > 0
-}
-
 splitByContrast <- function(F, cF,
                             tol    = 1e-12,
-                            tolRow = sqrt(.Machine$double.eps),
                             promoteIfNoNuisance = TRUE,
                             interceptName = "(Intercept)") {
   if (!all(colnames(F) %in% names(cF)))
@@ -937,7 +925,6 @@ splitByContrast <- function(F, cF,
   S  <- which(abs(cF) > tol)
   X  <- if (length(S)) F[, S, drop = FALSE] else F[, 0, drop = FALSE]
   Z  <- F[, setdiff(seq_len(ncol(F)), S), drop = FALSE]
-  core.rows <- computeCoreRows(X, tolRow = tolRow)
   contrast.X <- cF[colnames(X)]
   
   if (promoteIfNoNuisance) {
@@ -946,11 +933,10 @@ splitByContrast <- function(F, cF,
       X <- F
       Z <- NULL
       contrast.X <- cF[colnames(X)]
-      core.rows  <- computeCoreRows(X, tolRow = tolRow)
     }
   }
   
-  list(X = X, Z = Z, contrast.F = cF, contrast.X = contrast.X, core.rows = core.rows)
+  list(X = X, Z = Z, contrast.F = cF, contrast.X = contrast.X)
 }
 
 
@@ -959,14 +945,13 @@ splitByContrast <- function(F, cF,
 # ---- Diagnostics ----
 
 diagnoseDesign <- function(F = NULL, X = NULL, Z = NULL, qrZ = NULL,
-                           meta = NULL, blocks = NULL, core.rows = NULL,
+                           meta = NULL, blocks = NULL,
                            contrastSpec = NULL,
                            block.factors = NULL,
                            thresholds = list(
                              alias.tol     = 1e-8,
                              kappa.warn    = 1e3,
                              vif.warn      = 10,
-                             min.core.size = 2L,
                              show.top      = 10,
                              min.eff.perm  = 100
                            ),

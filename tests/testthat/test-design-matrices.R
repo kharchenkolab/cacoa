@@ -17,8 +17,8 @@ test_that("triple contrast builds X/Z split with endpoints", {
   expect_equal(unname(des$contrast_endpoints_F$num - des$contrast_endpoints_F$den), unname(des$contrast.F))
   # nuisance columns carry zero contrast weight
   expect_true(all(abs(des$contrast.F[colnames(des$Z)]) < 1e-12))
-  # core rows are the samples of the contrasted levels
-  expect_equal(unname(des$core.rows), meta$group %in% c("A", "B"))
+  # no core-row mask any more: every sample takes part in the fit
+  expect_null(des$core.rows)
 })
 
 test_that("simple contrast with at=, marginal contrast, and interaction cell contrast build", {

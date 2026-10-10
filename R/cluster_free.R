@@ -240,11 +240,11 @@ estimateClusterFreeDE_LM <- function(genes, de.inp, sample.per.cell, design, per
     fit <- performLMPermutations(x = design, y = Y, perm.method = perm.method, robust.method = robust.method,
                                  na.mode = na.mode, alternative = alternative, n.permutations = n.permutations, 
                                  n.cores = n.cores, return.residuals = return.residuals, return.sampled.stats = FALSE, 
-                                 return.sampled.fits = FALSE, return.y.resid = FALSE, ...)
+                                 return.sampled.fits = FALSE, ...)
 
     z.vec <- as.numeric(fit$z.score)
     if (!length(z.vec)) z.vec <- rep(NA_real_, ncol(Y))
-    s.vec <- as.numeric(fit$stat.obs)
+    s.vec <- as.numeric(fit$effect)                 # contrast effect (not the test statistic)
 
     if (return.residuals) {
       # fit$residuals is (used rows) × (focal cells). Row names already map to used rows.

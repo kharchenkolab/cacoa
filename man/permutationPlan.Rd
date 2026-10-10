@@ -8,7 +8,7 @@ permutationPlan(
   design,
   meta,
   samples = rownames(design$F),
-  scheme = c("auto", "block", "freedman-lane", "huh-jhun"),
+  scheme = c("auto", "block", "freedman-lane"),
   block.vars = NULL,
   n.permutations = 999,
   max.enumerate = 20000
@@ -21,8 +21,8 @@ permutationPlan(
 
 \item{samples}{samples taking part (default: all rows of the design)}
 
-\item{scheme}{\code{"auto"} (block when every adjusting covariate is discrete, else Freedman-Lane), \code{"block"},
-\code{"freedman-lane"} or \code{"huh-jhun"}}
+\item{scheme}{\code{"auto"} (block when every adjusting covariate is discrete, else Freedman-Lane), \code{"block"} or
+\code{"freedman-lane"}}
 
 \item{block.vars}{additional metadata columns defining strata}
 

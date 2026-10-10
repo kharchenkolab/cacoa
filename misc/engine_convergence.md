@@ -185,7 +185,8 @@ for the shift F (agreement to 1e-10).
    the full sample set. About a day plus the calibration runs.
 5. **Retire**: `projdiff.cpp`, `pca_project`, the unused `estimateCorrelationDistance` export, `makeBlocks` /
    `permutationGroups`, R reference loops out of the namespace, `huh-jhun` either in the kernel or dropped.
-6. Optional: fold `fl_fwl_cpp` into `fit_and_randomize` behind a `scheme` argument so each family has one entry point.
+6. Fold `fl_fwl_cpp` into `fit_and_randomize` (a `Z` argument: residualize per NA pattern, then fit) so each family
+   has one entry point. Done 2026-10-10 together with the decisions below.
 
 Steps 1-3 are each about half a day with tests; step 4 is the largest (a day) and the one with the visible payoff.
 The test plan over the option matrix is in §11; the grid helper is written before step 1 so every step is
@@ -296,6 +297,34 @@ permutation maxima for the max-statistic adjustment; the loop over cells runs on
   Left for later: step 6 (fold `fl_fwl_cpp` into `fit_and_randomize`), the R6 wrapper overhead of
   `getTopGenes()` / `getClusterFreeDEInput()`, HJ in the weighted path (falls back to block), and the FL fit on
   core rows only (a modelling choice inherited from the pair model, see issues).
+
+- **Decisions of 2026-10-10 (step 6 and the open points).**
+  1. *Core rows were a defect, not a choice.* `core.rows` marked the samples with a non-zero entry in the contrast
+     columns of `X`. With treatment coding and a nuisance covariate the reference level lives in the intercept (in
+     `Z`), so a two-level test kept only the target-level samples in the Freedman-Lane fit: on 12 samples with a
+     numeric covariate, null rejection 0.027 and power 0.077 against 0.053 / 0.577 with all rows. The auto scheme
+     picks Freedman-Lane exactly when a numeric nuisance is present, so every two-level composition / density /
+     cluster-free DE test with a numeric covariate was affected. Fix: `fit_and_randomize(..., Z = )` residualizes
+     `X` and `Y` on `Z` per NA pattern (all samples) and fits all rows; estimate, standard error and t equal `lm`
+     on the full model. `core.rows`, `computeCoreRows`, `coreCells`, `parse_core_rows`, `fl_fwl_cpp` and the
+     `partial_core` / `y.resid` outputs are gone; `getCoreSamples()` (DE cell subsampling) now takes the samples
+     of the contrasted levels from `contrastSampleInfo()`.
+  2. *Huh-Jhun removed.* It permuted rotated residual-space coordinates with its own RNG (so it could not share
+     `P`, was uncoupled across cell types and invalid for max-T), was shift-only, and silently became block
+     relabeling in the weighted path. `permutation` is now `auto` / `block` / `freedman-lane`.
+  3. *Studentized statistic in the per-column fitter.* `fit_and_randomize(statistic = "t")` (default) tests
+     effect / se with se from each fit's own residual variance (`sum(w r^2) / (n_obs - p - rank Z)` and
+     `c' (X'WX)^-1 c`, the final robust weights for Huber, the pseudo-response residuals for winsor);
+     `statistic = "coef"` keeps the raw contrast. The raw contrast (`effect`) and `se` are returned either way and
+     are what composition loadings, density scores and cluster-free DE effects use. Why: the raw coefficient is
+     not pivotal when the design is permuted along with a numeric covariate (block scheme) or when the contrast
+     spans several columns; on the planted example the same permutations gave p 0.12 (coef) and 0.009 (t). For two
+     groups without covariates the two statistics are monotone-equivalent and the p-values agree (test).
+     Constant responses: se = 0 and a rounding-level effect give t = 0 (p = 1), as the raw coefficient did.
+  Tests: `test-kernel-b.R` (brute-force t references under block, drop / impute_weak, Freedman-Lane with Z;
+  equality with `lm` for two- and three-level designs; calibration of t under block and Freedman-Lane for
+  none / huber / winsor x drop / impute_weak; power t > coef with a permuted numeric covariate), `test-build.R`,
+  `test-track-d.R`, `test-design-matrices.R`, `test-pairwise-inference.R` updated.
 
 ## 6. Scaling the cluster-free tests to ~10^6 cells
 

@@ -229,14 +229,15 @@ BEGIN_RCPP
 END_RCPP
 }
 // fit_and_randomize
-Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma::vec& contrast, Rcpp::Nullable<Rcpp::List> perm_groups, int n_randomizations, std::string alternative, bool return_residuals, bool return_sampled_fits, bool return_sampled_stats, std::string robust, double huber_k, int huber_maxit, double huber_tol, std::string na_mode, double na_weight, std::string na_center, double illcond_rcond, double pinv_tol, int n_cores, Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix);
-RcppExport SEXP _cacoa_fit_and_randomize(SEXP XSEXP, SEXP YSEXP, SEXP contrastSEXP, SEXP perm_groupsSEXP, SEXP n_randomizationsSEXP, SEXP alternativeSEXP, SEXP return_residualsSEXP, SEXP return_sampled_fitsSEXP, SEXP return_sampled_statsSEXP, SEXP robustSEXP, SEXP huber_kSEXP, SEXP huber_maxitSEXP, SEXP huber_tolSEXP, SEXP na_modeSEXP, SEXP na_weightSEXP, SEXP na_centerSEXP, SEXP illcond_rcondSEXP, SEXP pinv_tolSEXP, SEXP n_coresSEXP, SEXP perm_matrixSEXP) {
+Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma::vec& contrast, Rcpp::Nullable<Rcpp::NumericMatrix> Z, Rcpp::Nullable<Rcpp::List> perm_groups, int n_randomizations, std::string alternative, bool return_residuals, bool return_sampled_fits, bool return_sampled_stats, std::string robust, double huber_k, int huber_maxit, double huber_tol, std::string na_mode, double na_weight, std::string na_center, double illcond_rcond, double pinv_tol, int n_cores, Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix, std::string statistic);
+RcppExport SEXP _cacoa_fit_and_randomize(SEXP XSEXP, SEXP YSEXP, SEXP contrastSEXP, SEXP ZSEXP, SEXP perm_groupsSEXP, SEXP n_randomizationsSEXP, SEXP alternativeSEXP, SEXP return_residualsSEXP, SEXP return_sampled_fitsSEXP, SEXP return_sampled_statsSEXP, SEXP robustSEXP, SEXP huber_kSEXP, SEXP huber_maxitSEXP, SEXP huber_tolSEXP, SEXP na_modeSEXP, SEXP na_weightSEXP, SEXP na_centerSEXP, SEXP illcond_rcondSEXP, SEXP pinv_tolSEXP, SEXP n_coresSEXP, SEXP perm_matrixSEXP, SEXP statisticSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const arma::mat& >::type X(XSEXP);
     Rcpp::traits::input_parameter< const arma::mat& >::type Y(YSEXP);
     Rcpp::traits::input_parameter< const arma::vec& >::type contrast(contrastSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericMatrix> >::type Z(ZSEXP);
     Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::List> >::type perm_groups(perm_groupsSEXP);
     Rcpp::traits::input_parameter< int >::type n_randomizations(n_randomizationsSEXP);
     Rcpp::traits::input_parameter< std::string >::type alternative(alternativeSEXP);
@@ -254,39 +255,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type pinv_tol(pinv_tolSEXP);
     Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
     Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::IntegerMatrix> >::type perm_matrix(perm_matrixSEXP);
-    rcpp_result_gen = Rcpp::wrap(fit_and_randomize(X, Y, contrast, perm_groups, n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, perm_matrix));
-    return rcpp_result_gen;
-END_RCPP
-}
-// fl_fwl_cpp
-Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y, const arma::vec& contrast, SEXP core_rows, Rcpp::Nullable<Rcpp::List> core_perm_groups, int n_randomizations, std::string alternative, std::string robust, double huber_k, int huber_maxit, double huber_tol, std::string na_mode, double na_weight, std::string na_center, double illcond_rcond, double pinv_tol, int n_cores, bool return_residuals, bool return_sampled_fits, bool return_sampled_stats, Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix);
-RcppExport SEXP _cacoa_fl_fwl_cpp(SEXP XSEXP, SEXP ZSEXP, SEXP YSEXP, SEXP contrastSEXP, SEXP core_rowsSEXP, SEXP core_perm_groupsSEXP, SEXP n_randomizationsSEXP, SEXP alternativeSEXP, SEXP robustSEXP, SEXP huber_kSEXP, SEXP huber_maxitSEXP, SEXP huber_tolSEXP, SEXP na_modeSEXP, SEXP na_weightSEXP, SEXP na_centerSEXP, SEXP illcond_rcondSEXP, SEXP pinv_tolSEXP, SEXP n_coresSEXP, SEXP return_residualsSEXP, SEXP return_sampled_fitsSEXP, SEXP return_sampled_statsSEXP, SEXP perm_matrixSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const arma::mat& >::type X(XSEXP);
-    Rcpp::traits::input_parameter< const arma::mat& >::type Z(ZSEXP);
-    Rcpp::traits::input_parameter< const arma::mat& >::type Y(YSEXP);
-    Rcpp::traits::input_parameter< const arma::vec& >::type contrast(contrastSEXP);
-    Rcpp::traits::input_parameter< SEXP >::type core_rows(core_rowsSEXP);
-    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::List> >::type core_perm_groups(core_perm_groupsSEXP);
-    Rcpp::traits::input_parameter< int >::type n_randomizations(n_randomizationsSEXP);
-    Rcpp::traits::input_parameter< std::string >::type alternative(alternativeSEXP);
-    Rcpp::traits::input_parameter< std::string >::type robust(robustSEXP);
-    Rcpp::traits::input_parameter< double >::type huber_k(huber_kSEXP);
-    Rcpp::traits::input_parameter< int >::type huber_maxit(huber_maxitSEXP);
-    Rcpp::traits::input_parameter< double >::type huber_tol(huber_tolSEXP);
-    Rcpp::traits::input_parameter< std::string >::type na_mode(na_modeSEXP);
-    Rcpp::traits::input_parameter< double >::type na_weight(na_weightSEXP);
-    Rcpp::traits::input_parameter< std::string >::type na_center(na_centerSEXP);
-    Rcpp::traits::input_parameter< double >::type illcond_rcond(illcond_rcondSEXP);
-    Rcpp::traits::input_parameter< double >::type pinv_tol(pinv_tolSEXP);
-    Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
-    Rcpp::traits::input_parameter< bool >::type return_residuals(return_residualsSEXP);
-    Rcpp::traits::input_parameter< bool >::type return_sampled_fits(return_sampled_fitsSEXP);
-    Rcpp::traits::input_parameter< bool >::type return_sampled_stats(return_sampled_statsSEXP);
-    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::IntegerMatrix> >::type perm_matrix(perm_matrixSEXP);
-    rcpp_result_gen = Rcpp::wrap(fl_fwl_cpp(X, Z, Y, contrast, core_rows, core_perm_groups, n_randomizations, alternative, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, return_residuals, return_sampled_fits, return_sampled_stats, perm_matrix));
+    Rcpp::traits::input_parameter< std::string >::type statistic(statisticSEXP);
+    rcpp_result_gen = Rcpp::wrap(fit_and_randomize(X, Y, contrast, Z, perm_groups, n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, perm_matrix, statistic));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -514,8 +484,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_estimateExpressionShiftsPairsLM", (DL_FUNC) &_cacoa_estimateExpressionShiftsPairsLM, 9},
     {"_cacoa_applyMedianFilterES", (DL_FUNC) &_cacoa_applyMedianFilterES, 4},
     {"_cacoa_adjustedZScoresMaxStat", (DL_FUNC) &_cacoa_adjustedZScoresMaxStat, 8},
-    {"_cacoa_fit_and_randomize", (DL_FUNC) &_cacoa_fit_and_randomize, 20},
-    {"_cacoa_fl_fwl_cpp", (DL_FUNC) &_cacoa_fl_fwl_cpp, 22},
+    {"_cacoa_fit_and_randomize", (DL_FUNC) &_cacoa_fit_and_randomize, 22},
     {"_cacoa_permuted_contrast_F", (DL_FUNC) &_cacoa_permuted_contrast_F, 6},
     {"_cacoa_permuted_contrast_F_fl", (DL_FUNC) &_cacoa_permuted_contrast_F_fl, 9},
     {"_cacoa_permuted_contrast_stats", (DL_FUNC) &_cacoa_permuted_contrast_stats, 14},

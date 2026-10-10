@@ -12,7 +12,6 @@ buildDesignMatrices(
   numericRefRows = NULL,
   tol = 1e-12,
   na.action = stats::na.pass,
-  tolRow = sqrt(.Machine$double.eps),
   validate = TRUE,
   verbosity = c("none", "warn", "info", "debug"),
   computeQrZ = TRUE,
@@ -36,8 +35,6 @@ is constructed as described above.}
 
 \item{na.action}{NA handler for \code{model.frame}.}
 
-\item{tolRow}{Per-row activity threshold used to compute \code{core.rows}.}
-
 \item{validate}{Logical; compute diagnostics (rank, aliasing, VIF, permutation checks).}
 
 \item{verbosity}{\code{"none"|"warn"|"info"|"debug"}.}
@@ -54,7 +51,6 @@ A list with:
 \item{X}{Core submatrix (or \code{F} if no nuisance).}
 \item{Z}{Nuisance submatrix (or \code{NULL} if none).}
 \item{contrast.F, contrast.X}{Contrast vectors aligned to \code{F} and \code{X}.}
-\item{core.rows}{Logical mask of rows with non-negligible activity in \code{X}.}
 \item{qrZ}{QR decomposition of \code{Z} for Freedman-Lane (or \code{NULL}).}
 \item{diagnostics}{If \code{buildBlocks=TRUE}, design diagnostics.}
 \item{numeric_ref_used, formula_used, baselines_used, contrast_spec}{Metadata.}

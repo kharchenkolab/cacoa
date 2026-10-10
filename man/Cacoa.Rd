@@ -1349,7 +1349,7 @@ a temporary model for this call; \code{cao$setModel()} changes the stored one.}
 \item{\code{dist}}{\code{"cor"} (gene-centred cosine; default from options), \code{"l2"} or \code{"l1"} (\code{l1} does not separate shift
 from dispersion and is discouraged)}
 
-\item{\code{permutation}}{\code{"auto"}, \code{"block"}, \code{"freedman-lane"} or \code{"huh-jhun"} (default from options)}
+\item{\code{permutation}}{\code{"auto"}, \code{"block"} or \code{"freedman-lane"} (default from options)}
 
 \item{\code{n.permutations}}{number of permutations (default from options)}
 
@@ -3062,6 +3062,7 @@ Estimate cell loadings
   contrast = NULL,
   test = NULL,
   perm.method = c("freedman-lane", "block"),
+  statistic = c("t", "coef"),
   zero.pseudocount = 0.1,
   basis.type = c("default"),
   ref.p.thresh = 0.3,
@@ -3100,6 +3101,8 @@ Estimate cell loadings
 \item{\code{test}}{optional test for a temporary model (see \code{Cacoa$new()})}
 
 \item{\code{perm.method}}{permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'}
+
+\item{\code{statistic}}{test statistic of the per-column fitter: \code{"t"} (studentized contrast, default) or \code{"coef"} (raw contrast estimate)}
 
 \item{\code{zero.pseudocount}}{pseudocount added to zero counts before the log-ratio transform (default 0.1)}
 
@@ -3510,6 +3513,7 @@ Estimate differential cell density
   test = NULL,
   block.vars = NULL,
   perm.method = "freedman-lane",
+  statistic = c("t", "coef"),
   robust.method = "none",
   na.mode = "drop",
   alternative = "two-sided",
@@ -3543,6 +3547,8 @@ Estimate differential cell density
 \item{\code{block.vars}}{metadata columns defining permutation strata (default: stored)}
 
 \item{\code{perm.method}}{permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'}
+
+\item{\code{statistic}}{test statistic of the fitter: \code{"t"} (studentized contrast, default) or \code{"coef"} (raw contrast estimate)}
 
 \item{\code{robust.method}}{robust fitting: 'none', 'huber' or 'winsor'}
 
@@ -4047,6 +4053,7 @@ Estimate differential expression Z-scores between two conditions per individual 
   formula = NULL,
   contrast = NULL,
   perm.method = "freedman-lane",
+  statistic = c("t", "coef"),
   robust.method = "none",
   na.mode = "drop",
   alternative = "two-sided",
@@ -4089,6 +4096,8 @@ Estimate differential expression Z-scores between two conditions per individual 
 \item{\code{contrast}}{optional contrast for a temporary model (expert synonym of \code{test})}
 
 \item{\code{perm.method}}{permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'}
+
+\item{\code{statistic}}{test statistic of the fitter: \code{"t"} (studentized contrast, default) or \code{"coef"} (raw contrast estimate)}
 
 \item{\code{robust.method}}{robust fitting: 'none', 'huber' or 'winsor'}
 

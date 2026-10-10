@@ -2,12 +2,13 @@
 % Please edit documentation in R/de_function.R
 \name{getCoreSamples}
 \alias{getCoreSamples}
-\title{Get core samples from model}
+\title{Core samples of a model: the samples whose labels the test compares (both levels of a contrast; every sample for
+a numeric or whole-factor test), as decided by \code{contrastSampleInfo()}}
 \usage{
 getCoreSamples(model, samples)
 }
 \arguments{
-\item{model}{list returned by buildDesignMatrices (must contain F and core.rows)}
+\item{model}{design from buildDesignMatrices() / a test design of buildCacoaModel()}
 
 \item{samples}{character vector of sample IDs}
 }
@@ -15,6 +16,7 @@ getCoreSamples(model, samples)
 character vector of core sample IDs
 }
 \description{
-Get core samples from model
+Core samples of a model: the samples whose labels the test compares (both levels of a contrast; every sample for
+a numeric or whole-factor test), as decided by \code{contrastSampleInfo()}
 }
 \keyword{internal}

@@ -105,8 +105,8 @@ lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), zero.
                                return.sampled.fits  = TRUE, ...)
   
   coef.mat     <- fit$coef          # n_coef × K, aligned with chosen design
-  stat.obs     <- as.numeric(fit$stat.obs)   # length K
-  stats.perm   <- as.matrix(fit$stats.perm)  # n_perm × K
+  stat.obs     <- as.numeric(fit$effect)        # length K: contrast effect in ILR space (the loadings are built from effects, not from the test statistic)
+  stats.perm   <- as.matrix(fit$effects.perm)   # n_perm × K: the same under relabeling
   sampled.fits <- fit$sampled.fits          # list length K
   
   n.coef     <- nrow(coef.mat)

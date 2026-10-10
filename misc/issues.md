@@ -1,8 +1,21 @@
-# Known issues, deficiencies and open decisions (dev_lm, as of 2026-10-09, HEAD 54ec7d0)
+# Known issues, deficiencies and open decisions (dev_lm, as of 2026-10-10)
 
 Consolidated from the per-track status notes in `misc/plan.md`. Items are grouped by what the user has to decide or
 what still has to be built; nothing here is tracked by a test failure (the fast suite, the slow suite and
 `R CMD check` are clean).
+
+## 0b. Found and fixed while reviewing the open decisions (2026-10-10)
+
+- **Freedman-Lane in the per-column fitter fitted the target-level samples only** for a two-level test with a
+  nuisance covariate (the reference level sits in the intercept, which belongs to `Z`, so `core.rows` excluded it):
+  null rejection 0.027 and power 0.077 against 0.053 / 0.577 with all rows (12 samples, numeric covariate). The
+  auto scheme picks Freedman-Lane exactly when a numeric nuisance is present, so composition, density and
+  cluster-free DE tests of a two-level condition with a numeric covariate were affected. The fitter now fits all
+  rows (`fit_and_randomize(Z = )`; `fl_fwl_cpp` and `core.rows` removed) and matches `lm`.
+- **Huh-Jhun removed**: it used its own RNG (uncoupled across cell types, max-T invalid), was shift-only and
+  silently fell back to block under weights.
+- **Raw-coefficient statistic was not pivotal** under block relabeling with a numeric covariate (p 0.12 against
+  0.009 for t on the same permutations); the fitter now studentizes by default.
 
 ## 0a. Found and fixed during the engine convergence (2026-10-09)
 
@@ -33,21 +46,17 @@ The R / C++ split of fitting and randomization, and the plan to converge on two 
 - **Residual-vs-covariate diagnostic for density / cluster-free DE** (parity with `screenCovariates(adjust.for=)`
   on the shift side); see §9 of the same note. Not started.
 
-- **R-drawn permutations for the C++ fitter.** `fit_and_randomize` (used by CoDA contrast tests, cell density
-  and cluster-free DE) still draws its own block permutations. Only the expression-shift engine and the
-  cluster-free shift port share R-drawn permutations (`drawPermutations()`). Consequence: the permutations of
-  CoDA / density / cluster-free DE are not coupled with the shift tests, and the Freedman-Lane / Huh-Jhun
-  schemes are not available there (block only; FL only via the old `fl_fwl_cpp` path).
 - **Cluster-free shifts and density refuse whole-factor (K-level) tests** with a message; only contrasts and
   numeric steps run there.
 - **Analytic p-values** (`p.values = "analytic"` in the screen) remain a labelled preview; see §3.
 - **"Later" list from the plan** untouched: Welch-type shift test, robust weights, repeated measures, technical
   noise dispersion covariate, cor-geometry check, metric sensitivity report.
 
-- **Freedman-Lane in the per-column fitter fits the core rows only** (`core.rows` = samples with non-zero contrast
-  weight), a choice inherited from the pair model; the Gower engine fits all samples. Whether density / cluster-free
-  DE should also fit all samples under FL is a modelling decision for the user.
-- **Huh-Jhun with robust weights or weak imputation** falls back to block relabeling (documented in the code).
+- **Studentized statistic in the per-column fitter** (`statistic = "t"`, default since 2026-10-10; `"coef"` keeps the
+  raw contrast): effect sizes are still the raw contrast (`effect`, with `se`); only the p-values changed. Users who
+  compared coefficient magnitudes across tests can keep doing so (`effect`), or use predicted values. Block
+  relabeling with a numeric nuisance remains approximate (the covariate is permuted with the labels); the auto
+  scheme avoids it.
 
 ## 2. Decisions made autonomously that need the user's confirmation
 

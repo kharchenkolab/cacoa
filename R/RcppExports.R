@@ -45,12 +45,8 @@ adjustedZScoresMaxStat <- function(z_obs, alt, max_vals_in, min_vals_in, wins = 
     .Call(`_cacoa_adjustedZScoresMaxStat`, z_obs, alt, max_vals_in, min_vals_in, wins, smooth, nn_ids, non_zero_ids)
 }
 
-fit_and_randomize <- function(X, Y, contrast, perm_groups = NULL, n_randomizations = 100L, alternative = "two-sided", return_residuals = TRUE, return_sampled_fits = FALSE, return_sampled_stats = FALSE, robust = "none", huber_k = 1.345, huber_maxit = 8L, huber_tol = 1e-6, na_mode = "drop", na_weight = 1e-4, na_center = "mean", illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = 1L, perm_matrix = NULL) {
-    .Call(`_cacoa_fit_and_randomize`, X, Y, contrast, perm_groups, n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, perm_matrix)
-}
-
-fl_fwl_cpp <- function(X, Z, Y, contrast, core_rows = NULL, core_perm_groups = NULL, n_randomizations = 100L, alternative = "two-sided", robust = "none", huber_k = 1.345, huber_maxit = 8L, huber_tol = 1e-6, na_mode = "drop", na_weight = 1e-4, na_center = "mean", illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = 1L, return_residuals = TRUE, return_sampled_fits = FALSE, return_sampled_stats = FALSE, perm_matrix = NULL) {
-    .Call(`_cacoa_fl_fwl_cpp`, X, Z, Y, contrast, core_rows, core_perm_groups, n_randomizations, alternative, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, return_residuals, return_sampled_fits, return_sampled_stats, perm_matrix)
+fit_and_randomize <- function(X, Y, contrast, Z = NULL, perm_groups = NULL, n_randomizations = 100L, alternative = "two-sided", return_residuals = TRUE, return_sampled_fits = FALSE, return_sampled_stats = FALSE, robust = "none", huber_k = 1.345, huber_maxit = 8L, huber_tol = 1e-6, na_mode = "drop", na_weight = 1e-4, na_center = "mean", illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = 1L, perm_matrix = NULL, statistic = "t") {
+    .Call(`_cacoa_fit_and_randomize`, X, Y, contrast, Z, perm_groups, n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, perm_matrix, statistic)
 }
 
 permuted_contrast_F <- function(G, a, H, cXc, q, P) {

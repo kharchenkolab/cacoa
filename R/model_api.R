@@ -26,7 +26,7 @@ cacoaDefaultOptions <- function() {
     plot.provenance = TRUE,        # provenance subtitle on result plots
     min.samp.per.level = 3,        # minimum samples at each contrasted level per cell type
     dist = "cor",                  # expression distance: gene-centred cosine
-    permutation = "auto",          # permutation scheme: auto / block / freedman-lane / huh-jhun
+    permutation = "auto",          # permutation scheme: auto / block / freedman-lane
     numeric.step = 1,              # step for numeric tests (per unit); per-SD is reported as well
     robust = "none",               # robust fit of the distance model: none / huber / winsor (samples with outlying residual distances)
     na.mode = "drop",              # samples absent from a cell type: drop (fit on the present ones) / impute_weak (kept with a near-zero weight)
@@ -45,7 +45,7 @@ checkOptionValues <- function(opts) {
   chk(is.logical(opts$plot.provenance), "plot.provenance must be logical")
   chk(is.numeric(opts$min.samp.per.level) && opts$min.samp.per.level >= 2, "min.samp.per.level must be >= 2")
   chk(opts$dist %in% c("cor", "l2", "l1"), "dist must be one of cor, l2, l1")
-  chk(opts$permutation %in% c("auto", "block", "freedman-lane", "huh-jhun"), "unknown permutation scheme")
+  chk(opts$permutation %in% c("auto", "block", "freedman-lane"), "unknown permutation scheme")
   chk(is.numeric(opts$numeric.step) && opts$numeric.step != 0, "numeric.step must be a non-zero number")
   chk(opts$robust %in% c("none", "huber", "winsor"), "robust must be one of none, huber, winsor")
   chk(opts$na.mode %in% c("drop", "impute_weak"), "na.mode must be drop or impute_weak")
@@ -308,7 +308,7 @@ testInterpretation <- function(t) {
 #' @param block.vars metadata columns defining permutation strata
 #' @param numeric.ref `"auto"` or a named list of anchors for numeric covariates
 #' @param numeric.step step for numeric tests
-#' @param permutation permutation scheme (`"auto"`, `"block"`, `"freedman-lane"`, `"huh-jhun"`)
+#' @param permutation permutation scheme (`"auto"`, `"block"`, `"freedman-lane"`)
 #' @param n.permutations number of permutations the plan is made for
 #' @param verbosity passed to [buildDesignMatrices()]
 #' @return object of class `cacoaModel`
@@ -383,7 +383,7 @@ buildTermDesign <- function(meta, formula, variable, numeric.ref = "auto", block
   cF <- setNames(numeric(ncol(F)), colnames(F)); cF[term.cols] <- 1
   Z <- F[, setdiff(colnames(F), term.cols), drop = FALSE]
   list(F = F, X = F[, term.cols, drop = FALSE], Z = if (ncol(Z)) Z else NULL, contrast.F = cF, contrast.X = cF[term.cols],
-       core.rows = rep(TRUE, nrow(F)), qrZ = if (ncol(Z)) qr(Z) else NULL,
+       qrZ = if (ncol(Z)) qr(Z) else NULL,
        diagnostics = NULL, numeric_ref_used = list(), formula_used = formula, contrast_spec = list(type = "term", term = variable),
        baselines_used = NULL, contrast_endpoints_F = NULL, contrast_endpoints_X = NULL, contrast_label = sprintf("%s (term)", variable),
        contrast_endpoint_labels = NULL, contrast_endpoints_at = NULL, term.cols = term.cols, term.variable = variable)

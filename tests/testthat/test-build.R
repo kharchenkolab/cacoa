@@ -2,12 +2,13 @@
 
 test_that("compiled entry points are registered", {
   ns <- asNamespace("cacoa")
-  for (f in c("fit_and_randomize", "fl_fwl_cpp", "estimateExpressionShiftsPairsLM", "clusterFreeGeneMat",
+  for (f in c("fit_and_randomize", "estimateExpressionShiftsPairsLM", "clusterFreeGeneMat",
               "mapIds", "applyMedianFilterES", "adjustedZScoresMaxStat", "estimateCorrelationDistance",
               "clusterFreeZScoreMat", "estimateClusterFreeExpressionShiftsC")) {
     expect_true(exists(f, envir = ns, inherits = FALSE), info = f)
   }
   expect_false(exists("fit_with_focusing", envir = ns, inherits = FALSE))
+  expect_false(exists("fl_fwl_cpp", envir = ns, inherits = FALSE))                      # folded into fit_and_randomize (Z argument)
   expect_false(exists("pca_project", envir = ns, inherits = FALSE))
 })
 
@@ -32,10 +33,10 @@ test_that("fit_and_randomize is deterministic for a given permutation matrix and
   expect_equal(unname(r1$coef[, 1]), unname(coef(lm(Y[, 1] ~ X - 1))), tolerance = 1e-10)
 })
 
-test_that("fl_fwl_cpp works with zero permutations and a non-empty nuisance matrix (B6)", {
+test_that("fit_and_randomize works with zero permutations and a non-empty nuisance matrix (B6)", {
   set.seed(3)
   n <- 20; X <- cbind(rep(0:1, each = n / 2)); Z <- cbind(1, rnorm(n)); Y <- matrix(rnorm(n * 3), n, 3)
-  res <- cacoa:::fl_fwl_cpp(X, Z, Y, contrast = 1, n_randomizations = 0, return_sampled_stats = TRUE)
+  res <- cacoa:::fit_and_randomize(X, Y, contrast = 1, Z = Z, n_randomizations = 0, return_sampled_stats = TRUE)
   expect_length(res$stat, 3)
   expect_true(all(is.finite(res$stat)))
   expect_null(res$sampled_stats)

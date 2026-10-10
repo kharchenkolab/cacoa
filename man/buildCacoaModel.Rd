@@ -33,7 +33,7 @@ buildCacoaModel(
 
 \item{numeric.step}{step for numeric tests}
 
-\item{permutation}{permutation scheme (\code{"auto"}, \code{"block"}, \code{"freedman-lane"}, \code{"huh-jhun"})}
+\item{permutation}{permutation scheme (\code{"auto"}, \code{"block"}, \code{"freedman-lane"})}
 
 \item{n.permutations}{number of permutations the plan is made for}
 

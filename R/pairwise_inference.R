@@ -7,7 +7,6 @@
 ##  - "freedman-lane": fit the model without the tested term, permute residuals (within block.vars strata),
 ##    add the fitted part back; done on the Gower matrix (G* = K1 + K2[,p] + K3[p,] + K4[p,p]). Fallback for
 ##    continuous covariates; conservative when the effective dimension is large relative to n.
-##  - "huh-jhun": permutation in the residual space of the reduced model; shift only; opt-in.
 ## One set of global permutations is shared by all cell types (induced on each cell type's sample subset),
 ## which allows max-statistic combination across cell types.
 
@@ -98,8 +97,8 @@ logDistinctPermutations <- function(labels, in.set, strata) {
 #' @param design output of `buildDesignMatrices()`
 #' @param meta sample metadata (rows named by sample)
 #' @param samples samples taking part (default: all rows of the design)
-#' @param scheme `"auto"` (block when every adjusting covariate is discrete, else Freedman-Lane), `"block"`,
-#'   `"freedman-lane"` or `"huh-jhun"`
+#' @param scheme `"auto"` (block when every adjusting covariate is discrete, else Freedman-Lane), `"block"` or
+#'   `"freedman-lane"`
 #' @param block.vars additional metadata columns defining strata
 #' @param n.permutations requested number of permutations; when fewer distinct relabelings exist they are
 #'   enumerated exhaustively
@@ -108,7 +107,7 @@ logDistinctPermutations <- function(labels, in.set, strata) {
 #'   `n.distinct` (may be `Inf`-like large; see `log.n.distinct`), `exhaustive`, `p.floor`, `notes`
 #' @export
 permutationPlan <- function(design, meta, samples = rownames(design$F),
-                            scheme = c("auto", "block", "freedman-lane", "huh-jhun"),
+                            scheme = c("auto", "block", "freedman-lane"),
                             block.vars = NULL, n.permutations = 999, max.enumerate = 20000) {
   scheme <- match.arg(scheme)
   info <- contrastSampleInfo(design, meta, samples)
@@ -272,20 +271,6 @@ flGowerParts <- function(G, Xr) {
 }
 flGowerPermute <- function(parts, p) parts$K1 + parts$K2[, p] + parts$K3[p, ] + parts$K4[p, p]
 
-# Huh-Jhun: rotate into the residual space of the reduced model and permute there (shift F only)
-hjPrecompute <- function(G, X, cvec, pre) {
-  n <- nrow(G); Xr <- X %*% contrastNullBasis(cvec)
-  qr_ <- qr(Xr)$rank
-  Qr <- qr.Q(qr(Xr), complete = TRUE)[, seq_len(n - qr_) + qr_, drop = FALSE]
-  aW <- drop(t(Qr) %*% pre$a)
-  list(GW = t(Qr) %*% G %*% Qr, aW = aW, na2 = pre$cXc, k = ncol(Qr))
-}
-hjStat <- function(hj, p, n, q) {
-  GW <- if (is.null(p)) hj$GW else hj$GW[p, p]
-  num <- drop(crossprod(hj$aW, GW %*% hj$aW)) / hj$na2
-  num / ((sum(diag(GW)) - num) / (n - q))
-}
-
 # ---- one cell type --------------------------------------------------------------------------------
 
 # Permutation statistics for one cell type. `P` is the matrix of permutations of this cell type's samples
@@ -308,13 +293,9 @@ permutationStatsForCellType <- function(eff, plan, P, bias.correct = TRUE) {
   }
   if (plan$scheme == "block") {                 # C++ kernel; R reference: permutedStats()
     perm[, ] <- permuted_contrast_stats(G, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, znum, zden, P, bias.correct, need.var)
-  } else if (plan$scheme == "freedman-lane") {
+  } else {                                      # freedman-lane: Gower re-indexing of the reduced-model parts
     parts <- flGowerParts(G, X %*% contrastNullBasis(cvec))
     perm[, ] <- permuted_contrast_stats_fl(parts$K1, parts$K2, parts$K3, parts$K4, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, znum, zden, P, bias.correct, need.var)
-  } else {  # huh-jhun: shift only
-    hj <- hjPrecompute(G, X, cvec, pre)
-    obs["F"] <- hjStat(hj, NULL, pre$n, pre$q)
-    for (b in seq_len(B)) perm[b, "F"] <- hjStat(hj, sample.int(hj$k), pre$n, pre$q)
   }
   list(obs = obs, perm = perm)
 }
@@ -340,7 +321,7 @@ permutationPValue <- function(obs, perm, alternative = c("greater", "two.sided")
 #' @param design sample-level design from `buildDesignMatrices()`
 #' @param meta sample metadata (rows named by sample)
 #' @param dispersion.formula,dist,bias.correct,influence,min.samp.per.level passed to [pairwiseEffectsFromDesign()]
-#' @param permutation `"auto"`, `"block"`, `"freedman-lane"` or `"huh-jhun"` (see [permutationPlan()])
+#' @param permutation `"auto"`, `"block"` or `"freedman-lane"` (see [permutationPlan()])
 #' @param n.permutations number of permutations
 #' @param block.vars metadata columns defining additional permutation strata
 #' @param seed integer seed (default: drawn from R's RNG, so `set.seed()` applies)
@@ -355,7 +336,7 @@ permutationPValue <- function(obs, perm, alternative = c("greater", "two.sided")
 #' @param robust,na.mode,robust.k robust fit (`"none"`, `"huber"`, `"winsor"`), treatment of samples absent from a cell type
 #'   (`"drop"`, `"impute_weak"`) and robust tuning constant; recorded in `call.info`
 testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL, dist = c("cor", "l2", "l1"),
-                                permutation = c("auto", "block", "freedman-lane", "huh-jhun"), n.permutations = 999,
+                                permutation = c("auto", "block", "freedman-lane"), n.permutations = 999,
                                 block.vars = NULL, bias.correct = TRUE, influence = FALSE, min.samp.per.level = 3,
                                 seed = NULL, alpha = 0.05, n.cores = 1, return.perm.stats = FALSE, verbose = FALSE,
                                 robust = c("none", "huber", "winsor"), na.mode = c("drop", "impute_weak"), robust.k = 1.345) {

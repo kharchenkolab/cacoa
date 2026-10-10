@@ -233,13 +233,14 @@ diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c
                                  robust.method = robust.method, na.mode = na.mode, alternative = alternative,
                                  return.sampled.stats = return.sampled.stats, return.residuals = return.residuals,
                                  n.cores = n.cores, ...)
-  # center by permutation mean
-  score.c <- as.numeric(res$stat.obs - colMeans(res$stats.perm, na.rm = TRUE)) 
+  # effect (contrast estimate) centred by its permutation mean; the z-scores come from the test statistic's p-values
+  score.c <- as.numeric(if (is.null(res$effects.perm)) res$effect else res$effect - colMeans(res$effects.perm, na.rm = TRUE))
   names(score.c) <- colnames(Y)
   z.score <- res$z.score
   names(z.score) <- colnames(Y)
 
-  out <- list(score = score.c, permut.scores = t(res$stats.perm), z.score = z.score)
+  out <- list(score = score.c, permut.scores = if (is.null(res$effects.perm)) NULL else t(res$effects.perm), z.score = z.score,
+              effect = setNames(res$effect, colnames(Y)), se = setNames(res$se, colnames(Y)), statistic = res$statistic)
 
   if (return.residuals) {
     out$residuals <- res$residuals

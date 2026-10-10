@@ -2,7 +2,7 @@
 % Please edit documentation in R/model_fits.R
 \name{performLMPermutations}
 \alias{performLMPermutations}
-\title{Permutation tests for linear models (block or Freedman–Lane)}
+\title{Permutation tests for linear models (block or Freedman-Lane)}
 \usage{
 performLMPermutations(
   x,
@@ -10,13 +10,13 @@ performLMPermutations(
   perm.method = c("block", "freedman-lane"),
   robust.method = c("none", "huber", "winsor"),
   na.mode = c("drop", "impute_weak"),
-  na.center = c("mean", "median"),
+  na.center = c("mean", "zero"),
+  statistic = c("t", "coef"),
   alternative = c("two-sided", "greater", "less"),
   cross.rows = NULL,
   return.residuals = TRUE,
   return.sampled.stats = TRUE,
   return.sampled.fits = FALSE,
-  return.y.resid = TRUE,
   n.permutations = 1000,
   n.cores = 1,
   seed = NULL,
@@ -26,93 +26,60 @@ performLMPermutations(
 )
 }
 \arguments{
-\item{x}{A design bundle from \code{\link[=buildDesignMatrices]{buildDesignMatrices()}}, containing at least:
-\code{F}, \code{X}, \code{Z}, \code{contrast.F}, \code{contrast.X}, \code{perm.groups.full}, \code{perm.groups.core},
-and optionally \code{core.rows} and \code{pairs}.}
+\item{x}{design from \code{\link[=buildDesignMatrices]{buildDesignMatrices()}} or a test design of \code{\link[=buildCacoaModel]{buildCacoaModel()}} (\code{F}, \code{X}, \code{Z}, \code{contrast.F},
+\code{contrast.X}, \code{meta})}
 
-\item{y}{Numeric vector (\code{n}) or matrix (\verb{n × m}) of responses.}
+\item{y}{numeric vector (\code{n}) or matrix (\verb{n x m}) of responses; \code{NA} allowed}
 
-\item{perm.method}{One of \code{"block"} or \code{"freedman-lane"}.}
+\item{perm.method}{\code{"block"} or \code{"freedman-lane"}}
 
-\item{robust.method}{One of \code{"none"}, \code{"huber"}, or \code{"winsor"}. Passed through to the fitter.}
+\item{robust.method}{\code{"none"}, \code{"huber"} or \code{"winsor"} (robust fits, re-estimated under every relabeling)}
 
-\item{na.mode}{One of \code{"drop"} or \code{"impute.weak"}.
-\itemize{
-\item \code{"drop"}: for each response column, rows with \code{NA} are dropped \strong{for that column's fit}.
-\item \code{"impute.weak"}: rows with \code{NA} are \strong{kept}; nuisance residualization uses
-weighted LS (tiny weight on missing rows) to get Xr (falls back to NAs), and the fitter treats missing rows with
-a tiny weights similarly (observed rows are the ones permuted).
-}}
+\item{na.mode}{\code{"drop"} (rows with \code{NA} are dropped for that column) or \code{"impute_weak"} (kept with a near-zero weight)}
 
-\item{cross.rows}{Optional integer/logical index to subset residual rows to cross-group sample pairs
-for visualization \strong{after} fitting.
-Indices are with respect to the rows actually used: all rows for \code{"block"},
-or \code{which(x$core.rows)} when \code{perm.method = "freedman-lane"}}
+\item{na.center}{fill value of the weakly imputed rows: the observed mean (\code{"mean"}) or \code{"zero"}}
 
-\item{return.residuals}{Logical; return residual matrix.}
+\item{statistic}{\code{"t"} (default) or \code{"coef"}}
 
-\item{return.sampled.stats}{Logical; return the matrix of sampled permutation statistics.}
+\item{alternative}{\code{"two-sided"}, \code{"greater"} or \code{"less"}}
 
-\item{n.permutations}{Integer, number of randomizations.}
+\item{cross.rows}{optional row index to subset the residual matrices after fitting}
+
+\item{return.residuals, return.sampled.stats, return.sampled.fits}{optional outputs}
+
+\item{n.permutations}{number of permutations (ignored when \code{P} is given)}
+
+\item{n.cores}{threads (results do not depend on it)}
+
+\item{seed}{seed of the permutation draw (default: taken from R's RNG, so \code{set.seed()} applies)}
+
+\item{P, perm.cells}{permutations and cells from \code{\link[=modelPermutations]{modelPermutations()}}; drawn from the design when \code{NULL}}
+
+\item{block.vars}{additional strata for the permutation plan}
 }
 \value{
-A list with:
-\itemize{
-\item \code{stat.obs} — numeric length-\code{m} vector of observed contrast statistics.
-\item \code{pval} — numeric length-\code{m} vector of permutation p-values.
-\item \code{z.score} — numeric length-\code{m} vector of z-like scores derived from permutation p.
-\item \code{stats.perm} — if requested, a matrix \verb{n.permutations × m} (when available), otherwise a list.
-Columns are named by \code{colnames(y)}; rows are \code{"perm1"}, \code{"perm2"}, ….
-\item \code{residual} — if requested, residual matrix:
-- \code{"block"}: \verb{n × m} (all rows);
-- \code{"freedman-lane"}: \verb{|core rows| × m}, otherwise \verb{n × m}.
-Row names reflect the used rows; \code{cross.rows} may further subset rows.
-\item \code{y.resid} — for \code{"freedman-lane"}, the \verb{|core rows| × m} matrix of residualized responses (if requested).
-}
+list: \code{coef} (\verb{p x m}), \code{effect} and \code{se} (contrast estimate and standard error), \code{df}, \code{stat.obs} (the
+statistic), \code{pval}, \code{z.score} (normal quantile of \code{pval} with the sign of the effect), \code{stats.perm} and
+\code{effects.perm} (\verb{B x m}, when requested), \code{sampled.fits}, \code{residuals}, \code{residuals.pearson}, \code{P}, \code{perm.cells},
+\code{statistic}, \code{perm.method}
 }
 \description{
-Wrapper to run permutation-based inference for linear models using either
-\strong{block permutations} (shuffle within nuisance-defined blocks on the full design \code{F})
-or the \strong{Freedman–Lane} scheme (residualize out nuisance \code{Z}, then permute).
-Supports robust fitting and NA handling, and returns neatly named outputs.
-}
-\details{
-\strong{Block}: calls the underlying C++ \code{fit_and_randomize()} on the full design \code{F},
-shuffling within \code{x$perm.groups.full}.
-
-\strong{Freedman–Lane}: calls C++ helper \code{fl_fwl_cpp()}
-Column names from \code{colnames(y)} are propagated to \code{stat.obs}, \code{pval}, \code{z.score},
-and (when requested) to permutation statistics and residual matrices.
-}
-\section{Notes}{
-
+One call to the C++ fitter \code{fit_and_randomize()} for a matrix of responses: every column is fit on the model's
+design, a contrast of the coefficients is estimated and tested against the model's permutations
+(\code{\link[=modelPermutations]{modelPermutations()}}), which are shared with the distance-based tests of the same model.
 \itemize{
-\item For \code{"freedman-lane"}, if some columns are not estimable under a subset (e.g., too few rows),
-their outputs may be \code{NA}.
-}
+\item \code{perm.method = "block"}: fit on the full design \code{F}; the relabelings permute rows of \code{F} within the plan's cells.
+\item \code{perm.method = "freedman-lane"}: residualize \code{X} and the responses on the nuisance design \code{Z} using all
+samples, fit on the residualized design and permute the residualized responses (Freedman-Lane). Every sample
+stays in the fit; the estimate equals the full-model coefficient (Frisch-Waugh-Lovell).
 }
 
-\examples{
-\dontrun{
-# Assume 'x' from buildDesignMatrices(sample.meta, contrast = "group=B") or buildPairDesignMatrices()
-set.seed(1)
-Y <- matrix(rnorm(nrow(x$F) * 3L), ncol = 3L)
-colnames(Y) <- c("g1","g2","g3")
-
-# Block permutations
-out.block <- performLMPermutations(
-  x, Y, n.permutations = 999, perm.method = "block",
-  robust.method = "none", na.mode = "drop", return.sampled.stats = TRUE
-)
-
-# Freedman–Lane on core rows with weak imputation
-out.fl <- performLMPermutations(
-  x, Y, n.permutations = 999, perm.method = "freedman-lane",
-  na.mode = "impute_weak", return.residuals = TRUE
-)
-}
+The test statistic is the studentized contrast (\code{statistic = "t"}, the default: the estimate divided by its
+standard error from each fit's own residual variance, so the permutation null does not inherit the variance of
+the permuted fits) or the raw contrast estimate (\code{"coef"}). The raw estimate (\code{effect}) and its standard error
+(\code{se}) are returned in either case as the effect size.
 }
 \seealso{
-\code{\link[=buildDesignMatrices]{buildDesignMatrices()}}, \code{\link[=modelPermutations]{modelPermutations()}}, \code{fit_and_randomize()}
+\code{\link[=buildDesignMatrices]{buildDesignMatrices()}}, \code{\link[=modelPermutations]{modelPermutations()}}
 }
 \keyword{internal}

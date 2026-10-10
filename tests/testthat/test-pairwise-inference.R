@@ -164,16 +164,14 @@ test_that("testPairwiseEffects: results table, reproducibility, exhaustive p-val
   expect_equal(nrow(sk$results), 0); expect_equal(sk$skipped$celltype, "ct")
 })
 
-test_that("Freedman-Lane and Huh-Jhun schemes run and agree with block on a shifted design", {
+test_that("Freedman-Lane scheme runs on a shifted design with a continuous covariate", {
   sim <- simulateIndividualModel(c(A = 8, B = 8), p = 30, group.effect = 0.8 * sqrt(30), age = TRUE, age.effect = 0.2, seed = 12)
   meta <- sim$meta
   des <- cacoa:::buildDesignMatrices(meta, contrast = c("group", "B", "A"), formula = ~ group + age)
   r <- testPairwiseEffects(list(ct = sqrt(sim$D2)), des, meta, dist = "l2", n.permutations = 99, seed = 2)
   expect_equal(r$results$scheme, "freedman-lane"); expect_match(r$results$flags, "approximate")
   expect_lt(r$results$p.shift, 0.05)
-  rh <- testPairwiseEffects(list(ct = sqrt(sim$D2)), des, meta, dist = "l2", n.permutations = 99, seed = 2, permutation = "huh-jhun")
-  expect_lt(rh$results$p.shift, 0.05)
-  expect_true(is.na(rh$results$p.var))
+  expect_error(testPairwiseEffects(list(ct = sqrt(sim$D2)), des, meta, dist = "l2", n.permutations = 9, permutation = "huh-jhun"))   # scheme removed
 })
 
 test_that("calibration: block scheme is exact under the null and detects dispersion and shift", {

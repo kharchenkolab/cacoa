@@ -639,7 +639,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param dispersion.formula dispersion formula for a temporary model
     #' @param dist `"cor"` (gene-centred cosine; default from options), `"l2"` or `"l1"` (`l1` does not separate shift
     #'   from dispersion and is discouraged)
-    #' @param permutation `"auto"`, `"block"`, `"freedman-lane"` or `"huh-jhun"` (default from options)
+    #' @param permutation `"auto"`, `"block"` or `"freedman-lane"` (default from options)
     #' @param n.permutations number of permutations (default from options)
     #' @param block.vars metadata columns defining additional permutation strata (default: stored)
     #' @param cell.groups cell annotations (default: stored)
@@ -2392,6 +2392,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param contrast optional contrast for a temporary model (expert synonym of `test`)
     #' @param test optional test for a temporary model (see `Cacoa$new()`)
     #' @param perm.method permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'
+    #' @param statistic test statistic of the per-column fitter: `"t"` (studentized contrast, default) or `"coef"` (raw contrast estimate)
     #' @param zero.pseudocount pseudocount added to zero counts before the log-ratio transform (default 0.1)
     #' @param basis.type ILR basis type (default 'default')
     #' @param ref.p.thresh p-value threshold for picking the reference cell types (default 0.3)
@@ -2402,7 +2403,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateCellLoadings=function(n.permutations=1000, name='coda', n.seed=239,
                                   cells.to.remove=NULL, cells.to.remain=NULL, 
                                   filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose, method="lda",
-                                  formula=NULL, contrast=NULL, test=NULL, perm.method=c("freedman-lane", "block"), zero.pseudocount=0.1,
+                                  formula=NULL, contrast=NULL, test=NULL, perm.method=c("freedman-lane", "block"), statistic=c("t", "coef"), zero.pseudocount=0.1,
                                   basis.type = c("default"), ref.p.thresh = 0.3, ref.min.size = 1,ref.max.size = 3,
                                   block.vars = NULL, ...) {
       # Checks
@@ -2413,6 +2414,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       #if (method == "lda") checkPackageInstalled("quadprog", cran=TRUE)
 
       perm.method <- match.arg(perm.method)
+      statistic   <- match.arg(statistic)
       basis.type  <- match.arg(basis.type)
 
       # Get cell counts and groups
@@ -2446,7 +2448,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (verbose) message("Running lmCoda with design='", deparse(sample.model$formula_used), "' and ", perm.method, " permutations")
 
       #res <- runCoda(tmp$d.counts, tmp$d.groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type, method=method, n.cores=n.cores, verbose=verbose)
-      res <- lmCoda(cnts, sample.model, seed = private$opt("seed"), perm.method=perm.method, n.permutations=n.permutations,
+      res <- lmCoda(cnts, sample.model, seed = private$opt("seed"), perm.method=perm.method, statistic=statistic, n.permutations=n.permutations,
                     zero.pseudocount=zero.pseudocount, basis.type = basis.type, ref.p.thresh = ref.p.thresh,
                     ref.min.size = ref.min.size, ref.max.size = ref.max.size, ...)
       res$cnts <- cnts
@@ -2828,16 +2830,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param test optional test for a temporary model (see `Cacoa$new()`)
     #' @param block.vars metadata columns defining permutation strata (default: stored)
     #' @param perm.method permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'
+    #' @param statistic test statistic of the fitter: `"t"` (studentized contrast, default) or `"coef"` (raw contrast estimate)
     #' @param robust.method robust fitting: 'none', 'huber' or 'winsor'
     #' @param na.mode handling of missing responses: 'drop' or 'impute_weak'
     #' @param alternative alternative hypothesis for the z-scores: 'two-sided', 'greater' or 'less'
     #' @param return.residuals also return residuals
     #' @param return.sampled.stats also return the permutation statistics
     estimateDiffCellDensity=function(type='permutation', adjust=NULL, name='cell.density', sample.metadata=self$sample.meta, 
-                                     formula=NULL, contrast=NULL, test=NULL, block.vars=NULL, perm.method="freedman-lane",
+                                     formula=NULL, contrast=NULL, test=NULL, block.vars=NULL, perm.method="freedman-lane", statistic=c("t", "coef"),
                                      robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=TRUE,
                                      n.permutations=999, smooth=TRUE, verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
+      statistic <- match.arg(statistic)
       if (is.null(adjust)) adjust <- (type != 'subtract') # NULL can be forwarded here
       density.mat <- dens.res$density.mat
       if (dens.res$method == 'kde'){
@@ -2859,18 +2863,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else dens.res$model %||% private$resolveModel(verbose = verbose, what = "estimateDiffCellDensity()")
 
       perm.res <- density.mat %>%
-          diffCellDensityPermutations(sample.model=sample.model, seed = private$opt("seed"), perm.method=perm.method, robust.method = robust.method,
+          diffCellDensityPermutations(sample.model=sample.model, seed = private$opt("seed"), perm.method=perm.method, statistic=statistic, robust.method = robust.method,
                                       na.mode = na.mode, alternative = alternative, n.permutations=n.permutations,
                                       return.residuals=return.residuals, return.sampled.stats=return.sampled.stats,
                                       n.cores=n.cores, verbose=verbose)
 
       if(!adjust){
         score <- perm.res %>% .$z.score
-        res <- list(raw=score, model=sample.model, perm.method=perm.method, robust = robust.method)
+        res <- list(raw=score, model=sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se)
       } else {
         res <- list(raw=perm.res$z.score, adj=perm.res %$% adjustZScoresByPermutations(
                     score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores, verbose=verbose,
-                    l.max=l.max, ...), model = sample.model, perm.method=perm.method, robust = robust.method)
+                    l.max=l.max, ...), model = sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se)
       }
 
       if (return.residuals) {
@@ -3608,6 +3612,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param formula optional location formula for a temporary model (see `estimateExpressionShiftMagnitudes()`)
     #' @param contrast optional contrast for a temporary model (expert synonym of `test`)
     #' @param perm.method permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'
+    #' @param statistic test statistic of the fitter: `"t"` (studentized contrast, default) or `"coef"` (raw contrast estimate)
     #' @param robust.method robust fitting: 'none', 'huber' or 'winsor'
     #' @param na.mode handling of missing responses: 'drop' or 'impute_weak'
     #' @param alternative alternative hypothesis for the z-scores: 'two-sided', 'greater' or 'less'
@@ -3616,11 +3621,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... further arguments passed to the underlying function
     estimateClusterFreeDE=function(n.top.genes=Inf, genes=NULL, max.z=20, min.expr.frac=0.01, min.n.samp.per.cond=2,
                                    sample.per.cell=self$sample.per.cell, sample.metadata=self$sample.meta, formula=NULL, contrast=NULL,
-                                   perm.method = "freedman-lane", robust.method = "none", na.mode = "drop", alternative = "two-sided",
+                                   perm.method = "freedman-lane", statistic = c("t", "coef"), robust.method = "none", na.mode = "drop", alternative = "two-sided",
                                    min.n.obs.per.samp=2, adjust.pvalues=FALSE, keep.means=FALSE, robust=FALSE,
                                    smooth=TRUE, wins=0.01, n.permutations=200, lfc.pseudocount=1e-5, block.vars=NULL,
                                    min.edge.weight=0.6, verbose=self$verbose, n.cores=self$n.cores, 
                                    name="cluster.free.de", ...){
+      statistic <- match.arg(statistic)
       if (is.null(genes)) {
         genes <- private$getTopGenes(n.top.genes, gene.selection="expression", min.expr.frac=min.expr.frac)
       }
@@ -3642,7 +3648,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       #  verbose=verbose, n_cores=n.cores
       #)
       mats <- estimateClusterFreeDE_LM(seed = private$opt("seed"), genes, de.inp, sample.per.cell = sample.per.cell, design = sample.model, 
-                                                  perm.method = perm.method, robust.method = robust.method, 
+                                                  perm.method = perm.method, statistic = statistic, robust.method = robust.method, 
                                                   na.mode = na.mode, alternative = alternative, n.cores = n.cores,
                                                   min.n.samp.per.cond = min.n.samp.per.cond, min.n.obs.per.samp = min.n.obs.per.samp,
                                                   keep.means = keep.means, lfc.pseudocount = lfc.pseudocount, 

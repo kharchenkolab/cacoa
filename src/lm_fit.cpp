@@ -3,40 +3,27 @@
 #include "lm_common.h"
 
 /*
- * UNIFIED OPTIMIZED STATISTICS MODULE
- * ===================================
- * This module implements high-performance linear modeling and permutation-based inference
- * for high-dimensional data (e.g., gene expression, distance matrices).
- * 
- * The implementation is headed by two top-level functions: 
- *  fit_and_randomize implementing core fit and statistics
- *  fl_fwl_cpp implementing Freedman-Lane workflow
+ * PER-COLUMN LINEAR-MODEL FITTER WITH PERMUTATION INFERENCE
+ * =========================================================
+ * fit_and_randomize() fits Y[, j] ~ X (| Z) for every column j of Y, estimates a linear contrast of the X
+ * coefficients and tests it against relabelings supplied from R (perm_matrix). It is the kernel behind the
+ * composition (CoDA), cell-density and cluster-free DE tests.
  *
- * ARCHITECTURE & OPTIMIZATIONS
- * ----------------------------
- * 1. NA Pattern Grouping:
- * Columns of Y are grouped by their missingness (NA) pattern. Expensive linear algebra 
- * factorizations (e.g., (X'X)^-1) are computed only once per group, drastically 
- * reducing overhead for sparse or incomplete data.
- *
- * 2. Flattened Parallelism:
- * Instead of nesting parallel loops (which causes thread starvation when groups vary in size),
- * the workload is flattened into a single list of (Column, Group) jobs. This ensures 
- *
- * 3. Unified Randomization Engine:
- * Supports a layered randomization logic to handle complex designs:
- * - Block Constraints: Both modes support stratified permutation (shuffling within 
- * defined blocks, e.g., Batches) via 'perm_groups'.
- *
- * 4. Freedman-Lane Procedure (FWL):
- * Implements partial regression to control for nuisance covariates (Z) by projecting 
- * them out of the data before permutation testing, preserving the statistical 
- * validity of the test for the variable of interest (X).
+ *  - NA-pattern grouping: columns of Y sharing a missingness pattern share one factorization of the design.
+ *  - Nuisance covariates (Z): when Z is given, X and Y are residualized on Z per NA pattern (Frisch-Waugh-Lovell),
+ *    and the relabelings act on the residualized response (Freedman-Lane). Every sample stays in the fit.
+ *  - Missing responses: "drop" removes the rows for that column; "impute_weak" keeps them with weight na_weight
+ *    and the response filled by the observed mean (or zero). Under a relabeling the weights stay with the response
+ *    rows and the design rows are permuted instead.
+ *  - Robust fits: Huber IRLS or one-step winsorization of the residuals (both re-estimated per relabeling).
+ *  - Test statistic: "t" (contrast estimate divided by its standard error from the fit's own residual variance;
+ *    pivotal, the default) or "coef" (the raw contrast estimate). The raw estimate and its standard error are
+ *    returned in either case as the effect size.
+ *  - Flattened parallelism: (column, pattern) jobs on the sccore thread pool; results do not depend on n_cores.
  */
 
-
 /*** ===================================================================== ***/
-/*** MATH & STATS HELPERS                                                  ***/
+/*** HELPERS                                                               ***/
 /*** ===================================================================== ***/
 
 static inline bool is_ill_conditioned(const arma::mat& X, double rcond_thresh) {
@@ -45,82 +32,60 @@ static inline bool is_ill_conditioned(const arma::mat& X, double rcond_thresh) {
   return (!XtX.is_finite() || arma::rcond(arma::symmatu(XtX)) < rcond_thresh);
 }
 
-
-/*** ===================================================================== ***/
-/*** CORE LOGIC & EXPORTS                                                  ***/
-/*** ===================================================================== ***/
-
-
-// Represents a group of columns sharing the same NA pattern (Design reuse)
+// One NA pattern: the design seen by its columns and the permutation units.
 struct DesignGroup {
   bool valid_design = false;
   bool can_permute = false;
-  arma::uvec obs_indices; 
-  arma::mat X_sub, B, invXtX, Xt;       
-  arma::vec weights;
-  
-  // Permutation config for this group
-  std::vector<arma::uvec> perm_blocks;
-  arma::uword n_units_for_perm; 
-  arma::uvec perm_units_global;        // global row ids of the permutation units (for perm_matrix induction)
+  arma::uvec obs_indices;              // rows with an observed response
+  arma::mat X_sub, B, invXtX, Xt;      // design of the observed fit (rows = units; residualized on Z; sqrt(w)-scaled under impute_weak)
+  arma::mat X_full;                    // impute_weak: unscaled (residualized) design over all rows, permuted row-wise under relabeling
+  arma::mat Qz;                        // orthonormal basis of Z over the units (empty without Z)
+  arma::vec weights;                   // impute_weak: 1 for observed rows, na_weight for missing ones
+  int df = 0;                          // residual degrees of freedom: n_obs - p - rank(Z)
+  std::vector<arma::uvec> perm_blocks; // permutation cells in unit index space
+  arma::uvec perm_units_global;        // global row ids of the units (for perm_matrix induction)
 };
 
 struct Job { arma::uword col_idx; int group_idx; };
 
-// --- Iteratively Reweighted Least Squares (Huber) ---
-static arma::vec huber_irls(const arma::mat& X, const arma::vec& y, 
-                            const DesignGroup& g, const Config& cfg) {
-  arma::vec beta = g.invXtX * (g.Xt * y); 
-  if (!beta.is_finite()) return beta;
-  
-  for (int it = 0; it < cfg.huber_maxit; ++it) {
-    arma::vec r = y - X * beta;
-    double s = robust_scale_mad(r);
-    if (s <= 1e-12) break;
-    
-    double ks = cfg.huber_k * s;
-    arma::vec w = arma::abs(r);
-    w.transform([&](double val){ return (val > ks) ? (ks/val) : 1.0; });
-    if (cfg.na_mode == "impute_weak") w %= g.weights;
-    
-    arma::mat XtWX = X.t() * (X.each_col() % w);
-    arma::vec XtWy = X.t() * (y % w);
-    // Mild ridge stabilization
-    double tr = arma::trace(XtWX);
-    XtWX.diag() += 1e-10 * ((tr > 0.0) ? tr/X.n_cols : 1.0);
-    
-    arma::mat Minv;
-    if (!inv_sympd(Minv, XtWX)) Minv = arma::pinv(XtWX);
-    
-    arma::vec beta_new = Minv * XtWy;
-    if (!beta_new.is_finite()) return beta; 
-    
-    if (arma::norm(beta_new - beta)/(arma::norm(beta)+1e-12) < cfg.huber_tol) { beta=beta_new; break; }
-    beta = beta_new;
+// Standard error of the contrast: sqrt(sigma2 * c' (X'WX)^-1 c) with sigma2 = sum(w r^2) / df (w empty: unweighted).
+// `invXtX`, when given, is (X'WX)^-1 of the design passed in.
+static inline double contrast_se(const arma::mat& X, const arma::vec& y, const arma::vec& beta, const arma::vec& w,
+                                 const arma::vec& c, int df, const arma::mat* invXtX = nullptr) {
+  if (df < 1) return datum::nan;
+  arma::vec r = y - X * beta;
+  double rss = w.n_elem ? arma::dot(w, arma::square(r)) : arma::dot(r, r);
+  double cvar;
+  if (invXtX) cvar = arma::as_scalar(c.t() * (*invXtX) * c);
+  else {
+    arma::mat M = w.n_elem ? arma::mat(X.t() * (X.each_col() % w)) : arma::mat(X.t() * X);
+    arma::vec v;
+    if (!arma::solve(v, M, c, arma::solve_opts::likely_sympd + arma::solve_opts::no_approx)) v = arma::pinv(M) * c;
+    cvar = arma::dot(c, v);
   }
-  return beta;
+  double se2 = rss / df * cvar;
+  return (se2 >= 0.0 && std::isfinite(se2)) ? std::sqrt(se2) : datum::nan;
 }
 
-// --- Winsorized Fit ---
-static inline arma::vec winsor_fit(const DesignGroup& g, const arma::vec& y, double k) {
-  arma::vec beta = g.B * y;
-  arma::vec r = y - g.X_sub * beta;
-  double s = robust_scale_mad(r);
-  if (s <= 1e-12) return beta;
-  r.clamp(-k*s, k*s);
-  return g.B * (g.X_sub * beta + r);
+// Studentized contrast. A zero standard error means a perfectly fitted (e.g. constant) response: the statistic is 0
+// when the effect is at rounding level relative to the response scale `ysc`, NaN otherwise.
+static inline double studentize(double effect, double se, double ysc) {
+  if (se > 0.0 && std::isfinite(se)) return effect / se;
+  return (std::abs(effect) <= 1e-10 * std::max(1.0, ysc)) ? 0.0 : datum::nan;
 }
 
-// --- Fits on an explicitly permuted design (impute_weak under relabeling) ---
-// Under a relabeling the response rows keep their weights, so the design rows are permuted instead of the
-// response: beta_b = (X_q' W X_q)^-1 X_q' W y with X_q = X.rows(q). These helpers take the design as given.
+// --- Ordinary least squares on an explicit design ---
 static inline arma::vec ols_free(const arma::mat& X, const arma::vec& y) {
   arma::mat XtX = X.t() * X; arma::vec Xty = X.t() * y; arma::vec b;
   if (!arma::solve(b, XtX, Xty, arma::solve_opts::likely_sympd + arma::solve_opts::no_approx)) b = arma::pinv(XtX) * Xty;
   return b;
 }
-static arma::vec huber_irls_free(const arma::mat& X, const arma::vec& y, const arma::vec& wts, const Config& cfg) {
-  arma::vec beta = ols_free(X, y);
+
+// --- Huber IRLS; `base_w` (may be empty) multiplies the robust weights; the final weights are returned in w_out ---
+static arma::vec huber_irls(const arma::mat& X, const arma::vec& y, const arma::vec& base_w, const arma::vec& beta0,
+                            const Config& cfg, arma::vec& w_out) {
+  arma::vec beta = beta0;
+  w_out = base_w.n_elem ? base_w : arma::vec(y.n_elem, arma::fill::ones);
   if (!beta.is_finite()) return beta;
   for (int it = 0; it < cfg.huber_maxit; ++it) {
     arma::vec r = y - X * beta;
@@ -129,147 +94,59 @@ static arma::vec huber_irls_free(const arma::mat& X, const arma::vec& y, const a
     double ks = cfg.huber_k * s;
     arma::vec w = arma::abs(r);
     w.transform([&](double val){ return (val > ks) ? (ks/val) : 1.0; });
-    if (wts.n_elem) w %= wts;
+    if (base_w.n_elem) w %= base_w;
     arma::mat XtWX = X.t() * (X.each_col() % w);
     arma::vec XtWy = X.t() * (y % w);
     double tr = arma::trace(XtWX);
-    XtWX.diag() += 1e-10 * ((tr > 0.0) ? tr/X.n_cols : 1.0);
+    XtWX.diag() += 1e-10 * ((tr > 0.0) ? tr/X.n_cols : 1.0);    // mild ridge stabilization
     arma::mat Minv;
     if (!inv_sympd(Minv, XtWX)) Minv = arma::pinv(XtWX);
     arma::vec beta_new = Minv * XtWy;
     if (!beta_new.is_finite()) return beta;
+    w_out = w;
     if (arma::norm(beta_new - beta)/(arma::norm(beta)+1e-12) < cfg.huber_tol) { beta = beta_new; break; }
     beta = beta_new;
   }
   return beta;
 }
-static inline arma::vec winsor_fit_free(const arma::mat& X, const arma::vec& y, double k) {
-  arma::vec beta = ols_free(X, y);
-  arma::vec r = y - X * beta;
+
+// --- One-step winsorized fit: OLS on the pseudo-response X beta0 + clamp(r); the pseudo-response is returned in ystar ---
+static inline arma::vec winsor_fit(const arma::mat& X, const arma::vec& y, const arma::vec& beta0, double k,
+                                   const arma::mat* B, arma::vec& ystar) {
+  arma::vec r = y - X * beta0;
   double s = robust_scale_mad(r);
-  if (s <= 1e-12) return beta;
+  if (s <= 1e-12) { ystar = y; return beta0; }
   r.clamp(-k*s, k*s);
-  return ols_free(X, X * beta + r);
+  ystar = X * beta0 + r;
+  return B ? arma::vec((*B) * ystar) : ols_free(X, ystar);
 }
 
-// -------------------------------------------------------------------------
-// FIT_AND_RANDOMIZE
-// -------------------------------------------------------------------------
+/*** ===================================================================== ***/
+/*** FIT_AND_RANDOMIZE                                                     ***/
+/*** ===================================================================== ***/
 /*
- * fit_and_randomize
- * =================
- * Fits a linear model (Y ~ X) for each column of Y, estimates a linear contrast
- * of coefficients, and computes permutation-based statistics (P-values and Z-scores)
- * using a highly optimized, parallelized engine.
+ * @param X          design of interest (n x p); must carry the intercept unless Z does
+ * @param Y          responses (n x m), NA allowed
+ * @param contrast   contrast over the columns of X; effect = contrast' beta
+ * @param Z          optional nuisance design (n x q, complete). When given, X and Y are residualized on Z per NA
+ *                   pattern before fitting and permuting (Freedman-Lane / FWL); rank(Z) is removed from the df.
+ * @param perm_groups permutation cells (list of 1-based row index vectors) the relabelings were drawn in
+ * @param perm_matrix n x B matrix of 1-based relabelings in design convention (permuted design = X[p, ]); required
+ *                   whenever permutations are requested; induced onto the observed rows of each NA pattern
+ * @param statistic  "t" (default) or "coef"
+ * @param alternative "two-sided" / "greater" / "less" (on the chosen statistic)
+ * @param robust     "none", "huber" or "winsor"; huber_k, huber_maxit, huber_tol tune them
+ * @param na_mode    "drop" or "impute_weak"; na_weight, na_center ("mean" or anything else = zero) for the latter
+ * @param illcond_rcond, pinv_tol  conditioning guard and pseudo-inverse tolerance
+ * @param return_residuals / return_sampled_fits / return_sampled_stats  optional outputs
  *
- * ALGORITHMIC FEATURES
- * --------------------
- * 1. NA Pattern Grouping:
- * Columns of Y are automatically grouped by their missingness pattern. The expensive
- * linear algebra factorization (X'X)^-1 is computed only once per group, providing
- * massive speedups for datasets with sporadic missing values.
- *
- * 2. Flattened Parallelism:
- * Work is distributed across 'n_cores' using a dynamic load-balancing strategy
- * that flattens the nested loop (Groups -> Columns) into a single job list.
- * This prevents thread starvation when groups vary significantly in size.
- *
- * 3. Unified Randomization Engine:
- * Used for standard independent sampling designs.
- *
- * 4. Stratified Permutation (Blocking):
- * Both modes support restricted randomization via 'perm_groups'.
- *
- * PARAMETERS
- * ----------
- * @param X (arma::mat)
- * The design matrix (n_rows x n_preds). Must include an intercept column if desired.
- *
- * @param Y (arma::mat)
- * The response matrix (n_rows x n_features). Each column is fit independently.
- *
- * @param contrast (arma::vec)
- * A linear contrast vector (length = n_preds) defining the statistic of interest.
- * The observed statistic is calculated as: stat = dot(contrast, beta).
- *
- * @param perm_groups (Rcpp::Nullable<Rcpp::List>)
- * A list of integer vectors defining the blocks of exchangeable units for stratified permutation.
- * Rows are only swapped with other rows in the same block.
- * Samples are only swapped with other samples in the same block (e.g., Batch).
- * If NULL, every row is in one cell.
- *
- *
- * @param n_randomizations (int)
- * The number of permutations to perform per column.
- *
- * @param alternative (std::string)
- * The alternative hypothesis for P-value calculation:
- * - "two-sided": P = (|perm| >= |obs|). Z-score preserves the sign of (obs - median).
- * - "greater":   P = (perm >= obs).
- * - "less":      P = (perm <= obs).
- *
- * @param robust (std::string)
- * The estimation method:
- * - "none":   Ordinary Least Squares (OLS). Fastest.
- * - "winsor": OLS on residuals winsorized at 'huber_k' * MAD. Fast approximation of robust regression.
- * - "huber":  Iteratively Reweighted Least Squares (IRLS) using Huber weights. Fully robust but slower.
- *
- * @param huber_k (double)
- * The tuning constant for Huber/Winsorization (defaults to 1.345).
- *
- * @param huber_maxit (int)
- * Maximum iterations for Huber IRLS.
- *
- * @param huber_tol (double)
- * Convergence tolerance for Huber IRLS.
- *
- * @param na_mode (std::string)
- * How to handle missing values (NAs) in Y:
- * - "drop": Rows with NAs are excluded from the fit (exact OLS on subset).
- * but utilizes a mean-imputed "Clean Y" vector for generating the null distribution
- * to prevent permutations from pulling NAs into valid slots.
- * - "impute_weak": NAs are replaced by the mean (or 0) and assigned a negligible weight ('na_weight').
- *
- * @param na_weight (double)
- * The weight assigned to imputed observations in "impute_weak" mode (typically 1e-4).
- *
- * @param na_center (std::string)
- * "mean" (impute with observed mean) or "zero".
- *
- * @param illcond_rcond (double)
- * Reciprocal condition number threshold to detect singular designs. Groups failing this check are skipped.
- *
- * @param pinv_tol (double)
- * Tolerance for the pseudo-inverse (if Cholesky decomposition fails).
- *
- * @param seed (int)
- * Seed of the permutation RNG (per-column streams are derived from it); results are
- * reproducible for a given seed regardless of n_cores.
- *
- * @param n_cores (int)
- *
- * @param return_residuals (bool)
- * If TRUE, returns the (n x m) matrix of residuals from the observed fit.
- *
- * @param return_sampled_fits (bool)
- * If TRUE, returns a list of matrices containing the estimated coefficients for every permutation.
- *
- * @param return_sampled_stats (bool)
- * If TRUE, returns the (n_perm x m) matrix of permutation statistics.
- *
- * OUTPUT (Rcpp::List)
- * -------------------
- * coef : (p x m) matrix of observed coefficients.
- * stat : (m) vector of observed contrast statistics.
- * z_score : (m) vector of Z-scores derived from the permutation P-values.
- * (Quantile function of 1 - P/2 for two-sided).
- * p_value : (m) vector of permutation P-values (calculated with add-one smoothing).
- * residuals : (Optional) (n x m) matrix of residuals. NaN where input was NA (in drop mode).
- * sampled_stats : (Optional) (n_perm x m) matrix of null statistics.
- * sampled_fits : (Optional) List of (n_perm x p) matrices containing null coefficients.
+ * Returns a list: coef (p x m), effect (m; contrast' beta), se (m), df (m), stat (m; the chosen statistic),
+ * p_value (m; add-one smoothing), residuals (n x m, NaN where missing), sampled_stats (B x m),
+ * sampled_effects (B x m; only when statistic = "t"), sampled_fits (list of B x p).
  */
 // [[Rcpp::export]]
 Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma::vec& contrast,
+                             Rcpp::Nullable<Rcpp::NumericMatrix> Z = R_NilValue,
                              Rcpp::Nullable<Rcpp::List> perm_groups = R_NilValue,
                              int n_randomizations = 100,
                              std::string alternative = "two-sided",
@@ -277,59 +154,71 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
                              std::string robust = "none", double huber_k = 1.345, int huber_maxit = 8, double huber_tol = 1e-6,
                              std::string na_mode = "drop", double na_weight = 1e-4, std::string na_center = "mean",
                              double illcond_rcond = 1e-12, double pinv_tol = 0.0, int n_cores = 1,
-                             Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix = R_NilValue) {
-  
-  Config cfg; 
+                             Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix = R_NilValue,
+                             std::string statistic = "t") {
+
+  Config cfg;
   cfg.robust = robust; cfg.na_mode = na_mode; cfg.huber_k = huber_k; cfg.huber_maxit = huber_maxit; cfg.huber_tol = huber_tol;
   cfg.na_weight = na_weight; cfg.center_mean = (na_center == "mean"); cfg.pinv_tol = pinv_tol; cfg.illcond_rcond = illcond_rcond;
   cfg.n_randomizations = n_randomizations; cfg.ret_res = return_residuals; cfg.ret_fits = return_sampled_fits; cfg.ret_stats = return_sampled_stats;
   cfg.alt_code = (alternative=="two-sided")?0 : (alternative=="greater")?1 : 2;
+  if (statistic != "t" && statistic != "coef") Rcpp::stop("statistic must be \"t\" or \"coef\"");
+  const bool use_t = (statistic == "t");
+  if (robust != "none" && robust != "huber" && robust != "winsor") Rcpp::stop("robust must be \"none\", \"huber\" or \"winsor\"");
+  if (na_mode != "drop" && na_mode != "impute_weak") Rcpp::stop("na_mode must be \"drop\" or \"impute_weak\"");
 
-  arma::uword n = X.n_rows, p = X.n_cols, m = Y.n_cols;
+  const arma::uword n = X.n_rows, p = X.n_cols, m = Y.n_cols;
   if (Y.n_rows != n) stop("X and Y dimension mismatch");
+  if (contrast.n_elem != p) stop("contrast must have one entry per column of X");
 
-  // 1. Permutation cells (stratum x permuted-set groups of rows, 1-based) in which the R-drawn permutations are induced
-  const arma::uword n_units = n;
+  // nuisance design
+  arma::mat Zm;
+  if (Z.isNotNull()) {
+    Rcpp::NumericMatrix zz(Z);
+    if (zz.ncol() > 0) {
+      Zm = Rcpp::as<arma::mat>(zz);
+      if (Zm.n_rows != n) stop("Z must have one row per row of X");
+      if (!Zm.is_finite()) stop("Z must be complete");
+    }
+  }
+  const bool has_Z = Zm.n_cols > 0;
 
-  // Parse Constraints (Blocks)
+  // 1. Permutation cells (1-based row index vectors) in which the R-drawn permutations were drawn
   std::vector<arma::uvec> blocks;
   if (perm_groups.isNotNull()) {
     Rcpp::List pg(perm_groups);
     for (int i=0; i<pg.size(); ++i) {
       IntegerVector g = pg[i]; arma::uvec ug = as<arma::uvec>(g);
-      if(ug.max() > 0) ug -= 1; blocks.push_back(std::move(ug));
+      if (ug.n_elem && ug.max() > 0) ug -= 1; blocks.push_back(std::move(ug));
     }
   } else {
-    blocks.push_back(arma::regspace<arma::uvec>(0, n_units - 1));   // one cell: every row exchangeable
+    blocks.push_back(arma::regspace<arma::uvec>(0, n - 1));   // one cell: every row exchangeable
   }
 
-  // Permutations supplied from R (drawPermutations): n_units x B, 1-based, design convention (permuted design = X[p, ]).
-  // Every column of Y then sees the same relabeling b, induced onto its observed rows within the blocks.
+  // Permutations supplied from R: n x B, 1-based, design convention. Every column of Y sees the same relabeling b.
   const bool has_P = perm_matrix.isNotNull();
   arma::umat Pm;
   if (has_P) {
     Rcpp::IntegerMatrix pm(perm_matrix);
-    if ((arma::uword)pm.nrow() != n_units) Rcpp::stop("perm_matrix must have %d rows (one per unit), got %d", (int)n_units, pm.nrow());
+    if ((arma::uword)pm.nrow() != n) Rcpp::stop("perm_matrix must have %d rows (one per unit), got %d", (int)n, pm.nrow());
     Pm.set_size(pm.nrow(), pm.ncol());
     for (int b = 0; b < pm.ncol(); ++b) for (int i = 0; i < pm.nrow(); ++i) {
       int v = pm(i, b) - 1;
-      if (v < 0 || v >= (int)n_units) Rcpp::stop("perm_matrix has an index outside 1..%d", (int)n_units);
+      if (v < 0 || v >= (int)n) Rcpp::stop("perm_matrix has an index outside 1..%d", (int)n);
       Pm(i, b) = (arma::uword)v;
     }
     n_randomizations = (int)Pm.n_cols; cfg.n_randomizations = n_randomizations;
   } else if (n_randomizations > 0) Rcpp::stop("perm_matrix is required for permutations (draw it with drawPermutations())");
 
-  // 2. Group Columns by NA Pattern (Optimization)
+  // 2. Group columns by NA pattern
   std::unordered_map<std::uint64_t, std::vector<arma::uword>> map_mask;
   for (arma::uword j=0; j<m; ++j) map_mask[hash_vec_mask(Y.col(j))].push_back(j);
-  
-  std::vector<DesignGroup> designs; designs.reserve(map_mask.size());
+
+  std::vector<DesignGroup> designs;
   std::vector<Job> jobs; jobs.reserve(m);
   int grp_cnt = 0;
-  
   struct RawGroup { std::vector<arma::uword> cols; arma::uvec obs; };
   std::vector<RawGroup> raw_groups;
-
   for (auto& kv : map_mask) {
     arma::uword first = kv.second[0];
     raw_groups.push_back({kv.second, arma::find_finite(Y.col(first))});
@@ -338,446 +227,178 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
   }
   designs.resize(grp_cnt);
 
-  // 3. Pre-calculate Designs (Parallel)
+  const bool is_drop = (cfg.na_mode == "drop");
+  const bool is_huber = (cfg.robust == "huber"), is_winsor = (cfg.robust == "winsor");
+
+  // 3. Per-pattern designs (parallel)
   cacoa::parallelFor(0, grp_cnt, [&](int i) {
     DesignGroup& g = designs[i]; const RawGroup& raw = raw_groups[i];
     g.obs_indices = raw.obs;
-    bool is_drop = (cfg.na_mode == "drop");
-    
-    // Matrix factorization
-    if (is_drop) {
-      if (raw.obs.n_elem >= p + 1) {
-        g.X_sub = X.rows(raw.obs);
-        g.can_permute = (raw.obs.n_elem >= 2);
-      }
-    } else { 
-      g.weights.set_size(n); g.weights.fill(cfg.na_weight); g.weights.elem(raw.obs).fill(1.0);
-      g.X_sub = X.each_col() % arma::sqrt(g.weights);
-      g.can_permute = (raw.obs.n_elem >= 2);
-    }
+    arma::uword qz = 0;
+    if (raw.obs.n_elem < p + 1) return;
 
-    if (g.X_sub.n_rows > 0 && !is_ill_conditioned(g.X_sub, cfg.illcond_rcond) && 
+    if (is_drop) {
+      g.X_sub = X.rows(raw.obs);
+      if (has_Z) {
+        if (!qr_basis(Zm.rows(raw.obs), g.Qz)) return;
+        qz = g.Qz.n_cols;
+        if (raw.obs.n_elem < p + qz + 1) return;
+        g.X_sub = project_out_Q(g.Qz, g.X_sub);
+      }
+      g.perm_blocks = subset_blocks(blocks, g.obs_indices, n);
+      if (g.perm_blocks.empty() && g.obs_indices.n_elem > 0) g.perm_blocks.push_back(arma::regspace<arma::uvec>(0, g.obs_indices.n_elem - 1));
+      g.perm_units_global = g.obs_indices;
+    } else {
+      g.weights.set_size(n); g.weights.fill(cfg.na_weight); g.weights.elem(raw.obs).fill(1.0);
+      g.X_full = X;
+      if (has_Z) {
+        if (!qr_basis(Zm, g.Qz)) return;
+        qz = g.Qz.n_cols;
+        if (raw.obs.n_elem < p + qz + 1) return;
+        g.X_full = project_out_Q(g.Qz, X);
+      }
+      g.X_sub = g.X_full.each_col() % arma::sqrt(g.weights);
+      g.perm_blocks = blocks; g.perm_units_global = arma::regspace<arma::uvec>(0, n - 1);
+    }
+    g.can_permute = (raw.obs.n_elem >= 2);
+    g.df = (int)raw.obs.n_elem - (int)p - (int)qz;
+
+    if (g.X_sub.n_rows > 0 && !is_ill_conditioned(g.X_sub, cfg.illcond_rcond) &&
         inv_xtx_safe(g.X_sub, g.invXtX, g.Xt, cfg.pinv_tol)) {
       g.B = g.invXtX * g.Xt; g.valid_design = true;
     }
-
-    // Permutation cells for this NA pattern: drop -> the cells restricted to the observed rows (subset indices);
-    // impute -> all rows. The R-drawn permutation is induced onto these units within the cells.
-    if (is_drop) {
-        g.perm_blocks = subset_blocks(blocks, g.obs_indices, n);
-        if (g.perm_blocks.empty() && g.obs_indices.n_elem > 0) g.perm_blocks.push_back(arma::regspace<arma::uvec>(0, g.obs_indices.n_elem - 1));
-        g.n_units_for_perm = g.obs_indices.n_elem; g.perm_units_global = g.obs_indices;
-    } else {
-        g.perm_blocks = blocks; g.n_units_for_perm = n; g.perm_units_global = arma::regspace<arma::uvec>(0, n - 1);
-    }
   }, n_cores, false);
 
-  // 4. Execution (Flattened Parallelism)
+  // 4. Fits and permutations (flattened parallelism over columns)
   arma::mat Coef(p, m); Coef.fill(datum::nan);
-  arma::vec Stat(m); Stat.fill(datum::nan);
-  arma::vec Pval(m); Pval.fill(datum::nan);
+  arma::vec Effect(m), Se(m), Stat(m), Pval(m); Effect.fill(datum::nan); Se.fill(datum::nan); Stat.fill(datum::nan); Pval.fill(datum::nan);
+  arma::ivec Df(m); Df.fill(0);
   arma::mat Resid; if (cfg.ret_res) { Resid.set_size(n, m); Resid.fill(datum::nan); }
-  
   std::vector<arma::mat> SampledFits(m);
-  arma::mat SampledStats; 
-  if (cfg.ret_stats && n_randomizations > 0) { SampledStats.set_size(n_randomizations, m); SampledStats.fill(datum::nan); }
-
-  bool is_huber = (cfg.robust == "huber"), is_winsor = (cfg.robust == "winsor");
+  arma::mat SampledStats, SampledEffects;
+  if (cfg.ret_stats && n_randomizations > 0) {
+    SampledStats.set_size(n_randomizations, m); SampledStats.fill(datum::nan);
+    if (use_t) { SampledEffects.set_size(n_randomizations, m); SampledEffects.fill(datum::nan); }
+  }
+  const arma::vec no_w;
 
   cacoa::parallelFor(0, (int)jobs.size(), [&](int k) {
     const Job& job = jobs[k]; const DesignGroup& grp = designs[job.group_idx];
-    arma::uword j = job.col_idx;
+    const arma::uword j = job.col_idx;
     if (!grp.valid_design) return;
+    Df[j] = grp.df;
 
-    // Prepare Vectors
+    // response for this column: observed rows (drop) or all rows with the missing ones filled (impute_weak);
+    // residualized on Z when Z is given
     arma::vec y_raw = Y.col(j);
-    arma::vec y_work; 
-    
-    // y_clean: Dense vector for permutation (NAs filled) to prevent NaN pull-in
-    arma::vec y_clean = y_raw; 
-    double mu = 0.0;
-    if (grp.obs_indices.n_elem > 0) mu = arma::mean(y_raw.elem(grp.obs_indices));
-    y_clean.elem(find_nonfinite(y_clean)).fill(mu); 
-
-    // y_work: Vector for OBSERVED fit
-    if (cfg.na_mode == "drop") y_work = y_raw.elem(grp.obs_indices);
-    else {
-        y_work = y_clean;
-        if (!is_huber) y_work %= arma::sqrt(grp.weights); 
+    const arma::uvec miss = arma::find_nonfinite(y_raw);
+    auto fill_value = [&](const arma::vec& v) { return (cfg.center_mean && grp.obs_indices.n_elem) ? arma::mean(v.elem(grp.obs_indices)) : 0.0; };
+    arma::vec y_work, y_clean;
+    if (is_drop) {
+      y_work = y_raw.elem(grp.obs_indices);
+      if (has_Z) y_work = project_out_Q(grp.Qz, y_work);
+    } else {
+      y_clean = y_raw; y_clean.elem(miss).fill(fill_value(y_raw));
+      if (has_Z) {                                   // project the filled vector, then re-fill the missing rows from the residualized observed ones
+        y_clean = project_out_Q(grp.Qz, y_clean);
+        arma::vec tmp = y_clean; tmp.elem(miss).fill(datum::nan);
+        y_clean.elem(miss).fill(fill_value(tmp));
+      }
+      y_work = y_clean;
+      if (!is_huber) y_work %= arma::sqrt(grp.weights);
     }
+    const bool huber_imp = is_huber && !is_drop;
+    const arma::mat& Xobs = huber_imp ? grp.X_full : grp.X_sub;     // design matching y_work
+    const arma::vec& wobs = huber_imp ? grp.weights : no_w;         // explicit weights only for huber under impute_weak
 
-    // Observed Fit
-    arma::vec beta;
-    if (is_huber) beta = (cfg.na_mode=="drop") ? huber_irls(grp.X_sub, y_work, grp, cfg) : huber_irls(X, y_work, grp, cfg);
-    else if (is_winsor) beta = winsor_fit(grp, y_work, cfg.huber_k);
+    // observed fit
+    arma::vec beta, w_fin, ystar;
+    if (is_huber) {
+      arma::vec b0 = huber_imp ? arma::vec(grp.B * arma::vec(y_work % arma::sqrt(grp.weights))) : arma::vec(grp.B * y_work);
+      beta = huber_irls(Xobs, y_work, wobs, b0, cfg, w_fin);
+    } else if (is_winsor) beta = winsor_fit(Xobs, y_work, arma::vec(grp.B * y_work), cfg.huber_k, &grp.B, ystar);
     else beta = grp.B * y_work;
-
     if (!beta.is_finite()) return;
-    double stat_obs = arma::dot(beta, contrast);
-    Coef.col(j) = beta; Stat[j] = stat_obs;
+    const double effect = arma::dot(beta, contrast);
+    const double se = is_huber ? contrast_se(Xobs, y_work, beta, w_fin, contrast, grp.df)
+                               : contrast_se(Xobs, is_winsor ? ystar : y_work, beta, no_w, contrast, grp.df, &grp.invXtX);
+    const double ysc = y_work.n_elem ? arma::abs(y_work).max() : 0.0;
+    const double stat_obs = use_t ? studentize(effect, se, ysc) : effect;
+    Coef.col(j) = beta; Effect[j] = effect; Se[j] = se; Stat[j] = stat_obs;
 
     if (cfg.ret_res) {
       arma::vec r_out(n); r_out.fill(datum::nan);
-      if (cfg.na_mode == "drop") r_out.elem(grp.obs_indices) = y_work - grp.X_sub * beta;
-      else {
-          r_out = y_clean - X * beta;
-          r_out.elem(find_nonfinite(y_raw)).fill(datum::nan); 
-      }
+      if (is_drop) r_out.elem(grp.obs_indices) = y_work - grp.X_sub * beta;
+      else { r_out = y_clean - grp.X_full * beta; r_out.elem(miss).fill(datum::nan); }
       Resid.col(j) = r_out;
     }
 
-    if (cfg.n_randomizations == 0 || !grp.can_permute) return;
+    if (cfg.n_randomizations == 0 || !grp.can_permute || !std::isfinite(stat_obs)) return;
 
-    // Permutation Loop
-    arma::vec stats_perm(cfg.n_randomizations);
+    // permutation loop
+    arma::vec stats_perm(cfg.n_randomizations), effects_perm(cfg.n_randomizations);
     arma::mat fits_perm; if (cfg.ret_fits) fits_perm.set_size(cfg.n_randomizations, p);
-    
-    // Fast path alpha for OLS
-    arma::vec alpha; if (!is_huber && !is_winsor && !cfg.ret_fits) alpha = grp.B.t() * contrast;
+    arma::vec alpha; if (!is_huber && !is_winsor && !cfg.ret_fits && !use_t) alpha = grp.B.t() * contrast;   // raw-coefficient fast path
+    const arma::vec sw = is_drop ? arma::vec() : arma::vec(arma::sqrt(grp.weights));
 
     int ge=0, le=0, ge_abs=0;
     for (int r=0; r<cfg.n_randomizations; ++r) {
-        // relabeling b induced onto this pattern's units (design convention), applied to the response as its inverse
-        arma::uvec perm_idx = inverse_perm(induced_perm(Pm.col(r), grp.perm_units_global, grp.perm_blocks));
-        arma::vec y_perm;
-        if (cfg.na_mode == "drop") {
-            y_perm = y_work.elem(perm_idx);
-        } else {
-            y_perm = y_work.elem(perm_idx);
-        }
-
-        // Fit
-        double s_perm = 0.0; arma::vec b_perm;
-        if (cfg.na_mode != "drop") {
-             // impute_weak: the near-zero weights stay with the response rows; permute the design rows instead
-             arma::uvec q = induced_perm(Pm.col(r), grp.perm_units_global, grp.perm_blocks);
-             arma::mat Xq = X.rows(q);
-             if (is_huber) b_perm = huber_irls_free(Xq, y_clean, grp.weights, cfg);
-             else {
-               arma::vec sw = arma::sqrt(grp.weights);
-               arma::mat Xqw = Xq.each_col() % sw; arma::vec yw = y_clean % sw;
-               b_perm = is_winsor ? winsor_fit_free(Xqw, yw, cfg.huber_k) : ols_free(Xqw, yw);
-             }
-             s_perm = arma::dot(b_perm, contrast);
-        } else if (is_huber) {
-             b_perm = (cfg.na_mode=="drop") ? huber_irls(grp.X_sub, y_perm, grp, cfg) : huber_irls(X, y_perm, grp, cfg);
-             s_perm = arma::dot(b_perm, contrast);
+      arma::uvec q = induced_perm(Pm.col(r), grp.perm_units_global, grp.perm_blocks);   // design convention over this pattern's units
+      double eff_p = 0.0, s_p = 0.0; arma::vec b_p;
+      if (is_drop) {
+        arma::vec y_perm = y_work.elem(inverse_perm(q));                                  // response aligned with X_sub[q, ]
+        if (is_huber) {
+          arma::vec wf; b_p = huber_irls(grp.X_sub, y_perm, no_w, arma::vec(grp.B * y_perm), cfg, wf);
+          eff_p = arma::dot(b_p, contrast);
+          s_p = use_t ? studentize(eff_p, contrast_se(grp.X_sub, y_perm, b_p, wf, contrast, grp.df), ysc) : eff_p;
         } else if (is_winsor) {
-             b_perm = winsor_fit(grp, y_perm, cfg.huber_k);
-             s_perm = arma::dot(b_perm, contrast);
+          arma::vec ys; b_p = winsor_fit(grp.X_sub, y_perm, arma::vec(grp.B * y_perm), cfg.huber_k, &grp.B, ys);
+          eff_p = arma::dot(b_p, contrast);
+          s_p = use_t ? studentize(eff_p, contrast_se(grp.X_sub, ys, b_p, no_w, contrast, grp.df, &grp.invXtX), ysc) : eff_p;
+        } else if (alpha.n_elem) {
+          eff_p = s_p = arma::dot(alpha, y_perm);
         } else {
-             if (cfg.ret_fits) { b_perm = grp.B * y_perm; s_perm = arma::dot(b_perm, contrast); }
-             else s_perm = arma::dot(alpha, y_perm);
+          b_p = grp.B * y_perm; eff_p = arma::dot(b_p, contrast);
+          s_p = use_t ? studentize(eff_p, contrast_se(grp.X_sub, y_perm, b_p, no_w, contrast, grp.df, &grp.invXtX), ysc) : eff_p;
         }
-
-        // Stats
-        stats_perm[r] = s_perm;
-        if (std::abs(s_perm) >= std::abs(stat_obs)) ge_abs++;
-        if (s_perm >= stat_obs) ge++;
-        if (s_perm <= stat_obs) le++;
-        if (cfg.ret_fits) fits_perm.row(r) = b_perm.t();
+      } else {
+        // impute_weak: the weights stay with the response rows; the (residualized) design rows are permuted instead
+        arma::mat Xq = grp.X_full.rows(q);
+        arma::mat Xqw = Xq.each_col() % sw; arma::vec yw = y_clean % sw;
+        if (is_huber) {
+          arma::vec wf; b_p = huber_irls(Xq, y_clean, grp.weights, ols_free(Xqw, yw), cfg, wf);
+          eff_p = arma::dot(b_p, contrast);
+          s_p = use_t ? studentize(eff_p, contrast_se(Xq, y_clean, b_p, wf, contrast, grp.df), ysc) : eff_p;
+        } else if (is_winsor) {
+          arma::vec ys; b_p = winsor_fit(Xqw, yw, ols_free(Xqw, yw), cfg.huber_k, nullptr, ys);
+          eff_p = arma::dot(b_p, contrast);
+          s_p = use_t ? studentize(eff_p, contrast_se(Xqw, ys, b_p, no_w, contrast, grp.df), ysc) : eff_p;
+        } else {
+          b_p = ols_free(Xqw, yw); eff_p = arma::dot(b_p, contrast);
+          s_p = use_t ? studentize(eff_p, contrast_se(Xqw, yw, b_p, no_w, contrast, grp.df), ysc) : eff_p;
+        }
+      }
+      stats_perm[r] = s_p; effects_perm[r] = eff_p;
+      if (std::isfinite(s_p)) {
+        if (std::abs(s_p) >= std::abs(stat_obs)) ge_abs++;
+        if (s_p >= stat_obs) ge++;
+        if (s_p <= stat_obs) le++;
+      }
+      if (cfg.ret_fits) fits_perm.row(r) = b_p.t();
     }
 
     double pval = (cfg.alt_code==0)?(ge_abs+1.0):(cfg.alt_code==1)?(ge+1.0):(le+1.0);
-    pval /= (cfg.n_randomizations + 1.0);
-    
-    arma::uvec valid_p = find_finite(stats_perm);
-    double med = (valid_p.n_elem > 0) ? arma::median(stats_perm.elem(valid_p)) : 0.0;
-    
-    Pval[j] = pval;
-    if (cfg.ret_stats) SampledStats.col(j) = stats_perm;
+    Pval[j] = pval / (cfg.n_randomizations + 1.0);
+    if (cfg.ret_stats) { SampledStats.col(j) = stats_perm; if (use_t) SampledEffects.col(j) = effects_perm; }
     if (cfg.ret_fits) SampledFits[j] = fits_perm;
   }, n_cores, false);
 
-  Rcpp::List out = Rcpp::List::create(_["coef"]=Coef, _["stat"]=Stat, _["p_value"]=Pval);
+  if (cfg.ret_fits) for (uword j = 0; j < m; ++j) if (SampledFits[j].n_elem == 0) { SampledFits[j].set_size(std::max(n_randomizations, 0), p); SampledFits[j].fill(datum::nan); }   // failed / unpermuted columns
+
+  Rcpp::List out = Rcpp::List::create(_["coef"]=Coef, _["effect"]=Effect, _["se"]=Se, _["df"]=Df, _["stat"]=Stat, _["p_value"]=Pval);
   if (cfg.ret_res) out["residuals"] = Resid;
-  if (cfg.ret_stats && n_randomizations > 0) out["sampled_stats"] = SampledStats;
+  if (cfg.ret_stats && n_randomizations > 0) { out["sampled_stats"] = SampledStats; if (use_t) out["sampled_effects"] = SampledEffects; }
   if (cfg.ret_fits) {
-    Rcpp::List L(m); for(uword j=0; j<m; ++j) L[j]=Rcpp::wrap(SampledFits[j]);
-    out["sampled_fits"] = L;
-  }
-  return out;
-}
-
-// -------------------------------------------------------------------------
-// FL_FWL_CPP
-// -------------------------------------------------------------------------
-/*
- * Performs the Freedman-Lane procedure for partial regression (Y ~ X | Z).
- * This function controls for nuisance covariates (Z) by projecting them out of 
- * both the design matrix (X) and the response (Y) before performing inference 
- * on the variable of interest.
- *
- * ALGORITHM
- * ---------
- * 1. NA Pattern Grouping:
- * Columns of Y are grouped by missingness pattern to minimize redundant 
- * QR decompositions of Z.
- *
- * 2. Nuisance Projection (Residualization):
- * For each group, the nuisance matrix Z (subsetted to valid rows) is decomposed 
- * (QR). Both X and Y are projected onto the orthogonal complement of Z:
- * X_resid = (I - P_z) * X
- * Y_resid = (I - P_z) * Y
- *
- * 3. Core Subset Selection:
- * If 'core_rows' is provided, the residualized matrices are subsetted to these 
- * specific rows (e.g., for split-sample validation schemes).
- *
- * 4. Inference:
- * The residualized (and potentially subsetted) matrices are passed to 
- * 'fit_and_randomize' for parameter estimation and permutation testing.
- *
- * PARAMETERS
- * ----------
- * @param X (arma::mat)
- * The primary design matrix (n_rows x n_preds) containing variables of interest.
- *
- * @param Z (arma::mat)
- * The nuisance design matrix (n_rows x n_nuis) to be projected out.
- *
- * @param Y (arma::mat)
- * The response matrix (n_rows x n_features).
- *
- * @param contrast (arma::vec)
- * Linear contrast vector for X.
- *
- * @param core_rows (SEXP: IntegerVector, LogicalVector, or NULL)
- * Optional subset of rows to use for the final test statistic. 
- * - If NULL: All rows are used.
- * - If provided: The residualization (Step 2) uses ALL valid data to learn Z effects,
- * but the final fit (Step 4) uses only the specified 'core_rows'.
- *
- * @param perm_groups (Rcpp::Nullable<Rcpp::List>)
- * Passed to fit_and_randomize: permutation cells in core-row index space.
- *
- *
- * @param na_mode (std::string)
- * Controls how NAs are handled during the Z projection step:
- * - "drop": Z is projected out using only rows where Y is observed.
- * - "impute_weak": Z is projected out using all rows (requires Z to be complete).
- *
- * @param [Pass-through Parameters]
- * n_randomizations, alternative, robust, huber_k, huber_maxit, huber_tol,
- * na_weight, na_center, illcond_rcond, pinv_tol, n_cores, 
- * return_residuals, return_sampled_fits, return_sampled_stats.
- * (See 'fit_and_randomize' documentation for details).
- *
- * OUTPUT (Rcpp::List)
- * -------------------
- * coef : (p x m) Estimated coefficients for X (after controlling for Z).
- * stat : (m) Contrast statistics.
- * z_score : (m) Permutation Z-scores.
- * p_value : (m) Permutation P-values.
- * partial_core : (n_core x m) The Y residuals (Y - Y_hat_Z) restricted to core_rows.
- * residuals : (Optional) (n_core x m) The full model residuals (Y - Y_hat_X - Y_hat_Z).
- * sampled_stats : (Optional) Null distribution statistics.
- * sampled_fits : (Optional) Null distribution coefficients.
- */
-// [[Rcpp::export]]
-Rcpp::List fl_fwl_cpp(const arma::mat& X, const arma::mat& Z, const arma::mat& Y, const arma::vec& contrast,
-                      SEXP core_rows = R_NilValue, 
-                      Rcpp::Nullable<Rcpp::List> core_perm_groups = R_NilValue,
-                      int n_randomizations = 100,
-                      std::string alternative = "two-sided", std::string robust = "none",
-                      double huber_k = 1.345, int huber_maxit = 8, double huber_tol = 1e-6,
-                      std::string na_mode = "drop", double na_weight = 1e-4, std::string na_center = "mean",
-                      double illcond_rcond = 1e-12, double pinv_tol = 0.0, int n_cores = 1,
-                      bool return_residuals = true, bool return_sampled_fits = false, bool return_sampled_stats = false,
-                      Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix = R_NilValue) {
-  
-  arma::uword n = X.n_rows, m = Y.n_cols;
-  arma::uvec idx_core = parse_core_rows(core_rows, n);
-
-  // Permutations from R over all n rows: induce onto the core rows within the core blocks and hand the result to the inner fit.
-  Rcpp::Nullable<Rcpp::IntegerMatrix> inner_P = R_NilValue;
-  if (perm_matrix.isNotNull()) {
-    Rcpp::IntegerMatrix pm(perm_matrix);
-    if ((arma::uword)pm.nrow() != n) Rcpp::stop("perm_matrix must have %d rows, got %d", (int)n, pm.nrow());
-    std::vector<arma::uvec> core_blocks;
-    if (core_perm_groups.isNotNull()) {
-      Rcpp::List pg(core_perm_groups);
-      for (int i = 0; i < pg.size(); ++i) { arma::uvec ug = Rcpp::as<arma::uvec>(Rcpp::IntegerVector(pg[i])); if (ug.n_elem && ug.max() > 0) ug -= 1; core_blocks.push_back(ug); }
-    } else core_blocks.push_back(arma::regspace<arma::uvec>(0, idx_core.n_elem - 1));
-    Rcpp::IntegerMatrix pc(idx_core.n_elem, pm.ncol());
-    arma::uvec p(n);
-    for (int b = 0; b < pm.ncol(); ++b) {
-      for (arma::uword i = 0; i < n; ++i) p[i] = (arma::uword)(pm(i, b) - 1);
-      arma::uvec q = induced_perm(p, idx_core, core_blocks);
-      for (arma::uword k = 0; k < idx_core.n_elem; ++k) pc(k, b) = (int)q[k] + 1;
-    }
-    inner_P = Rcpp::Nullable<Rcpp::IntegerMatrix>(Rcpp::wrap(pc));
-    n_randomizations = pm.ncol();
-  }
-  
-  // 1. FAST PATH: No Nuisance Variables (Z is empty)
-  if (Z.n_cols == 0) {
-    arma::mat X_sub = X.rows(idx_core);
-    arma::mat Y_sub = Y.rows(idx_core);
-    Rcpp::List out = fit_and_randomize(X_sub, Y_sub, contrast, core_perm_groups,
-                                       n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats,
-                                       robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center,
-                                       illcond_rcond, pinv_tol, n_cores, inner_P);
-    out["partial_core"] = Y_sub;
-    return out;
-  }
-  
-  // 2. FREEDMAN-LANE PATH (Has Z)
-  std::unordered_map<std::uint64_t, std::vector<arma::uword>> groups;
-  for (arma::uword j=0; j<m; ++j) {
-    groups[hash_vec_mask(Y.col(j))].push_back(j);
-  }
-  
-  arma::mat Coef(X.n_cols, m); Coef.fill(datum::nan);
-  arma::vec Stat(m), Pval(m); Stat.fill(datum::nan); Pval.fill(datum::nan);
-  arma::mat Resid; if(return_residuals) { Resid.set_size(idx_core.n_elem, m); Resid.fill(datum::nan); }
-  arma::mat PartialCore; PartialCore.set_size(idx_core.n_elem, m); PartialCore.fill(datum::nan);
-  arma::mat SampledStats; if(return_sampled_stats) { SampledStats.set_size(n_randomizations, m); SampledStats.fill(datum::nan); }
-  std::vector<arma::mat> SampledFits(m); 
-  
-  std::vector<int> global_to_core(n, -1);
-  for(uword k=0; k < idx_core.n_elem; ++k) global_to_core[idx_core[k]] = k;
-  
-  for (auto & kv : groups) {
-    std::vector<arma::uword> J = kv.second;
-    arma::uvec Jv = arma::conv_to<arma::uvec>::from(J);
-    bool use_drop = (na_mode == "drop");
-    
-    // A. Identify Rows
-    // 'valid_rows' are strictly those with FINITE data.
-    // In 'impute' mode, we will use ALL rows, but we need 'valid_rows' to calculate the mean.
-    arma::vec y_rep = Y.col(J[0]);
-    arma::uvec valid_rows = arma::find_finite(y_rep);
-    
-    // We need 'obs_rows' for the projection matrix.
-    // Drop: obs_rows = valid_rows
-    // Impute: obs_rows = 0..n-1 (all)
-    arma::uvec obs_rows;
-    if (use_drop) obs_rows = valid_rows;
-    else obs_rows = arma::regspace<arma::uvec>(0, n-1);
-    
-    if (obs_rows.n_elem < X.n_cols) continue;
-    
-    // B. Calculate Residuals (With Temp Imputation for Weak Mode)
-    arma::mat Z_sub = Z.rows(obs_rows);
-    arma::mat Qz;
-    if (!qr_basis(Z_sub, Qz, pinv_tol)) continue; 
-    
-    // Handle Y for projection
-    // If impute_weak, we must fill NaNs in Y before projecting, 
-    // otherwise Q'*Y propagates NaNs everywhere.
-    arma::mat Y_for_proj;
-    if (use_drop) {
-      Y_for_proj = Y.submat(obs_rows, Jv);
-    } else {
-      // Extract full columns
-      Y_for_proj = Y.cols(Jv); 
-      // Impute NaNs with Mean of Valid Data (or 0)
-      // Since all cols in J share the same mask, we iterate cols
-      for(uword c=0; c < Y_for_proj.n_cols; ++c) {
-        arma::vec col = Y_for_proj.col(c);
-        double mu = 0.0;
-        if (valid_rows.n_elem > 0) {
-          // valid_rows indices are global. We need valid indices relative to Y_for_proj (which is full size n)
-          // Since Y_for_proj is n rows, valid_rows works directly.
-          mu = (na_center == "mean") ? arma::mean(col.elem(valid_rows)) : 0.0;
-        }
-        // Fill non-finite values
-        col.elem(find_nonfinite(col)).fill(mu);
-        Y_for_proj.col(c) = col;
-      }
-    }
-    
-    arma::mat X_resid_full = project_out_Q(Qz, X.rows(obs_rows));
-    arma::mat Y_resid_full = project_out_Q(Qz, Y_for_proj);
-    
-    // C. Construct Core Subset Matrices
-    // If 'impute_weak', we must RE-MASK the values that were originally missing to NaN.
-    // fit_and_randomize needs NaNs to trigger the weighting logic.
-    
-    arma::mat X_fin(idx_core.n_elem, X.n_cols); X_fin.fill(datum::nan);
-    arma::mat Y_fin(idx_core.n_elem, J.size()); Y_fin.fill(datum::nan);
-    
-    bool has_data = false;
-    
-    // Map from obs_rows index -> global index -> core index
-    for(uword k=0; k < obs_rows.n_elem; ++k) {
-      uword glob_idx = obs_rows[k];
-      int core_idx = global_to_core[glob_idx];
-      
-      if (core_idx != -1) {
-        // Check if this row was originally valid
-        bool was_valid = std::isfinite(y_rep[glob_idx]);
-        
-        if (use_drop) {
-          // In Drop mode, obs_rows ARE valid_rows. So always valid.
-          X_fin.row(core_idx) = X_resid_full.row(k);
-          Y_fin.row(core_idx) = Y_resid_full.row(k);
-          has_data = true;
-        } else {
-          // In Impute mode, obs_rows includes NAs.
-          X_fin.row(core_idx) = X_resid_full.row(k);
-          
-          if (was_valid) {
-            Y_fin.row(core_idx) = Y_resid_full.row(k);
-          } else {
-            // It was originally NA. We imputed it for projection.
-            // Now RE-MASK it to NaN so fit_and_randomize applies epsilon weight.
-            Y_fin.row(core_idx).fill(datum::nan);
-          }
-          has_data = true; // Even if NaN, we pass it (as missing/weighted)
-        }
-      }
-    }
-    
-    if (!has_data) continue;
-    
-    // D. Call Fitter
-    Rcpp::List res = fit_and_randomize(X_fin, Y_fin, contrast, core_perm_groups,
-                                       n_randomizations, alternative, /* return_residuals = */ true, return_sampled_fits, return_sampled_stats,
-                                       robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center,
-                                       illcond_rcond, pinv_tol, n_cores, inner_P);
-    
-    // E. Unpack
-    arma::mat B = res["coef"];
-    arma::vec S = res["stat"];
-    arma::vec Pv = res["p_value"];
-    
-    for(uword i=0; i<J.size(); ++i) {
-      uword col = J[i];
-      Coef.col(col) = B.col(i);
-      Stat(col) = S(i); Pval(col) = Pv(i);
-    }
-    
-    // Fill PartialCore and Resid
-    {
-      arma::mat Rr = res["residuals"]; 
-      for(uword c=0; c < J.size(); ++c) {
-        uword col = J[c];
-        if (return_residuals) Resid.col(col) = Rr.col(c);   // Resid is empty when residuals are not requested
-        
-        // For PartialCore: In 'impute' mode, we might want the IMPUTED residual 
-        // rather than NaN for plotting? 
-        // Standard behavior: Return what was used. If it was NaN (masked), return NaN.
-        PartialCore.col(col) = Y_fin.col(c);
-      }
-    }
-    
-    if(return_sampled_stats && n_randomizations > 0) {
-      arma::mat SS = res["sampled_stats"];
-      SampledStats.cols(Jv) = SS;
-    }
-    if(return_sampled_fits) {
-      Rcpp::List L = res["sampled_fits"];
-      for(uword i=0; i<J.size(); ++i) SampledFits[J[i]] = Rcpp::as<arma::mat>(L[i]);
-    }
-  }
-  
-  Rcpp::List out = Rcpp::List::create(_["coef"]=Coef, _["stat"]=Stat, _["p_value"]=Pval);
-  if(return_residuals) out["residuals"] = Resid;
-  out["partial_core"] = PartialCore;
-  if(return_sampled_stats && n_randomizations>0) out["sampled_stats"] = SampledStats;
-  if(return_sampled_fits) {
     Rcpp::List L(m); for(uword j=0; j<m; ++j) L[j]=Rcpp::wrap(SampledFits[j]);
     out["sampled_fits"] = L;
   }

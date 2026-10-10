@@ -156,7 +156,7 @@ termPermutationStats <- function(eff, plan, P) {
   }
   # C++ kernel (R references: termTestGower() / dispersionTermTest(), looped per relabeling)
   k <- termKernelInputs(Xf, Xr, Zf, Zr, nrow(G))
-  perm[, ] <- if (plan$scheme == "block" || plan$scheme == "huh-jhun") {
+  perm[, ] <- if (plan$scheme == "block") {
     permuted_term_stats(G, k$Hf, k$Hr, k$Zf, k$Zr, k$df, k$nu, k$qZf, k$qZr, P, need.disp)
   } else {   # freedman-lane on the reduced location model
     parts <- flGowerParts(G, Xr)
@@ -182,11 +182,10 @@ termPermutationStats <- function(eff, plan, P) {
 #' @param robust,na.mode,robust.k robust fit (`"none"`, `"huber"`, `"winsor"`), treatment of samples absent from a cell type
 #'   (`"drop"`, `"impute_weak"`) and robust tuning constant
 testTermEffects <- function(D.list, design, meta, dispersion.formula = NULL, dist = c("cor", "l2", "l1"),
-                            permutation = c("auto", "block", "freedman-lane", "huh-jhun"), n.permutations = 999,
+                            permutation = c("auto", "block", "freedman-lane"), n.permutations = 999,
                             block.vars = NULL, min.samp.per.level = 3, seed = NULL, alpha = 0.05, n.cores = 1,
                             return.perm.stats = FALSE, verbose = FALSE, robust = c("none", "huber", "winsor"), na.mode = c("drop", "impute_weak"), robust.k = 1.345) {
   dist <- match.arg(dist); permutation <- match.arg(permutation); robust <- match.arg(robust); na.mode <- match.arg(na.mode)
-  if (permutation == "huh-jhun") { permutation <- "block"; warning("huh-jhun is a contrast-only scheme; using block permutations for the term test") }
   if (is.null(names(D.list))) names(D.list) <- paste0("CT", seq_along(D.list))
   all.samples <- intersect(rownames(design$F), rownames(meta))
   if (is.null(seed)) seed <- sample.int(.Machine$integer.max, 1L)

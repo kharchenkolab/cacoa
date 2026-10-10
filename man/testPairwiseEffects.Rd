@@ -10,7 +10,7 @@ testPairwiseEffects(
   meta,
   dispersion.formula = NULL,
   dist = c("cor", "l2", "l1"),
-  permutation = c("auto", "block", "freedman-lane", "huh-jhun"),
+  permutation = c("auto", "block", "freedman-lane"),
   n.permutations = 999,
   block.vars = NULL,
   bias.correct = TRUE,
@@ -35,7 +35,7 @@ testPairwiseEffects(
 
 \item{dispersion.formula, dist, bias.correct, influence, min.samp.per.level}{passed to \code{\link[=pairwiseEffectsFromDesign]{pairwiseEffectsFromDesign()}}}
 
-\item{permutation}{\code{"auto"}, \code{"block"}, \code{"freedman-lane"} or \code{"huh-jhun"} (see \code{\link[=permutationPlan]{permutationPlan()}})}
+\item{permutation}{\code{"auto"}, \code{"block"} or \code{"freedman-lane"} (see \code{\link[=permutationPlan]{permutationPlan()}})}
 
 \item{n.permutations}{number of permutations}
 

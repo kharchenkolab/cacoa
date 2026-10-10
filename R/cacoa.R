@@ -638,9 +638,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   define shift / var / total, per-sample dispersion by group, and the level x level table for term tests
     #' @param cell.type cell type
     #' @param test test label or index (default: first test)
+    #' @param label.samples label the samples in the distance panel (default FALSE)
     #' @param name results slot (default "expression.shifts")
     #' @return cowplot grid of ggplot2 panels
-    plotShiftDetail = function(cell.type, test = NULL, name = "expression.shifts") {
+    plotShiftDetail = function(cell.type, test = NULL, name = "expression.shifts", label.samples = FALSE) {
       res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
       if (is.null(test)) test <- 1
       tn <- if (is.numeric(test)) names(res$fits)[test] else test
@@ -648,7 +649,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.null(eff) || !isTRUE(eff$ok)) stop("no fit for cell type '", cell.type, "' in test '", tn, "'")
       groups <- self$getSampleGroups(tn, model = res$model)
       plotShiftDetailPanels(eff, adjusted = res$adjusted.distances[[tn]][[cell.type]], groups = groups, dist = res$settings$dist,
-                            title = sprintf("%s: %s", cell.type, tn), palette = self$sample.groups.palette, plot.theme = self$plot.theme)
+                            title = sprintf("%s: %s", cell.type, tn), palette = self$sample.groups.palette, plot.theme = self$plot.theme,
+                            label.samples = label.samples)
     },
 
     #' @description Expression shift magnitudes per cell type
@@ -756,6 +758,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                           paste(format(res$global$p[res$global$effect %in% c("shift", "location")], digits = 2), collapse = ", ")))
         }
       }
+      class(res) <- c("cacoaExpressionShifts", "list")
       self$test.results[[name]] <- res
       invisible(res)
     },
@@ -797,12 +800,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(cell.types)) df <- df[df$celltype %in% cell.types, ]
       subtitle <- if (show.provenance) {
         prov <- vapply(unique(df$test.id), function(i) modelProvenance(res$model, i), character(1))
+        prov <- sub("([a-z-]+) permutations", sprintf("%d \\1 permutations", res$settings$n.permutations), prov)
         sc <- unique(df$scheme); fl <- unique(df$p.floor)
         rob <- c(if (!identical(res$settings$robust %||% "none", "none")) sprintf("robust: %s", res$settings$robust),
                  if (identical(res$settings$na.mode, "impute_weak")) "absent samples weakly imputed")
-        paste(c(prov, sprintf("dist = %s; %s; significance: %s < %.2g%s", res$settings$dist,
-                              if (length(sc) == 1) sprintf("%s permutations (%d)", sc, res$settings$n.permutations) else "mixed permutation schemes",
-                              significance, alpha, if (length(rob)) paste0("; ", paste(rob, collapse = "; ")) else "")), collapse = "\n")
+        paste(c(prov, sprintf("distance: %s%s; filled points: %s < %.2g%s", res$settings$dist,
+                              if (length(sc) > 1) " (mixed permutation schemes)" else "", significance, alpha,
+                              if (length(rob)) paste0("; ", paste(rob, collapse = "; ")) else "")), collapse = "\n")
       } else NULL
       plotEffectsPerCellType(df, normalized = normalized, type = type, order.by = order.by, show.ci = show.ci, significance = significance,
                              alpha = alpha, palette = self$cell.groups.palette, plot.theme = self$plot.theme, subtitle = subtitle,
@@ -1189,8 +1193,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         subsamples <- lapply(de.raw, function(df) attr(df, "subsamples"))
         miss.subsamples <- names(subsamples)[sapply(subsamples, function(x) is.null(x) || length(x) == 0L)]
         if (length(miss.subsamples) == length(subsamples)) {
-          warning("resampling results are missing for all cell types, falling back to point estimates.",
-                  "Please rerun estimateDEPerCellType() with resampling != NULL")
+          message("resampling results are missing for all cell types: showing point estimates ",
+                  "(rerun estimateDEPerCellType() with resampling != NULL for uncertainty)")
           rl <- de.raw
         } else {
           if (length(miss.subsamples) > 0) {
@@ -1223,6 +1227,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # convert to dataframe for plotting
       p.col <- if (p.adjust) "padj" else "pvalue"
       df <- lapply(rl, function(d) {
+        if (is.list(d) && !is.data.frame(d) && !is.null(d$res)) d <- d$res
         if (is.null(d) || !(p.col %in% colnames(d))) return(data.frame(value = NA_real_))
         data.frame(value = sum(d[[p.col]] <= pvalue.cutoff, na.rm = TRUE))
       }) %>% dplyr::bind_rows(.id = "Type")
@@ -3401,7 +3406,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(adjust.for) && values != "unadjusted") { values <- "unadjusted" }   # adjust.for replaces the model-adjusted view
       if (identical(color.by, "test") && !is.null(self$model)) {   # the active test's groups / values
         sg <- self$getSampleGroups()
-        if (!is.null(sg)) { sample.meta <- (sample.meta %||% self$sample.meta); sample.meta$test <- as.vector(sg[rownames(sample.meta)]); color.title <- color.title %||% self$model$tests[[1]]$label }
+        if (!is.null(sg)) { sample.meta <- (sample.meta %||% self$sample.meta); sample.meta$test <- as.vector(sg[rownames(sample.meta)]); color.title <- color.title %||% self$model$tests[[1]]$variable }
       }
       if (is.null(cell.type)) {
         n.cells.per.samp <- table(self$sample.per.cell)
@@ -3488,7 +3493,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           plot.theme=self$plot.theme, ...)
 
         gg <- cowplot::plot_grid(gg.pre, gg.post, ncol = both.ncol, align = both.align)
-        gg <- cowplot::plot_grid(cowplot::ggdraw() + cowplot::draw_label(space, fontface="bold", x=0, hjust=0),
+        gg <- cowplot::plot_grid(cowplot::ggdraw() + cowplot::draw_label(title, fontface="bold", x=0, hjust=0),
                                  gg, ncol = 1,rel_heights = c(0.08, 1))
 
         return(gg)
@@ -4065,7 +4070,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       ggs <- mapply(function(cls, lt) {
         self$plotEmbedding(colors=cls, plot.na=plot.na, alpha=alpha, palette=pal.seq, legend.title=lt, ...) +
           theme(legend.background = element_blank())
-      }, list(shifts, z.scores), c("Effect Size", "Z-score"), SIMPLIFY=FALSE)
+      }, list(shifts, z.scores), c("shift", if (adjusted) "z (adj.)" else "z"), SIMPLIFY=FALSE)
 
 
       if (scale.z.palette) {
@@ -4096,7 +4101,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (!is.null(adj.list)) ggs %<>% lapply(`+`, adj.list)
-      if (build.panel) ggs %<>% cowplot::plot_grid(plotlist=., ncol=2, labels=c("Shifts", "Adj. z-scores"))
+      if (build.panel) {
+        ggs[[1]] <- ggs[[1]] + ggtitle("Expression shift"); ggs[[2]] <- ggs[[2]] + ggtitle(if (adjusted) "Adjusted z-score" else "z-score")
+        ggs %<>% cowplot::plot_grid(plotlist=., ncol=2)
+      }
 
       return(ggs)
     },

@@ -7,7 +7,8 @@
       Test: group: B vs A  (reference 'A': most frequent level; to change: test = "group: A vs B")
              adjusted for batch; permutations: block within 2 strata (400 distinct)
              shift > 0: B samples differ from A samples in a common direction, beyond within-group variability
-      Samples: 12 used.   Issues: 1 warning (see $issues)
+      Samples: 12 used.   Issues: 1 warning
+        warning: only 9 residual degrees of freedom (n = 12, 3 parameters) -> fewer covariates, or restrict to the test variable
 
 ---
 
@@ -41,7 +42,8 @@
              adjusted for batch; permutations: block within 2 strata (400 distinct)
              shift > 0: B samples differ from A samples in a common direction, beyond within-group variability
              note: group interacts with batch: compared marginally (equal weights over batch levels); use a structured test with at = or over = to change
-      Samples: 12 used.   Issues: 1 warning, 1 note (see $issues)
+      Samples: 12 used.   Issues: 1 warning, 1 note
+        warning: only 8 residual degrees of freedom (n = 12, 4 parameters) -> fewer covariates, or restrict to the test variable
 
 ---
 
@@ -52,7 +54,9 @@
       Test: age: per 1 unit
              adjusted for batch; permutations: block within 2 strata (518,400 distinct)
              shift > 0: samples move in a common direction as age increases (per 1 unit)
-      Samples: 12 used.   Issues: 2 warnings (see $issues)
+      Samples: 12 used.   Issues: 2 warnings
+        warning: only 9 residual degrees of freedom (n = 12, 3 parameters) -> fewer covariates, or restrict to the test variable
+        warning: 'age' is strongly collinear with the other covariates (only 9% of its variation is independent) -> check cao$checkDesign() for the association
 
 ---
 
@@ -64,5 +68,6 @@
              adjusted for site, batch; permutations: block within 2 strata (400 distinct)
              shift > 0: B samples differ from A samples in a common direction, beyond within-group variability
              note: term site dropped from the formula: constant in the samples used
-      Samples: 12 used.   Issues: 1 warning, 1 note (see $issues)
+      Samples: 12 used.   Issues: 1 warning, 1 note
+        warning: only 9 residual degrees of freedom (n = 12, 3 parameters) -> fewer covariates, or restrict to the test variable
 

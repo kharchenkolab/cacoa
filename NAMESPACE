@@ -3,6 +3,7 @@
 S3method(base::format,cacoaModel)
 S3method(base::print,cacoaCovariateScreen)
 S3method(base::print,cacoaDesignCheck)
+S3method(base::print,cacoaExpressionShifts)
 S3method(base::print,cacoaModel)
 S3method(base::print,cacoaSensitivity)
 S3method(base::summary,cacoaModel)

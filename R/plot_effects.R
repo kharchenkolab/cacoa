@@ -80,17 +80,20 @@ plotInfluenceHeatmap <- function(m, se = NULL, groups = NULL, effect = "shift", 
   ord.s <- rownames(m)[order(rowMeans(abs(m), na.rm = TRUE), decreasing = TRUE)]
   if (!is.null(groups)) { g <- as.character(groups[ord.s]); ord.s <- ord.s[order(g, na.last = TRUE)] }
   df$sample <- factor(df$sample, levels = ord.s)
+  strip <- " "                                       # the group annotation gets its own column
+  df$celltype <- factor(df$celltype, levels = c(if (!is.null(groups)) strip, colnames(m)))
   lim <- max(abs(df$value), na.rm = TRUE)
   gg <- ggplot2::ggplot(df, ggplot2::aes(x = .data$celltype, y = .data$sample, fill = .data$value)) + ggplot2::geom_tile() +
     ggplot2::scale_fill_gradient2(low = "#2166ac", mid = "white", high = "#b2182b", limits = c(-lim, lim),
                                   name = if (is.null(se)) sprintf("change in %s", effect) else sprintf("change in %s\n(SE units)", effect)) +
+    ggplot2::scale_x_discrete(drop = FALSE) +
     plot.theme + ggplot2::labs(x = NULL, y = NULL, title = sprintf("Influence of single samples on %s", effect)) +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1), panel.grid = ggplot2::element_blank())
   if (!is.null(groups)) {
-    gdf <- data.frame(sample = factor(ord.s, levels = ord.s), group = as.character(groups[ord.s]), stringsAsFactors = FALSE)
+    gdf <- data.frame(sample = factor(ord.s, levels = ord.s), group = as.character(groups[ord.s]), x = strip, stringsAsFactors = FALSE)
     gdf <- gdf[!is.na(gdf$group), ]
-    gg <- gg + ggplot2::geom_point(data = gdf, ggplot2::aes(x = -0.6, y = .data$sample, colour = .data$group), inherit.aes = FALSE, shape = 15, size = 3) +
-      ggplot2::coord_cartesian(xlim = c(0.3, ncol(m) + 0.5), clip = "off") + ggplot2::labs(colour = "group")
+    gg <- gg + ggplot2::geom_point(data = gdf, ggplot2::aes(x = .data$x, y = .data$sample, colour = .data$group), inherit.aes = FALSE, shape = 15, size = 3) +
+      ggplot2::labs(colour = "group")
     if (!is.null(palette) && all(unique(gdf$group) %in% names(palette))) gg <- gg + ggplot2::scale_colour_manual(values = palette)
   }
   gg

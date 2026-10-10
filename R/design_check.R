@@ -136,6 +136,9 @@ checkDesign <- function(meta, model = NULL, test.variable = NULL, covariates = N
       if (is.finite(a) && a > overadjust.flag)
         add("warning", sprintf("'%s' is strongly associated with '%s' (%.2f): adjusting for it estimates the %s effect not explained by %s",
                                v, test.variable, a, test.variable, v), "consider reporting both models (cao$checkSensitivity())")
+      else if (is.finite(a) && a > assoc.flag)
+        add("note", sprintf("'%s' differs between the levels of '%s' (association %.2f)", v, test.variable, a),
+            sprintf("adjust for '%s' and compare with the unadjusted result (cao$checkSensitivity())", v))
     }
     if (isDiscreteVar(tv)) {
       tb <- table(tv); if (any(tb < 3)) add("warning", sprintf("'%s' has only %d sample(s) at level %s", test.variable, min(tb), names(tb)[which.min(tb)]), "cell types need min.samp.per.level samples per level")
@@ -189,7 +192,8 @@ print.cacoaDesignCheck <- function(x, ...) {
   }
   A <- x$associations
   if (!is.null(x$test.variable) && length(x$covariates) > 1) {
-    a <- sort(A[x$test.variable, setdiff(x$covariates, x$test.variable)], decreasing = TRUE)
+    cv <- setdiff(x$covariates, x$test.variable)
+    a <- sort(stats::setNames(A[x$test.variable, cv], cv), decreasing = TRUE)
     a <- a[is.finite(a)]
     if (length(a)) cat(sprintf("  association with '%s': %s\n", x$test.variable, paste(sprintf("%s %.2f", names(a), a), collapse = ", ")))
   }
@@ -231,8 +235,9 @@ plotDesignCheck <- function(x, type = c("associations", "balance", "issues"), me
     gg <- ggplot2::ggplot(df, ggplot2::aes(x = .data$a, y = .data$b, fill = .data$value)) + ggplot2::geom_tile(colour = "white") +
       ggplot2::geom_text(ggplot2::aes(label = .data$label), size = 3) +
       ggplot2::scale_fill_gradient(low = "white", high = "#b2182b", limits = c(0, 1), na.value = "grey90", name = "association") +
-      plot.theme + ggplot2::labs(x = NULL, y = NULL, title = "Covariate associations (Cramer's V / eta / |Spearman|)") +
-      ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+      plot.theme + ggplot2::labs(x = NULL, y = NULL, title = "Covariate associations",
+                                 subtitle = "Cramer's V (two factors), correlation ratio (factor vs numeric), |Spearman| (two numerics)") +
+      ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1), plot.subtitle = ggplot2::element_text(size = 8, colour = "grey30"))
     if (!is.null(x$test.variable) && x$test.variable %in% ord) {
       i <- match(x$test.variable, ord)
       gg <- gg + ggplot2::annotate("rect", xmin = i - 0.5, xmax = i + 0.5, ymin = 0.5, ymax = length(ord) + 0.5, fill = NA, colour = "black", linewidth = 0.8)

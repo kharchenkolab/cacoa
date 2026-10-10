@@ -500,9 +500,13 @@ format.cacoaModel <- function(x, ...) {
   iss <- x$issues
   cnt <- table(factor(iss$severity, levels = c("error", "warning", "note")))
   iss.txt <- if (!nrow(iss)) "none" else paste(sprintf("%d %s%s", cnt, names(cnt), ifelse(cnt == 1, "", "s"))[cnt > 0], collapse = ", ")
-  lines <- c(lines, sprintf("Samples: %d used%s.   Issues: %s%s", length(x$samples$used),
-                            if (length(dr)) sprintf(", %d dropped (%s)", length(dr), paste(dr, collapse = ", ")) else "",
-                            iss.txt, if (nrow(iss)) " (see $issues)" else ""))
+  lines <- c(lines, sprintf("Samples: %d used%s.   Issues: %s", length(x$samples$used),
+                            if (length(dr)) sprintf(", %d dropped (%s)", length(dr), paste(dr, collapse = ", ")) else "", iss.txt))
+  design.notes <- unlist(lapply(x$tests, function(t) t$design$notes))        # already printed under their test
+  for (i in seq_len(nrow(iss))) {
+    if (length(design.notes) && any(endsWith(iss$message[i], design.notes))) next
+    lines <- c(lines, sprintf("  %s: %s%s", iss$severity[i], iss$message[i], if (nzchar(iss$suggestion[i])) paste0(" -> ", iss$suggestion[i]) else ""))
+  }
   lines
 }
 

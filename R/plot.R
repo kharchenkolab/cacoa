@@ -800,6 +800,9 @@ plotSampleDistanceMatrix <- function(p.dists, sample.labels=NULL, n.cells.per.sa
       }
 
       gg <- gg + plot.theme
+      # nothing mapped to colour / shape: one neutral colour, no legend entries
+      if (is.null(sample.labels) && is.null(sample.colors)) gg <- gg + (if (is.null(palette)) scale_color_manual(values = "grey30", guide = "none") else guides(color = "none"))
+      if (is.null(shape.labels)) gg <- gg + guides(shape = "none")
 
       if (show.sample.size) {
         if (length(size) == 1) {

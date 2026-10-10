@@ -112,6 +112,16 @@ checkSensitivity <- function(D.list, model, meta, formulas = NULL, screen = NULL
             class = c("cacoaSensitivity", "list"))
 }
 
+# short form of a verdict for plot strips
+shortVerdict <- function(v) {
+  out <- v
+  out[startsWith(v, "driven by sample")] <- "driven by one sample"
+  out[startsWith(v, "sign sensitive")] <- "sign depends on the model"
+  out[startsWith(v, "significance sensitive")] <- "significance depends on the model"
+  out[startsWith(v, "estimate changes")] <- sub(" \\(.*\\)$", "", v[startsWith(v, "estimate changes")])
+  out
+}
+
 #' @exportS3Method base::print
 print.cacoaSensitivity <- function(x, ...) {
   cat(sprintf("Sensitivity of '%s' (shift) across %d models: %s\n", x$test, length(x$formulas),
@@ -144,7 +154,7 @@ plotSensitivity <- function(x, effect = "shift", cell.types = NULL, normalized =
   d$model <- factor(d$model, levels = rev(levels(x$table$model)))
   ord <- x$summary$celltype[order(x$summary$verdict != "robust", -abs(x$summary$estimate.current))]
   d$celltype <- factor(d$celltype, levels = intersect(ord, unique(d$celltype)))
-  verd <- setNames(x$summary$verdict, x$summary$celltype)
+  verd <- setNames(shortVerdict(x$summary$verdict), x$summary$celltype)
   d$panel <- factor(sprintf("%s\n%s", as.character(d$celltype), verd[as.character(d$celltype)]), levels = sprintf("%s\n%s", levels(d$celltype), verd[levels(d$celltype)]))
   ggplot2::ggplot(d, ggplot2::aes(x = .data$value, y = .data$model)) +
     ggplot2::geom_vline(xintercept = 0, linetype = 2, colour = "grey60") +

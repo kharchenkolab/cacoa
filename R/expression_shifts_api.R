@@ -382,3 +382,30 @@ settingsKey <- function(...) {
   x <- list(...)
   if (requireNamespace("rlang", quietly = TRUE) && exists("hash", asNamespace("rlang"))) rlang::hash(x) else paste(deparse(x), collapse = "")
 }
+
+#' @exportS3Method base::print
+print.cacoaExpressionShifts <- function(x, digits = 2, ...) {
+  s <- x$settings; alpha <- s$alpha %||% 0.05
+  if (is.null(x$results) || !nrow(x$results)) { cat("Expression shifts: no cell type could be tested\n"); return(invisible(x)) }
+  for (t in unique(x$results$test.id)) {
+    d <- x$results[x$results$test.id == t, ]
+    effs <- intersect(effectOrder, unique(d$effect))
+    prov <- sub("([a-z-]+) permutations", sprintf("%d \\1 permutations", s$n.permutations), modelProvenance(x$model, t, extra = sprintf("distance %s", s$dist)))
+    cat(sprintf("Expression shifts: %s\n", prov))
+    cts <- unique(d$celltype)
+    tab <- data.frame(celltype = cts, n = d$n[match(cts, d$celltype)], stringsAsFactors = FALSE)
+    for (e in effs) {
+      r <- d[d$effect == e, ]; i <- match(cts, r$celltype)
+      tab[[e]] <- round(r$estimate.norm[i], digits); tab[[paste0("padj.", e)]] <- signif(r$padj[i], 2)
+    }
+    tab <- tab[order(-tab[[effs[1]]]), ]; rownames(tab) <- NULL
+    print(tab, row.names = FALSE)
+    g <- x$global[x$global$test.id == t, ]
+    pa <- tab[[paste0("padj.", effs[1])]]
+    cat(sprintf("  %d of %d cell types with a significant %s (BH %.0f%%); global p: %s\n", sum(!is.na(pa) & pa < alpha), nrow(tab), effs[1],
+                100 * alpha, paste(sprintf("%s %.3g", g$effect, g$p), collapse = ", ")))
+  }
+  if (!is.null(x$skipped) && nrow(x$skipped)) cat(sprintf("  not tested: %s\n", paste(unique(x$skipped$celltype), collapse = ", ")))
+  cat("  (normalized effects; full tables in $results and $wide)\n")
+  invisible(x)
+}

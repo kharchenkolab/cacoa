@@ -1331,7 +1331,12 @@ ggplot2 object (or a matrix: cell types x components)
 Drill-down for one cell type: MDS of the adjusted distances, the pair-distance boxplots that
 define shift / var / total, per-sample dispersion by group, and the level x level table for term tests
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotShiftDetail(cell.type, test = NULL, name = "expression.shifts")}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotShiftDetail(
+  cell.type,
+  test = NULL,
+  name = "expression.shifts",
+  label.samples = FALSE
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -1342,6 +1347,8 @@ define shift / var / total, per-sample dispersion by group, and the level x leve
 \item{\code{test}}{test label or index (default: first test)}
 
 \item{\code{name}}{results slot (default "expression.shifts")}
+
+\item{\code{label.samples}}{label the samples in the distance panel (default FALSE)}
 }
 \if{html}{\out{</div>}}
 }

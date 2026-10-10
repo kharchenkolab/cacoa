@@ -19,9 +19,11 @@ pairDistanceTable <- function(D2, groups) {
 #' @param title title
 #' @param palette colours for the groups
 #' @param plot.theme ggplot2 theme
+#' @param label.samples label the samples in the distance panel (default FALSE)
 #' @return cowplot grid
 #' @export
-plotShiftDetailPanels <- function(eff, adjusted = NULL, groups = NULL, dist = "cor", title = NULL, palette = NULL, plot.theme = ggplot2::theme_bw()) {
+plotShiftDetailPanels <- function(eff, adjusted = NULL, groups = NULL, dist = "cor", title = NULL, palette = NULL, plot.theme = ggplot2::theme_bw(),
+                                  label.samples = FALSE) {
   if (is.null(adjusted)) adjusted <- adjustedDistanceMatrix(eff$G, nuisanceColumns(eff, NULL), dist)
   D2 <- if (dist == "l2") adjusted^2 else adjusted
   samples <- rownames(D2)
@@ -31,8 +33,9 @@ plotShiftDetailPanels <- function(eff, adjusted = NULL, groups = NULL, dist = "c
   mds <- stats::cmdscale(sqrt(pmax(D2, 0)), k = 2)
   df <- data.frame(x = mds[, 1], y = mds[, 2], sample = samples, group = if (is.null(grp)) "all" else grp, stringsAsFactors = FALSE)
   gg.a <- ggplot2::ggplot(df, ggplot2::aes(x = .data$x, y = .data$y, colour = .data$group)) + ggplot2::geom_point(size = 3) +
-    ggrepel::geom_text_repel(ggplot2::aes(label = .data$sample), size = 2.5, show.legend = FALSE, max.overlaps = 20) +
-    plot.theme + ggplot2::labs(x = "MDS 1", y = "MDS 2", title = "adjusted sample distances", colour = NULL)
+    plot.theme + ggplot2::labs(x = "MDS 1", y = "MDS 2", title = "adjusted sample distances", colour = NULL) +
+    ggplot2::theme(legend.position = "bottom")
+  if (label.samples) gg.a <- gg.a + ggrepel::geom_text_repel(ggplot2::aes(label = .data$sample), size = 2.5, show.legend = FALSE, max.overlaps = Inf)
   if (!is.null(palette) && is.two && all(levels(grp) %in% names(palette))) gg.a <- gg.a + ggplot2::scale_colour_manual(values = palette)
   panels <- list(gg.a)
   # (b) pair distances within / between, annotated with the three effects
@@ -66,7 +69,7 @@ plotShiftDetailPanels <- function(eff, adjusted = NULL, groups = NULL, dist = "c
       plot.theme + ggplot2::labs(x = NULL, y = NULL, title = "model-implied pair distances between levels (diagonal: 2 x dispersion)")
     panels <- c(panels, list(gg.d))
   }
-  gg <- cowplot::plot_grid(plotlist = panels, ncol = min(2, length(panels)))
+  gg <- cowplot::plot_grid(plotlist = panels, ncol = min(3, length(panels)))
   if (!is.null(title)) gg <- cowplot::plot_grid(cowplot::ggdraw() + cowplot::draw_label(title, fontface = "bold", x = 0, hjust = 0), gg, ncol = 1, rel_heights = c(0.07, 1))
   gg
 }

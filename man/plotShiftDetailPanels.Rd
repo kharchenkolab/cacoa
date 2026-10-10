@@ -11,7 +11,8 @@ plotShiftDetailPanels(
   dist = "cor",
   title = NULL,
   palette = NULL,
-  plot.theme = ggplot2::theme_bw()
+  plot.theme = ggplot2::theme_bw(),
+  label.samples = FALSE
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ plotShiftDetailPanels(
 \item{palette}{colours for the groups}
 
 \item{plot.theme}{ggplot2 theme}
+
+\item{label.samples}{label the samples in the distance panel (default FALSE)}
 }
 \value{
 cowplot grid

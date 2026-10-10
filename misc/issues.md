@@ -131,6 +131,15 @@ The R / C++ split of fitting and randomization, and the plan to converge on two 
 
 ## 4. Housekeeping and cleanup candidates
 
+- (done 2026-10-10, vignette pass) plot fixes found by reading the rendered walkthrough: sample-distance plots drew a
+  "Covariate: All" legend when nothing was mapped; `plotShiftDetail()` labelled every sample (ggrepel warning) and
+  left an empty grid cell; the influence heatmap's group strip overlapped the sample names; sensitivity strips were
+  cut off by the long verdicts; `plotNumberOfDEGenes()` failed without resampling results (and warned instead of
+  messaging); the cluster-free panel titles overlapped the plots; the design check printed an empty association
+  list with a single covariate and did not note a moderately associated covariate (0.3-0.5); model issues were only
+  counted ("see $issues"), now printed inline. `estimateExpressionShiftMagnitudes()` results now have a class with a
+  compact print method (normalized effects per cell type with BH p-values and the global p-values).
+
 - (examined 2026-10-10) `private$getTopGenes()` / `getClusterFreeDEInput()`: the time is the one-off extraction of
   the joint count matrix from the Conos object (`extractJointCountMatrix`, 8-13 s, in conos), cached afterwards in
   `cao$cache` (one entry for raw and one for normalized counts); the neighbourhood split costs 3 s. Nothing in
@@ -141,8 +150,10 @@ The R / C++ split of fitting and randomization, and the plan to converge on two 
 - Pre-existing TODOs in `R/cacoa.R` (overall p-adjustment in ontology plots, z-score adjustment in
   cluster-free DE, binary distance in `plotOntologySimilarities`), `R/ontology.R`, `R/cell_density.R`
   (`findScoreGroupsGraph` deprecated?), `R/de_function.R` (bootstrap resampling use).
-- Vignette / walkthrough (2026-10-10): `vignettes/walkthrough_short.Rmd` is the single source. Its chunks run only
-  when the simulated dataset is passed as the `sim.file` parameter; `misc/notebook/render_walkthrough.sh` renders the
+- Vignette / walkthrough (2026-10-10): `vignettes/walkthrough_short.Rmd` is the single source: one model
+  (`~ treatment + age`), one contrast (treated vs control) on a 20-sample subset of the no-batch simulation built by
+  `misc/notebook/prepare_sim_dataset.R` into `test/sim_treatment.rds` (57 MB; synthetic `age`, 6 years older in the
+  treated arm, no expression effect). Its chunks run only when that file is passed as the `sim.file` parameter; `misc/notebook/render_walkthrough.sh` renders the
   executed `github_document` copy (`vignettes/walkthrough_short.md` + `walkthrough_short_files/`, both in
   `.Rbuildignore`) with the RStudio/quarto-bundled pandoc (the system pandoc 2.5 is below rmarkdown's 2.11.2
   requirement for that format). The vignette build itself evaluates nothing, so `R CMD check` with a vignette

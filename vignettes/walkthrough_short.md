@@ -197,7 +197,7 @@ res <- cao$estimateExpressionShiftMagnitudes()
 res
 ```
 
-    Expression shifts: treatment: treated vs control; adjusted for age; 499 freedman-lane permutations; distance cor
+    Expression shifts: treatment: treated vs control; adjusted for age; 499 freedman-lane permutations (smallest p 0.002); distance cor
       celltype  n shift padj.shift   var padj.var total padj.total
           L2/3 17  7.14     0.0026 -0.29     0.98  6.40      0.003
          IN-PV 15  2.12     0.0026  0.73     0.98  3.15      0.003

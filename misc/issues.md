@@ -51,6 +51,29 @@ method needs at least a smoke test on the result structure its estimator now pro
 The R / C++ split of fitting and randomization, and the plan to converge on two kernels, is in
 `misc/engine_convergence.md`.
 
+## 0d. Real-dataset pass (2026-10-10): three example notebooks, bugs found and fixed
+
+Notebooks (github_document, executed; disease vs control, model `~ condition` only, covariates illustrated):
+`examples/alz/alz_cacoa.{Rmd,md}` (Grubman 2019, 12 samples), `examples/ms/ms_cacoa.{Rmd,md}` (Schirmer 2019, 21 samples),
+`examples/scc/scc_cacoa.{Rmd,md}` (Ji 2020, 18 paired samples); each with `<ds>_notes.md` (data decisions, findings,
+QC, runtimes, issue status). Package bugs found by them and fixed (commits 3bf8455, da2c20b, 28df162):
+- **Response rows paired with the design by position** in `performLMPermutations()` callers: the cell-density test
+  used the Conos sample order against the metadata order, giving a scrambled (MS) or sign-reversed (SCC) density map.
+  Responses are now matched by sample name (error when a sample is missing); regression test in `test-kernel-b.R`.
+- **Estimability judged on unscaled designs**: numeric covariates in large units (median UMI) made the contrast
+  "not estimable" (`isEstimable()` used ginv on X'X); now an SVD row-space projector on unit-norm columns.
+- **Arm dispersions not identifiable under a paired location model** (`~ condition + patient`): the columns of
+  (R o R) Z coincide and ginv produced s.alt/s.ref = 1.5 identically; `fitDispersion()` now detects this, pools the
+  dispersion, and `var`/`total` are NA with the flag `dispersion-not-identifiable` (shift kept).
+- Screen / variance partition crashed on a covariate constant within a cell type's samples; `estimateDEPerCellType()`
+  tested cell types with 1-2 samples per arm (now `min.samp.per.level`); the sensitivity analysis announced models it
+  silently dropped and lost the "current" label; the design check missed excluded factor columns nested in the test
+  variable (pooled batches) and did not recognize pairing factors; plus the plot/legend/palette/wording fixes listed
+  in the notes.
+Kept as observations: max-statistic adjustment over cells floors every adjusted z to 0 for small designs (ALZ 12
+samples, MS 99 permutations) — now announced, raw z offered; dispersion R2 normalisation vs its p-value; the
+permutation set depends on the metadata row order for a fixed seed.
+
 ## 1. Not implemented
 
 - **Robust fitting and weak imputation in the distance engine**: implemented 2026-10-09 (step 4b); calibration

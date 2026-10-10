@@ -82,7 +82,7 @@ For visualization purposes, Conos must have cell embedding estimated or the embe
 
 Cacoa can estimate and visualize various statistics. Most of them have paired functions `cao$estimateX(...)` and `cao$plotX(...)` (for example, `cao$estimateCellLoadings()` and `cao$plotCellLoadings()`). Results of all estimation are stored in `cao$test.results`, and their exact name can be controlled by `name` parameter passed to `cao$estimateX()`. For example, calling `cao$estimateExpressionShiftMagnitudes(name='es')` would save the results in `cao$test.results$es`.
 
-Please, see the documentation for exact functions inside the package. For a demonstration see [the executed walkthrough](vignettes/walkthrough_short.md) (run on a simulated dataset; also available as a [Jupyter notebook](vignettes/walkthrough_short.ipynb)) or its [R Markdown source](vignettes/walkthrough_short.Rmd). Additionally, the [cacoaAnalysis](https://github.com/kharchenkolab/cacoaAnalysis/) repository contains analysis conducted inside the paper, though the Cacoa version there may be out of date.
+Please, see the documentation for exact functions inside the package. For a demonstration see [the executed walkthrough](vignettes/walkthrough_short.md) (run on a simulated dataset) or its [R Markdown source](vignettes/walkthrough_short.Rmd). Additionally, the [cacoaAnalysis](https://github.com/kharchenkolab/cacoaAnalysis/) repository contains analysis conducted inside the paper, though the Cacoa version there may be out of date.
 
 ## Citation
 

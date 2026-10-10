@@ -105,7 +105,7 @@ estimability, pseudo-inverse); DE term tests via contrast matrices; `repairDesig
 Checkpoint: T9, T10 (slow, SCC example), T5 calibration; slow suite.
 
 **Step 4: R6 and retirement.** `estimateClusterFreeDE()` through `resolveModel()`, legacy fields, retire list,
-docs, `misc/issues.md`, notebook re-render, `R CMD check`. Checkpoint: T12.
+docs, `misc/issues.md`, walkthrough re-render, `R CMD check`. Checkpoint: T12.
 
 Order of commits: one per step, one-line messages. Each step ends with the fast suite; steps 3 and 4 with the
 slow suite and the check.
@@ -147,7 +147,7 @@ slow suite and the check.
 | T9 | estimability in kernel B | a column whose observed rows lack a nuisance level: finite `effect` / `se` / `p` equal to `lm` on the subset with the constant column dropped; a column lacking a contrasted level: NA with the "not estimable" reason; `impute_weak` unchanged; the shift engine and the fitter agree on which columns are skipped | `test-kernel-b.R` |
 | T10 | DE | DESeq2 Wald, edgeR QL and limma-voom log fold changes and p-values under the new coding equal the treatment-coded results (SCC example); term tests via contrast matrices equal `coef = term.cols` on treatment coding; per-cell-type subsetting through `subsetDesign()` keeps the same cell types as before | `test-example-datasets.R` (slow), `test-track-d.R` |
 | T11 | CoDA | per-coefficient effects are level means in ILR space; predicted baseline / target compositions equal the back-transformed endpoint rows; loadings and their p-values equal the step-0 fixtures | `test-track-d.R`, `test-model-builder.R` |
-| T12 | end to end | fast suite, slow suite (validation rows, example datasets, weighted, cluster-free), `R CMD check`, notebook re-render with the composition / density / cluster-free panels compared to the current ones | CI of each step |
+| T12 | end to end | fast suite, slow suite (validation rows, example datasets, weighted, cluster-free), `R CMD check`, walkthrough re-render with the composition / density / cluster-free panels compared to the current ones | CI of each step |
 | T13 | printout snapshots | `format.cacoaModel()` for six designs (two-level, three-level contrast, term, interaction marginal default, numeric, with notes) as `expect_snapshot()` | `test-model-builder.R` |
 
 Coverage check at the end: every function left in `model_matrices.R` / `model_api.R` is reached by at least one

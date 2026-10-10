@@ -121,7 +121,7 @@ costs is R call overhead multiplied by the number of (test x cell type x permuta
 - Screen: covariates x cell types x 2 modes x (term + dispersion) R loops; 5 covariates x 9 cell types at 999
   permutations is a few minutes. Acceptable, but it is the slowest exploratory step.
 - Cluster-free shifts: cells x (R induction of P over B columns + C++ kernel + R shift estimate). Measured in the
-  notebook render: 4,500 cells x 99 permutations x 500 genes took 8.7 minutes on 16 cores (the C++ kernel itself
+  walkthrough render: 4,500 cells x 99 permutations x 500 genes took 8.7 minutes on 16 cores (the C++ kernel itself
   accounts for seconds of that); the R per-cell overhead dominates. **This is the real performance problem.**
 - Rows 6, 8, 9 are fast (C++ end to end) but on a different permutation distribution.
 

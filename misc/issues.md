@@ -141,9 +141,14 @@ The R / C++ split of fitting and randomization, and the plan to converge on two 
 - Pre-existing TODOs in `R/cacoa.R` (overall p-adjustment in ontology plots, z-score adjustment in
   cluster-free DE, binary distance in `plotOntologySimilarities`), `R/ontology.R`, `R/cell_density.R`
   (`findScoreGroupsGraph` deprecated?), `R/de_function.R` (bootstrap resampling use).
-- Vignette: chunks are neither evaluated nor purled because the PF Conos object is not shipped, so
-  `R CMD check` with a vignette build will warn (no `inst/doc`). A small shipped example (e.g. a trimmed
-  `panel.preprocessed` run) would let the vignette build.
+- Vignette / walkthrough (2026-10-10): `vignettes/walkthrough_short.Rmd` is the single source. Its chunks run only
+  when the simulated dataset is passed as the `sim.file` parameter; `misc/notebook/render_walkthrough.sh` renders the
+  executed `github_document` copy (`vignettes/walkthrough_short.md` + `walkthrough_short_files/`, both in
+  `.Rbuildignore`) with the RStudio/quarto-bundled pandoc (the system pandoc 2.5 is below rmarkdown's 2.11.2
+  requirement for that format). The vignette build itself evaluates nothing, so `R CMD check` with a vignette
+  build will warn (no `inst/doc`); a small shipped example would let it build. The earlier executed `.ipynb`
+  was dropped: GitHub's notebook viewer runs its math pass over code cells and mangles every `$` in R code, and
+  knitr's native code/output interleaving is lost in any md-to-ipynb conversion.
 - `R CMD check` notes: installed size 18.5 MB (mostly `data/`), Suggests not installed on this machine
   (uwot, knitr, rmarkdown), a `fabia` cross-reference.
 - Tests: the conos smoke test in `test-expression-shifts.R` is `skip_on_cran` and therefore skipped under plain

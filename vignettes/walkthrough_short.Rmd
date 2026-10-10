@@ -6,114 +6,149 @@ output:
   html_document:
     toc: yes
     toc_depth: '3'
-    df_print: paged
+params:
+  sim.file: ""      # path to the simulated dataset; empty = do not evaluate
+  n.cores: 16
 vignette: >
   %\VignetteIndexEntry{Getting started with Cacoa}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r setup, include=FALSE, eval=FALSE, purl=FALSE}
-# The walkthrough uses a Conos object of a pulmonary fibrosis cohort that is not shipped with the package,
-# so the chunks are not evaluated when the vignette is built.
-knitr::opts_chunk$set(eval = FALSE, purl = FALSE)
+```{r setup, include=FALSE}
+# The walkthrough runs on a simulated dataset (720 MB) that is not shipped with the package. The chunks are
+# evaluated only when that file is present (misc/notebook/render_walkthrough.sh renders the executed Markdown
+# copy in vignettes/); the vignette build evaluates nothing.
+knitr::opts_chunk$set(eval = file.exists(params$sim.file), purl = FALSE, fig.width = 8, fig.height = 4.5, dpi = 110,
+                      message = FALSE, warning = TRUE, comment = "")
 ```
 
-```{r libs, message=FALSE, eval=FALSE, purl=FALSE}
-library(conos)
-library(cacoa)
-library(cowplot)
-library(ggplot2)
-```
+Cacoa compares samples (patients, donors, replicates) across conditions. One **model** is set once and used by every
+analysis: expression shifts per cell type, composition, differential expression, cell density and the cluster-free
+analyses.
 
-## The workflow in one glance
+The recommended order is
 
-Cacoa compares samples (patients, donors, replicates) across conditions. One **model** is set once and used by
-every analysis: expression shifts per cell type, composition, differential expression, cell density and the
-cluster-free analyses. The recommended order is
-
-1. `Cacoa$new()` with the sample metadata: no model is needed yet; a summary of the metadata is printed.
-2. `cao$checkDesign()`, `cao$plotDesign()`: confounding, balance, degrees of freedom, permutation feasibility,
-   from the metadata alone.
-3. `cao$screenCovariates()`, `cao$plotCovariateScreen()`: which covariates are associated with sample-level
-   variation, in which cell types (exploratory).
+1. `Cacoa$new()` with the sample metadata. No model is needed yet; a summary of the metadata is printed.
+2. `cao$checkDesign()`, `cao$plotDesign()`: confounding, balance, degrees of freedom and permutation feasibility, from the metadata alone.
+3. `cao$screenCovariates()`, `cao$plotCovariateScreen()`: which covariates are associated with sample-level variation, and in which cell types (exploratory).
 4. `cao$setModel(~ condition + batch, test = "condition")`: the model used from here on.
 5. `cao$estimateExpressionShiftMagnitudes()`, `cao$plotExpressionShiftMagnitudes()` and the other analyses.
 6. `cao$checkSensitivity()`, `cao$plotSensitivity()`: is the result robust to the covariate set and to single samples?
 
-## Load data
+This walkthrough runs the workflow on a **simulated** dataset: a Conos object with 40 samples (4 groups x 2 batches,
+5 samples each) and 9 cell types of 500 cells. Expression differences between `Group2` and `Group1` were planted with
+a known strength per cell type: strong in `IN-SST`, `IN-PV` and `L2/3`; moderate in `OPC`, `L5/6-CC` and `AST-PP`;
+weak in `AST-FB`; none in `Microglia` and `Neu-NRGN`. The object is not shipped with the package (720 MB); the
+executed copy of this document is provided for reading, with its outputs. The same code runs on any Conos or Seurat
+object with a sample metadata table.
 
-```{r, eval=FALSE, purl=FALSE}
-con <- Conos$new(readRDS("../../cacoaAnalysis/data/PF/con.rds"))
-sample.meta <- as.data.frame(con$misc$sample_metadata)   # rows = samples, columns = covariates
-rownames(sample.meta) <- sample.meta$Sample_Name
-
-cao <- Cacoa$new(con, sample.metadata = sample.meta, cell.groups = con$misc$cell_metadata$cellType, n.cores = 45)
-
-cao$plot.params <- list(size = 0.1, alpha = 0.1, font.size = c(2, 3))
-cao$plot.theme <- cao$plot.theme + theme(legend.background = element_blank())
+```{r libs}
+library(conos)
+library(cacoa)
+library(ggplot2)
+library(cowplot)
 ```
 
-The constructor prints which metadata columns can be used as covariates and which cannot (ID-like, constant,
-mostly missing, too many levels). The previous two-group constructor (`sample.groups`, `ref.level`,
-`target.level`) still works and is translated into a `condition` column and `test = "condition"`.
+## Load data
+
+`sample.metadata` is a data frame with one row per sample (row names are the sample names) and one column per
+covariate. Here it has the group, the batch and two technical columns from the simulation. A random `age` column is
+added to show how an unrelated covariate is treated.
+
+```{r load}
+sim <- readRDS(params$sim.file)$with_batch              # a Cacoa object from an earlier version
+con <- sim$data.object                                 # the Conos object inside it
+sample.meta <- con$misc$sample_meta
+set.seed(1); sample.meta$age <- round(rnorm(nrow(sample.meta), 55, 8))   # unrelated to the groups, for illustration
+head(sample.meta)
+```
+
+```{r construct, message=TRUE}
+cao <- Cacoa$new(con, sample.metadata = sample.meta, cell.groups = sim$cell.groups, sample.per.cell = sim$sample.per.cell,
+                 n.cores = params$n.cores)
+cao$plot.params <- list(size = 0.3, alpha = 0.3, font.size = c(2, 3))
+```
+
+The constructor prints which metadata columns can be used as covariates and which cannot (ID-like, constant, mostly
+missing, too many levels). The previous two-group constructor (`sample.groups`, `ref.level`, `target.level`) still
+works and is translated into a `condition` column and `test = "condition"`.
+
+Options shared by all methods are set once; explicit arguments of a method call still win.
+
+```{r options}
+cao$setOptions(n.permutations = 499, seed = 1)
+```
 
 ## Check the design
 
-```{r, eval=FALSE, purl=FALSE}
-cao$checkDesign(test = "Diagnosis")
+Before fitting anything, the metadata alone tells whether the planned comparison can be adjusted for the other
+covariates: associations between covariates (bias-corrected Cramer's V, correlation ratio, Spearman correlation),
+balance of the groups over the covariates, aliasing, degrees of freedom and how many distinct permutations the design
+allows.
+
+```{r check-design}
+chk <- cao$checkDesign(test = "Group")       # the report is printed; `chk` keeps the tables
+```
+
+```{r plot-design-assoc, fig.width=5, fig.height=4}
 cao$plotDesign("associations")
+```
+
+```{r plot-design-balance, fig.width=8, fig.height=3.5}
 cao$plotDesign("balance")
 ```
 
-The report lists errors (a covariate that fully determines the condition), warnings (strongly associated
-covariates, small groups, few distinct permutations) and notes, each with a suggestion.
+The report lists errors (a covariate that fully determines the condition), warnings (strongly associated covariates,
+small groups, few distinct permutations) and notes, each with a suggestion. Here the groups are balanced over the
+batches; the simulation's library-size column is strongly associated with the group, so the report suggests comparing
+models with and without it (`cao$checkSensitivity()`), which is done below.
 
 ## Screen covariates
 
-```{r, eval=FALSE, purl=FALSE}
-cao$screenCovariates()            # all usable covariates, marginal and partial, per cell type
-cao$plotCovariateScreen()         # dot: FDR < 0.05; ring: significant only marginally (explained by other covariates)
-cao$plotCovariateSummary()
-cao$plotVariancePartition(c("Diagnosis", "Sample_Source"))
+The screen tests every usable covariate against the sample-to-sample expression distances of each cell type,
+**marginally** (alone) and **partially** (adjusted for all other covariates). A covariate that is significant only
+marginally is explained by the others (shown as a ring in the plot). The last column is a global test over all cell
+types. The screen ends with a suggested model; it is not applied automatically.
+
+```{r screen}
+scr <- cao$screenCovariates(n.permutations = 199)   # `scr$table` holds the per-covariate results
 ```
 
-The screen ends with a suggested model. It is not applied automatically.
+```{r plot-screen, fig.width=8, fig.height=4}
+cao$plotCovariateScreen()
+```
+
+```{r plot-screen-summary, fig.width=7, fig.height=3.5}
+cao$plotCovariateSummary()
+```
+
+Variance partition: how much of the sample-level variation is explained uniquely by each covariate, shared between
+them, or left unexplained.
+
+```{r plot-varpart, fig.width=8, fig.height=3.5}
+cao$plotVariancePartition(c("Group", "Batch"))
+```
 
 ## Set the model
 
-```{r, eval=FALSE, purl=FALSE}
-cao$setModel(~ Diagnosis + Sample_Source, test = "Diagnosis")
-```
-
 `test` accepts a variable name (two levels: a contrast with an automatically chosen reference; numeric: a slope per
-unit; a factor with more levels needs the comparison, e.g. `"Group: G2 vs G1"`, or `"Group: all"` for a whole-factor
-test), an explicit comparison such as `"Diagnosis: IPF vs Control"`, several variables, `"all"`, or a structured
-contrast. The printout states the reference level and how it was chosen, the
-adjustment set, the permutation scheme and the number of distinct permutations.
+unit; a factor with more levels needs the comparison, e.g. `"Group: Group2 vs Group1"`, or `"Group: all"` for a
+whole-factor test), an explicit comparison such as `"Group: Group2 vs Group1"`, several variables, `"all"`, or a
+structured contrast. The printout states the reference level and how it was chosen, the adjustment set, the
+permutation scheme and the number of distinct permutations.
 
-Options shared by all methods are set once:
+Here two tests are set: the planted contrast `Group2 vs Group1`, and the whole-factor test of `Group` over all four
+groups. Both are adjusted for `Batch`.
 
-```{r, eval=FALSE, purl=FALSE}
-cao$setOptions(n.permutations = 1999, seed = 1, n.cores = 45)
+```{r set-model}
+cao$setModel(~ Group + Batch, test = c("Group: Group2 vs Group1", "Group: all"))
 ```
 
-## Cluster-based changes
+## Expression shifts per cell type
 
-```{r, eval=FALSE, purl=FALSE}
-cao$estimateCellLoadings()
-cao$estimateExpressionShiftMagnitudes()
-```
-
-```{r, fig.width=5, fig.height=6, eval=FALSE, purl=FALSE}
-cao$plotCellLoadings(show.pvals = FALSE)
-```
-
-```{r, fig.width=9, fig.height=5, eval=FALSE, purl=FALSE}
-cao$plotExpressionShiftMagnitudes()
-```
-
-Three effects are reported per cell type:
+The expression shift is estimated with an individual-level model fitted to the sample-sample distances of each cell
+type. Three effects are reported for a contrast:
 
 | effect | meaning |
 |---|---|
@@ -121,63 +156,118 @@ Three effects are reported per cell type:
 | `var`   | the target group is more (or less) heterogeneous than the reference group |
 | `total` | target samples are farther from reference samples than reference samples are from each other (`shift + var/2`) |
 
+For a whole-factor test the effects are `location` (any group differs) and `dispersion` (the groups differ in
+heterogeneity). P-values come from permutations (block randomization within batches here); they are adjusted across
+cell types by Benjamini-Hochberg (`padj`) and by the max-statistic (`p.fwer`), and a global p-value per test is
+reported.
+
+```{r shifts}
+res <- cao$estimateExpressionShiftMagnitudes()
+subset(res$results, effect == "shift")[, c("celltype", "estimate", "estimate.norm", "se.jk", "p", "padj", "p.fwer", "n")]
+```
+
+```{r shifts-global}
+res$global
+```
+
+```{r plot-shifts, fig.width=9, fig.height=4.5}
+cao$plotExpressionShiftMagnitudes()
+```
+
 Points are normalized effects with jackknife intervals; filled points are significant after Benjamini-Hochberg
-adjustment across cell types. The subtitle records the test, the adjustment set and the permutation scheme.
-`cao$plotShiftDetail("AT2")` shows the sample-level picture behind one cell type, `cao$plotSampleInfluence()` the
-effect of leaving each sample out.
+adjustment across cell types. The subtitle records the test, the adjustment set and the permutation scheme. The
+planted strong cell types come out on top and the two unchanged ones at the bottom.
+
+The second test (all four groups) is plotted by name.
+
+```{r plot-shifts-term, fig.width=9, fig.height=4.5}
+cao$plotExpressionShiftMagnitudes(test = "Group")
+```
+
+### Behind one cell type
+
+`plotShiftDetail()` shows the sample-level picture: the distance distribution within and between groups, and the
+samples in the adjusted distance space.
+
+```{r plot-shift-detail, fig.width=10, fig.height=4}
+cao$plotShiftDetail("IN-SST")
+```
+
+`plotSampleInfluence()` shows how much each sample changes the shift estimate when it is left out.
+
+```{r plot-influence, fig.width=9, fig.height=4.5}
+cao$plotSampleInfluence()
+```
 
 ## Robustness
 
-```{r, eval=FALSE, purl=FALSE}
-cao$checkSensitivity()
+The expression shifts are re-estimated without adjustment, with the current model, without each covariate, and with
+the top covariates proposed by the screen. Per cell type, one verdict summarizes the result: robust, sign or
+significance sensitive to the adjustment set, the estimate changes by more than half, or the result is driven by one
+sample.
+
+```{r sensitivity}
+sens <- cao$checkSensitivity(n.permutations = 199)
+```
+
+```{r plot-sensitivity, fig.width=9, fig.height=5}
 cao$plotSensitivity()
 ```
 
-The expression shifts are re-estimated without adjustment, with the current model, without each covariate, and
-with the top covariates proposed by the screen. One verdict per cell type summarizes the result.
-
 ## Sample structure
 
-```{r, fig.width=8, fig.height=4, eval=FALSE, purl=FALSE}
-cao$plotSampleDistances(space = "expression.shifts", color.by = "test", values = "both")
-cao$plotSampleDistances(space = "expression.shifts", color.by = "Sample_Source", adjust.for = ~ Diagnosis)
+The sample distances of one cell type (or of all cell types jointly) can be shown as is, or after removing the part
+explained by a covariate (`adjust.for`).
+
+```{r plot-sample-distances, fig.width=10, fig.height=4}
+plot_grid(
+  cao$plotSampleDistances(space = "expression.shifts", cell.type = "IN-SST", color.by = "test", values = "unadjusted"),
+  cao$plotSampleDistances(space = "expression.shifts", cell.type = "IN-SST", color.by = "Batch", adjust.for = ~ Group),
+  ncol = 2)
 ```
 
-## Functional interpretation
+## Differential expression and composition on the same model
 
-```{r, eval=FALSE, purl=FALSE}
-cao$estimateDEPerCellType(independent.filtering = TRUE, test = "DESeq2.Wald")
-cao$estimateOntology(type = "GSEA", org.db = org.Hs.eg.db::org.Hs.eg.db, n.cores = 1)
+The stored model (formula, test, reference level) is used by the per-cell-type differential expression, by the
+compositional analysis and by the cell density analysis, and is recorded with each result. Whole-factor tests are
+routed to the corresponding multi-group tests (DESeq2 LRT, edgeR/limma F).
+
+```{r de}
+de <- cao$estimateDEPerCellType(test = "limma-voom", min.cell.count = 5)
+sapply(de, function(d) sum(d$res$padj < 0.05, na.rm = TRUE))             # DE genes per cell type
 ```
 
-```{r, fig.width=10, fig.height=12, eval=FALSE, purl=FALSE}
-cao$plotVolcano(xlim = c(-3, 3), ylim = c(0, 3.5), lf.cutoff = 1)
+The top genes of one cell type (`cao$plotVolcano()` draws them when the EnhancedVolcano package is installed):
+
+```{r de-top}
+r <- de[["IN-SST"]]$res; r <- r[order(r$padj), intersect(c("Gene", "log2FoldChange", "stat", "pvalue", "padj", "CellFrac"), names(r))]
+head(r, 8)
 ```
 
-```{r, fig.width=9, fig.height=12, eval=FALSE, purl=FALSE}
-cao$plotOntologyHeatmapCollapsed(name = "GSEA", genes = "up", n = 50, clust.method = "ward.D", size.range = c(1, 4))
+```{r loadings, fig.width=5, fig.height=5}
+cao$estimateCellLoadings()
+cao$plotCellLoadings(show.pvals = FALSE)
 ```
 
 ## Cluster-free analyses
 
-```{r, eval=FALSE, purl=FALSE}
+Cell density is compared between the two groups using the regression weights of the contrast, so adjusted covariates
+are accounted for. Cluster-free expression shifts test the same contrast in every cell's neighbourhood, sharing the
+permutations across cells and adjusting the z-scores by the maximum statistic.
+
+```{r density, fig.width=10, fig.height=4.5}
 cao$estimateCellDensity(method = "graph")
 cao$estimateDiffCellDensity(type = "permutation")
-cao$estimateClusterFreeExpressionShifts()
+plot_grid(cao$plotEmbedding(color.by = "cell.groups"), cao$plotDiffCellDensity(), ncol = 2)
 ```
 
-```{r, fig.width=8, fig.height=4, eval=FALSE, purl=FALSE}
-plot_grid(cao$plotEmbedding(color.by = "cell.groups"), cao$plotDiffCellDensity(legend.position = c(0, 1)), ncol = 2)
-cao$plotClusterFreeExpressionShifts(legend.position = c(0, 1), font.size = 2)
+```{r cluster-free-shifts, fig.width=5.5, fig.height=4.5}
+cao$estimateClusterFreeExpressionShifts(n.top.genes = 500, n.permutations = 99)
+cao$plotClusterFreeExpressionShifts(font.size = 2)
 ```
 
-```{r, eval=FALSE, purl=FALSE}
-cao$estimateClusterFreeDE(n.top.genes = 1000, min.expr.frac = 0.01, adjust.pvalues = TRUE, smooth = TRUE)
-cao$estimateGenePrograms(method = "leiden", z.adj = TRUE, smooth = FALSE)
-```
+## Session info
 
-## Session Info
-
-```{r, echo=FALSE, eval=FALSE, purl=FALSE}
+```{r session-info}
 sessionInfo()
 ```

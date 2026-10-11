@@ -7,11 +7,12 @@
 adjustCellScores(
   z,
   p = NULL,
-  method = c("bh", "spatial-fdr", "neighbourhood"),
+  method = c("bh", "spatial-fdr", "neighbourhood", "perm-fdr"),
   nn.list = NULL,
   weights = NULL,
   alternative = c("two.sided", "greater"),
-  seed = 1
+  seed = 1,
+  perm = NULL
 )
 }
 \arguments{
@@ -22,9 +23,11 @@ adjustCellScores(
 
 \item{method}{\code{"bh"} (Benjamini-Hochberg over the tested cells), \code{"spatial-fdr"} (weighted BH with weights
 \code{1 / (1 + degree)}, so that cells in dense regions, whose neighbourhoods overlap most, count less; the spatial FDR
-of Milo), or \code{"neighbourhood"} (a covering set of index cells is tested, weighted BH over those neighbourhoods
+of Milo), \code{"neighbourhood"} (a covering set of index cells is tested, weighted BH over those neighbourhoods
 with weights inverse to their overlap, and every cell inherits the smallest adjusted p-value of the index
-neighbourhoods it belongs to; the neighbourhood-level testing of Milo without its negative-binomial model)}
+neighbourhoods it belongs to; the neighbourhood-level testing of Milo without its negative-binomial model) or
+\code{"perm-fdr"} (pooled permutation FDR, see \code{\link[=permutationFDR]{permutationFDR()}}: the expected number of cells exceeding a threshold
+under the permutations, pooled over cells, against the observed number; no per-cell p-value floor; needs \code{perm})}
 
 \item{nn.list}{list of 0-based neighbour indices per cell (needed for \code{"spatial-fdr"} and \code{"neighbourhood"})}
 
@@ -33,10 +36,13 @@ neighbourhoods it belongs to; the neighbourhood-level testing of Milo without it
 \item{alternative}{\code{"two.sided"} (default) or \code{"greater"}: how \code{p} relates to \code{z} and how \code{z.adj} is derived}
 
 \item{seed}{seed of the index-cell sampling}
+
+\item{perm}{for \code{"perm-fdr"}: the permuted statistics, either a permutations x cells matrix on the scale of \code{z}, or a
+list \verb{(grid, hist)} of pooled exceedance histograms (see \code{\link[=permutationFDR]{permutationFDR()}})}
 }
 \value{
 list: \code{p.adj} (per cell), \code{z.adj} (signed z-scores of the adjusted p-values; 0 when \code{p.adj} is 1),
-\code{index} (index cells of the neighbourhood method), \code{method}
+\code{index} (index cells of the neighbourhood method), \code{method}, and for \code{"perm-fdr"} the \code{fdr.curve}
 }
 \description{
 Adjust per-cell test statistics for multiplicity across cells

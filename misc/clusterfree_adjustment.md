@@ -63,3 +63,25 @@ cell passes BH with the permutation p at 199-999 permutations because too few ce
 the notebook shows the raw z map instead. (2) Density: a moderated t (limma `squeezeVar` across cells, `moderate =
 TRUE`) is the default parametric p; it leaves the simulation and MS results unchanged and does not rescue SCC. See
 `misc/milo/milo_comparison.md` for the head-to-head with Milo.
+
+## Calibration and power benchmark (2026-10-11, second pass): see `misc/benchmark/README.md`
+
+Added to the package after the benchmark: `adjust.method = "perm-fdr"` (pooled permutation FDR, `permutationFDR()`;
+now the default of both cluster-free tests), `estimateCellDensity(smoothing = "neighbourhood")` with
+`estimateDiffCellDensity(transform = "log")` (1-hop neighbourhood counts on the log scale, the unit of a Milo-type
+test), and the per-cell-type summaries `estimateClusterFreeSummary()` / `plotClusterFreeSummary()` (exact group
+permutation test from the shared permutations, `groupPermutationTest()`, or the Cauchy combination of the cells'
+p-values, `cauchyCombination()`). On the planted simulation the pooled permutation FDR calls the same cells as BH for the
+density (every change with p < 0.01 in the per-sample test, nothing in the unchanged types) and, for the shifts,
+fractions within a few percent of BH on the permutation p (strong 82-94 %, moderate 57-80 %, weak 18 %, null types
+Microglia 24 % at the AST-FB boundary and Neu-NRGN 9 %). The group permutation test marks the six changed types of the
+density simulation and none of the three unchanged ones (p 0.001-0.002 versus 0.40-0.70).
+
+Kernel fix (2026-10-11, from the null study): the shift kernel induced each shared permutation within a cell's present
+samples, which keeps the per-cell test exact but makes the relabelings incoherent across cells and the group
+permutation test anti-conservative (9-22 % of the types at the 5 % level under relabeling; 31 % on iid synthetic data
+with 6 of 16 samples absent). Permutations of the labels are now global relabelings restricted to each cell's present
+samples (cells are skipped under relabelings that leave too few samples per level; `n.perm` per cell), Freedman-Lane
+keeps the within-cell induction. The low-level `clusterFreeExpressionShifts()`, `testTermEffects()` and
+`testPairwiseEffects()` now default `block.vars` to the model's, as the class methods already did. Details and the
+synthetic checks in `misc/benchmark/README.md`.

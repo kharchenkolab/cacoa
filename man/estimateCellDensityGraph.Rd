@@ -11,7 +11,9 @@ estimateCellDensityGraph(
   n.cores = 1,
   beta = 30,
   m = 50,
-  verbose = TRUE
+  verbose = TRUE,
+  smoothing = c("heat", "neighbourhood"),
+  n.hops = 1
 )
 }
 \arguments{
@@ -24,6 +26,13 @@ estimateCellDensityGraph(
 \item{n.cores}{number of cores}
 
 \item{m}{numeric Maximum order of Chebyshev coeff to compute (default=50)}
+
+\item{smoothing}{\code{"heat"} (default): the heat-kernel smooth of each sample's cell indicator (a soft, wide
+neighbourhood set by \code{beta}); \code{"neighbourhood"}: the number of each sample's cells among the cell's graph
+neighbours within \code{n.hops} hops (itself included), i.e. the per-neighbourhood sample counts of a Milo-type
+abundance test; the raw counts are kept in \code{counts.mat} for a log-count test}
+
+\item{n.hops}{neighbourhood radius for \code{smoothing = "neighbourhood"} (default 1)}
 }
 \description{
 Estimate graph smooth based cell density

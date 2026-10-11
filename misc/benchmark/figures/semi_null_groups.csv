@@ -1,0 +1,9 @@
+"dataset","regime","test","groups.sig.perm","groups.sig.cauchy","groups.sig.cauchy.param","n.groups","n"
+"pf","unpaired","heat",0,0,0,29,3
+"pf","unpaired","nb",0,0,0,29,3
+"pf","paired","heat",0,0,0,29,3
+"pf","paired","nb",0,0,0,29,3
+"scc","unpaired","heat",0,0,0,16,3
+"scc","unpaired","nb",0,0,0,16,3
+"scc","paired","heat",0,0,0,16,3
+"scc","paired","nb",0,0,0,16,3

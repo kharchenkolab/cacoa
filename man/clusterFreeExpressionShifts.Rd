@@ -25,8 +25,10 @@ clusterFreeExpressionShifts(
   verbose = FALSE,
   robust = c("none", "huber", "winsor"),
   robust.k = 1.345,
-  adjust.method = c("bh", "spatial-fdr", "neighbourhood", "max-t"),
-  p.source = c("permutation", "z", "parametric")
+  adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
+  p.source = c("permutation", "z", "parametric"),
+  z.grid = seq(0, 25, by = 0.02),
+  groups = NULL
 )
 }
 \arguments{
@@ -46,7 +48,7 @@ clusterFreeExpressionShifts(
 
 \item{min.samp.per.level}{minimum samples per compared level (default 2)}
 
-\item{permutation, n.permutations, block.vars, seed}{permutation settings (see \code{\link[=permutationPlan]{permutationPlan()}})}
+\item{permutation, n.permutations, block.vars, seed}{permutation settings (see \code{\link[=permutationPlan]{permutationPlan()}}); \code{block.vars} defaults to the model's}
 
 \item{adjust}{max-statistic adjustment of the z-scores across cells (default TRUE)}
 
@@ -64,12 +66,21 @@ clusterFreeExpressionShifts(
 
 \item{robust.k}{robust tuning constant}
 
-\item{adjust.method}{\code{"bh"} (default), \code{"spatial-fdr"}, \code{"neighbourhood"} or \code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
+\item{adjust.method}{\code{"perm-fdr"} (default: pooled permutation FDR over cells, see \code{\link[=permutationFDR]{permutationFDR()}}; no per-cell
+floor), \code{"bh"}, \code{"spatial-fdr"}, \code{"neighbourhood"} or \code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
 
-\item{p.source}{per-cell p-values for the FDR adjustments: \code{"permutation"} (default; calibrated but floored at
+\item{p.source}{per-cell p-values for the BH-type adjustments: \code{"permutation"} (default; calibrated but floored at
 1 / (n.permutations + 1), so with many cells and sparse signal BH may call nothing), \code{"z"} (the normal tail of the
 permutation-standardized z-score: no floor, but anti-conservative in the tail, about three times the nominal false
 discovery rate on the simulation) or \code{"parametric"} (F statistic; not calibrated for this statistic)}
+
+\item{z.grid}{thresholds of the permutation-standardized z at which the pooled null exceedance counts are
+accumulated for \code{"perm-fdr"} (default 0 to 25 in steps of 0.02)}
+
+\item{groups}{optional factor of cell groups (named by cell): the kernel then also accumulates the sum of the
+permuted z-scores per group, from which \code{group.test} gives the exact group-level permutation test (the mean z of
+the group's cells against its permutation distribution; one-sided) with BH across groups; the permutation
+distribution of the group means is stored as \code{attr(group.test, "perm.means")}}
 }
 \value{
 list: \code{stat} (shift F per cell), \code{p.value}, \code{z.score} (and \code{z.scores}), \code{z.adj}, \code{shifts} (bias-corrected shift
@@ -77,4 +88,13 @@ estimate), \code{shifts.smoothed}, \code{n.samples}, \code{settings}
 }
 \description{
 Cluster-free expression shifts for one contrast
+}
+\details{
+Label permutations (the block scheme) are applied as global relabelings of the samples: in a neighbourhood
+where some samples are absent, a present sample takes the design row of the sample it is mapped to, so that one
+permutation means the same relabeling in every cell and statistics pooled over cells (the group test, the
+pooled permutation FDR, the max statistic) are compared with a coherent null. A cell is not tested under a
+relabeling that leaves fewer than \code{min.samp.per.level} present samples at a compared level (\code{n.perm} counts the
+relabelings under which each cell was tested). Residual permutations (Freedman-Lane) act on the present samples'
+residuals and are induced within each cell's sample set.
 }

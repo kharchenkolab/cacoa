@@ -1,0 +1,105 @@
+"dataset","method","alpha","mean.frac.called","max.frac.called","n"
+"SCC normals, unpaired (4 + 5)","1-hop log: bh.param",0.05,5.23067266450466e-05,0.00015692017993514,3
+"SCC normals, unpaired (4 + 5)","1-hop log: bh.param",0.1,5.23067266450466e-05,0.00015692017993514,3
+"SCC normals, unpaired (4 + 5)","1-hop log: bh.perm",0.05,0,0,3
+"SCC normals, unpaired (4 + 5)","1-hop log: bh.perm",0.1,0,0,3
+"SCC normals, unpaired (4 + 5)","1-hop log: max.t",0.05,0,0,3
+"SCC normals, unpaired (4 + 5)","1-hop log: max.t",0.1,0.00707884367262963,0.0111413327753949,3
+"SCC normals, unpaired (4 + 5)","1-hop log: nbhd.param",0.05,0,0,3
+"SCC normals, unpaired (4 + 5)","1-hop log: nbhd.param",0.1,0.00061024514419221,0.00183073543257663,3
+"SCC normals, unpaired (4 + 5)","1-hop log: perm.fdr",0.05,0,0,3
+"SCC normals, unpaired (4 + 5)","1-hop log: perm.fdr",0.1,1.74355755483488e-05,5.23067266450466e-05,3
+"SCC normals, unpaired (4 + 5)","1-hop log: spatial.param",0.05,5.23067266450466e-05,0.00015692017993514,3
+"SCC normals, unpaired (4 + 5)","1-hop log: spatial.param",0.1,5.23067266450466e-05,0.00015692017993514,3
+"SCC normals, unpaired (4 + 5)","Milo (graph, spatial FDR)",0.05,0,0,3
+"SCC normals, unpaired (4 + 5)","Milo (graph, spatial FDR)",0.1,0,0,3
+"SCC normals, unpaired (4 + 5)","heat: bh.param",0.05,0,0,3
+"SCC normals, unpaired (4 + 5)","heat: bh.param",0.1,0,0,3
+"SCC normals, unpaired (4 + 5)","heat: bh.perm",0.05,0,0,3
+"SCC normals, unpaired (4 + 5)","heat: bh.perm",0.1,0,0,3
+"SCC normals, unpaired (4 + 5)","heat: max.t",0.05,0,0,3
+"SCC normals, unpaired (4 + 5)","heat: max.t",0.1,0,0,3
+"SCC normals, unpaired (4 + 5)","heat: nbhd.param",0.05,0,0,3
+"SCC normals, unpaired (4 + 5)","heat: nbhd.param",0.1,0,0,3
+"SCC normals, unpaired (4 + 5)","heat: perm.fdr",0.05,0,0,3
+"SCC normals, unpaired (4 + 5)","heat: perm.fdr",0.1,0,0,3
+"SCC normals, unpaired (4 + 5)","heat: spatial.param",0.05,0,0,3
+"SCC normals, unpaired (4 + 5)","heat: spatial.param",0.1,0,0,3
+"SCC normals, paired (9 donors)","1-hop log: bh.param",0.05,0,0,3
+"SCC normals, paired (9 donors)","1-hop log: bh.param",0.1,0,0,3
+"SCC normals, paired (9 donors)","1-hop log: bh.perm",0.05,0,0,3
+"SCC normals, paired (9 donors)","1-hop log: bh.perm",0.1,0,0,3
+"SCC normals, paired (9 donors)","1-hop log: max.t",0.05,0,0,3
+"SCC normals, paired (9 donors)","1-hop log: max.t",0.1,0,0,3
+"SCC normals, paired (9 donors)","1-hop log: nbhd.param",0.05,0,0,3
+"SCC normals, paired (9 donors)","1-hop log: nbhd.param",0.1,0,0,3
+"SCC normals, paired (9 donors)","1-hop log: perm.fdr",0.05,0,0,3
+"SCC normals, paired (9 donors)","1-hop log: perm.fdr",0.1,3.48711510966977e-05,5.23067266450466e-05,3
+"SCC normals, paired (9 donors)","1-hop log: spatial.param",0.05,0,0,3
+"SCC normals, paired (9 donors)","1-hop log: spatial.param",0.1,0,0,3
+"SCC normals, paired (9 donors)","Milo (graph, spatial FDR)",0.05,0,0,3
+"SCC normals, paired (9 donors)","Milo (graph, spatial FDR)",0.1,0,0,3
+"SCC normals, paired (9 donors)","heat: bh.param",0.05,0,0,3
+"SCC normals, paired (9 donors)","heat: bh.param",0.1,0,0,3
+"SCC normals, paired (9 donors)","heat: bh.perm",0.05,0,0,3
+"SCC normals, paired (9 donors)","heat: bh.perm",0.1,0,0,3
+"SCC normals, paired (9 donors)","heat: max.t",0.05,0,0,3
+"SCC normals, paired (9 donors)","heat: max.t",0.1,0,0,3
+"SCC normals, paired (9 donors)","heat: nbhd.param",0.05,0,0,3
+"SCC normals, paired (9 donors)","heat: nbhd.param",0.1,0,0,3
+"SCC normals, paired (9 donors)","heat: perm.fdr",0.05,0,0,3
+"SCC normals, paired (9 donors)","heat: perm.fdr",0.1,0,0,3
+"SCC normals, paired (9 donors)","heat: spatial.param",0.05,0,0,3
+"SCC normals, paired (9 donors)","heat: spatial.param",0.1,0,0,3
+"PF controls, unpaired (5 + 5)","1-hop log: bh.param",0.05,0,0,3
+"PF controls, unpaired (5 + 5)","1-hop log: bh.param",0.1,1.05338558125816e-05,3.16015674377449e-05,3
+"PF controls, unpaired (5 + 5)","1-hop log: bh.perm",0.05,0,0,3
+"PF controls, unpaired (5 + 5)","1-hop log: bh.perm",0.1,0,0,3
+"PF controls, unpaired (5 + 5)","1-hop log: max.t",0.05,0,0,3
+"PF controls, unpaired (5 + 5)","1-hop log: max.t",0.1,0,0,3
+"PF controls, unpaired (5 + 5)","1-hop log: nbhd.param",0.05,0,0,3
+"PF controls, unpaired (5 + 5)","1-hop log: nbhd.param",0.1,0,0,3
+"PF controls, unpaired (5 + 5)","1-hop log: perm.fdr",0.05,0,0,3
+"PF controls, unpaired (5 + 5)","1-hop log: perm.fdr",0.1,0,0,3
+"PF controls, unpaired (5 + 5)","1-hop log: spatial.param",0.05,0,0,3
+"PF controls, unpaired (5 + 5)","1-hop log: spatial.param",0.1,0,0,3
+"PF controls, unpaired (5 + 5)","Milo (graph, spatial FDR)",0.05,0,0,3
+"PF controls, unpaired (5 + 5)","Milo (graph, spatial FDR)",0.1,0.154877800529272,0.283363868232927,3
+"PF controls, unpaired (5 + 5)","heat: bh.param",0.05,0,0,3
+"PF controls, unpaired (5 + 5)","heat: bh.param",0.1,0,0,3
+"PF controls, unpaired (5 + 5)","heat: bh.perm",0.05,0,0,3
+"PF controls, unpaired (5 + 5)","heat: bh.perm",0.1,0,0,3
+"PF controls, unpaired (5 + 5)","heat: max.t",0.05,0.00334976614840096,0.0100492984452029,3
+"PF controls, unpaired (5 + 5)","heat: max.t",0.1,0.00353937555302743,0.0106181266590823,3
+"PF controls, unpaired (5 + 5)","heat: nbhd.param",0.05,0,0,3
+"PF controls, unpaired (5 + 5)","heat: nbhd.param",0.1,0,0,3
+"PF controls, unpaired (5 + 5)","heat: perm.fdr",0.05,0,0,3
+"PF controls, unpaired (5 + 5)","heat: perm.fdr",0.1,0,0,3
+"PF controls, unpaired (5 + 5)","heat: spatial.param",0.05,0,0,3
+"PF controls, unpaired (5 + 5)","heat: spatial.param",0.1,0,0,3
+"PF controls, paired (10 donors)","1-hop log: bh.param",0.05,0,0,3
+"PF controls, paired (10 donors)","1-hop log: bh.param",0.1,0,0,3
+"PF controls, paired (10 donors)","1-hop log: bh.perm",0.05,0,0,3
+"PF controls, paired (10 donors)","1-hop log: bh.perm",0.1,0,0,3
+"PF controls, paired (10 donors)","1-hop log: max.t",0.05,0,0,3
+"PF controls, paired (10 donors)","1-hop log: max.t",0.1,0,0,3
+"PF controls, paired (10 donors)","1-hop log: nbhd.param",0.05,0,0,3
+"PF controls, paired (10 donors)","1-hop log: nbhd.param",0.1,0,0,3
+"PF controls, paired (10 donors)","1-hop log: perm.fdr",0.05,0,0,3
+"PF controls, paired (10 donors)","1-hop log: perm.fdr",0.1,0,0,3
+"PF controls, paired (10 donors)","1-hop log: spatial.param",0.05,0,0,3
+"PF controls, paired (10 donors)","1-hop log: spatial.param",0.1,0,0,3
+"PF controls, paired (10 donors)","Milo (graph, spatial FDR)",0.05,0.0106333297409922,0.0190034845708949,3
+"PF controls, paired (10 donors)","Milo (graph, spatial FDR)",0.1,0.0106333297409922,0.0190034845708949,3
+"PF controls, paired (10 donors)","heat: bh.param",0.05,0,0,3
+"PF controls, paired (10 donors)","heat: bh.param",0.1,0,0,3
+"PF controls, paired (10 donors)","heat: bh.perm",0.05,0,0,3
+"PF controls, paired (10 donors)","heat: bh.perm",0.1,0,0,3
+"PF controls, paired (10 donors)","heat: max.t",0.05,0,0,3
+"PF controls, paired (10 donors)","heat: max.t",0.1,0.00333923229258838,0.0100176968777651,3
+"PF controls, paired (10 donors)","heat: nbhd.param",0.05,0,0,3
+"PF controls, paired (10 donors)","heat: nbhd.param",0.1,0,0,3
+"PF controls, paired (10 donors)","heat: perm.fdr",0.05,0,0,3
+"PF controls, paired (10 donors)","heat: perm.fdr",0.1,0,0,3
+"PF controls, paired (10 donors)","heat: spatial.param",0.05,0,0,3
+"PF controls, paired (10 donors)","heat: spatial.param",0.1,0,0,3

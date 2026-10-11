@@ -76,17 +76,36 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.weights, bins, b
 #' @param sample.weights Named numeric vector: per-sample signed weights.
 #' @param n.cores number of cores
 #' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
+#' @param smoothing `"heat"` (default): the heat-kernel smooth of each sample's cell indicator (a soft, wide
+#'   neighbourhood set by `beta`); `"neighbourhood"`: the number of each sample's cells among the cell's graph
+#'   neighbours within `n.hops` hops (itself included), i.e. the per-neighbourhood sample counts of a Milo-type
+#'   abundance test; the raw counts are kept in `counts.mat` for a log-count test
+#' @param n.hops neighbourhood radius for `smoothing = "neighbourhood"` (default 1)
 #' @keywords internal
-estimateCellDensityGraph <- function(graph, sample.per.cell, sample.weights, n.cores=1, beta=30, m=50, verbose=TRUE) {
+estimateCellDensityGraph <- function(graph, sample.per.cell, sample.weights, n.cores=1, beta=30, m=50, verbose=TRUE,
+                                     smoothing=c("heat", "neighbourhood"), n.hops=1) {
+  smoothing <- match.arg(smoothing)
   sig.mat <- unique(sample.per.cell) %>% sapply(function(s) as.numeric(sample.per.cell == s)) %>%
     set_rownames(names(sample.per.cell)) %>% set_colnames(unique(sample.per.cell))
+  counts.mat <- NULL; sample.sizes <- colSums(sig.mat)
 
-  score.mat <- sccore::smoothSignalOnGraph(
-    sig.mat, filter=function(...) sccore::heatFilter(..., beta=beta), graph=graph,
-    m=m, n.cores=n.cores, progress.chunk=(verbose + 1), progress=verbose,
-  ) %>% as.matrix()
+  if (smoothing == "neighbourhood") {
+    cells <- intersect(igraph::V(graph)$name, rownames(sig.mat))
+    A <- igraph::as_adj(graph, sparse = TRUE)[cells, cells, drop = FALSE]
+    A@x[] <- 1; Matrix::diag(A) <- 1
+    M <- A
+    if (n.hops > 1) for (h in seq_len(n.hops - 1)) { M <- M %*% A; M@x[] <- 1 }
+    counts.mat <- as.matrix(M %*% sig.mat[cells, , drop = FALSE])
+    rownames(counts.mat) <- cells
+    score.mat <- t(t(counts.mat) / sample.sizes[colnames(counts.mat)])   # fraction of the sample's cells in the neighbourhood
+  } else {
+    score.mat <- sccore::smoothSignalOnGraph(
+      sig.mat, filter=function(...) sccore::heatFilter(..., beta=beta), graph=graph,
+      m=m, n.cores=n.cores, progress.chunk=(verbose + 1), progress=verbose,
+    ) %>% as.matrix()
 
-  score.mat %<>% {t(.) / colSums(.)} %>% t() # Normalize by columns to adjust on the number of cells per sample
+    score.mat %<>% {t(.) / colSums(.)} %>% t() # Normalize by columns to adjust on the number of cells per sample
+  }
 
 
   # ---------- condition densities from weights ----------
@@ -109,7 +128,7 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.weights, n.c
   cond.densities <- list(num = dens.num, den = dens.den)
   # ------------------------------------------------------
 
-  return(list(density.mat=score.mat, cond.densities=cond.densities, method='graph'))
+  return(list(density.mat=score.mat, cond.densities=cond.densities, method='graph', smoothing=smoothing, counts.mat=counts.mat, sample.sizes=sample.sizes))
 }
 
 
@@ -249,7 +268,7 @@ diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c
     tstat <- res$effect / se.mod
   } else tstat <- res$effect / res$se
   p.param <- if (alternative == "two-sided") 2 * stats::pt(-abs(tstat), dfr) else if (alternative == "greater") stats::pt(tstat, dfr, lower.tail = FALSE) else stats::pt(tstat, dfr)
-  out <- list(score = score.c, permut.scores = if (is.null(res$effects.perm)) NULL else t(res$effects.perm), z.score = z.score,
+  out <- list(score = score.c, permut.scores = if (is.null(res$effects.perm)) NULL else t(res$effects.perm), stats.perm = res$stats.perm, stat.obs = setNames(res$stat.obs, colnames(Y)), z.score = z.score,
               effect = setNames(res$effect, colnames(Y)), se = setNames(res$se, colnames(Y)), statistic = res$statistic,
               t = setNames(tstat, colnames(Y)), df = dfr, p.param = setNames(p.param, colnames(Y)), p.perm = setNames(res$pval, colnames(Y)))
 

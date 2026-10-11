@@ -32,15 +32,29 @@ pairVectorToMatrix <- function(y, pairs, samples) {
 #' @param dist `"cor"` (1 - Pearson correlation between the two samples' mean profiles; default), `"cosine"` or `"js"`
 #' @param min.n.obs.per.samp minimum cells of a sample inside the neighbourhood (default 3)
 #' @param min.samp.per.level minimum samples per compared level (default 2)
-#' @param permutation,n.permutations,block.vars,seed permutation settings (see [permutationPlan()])
+#' @param permutation,n.permutations,block.vars,seed permutation settings (see [permutationPlan()]); `block.vars` defaults to the model's
 #' @param adjust max-statistic adjustment of the z-scores across cells (default TRUE)
 #' @param smooth median-filter the shifts and adjusted z-scores over the graph (default TRUE)
 #' @param wins winsorizing fraction for the adjustment (default 0.025)
-#' @param adjust.method `"bh"` (default), `"spatial-fdr"`, `"neighbourhood"` or `"max-t"`, see [adjustCellScores()]
-#' @param p.source per-cell p-values for the FDR adjustments: `"permutation"` (default; calibrated but floored at
+#' @param adjust.method `"perm-fdr"` (default: pooled permutation FDR over cells, see [permutationFDR()]; no per-cell
+#'   floor), `"bh"`, `"spatial-fdr"`, `"neighbourhood"` or `"max-t"`, see [adjustCellScores()]
+#' @param p.source per-cell p-values for the BH-type adjustments: `"permutation"` (default; calibrated but floored at
 #'   1 / (n.permutations + 1), so with many cells and sparse signal BH may call nothing), `"z"` (the normal tail of the
 #'   permutation-standardized z-score: no floor, but anti-conservative in the tail, about three times the nominal false
 #'   discovery rate on the simulation) or `"parametric"` (F statistic; not calibrated for this statistic)
+#' @param z.grid thresholds of the permutation-standardized z at which the pooled null exceedance counts are
+#'   accumulated for `"perm-fdr"` (default 0 to 25 in steps of 0.02)
+#' @param groups optional factor of cell groups (named by cell): the kernel then also accumulates the sum of the
+#'   permuted z-scores per group, from which `group.test` gives the exact group-level permutation test (the mean z of
+#'   the group's cells against its permutation distribution; one-sided) with BH across groups; the permutation
+#'   distribution of the group means is stored as `attr(group.test, "perm.means")`
+#' @details Label permutations (the block scheme) are applied as global relabelings of the samples: in a neighbourhood
+#'   where some samples are absent, a present sample takes the design row of the sample it is mapped to, so that one
+#'   permutation means the same relabeling in every cell and statistics pooled over cells (the group test, the
+#'   pooled permutation FDR, the max statistic) are compared with a coherent null. A cell is not tested under a
+#'   relabeling that leaves fewer than `min.samp.per.level` present samples at a compared level (`n.perm` counts the
+#'   relabelings under which each cell was tested). Residual permutations (Freedman-Lane) act on the present samples'
+#'   residuals and are induced within each cell's sample set.
 #' @param log.vectors log10(1e3 x + 1) transform of the mean profiles (default TRUE)
 #' @param n.cores threads for the per-cell loop (C++)
 #' @param verbose progress
@@ -53,8 +67,10 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
                                         min.samp.per.level = 2, permutation = "auto", n.permutations = 199, block.vars = NULL, seed = 1,
                                         adjust = TRUE, smooth = TRUE, wins = 0.025, log.vectors = TRUE, n.cores = 1, verbose = FALSE,
                                         robust = c("none", "huber", "winsor"), robust.k = 1.345,
-                                        adjust.method = c("bh", "spatial-fdr", "neighbourhood", "max-t"), p.source = c("permutation", "z", "parametric")) {
+                                        adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"), p.source = c("permutation", "z", "parametric"),
+                                        z.grid = seq(0, 25, by = 0.02), groups = NULL) {
   dist <- match.arg(dist); robust <- match.arg(robust); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source)
+  block.vars <- block.vars %||% design$block.vars   # the model's permutation strata unless overridden
   if (identical(design$contrast_spec$type, "term")) stop("cluster-free shifts need a contrast test (two groups or a numeric step)")
   samples <- intersect(rownames(design$F), levels(droplevels(factor(sample.per.cell))))
   if (length(samples) < 4) stop("fewer than 4 samples shared by the design and the cells")
@@ -81,16 +97,20 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
   lev.var <- if (!is.null(spec) && spec$type %in% c("simple", "marginal") && !grepl(":", spec$term, fixed = TRUE) && spec$term %in% names(meta) && !is.numeric(meta[[spec$term]])) spec$term else NULL
   level.code <- rep(-1L, n)
   if (!is.null(lev.var)) { g <- as.character(meta[[lev.var]]); level.code <- ifelse(is.na(g), -1L, ifelse(g == spec$den, 1L, ifelse(g == spec$num, 2L, 0L))) }
+  cell.names <- names(nns.per.cell) %||% colnames(cm)
+  grp.code <- integer(0); grp.levels <- NULL
+  if (!is.null(groups)) { gf <- as.factor(groups[cell.names]); grp.levels <- levels(gf); grp.code <- as.integer(gf) - 1L; grp.code[is.na(grp.code)] <- -1L }
   if (verbose) message(sprintf("Testing %d cells (%d samples) with %d permutations (%s)...", m, n, B, gplan$scheme))
   kr <- cluster_free_shift_stream(cm, as.integer(spc), nn.list, FALSE, as.integer(min.n.obs.per.samp), dist, log.vectors,
                                   pairs - 1L, n, des$F, cF, as.integer(level.code), as.integer(min.samp.per.level), as.integer(gplan$strata), as.integer(gplan$in.set),
-                                  P.global, gplan$scheme == "freedman-lane", TRUE, as.integer(n.cores), c(none = 0L, huber = 1L, winsor = 2L)[[robust]], robust.k)
-  Fobs <- as.numeric(kr$stat); pval <- as.numeric(kr$p); shifts <- as.numeric(kr$shift); n.samp <- as.integer(kr$n); z <- as.numeric(kr$z)
+                                  P.global, gplan$scheme == "freedman-lane", TRUE, as.integer(n.cores), c(none = 0L, huber = 1L, winsor = 2L)[[robust]], robust.k,
+                                  as.numeric(z.grid), as.integer(grp.code))
+  Fobs <- as.numeric(kr$stat); pval <- as.numeric(kr$p); shifts <- as.numeric(kr$shift); n.samp <- as.integer(kr$n); n.perm <- as.integer(kr$n_perm); z <- as.numeric(kr$z)
   mx <- as.numeric(kr$max); mn <- as.numeric(kr$min)
   valid <- which(is.finite(z))
-  cell.names <- names(nns.per.cell) %||% colnames(cm)
-  names(Fobs) <- names(pval) <- names(shifts) <- names(z) <- names(n.samp) <- cell.names
-  z.adj <- NULL; p.adj <- NULL; index.cells <- NULL
+  names(Fobs) <- names(pval) <- names(shifts) <- names(z) <- names(n.samp) <- names(n.perm) <- cell.names
+  z.adj <- NULL; p.adj <- NULL; index.cells <- NULL; fdr.curve <- NULL
+  perm.hist <- list(grid = as.numeric(kr$grid), hist = kr$hist)
   q <- ncol(des$F)
   p.param <- stats::pf(Fobs, 1, pmax(n.samp - q, 1), lower.tail = FALSE); p.param[!is.finite(Fobs)] <- NA_real_
   names(p.param) <- cell.names
@@ -100,6 +120,9 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
       z.adj <- adjustedZScoresMaxStat(z_obs = z0, alt = 1L, max_vals_in = mx, min_vals_in = mn, wins = wins, smooth = smooth,
                                       nn_ids = nn.list, non_zero_ids = as.integer(valid - 1L))
       z.adj[!is.finite(z)] <- NA_real_
+    } else if (adjust.method == "perm-fdr") {
+      ad <- adjustCellScores(z, NULL, method = "perm-fdr", alternative = "greater", perm = perm.hist)
+      z.adj <- ad$z.adj; p.adj <- ad$p.adj; names(p.adj) <- cell.names; fdr.curve <- ad$fdr.curve
     } else {
       p.in <- switch(p.source, parametric = p.param, permutation = pval,
                      z = { pz <- stats::pnorm(z, lower.tail = FALSE); pz[!is.finite(z)] <- NA_real_; names(pz) <- cell.names; pz })   # normal tail of the permutation-standardized z: no floor
@@ -110,6 +133,15 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
     }
     names(z.adj) <- cell.names
   }
+  group.test <- NULL
+  if (length(grp.levels)) {
+    gn <- as.integer(kr$group_n); gobs <- as.numeric(kr$group_obs)
+    pm <- kr$group_sum / kr$group_count; pm[kr$group_count == 0] <- NA_real_   # permutations x groups: the mean z of the cells tested under each relabeling
+    mean.obs <- ifelse(gn > 0, gobs / pmax(gn, 1), NA_real_)
+    p.g <- vapply(seq_along(grp.levels), function(g) { ok <- is.finite(pm[, g]); if (gn[g] > 0 && any(ok)) (sum(pm[ok, g] >= mean.obs[g] - 1e-12) + 1) / (sum(ok) + 1) else NA_real_ }, numeric(1))
+    group.test <- data.frame(group = grp.levels, n.tested = gn, mean.z = mean.obs, p.perm = p.g, padj = stats::p.adjust(p.g, "BH"), stringsAsFactors = FALSE)
+    attr(group.test, "perm.means") <- `colnames<-`(pm, grp.levels)
+  }
   shifts.smoothed <- NULL
   if (smooth) {
     s0 <- shifts; s0[!is.finite(s0)] <- 0
@@ -118,7 +150,8 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
     names(shifts.smoothed) <- cell.names
   }
   list(stat = Fobs, p.value = pval, p.param = p.param, z.score = z, z.scores = z, z.adj = z.adj, p.adj = p.adj, index.cells = index.cells,
-       shifts = shifts, shifts.smoothed = shifts.smoothed, n.samples = n.samp,
-       settings = list(dist = dist, permutation = gplan$scheme, n.permutations = B, seed = seed, min.n.obs.per.samp = min.n.obs.per.samp, robust = robust,
+       fdr.curve = fdr.curve, perm.hist = perm.hist, group.test = group.test,
+       shifts = shifts, shifts.smoothed = shifts.smoothed, n.samples = n.samp, n.perm = n.perm,
+       settings = list(dist = dist, permutation = gplan$scheme, block.vars = block.vars, n.permutations = B, seed = seed, min.n.obs.per.samp = min.n.obs.per.samp, robust = robust,
                        adjust = adjust, adjust.method = adjust.method, p.source = p.source, smooth = smooth, n.cells.tested = length(valid)))
 }

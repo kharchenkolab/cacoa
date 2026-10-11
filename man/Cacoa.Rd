@@ -439,6 +439,15 @@ cao$getMostChangedGenes(n = 10) # n can be any number of genes to extract
 }
 
 ## ------------------------------------------------
+## Method `Cacoa$estimateClusterFreeSummary`
+## ------------------------------------------------
+
+\dontrun{
+cao$estimateDiffCellDensity(); cao$estimateClusterFreeSummary("cell.density")
+cao$estimateClusterFreeExpressionShifts(); cao$estimateClusterFreeSummary("cluster.free.expr.shifts")
+}
+
+## ------------------------------------------------
 ## Method `Cacoa$smoothClusterFreeZScores`
 ## ------------------------------------------------
 
@@ -651,6 +660,8 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item \href{#method-Cacoa-estimateClusterFreeDE}{\code{Cacoa$estimateClusterFreeDE()}}
 \item \href{#method-Cacoa-getMostChangedGenes}{\code{Cacoa$getMostChangedGenes()}}
 \item \href{#method-Cacoa-estimateClusterFreeExpressionShifts}{\code{Cacoa$estimateClusterFreeExpressionShifts()}}
+\item \href{#method-Cacoa-estimateClusterFreeSummary}{\code{Cacoa$estimateClusterFreeSummary()}}
+\item \href{#method-Cacoa-plotClusterFreeSummary}{\code{Cacoa$plotClusterFreeSummary()}}
 \item \href{#method-Cacoa-smoothClusterFreeZScores}{\code{Cacoa$smoothClusterFreeZScores()}}
 \item \href{#method-Cacoa-estimateGenePrograms}{\code{Cacoa$estimateGenePrograms()}}
 \item \href{#method-Cacoa-plotGeneProgramScores}{\code{Cacoa$plotGeneProgramScores()}}
@@ -1187,9 +1198,6 @@ cao$screenCovariates(); cao$plotCovariateScreen(); cao$plotCovariateSummary()
 \if{html}{\out{<a id="method-Cacoa-screenResiduals"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-screenResiduals}{}}}
 \subsection{Method \code{screenResiduals()}}{
-Heatmap of the covariate screen (see \code{\link[=plotCovariateScreen]{plotCovariateScreen()}})
-
-
 Screen covariates against the residuals of a stored cell-density or cluster-free DE result
 
 The estimator must have been run with \code{return.residuals = TRUE}. Residuals are turned into sample distances
@@ -1211,8 +1219,6 @@ and screened marginally for every usable covariate that is not in the model (see
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{results slot (default "covariate.screen")}
-
 \item{\code{name}}{name of the stored result (\code{"cell.density"} or \code{"cluster.free.de"})}
 
 \item{\code{covariates}}{covariates to screen (default: all usable columns not in the model)}
@@ -1228,13 +1234,11 @@ and screened marginally for every usable covariate that is not in the model (see
 \item{\code{robust}}{\code{"none"}, \code{"huber"} or \code{"winsor"} (default: option)}
 
 \item{\code{result.name}}{where to store the screen (default: \verb{<name>.residual.screen})}
-
-\item{\code{...}}{passed to \code{\link[=plotCovariateScreen]{plotCovariateScreen()}} (\code{effect}, \code{mode}, \code{value}, \code{cell.types}, \code{covariates}, \code{cluster}, \code{alpha})}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-ggplot2 object
+object of class \code{cacoaCovariateScreen}
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
@@ -1252,6 +1256,7 @@ cao$plotCovariateScreen(name = "cell.density.residual.screen")
 \if{html}{\out{<a id="method-Cacoa-plotCovariateScreen"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotCovariateScreen}{}}}
 \subsection{Method \code{plotCovariateScreen()}}{
+Heatmap of the covariate screen (see \code{\link[=plotCovariateScreen]{plotCovariateScreen()}})
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCovariateScreen(name = "covariate.screen", ...)}\if{html}{\out{</div>}}
 }
@@ -1259,9 +1264,14 @@ cao$plotCovariateScreen(name = "cell.density.residual.screen")
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{string Field name where the test results are stored}
+\item{\code{name}}{results slot (default "covariate.screen")}
+
+\item{\code{...}}{passed to \code{\link[=plotCovariateScreen]{plotCovariateScreen()}} (\code{effect}, \code{mode}, \code{value}, \code{cell.types}, \code{covariates}, \code{cluster}, \code{alpha})}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}
@@ -3393,6 +3403,8 @@ Estimate cell density in giving embedding
   sample.metadata = self$sample.meta,
   block.vars = NULL,
   bandwidth = 0.05,
+  smoothing = c("heat", "neighbourhood"),
+  n.hops = 1,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -3426,6 +3438,12 @@ Estimate cell density in giving embedding
 
 \item{\code{bandwidth}}{numeric KDE bandwidth multiplier (default=0.5). The full bandwidth is estimated by multiplying this value on the difference between 90\% and 10\%
 of the corresponding embedding dimension. Set it to NULL to use \link[MASS:bandwidth.nrd]{bandwidth.nrd} estimator. (default=0.05)}
+
+\item{\code{smoothing}}{graph method only: \code{"heat"} (default; heat-kernel smooth with \code{beta}) or \code{"neighbourhood"}
+(per-sample counts of the cell's graph neighbours within \code{n.hops} hops, the unit of a Milo-type abundance
+test; use with \code{estimateDiffCellDensity(transform = "log")})}
+
+\item{\code{n.hops}}{neighbourhood radius for \code{smoothing = "neighbourhood"} (default 1)}
 
 \item{\code{...}}{additional arguments}
 }
@@ -3592,9 +3610,10 @@ Estimate differential cell density
   return.sampled.stats = TRUE,
   n.permutations = 999,
   smooth = TRUE,
-  adjust.method = c("bh", "spatial-fdr", "neighbourhood", "max-t"),
+  adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
   p.source = c("parametric", "permutation"),
   moderate = TRUE,
+  transform = c("none", "log"),
   verbose = self$verbose,
   n.cores = self$n.cores,
   ...
@@ -3638,16 +3657,24 @@ Estimate differential cell density
 
 \item{\code{smooth}}{boolean Smooth results (default=TRUE)}
 
-\item{\code{adjust.method}}{multiplicity adjustment across cells, see \code{\link[=adjustCellScores]{adjustCellScores()}}: \code{"bh"} (Benjamini-Hochberg over
-the tested cells; default), \code{"spatial-fdr"} (Milo's spatially weighted BH), \code{"neighbourhood"} (a covering set of
-index neighbourhoods is tested; liberal) or \code{"max-t"} (familywise, the maximum statistic under permutations; very
-conservative with many cells)}
+\item{\code{adjust.method}}{multiplicity adjustment across cells, see \code{\link[=adjustCellScores]{adjustCellScores()}}: \code{"perm-fdr"} (default: the
+pooled permutation FDR of the studentized contrast over cells, see \code{\link[=permutationFDR]{permutationFDR()}}; no per-cell floor, uses
+the permutation blocks of the design), \code{"bh"} (Benjamini-Hochberg over the tested cells' p-values; the
+parametric p-values ignore permutation blocks and are conservative where few samples carry density),
+\code{"spatial-fdr"} (Milo's spatially weighted BH), \code{"neighbourhood"} (a covering set of index neighbourhoods is
+tested; liberal) or \code{"max-t"} (the maximum statistic under permutations; the former default). Benchmarks:
+\code{misc/benchmark/README.md}}
 
-\item{\code{p.source}}{per-cell p-values for the FDR alternatives: \code{"parametric"} (t statistic of the contrast, default)
+\item{\code{p.source}}{per-cell p-values for the BH-type alternatives: \code{"parametric"} (t statistic of the contrast, default)
 or \code{"permutation"} (floored at 1 / (n.permutations + 1))}
 
 \item{\code{moderate}}{shrink the per-cell residual variances towards a common prior across cells (limma's empirical
 Bayes; a moderated t with extra degrees of freedom) before the parametric p-values (default TRUE)}
+
+\item{\code{transform}}{\code{"none"} (default): test the densities as they are; \code{"log"}: test \code{log2} counts per 10,000 cells
+of the sample (\code{log2((density * n + 0.5) / (n + 1) * 1e4)}, \code{n} the sample's cell number), the log-count model
+of a Milo-type abundance test, natural with \code{estimateCellDensity(smoothing = "neighbourhood")}; the effect is
+then a log2 fold change of the density}
 
 \item{\code{verbose}}{boolean Print messages (default=self$verbose)}
 
@@ -4328,7 +4355,7 @@ median smoothing over the graph.
   genes = NULL,
   min.expr.frac = 0,
   min.edge.weight = 0,
-  adjust.method = c("bh", "spatial-fdr", "neighbourhood", "max-t"),
+  adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
   p.source = c("permutation", "z", "parametric"),
   verbose = NULL,
   n.cores = NULL,
@@ -4378,9 +4405,10 @@ median smoothing over the graph.
 
 \item{\code{min.edge.weight}}{minimum graph edge weight between cells of different samples (default 0)}
 
-\item{\code{adjust.method}}{multiplicity adjustment across cells: \code{"bh"} (default), \code{"spatial-fdr"}, \code{"neighbourhood"} or \code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
+\item{\code{adjust.method}}{multiplicity adjustment across cells: \code{"perm-fdr"} (default; pooled permutation FDR, see
+\code{\link[=permutationFDR]{permutationFDR()}}), \code{"bh"}, \code{"spatial-fdr"}, \code{"neighbourhood"} or \code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
 
-\item{\code{p.source}}{per-cell p-values for the FDR adjustments: \code{"permutation"} (default; calibrated, floored at
+\item{\code{p.source}}{per-cell p-values for the BH-type adjustments: \code{"permutation"} (default; calibrated, floored at
 1 / (n.permutations + 1)), \code{"z"} (normal tail of the permutation-standardized z: no floor, anti-conservative) or
 \code{"parametric"} (the F of the neighbourhood shift; not calibrated)}
 
@@ -4396,6 +4424,93 @@ median smoothing over the graph.
 }
 \subsection{Returns}{
 list (see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}), also stored in \code{cao$test.results[[name]]}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-estimateClusterFreeSummary"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-estimateClusterFreeSummary}{}}}
+\subsection{Method \code{estimateClusterFreeSummary()}}{
+Group-level summary of a cluster-free test: one Cauchy-combined p-value per cell group
+(see \code{\link[=summarizeCellScoresByGroup]{summarizeCellScoresByGroup()}}) from the per-cell p-values of the differential density or of the
+cluster-free expression shifts, BH-adjusted across groups, next to the median effect and the fraction of
+cells significant after the per-cell adjustment. The combination holds under the dependence between
+neighbouring cells and needs no per-cell adjustment, so it gives a group verdict where the per-cell map is empty.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeSummary(
+  name = c("cell.density", "cluster.free.expr.shifts"),
+  cell.groups = self$cell.groups,
+  alpha = 0.05,
+  min.cells = 10,
+  type = NULL,
+  method = c("permutation", "cauchy")
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{results slot: \code{"cell.density"} (after \code{estimateDiffCellDensity()}) or \code{"cluster.free.expr.shifts"}}
+
+\item{\code{cell.groups}}{cell groups (default: stored annotation)}
+
+\item{\code{alpha}}{significance level (default 0.05)}
+
+\item{\code{min.cells}}{groups with fewer tested cells are not combined (default 10)}
+
+\item{\code{type}}{for the density: the \code{diff} result to summarize (default: the first stored)}
+
+\item{\code{method}}{\code{"permutation"} (default: the exact permutation test of the group's mean statistic, computed by the
+estimators when cell groups are stored) or \code{"cauchy"} (Cauchy combination of the per-cell p-values)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+data.frame (see \code{\link[=summarizeCellScoresByGroup]{summarizeCellScoresByGroup()}}), also stored in \code{cao$test.results[[name]]$group.summary}
+}
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
+cao$estimateDiffCellDensity(); cao$estimateClusterFreeSummary("cell.density")
+cao$estimateClusterFreeExpressionShifts(); cao$estimateClusterFreeSummary("cluster.free.expr.shifts")
+}
+}
+\if{html}{\out{</div>}}
+
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-plotClusterFreeSummary"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-plotClusterFreeSummary}{}}}
+\subsection{Method \code{plotClusterFreeSummary()}}{
+Plot the group-level summary of a cluster-free test (see \code{estimateClusterFreeSummary()}): bars of
+-log10 of the group p-value per cell group, signed by the direction of the median effect for the
+density, filled by significance after BH across groups, labelled with the fraction of cells significant in the
+per-cell map
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotClusterFreeSummary(
+  name = c("cell.density", "cluster.free.expr.shifts"),
+  alpha = 0.05,
+  show.frac = TRUE,
+  palette = c("grey70", "#2a78d6")
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{results slot (see \code{estimateClusterFreeSummary()})}
+
+\item{\code{alpha}}{significance level for the fill (default 0.05)}
+
+\item{\code{show.frac}}{label the bars with the fraction of significant cells (default TRUE)}
+
+\item{\code{palette}}{two colours: not significant, significant (default grey and blue)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+ggplot2 object
 }
 }
 \if{html}{\out{<hr>}}

@@ -20,15 +20,28 @@ refClusterFreeShifts <- function(Y, pairs, samples, design, meta, gplan, P.globa
     G <- cacoa:::gowerCenter(cacoa:::asSquaredDistance(D, "cor"))
     pre <- cacoa:::inferencePrecompute(G, X, matrix(1, nrow(X), 1), cvec)
     eff <- cacoa:::estimatePairwiseEffects(NULL, X, cvec, NULL, NULL, TRUE, G = G)
-    plan <- cacoa:::permutationPlan(des, meta, s, scheme = gplan$scheme, block.vars = block.vars, n.permutations = B, max.enumerate = 0)
     sub <- match(s, samples)
-    P <- apply(P.global, 2, cacoa:::inducePermutation, sub = sub, sub.plan = plan); storage.mode(P) <- "integer"
-    Fp <- if (gplan$scheme == "freedman-lane") { parts <- cacoa:::flGowerParts(G, X %*% cacoa:::contrastNullBasis(cvec))
-      cacoa:::permuted_contrast_F_fl(parts$K1, parts$K2, parts$K3, parts$K4, pre$a, pre$H, pre$cXc, pre$q, P) } else cacoa:::permuted_contrast_F(G, pre$a, pre$H, pre$cXc, pre$q, P)
-    Fp <- as.numeric(Fp); Fo <- cacoa:::contrastF(G, cacoa:::hatInfo(X), cvec)
-    out$F[k] <- Fo; out$p[k] <- (sum(Fp >= Fo - 1e-12) + 1) / (B + 1); out$shift[k] <- eff$shift; out$n[k] <- length(s)
-    mu <- mean(Fp); sdv <- sd(Fp)
-    if (is.finite(sdv) && sdv > 0) { out$z[k] <- (Fo - mu) / sdv; zp <- (Fp - mu) / sdv; mx <- pmax(mx, zp); mn <- pmin(mn, zp) }
+    if (gplan$scheme == "freedman-lane" || length(s) == n) {   # residual permutation (or every sample present): induced within the present samples
+      plan <- cacoa:::permutationPlan(des, meta, s, scheme = gplan$scheme, block.vars = block.vars, n.permutations = B, max.enumerate = 0)
+      P <- apply(P.global, 2, cacoa:::inducePermutation, sub = sub, sub.plan = plan); storage.mode(P) <- "integer"
+      Fp <- if (gplan$scheme == "freedman-lane") { parts <- cacoa:::flGowerParts(G, X %*% cacoa:::contrastNullBasis(cvec))
+        cacoa:::permuted_contrast_F_fl(parts$K1, parts$K2, parts$K3, parts$K4, pre$a, pre$H, pre$cXc, pre$q, P) } else cacoa:::permuted_contrast_F(G, pre$a, pre$H, pre$cXc, pre$q, P)
+      Fp <- as.numeric(Fp)
+    } else {   # label permutation with absent samples: the global relabeling restricted to the present samples
+      Fp <- apply(P.global, 2, function(p) {
+        ps <- p[sub]
+        if (!is.null(lev.var)) { g <- as.character(meta[samples[ps], lev.var]); tb <- table(factor(g, levels = c(spec$den, spec$num))); if (min(tb) < min.samp.per.level) return(NA_real_) }
+        Xp <- des$F[ps, , drop = FALSE]; kp <- colSums(abs(Xp)) > 1e-12
+        if (any(abs(cF[!kp]) > 1e-12)) return(NA_real_)
+        Xp <- Xp[, kp, drop = FALSE]; cp <- cF[kp]
+        if (ncol(Xp) >= nrow(Xp) || !cacoa:::isEstimable(Xp, cp)) return(NA_real_)
+        cacoa:::contrastF(G, cacoa:::hatInfo(Xp), cp) })
+    }
+    Fo <- cacoa:::contrastF(G, cacoa:::hatInfo(X), cvec); adm <- is.finite(Fp)
+    if (!any(adm)) next
+    out$F[k] <- Fo; out$p[k] <- (sum(Fp[adm] >= Fo - 1e-12) + 1) / (sum(adm) + 1); out$shift[k] <- eff$shift; out$n[k] <- length(s)
+    mu <- mean(Fp[adm]); sdv <- sd(Fp[adm])
+    if (is.finite(sdv) && sdv > 0) { out$z[k] <- (Fo - mu) / sdv; zp <- (Fp - mu) / sdv; mx <- pmax(mx, zp, na.rm = TRUE); mn <- pmin(mn, zp, na.rm = TRUE) }
   }
   out$max <- mx; out$min <- mn; out
 }

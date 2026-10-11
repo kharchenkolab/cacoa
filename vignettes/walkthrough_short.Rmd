@@ -214,9 +214,12 @@ cao$plotCellLoadings(show.pvals = FALSE)
 
 ## Cluster-free analyses
 
-Cell density is compared between the arms in every neighbourhood of the cell graph with the same model; the per-cell
-p-values are adjusted across cells by Benjamini-Hochberg (`adjust.method`; the familywise max-statistic adjustment is
-available as `"max-t"`). The cluster-free expression shifts test the contrast in every cell's neighbourhood.
+Cell density is compared between the arms in every neighbourhood of the cell graph with the same model. The per-cell
+statistics are strongly dependent and permutation p-values are floored at 1 / (permutations + 1), so the maps are
+adjusted by a pooled permutation false-discovery rate (`adjust.method = "perm-fdr"`): the number of cells beyond a
+threshold under the permutations, pooled over all cells, against the observed number. Benjamini-Hochberg on per-cell
+p-values (`"bh"`) and the familywise max-statistic adjustment (`"max-t"`) remain available. The cluster-free expression
+shifts test the contrast in every cell's neighbourhood with the same adjustment.
 
 ```{r density, fig.width=10, fig.height=4.5, purl=FALSE}
 cao$estimateCellDensity(method = "graph")
@@ -231,6 +234,24 @@ and `OPC` enriched. The expression shifts show the planted cell types (the adjus
 cao$estimateClusterFreeExpressionShifts(n.top.genes = 500, n.permutations = 99)
 cao$plotClusterFreeExpressionShifts(font.size = 3)
 ```
+
+Both cluster-free maps are summarized per cell type by an exact group-level permutation test: the mean per-cell
+statistic of the type is compared with the same mean under the permutations shared by all cells, so the dependence
+between neighbouring cells is carried along, and the result is adjusted across types. This gives a verdict per type
+where the per-cell map is too sparse to call single cells (a Cauchy combination of the cells' p-values is the
+alternative, `method = "cauchy"`).
+
+```{r cluster-free-summary, fig.width=10, fig.height=4, purl=FALSE}
+cao$estimateClusterFreeSummary("cell.density")
+cao$estimateClusterFreeSummary("cluster.free.expr.shifts")
+cowplot::plot_grid(cao$plotClusterFreeSummary("cell.density"), cao$plotClusterFreeSummary("cluster.free.expr.shifts"), ncol = 2)
+```
+
+The density summary recovers the composition differences of the simulation and the shift summary the planted cell
+types. `Microglia` is also called by the shift summary although nothing was planted there: its neighbourhoods border
+`AST-FB`, whose frequency differs between the arms, so the neighbourhood profiles shift with the composition. The
+per-cell-type test above, which pools the cells of a type, puts `Microglia` at zero; a neighbourhood-level expression
+test cannot separate the two.
 
 ## Functional interpretation
 

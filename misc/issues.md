@@ -225,3 +225,26 @@ permutation set depends on the metadata row order for a fixed seed.
 - Do not run an install into the scratch library while a test process is using it.
 - Roxygen must be run with `roxygen2::roxygenise(load_code = roxygen2::load_pkgload)`; `load_source` loses the
   R6 method docs.
+
+## 6. Cluster-free inference (2026-10-11, after the calibration benchmark: `misc/benchmark/README.md`)
+
+- (fixed) Shift kernel: shared permutations were induced within each cell's present samples; the per-cell test was
+  exact but pooled statistics (group permutation test, max statistic) were compared with an incoherent null. Label
+  permutations are now global relabelings restricted to the present samples; Freedman-Lane (residual permutation)
+  still induces within the cell, so the group test is approximate under that scheme when samples are absent from
+  neighbourhoods. The same caveat applies to the max-statistic adjustment across cell types in
+  `testPairwiseEffects()` / `testTermEffects()` (each cell type has its own sample set and the shared permutations
+  are induced per type): per-type p-values exact, the familywise max over types approximate.
+- Group permutation test in block designs: the p-value is floored by the number of distinct relabelings (1/513 for 9
+  paired donors), so BH across 16-29 cell types cannot reach 0.05 from a single floored type; report the raw floor
+  with the BH value. The Cauchy combination of the per-cell permutation p has no floor from the group count, but it
+  is calibrated only for the density maps; for the shifts it is strongly conservative (tie-dominated per-cell p near 1
+  in sparse neighbourhoods), so it is no substitute there.
+- 1-hop neighbourhood counts on the log scale: the count of a sample among a cell's neighbours carries a sample-level
+  factor (total cells, graph connectivity) shared by every cell type; in PF (22 samples of heterogeneous size and
+  site) 2 of 25 null relabelings fire under every adjustment, the permutation ones included, and 3 of 25 put most
+  cell types below the group threshold at once. The per-cell p-values stay uniform; it is dependence, not bias. The
+  heat-kernel density (normalized per sample) shows nothing in the same relabelings and is the default.
+- Milo's spatial FDR on unpaired heterogeneous controls (PF, two processing sites): 15-28 % of the cells called in
+  two of three control-only splits; its per-cell inheritance of the smallest neighbourhood FDR also inflates the
+  cell-level false-discovery proportion in the paired regime (0.2-0.5 at nominal 0.1).

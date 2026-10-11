@@ -560,10 +560,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       invisible(res)
     },
 
-    #' @description Heatmap of the covariate screen (see [plotCovariateScreen()])
-    #' @param name results slot (default "covariate.screen")
-    #' @param ... passed to [plotCovariateScreen()] (`effect`, `mode`, `value`, `cell.types`, `covariates`, `cluster`, `alpha`)
-    #' @return ggplot2 object
     #' @description Screen covariates against the residuals of a stored cell-density or cluster-free DE result
     #'
     #' The estimator must have been run with `return.residuals = TRUE`. Residuals are turned into sample distances
@@ -602,6 +598,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       invisible(out)
     },
 
+    #' @description Heatmap of the covariate screen (see [plotCovariateScreen()])
+    #' @param name results slot (default "covariate.screen")
+    #' @param ... passed to [plotCovariateScreen()] (`effect`, `mode`, `value`, `cell.types`, `covariates`, `cluster`, `alpha`)
+    #' @return ggplot2 object
     plotCovariateScreen = function(name = "covariate.screen", ...) {
       plotCovariateScreen(private$getResults(name, "screenCovariates()"), plot.theme = self$plot.theme, ...)
     },
@@ -2659,9 +2659,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param test optional test for a temporary model (see `Cacoa$new()`)
     #' @param sample.metadata sample metadata (default: stored)
     #' @param block.vars metadata columns defining permutation strata (default: stored)
+    #' @param smoothing graph method only: `"heat"` (default; heat-kernel smooth with `beta`) or `"neighbourhood"`
+    #'   (per-sample counts of the cell's graph neighbours within `n.hops` hops, the unit of a Milo-type abundance
+    #'   test; use with `estimateDiffCellDensity(transform = "log")`)
+    #' @param n.hops neighbourhood radius for `smoothing = "neighbourhood"` (default 1)
     estimateCellDensity = function(bins=400, method='kde', name='cell.density', beta=30, estimate.variation=TRUE, contrast=NULL,
                                    formula=NULL, test=NULL, verbose=self$verbose, n.cores=self$n.cores, sample.metadata=self$sample.meta,
-                                   block.vars=NULL, bandwidth=0.05, ...){
+                                   block.vars=NULL, bandwidth=0.05, smoothing=c("heat", "neighbourhood"), n.hops=1, ...){
+      smoothing <- match.arg(smoothing)
       sample.per.cell <- self$sample.per.cell
 
       sample.model <- private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose,
@@ -2687,7 +2692,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else if (method == 'graph') {
         res <-  extractCellGraph(self$data.object) %>%
           estimateCellDensityGraph(sample.per.cell=sample.per.cell, sample.weights=sample.weights,
-                                   n.cores=n.cores, beta=beta, verbose=verbose, ...)
+                                   n.cores=n.cores, beta=beta, verbose=verbose, smoothing=smoothing, n.hops=n.hops, ...)
       } else stop("Unknown method: ", method)
       
 
@@ -2888,23 +2893,36 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param alternative alternative hypothesis for the z-scores: 'two-sided', 'greater' or 'less'
     #' @param return.residuals also return residuals
     #' @param return.sampled.stats also return the permutation statistics
-    #' @param adjust.method multiplicity adjustment across cells, see [adjustCellScores()]: `"bh"` (Benjamini-Hochberg over
-    #'   the tested cells; default), `"spatial-fdr"` (Milo's spatially weighted BH), `"neighbourhood"` (a covering set of
-    #'   index neighbourhoods is tested; liberal) or `"max-t"` (familywise, the maximum statistic under permutations; very
-    #'   conservative with many cells)
-    #' @param p.source per-cell p-values for the FDR alternatives: `"parametric"` (t statistic of the contrast, default)
+    #' @param adjust.method multiplicity adjustment across cells, see [adjustCellScores()]: `"perm-fdr"` (default: the
+    #'   pooled permutation FDR of the studentized contrast over cells, see [permutationFDR()]; no per-cell floor, uses
+    #'   the permutation blocks of the design), `"bh"` (Benjamini-Hochberg over the tested cells' p-values; the
+    #'   parametric p-values ignore permutation blocks and are conservative where few samples carry density),
+    #'   `"spatial-fdr"` (Milo's spatially weighted BH), `"neighbourhood"` (a covering set of index neighbourhoods is
+    #'   tested; liberal) or `"max-t"` (the maximum statistic under permutations; the former default). Benchmarks:
+    #'   `misc/benchmark/README.md`
+    #' @param p.source per-cell p-values for the BH-type alternatives: `"parametric"` (t statistic of the contrast, default)
     #'   or `"permutation"` (floored at 1 / (n.permutations + 1))
     #' @param moderate shrink the per-cell residual variances towards a common prior across cells (limma's empirical
     #'   Bayes; a moderated t with extra degrees of freedom) before the parametric p-values (default TRUE)
+    #' @param transform `"none"` (default): test the densities as they are; `"log"`: test `log2` counts per 10,000 cells
+    #'   of the sample (`log2((density * n + 0.5) / (n + 1) * 1e4)`, `n` the sample's cell number), the log-count model
+    #'   of a Milo-type abundance test, natural with `estimateCellDensity(smoothing = "neighbourhood")`; the effect is
+    #'   then a log2 fold change of the density
     estimateDiffCellDensity=function(type='permutation', adjust=NULL, name='cell.density', sample.metadata=self$sample.meta, 
                                      formula=NULL, contrast=NULL, test=NULL, block.vars=NULL, perm.method="freedman-lane", statistic=c("t", "coef"),
                                      robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=TRUE,
-                                     n.permutations=999, smooth=TRUE, adjust.method=c("bh", "spatial-fdr", "neighbourhood", "max-t"),
-                                     p.source=c("parametric", "permutation"), moderate=TRUE, verbose=self$verbose, n.cores=self$n.cores, ...){
+                                     n.permutations=999, smooth=TRUE, adjust.method=c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
+                                     p.source=c("parametric", "permutation"), moderate=TRUE, transform=c("none", "log"), verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
-      statistic <- match.arg(statistic); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source)
+      statistic <- match.arg(statistic); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source); transform <- match.arg(transform)
       if (is.null(adjust)) adjust <- (type != 'subtract') # NULL can be forwarded here
       density.mat <- dens.res$density.mat
+      if (transform == "log") {
+        sizes <- dens.res$sample.sizes %||% table(self$sample.per.cell)
+        sizes <- as.numeric(sizes[colnames(density.mat)])
+        if (any(is.na(sizes))) stop("sample sizes are missing for some density columns")
+        density.mat <- log2(t((t(density.mat) * sizes + 0.5) / (sizes + 1)) * 1e4)
+      }
       if (dens.res$method == 'kde'){
         if (adjust) {
           # For p-value adjustment matrix filtration can result in disconnected grid and break estimating l.max
@@ -2938,6 +2956,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                     score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores, verbose=verbose,
                     l.max=l.max, ...), model = sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se,
                     t = perm.res$t, p.param = perm.res$p.param, adjust.method = adjust.method)
+      } else if (adjust.method == "perm-fdr") {
+        if (is.null(perm.res$stats.perm)) stop("perm-fdr needs the permutation statistics (return.sampled.stats = TRUE)")
+        ad <- adjustCellScores(perm.res$stat.obs, NULL, method = "perm-fdr", perm = perm.res$stats.perm,
+                               alternative = if (alternative == "two-sided") "two.sided" else "greater")
+        res <- list(raw=perm.res$z.score, adj=ad$z.adj, p.adj = ad$p.adj, fdr.curve = ad$fdr.curve,
+                    model = sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se,
+                    t = perm.res$t, p.param = perm.res$p.param, adjust.method = adjust.method, p.source = "permutation")
       } else {
         # false-discovery-rate alternatives on per-cell p-values (parametric t by default: no permutation floor)
         z.in <- if (p.source == "parametric") perm.res$t else perm.res$z.score
@@ -2955,6 +2980,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                     t = perm.res$t, p.param = perm.res$p.param, adjust.method = adjust.method, p.source = p.source)
       }
 
+      res$transform <- transform; res$p.perm <- perm.res$p.perm
+      if (!is.null(self$cell.groups) && !is.null(perm.res$stats.perm)) {   # exact group-level permutation test (shared permutations)
+        res$group.test <- groupPermutationTest(perm.res$stat.obs, perm.res$stats.perm, self$cell.groups, alternative = if (alternative == "two-sided") "two.sided" else "greater")
+      }
       if (return.residuals) {
         res$residuals <- perm.res$residuals
         res$residuals.pearson <- perm.res$residuals.pearson
@@ -3818,8 +3847,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.edge.weight minimum graph edge weight between cells of different samples (default 0)
     #' @param ... deprecated arguments of the previous implementation are accepted and ignored with a message
     #' @return list (see [clusterFreeExpressionShifts()]), also stored in `cao$test.results[[name]]`
-    #' @param adjust.method multiplicity adjustment across cells: `"bh"` (default), `"spatial-fdr"`, `"neighbourhood"` or `"max-t"`, see [adjustCellScores()]
-    #' @param p.source per-cell p-values for the FDR adjustments: `"permutation"` (default; calibrated, floored at
+    #' @param adjust.method multiplicity adjustment across cells: `"perm-fdr"` (default; pooled permutation FDR, see
+    #'   [permutationFDR()]), `"bh"`, `"spatial-fdr"`, `"neighbourhood"` or `"max-t"`, see [adjustCellScores()]
+    #' @param p.source per-cell p-values for the BH-type adjustments: `"permutation"` (default; calibrated, floored at
     #'   1 / (n.permutations + 1)), `"z"` (normal tail of the permutation-standardized z: no floor, anti-conservative) or
     #'   `"parametric"` (the F of the neighbourhood shift; not calibrated)
     #' @param robust `"none"` (default, option `robust`), `"huber"` or `"winsor"`: robust per-cell shift test
@@ -3827,7 +3857,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                  test=NULL, formula=NULL, contrast=NULL, block.vars=NULL,
                                                  min.n.obs.per.samp=3, min.samp.per.level=2, permutation=NULL, n.permutations=NULL, seed=NULL,
                                                  dist=c("cor", "cosine", "js"), adjust=TRUE, smooth=TRUE, wins=0.025, genes=NULL, min.expr.frac=0.0,
-                                                 min.edge.weight=0.0, adjust.method=c("bh", "spatial-fdr", "neighbourhood", "max-t"), p.source=c("permutation", "z", "parametric"),
+                                                 min.edge.weight=0.0, adjust.method=c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"), p.source=c("permutation", "z", "parametric"),
                                                  verbose=NULL, n.cores=NULL, robust=NULL, ...) {
       dist <- match.arg(dist); robust <- private$opt("robust", robust); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source)
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
@@ -3844,10 +3874,82 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                             min.samp.per.level = min.samp.per.level, permutation = permutation, n.permutations = n.permutations,
                                             block.vars = block.vars %||% model$block.vars, seed = seed %||% sample.int(.Machine$integer.max, 1),
                                             adjust = adjust, smooth = smooth, wins = wins, n.cores = n.cores, verbose = verbose,
-                                            robust = robust, robust.k = private$opt("robust.k"), adjust.method = adjust.method, p.source = p.source)
+                                            robust = robust, robust.k = private$opt("robust.k"), adjust.method = adjust.method, p.source = p.source,
+                                            groups = self$cell.groups)
       shifts$model <- model
       self$test.results[[name]] <- shifts
       return(invisible(shifts))
+    },
+
+    #' @description Group-level summary of a cluster-free test: one Cauchy-combined p-value per cell group
+    #'   (see [summarizeCellScoresByGroup()]) from the per-cell p-values of the differential density or of the
+    #'   cluster-free expression shifts, BH-adjusted across groups, next to the median effect and the fraction of
+    #'   cells significant after the per-cell adjustment. The combination holds under the dependence between
+    #'   neighbouring cells and needs no per-cell adjustment, so it gives a group verdict where the per-cell map is empty.
+    #' @param name results slot: `"cell.density"` (after `estimateDiffCellDensity()`) or `"cluster.free.expr.shifts"`
+    #' @param cell.groups cell groups (default: stored annotation)
+    #' @param alpha significance level (default 0.05)
+    #' @param min.cells groups with fewer tested cells are not combined (default 10)
+    #' @param type for the density: the `diff` result to summarize (default: the first stored)
+    #' @param method `"permutation"` (default: the exact permutation test of the group's mean statistic, computed by the
+    #'   estimators when cell groups are stored) or `"cauchy"` (Cauchy combination of the per-cell p-values)
+    #' @return data.frame (see [summarizeCellScoresByGroup()]), also stored in `cao$test.results[[name]]$group.summary`
+    #' @examples
+    #' \dontrun{
+    #' cao$estimateDiffCellDensity(); cao$estimateClusterFreeSummary("cell.density")
+    #' cao$estimateClusterFreeExpressionShifts(); cao$estimateClusterFreeSummary("cluster.free.expr.shifts")
+    #' }
+    estimateClusterFreeSummary = function(name=c("cell.density", "cluster.free.expr.shifts"), cell.groups=self$cell.groups, alpha=0.05, min.cells=10, type=NULL,
+                                          method=c("permutation", "cauchy")) {
+      name <- match.arg(name); method <- match.arg(method)
+      if (is.null(cell.groups)) stop("cell.groups are needed")
+      if (name == "cell.density") {
+        dens.res <- private$getResults(name, 'estimateDiffCellDensity')
+        r <- if (is.null(type)) dens.res$diff[[1]] else dens.res$diff[[type]]
+        if (is.null(r) || is.null(r$p.param)) stop("run estimateDiffCellDensity(type = 'permutation') first")
+        p <- r$p.perm %||% r$p.param; eff <- r$effect; z <- r$raw; padj <- r$p.adj; gt <- r$group.test
+      } else {
+        r <- private$getResults(name, 'estimateClusterFreeExpressionShifts')
+        p <- r$p.value; eff <- r$shifts; z <- r$z.score; padj <- r$p.adj; gt <- r$group.test
+      }
+      groups <- as.factor(cell.groups[intersect(names(cell.groups), names(p))])
+      if (!is.null(gt) && !identical(sort(unique(as.character(groups))), sort(gt$group[gt$n.tested > 0]))) gt <- NULL   # other groups than the stored test: Cauchy only
+      if (method == "permutation" && is.null(gt)) message("no stored group permutation test for these groups: using the Cauchy combination")
+      res <- summarizeCellScoresByGroup(p, groups, effect = eff, z = z, p.adj = padj, alpha = alpha, min.cells = min.cells, group.test = gt, method = method)
+      res$test <- name
+      self$test.results[[name]]$group.summary <- res
+      return(invisible(res))
+    },
+
+    #' @description Plot the group-level summary of a cluster-free test (see `estimateClusterFreeSummary()`): bars of
+    #'   -log10 of the group p-value per cell group, signed by the direction of the median effect for the
+    #'   density, filled by significance after BH across groups, labelled with the fraction of cells significant in the
+    #'   per-cell map
+    #' @param name results slot (see `estimateClusterFreeSummary()`)
+    #' @param alpha significance level for the fill (default 0.05)
+    #' @param show.frac label the bars with the fraction of significant cells (default TRUE)
+    #' @param palette two colours: not significant, significant (default grey and blue)
+    #' @return ggplot2 object
+    plotClusterFreeSummary = function(name=c("cell.density", "cluster.free.expr.shifts"), alpha=0.05, show.frac=TRUE, palette=c("grey70", "#2a78d6")) {
+      name <- match.arg(name)
+      res <- self$test.results[[name]]$group.summary
+      if (is.null(res)) res <- self$estimateClusterFreeSummary(name, alpha = alpha)
+      df <- res[is.finite(res$p), ]
+      if (!nrow(df)) stop("no group with enough tested cells")
+      sgn <- if (name == "cell.density") ifelse(df$direction == "down", -1, 1) else rep(1, nrow(df))
+      df$score <- sgn * pmin(-log10(pmax(df$p, 1e-300)), 300)
+      df$group <- factor(df$group, levels = df$group[order(df$score)])
+      df$sig <- factor(ifelse(is.finite(df$padj) & df$padj < alpha, "significant", "n.s."), levels = c("n.s.", "significant"))
+      df$label <- if (show.frac && any(is.finite(df$frac.sig))) sprintf("%.0f%%", 100 * df$frac.sig) else ""
+      lab <- if (identical(res$method[1], "permutation")) "group permutation test" else "Cauchy combination"
+      xl <- if (name == "cell.density") sprintf("signed -log10 p (%s) of the density change", lab) else sprintf("-log10 p (%s) of the expression shift", lab)
+      gg <- ggplot(df, aes(x = score, y = group, fill = sig)) + geom_col(width = 0.7) +
+        geom_vline(xintercept = 0, colour = "grey40", linewidth = 0.3) +
+        scale_fill_manual(values = stats::setNames(palette, c("n.s.", "significant")), drop = FALSE, name = sprintf("BH across groups, %d%%", round(100 * alpha))) +
+        labs(x = xl, y = NULL) + theme_bw() + theme(legend.position = "bottom", panel.grid.minor = element_blank())
+      if (show.frac) gg <- gg + geom_text(aes(label = label, hjust = ifelse(score >= 0, -0.1, 1.1)), size = 3, colour = "grey30") +
+        scale_x_continuous(expand = expansion(mult = 0.15))
+      gg
     },
 
     #' @description Performs graph smoothing of the cluster-free DE Z-scores

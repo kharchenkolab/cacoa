@@ -163,7 +163,11 @@ test_that("planted density simulation: the BH adjustment calls the changed cell 
   ct <- cao$cell.groups
   frac <- function(z) tapply(abs(z[names(ct)]) > qnorm(0.975), ct, mean, na.rm = TRUE)
   bh <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 199, verbose = FALSE)$diff$permutation
-  expect_equal(bh$adjust.method, "bh")
+  expect_equal(bh$adjust.method, "perm-fdr"); expect_false(is.null(bh$group.test))
+  gs <- cao$estimateClusterFreeSummary("cell.density")
+  expect_true(all(gs$significant[gs$group %in% c("IN-SST", "L2/3", "L5/6-CC", "IN-PV", "OPC")]))
+  expect_false(any(gs$significant[gs$group %in% c("AST-PP", "Microglia", "Neu-NRGN")]))
+  expect_equal(gs$direction[gs$group == "IN-SST"], "down"); expect_equal(gs$direction[gs$group == "OPC"], "up")
   f.bh <- frac(bh$adj)
   # changed between the arms (planted or inherited from the simulation): IN-SST, L2/3, L5/6-CC down; IN-PV, OPC up
   for (ct.i in c("IN-SST", "L2/3", "L5/6-CC", "IN-PV", "OPC")) expect_gt(f.bh[[ct.i]], 0.8)
@@ -172,7 +176,8 @@ test_that("planted density simulation: the BH adjustment calls the changed cell 
   mt <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 199, adjust.method = "max-t", verbose = FALSE)$diff$permutation
   expect_lt(sum(frac(mt$adj) > 0.8), sum(f.bh > 0.8))                                   # the familywise adjustment finds fewer
   s <- cao$estimateClusterFreeExpressionShifts(n.top.genes = 300, n.permutations = 99, verbose = FALSE)
-  expect_equal(s$settings$adjust.method, "bh"); expect_equal(s$settings$p.source, "permutation")
+  expect_equal(s$settings$adjust.method, "perm-fdr"); expect_false(is.null(s$group.test))
+  ss <- cao$estimateClusterFreeSummary("cluster.free.expr.shifts"); expect_true(all(ss$significant[ss$group %in% c("L2/3", "IN-PV", "IN-SST")]))
   fs <- tapply(s$z.adj[names(ct)] > qnorm(0.95), ct, mean, na.rm = TRUE)
   expect_gt(fs[["L2/3"]], 0.5); expect_gt(fs[["IN-PV"]], 0.5); expect_lt(fs[["Neu-NRGN"]], 0.2)
   expect_true(all(s$z.adj >= 0, na.rm = TRUE))

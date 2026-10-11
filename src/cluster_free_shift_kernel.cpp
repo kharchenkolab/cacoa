@@ -12,8 +12,9 @@
 //
 // For every cell (column of Y, the pair-layout distance matrix produced by estimateExpressionShiftsPairsLM), this
 // does in C++ what clusterFreeExpressionShifts() used to do in R per cell: select the samples present, check
-// estimability of the contrast on the reduced design, Gower-centre the distances, induce the shared permutations
-// onto the present samples within the plan's cells, compute the observed shift F and shift estimate, the permuted
+// estimability of the contrast on the reduced design, Gower-centre the distances, apply the shared permutations
+// (block scheme: the global relabeling restricted to the present samples; Freedman-Lane: induced onto the present
+// samples within the plan's cells), compute the observed shift F and shift estimate, the permuted
 // F under the block (relabel the design) or Freedman-Lane (re-index the residual kernel) scheme, the per-cell
 // permutation p-value and z-score, and the per-permutation extremes of the z-scores over cells for the
 // max-statistic adjustment. R reference: the former oneCell() loop, kept in tests/testthat/helper-reference.R.
@@ -53,7 +54,7 @@ inline double shift_estimate(const arma::mat& G, const arma::mat& X, const Hat& 
 }
 
 
-struct CellResult { double F = arma::datum::nan, p = arma::datum::nan, shift = arma::datum::nan, z = arma::datum::nan; int n = 0; bool ok = false; arma::vec zp; };
+struct CellResult { double F = arma::datum::nan, p = arma::datum::nan, shift = arma::datum::nan, z = arma::datum::nan; int n = 0, n_perm = 0; bool ok = false; arma::vec zp; };
 
 struct KernelInputs {
   const arma::imat& pairs; arma::uword n; const arma::mat& X; const arma::vec& cvec; const arma::ivec& level_code; int min_samp_per_level;
@@ -109,7 +110,31 @@ static CellResult test_cell(const arma::vec& y, const KernelInputs& in) {
     for (arma::uword j = 0; j < m; ++j) if (in.inset[s[j]]) by_stratum[in.stratum[s[j]]].push_back(j);
     for (auto& kv : by_stratum) if (kv.second.size() >= 2) blocks.push_back(arma::uvec(kv.second));
   }
-  arma::vec Fp(B);
+  // Label permutations (the block scheme) are applied as global relabelings: present sample j takes the design row of
+  // the sample P(s[j], b) maps it to, which may be absent from this neighbourhood. Inducing the permutation within the
+  // present samples instead would keep every cell's level counts fixed and make the relabelings incoherent across
+  // cells (each cell's permuted labeling is then conditional on its own sample set): the per-cell p-value stays exact
+  // but any statistic pooled over cells (group means, the max statistic) is compared with a null that is too narrow.
+  // Under a relabeling that leaves fewer than min_samp_per_level present samples at a compared level, or makes the
+  // contrast inestimable, the cell would not have been tested; such permutations are skipped (Fp NaN) and the
+  // p-value, z-score and pooled accumulators use the admissible ones. Residual permutations (Freedman-Lane) act on
+  // the present samples' residuals and keep the induced permutation.
+  const bool complete = (m == n);
+  auto permuted_design = [&](arma::uword b, arma::mat& Xp, arma::vec& cp) -> bool {
+    arma::uvec ps(m);
+    for (arma::uword j = 0; j < m; ++j) ps[j] = (arma::uword)(in.P(s[j], b) - 1);
+    if (in.use_levels) {
+      int n_den = 0, n_num = 0;
+      for (arma::uword j = 0; j < m; ++j) { if (in.level_code[ps[j]] == 1) ++n_den; else if (in.level_code[ps[j]] == 2) ++n_num; }
+      if (n_den < in.min_samp_per_level || n_num < in.min_samp_per_level) return false;
+    }
+    arma::mat Xf = in.X.rows(ps);
+    arma::uvec kp = arma::find(arma::sum(arma::abs(Xf), 0).t() > 1e-12);
+    for (arma::uword j = 0; j < in.X.n_cols; ++j) if (!arma::any(kp == j) && std::abs(in.cvec[j]) > 1e-12) return false;
+    Xp = Xf.cols(kp); cp = in.cvec(kp);
+    return Xp.n_cols < m && estimable(Xp, cp);
+  };
+  arma::vec Fp(B); Fp.fill(arma::datum::nan);
   if (in.robust > 0) {
     if (in.freedman_lane) {
       arma::mat Q, Rq; arma::qr(Q, Rq, c); arma::mat Xr = Xs * Q.cols(1, Q.n_cols - 1);
@@ -120,10 +145,16 @@ static CellResult test_cell(const arma::vec& y, const KernelInputs& in) {
         arma::mat Gs = K1 + K2.cols(q) + K3.rows(q) + K4.submat(q, q);
         Fp[b] = cacoa_gower::contrast_stats_w(Gs, Xs, Z1, ones, c, z1, z1, in.bias_correct, false, in.robust, in.robust_k, 5)(0);
       }
-    } else {
+    } else if (complete) {
       for (arma::uword b = 0; b < B; ++b) {
         arma::uvec q = induced_perm(arma::conv_to<arma::uvec>::from(in.P.col(b) - 1), s, blocks);
         Fp[b] = cacoa_gower::contrast_stats_w(G, Xs.rows(q), Z1, ones, c, z1, z1, in.bias_correct, false, in.robust, in.robust_k, 5)(0);
+      }
+    } else {
+      arma::mat Xp; arma::vec cp;
+      for (arma::uword b = 0; b < B; ++b) {
+        if (!permuted_design(b, Xp, cp)) continue;
+        Fp[b] = cacoa_gower::contrast_stats_w(G, Xp, Z1, ones, cp, z1, z1, in.bias_correct, false, in.robust, in.robust_k, 5)(0);
       }
     }
   } else if (in.freedman_lane) {
@@ -135,32 +166,67 @@ static CellResult test_cell(const arma::vec& y, const KernelInputs& in) {
       arma::mat Gs = K1 + K2.cols(q) + K3.rows(q) + K4.submat(q, q);
       Fp[b] = contrast_F(Gs, h.H, a, cXc, h.rank);
     }
-  } else {
+  } else if (complete) {   // every sample present: the global relabeling is a row permutation of the observed design
     for (arma::uword b = 0; b < B; ++b) {
       arma::uvec q = induced_perm(arma::conv_to<arma::uvec>::from(in.P.col(b) - 1), s, blocks);
       Fp[b] = contrast_F(G, h.H.submat(q, q), a(q), cXc, h.rank);
     }
+  } else {
+    arma::mat Xp; arma::vec cp;
+    for (arma::uword b = 0; b < B; ++b) {
+      if (!permuted_design(b, Xp, cp)) continue;
+      Hat hp = hat_of(Xp); arma::vec ap = hp.A.t() * cp; const double cXcp = arma::as_scalar(cp.t() * hp.XtXi * cp);
+      Fp[b] = contrast_F(G, hp.H, ap, cXcp, hp.rank);
+    }
   }
-  out.ok = true; out.F = Fo; out.n = (int)m; out.shift = (in.robust > 0) ? shift_w : shift_estimate(G, Xs, h, c, in.bias_correct);
-  arma::uword ge = 0; for (arma::uword b = 0; b < B; ++b) if (Fp[b] >= Fo - 1e-12) ++ge;
-  out.p = (ge + 1.0) / (B + 1.0);
-  const double mu = arma::mean(Fp), sdv = arma::stddev(Fp);
-  if (std::isfinite(sdv) && sdv > 0) { out.z = (Fo - mu) / sdv; out.zp = (Fp - mu) / sdv; }
+  const arma::uvec adm = arma::find_finite(Fp); const arma::uword B_adm = adm.n_elem;
+  if (B_adm == 0) return out;
+  out.ok = true; out.F = Fo; out.n = (int)m; out.n_perm = (int)B_adm; out.shift = (in.robust > 0) ? shift_w : shift_estimate(G, Xs, h, c, in.bias_correct);
+  arma::uword ge = 0; for (arma::uword i = 0; i < B_adm; ++i) if (Fp[adm[i]] >= Fo - 1e-12) ++ge;
+  out.p = (ge + 1.0) / (B_adm + 1.0);
+  const arma::vec Fa = Fp(adm); const double mu = arma::mean(Fa), sdv = arma::stddev(Fa);
+  if (std::isfinite(sdv) && sdv > 0) { out.z = (Fo - mu) / sdv; out.zp = (Fp - mu) / sdv; }   // NaN under the skipped permutations
   return out;
 }
 
+// Per-permutation extremes of the z-scores over cells (max-statistic adjustment); when a threshold grid is given,
+// per-permutation histograms of the permuted z-scores pooled over cells (hist(b, k) counts the cells whose permuted
+// z under permutation b falls in [grid[k-1], grid[k]); k = 0: below grid[0]; k = n_grid: at or above the last
+// threshold) for the pooled permutation FDR (permutationFDR() in R); and when cell groups are given, the sum and the
+// count of the permuted z-scores per group and permutation (group_sum(b, g), group_count(b, g)) next to the
+// observed sum per group, for the exact group-level permutation test (the mean z of a group against its own
+// permutation distribution). A cell contributes to a permutation only where it is tested under that relabeling.
 struct Accum {
-  arma::vec stat, pval, shift, z; arma::ivec nsamp; arma::vec mx, mn; std::mutex lock;
-  Accum(arma::uword m, arma::uword B) : stat(m), pval(m), shift(m), z(m), nsamp(m, arma::fill::zeros), mx(B), mn(B) {
-    stat.fill(arma::datum::nan); pval.fill(arma::datum::nan); shift.fill(arma::datum::nan); z.fill(arma::datum::nan); mx.fill(-arma::datum::inf); mn.fill(arma::datum::inf); }
+  arma::vec stat, pval, shift, z; arma::ivec nsamp, nperm; arma::vec mx, mn; arma::imat hist; arma::vec grid;
+  const arma::ivec& group; arma::mat gsum; arma::imat gcount; arma::vec gobs; arma::ivec gn; std::mutex lock;
+  Accum(arma::uword m, arma::uword B, const arma::vec& z_grid, const arma::ivec& group_in, int n_groups)
+    : stat(m), pval(m), shift(m), z(m), nsamp(m, arma::fill::zeros), nperm(m, arma::fill::zeros), mx(B), mn(B), grid(z_grid), group(group_in) {
+    stat.fill(arma::datum::nan); pval.fill(arma::datum::nan); shift.fill(arma::datum::nan); z.fill(arma::datum::nan); mx.fill(-arma::datum::inf); mn.fill(arma::datum::inf);
+    if (grid.n_elem) hist.zeros(B, grid.n_elem + 1);
+    if (n_groups > 0) { gsum.zeros(B, n_groups); gcount.zeros(B, n_groups); gobs.zeros(n_groups); gn.zeros(n_groups); } }
   void add(arma::uword k, const CellResult& r) {
     if (!r.ok) return;
-    stat[k] = r.F; pval[k] = r.p; shift[k] = r.shift; nsamp[k] = r.n; z[k] = r.z;
-    if (r.zp.n_elem) { std::lock_guard<std::mutex> lk(lock); mx = arma::max(mx, r.zp); mn = arma::min(mn, r.zp); }
+    stat[k] = r.F; pval[k] = r.p; shift[k] = r.shift; nsamp[k] = r.n; nperm[k] = r.n_perm; z[k] = r.z;
+    if (r.zp.n_elem) {
+      std::vector<arma::uword> bins;
+      if (grid.n_elem) { bins.resize(r.zp.n_elem); for (arma::uword b = 0; b < r.zp.n_elem; ++b) bins[b] = std::isfinite(r.zp[b]) ? (arma::uword)(std::upper_bound(grid.begin(), grid.end(), r.zp[b]) - grid.begin()) : 0; }
+      const int g = (group.n_elem > k) ? group[k] : -1;
+      const bool in_group = g >= 0 && (arma::uword)g < gsum.n_cols && std::isfinite(r.z);
+      std::lock_guard<std::mutex> lk(lock);
+      for (arma::uword b = 0; b < r.zp.n_elem; ++b) {
+        if (!std::isfinite(r.zp[b])) continue;   // the cell is not tested under this relabeling
+        if (r.zp[b] > mx[b]) mx[b] = r.zp[b];
+        if (r.zp[b] < mn[b]) mn[b] = r.zp[b];
+        if (grid.n_elem) ++hist(b, bins[b]);
+        if (in_group) { gsum(b, g) += r.zp[b]; ++gcount(b, g); }
+      }
+      if (in_group) { gobs[g] += r.z; ++gn[g]; }
+    }
   }
   Rcpp::List result() const {
-    return Rcpp::List::create(Rcpp::_["stat"] = stat, Rcpp::_["p"] = pval, Rcpp::_["shift"] = shift, Rcpp::_["n"] = nsamp, Rcpp::_["z"] = z,
-                              Rcpp::_["max"] = mx, Rcpp::_["min"] = mn);
+    return Rcpp::List::create(Rcpp::_["stat"] = stat, Rcpp::_["p"] = pval, Rcpp::_["shift"] = shift, Rcpp::_["n"] = nsamp, Rcpp::_["n_perm"] = nperm, Rcpp::_["z"] = z,
+                              Rcpp::_["max"] = mx, Rcpp::_["min"] = mn, Rcpp::_["hist"] = hist, Rcpp::_["grid"] = grid,
+                              Rcpp::_["group_sum"] = gsum, Rcpp::_["group_count"] = gcount, Rcpp::_["group_obs"] = gobs, Rcpp::_["group_n"] = gn);
   }
 };
 
@@ -171,11 +237,13 @@ struct Accum {
 // [[Rcpp::export]]
 Rcpp::List cluster_free_shift_batch(const arma::mat& Y, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec,
                                     const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset,
-                                    const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust = 0, double robust_k = 1.345) {
+                                    const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust = 0, double robust_k = 1.345,
+                                    Rcpp::NumericVector z_grid = Rcpp::NumericVector::create(), Rcpp::IntegerVector group = Rcpp::IntegerVector::create()) {
   const arma::uword m_cells = Y.n_cols, n = (arma::uword)n_samples;
   if ((arma::uword)X.n_rows != n || P.n_rows != n || level_code.n_elem != n || stratum.n_elem != n || inset.n_elem != n) Rcpp::stop("dimension mismatch in cluster_free_shift_batch");
   KernelInputs in{pairs, n, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, arma::any(level_code >= 0), robust, robust_k};
-  Accum acc(m_cells, P.n_cols);
+  arma::ivec grp(group.begin(), group.size()); const int n_groups = grp.n_elem ? (int)grp.max() + 1 : 0;
+  Accum acc(m_cells, P.n_cols, arma::vec(z_grid.begin(), z_grid.size()), grp, n_groups);
   cacoa::parallelFor(0, (int)m_cells, [&](int k) { acc.add(k, test_cell(Y.col(k), in)); }, n_cores, false);
   return acc.result();
 }
@@ -187,7 +255,8 @@ Rcpp::List cluster_free_shift_stream(const Eigen::SparseMatrix<double>& cm, Rcpp
                                      int min_n_obs_per_samp, std::string dist, bool log_vecs,
                                      const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec,
                                      const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset,
-                                     const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust = 0, double robust_k = 1.345) {
+                                     const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust = 0, double robust_k = 1.345,
+                                     Rcpp::NumericVector z_grid = Rcpp::NumericVector::create(), Rcpp::IntegerVector group = Rcpp::IntegerVector::create()) {
   const arma::uword n = (arma::uword)n_samples, m_cells = nn_ids.size(), n_pairs = pairs.n_rows;
   if ((arma::uword)X.n_rows != n || P.n_rows != n || level_code.n_elem != n || stratum.n_elem != n || inset.n_elem != n) Rcpp::stop("dimension mismatch in cluster_free_shift_stream");
   if (cm.cols() != sample_per_cell.size()) Rcpp::stop("cm must have one column per cell");
@@ -201,7 +270,9 @@ Rcpp::List cluster_free_shift_stream(const Eigen::SparseMatrix<double>& cm, Rcpp
       if (v < 0 || v >= cm.cols()) Rcpp::stop("nn_ids[[%d]] has an index outside the cells", (int)k + 1); nn[k].push_back(v); }
   }
   KernelInputs in{pairs, n, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, arma::any(level_code >= 0), robust, robust_k};
-  Accum acc(m_cells, P.n_cols);
+  arma::ivec grp(group.begin(), group.size()); const int n_groups = grp.n_elem ? (int)grp.max() + 1 : 0;
+  if (grp.n_elem && grp.n_elem != m_cells) Rcpp::stop("group must have one entry per cell");
+  Accum acc(m_cells, P.n_cols, arma::vec(z_grid.begin(), z_grid.size()), grp, n_groups);
   cacoa::parallelFor(0, (int)m_cells, [&](int k) {
     const auto& ids = nn[k];
     if ((int)ids.size() < min_n_obs_per_samp) return;

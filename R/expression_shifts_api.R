@@ -188,6 +188,7 @@ testTermEffects <- function(D.list, design, meta, dispersion.formula = NULL, dis
                             block.vars = NULL, min.samp.per.level = 3, seed = NULL, alpha = 0.05, n.cores = 1,
                             return.perm.stats = FALSE, verbose = FALSE, robust = c("none", "huber", "winsor"), na.mode = c("drop", "impute_weak"), robust.k = 1.345) {
   dist <- match.arg(dist); permutation <- match.arg(permutation); robust <- match.arg(robust); na.mode <- match.arg(na.mode)
+  block.vars <- block.vars %||% design$block.vars   # the model's permutation strata unless overridden
   if (is.null(names(D.list))) names(D.list) <- paste0("CT", seq_along(D.list))
   all.samples <- intersect(rownames(design$F), rownames(meta))
   if (is.null(seed)) seed <- sample.int(.Machine$integer.max, 1L)

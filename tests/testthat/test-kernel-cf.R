@@ -79,3 +79,38 @@ test_that("a sample with too few cells in a neighbourhood drops itself, not the 
   n <- nlevels(spc); pairs <- t(utils::combn(n, 2)); y <- runif(nrow(pairs)); y[pairs[, 1] == 1 | pairs[, 2] == 1] <- NA
   expect_equal(rownames(cacoa:::pairVectorToMatrix(y, pairs, levels(spc))), levels(spc)[-1])
 })
+
+test_that("label permutations are global relabelings: a cell is skipped where the relabeling leaves too few samples, and pooled group means stay calibrated with absent samples", {
+  cao <- makeToyCacoa(n.per.group = c(A = 5, B = 5), cells.per.sample = 40, n.genes = 80, shift = 1.2)
+  cg <- cao$cell.groups
+  set.seed(5); nns <- lapply(seq_along(cg), function(i) sample(seq_along(cg) - 1L, 60)); names(nns) <- names(cg)   # several samples absent per cell
+  res <- clusterFreeExpressionShifts(Matrix::t(cao$data.object), cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 49, seed = 1,
+                                     adjust = TRUE, smooth = FALSE, groups = cg, min.samp.per.level = 3)
+  ok <- is.finite(res$z.score)
+  expect_true(any(res$n.samples[ok] < nlevels(cao$sample.per.cell)))
+  expect_true(all(res$n.perm[ok] >= 1 & res$n.perm[ok] <= 49)); expect_true(any(res$n.perm[ok] < 49))
+  pm <- attr(res$group.test, "perm.means"); expect_equal(dim(pm), c(49L, nlevels(cg)))
+  for (g in seq_len(nlevels(cg))) {   # the group p is the exceedance over the relabelings under which cells of the group were tested
+    pk <- is.finite(pm[, g]); mo <- res$group.test$mean.z[g]
+    expect_equal(res$group.test$p.perm[g], (sum(pm[pk, g] >= mo - 1e-12) + 1) / (sum(pk) + 1))
+  }
+  # calibration of the group test with absent samples (batched kernel on iid distance matrices; the induced-within-cell
+  # permutation of the former kernel rejected about 30 % of the groups at the 5 % level in this setting)
+  set.seed(7); n <- 16; B <- 199; m <- 600
+  pairs <- t(utils::combn(n, 2)); storage.mode(pairs) <- "integer"
+  regions <- sample(3, m, replace = TRUE); base <- lapply(1:3, function(r) matrix(rnorm(n * 5), n))
+  Y <- sapply(seq_len(m), function(i) { X <- base[[regions[i]]] + matrix(rnorm(n * 5, 0, 0.7), n); d <- as.matrix(dist(X))^2
+    miss <- sample(n, 6); d[miss, ] <- NA; d[, miss] <- NA; d[cbind(pairs[, 1], pairs[, 2])] })
+  meta0 <- data.frame(row.names = paste0("s", seq_len(n))); pg <- c()
+  for (k in 1:20) {
+    meta <- meta0; meta$cond <- factor(sample(rep(c("A", "B"), n / 2)))
+    model <- buildCacoaModel(meta, formula = ~ cond, test = "cond")
+    gp <- cacoa:::permutationPlan(model, model$meta, rownames(meta), scheme = "auto", n.permutations = B, max.enumerate = 0)
+    P <- cacoa:::withSeed(k, drawPermutations(gp, B)); storage.mode(P) <- "integer"
+    r <- cacoa:::cluster_free_shift_batch(Y, pairs - 1L, n, model$F, model$contrast.F, ifelse(meta$cond == "A", 1L, 2L), 2L, as.integer(gp$strata), as.integer(gp$in.set), P,
+                                          FALSE, TRUE, 2L, 0L, 1.345, as.numeric(c()), as.integer(regions) - 1L)
+    mo <- r$group_obs / r$group_n; pm <- r$group_sum / r$group_count; pm[r$group_count == 0] <- NA
+    pg <- c(pg, sapply(1:3, function(g) { pk <- is.finite(pm[, g]); (sum(pm[pk, g] >= mo[g] - 1e-12) + 1) / (sum(pk) + 1) }))
+  }
+  expect_lt(mean(pg < 0.05), 0.2); expect_gt(mean(pg), 0.3)
+})

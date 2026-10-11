@@ -40,25 +40,33 @@ graphNeighbourList <- function(graph, cells) {
 #'   `alternative = "greater"` for a one-sided statistic such as the expression shift)
 #' @param method `"bh"` (Benjamini-Hochberg over the tested cells), `"spatial-fdr"` (weighted BH with weights
 #'   `1 / (1 + degree)`, so that cells in dense regions, whose neighbourhoods overlap most, count less; the spatial FDR
-#'   of Milo), or `"neighbourhood"` (a covering set of index cells is tested, weighted BH over those neighbourhoods
+#'   of Milo), `"neighbourhood"` (a covering set of index cells is tested, weighted BH over those neighbourhoods
 #'   with weights inverse to their overlap, and every cell inherits the smallest adjusted p-value of the index
-#'   neighbourhoods it belongs to; the neighbourhood-level testing of Milo without its negative-binomial model)
+#'   neighbourhoods it belongs to; the neighbourhood-level testing of Milo without its negative-binomial model) or
+#'   `"perm-fdr"` (pooled permutation FDR, see [permutationFDR()]: the expected number of cells exceeding a threshold
+#'   under the permutations, pooled over cells, against the observed number; no per-cell p-value floor; needs `perm`)
 #' @param nn.list list of 0-based neighbour indices per cell (needed for `"spatial-fdr"` and `"neighbourhood"`)
 #' @param weights optional per-cell weights for `"spatial-fdr"`
 #' @param alternative `"two.sided"` (default) or `"greater"`: how `p` relates to `z` and how `z.adj` is derived
 #' @param seed seed of the index-cell sampling
+#' @param perm for `"perm-fdr"`: the permuted statistics, either a permutations x cells matrix on the scale of `z`, or a
+#'   list `(grid, hist)` of pooled exceedance histograms (see [permutationFDR()])
 #' @return list: `p.adj` (per cell), `z.adj` (signed z-scores of the adjusted p-values; 0 when `p.adj` is 1),
-#'   `index` (index cells of the neighbourhood method), `method`
+#'   `index` (index cells of the neighbourhood method), `method`, and for `"perm-fdr"` the `fdr.curve`
 #' @export
-adjustCellScores <- function(z, p = NULL, method = c("bh", "spatial-fdr", "neighbourhood"), nn.list = NULL, weights = NULL,
-                             alternative = c("two.sided", "greater"), seed = 1) {
+adjustCellScores <- function(z, p = NULL, method = c("bh", "spatial-fdr", "neighbourhood", "perm-fdr"), nn.list = NULL, weights = NULL,
+                             alternative = c("two.sided", "greater"), seed = 1, perm = NULL) {
   method <- match.arg(method); alternative <- match.arg(alternative)
   if (is.null(p)) p <- if (alternative == "two.sided") 2 * stats::pnorm(-abs(z)) else stats::pnorm(z, lower.tail = FALSE)
   ok <- is.finite(z) & is.finite(p)
-  p.adj <- rep(NA_real_, length(z)); names(p.adj) <- names(z); idx <- NULL
+  p.adj <- rep(NA_real_, length(z)); names(p.adj) <- names(z); idx <- NULL; curve <- NULL
   if (!any(ok)) return(list(p.adj = p.adj, z.adj = p.adj, index = idx, method = method))
   if (method == "bh") {
     p.adj[ok] <- stats::p.adjust(p[ok], "BH")
+  } else if (method == "perm-fdr") {
+    if (is.null(perm)) stop("perm (the permuted statistics) is needed for method 'perm-fdr'")
+    pf <- permutationFDR(z, perm, alternative = alternative)
+    p.adj <- pf$q; names(p.adj) <- names(z); curve <- pf$curve
   } else {
     if (is.null(nn.list) || length(nn.list) != length(z)) stop("nn.list (one entry per cell) is needed for method '", method, "'")
     deg <- vapply(nn.list, length, integer(1))
@@ -79,5 +87,168 @@ adjustCellScores <- function(z, p = NULL, method = c("bh", "spatial-fdr", "neigh
   pa <- pmin(pmax(p.adj, 1e-300), 1)
   z.adj <- if (alternative == "two.sided") sign(z) * stats::qnorm(pa / 2, lower.tail = FALSE) else pmax(stats::qnorm(pa, lower.tail = FALSE), 0)   # one-sided: 0 at p >= 0.5
   z.adj[!is.finite(z.adj)] <- NA_real_
-  list(p.adj = p.adj, z.adj = z.adj, index = idx, method = method)
+  list(p.adj = p.adj, z.adj = z.adj, index = idx, method = method, fdr.curve = curve)
+}
+
+#' Pooled permutation false discovery rate for per-cell statistics
+#'
+#' The SAM-type estimate (Tusher et al. 2001; Storey & Tibshirani 2003): for a threshold t the expected number of
+#' cells with a null statistic at or above t is the average, over the permutations, of the number of cells whose
+#' permuted statistic is at or above t, pooled over all cells; the FDR at t is that count divided by the observed
+#' number of cells at or above t, and a cell's q-value is the smallest FDR over the thresholds at or below its own
+#' statistic. Pooling over cells removes the per-cell permutation floor (a cell can only be as significant as
+#' 1 / (B + 1) on its own, but the pooled null count resolves far smaller rates), and the permuted maps carry the
+#' dependence between cells, so no independence assumption is made. Cells must be exchangeable with their own
+#' permuted statistics under the null, which holds for the permutation-standardized z-scores (shift F) and for the
+#' studentized t of the density contrast; their null distributions need not be identical across cells.
+#'
+#' @param stat observed per-cell statistics (`NA` for untested cells)
+#' @param perm either a permutations x cells numeric matrix of the permuted statistics (`NA` allowed), or a list with
+#'   `grid` (increasing thresholds) and `hist` (a permutations x (length(grid) + 1) count matrix: column k + 1 holds the
+#'   number of cells whose permuted statistic fell in `[grid[k], grid[k + 1])`, column 1 those below `grid[1]`, the last
+#'   column those at or above the last threshold), as returned by the streaming cluster-free kernel
+#' @param alternative `"two.sided"` (thresholds on `abs(stat)`) or `"greater"`
+#' @param pi0 proportion of null cells assumed (1, conservative, by default)
+#' @param n.grid number of thresholds when `perm` is a matrix (quantiles of the observed statistics)
+#' @return list: `q` (per cell), `curve` (data.frame: `threshold`, `n.observed`, `n.null` (expected), `fdr`)
+#' @export
+permutationFDR <- function(stat, perm, alternative = c("two.sided", "greater"), pi0 = 1, n.grid = 2000) {
+  alternative <- match.arg(alternative)
+  s <- if (alternative == "two.sided") abs(stat) else stat
+  ok <- is.finite(s)
+  q <- rep(NA_real_, length(stat)); names(q) <- names(stat)
+  if (!any(ok)) return(list(q = q, curve = NULL))
+  if (is.list(perm)) {
+    grid <- as.numeric(perm$grid); H <- perm$hist
+    if (ncol(H) != length(grid) + 1L) stop("perm$hist must have length(perm$grid) + 1 columns")
+    if (alternative == "two.sided") stop("histogram input is one-sided (thresholds on the statistic itself); use alternative = 'greater'")
+    # expected null count at or above grid[k]: mean over permutations of the counts in columns k + 1 .. end
+    cum <- t(apply(H[, ncol(H):1, drop = FALSE], 1, cumsum))[, ncol(H):1, drop = FALSE]   # reverse cumulative sums
+    n.null <- colMeans(cum[, -1, drop = FALSE])                                              # columns 2..: at or above grid[k]
+  } else {
+    P <- if (alternative == "two.sided") abs(perm) else perm
+    if (ncol(P) != length(stat)) stop("perm must have one column per cell")
+    P <- P[, ok, drop = FALSE]
+    so <- sort(s[ok])
+    grid <- if (length(so) > n.grid) unique(stats::quantile(so, probs = seq(0, 1, length.out = n.grid), names = FALSE, type = 1)) else unique(so)
+    n.null <- numeric(length(grid))
+    for (b in seq_len(nrow(P))) {
+      v <- P[b, ]; v <- v[is.finite(v)]
+      h <- tabulate(findInterval(v, grid) + 1L, nbins = length(grid) + 1L)
+      n.null <- n.null + rev(cumsum(rev(h)))[-1]
+    }
+    n.null <- n.null / nrow(P)
+  }
+  so <- sort(s[ok]); n.obs <- length(so) - findInterval(grid, so, left.open = TRUE)     # cells with s >= grid[k]
+  fdr <- pmin(1, pi0 * n.null / pmax(n.obs, 1)); fdr[n.obs == 0] <- NA_real_
+  # q-value: the smallest FDR over the thresholds at or below the cell's statistic (the most favourable rejection set
+  # that still contains the cell), which makes q non-increasing in the statistic
+  fdr.run <- fdr; fdr.run[is.na(fdr.run)] <- 1
+  qmin <- cummin(fdr.run)
+  k <- findInterval(s[ok], grid)
+  q[ok] <- ifelse(k == 0, 1, qmin[pmax(k, 1)])
+  list(q = q, curve = data.frame(threshold = grid, n.observed = n.obs, n.null = n.null, fdr = fdr))
+}
+
+#' Cauchy combination of dependent p-values (Liu & Xie 2020)
+#'
+#' The weighted mean of `tan((0.5 - p) * pi)` is standard Cauchy under the global null for any dependence between the
+#' p-values; the combined p-value is its upper tail. Useful for summarizing per-cell tests over a region (a cluster, a
+#' neighbourhood of the embedding). Very small p-values dominate, so the combination behaves like a minimum-p test
+#' that needs no multiplicity correction within the region.
+#'
+#' @param p p-values (`NA` dropped)
+#' @param weights non-negative weights (default equal)
+#' @param p.min,p.max p-values are clamped into `[p.min, p.max]` before the transform (permutation p-values of exactly
+#'   1 would otherwise cancel any signal)
+#' @return the combined p-value (`NA` when no finite p-value is given)
+#' @export
+cauchyCombination <- function(p, weights = NULL, p.min = 1e-15, p.max = 1 - 1e-3) {
+  ok <- is.finite(p)
+  if (!any(ok)) return(NA_real_)
+  p <- pmin(pmax(p[ok], p.min), p.max)
+  w <- if (is.null(weights)) rep(1, length(p)) else weights[ok]
+  w <- w / sum(w)
+  t.stat <- sum(w * tan((0.5 - p) * pi))
+  stats::pcauchy(t.stat, lower.tail = FALSE)
+}
+
+#' Exact group-level permutation test of per-cell statistics
+#'
+#' For every group, the mean of the per-cell statistics over the group's tested cells is compared with the same mean
+#' under every permutation of the sample labels (the permutations are shared by all cells, so the dependence between
+#' neighbouring cells is carried along exactly). Two-sided for signed statistics (the density contrast), one-sided
+#' for the shift statistic.
+#'
+#' @param stat observed per-cell statistics named by cell (`NA` for untested cells)
+#' @param stats.perm permutations x cells matrix of the permuted statistics (columns named by cell)
+#' @param groups factor of cell groups named by cell
+#' @param alternative `"two.sided"` or `"greater"`
+#' @param min.cells groups with fewer tested cells get `NA`
+#' @return data.frame: `group`, `n.tested`, `mean.stat`, `p.perm`, `padj` (BH across groups)
+#' @export
+groupPermutationTest <- function(stat, stats.perm, groups, alternative = c("two.sided", "greater"), min.cells = 10) {
+  alternative <- match.arg(alternative); groups <- as.factor(groups)
+  ok <- names(stat)[is.finite(stat)]; ok <- intersect(ok, intersect(names(groups), colnames(stats.perm)))
+  B <- nrow(stats.perm)
+  res <- lapply(levels(groups), function(g) {
+    idx <- ok[groups[ok] == g]
+    if (length(idx) < min.cells) return(data.frame(group = g, n.tested = length(idx), mean.stat = NA_real_, p.perm = NA_real_, stringsAsFactors = FALSE))
+    obs <- mean(stat[idx]); perm <- rowMeans(stats.perm[, idx, drop = FALSE], na.rm = TRUE)
+    p <- if (alternative == "two.sided") (sum(abs(perm) >= abs(obs) - 1e-12, na.rm = TRUE) + 1) / (B + 1) else (sum(perm >= obs - 1e-12, na.rm = TRUE) + 1) / (B + 1)
+    data.frame(group = g, n.tested = length(idx), mean.stat = obs, p.perm = p, stringsAsFactors = FALSE)
+  })
+  res <- do.call(rbind, res); res$padj <- stats::p.adjust(res$p.perm, "BH"); res
+}
+
+#' Summarize per-cell test results by cell group
+#'
+#' One p-value per group with BH adjustment across groups, next to the median effect, the median z-score and the
+#' fraction of the group's cells significant after the per-cell adjustment. Two group tests are offered: the exact
+#' permutation test of the group's mean statistic (see [groupPermutationTest()]; the default whenever the permuted
+#' statistics or a precomputed `group.test` are given) and the Cauchy combination of the cells' p-values (see
+#' [cauchyCombination()]; valid under dependence but driven by the smallest p-values, so it needs per-cell p-values
+#' that are calibrated in the far tail: permutation p-values rather than parametric ones). Either gives a group-level
+#' verdict where the per-cell adjustment calls nothing.
+#'
+#' @param p per-cell p-values (named by cell; untested cells `NA`)
+#' @param groups factor of cell groups named by cell
+#' @param effect optional per-cell effects (signed; for the direction and the median)
+#' @param z optional per-cell z-scores
+#' @param p.adj optional per-cell adjusted p-values (for the fraction of significant cells)
+#' @param alpha significance level for the fraction of significant cells and the `significant` flag (default 0.05)
+#' @param min.cells groups with fewer tested cells are reported with `NA` (default 10)
+#' @param stat,stats.perm observed and permuted per-cell statistics for the permutation group test
+#' @param group.test a precomputed permutation group test (data.frame with `group` and `p.perm`)
+#' @param alternative for the permutation group test
+#' @param method which p-value fills `p` and `padj`: `"permutation"` (default when available) or `"cauchy"`
+#' @return data.frame: `group`, `n.cells`, `n.tested`, `p`, `padj`, `p.perm`, `p.cauchy`, `median.effect`, `median.z`,
+#'   `frac.sig`, `direction` (sign of the median effect: "up", "down" or "none"), `significant`, `method`
+#' @export
+summarizeCellScoresByGroup <- function(p, groups, effect = NULL, z = NULL, p.adj = NULL, alpha = 0.05, min.cells = 10,
+                                       stat = NULL, stats.perm = NULL, group.test = NULL, alternative = c("two.sided", "greater"),
+                                       method = c("permutation", "cauchy")) {
+  method <- match.arg(method); alternative <- match.arg(alternative)
+  groups <- as.factor(groups)
+  cells <- names(groups)
+  if (is.null(cells) || is.null(names(p))) stop("p and groups must be named by cell")
+  pc <- p[cells]; ec <- if (!is.null(effect)) effect[cells] else NULL; zc <- if (!is.null(z)) z[cells] else NULL; ac <- if (!is.null(p.adj)) p.adj[cells] else NULL
+  res <- lapply(levels(groups), function(g) {
+    i <- which(groups == g); tested <- i[is.finite(pc[i])]
+    med.e <- if (!is.null(ec) && length(tested)) stats::median(ec[tested], na.rm = TRUE) else NA_real_
+    data.frame(group = g, n.cells = length(i), n.tested = length(tested),
+               p.cauchy = if (length(tested) >= min.cells) cauchyCombination(pc[tested]) else NA_real_,
+               median.effect = med.e, median.z = if (!is.null(zc) && length(tested)) stats::median(zc[tested], na.rm = TRUE) else NA_real_,
+               frac.sig = if (!is.null(ac) && length(tested)) mean(ac[tested] < alpha, na.rm = TRUE) else NA_real_,
+               direction = if (!is.finite(med.e) || med.e == 0) "none" else if (med.e > 0) "up" else "down", stringsAsFactors = FALSE)
+  })
+  res <- do.call(rbind, res)
+  if (is.null(group.test) && !is.null(stat) && !is.null(stats.perm)) group.test <- groupPermutationTest(stat, stats.perm, groups, alternative = alternative, min.cells = min.cells)
+  res$p.perm <- if (!is.null(group.test)) group.test$p.perm[match(res$group, group.test$group)] else NA_real_
+  if (method == "permutation" && is.null(group.test)) method <- "cauchy"
+  res$p <- if (method == "permutation") res$p.perm else res$p.cauchy
+  res$padj <- stats::p.adjust(res$p, "BH")
+  res$significant <- is.finite(res$padj) & res$padj < alpha
+  res$method <- method
+  res[, c("group", "n.cells", "n.tested", "p", "padj", "p.perm", "p.cauchy", "median.effect", "median.z", "frac.sig", "direction", "significant", "method")]
 }

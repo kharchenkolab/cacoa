@@ -351,7 +351,7 @@ one-sided):
 
 ``` r
 cao$estimateClusterFreeExpressionShifts(n.top.genes = 500, n.permutations = 99)
-cao$plotClusterFreeExpressionShifts()
+cao$plotClusterFreeExpressionShifts(font.size = 3)
 ```
 
 ![](walkthrough_short_files/figure-gfm/cluster-free-shifts-1.png)<!-- -->

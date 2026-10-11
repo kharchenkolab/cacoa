@@ -388,7 +388,7 @@ estimateDEPerCellTypeInner_model <- function(raw.mats, cell.groups = NULL, sampl
         }
         model.ct <- restrictModelToSamples(model, samp.ct)
         if (is.null(model.ct)) {
-          warning("Contrast not estimable for cell type ", l, " (a compared level is absent or confounded there); skipping")
+          if (verbose) message("Skipping cell type ", l, ": contrast not estimable (a compared level is absent or confounded there)")
           return(NULL)
         }
         info <- tryCatch(contrastSampleInfo(model.ct, sample.meta[samp.ct, , drop = FALSE], samp.ct), error = function(e) NULL)

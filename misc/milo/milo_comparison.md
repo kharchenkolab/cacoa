@@ -11,7 +11,7 @@ the smallest spatial FDR over the neighbourhoods containing the cell and the log
 
 ## Planted density simulation (`test/sim_density.rds`; 2,557 cells, 10 vs 10 samples)
 
-Empirical truth (per-sample proportions, treated vs control): IN-SST, L2/3, L5/6-CC down; IN-PV, OPC, AST-FB up;
+Empirical truth (per-sample proportions, treated vs control; now stored as `truth$composition` in `test/sim_density.rds`, Wilcoxon p < 0.01): IN-SST, L2/3, L5/6-CC down; IN-PV, OPC, AST-FB up;
 AST-PP, Microglia, Neu-NRGN unchanged. Fractions of cells called:
 
 | cell type | change | cacoa BH (|z| > 1.96) | cacoa max-t | Milo cells (FDR < 0.1) | Milo neighbourhoods (FDR < 0.1) |
@@ -93,3 +93,10 @@ neighbourhoods, and tests about 3,000 neighbourhoods instead of 35,000 cells. Ma
   machinery, and a smaller smoothing bandwidth for the density, are the natural next steps; the present
   `adjust.method = "neighbourhood"` only reduces the number of tests (it reuses the per-cell smoothed statistics) and is
   liberal on the simulation.
+
+Milo agent's full write-up: `milo_notes.md` (methods, per-cell-type tables for every route and design, runtimes) and
+`summary_tables.md`. Its two caveats stand: the simulation's Conos graph is dense (median degree 341 of 2,557 cells), so
+Milo's neighbourhoods there are nearly cluster-sized (median 405 cells, 72 % type purity); and Milo's PCA route
+without integration is uninformative on all three datasets (the expression shifts split the planted types into
+condition-pure neighbourhoods), so the Conos-graph route is the fair comparison. The k-distance spatial FDR on the
+2-D embedding is unusable (weights span orders of magnitude; 1 neighbourhood called on MS); graph-overlap is used.

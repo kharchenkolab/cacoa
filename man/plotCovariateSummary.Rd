@@ -17,6 +17,6 @@ plotCovariateSummary(x, mode = NULL, plot.theme = ggplot2::theme_bw())
 ggplot2 object
 }
 \description{
-One bar per covariate: median chance-corrected R2 across cell types for location and dispersion, with the
+One bar per covariate: median chance-corrected R2 across cell types for the location association, labelled with the
 number of significant cell types as a label.
 }

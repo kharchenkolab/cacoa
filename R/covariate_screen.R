@@ -360,7 +360,7 @@ plotCovariateScreen <- function(x, effect = c("location", "dispersion"), mode = 
 
 #' Summary bars of a covariate screen
 #'
-#' One bar per covariate: median chance-corrected R2 across cell types for location and dispersion, with the
+#' One bar per covariate: median chance-corrected R2 across cell types for the location association, labelled with the
 #' number of significant cell types as a label.
 #' @param x `cacoaCovariateScreen`
 #' @param mode `"partial"` (default when available) or `"marginal"`
@@ -370,19 +370,24 @@ plotCovariateScreen <- function(x, effect = c("location", "dispersion"), mode = 
 plotCovariateSummary <- function(x, mode = NULL, plot.theme = ggplot2::theme_bw()) {
   if (is.null(mode)) mode <- if ("partial" %in% x$modes) "partial" else x$modes[1]
   tb <- x$table[x$table$mode == mode, ]
+  # location: median chance-corrected R2 across cell types; dispersion: only the count of significant cell types
+  # (with a handful of samples per arm the dispersion F is too unstable for an R2-type summary)
   agg <- do.call(rbind, lapply(split(tb, tb$covariate), function(d) data.frame(
-    covariate = d$covariate[1], effect = c("location", "dispersion"),
-    value = c(stats::median(d$R2.adj, na.rm = TRUE), stats::median(d$R2.disp.adj, na.rm = TRUE)),
-    n.sig = c(sum(d$padj < x$settings$alpha, na.rm = TRUE), sum(d$padj.disp < x$settings$alpha, na.rm = TRUE)), stringsAsFactors = FALSE)))
+    covariate = d$covariate[1], value = stats::median(d$R2.adj, na.rm = TRUE), n.types = sum(is.finite(d$p)),
+    n.sig = sum(d$padj < x$settings$alpha, na.rm = TRUE), n.sig.disp = sum(d$padj.disp < x$settings$alpha, na.rm = TRUE), stringsAsFactors = FALSE)))
   agg$value[!is.finite(agg$value)] <- 0
-  ord <- agg$covariate[agg$effect == "location"][order(agg$value[agg$effect == "location"])]
-  agg$covariate <- factor(agg$covariate, levels = ord); agg$effect <- factor(agg$effect, levels = c("location", "dispersion"))
-  ggplot2::ggplot(agg, ggplot2::aes(x = .data$covariate, y = pmax(.data$value, 0), fill = .data$effect)) +
-    ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.8), width = 0.7) +
-    ggplot2::geom_text(ggplot2::aes(label = ifelse(.data$n.sig > 0, .data$n.sig, "")), position = ggplot2::position_dodge(width = 0.8), hjust = -0.2, size = 3) +
-    ggplot2::coord_flip() + ggplot2::scale_fill_manual(values = c(location = "#2c7fb8", dispersion = "#f03b20")) + plot.theme +
-    ggplot2::labs(x = NULL, y = "median chance-corrected R2 across cell types", fill = NULL,
-                  title = sprintf("Covariate summary (%s); labels: cell types with FDR < %.2g", mode, x$settings$alpha))
+  agg$covariate <- factor(agg$covariate, levels = agg$covariate[order(agg$value)])
+  agg$disp.label <- ifelse(agg$n.sig.disp > 0, sprintf("dispersion: %d", agg$n.sig.disp), "")
+  ymax <- max(agg$value, 0.01)
+  ggplot2::ggplot(agg, ggplot2::aes(x = .data$covariate, y = pmax(.data$value, 0))) +
+    ggplot2::geom_col(width = 0.7, fill = "#2c7fb8") +
+    ggplot2::geom_text(ggplot2::aes(label = ifelse(.data$n.sig > 0, sprintf("%d of %d", .data$n.sig, .data$n.types), "")), hjust = -0.15, size = 3) +
+    ggplot2::geom_text(ggplot2::aes(y = ymax * 1.35, label = .data$disp.label), hjust = 0, size = 3, colour = "#b2182b") +
+    ggplot2::coord_flip(clip = "off") + ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0.6))) + plot.theme +
+    ggplot2::labs(x = NULL, y = "median chance-corrected R2 across cell types (location)",
+                  title = sprintf("Covariate summary (%s)", mode),
+                  subtitle = sprintf("labels: cell types with location FDR < %.2g; red: cell types with a dispersion association at FDR < %.2g", x$settings$alpha, x$settings$alpha)) +
+    ggplot2::theme(plot.subtitle = ggplot2::element_text(size = 8, colour = "grey30"))
 }
 
 #' Stacked bars of a variance partition per cell type

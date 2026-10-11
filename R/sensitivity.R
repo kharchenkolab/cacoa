@@ -108,7 +108,11 @@ checkSensitivity <- function(D.list, model, meta, formulas = NULL, screen = NULL
         if (isTRUE(outlying) && is.finite(infl.rel) && infl.rel > influence.rel) infl.sample <- names(ch)[i]
       }
     }
-    verdict <- if (!is.na(infl.sample)) sprintf("driven by sample %s", infl.sample)
+    cur.sig <- nrow(cur.row) && !is.na(cur.row$padj) && cur.row$padj < alpha
+    verdict <- if (m <= 1) sprintf("only one model could be fitted (%s)", if (n.sig) "significant" else "not significant")
+      else if (n.sig == 0) "no significant effect in any model"
+      else if (!cur.sig && !is.na(infl.sample)) "no significant effect in the current model"
+      else if (!is.na(infl.sample)) sprintf("driven by sample %s", infl.sample)
       else if (!same.sign) "sign sensitive to the adjustment set"
       else if (!is.na(sig.change) && sig.change) sprintf("significance sensitive to the adjustment set (%s)", flipped.by)
       else if (is.finite(max.rel) && max.rel > rel.change) sprintf("estimate changes by %.0f%% (%s)", 100 * max.rel, as.character(worst))
@@ -130,6 +134,8 @@ shortVerdict <- function(v) {
   out[startsWith(v, "sign sensitive")] <- "sign depends on the model"
   out[startsWith(v, "significance sensitive")] <- "significance depends on the model"
   out[startsWith(v, "estimate changes")] <- sub(" \\(.*\\)$", "", v[startsWith(v, "estimate changes")])
+  out[startsWith(v, "only one model")] <- "only one model fitted"
+  out[startsWith(v, "no significant effect")] <- "no significant effect"
   out
 }
 

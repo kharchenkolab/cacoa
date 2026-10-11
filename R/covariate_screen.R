@@ -55,7 +55,14 @@ screenOneMatrix <- function(G, meta, covariates, mode, adjust.cols = NULL, n.per
                                    c(huber = 1L, winsor = 2L)[[robust]], robust.k, 5L)
       Fp <- st[, 1]; Fdp <- st[, 2]
       p.perm <- (sum(Fp >= tt["F"] - 1e-12) + 1) / (B + 1)
-      if (dispersion && is.finite(dd["F.disp"])) p.disp.perm <- (sum(Fdp >= dd["F.disp"] - 1e-12, na.rm = TRUE) + 1) / (sum(is.finite(Fdp)) + 1)
+      if (dispersion && is.finite(dd["F.disp"])) {
+        p.disp.perm <- (sum(Fdp >= dd["F.disp"] - 1e-12, na.rm = TRUE) + 1) / (sum(is.finite(Fdp)) + 1)
+        # chance-corrected dispersion R2 against the permutation null of F.disp (its null is not centred at 1), so that
+        # the bars of the summary plot and the permutation p-values agree
+        F0 <- stats::median(Fdp, na.rm = TRUE); dfd <- unname(dd["df.disp"]); nud <- unname(dd["nu.disp"])
+        if (is.finite(F0) && is.finite(dfd) && is.finite(nud) && dfd > 0 && nud > 0)
+          r2d <- (unname(dd["F.disp"]) - F0) * dfd / (unname(dd["F.disp"]) * dfd + nud)
+      }
     }
     rows[[v]] <- data.frame(covariate = v, mode = mode, n.used = n.used, R2 = unname(tt["R2"]), R2.adj = unname(tt["R2.adj"]),
                             R2.partial = unname(tt["R2.partial"]), F = unname(tt["F"]), df = unname(tt["df"]), r.eff = unname(tt["r.eff"]),

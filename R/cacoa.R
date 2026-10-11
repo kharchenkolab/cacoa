@@ -3040,7 +3040,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       density.emb <- density.emb[names(scores),]
 
       if (is.null(color.range)) {
-        color.range <- c(-1, 1) * max(abs(scores))
+        # adjusted scores: keep at least +-1.96 in the range so that a map without significant cells looks pale
+        color.range <- c(-1, 1) * max(abs(scores), if (adjust) stats::qnorm(0.975) else 0, na.rm = TRUE)
       } else {
         color.range %<>% parseLimitRange(scores)
         color.range <- max(abs(color.range)) %>% {c(-., .)}

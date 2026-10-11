@@ -90,6 +90,14 @@ permutation set depends on the metadata row order for a fixed seed.
   (the parametric F of the neighbourhood shift is not calibrated). Known confound: neighbourhoods mixing cell types
   whose composition differs between arms show "shifts" (Microglia next to AST-FB in the simulation).
 
+- (2026-10-11, from the PF notebook, open) `estimateOntology()` with many cores fails intermittently with "database disk
+  image is malformed": the org.db SQLite connection is used inside forked workers. Proposed fix: query the organism /
+  readable mapping once in the parent (`setReadable` after the parallel step), keep the workers free of org.db calls.
+  Until then use n.cores <= 4 for GSEA. GSEA is stochastic unless `seed = TRUE` (now works under forking).
+- (2026-10-11, open) Cluster-free panels on large datasets (PF 89k cells, MS 49k): BH over cells needs hundreds of
+  cells at the permutation floor; the adjusted maps are empty and the notebooks show raw z. The screen's grid-wide BH
+  can call nothing although the global max-statistic p-values are clear (PF): the summary line should say so.
+
 ## 1. Not implemented
 
 - **Robust fitting and weak imputation in the distance engine**: implemented 2026-10-09 (step 4b); calibration

@@ -2894,11 +2894,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   conservative with many cells)
     #' @param p.source per-cell p-values for the FDR alternatives: `"parametric"` (t statistic of the contrast, default)
     #'   or `"permutation"` (floored at 1 / (n.permutations + 1))
+    #' @param moderate shrink the per-cell residual variances towards a common prior across cells (limma's empirical
+    #'   Bayes; a moderated t with extra degrees of freedom) before the parametric p-values (default TRUE)
     estimateDiffCellDensity=function(type='permutation', adjust=NULL, name='cell.density', sample.metadata=self$sample.meta, 
                                      formula=NULL, contrast=NULL, test=NULL, block.vars=NULL, perm.method="freedman-lane", statistic=c("t", "coef"),
                                      robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=TRUE,
                                      n.permutations=999, smooth=TRUE, adjust.method=c("bh", "spatial-fdr", "neighbourhood", "max-t"),
-                                     p.source=c("parametric", "permutation"), verbose=self$verbose, n.cores=self$n.cores, ...){
+                                     p.source=c("parametric", "permutation"), moderate=TRUE, verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
       statistic <- match.arg(statistic); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source)
       if (is.null(adjust)) adjust <- (type != 'subtract') # NULL can be forwarded here
@@ -2925,7 +2927,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           diffCellDensityPermutations(sample.model=sample.model, seed = private$opt("seed"), perm.method=perm.method, statistic=statistic, robust.method = robust.method,
                                       na.mode = na.mode, alternative = alternative, n.permutations=n.permutations,
                                       return.residuals=return.residuals, return.sampled.stats=return.sampled.stats,
-                                      n.cores=n.cores, verbose=verbose)
+                                      n.cores=n.cores, verbose=verbose, moderate=moderate)
 
       if(!adjust){
         score <- perm.res %>% .$z.score
@@ -3816,14 +3818,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... deprecated arguments of the previous implementation are accepted and ignored with a message
     #' @return list (see [clusterFreeExpressionShifts()]), also stored in `cao$test.results[[name]]`
     #' @param adjust.method multiplicity adjustment across cells: `"bh"` (default), `"spatial-fdr"`, `"neighbourhood"` or `"max-t"`, see [adjustCellScores()]
-    #' @param p.source per-cell p-values for the FDR adjustments: `"permutation"` (default; the parametric F of the
-    #'   neighbourhood shift is not calibrated) or `"parametric"`
+    #' @param p.source per-cell p-values for the FDR adjustments: `"permutation"` (default; calibrated, floored at
+    #'   1 / (n.permutations + 1)), `"z"` (normal tail of the permutation-standardized z: no floor, anti-conservative) or
+    #'   `"parametric"` (the F of the neighbourhood shift; not calibrated)
     #' @param robust `"none"` (default, option `robust`), `"huber"` or `"winsor"`: robust per-cell shift test
     estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="expression", name="cluster.free.expr.shifts",
                                                  test=NULL, formula=NULL, contrast=NULL, block.vars=NULL,
                                                  min.n.obs.per.samp=3, min.samp.per.level=2, permutation=NULL, n.permutations=NULL, seed=NULL,
                                                  dist=c("cor", "cosine", "js"), adjust=TRUE, smooth=TRUE, wins=0.025, genes=NULL, min.expr.frac=0.0,
-                                                 min.edge.weight=0.0, adjust.method=c("bh", "spatial-fdr", "neighbourhood", "max-t"), p.source=c("permutation", "parametric"),
+                                                 min.edge.weight=0.0, adjust.method=c("bh", "spatial-fdr", "neighbourhood", "max-t"), p.source=c("permutation", "z", "parametric"),
                                                  verbose=NULL, n.cores=NULL, robust=NULL, ...) {
       dist <- match.arg(dist); robust <- private$opt("robust", robust); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source)
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)

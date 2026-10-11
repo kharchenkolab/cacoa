@@ -76,8 +76,8 @@ adjustCellScores <- function(z, p = NULL, method = c("bh", "spatial-fdr", "neigh
       p.adj[ok] <- best[ok]
     }
   }
-  pa <- pmin(p.adj, 1)
-  z.adj <- if (alternative == "two.sided") sign(z) * stats::qnorm(1 - pa / 2) else pmax(stats::qnorm(1 - pa), 0)   # one-sided: 0 at p >= 0.5
+  pa <- pmin(pmax(p.adj, 1e-300), 1)
+  z.adj <- if (alternative == "two.sided") sign(z) * stats::qnorm(pa / 2, lower.tail = FALSE) else pmax(stats::qnorm(pa, lower.tail = FALSE), 0)   # one-sided: 0 at p >= 0.5
   z.adj[!is.finite(z.adj)] <- NA_real_
   list(p.adj = p.adj, z.adj = z.adj, index = idx, method = method)
 }

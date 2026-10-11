@@ -26,7 +26,7 @@ clusterFreeExpressionShifts(
   robust = c("none", "huber", "winsor"),
   robust.k = 1.345,
   adjust.method = c("bh", "spatial-fdr", "neighbourhood", "max-t"),
-  p.source = c("permutation", "parametric")
+  p.source = c("permutation", "z", "parametric")
 )
 }
 \arguments{
@@ -66,7 +66,10 @@ clusterFreeExpressionShifts(
 
 \item{adjust.method}{\code{"bh"} (default), \code{"spatial-fdr"}, \code{"neighbourhood"} or \code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
 
-\item{p.source}{per-cell p-values for the FDR adjustments: \code{"permutation"} (default) or \code{"parametric"} (F statistic; not calibrated for this statistic)}
+\item{p.source}{per-cell p-values for the FDR adjustments: \code{"permutation"} (default; calibrated but floored at
+1 / (n.permutations + 1), so with many cells and sparse signal BH may call nothing), \code{"z"} (the normal tail of the
+permutation-standardized z-score: no floor, but anti-conservative in the tail, about three times the nominal false
+discovery rate on the simulation) or \code{"parametric"} (F statistic; not calibrated for this statistic)}
 }
 \value{
 list: \code{stat} (shift F per cell), \code{p.value}, \code{z.score} (and \code{z.scores}), \code{z.adj}, \code{shifts} (bias-corrected shift

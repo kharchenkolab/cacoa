@@ -61,9 +61,24 @@ analysis, the original study and cacoa's BH map all show; cacoa misses the inter
 populations: 105-1,900 nuclei spread over 21 samples; the per-cell density contrast has little power there). Maps:
 `compare_ms_maps.png`.
 
-## SCC (Ji 2020)
+## SCC (Ji 2020; 35,640 cells, 9 tumour vs 9 normal, 2,945 Milo neighbourhoods)
 
-Pending (Milo run in progress).
+Reference: tumour-only populations (TSK, PDC, B cells, ASDC) in the loadings. cacoa's per-cell density test calls
+nothing at 5 % FDR with any adjustment (BH on the parametric t, on the moderated t, on the permutation p; max-t):
+the smallest BH-adjusted p is 0.07. Milo calls 58 % of the cells at FDR < 0.1 and 49 % at 0.05, with the tumour-only
+populations on top (PDC 99 %, B cells 96 %, ASDC 94 %, TSK 89 % of cells; 100 %, 92 %, 65 %, 69 % of their
+neighbourhoods) and the keratinocyte states down (KC_Diff 41 % of neighbourhoods). Cell-level Spearman between
+cacoa's z and Milo's logFC: 0.82 (the two statistics agree on direction and order; the difference is power).
+
+Why cacoa loses here: (1) the graph density is a heat-kernel smooth (beta = 30) of each sample's cell indicator, so a
+small population embedded in a large one (TSK inside KC_Basal) has its tumour-only signal diluted by the normal
+neighbours (TSK median raw z 1.1, PDC 3.3); (2) the per-cell contrast rests on 18 sample densities, so even a
+perfectly separated population reaches only the permutation floor (0.001 at 999 permutations; 310 cells at the floor
+in SCC), and BH over 35,640 cells needs about 700 such cells before any passes; the parametric t is no better (zero
+densities in one arm and heterogeneous tumours give t about 3). Shrinking the per-cell variances across cells (a
+moderated t, limma's empirical Bayes, now `moderate = TRUE` by default) changes nothing here: the limitation is the
+statistic, not its variance estimate. Milo pools counts per neighbourhood and borrows dispersion across
+neighbourhoods, and tests about 3,000 neighbourhoods instead of 35,000 cells. Maps: `compare_scc_maps.png`.
 
 ## Reading
 
@@ -72,5 +87,9 @@ Pending (Milo run in progress).
 - Milo's advantage is in small populations where pooling a neighbourhood's counts gives power; its weakness on the same
   graph is the coverage of its calls (large overlapping neighbourhoods, minimum-FDR propagation), which paints whole
   unchanged populations at the 10 % threshold, and its dependence on an integrated embedding when built in its usual way.
-- cacoa's per-cell test remains a per-cell contrast of smoothed densities; a neighbourhood-level count model (Milo's) with
-  cacoa's design and permutation machinery would combine both, and is the natural next step if small populations matter.
+- cacoa's per-cell test remains a per-cell contrast of smoothed densities: it wins on the simulation and on MS (large
+  populations, calibrated calls) and loses on SCC (small condition-specific populations among many cells). A
+  neighbourhood-level count model on index cells (Milo's unit of testing) with cacoa's design and permutation
+  machinery, and a smaller smoothing bandwidth for the density, are the natural next steps; the present
+  `adjust.method = "neighbourhood"` only reduces the number of tests (it reuses the per-cell smoothed statistics) and is
+  liberal on the simulation.

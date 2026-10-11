@@ -37,7 +37,10 @@ pairVectorToMatrix <- function(y, pairs, samples) {
 #' @param smooth median-filter the shifts and adjusted z-scores over the graph (default TRUE)
 #' @param wins winsorizing fraction for the adjustment (default 0.025)
 #' @param adjust.method `"bh"` (default), `"spatial-fdr"`, `"neighbourhood"` or `"max-t"`, see [adjustCellScores()]
-#' @param p.source per-cell p-values for the FDR adjustments: `"permutation"` (default) or `"parametric"` (F statistic; not calibrated for this statistic)
+#' @param p.source per-cell p-values for the FDR adjustments: `"permutation"` (default; calibrated but floored at
+#'   1 / (n.permutations + 1), so with many cells and sparse signal BH may call nothing), `"z"` (the normal tail of the
+#'   permutation-standardized z-score: no floor, but anti-conservative in the tail, about three times the nominal false
+#'   discovery rate on the simulation) or `"parametric"` (F statistic; not calibrated for this statistic)
 #' @param log.vectors log10(1e3 x + 1) transform of the mean profiles (default TRUE)
 #' @param n.cores threads for the per-cell loop (C++)
 #' @param verbose progress
@@ -50,7 +53,7 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
                                         min.samp.per.level = 2, permutation = "auto", n.permutations = 199, block.vars = NULL, seed = 1,
                                         adjust = TRUE, smooth = TRUE, wins = 0.025, log.vectors = TRUE, n.cores = 1, verbose = FALSE,
                                         robust = c("none", "huber", "winsor"), robust.k = 1.345,
-                                        adjust.method = c("bh", "spatial-fdr", "neighbourhood", "max-t"), p.source = c("permutation", "parametric")) {
+                                        adjust.method = c("bh", "spatial-fdr", "neighbourhood", "max-t"), p.source = c("permutation", "z", "parametric")) {
   dist <- match.arg(dist); robust <- match.arg(robust); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source)
   if (identical(design$contrast_spec$type, "term")) stop("cluster-free shifts need a contrast test (two groups or a numeric step)")
   samples <- intersect(rownames(design$F), levels(droplevels(factor(sample.per.cell))))
@@ -98,7 +101,8 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
                                       nn_ids = nn.list, non_zero_ids = as.integer(valid - 1L))
       z.adj[!is.finite(z)] <- NA_real_
     } else {
-      p.in <- if (p.source == "parametric") p.param else pval
+      p.in <- switch(p.source, parametric = p.param, permutation = pval,
+                     z = { pz <- stats::pnorm(z, lower.tail = FALSE); pz[!is.finite(z)] <- NA_real_; names(pz) <- cell.names; pz })   # normal tail of the permutation-standardized z: no floor
       z.in <- stats::qnorm(pmin(pmax(p.in, 1e-300), 1 - 1e-16), lower.tail = FALSE); z.in[!is.finite(p.in)] <- NA_real_
       ad <- adjustCellScores(z.in, p.in, method = adjust.method, nn.list = nn.list, alternative = "greater", seed = seed)
       z.adj <- ad$z.adj; p.adj <- ad$p.adj; names(p.adj) <- cell.names

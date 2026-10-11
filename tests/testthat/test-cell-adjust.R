@@ -29,3 +29,10 @@ test_that("density and cluster-free shift tests accept the FDR adjustments", {
   }
   expect_s3_class(cao$plotDiffCellDensity(), "ggplot")
 })
+
+test_that("very small p-values give finite adjusted z-scores", {
+  z <- c(a = 40, b = 2, c = -3, d = NA); p <- c(1e-320, 0.02, 0.001, NA)
+  a <- adjustCellScores(z, p, method = "bh")
+  expect_true(all(is.finite(a$z.adj[1:3]))); expect_gt(a$z.adj[["a"]], 30); expect_lt(a$z.adj[["c"]], 0)
+  g <- adjustCellScores(abs(z), p, method = "bh", alternative = "greater"); expect_true(all(g$z.adj[1:3] >= 0))
+})

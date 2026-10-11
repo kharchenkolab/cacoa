@@ -55,3 +55,11 @@ AST-FB boundary of the graph: neighbourhoods that mix cell types whose compositi
 cluster-based test does not have. Defaults set 2026-10-11: density `"bh"` with parametric p; shifts `"bh"` with
 permutation p; `"max-t"` kept as an option. Head-to-head with Milo on the same simulation and on MS / SCC: see
 `misc/milo_comparison.md` (pending).
+
+Addendum (same day): (1) `p.source = "z"` for the cluster-free shifts (normal tail of the permutation-standardized z,
+no floor) raises sensitivity (strong 79-91 %, moderate 72-84 %) but is anti-conservative on the null types (Microglia
+37 %, Neu-NRGN 15 % at a nominal 5 %), so the default stays `"permutation"`; on MS (30,000 cells, sparse signal) no
+cell passes BH with the permutation p at 199-999 permutations because too few cells sit at the floor (108 at 999),
+the notebook shows the raw z map instead. (2) Density: a moderated t (limma `squeezeVar` across cells, `moderate =
+TRUE`) is the default parametric p; it leaves the simulation and MS results unchanged and does not rescue SCC. See
+`misc/milo/milo_comparison.md` for the head-to-head with Milo.

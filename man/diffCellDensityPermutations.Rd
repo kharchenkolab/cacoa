@@ -16,6 +16,7 @@ diffCellDensityPermutations(
   return.sampled.stats = TRUE,
   n.cores = 1,
   verbose = TRUE,
+  moderate = TRUE,
   ...
 )
 }

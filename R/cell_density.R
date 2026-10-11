@@ -216,7 +216,7 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
 diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c("block", "freedman-lane"), 
                                         n.permutations=999, robust.method=c("none","huber","winsor"), na.mode=c("drop", "impute_weak"),
                                         alternative=c("two-sided","greater","less"), return.residuals=FALSE, return.sampled.stats=TRUE,
-                                        n.cores=1, verbose=TRUE, ...) {
+                                        n.cores=1, verbose=TRUE, moderate=TRUE, ...) {
   perm.method <- match.arg(perm.method)
   robust.method <- match.arg(robust.method)
   na.mode <- match.arg(na.mode)
@@ -240,7 +240,14 @@ diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c
   z.score <- res$z.score
   names(z.score) <- colnames(Y)
 
-  tstat <- res$effect / res$se; dfr <- res$df
+  # moderated t: the per-cell residual variances are shrunk towards a common prior estimated across cells (limma's
+  # empirical Bayes), which borrows strength across the many cells the way Milo's count model does across neighbourhoods
+  dfr <- res$df; se2 <- res$se^2; ok <- is.finite(se2) & se2 > 0
+  if (moderate && sum(ok) > 10 && requireNamespace("limma", quietly = TRUE)) {
+    sq <- limma::squeezeVar(se2[ok], df = dfr)
+    se.mod <- res$se; se.mod[ok] <- sqrt(sq$var.post); dfr <- dfr + sq$df.prior
+    tstat <- res$effect / se.mod
+  } else tstat <- res$effect / res$se
   p.param <- if (alternative == "two-sided") 2 * stats::pt(-abs(tstat), dfr) else if (alternative == "greater") stats::pt(tstat, dfr, lower.tail = FALSE) else stats::pt(tstat, dfr)
   out <- list(score = score.c, permut.scores = if (is.null(res$effects.perm)) NULL else t(res$effects.perm), z.score = z.score,
               effect = setNames(res$effect, colnames(Y)), se = setNames(res$se, colnames(Y)), statistic = res$statistic,

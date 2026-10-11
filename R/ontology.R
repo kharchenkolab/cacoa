@@ -201,6 +201,8 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
                                     keep.gene.sets=FALSE, verbose=TRUE, n.cores=1, ...) {
   # TODO: n.cores only affects GSEA. Need to understand if it can be passed to GO/DO
   checkPackageInstalled("DOSE", bioc=TRUE)
+  # GSEA's `seed = TRUE` reads .Random.seed inside the (forked) workers: make sure it exists before forking
+  if (isTRUE(list(...)$seed) && !exists(".Random.seed", envir = globalenv(), inherits = FALSE)) invisible(stats::runif(1))
 
   if (type %in% c("GO", "DO") && (n.top.genes > 0)) {
     # Adjust to n.top.genes

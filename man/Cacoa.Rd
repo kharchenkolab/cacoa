@@ -3594,6 +3594,7 @@ Estimate differential cell density
   smooth = TRUE,
   adjust.method = c("bh", "spatial-fdr", "neighbourhood", "max-t"),
   p.source = c("parametric", "permutation"),
+  moderate = TRUE,
   verbose = self$verbose,
   n.cores = self$n.cores,
   ...
@@ -3644,6 +3645,9 @@ conservative with many cells)}
 
 \item{\code{p.source}}{per-cell p-values for the FDR alternatives: \code{"parametric"} (t statistic of the contrast, default)
 or \code{"permutation"} (floored at 1 / (n.permutations + 1))}
+
+\item{\code{moderate}}{shrink the per-cell residual variances towards a common prior across cells (limma's empirical
+Bayes; a moderated t with extra degrees of freedom) before the parametric p-values (default TRUE)}
 
 \item{\code{verbose}}{boolean Print messages (default=self$verbose)}
 
@@ -4325,7 +4329,7 @@ median smoothing over the graph.
   min.expr.frac = 0,
   min.edge.weight = 0,
   adjust.method = c("bh", "spatial-fdr", "neighbourhood", "max-t"),
-  p.source = c("permutation", "parametric"),
+  p.source = c("permutation", "z", "parametric"),
   verbose = NULL,
   n.cores = NULL,
   robust = NULL,
@@ -4376,8 +4380,9 @@ median smoothing over the graph.
 
 \item{\code{adjust.method}}{multiplicity adjustment across cells: \code{"bh"} (default), \code{"spatial-fdr"}, \code{"neighbourhood"} or \code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
 
-\item{\code{p.source}}{per-cell p-values for the FDR adjustments: \code{"permutation"} (default; the parametric F of the
-neighbourhood shift is not calibrated) or \code{"parametric"}}
+\item{\code{p.source}}{per-cell p-values for the FDR adjustments: \code{"permutation"} (default; calibrated, floored at
+1 / (n.permutations + 1)), \code{"z"} (normal tail of the permutation-standardized z: no floor, anti-conservative) or
+\code{"parametric"} (the F of the neighbourhood shift; not calibrated)}
 
 \item{\code{verbose}}{defaults from options (permutations capped at 499)}
 

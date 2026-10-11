@@ -179,3 +179,14 @@ test_that("a paired location model makes the arm dispersions non-identifiable: v
   res0 <- cao$estimateExpressionShiftMagnitudes(formula = ~ group, test = "group", n.permutations = 29, verbose = FALSE)
   expect_true(all(is.finite(res0$results$estimate[res0$results$effect == "var"])))
 })
+
+test_that("explicit covariate sets: the stored model is recognized as 'current' by its formula", {
+  cao <- makeToyCacoa(n.per.group = c(A = 6, B = 6), cells.per.sample = 40, n.genes = 80, shift = 1.5)
+  cao$sample.meta$nuisance <- factor(rep(c("u", "v"), 6))
+  cao$setModel(~ group, test = "group", verbose = FALSE)
+  cao$estimateExpressionShiftMagnitudes(n.permutations = 49, verbose = FALSE)
+  s1 <- cao$checkSensitivity(covariate.sets = list(unadjusted = ~ group, `plus nuisance` = ~ group + nuisance), n.permutations = 29, verbose = FALSE)
+  expect_true("current" %in% names(s1$formulas)); expect_false("unadjusted" %in% names(s1$formulas))
+  s2 <- cao$checkSensitivity(covariate.sets = list(`plus nuisance` = ~ group + nuisance), n.permutations = 29, verbose = FALSE)
+  expect_equal(names(s2$formulas)[1], "current"); expect_true(all(s2$table$model[s2$table$model == "current"] == "current"))
+})

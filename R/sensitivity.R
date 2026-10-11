@@ -59,6 +59,11 @@ checkSensitivity <- function(D.list, model, meta, formulas = NULL, screen = NULL
   t <- model$tests[[1]]
   if (t$kind != "contrast") stop("sensitivity analysis is defined for contrast tests (two groups or a numeric step)")
   if (is.null(formulas)) formulas <- sensitivityFormulas(model, screen, meta, top.k = top.k)
+  if (!"current" %in% names(formulas)) {            # the stored model is "current" whatever the caller named it
+    key <- function(f) paste(sort(all.vars(f)), collapse = "+")
+    same <- which(vapply(formulas, key, character(1)) == key(model$formula))
+    if (length(same)) names(formulas)[same[1]] <- "current" else formulas <- c(list(current = model$formula), formulas)
+  }
   spec <- model$test.spec %||% list(test = NULL, contrast = t$contrast)
   runs <- lapply(names(formulas), function(nm) {
     m <- tryCatch(buildCacoaModel(meta, formula = formulas[[nm]], test = spec$test, contrast = spec$contrast, dispersion.formula = model$dispersion.formula,

@@ -74,6 +74,15 @@ Kept as observations: max-statistic adjustment over cells floors every adjusted 
 samples, MS 99 permutations) — now announced, raw z offered; dispersion R2 normalisation vs its p-value; the
 permutation set depends on the metadata row order for a fixed seed.
 
+- (2026-10-11) Screen summary plot: dispersion R2 bars removed (with 5-10 samples per arm the dispersion F is too unstable
+  for an R2-type summary; even centred on the permutation null the bars read 0.3-0.5 at p 0.2); the plot shows location R2
+  bars and the number of cell types with a significant dispersion association. Sensitivity verdicts: "no significant
+  effect in any model", "only one model could be fitted", and no "driven by sample" for a non-significant current estimate.
+- (2026-10-11) Comparison with the preprint (`examples/paper_comparison.md`): compositions and DE rankings reproduce;
+  expression-shift rankings agree (Spearman 0.7-0.9); MS significance is borderline and depends on the data object (the
+  new engine on the preprint's MS object finds 0 of 14 significant, same ranking); the preprint's fibroblast-first SCC
+  ranking is a property of the old statistic (new engine on the preprint's SCC object: KC_Diff > KC_Cyc > Fibroblast).
+
 ## 1. Not implemented
 
 - **Robust fitting and weak imputation in the distance engine**: implemented 2026-10-09 (step 4b); calibration

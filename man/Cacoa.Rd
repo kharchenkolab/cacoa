@@ -3592,6 +3592,8 @@ Estimate differential cell density
   return.sampled.stats = TRUE,
   n.permutations = 999,
   smooth = TRUE,
+  adjust.method = c("bh", "spatial-fdr", "neighbourhood", "max-t"),
+  p.source = c("parametric", "permutation"),
   verbose = self$verbose,
   n.cores = self$n.cores,
   ...
@@ -3634,6 +3636,14 @@ Estimate differential cell density
 \item{\code{n.permutations}}{numeric Number of permutations (default=400)}
 
 \item{\code{smooth}}{boolean Smooth results (default=TRUE)}
+
+\item{\code{adjust.method}}{multiplicity adjustment across cells, see \code{\link[=adjustCellScores]{adjustCellScores()}}: \code{"bh"} (Benjamini-Hochberg over
+the tested cells; default), \code{"spatial-fdr"} (Milo's spatially weighted BH), \code{"neighbourhood"} (a covering set of
+index neighbourhoods is tested; liberal) or \code{"max-t"} (familywise, the maximum statistic under permutations; very
+conservative with many cells)}
+
+\item{\code{p.source}}{per-cell p-values for the FDR alternatives: \code{"parametric"} (t statistic of the contrast, default)
+or \code{"permutation"} (floored at 1 / (n.permutations + 1))}
 
 \item{\code{verbose}}{boolean Print messages (default=self$verbose)}
 
@@ -4314,6 +4324,8 @@ median smoothing over the graph.
   genes = NULL,
   min.expr.frac = 0,
   min.edge.weight = 0,
+  adjust.method = c("bh", "spatial-fdr", "neighbourhood", "max-t"),
+  p.source = c("permutation", "parametric"),
   verbose = NULL,
   n.cores = NULL,
   robust = NULL,
@@ -4361,6 +4373,11 @@ median smoothing over the graph.
 \item{\code{min.expr.frac}}{gene set (default: 3000 most expressed genes)}
 
 \item{\code{min.edge.weight}}{minimum graph edge weight between cells of different samples (default 0)}
+
+\item{\code{adjust.method}}{multiplicity adjustment across cells: \code{"bh"} (default), \code{"spatial-fdr"}, \code{"neighbourhood"} or \code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
+
+\item{\code{p.source}}{per-cell p-values for the FDR adjustments: \code{"permutation"} (default; the parametric F of the
+neighbourhood shift is not calibrated) or \code{"parametric"}}
 
 \item{\code{verbose}}{defaults from options (permutations capped at 499)}
 

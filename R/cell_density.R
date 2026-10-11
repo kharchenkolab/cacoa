@@ -240,8 +240,11 @@ diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c
   z.score <- res$z.score
   names(z.score) <- colnames(Y)
 
+  tstat <- res$effect / res$se; dfr <- res$df
+  p.param <- if (alternative == "two-sided") 2 * stats::pt(-abs(tstat), dfr) else if (alternative == "greater") stats::pt(tstat, dfr, lower.tail = FALSE) else stats::pt(tstat, dfr)
   out <- list(score = score.c, permut.scores = if (is.null(res$effects.perm)) NULL else t(res$effects.perm), z.score = z.score,
-              effect = setNames(res$effect, colnames(Y)), se = setNames(res$se, colnames(Y)), statistic = res$statistic)
+              effect = setNames(res$effect, colnames(Y)), se = setNames(res$se, colnames(Y)), statistic = res$statistic,
+              t = setNames(tstat, colnames(Y)), df = dfr, p.param = setNames(p.param, colnames(Y)), p.perm = setNames(res$pval, colnames(Y)))
 
   if (return.residuals) {
     out$residuals <- res$residuals

@@ -24,7 +24,9 @@ clusterFreeExpressionShifts(
   n.cores = 1,
   verbose = FALSE,
   robust = c("none", "huber", "winsor"),
-  robust.k = 1.345
+  robust.k = 1.345,
+  adjust.method = c("bh", "spatial-fdr", "neighbourhood", "max-t"),
+  p.source = c("permutation", "parametric")
 )
 }
 \arguments{
@@ -61,6 +63,10 @@ clusterFreeExpressionShifts(
 \item{robust}{\code{"none"}, \code{"huber"} or \code{"winsor"}: down-weight samples with outlying residual distances (re-estimated under every relabeling)}
 
 \item{robust.k}{robust tuning constant}
+
+\item{adjust.method}{\code{"bh"} (default), \code{"spatial-fdr"}, \code{"neighbourhood"} or \code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
+
+\item{p.source}{per-cell p-values for the FDR adjustments: \code{"permutation"} (default) or \code{"parametric"} (F statistic; not calibrated for this statistic)}
 }
 \value{
 list: \code{stat} (shift F per cell), \code{p.value}, \code{z.score} (and \code{z.scores}), \code{z.adj}, \code{shifts} (bias-corrected shift

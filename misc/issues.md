@@ -83,6 +83,13 @@ permutation set depends on the metadata row order for a fixed seed.
   new engine on the preprint's MS object finds 0 of 14 significant, same ranking); the preprint's fibroblast-first SCC
   ranking is a property of the old statistic (new engine on the preprint's SCC object: KC_Diff > KC_Cyc > Fibroblast).
 
+- (2026-10-11) Cluster-free multiplicity adjustment: the max-statistic (familywise) adjustment was far too conservative on
+  real data (no significant cell in AD / MS / SCC). `adjustCellScores()` adds BH, Milo's spatial FDR and a Milo-like
+  neighbourhood-level test; benchmark on a planted density simulation in `misc/clusterfree_adjustment.md`. New defaults:
+  density `adjust.method = "bh"` on the parametric t p-values, cluster-free shifts `"bh"` on permutation p-values
+  (the parametric F of the neighbourhood shift is not calibrated). Known confound: neighbourhoods mixing cell types
+  whose composition differs between arms show "shifts" (Microglia next to AST-FB in the simulation).
+
 ## 1. Not implemented
 
 - **Robust fitting and weak imputation in the distance engine**: implemented 2026-10-09 (step 4b); calibration

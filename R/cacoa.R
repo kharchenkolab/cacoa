@@ -2888,12 +2888,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param alternative alternative hypothesis for the z-scores: 'two-sided', 'greater' or 'less'
     #' @param return.residuals also return residuals
     #' @param return.sampled.stats also return the permutation statistics
+    #' @param adjust.method multiplicity adjustment across cells, see [adjustCellScores()]: `"bh"` (Benjamini-Hochberg over
+    #'   the tested cells; default), `"spatial-fdr"` (Milo's spatially weighted BH), `"neighbourhood"` (a covering set of
+    #'   index neighbourhoods is tested; liberal) or `"max-t"` (familywise, the maximum statistic under permutations; very
+    #'   conservative with many cells)
+    #' @param p.source per-cell p-values for the FDR alternatives: `"parametric"` (t statistic of the contrast, default)
+    #'   or `"permutation"` (floored at 1 / (n.permutations + 1))
     estimateDiffCellDensity=function(type='permutation', adjust=NULL, name='cell.density', sample.metadata=self$sample.meta, 
                                      formula=NULL, contrast=NULL, test=NULL, block.vars=NULL, perm.method="freedman-lane", statistic=c("t", "coef"),
                                      robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=TRUE,
-                                     n.permutations=999, smooth=TRUE, verbose=self$verbose, n.cores=self$n.cores, ...){
+                                     n.permutations=999, smooth=TRUE, adjust.method=c("bh", "spatial-fdr", "neighbourhood", "max-t"),
+                                     p.source=c("parametric", "permutation"), verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
-      statistic <- match.arg(statistic)
+      statistic <- match.arg(statistic); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source)
       if (is.null(adjust)) adjust <- (type != 'subtract') # NULL can be forwarded here
       density.mat <- dens.res$density.mat
       if (dens.res$method == 'kde'){
@@ -2922,11 +2929,28 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if(!adjust){
         score <- perm.res %>% .$z.score
-        res <- list(raw=score, model=sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se)
-      } else {
+        res <- list(raw=score, model=sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se,
+                    t = perm.res$t, p.param = perm.res$p.param)
+      } else if (adjust.method == "max-t") {
         res <- list(raw=perm.res$z.score, adj=perm.res %$% adjustZScoresByPermutations(
                     score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores, verbose=verbose,
-                    l.max=l.max, ...), model = sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se)
+                    l.max=l.max, ...), model = sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se,
+                    t = perm.res$t, p.param = perm.res$p.param, adjust.method = adjust.method)
+      } else {
+        # false-discovery-rate alternatives on per-cell p-values (parametric t by default: no permutation floor)
+        z.in <- if (p.source == "parametric") perm.res$t else perm.res$z.score
+        p.in <- if (p.source == "parametric") perm.res$p.param else perm.res$p.perm
+        nn <- NULL
+        if (adjust.method != "bh") {
+          cells <- names(z.in)
+          g <- if (dens.res$method == 'graph') extractCellGraph(self$data.object) else graph
+          nn <- graphNeighbourList(g, cells)
+          if (length(nn) != length(cells)) stop("the graph does not cover all tested cells")
+        }
+        ad <- adjustCellScores(z.in, p.in, method = adjust.method, nn.list = nn, seed = private$opt("seed") %||% 1)
+        res <- list(raw=perm.res$z.score, adj=ad$z.adj, p.adj = ad$p.adj, index.cells = if (!is.null(ad$index)) names(z.in)[ad$index] else NULL,
+                    model = sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se,
+                    t = perm.res$t, p.param = perm.res$p.param, adjust.method = adjust.method, p.source = p.source)
       }
 
       if (return.residuals) {
@@ -3791,13 +3815,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.edge.weight minimum graph edge weight between cells of different samples (default 0)
     #' @param ... deprecated arguments of the previous implementation are accepted and ignored with a message
     #' @return list (see [clusterFreeExpressionShifts()]), also stored in `cao$test.results[[name]]`
+    #' @param adjust.method multiplicity adjustment across cells: `"bh"` (default), `"spatial-fdr"`, `"neighbourhood"` or `"max-t"`, see [adjustCellScores()]
+    #' @param p.source per-cell p-values for the FDR adjustments: `"permutation"` (default; the parametric F of the
+    #'   neighbourhood shift is not calibrated) or `"parametric"`
     #' @param robust `"none"` (default, option `robust`), `"huber"` or `"winsor"`: robust per-cell shift test
     estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="expression", name="cluster.free.expr.shifts",
                                                  test=NULL, formula=NULL, contrast=NULL, block.vars=NULL,
                                                  min.n.obs.per.samp=3, min.samp.per.level=2, permutation=NULL, n.permutations=NULL, seed=NULL,
                                                  dist=c("cor", "cosine", "js"), adjust=TRUE, smooth=TRUE, wins=0.025, genes=NULL, min.expr.frac=0.0,
-                                                 min.edge.weight=0.0, verbose=NULL, n.cores=NULL, robust=NULL, ...) {
-      dist <- match.arg(dist); robust <- private$opt("robust", robust)
+                                                 min.edge.weight=0.0, adjust.method=c("bh", "spatial-fdr", "neighbourhood", "max-t"), p.source=c("permutation", "parametric"),
+                                                 verbose=NULL, n.cores=NULL, robust=NULL, ...) {
+      dist <- match.arg(dist); robust <- private$opt("robust", robust); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source)
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
       legacy <- private$legacyShiftArgs(list(...), verbose)
       permutation <- private$opt("permutation", legacy$permutation %||% permutation)
@@ -3812,7 +3840,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                             min.samp.per.level = min.samp.per.level, permutation = permutation, n.permutations = n.permutations,
                                             block.vars = block.vars %||% model$block.vars, seed = seed %||% sample.int(.Machine$integer.max, 1),
                                             adjust = adjust, smooth = smooth, wins = wins, n.cores = n.cores, verbose = verbose,
-                                            robust = robust, robust.k = private$opt("robust.k"))
+                                            robust = robust, robust.k = private$opt("robust.k"), adjust.method = adjust.method, p.source = p.source)
       shifts$model <- model
       self$test.results[[name]] <- shifts
       return(invisible(shifts))

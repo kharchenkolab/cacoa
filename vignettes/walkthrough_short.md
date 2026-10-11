@@ -1,7 +1,7 @@
 Getting started with Cacoa
 ================
 Cacoa developers
-2026-10-10
+2026-10-11
 
 - <a href="#load-data" id="toc-load-data">Load data</a>
 - <a href="#check-the-design" id="toc-check-the-design">Check the
@@ -22,6 +22,8 @@ Cacoa developers
   expression and composition on the same model</a>
 - <a href="#cluster-free-analyses"
   id="toc-cluster-free-analyses">Cluster-free analyses</a>
+- <a href="#functional-interpretation"
+  id="toc-functional-interpretation">Functional interpretation</a>
 - <a href="#session-info" id="toc-session-info">Session info</a>
 
 Cacoa compares samples (patients, donors, replicates) across conditions.
@@ -47,11 +49,14 @@ This walkthrough uses a **simulated** dataset: 20 samples, 10 treated
 and 10 control, and 9 cell types. Expression differences between the
 arms were planted with a known strength per cell type: strong in
 `IN-SST`, `IN-PV` and `L2/3`; moderate in `OPC`, `L5/6-CC` and `AST-PP`;
-weak in `AST-FB`; none in `Microglia` and `Neu-NRGN`. The composition is
-the same in both arms. A sample `age` was added as a covariate: the
-treated arm is older on average, but age has no effect on expression in
-the simulation. The same code runs on any Conos or Seurat object with a
-sample metadata table.
+weak in `AST-FB`; none in `Microglia` and `Neu-NRGN`. The simulated arms
+also differ in composition (not planted on purpose, but present): `L2/3`
+and `L5/6-CC` are about half as frequent in the treated arm, `IN-PV` and
+`IN-SST` almost twice as frequent, `AST-FB` and `OPC` somewhat more
+frequent. A sample `age` was added as a covariate: the treated arm is
+older on average, but age has no effect on expression in the simulation.
+The same code runs on any Conos or Seurat object with a sample metadata
+table.
 
 ``` r
 library(cacoa)
@@ -264,8 +269,8 @@ cao$checkSensitivity(n.permutations = 199)
       OPC                  robust (significant in 2 of 2 models)
       AST-PP               robust (significant in 2 of 2 models)
       AST-FB               robust (significant in 2 of 2 models)
-      Neu-NRGN             driven by sample S20 (significant in 0 of 2 models)
-      Microglia            driven by sample S15 (significant in 0 of 2 models)
+      Neu-NRGN             no significant effect in any model (significant in 0 of 2 models)
+      Microglia            no significant effect in any model (significant in 0 of 2 models)
 
 ``` r
 cao$plotSensitivity()
@@ -314,7 +319,7 @@ cao$plotNumberOfDEGenes()
 ![](walkthrough_short_files/figure-gfm/plot-n-de-1.png)<!-- -->
 
 Compositional changes are tested on the same contrast (cell-type
-loadings of the treated versus the control arm; here none were planted):
+loadings of the treated versus the control arm):
 
 ``` r
 cao$estimateCellLoadings()
@@ -326,8 +331,10 @@ cao$plotCellLoadings(show.pvals = FALSE)
 ## Cluster-free analyses
 
 Cell density is compared between the arms in every neighbourhood of the
-cell graph, with the same adjustment, and the cluster-free expression
-shifts test the contrast in every cell’s neighbourhood.
+cell graph with the same model; the per-cell p-values are adjusted
+across cells by Benjamini-Hochberg (`adjust.method`; the familywise
+max-statistic adjustment is available as `"max-t"`). The cluster-free
+expression shifts test the contrast in every cell’s neighbourhood.
 
 ``` r
 cao$estimateCellDensity(method = "graph")
@@ -337,8 +344,10 @@ cowplot::plot_grid(cao$plotEmbedding(color.by = "cell.groups"), cao$plotDiffCell
 
 ![](walkthrough_short_files/figure-gfm/density-1.png)<!-- -->
 
-No density differences were simulated and none are found. The expression
-shifts, on the other hand, show the planted cell types:
+The density map agrees with the loadings: `L2/3` and `L5/6-CC` are
+depleted in the treated arm, `IN-PV`, `IN-SST` and `OPC` enriched. The
+expression shifts show the planted cell types (the adjusted z-scores are
+one-sided):
 
 ``` r
 cao$estimateClusterFreeExpressionShifts(n.top.genes = 500, n.permutations = 99)
@@ -346,6 +355,23 @@ cao$plotClusterFreeExpressionShifts()
 ```
 
 ![](walkthrough_short_files/figure-gfm/cluster-free-shifts-1.png)<!-- -->
+
+## Functional interpretation
+
+The DE tables feed a gene set enrichment analysis per cell type (GSEA on
+GO biological processes, through clusterProfiler), and the enriched
+terms are summarized by grouping related terms: terms are first
+clustered by the genes they share, then by their enrichment pattern
+across cell types, and each cluster is labelled by its most frequent
+words. The simulated genes have no annotation, so the chunks below are
+shown but not run; see the real-data examples in `examples/` for
+executed versions.
+
+``` r
+cao$estimateOntology(type = "GSEA", org.db = org.Hs.eg.db::org.Hs.eg.db)
+cao$plotOntologyHeatmapCollapsed(name = "GSEA", genes = "up", n = 25, clust.method = "ward.D")
+cao$plotOntology(cell.type = "IN-SST", name = "GSEA", genes = "up")
+```
 
 ## Session info
 

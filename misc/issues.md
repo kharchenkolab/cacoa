@@ -287,6 +287,17 @@ permutation set depends on the metadata row order for a fixed seed.
   fibroblasts 3-4x), not a site effect, not a normalization artefact. TO DO in the package: an `inherit` option for
   the density map; weights for the neighbourhood-count route; per-cell pooled p of a weighted statistic needs
   standardization with a scale floor (raw pooling is fine for the FDR, wrong for p).
+- (2026-10-12, unit x post-processing grid, README "unit x post-processing grid"; supersedes the package TO DO above)
+  At matched effective size and matched realized error, cacoa-native kNN neighbourhood counts of 100-400 cells are at
+  least as powerful as the heat kernel and much more so on PF, where the default kernel (beta 30) averages only 61
+  cells against 1,100-1,400 on SCC and MS: a kernel width should be set by a target effective size (Hutchinson
+  estimate), not by beta. Weights are dropped: binomial kernel weights are not calibrated (single relabelings fire
+  on PF and MS even at the default width) and voom weights on counts of >= 100 cells cost power. The neighbour-
+  averaged statistic (exact, recomputed under every permutation) is a calibrated post-processing step with honest
+  q-values that matches the inheritance on kNN units at k <= 100 and on PF at every k; the inheritance keeps an edge
+  on the kernel and on SCC at k >= 200. TO DO in the package: a kNN count unit with a target size (100-200) for the
+  density map; the averaged statistic as default post-processing, inheritance as an option; the effective-size
+  diagnostic for the kernel; no observation weights.
 - (2026-10-12) The unadjusted z-scores of both maps are now the signed tail z of the pooled p (`pooled` slot of the
   density results, `z.pooled` of the shifts; the permutation-standardized shift statistic is `z.std`); the adjusted
   z of q-values near 0 run to 37, so the default colour range of a z map is the 99.5 % quantile capped at 8.

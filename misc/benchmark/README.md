@@ -460,6 +460,103 @@ the Cauchy of the pooled p is calibrated for the density maps (2.5-3.9 % of the 
 for the shifts (7.7 % at 5 %, 2 of 15 relabelings with a BH call), so the group permutation test stays the default
 summary and the Cauchy of the pooled p is an option for density only.
 
+## Results: unit x post-processing grid (`grid_units.R`, `figures/planted_grid.png`, `planted_grid_summary.csv`, `null_grid_calls.csv`)
+
+The previous rounds compared units of different effective size. This round sweeps the size of each unit and crosses
+it with the two post-processing steps, every cell scored with the same test (closed-form permutation LM, 1,999
+block permutations, raw pooled FDR) on the 90 planted sets (power, recall at a realized false-call rate of 10 %)
+and the 45 control-only relabelings (calibration, 15 per dataset). Units: the heat kernel at beta 1 / 3 / 10 / 30
+(default) / 100, with its effective neighbourhood size n_eff = r_i^2 / sum_k K_ik^2 estimated per cell by a
+Hutchinson probe; cacoa-native kNN neighbourhood counts of k = 50 / 100 / 200 / 400 cells (1-hop neighbours by
+edge weight, then 2-hop by shared-neighbour count). Weighting: none, or binomial effective-count precision weights
+for the kernel (w_ij = n_j^2 / (p(1 - p)) with p the fitted smoothed fraction, floored at 1 %) and voom weights
+(library-size normalization) for the counts. Post-processing: none; the neighbour-averaged statistic (mean of the
+per-cell t over the cell and its graph neighbours, recomputed under every permutation, so an exact test of a
+one-hop-larger unit); neighbourhood inheritance (min q over the cell and its neighbours).
+
+Median effective size of the kernel (cells), 5-95 % range in brackets:
+
+| beta | SCC | PF | MS |
+|---|---|---|---|
+| 1 | 1.4 | 1.2 | 1.4 |
+| 3 | 3.0 | 1.5 | 2.5 |
+| 10 | 33 | 4.1 | 20 |
+| 30 (default) | 1,378 [3-7,000] | 61 | 1,108 |
+| 100 | 9,596 | 3,959 | 4,899 |
+
+The same beta gives a 20x smaller neighbourhood on PF than on SCC or MS: the kernel's width is a property of the
+graph, not of the parameter, which is the argument for setting it by a target effective size.
+
+**Calibration** (fraction of cells called at FDR 5 %, maximum over 15 relabelings; `null_grid_calls.csv`):
+
+| unit | weighting | none | averaged | inherit |
+|---|---|---|---|---|
+| kernel, every beta | unweighted | 0.00003 (SCC b=3) | 0 | 0.005 (SCC b=3, one relabeling) |
+| kNN, every k | unweighted or voom | 0.00002 | 0 | 0.002 (one relabeling) |
+| kernel b=1, 3 | binomial | 0.1-0.8, every relabeling | 0.1-0.2 | 0.6-1.0 |
+| kernel b=10 | binomial | PF 0.13 (10 of 15); SCC, MS clean | PF 0.05 | PF 0.43 |
+| kernel b=30 | binomial | PF 0.07 (3 of 15), MS 0.03 (1 of 15) | PF 0.02, MS 0.06 | PF 0.21, MS 0.08 |
+| kernel b=100 | binomial | MS 0.06 (1 of 15); SCC, PF clean | MS 0.07 | MS 0.08 |
+
+Every unweighted row and every kNN row is clean. The binomial kernel weights are not: with few effective cells the
+fitted fraction of some samples sits at the floor and one sample carries the fit, and even at the default and the
+widest kernel single relabelings fire on PF and MS. The weighted t is exact per cell but its null scale varies with
+the weight pattern, which the pooled FDR assumes constant across cells. The weighted kernel rows are therefore
+inadmissible; they are kept in the figure only to show that they do not gain power where they are calibrated
+(SCC b=30: 0.45 vs 0.45 without post-processing).
+
+**Power** (recall at realized fdp2 <= 10 %, 100 % removal, mean over the three planted types; unweighted rows):
+
+| unit (median n_eff SCC / PF / MS) | none | averaged | inherit |
+|---|---|---|---|
+| kernel b=10 (33 / 4 / 20) | 0.30 / 0.23 / 0.68 | 0.39 / 0.46 / 0.91 | 0.52 / 0.53 / 0.98 |
+| kernel b=30, default (1,378 / 61 / 1,108) | 0.45 / 0.34 / 0.84 | 0.49 / 0.48 / 0.91 | 0.63 / 0.59 / 0.99 |
+| kernel b=100 (9,596 / 3,959 / 4,899) | 0.31 / 0.44 / 0.76 | 0.32 / 0.51 / 0.62 | 0.41 / 0.62 / 0.87 |
+| kNN k=50 | 0.24 / 0.48 / 0.43 | 0.53 / 0.64 / 0.92 | 0.43 / 0.54 / 0.73 |
+| kNN k=100 | 0.42 / 0.57 / 0.87 | 0.56 / 0.65 / 0.94 | 0.62 / 0.63 / 0.97 |
+| kNN k=200 | 0.41 / 0.58 / 0.92 | 0.49 / 0.81 / 0.95 | 0.63 / 0.65 / 0.99 |
+| kNN k=400 | 0.36 / 0.66 / 0.94 | 0.41 / 0.82 / 0.95 | 0.62 / 0.83 / 0.99 |
+| Milo (previous table) | 0.45 / 0.43 / 0.92 | | |
+| kNN k=100-400, voom weights | 0.23-0.36 / 0.57-0.58 / 0.69-0.85 | 0.40-0.60 / 0.65 / 0.93-0.94 | 0.31-0.44 / 0.61-0.66 / 0.96-0.98 |
+
+By planted type (recall at realized 10 %, unweighted, no post-processing / averaged / inherit; kernel default vs
+best kNN):
+
+| type (share of cells) | kernel b=30 | kNN (k) |
+|---|---|---|
+| SCC CD1C (8.4 %) | 0.52 / 0.57 / 0.65 | 0.58 / 0.80 / 0.93 (200 / 100 / 200) |
+| SCC KC_Cyc (4.4 %) | 0.66 / 0.69 / 0.93 | 0.68 / 0.89 / 0.97 (100 / 50 / 100) |
+| SCC MDSC (1.0 %) | 0.18 / 0.22 / 0.30 | 0 at every k |
+| PF Ciliated (9.6 %) | 0.41 / 0.62 / 0.81 | 0.83 / 0.96 / 0.97 (400) |
+| PF Endothelial (4.7 %) | 0.61 / 0.83 / 0.95 | 0.94 / 1.00 / 1.00 (400) |
+| PF MUC5B+ (1.7 %) | 0 / 0 / 0 | 0.23 / 0.50 / 0.53 (400) |
+| MS OL (17 %) | 0.91 / 0.99 / 1.00 | 0.99 / 1.00 / 1.00 (400) |
+| MS EN-L4 (3.9 %) | 0.75 / 0.84 / 0.96 | 0.86 / 0.90 / 0.98 (400) |
+| MS IN-SV2C (1.0 %) | 0.85 / 0.91 / 1.00 | 0.97 / 0.97 / 1.00 (400) |
+
+- **At matched effective size the kNN count unit is at least as powerful as the kernel, and on PF much more so.**
+  Without post-processing, kNN of 100-400 cells reaches 0.42 / 0.66 / 0.94 against the kernel's best width 0.45 /
+  0.44 / 0.84; with inheritance 0.63 / 0.83 / 0.99 against 0.63 / 0.62 / 0.99. The kernel's PF deficit is its
+  width: at the default beta it averages 61 cells on PF, and the next setting jumps to 4,000. The one exception is
+  the diffuse 1 % SCC type (MDSC), which only the wide kernel finds (0.18-0.30).
+- **Precision weights are out for cacoa's units.** The binomial kernel weights are not calibrated (above) and add
+  nothing at the default width. Voom weights on the kNN counts cost recall at matched error on SCC and MS (k = 100:
+  0.42 -> 0.32, 0.87 -> 0.69) and are neutral on PF; the earlier gain from voom weights was on the small 1-hop
+  counts (median 40-60 cells, Poisson-dominated), not on units of 100 cells or more.
+- **The neighbour-averaged statistic replaces the inheritance** as a calibrated post-processing step that borrows
+  nothing from Milo: it is an exact permutation test of the one-hop-larger unit with calibrated q-values (realized
+  error at the nominal 10 %: 0.000-0.006 on every dataset, against 0.09-0.11 for the inheritance on PF and MS, which
+  at the nominal threshold sits at the realized error, like Milo). On the kNN units it matches or beats the
+  inheritance at k <= 100 on all datasets and on PF at every k (0.81-0.82 vs 0.65-0.83); the inheritance keeps an
+  edge on SCC at k >= 200 (0.63 vs 0.49) and on the kernel (0.63 vs 0.49 at the default).
+- **Choice of k.** Recall rises with k up to 200-400 cells for types of 4 % or more and for the 1-2 % types in PF
+  and MS, and falls beyond k = 100-200 for the 4-8 % SCC types without post-processing (over-smoothing in a dataset
+  of 42k cells where a 4 % type is 1,500 cells). A k of 100-200 is a safe default across the three datasets, and
+  the Hutchinson effective size makes the kernel comparable to it when the kernel is kept.
+- **Runtime.** The whole grid (54 configurations, 1,999 permutations) takes 14 minutes per SCC set (34k cells)
+  and 34 per PF set (83k) on 8 cores; a
+  single kNN configuration with the averaged statistic is seconds to a minute on top of the permutation draw.
+
 ## Conclusions (2026-10-12 update)
 
 8. **Power on real data, unpaired.** With 9-11 whole samples per arm cacoa's density map recovers a third to a half of
@@ -477,6 +574,17 @@ summary and the Cauchy of the pooled p is an option for density only.
     pooled p as a density-only group summary; (iv) a look at why the heat-kernel pooled FDR is conservative with
     respect to a localized truth. A kNN unit with a target size and its k diagnostic remain useful for the count
     route but are not needed for power: the kernel with inheritance matches the best count configuration.
+11. **Unit x post-processing grid (revises 9 and 10).** At matched effective size and matched realized error,
+    cacoa-native kNN neighbourhood counts of 100-400 cells are at least as powerful as the heat kernel and clearly
+    more so on PF, where the default kernel is only 61 cells wide (the same beta is 20x wider on SCC and MS, so a
+    kernel should be set by target effective size, not beta). Precision weights are dropped for both units: the
+    binomial kernel weights are not calibrated, and voom weights on counts of 100 cells or more cost power. The
+    neighbour-averaged statistic (exact, q-values calibrated against the localized truth) matches the inheritance on
+    the kNN units for k <= 100 and on PF at every k, and needs no borrowed step; the inheritance keeps an edge on the
+    kernel and on SCC at large k. Package work this now supports: (i) a kNN count unit with a target size (default
+    100-200 cells) for the density map, tested with the existing permutation LM and pooled FDR; (ii) the
+    neighbour-averaged statistic as the default post-processing, the inheritance as an option; (iii) the Hutchinson
+    effective size as the kernel's width diagnostic; (iv) no observation weights.
 
 ## Conclusions
 

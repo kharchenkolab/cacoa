@@ -1,0 +1,187 @@
+"dataset","method","frac","recall","fdp.down","fdp.down2","other.up"
+"pf","1-hop log: fdr.tb",0.5,0,NA,NA,0
+"pf","1-hop log: fdr.tb",0.8,2.75163722414837e-05,0,0,0
+"pf","1-hop log: fdr.tb",1,0.100950084285721,0.00358810163661623,0.00234273186850917,0.000154906939063553
+"pf","1-hop log: fdr.tbscale",0.5,0,0,0,4.16386560009469e-06
+"pf","1-hop log: fdr.tbscale",0.8,0.00117519107649989,0.00378787878787879,0.00378787878787879,5.50172023160698e-06
+"pf","1-hop log: fdr.tbscale",1,0.107561363581227,0.0029844776525851,0.00196327425076304,0.000219071121811522
+"pf","1-hop log: perm.fdr",0.5,0,0,0,1.49682896783165e-06
+"pf","1-hop log: perm.fdr",0.8,4.70198145990598e-05,0,0,1.49539865832832e-06
+"pf","1-hop log: perm.fdr",1,0.104053906982723,0.00435675408904713,0.00260572812875197,0.000170436706397499
+"pf","Milo (graph, spatial FDR)",0.5,0.497692672468866,0.490599166301815,0.431361948591288,0.124422764836436
+"pf","Milo (graph, spatial FDR)",0.8,0.785396124852705,0.467295475436736,0.415614482114015,0.125442402894211
+"pf","Milo (graph, spatial FDR)",1,0.916193190935543,0.506725919195989,0.459047232438952,0.111480226231377
+"pf","decomp: 1-hop + edgeR QL: bh",0.5,0.0966990087010712,0.589006845582513,0.573953555872699,0.0555792601554886
+"pf","decomp: 1-hop + edgeR QL: bh",0.8,0.267202853240789,0.564037686035046,0.551656917770894,0.0565872396160845
+"pf","decomp: 1-hop + edgeR QL: bh",1,0.752060116334328,0.509833130527488,0.499662382810228,0.0568847088683439
+"pf","decomp: 1-hop + edgeR QL: spatial-fdr",0.5,0.127328380041023,0.577186694071836,0.557508928883751,0.0667003028799641
+"pf","decomp: 1-hop + edgeR QL: spatial-fdr",0.8,0.354618833150271,0.547166076090219,0.531543907548075,0.0679542012074167
+"pf","decomp: 1-hop + edgeR QL: spatial-fdr",1,0.786460853374051,0.513687201196694,0.500458918098192,0.0678937299699188
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd",0.5,0,0,0,4.16323207126071e-06
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd",0.8,0.031586650449356,0.0785959828201978,0.0627217493669594,0.000577444831342512
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd",1,0.238059379354934,0.131350841222249,0.0989854125478912,0.00261140323586569
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd + inheritance",0.5,0,0,0,0.000249793924275642
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd + inheritance",0.8,0.375060740960952,0.174161168323412,0.135661403238447,0.029513600748421
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd + inheritance",1,0.614562490653403,0.318352929777825,0.251782301549031,0.0962352052342788
+"pf","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr",0.5,0,NA,NA,0
+"pf","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr",0.8,0.0258207466547856,0.0570735820134715,0.0432851494176255,0.0001661839154879
+"pf","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr",1,0.185661780715789,0.0531267896053775,0.0458323071230014,0.00109713441520841
+"pf","decomp: 1-hop + voom-weighted perm: fdr.sd",0.5,0.00375786685435133,0.472035006130972,0.355214740368125,0.000311552227894522
+"pf","decomp: 1-hop + voom-weighted perm: fdr.sd",0.8,0.0514311006980623,0.314002749237913,0.236540842071398,0.00124735862258087
+"pf","decomp: 1-hop + voom-weighted perm: fdr.sd",1,0.331048053265324,0.255231883252346,0.195268815740471,0.00283774535753238
+"pf","decomp: 1-hop + voom-weighted perm: perm.fdr",0.5,0,NA,NA,0
+"pf","decomp: 1-hop + voom-weighted perm: perm.fdr",0.8,0.0306892854977228,0.0788287675985671,0.0618434890736035,0.000145716237631853
+"pf","decomp: 1-hop + voom-weighted perm: perm.fdr",1,0.245684912070636,0.106119777812329,0.0936217048916977,0.00102266054181813
+"pf","decomp: 1-hop + voom: bh",0.5,0,0.666666666666667,0.5,7.99014901690588e-06
+"pf","decomp: 1-hop + voom: bh",0.8,0.018715858726913,0.255340990766523,0.226847077272609,0.00010301268835409
+"pf","decomp: 1-hop + voom: bh",1,0.197838090042785,0.174490735963845,0.155484864431121,0.000504861106804531
+"pf","decomp: 2-hop + voom-weighted perm: fdr.sd",0.5,0.0621954900185401,0.00507270882651336,0.00439634764964491,6.46049608534315e-05
+"pf","decomp: 2-hop + voom-weighted perm: fdr.sd",0.8,0.293483651499128,0.0110508907010787,0.00920703076694993,0.00165715231455756
+"pf","decomp: 2-hop + voom-weighted perm: fdr.sd",1,0.571975943067587,0.0249188307137689,0.01378985881832,0.00114696666517915
+"pf","decomp: 2-hop + voom-weighted perm: perm.fdr",0.5,0.0506833958521968,0.00251677852348993,0.00209731543624161,2.82646703733763e-05
+"pf","decomp: 2-hop + voom-weighted perm: perm.fdr",0.8,0.306440549904206,0.0132582395413616,0.0110447461608558,0.00173648048689469
+"pf","decomp: 2-hop + voom-weighted perm: perm.fdr",1,0.56221755583396,0.0389968086016858,0.0223378390980663,0.00111061540892405
+"pf","decomp: 2-hop + voom: bh",0.5,0,NA,NA,0
+"pf","decomp: 2-hop + voom: bh",0.8,0.283500511180889,0.00845815168953652,0.00802792624503352,0.000292515910473665
+"pf","decomp: 2-hop + voom: bh",1,0.563909077857942,0.0414396843930446,0.0252857210029023,0.000289300673043381
+"pf","decomp: Milo (edgeR QL + spatial FDR)",0.5,0.497692672468866,0.490599166301815,0.431361948591288,0.124422764836436
+"pf","decomp: Milo (edgeR QL + spatial FDR)",0.8,0.785396124852705,0.467295475436736,0.415614482114015,0.125442402894211
+"pf","decomp: Milo (edgeR QL + spatial FDR)",1,0.916193190935543,0.506725919195989,0.459047232438952,0.111480226231377
+"pf","decomp: heat + inheritance: perm.fdr",0.5,0,NA,NA,0
+"pf","decomp: heat + inheritance: perm.fdr",0.8,0.166547572176377,0.0038323271682448,0,9.41175205142581e-05
+"pf","decomp: heat + inheritance: perm.fdr",1,0.535626656699787,0.00578188218519571,0.000581364621320226,0.0013165438100469
+"pf","decomp: kNN nhoods + cacoa perm: bh.perm",0.5,0,NA,NA,0
+"pf","decomp: kNN nhoods + cacoa perm: bh.perm",0.8,0.292334618668219,0.115836185250451,0.0964978758563795,0.000980588581192572
+"pf","decomp: kNN nhoods + cacoa perm: bh.perm",1,0.486235595630858,0.2346131538586,0.208212451876803,0.00315030261429505
+"pf","decomp: kNN nhoods + cacoa perm: bh.pooled",0.5,0.067741424500335,0.0256410256410256,0.0225434520736534,0
+"pf","decomp: kNN nhoods + cacoa perm: bh.pooled",0.8,0.150455633960862,0.079058232256443,0.0347371664682658,0.000612568788324428
+"pf","decomp: kNN nhoods + cacoa perm: bh.pooled",1,0.510740546687883,0.16764800284687,0.155088475918842,0.00394091560810242
+"pf","decomp: kNN nhoods + cacoa perm: fdr.sd",0.5,0.0613039697673193,0.0274098601913171,0.0240986019131714,0
+"pf","decomp: kNN nhoods + cacoa perm: fdr.sd",0.8,0.146385701743184,0.061367780687782,0.0257382820643396,0.000376272362550638
+"pf","decomp: kNN nhoods + cacoa perm: fdr.sd",1,0.510142554020823,0.166592939859334,0.152062751731736,0.00394091560810242
+"pf","decomp: kNN nhoods + cacoa perm: perm.fdr",0.5,0.0636459209547411,0.0274098601913171,0.0240986019131714,0
+"pf","decomp: kNN nhoods + cacoa perm: perm.fdr",0.8,0.148626061424423,0.0639171260832601,0.0283665769709302,0.000858530375965754
+"pf","decomp: kNN nhoods + cacoa perm: perm.fdr",1,0.510558115910448,0.171531874042137,0.156919710255821,0.00258806783166655
+"pf","decomp: kNN nhoods + edgeR QL (libsize): bh",0.5,0.150593263887455,0.573151697527256,0.534893196457876,0.0397216559933285
+"pf","decomp: kNN nhoods + edgeR QL (libsize): bh",0.8,0.502986245932327,0.479983487848582,0.449522180414159,0.0429916043000806
+"pf","decomp: kNN nhoods + edgeR QL (libsize): bh",1,0.808846225774727,0.457111046186071,0.431547475746923,0.0466205833475642
+"pf","decomp: kNN nhoods + edgeR QL: bh",0.5,0.180608636915815,0.570888809560129,0.535579481572015,0.0381449437535781
+"pf","decomp: kNN nhoods + edgeR QL: bh",0.8,0.511711608266548,0.482105515210884,0.451028162437664,0.0415122234425924
+"pf","decomp: kNN nhoods + edgeR QL: bh",1,0.824191691657057,0.481955860016465,0.452484090767682,0.0393023445391011
+"pf","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr",0.5,0,1,0.666666666666667,0
+"pf","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr",0.8,0.319296910186502,0.382443483213175,0.191876842479938,0.00477714515527156
+"pf","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr",1,0.514864547026572,0.105462413565418,0.0894474496142844,0.0120926442698208
+"pf","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr",0.5,0.0155174297890941,0.5,0.333333333333333,0
+"pf","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr",0.8,0.32901889452454,0.413118622698612,0.207687688376892,0.00370359490399579
+"pf","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr",1,0.531811485752347,0.189511505400516,0.143530003590077,0.00606031001663084
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd",0.5,0.161205977650099,0.496529513534717,0.42234661193471,0.014026108885476
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd",0.8,0.440919752234673,0.324315515738216,0.232767176318863,0.0407164312860488
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd",1,0.692545174620966,0.30495591785302,0.247354473827975,0.0610573892772218
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr",0.5,0,NA,NA,0
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr",0.8,0.39078671088021,0.443166570733053,0.236877156444759,0.0125168379598402
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr",1,0.561046880082119,0.148563256918976,0.119409282729219,0.027725954122229
+"pf","decomp: kNN nhoods + voom-weighted perm: fdr.sd",0.5,0.233425297976456,0.498042410841127,0.357299571214267,0.0142259686048483
+"pf","decomp: kNN nhoods + voom-weighted perm: fdr.sd",0.8,0.444143525704879,0.437028126265808,0.295050313923193,0.0338163408547056
+"pf","decomp: kNN nhoods + voom-weighted perm: fdr.sd",1,0.714472851020062,0.438658050088564,0.356900245670783,0.043122095074238
+"pf","decomp: kNN nhoods + voom-weighted perm: perm.fdr",0.5,0.111972602194459,0.297220102082461,0.178164848457793,0.000631663845830401
+"pf","decomp: kNN nhoods + voom-weighted perm: perm.fdr",0.8,0.406147399091145,0.166980894916721,0.101659857580434,0.00945572767114353
+"pf","decomp: kNN nhoods + voom-weighted perm: perm.fdr",1,0.607505835488408,0.273853306968719,0.222702443532779,0.0140919097968656
+"pf","decomp: kNN nhoods + voom: bh",0.5,0,NA,NA,0
+"pf","decomp: kNN nhoods + voom: bh",0.8,0.357773831187107,0.119913051891821,0.0985423007232065,0.00417805889350548
+"pf","decomp: kNN nhoods + voom: bh",1,0.559492414560582,0.225959118958009,0.178859372707384,0.00677201744980631
+"pf","heat: perm.fdr",0.5,0,NA,NA,0
+"pf","heat: perm.fdr",0.8,0.0662954667567997,0,0,1.34453600734654e-06
+"pf","heat: perm.fdr",1,0.249561970118811,8.51643672287515e-05,8.51643672287515e-05,2.49010181877791e-05
+"scc","1-hop log: fdr.tb",0.5,0,NA,NA,0
+"scc","1-hop log: fdr.tb",0.8,0,NA,NA,0
+"scc","1-hop log: fdr.tb",1,0.0360012868615821,0.00142450142450142,0,0.000441951086121344
+"scc","1-hop log: fdr.tbscale",0.5,0,NA,NA,0
+"scc","1-hop log: fdr.tbscale",0.8,0,NA,NA,0
+"scc","1-hop log: fdr.tbscale",1,0.0433752292997169,0.00126903553299492,0,0.000580791270623069
+"scc","1-hop log: perm.fdr",0.5,0,NA,NA,0
+"scc","1-hop log: perm.fdr",0.8,0,NA,NA,0
+"scc","1-hop log: perm.fdr",1,0.0427828614715642,0.00188323917137476,0,0.000188451164082275
+"scc","Milo (graph, spatial FDR)",0.5,0.0412082847531138,0.327984642454722,0.2093950917345,0.0845308193739693
+"scc","Milo (graph, spatial FDR)",0.8,0.342408462268499,0.300560594472752,0.205908145326704,0.0795106833654033
+"scc","Milo (graph, spatial FDR)",1,0.748958595590582,0.262910586314028,0.187626905454955,0.0893601781897996
+"scc","decomp: 1-hop + edgeR QL: bh",0.5,0.000507211919480108,0.0285318469121519,0.0184490954066889,0.010257241416833
+"scc","decomp: 1-hop + edgeR QL: bh",0.8,0.00158435353430163,0.0248401906680924,0.0137655774664561,0.00978261266590544
+"scc","decomp: 1-hop + edgeR QL: bh",1,0.160327103464544,0.0895457699034756,0.055357889555183,0.0163522779653598
+"scc","decomp: 1-hop + edgeR QL: spatial-fdr",0.5,0.00484945712859518,0.332181584794769,0.241954621510105,0.0270504797389528
+"scc","decomp: 1-hop + edgeR QL: spatial-fdr",0.8,0.0275841561912352,0.314435181232313,0.233655677317173,0.0277227440682518
+"scc","decomp: 1-hop + edgeR QL: spatial-fdr",1,0.295063688085659,0.286889298147892,0.227081664326597,0.0280205218952529
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd",0.5,0,NA,NA,0
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd",0.8,0,NA,NA,0
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd",1,0.114805946735852,0.0073800705671344,0.000648508430609598,0.00216790448056116
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd + inheritance",0.5,0,NA,NA,0
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd + inheritance",0.8,0,NA,NA,0
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd + inheritance",1,0.548122106750205,0.0535997532125904,0.00770305303086822,0.0480620576606433
+"scc","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr",0.5,0,NA,NA,0
+"scc","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr",0.8,0,NA,NA,0
+"scc","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr",1,0.0819546657744459,0.0114483959278726,0,0.000803277236827435
+"scc","decomp: 1-hop + voom-weighted perm: fdr.sd",0.5,0,NA,NA,0
+"scc","decomp: 1-hop + voom-weighted perm: fdr.sd",0.8,0,NA,NA,0
+"scc","decomp: 1-hop + voom-weighted perm: fdr.sd",1,0.135129706336476,0.0137857427629687,0.00302717655948927,0.00296602832760001
+"scc","decomp: 1-hop + voom-weighted perm: perm.fdr",0.5,0,NA,NA,0
+"scc","decomp: 1-hop + voom-weighted perm: perm.fdr",0.8,0,NA,NA,0
+"scc","decomp: 1-hop + voom-weighted perm: perm.fdr",1,0.0869263455232206,0.00505348288084548,0.00157232704402516,0.000485366790677484
+"scc","decomp: 1-hop + voom: bh",0.5,0,0,0,2.64933064800791e-05
+"scc","decomp: 1-hop + voom: bh",0.8,0,NA,NA,0
+"scc","decomp: 1-hop + voom: bh",1,0.120707161389828,0.00420862379095205,0.000345781466113416,0.000622570582503378
+"scc","decomp: 2-hop + voom-weighted perm: fdr.sd",0.5,0.00816513162192175,0,0,0.000154874109473871
+"scc","decomp: 2-hop + voom-weighted perm: fdr.sd",0.8,0.0664183264347138,0.00548799179302129,0.00119904076738609,0.000359652018208206
+"scc","decomp: 2-hop + voom-weighted perm: fdr.sd",1,0.173182730975641,0.00671887809456769,0.000269406479734152,0.000645157282659805
+"scc","decomp: 2-hop + voom-weighted perm: perm.fdr",0.5,0.00862237899274936,0,0,8.48120123309291e-05
+"scc","decomp: 2-hop + voom-weighted perm: perm.fdr",0.8,0.072516591813948,0.0026180387409201,0.00112994350282486,0.000199868388505348
+"scc","decomp: 2-hop + voom-weighted perm: perm.fdr",1,0.174768442118126,0.0104968592074812,0.000537634408602151,0.000295102495229408
+"scc","decomp: 2-hop + voom: bh",0.5,0,NA,NA,0
+"scc","decomp: 2-hop + voom: bh",0.8,0,NA,NA,0
+"scc","decomp: 2-hop + voom: bh",1,0.119335797621357,0.00068870523415978,0,5.03745646404198e-05
+"scc","decomp: Milo (edgeR QL + spatial FDR)",0.5,0.0412082847531138,0.327984642454722,0.2093950917345,0.0845308193739693
+"scc","decomp: Milo (edgeR QL + spatial FDR)",0.8,0.342408462268499,0.300560594472752,0.205908145326704,0.0795106833654033
+"scc","decomp: Milo (edgeR QL + spatial FDR)",1,0.748958595590582,0.262910586314028,0.187626905454955,0.0893601781897996
+"scc","decomp: heat + inheritance: perm.fdr",0.5,0,NA,NA,0
+"scc","decomp: heat + inheritance: perm.fdr",0.8,0.102327624066754,0.0119733924611973,0,0
+"scc","decomp: heat + inheritance: perm.fdr",1,0.273390501675924,0.040135923380381,0,0.0374550703440576
+"scc","decomp: kNN nhoods + cacoa perm: bh.perm",0.5,0,NA,NA,0
+"scc","decomp: kNN nhoods + cacoa perm: bh.perm",0.8,0,NA,NA,0
+"scc","decomp: kNN nhoods + cacoa perm: bh.perm",1,0.075348771333475,0.0962099125364431,0.0225947521865889,0
+"scc","decomp: kNN nhoods + cacoa perm: bh.pooled",0.5,0,NA,NA,0
+"scc","decomp: kNN nhoods + cacoa perm: bh.pooled",0.8,0,NA,NA,0
+"scc","decomp: kNN nhoods + cacoa perm: bh.pooled",1,0.218327382408915,0.0187334724436833,0.00469128329297821,0.00100798635341552
+"scc","decomp: kNN nhoods + cacoa perm: fdr.sd",0.5,0,NA,NA,0
+"scc","decomp: kNN nhoods + cacoa perm: fdr.sd",0.8,0,NA,NA,0
+"scc","decomp: kNN nhoods + cacoa perm: fdr.sd",1,0.21652184003874,0.0187309981976734,0.00469128329297821,0.00100798635341552
+"scc","decomp: kNN nhoods + cacoa perm: perm.fdr",0.5,0,NA,NA,0
+"scc","decomp: kNN nhoods + cacoa perm: perm.fdr",0.8,0,NA,NA,0
+"scc","decomp: kNN nhoods + cacoa perm: perm.fdr",1,0.213070006695847,0.0187034277198212,0.0046969696969697,0.000620299294409553
+"scc","decomp: kNN nhoods + edgeR QL (libsize): bh",0.5,0.00116415415731551,0.0444672837952476,0.02308825311594,0.0115237588171494
+"scc","decomp: kNN nhoods + edgeR QL (libsize): bh",0.8,0.0256967811955893,0.0735342523194366,0.0449304095571802,0.01600182535896
+"scc","decomp: kNN nhoods + edgeR QL (libsize): bh",1,0.510371758968472,0.159641793841989,0.108050292655488,0.0272624448235154
+"scc","decomp: kNN nhoods + edgeR QL: bh",0.5,0.00110235709885549,0.0487581699346405,0.0346862745098039,0.0155043066294589
+"scc","decomp: kNN nhoods + edgeR QL: bh",0.8,0.0159496477488109,0.0833163163384525,0.0412697904522343,0.0130669383170056
+"scc","decomp: kNN nhoods + edgeR QL: bh",1,0.395777714166686,0.133261798078267,0.0796508518597669,0.0275088474213559
+"scc","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr",0.5,0,NA,NA,0
+"scc","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr",0.8,0.0109628236711625,0,0,0
+"scc","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr",1,0.298520943585519,0.0301766331858924,0,0.00481625075475457
+"scc","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr",0.5,0,NA,NA,0
+"scc","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr",0.8,0.00565048368140313,0,0,0
+"scc","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr",1,0.295683895341188,0.0453109767207351,0,0.00224760860714057
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd",0.5,0,NA,NA,0
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd",0.8,0.106553091830516,0,0,0.002963505553239
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd",1,0.462704132464338,0.0140925061044799,0.00100092768907768,0.0244869360502555
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr",0.5,0,NA,NA,0
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr",0.8,0.0886089960997435,0,0,0.00121287418268201
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr",1,0.417429663015098,0.0121958573456945,0,0.0126590925271872
+"scc","decomp: kNN nhoods + voom-weighted perm: fdr.sd",0.5,0,NA,NA,0
+"scc","decomp: kNN nhoods + voom-weighted perm: fdr.sd",0.8,0.0548466151467543,0,0,0
+"scc","decomp: kNN nhoods + voom-weighted perm: fdr.sd",1,0.423304879488947,0.0322331976608884,0.00500340036918294,0.0117181768820772
+"scc","decomp: kNN nhoods + voom-weighted perm: perm.fdr",0.5,0,NA,NA,0
+"scc","decomp: kNN nhoods + voom-weighted perm: perm.fdr",0.8,0.0109628236711625,0,0,0
+"scc","decomp: kNN nhoods + voom-weighted perm: perm.fdr",1,0.346587347741564,0.0305366442618257,0,0.00488494590948143
+"scc","decomp: kNN nhoods + voom: bh",0.5,0,0,0,0.00105307198128387
+"scc","decomp: kNN nhoods + voom: bh",0.8,0.0355862775217614,0,0,0.00152676433203271
+"scc","decomp: kNN nhoods + voom: bh",1,0.417815952836355,0.00885393900756611,0,0.00744385871027721
+"scc","heat: perm.fdr",0.5,0,NA,NA,0
+"scc","heat: perm.fdr",0.8,0.064809586548717,0,0,0
+"scc","heat: perm.fdr",1,0.139103624271686,0,0,0.0137420131587515

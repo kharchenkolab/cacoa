@@ -18,6 +18,9 @@ Scripts (this directory; scratch outputs under `$S/bench/`):
 | `tail_collect.R <ds> <n.cells> <B> <cores>` | per-cell tail study: full permutation matrices of a cell subset under one null relabeling |
 | `tail_analyze.R <rds> <prefix>` | tail approximations evaluated on held-out null draws (`CACOA_BSMALL`: training sizes) |
 | `tail_diag.R` | the relabeling-count diagnostic of the pooled tail (`$S/bench/tail/`) |
+| `planted_relabel.R <ds> generate\|run [B] [cores]` | unpaired power study: balanced relabeling (9-11 whole samples per arm) + planted depletion of one type in arm B; cacoa with the pooled-null variants (`$S/bench/planted/<ds>/<id>/`) |
+| `milo_decompose.R <ds> [B] [cores]` | Milo comparison decomposed into unit (refined kNN neighbourhoods of ~95 cells from Milo's run vs cacoa's 1-hop) x test (edgeR QL, voom, cacoa's permutation LM, voom-weighted permutation prototype) x adjustment, with TMM and library-size normalization |
+| `analyze_planted.R [out.dir]` | figures and tables of the planted study (`figures/planted_*`), compositional truth |
 | `pilot_pooled.R <B> <cores>` | pilot of the pooled p-values in the BH-type adjustments and the Cauchy summary: one SCC null relabeling and four paired semi-synthetic sets |
 | `diag_pooled.R <set> <B> <cores>` | per-cell vs raw pooling, unpaired model vs donor covariate, direction of the extra calls on one semi-synthetic set |
 | `$S/bench/run_milo_semi.R` | Milo (miloR 1.6.0) on the semi-synthetic sets (subagent) |
@@ -298,6 +301,130 @@ with the donor as a covariate, for cacoa as for Milo; (iii) the pooled FDR and t
 computed from the per-cell standardized statistics (the shifts already are), or the density statistic must be made
 pivotal by the model; the trade-off is the power loss for affected cells whose own permutation distribution is
 inflated by the effect, to be measured.
+
+## Results: planted-relabeling power study (2026-10-12)
+
+Design (`planted_relabel.R`): the balanced relabelings of the null study (SCC 9 + 9 and PF 11 + 11 whole samples, the
+real condition split evenly between the arms, permutations blocked on it) with 50, 80 or 100 % of one cell type's
+cells removed from arm B, three relabelings per setting, plus three control-only relabelings; planted types SCC MDSC
+(2 %), KC_Cyc (7 %), CD1C (8 % of arm B); PF MUC5B+ (2 %), Endothelial (7 %), Ciliated (20 %). Milo on the same sets
+with `~ condition`. Truth with compositional closure: the planted type's remaining cells should be called down; every
+other cell is expected *up* by the closure factor (1.03-1.27) and such calls are reported separately (`other.up`); a
+cell of another type called down is a false discovery (`fdp.down`); graph neighbours of planted cells are ambiguous
+and excluded. Figures `figures/planted_recall.png`, `planted_fdp.png`, `planted_up.png`; tables
+`planted_cells_summary.csv`, `planted_decomp_summary.csv`, `planted_null_calls.csv`, `planted_groups.csv`,
+`planted_scales.csv`.
+
+Recall of the planted cells at FDR 10 % (false-discovery proportion in brackets; mean over three relabelings):
+
+| method | SCC medium 80 / 100 % | SCC large 100 % | PF medium 80 / 100 % | PF large 100 % | small types |
+|---|---|---|---|---|---|
+| heat kernel, pooled permutation FDR (default) | 0.19 / 0.28 (0) | 0.14 (0) | 0.20 / 0.47 (0) | 0.28 (0.0002) | 0 |
+| heat kernel, pooled FDR on standardized t | 0.19 / 0.28 (0) | 0.13 (0) | 0.22 / 0.48 (0) | 0.28 (0.0002) | 0 |
+| heat kernel, pooled FDR, ter Braak scale | 0.19 / 0.38 (0.001) | 0.18 (0.0002) | 0.21 / 0.47 (0) | 0.25 (0) | 0 |
+| heat kernel, BH / spatial FDR / neighbourhood BH on the pooled p | 0.19 / 0.29, 0.18 / 0.27, 0.23 / 0.36 | 0.13, 0, 0 | 0.22 / 0.49, 0.10 / 0.45, 0.13 / 0.55 | 0.28, 0.20, 0.29 | 0 |
+| 1-hop counts (log), pooled FDR | 0 / 0.07 (0) | 0.06 (0.004) | 0 / 0.20 (0.006) | 0.12 (0.003) | 0 |
+| Milo (edgeR QL, spatial FDR with inheritance) | 0.29 / 0.83 (0.27) | 0.72 (0.19) | 0.92 / 0.99 (0.47-0.52) | 0.99 (0.48) | 0.70-0.77 (0.33-0.52) |
+
+- **Standardization costs no power here.** The permutation sd of the statistic of the planted cells is within 1-8 % of
+  the other cells' (`planted_scales.csv`: heat kernel 1.06 vs 1.02 on SCC, 1.01 vs 1.00 on PF), so the raw and the
+  per-cell standardized pooled FDR coincide; the ter Braak (effect-free) scale adds a little on SCC (0.38 vs 0.28 at
+  the medium type). The sixfold scale difference of the paired pilot was a property of fitting the donor-split sets
+  without the donor covariate, not of standardization.
+- **The pooled p-values do not change the BH-type adjustments.** BH on the pooled p equals the pooled FDR; the spatial
+  FDR is slightly less powerful and the neighbourhood BH slightly more (0.36 vs 0.28), all without false calls.
+- **cacoa's density map is underpowered in this realistic unpaired design**: a third to a half of a medium or large
+  type's cells at complete removal, nothing of a 2 % type, with zero false calls; the 1-hop count unit is weaker still.
+- **Milo is not calibrated on these sets.** Its false-discovery proportion is 0.2-0.5 at a nominal 0.1, and in the
+  control-only relabelings it calls 10-13 % (SCC) and 26-32 % (PF) of all cells, where every cacoa method calls at
+  most 0.001 %. Its recall is therefore not comparable at face value; see the decomposition below.
+- **Compositional response.** The heat-kernel map calls 4-6 % of the other cells up at 100 % removal of the SCC large
+  type (closure 1.08) and essentially none elsewhere; Milo calls 8-13 % up in every set, the null sets included.
+- **Group level** (`planted_groups.csv`): the planted type is the most significant group in every 80-100 % set of a
+  medium or large type under all three summaries (group permutation p 0.0005-0.04, Cauchy of pooled p down to 1e-7),
+  and no control-only relabeling has a significant group. BH across 19-29 types reaches 0.05 only for the Cauchy of
+  the pooled p (which also flags the types that rise by closure); the group permutation p is floored at 1 / 2000.
+
+### Decomposition of the Milo comparison (`milo_decompose.R`, `figures/planted_decomp_summary.csv`)
+
+The Milo pipeline differs from cacoa in the unit (its refined kNN neighbourhoods, ~95 cells on SCC and ~116 on PF,
+one per ~12 cells, against cacoa's per-cell 1-hop sets of ~59 / 40 cells or the heat kernel), the test (edgeR's
+quasi-likelihood F on counts against cacoa's permutation linear model on log counts) and the adjustment (spatial FDR
+with every cell inheriting the smallest FDR of the neighbourhoods containing it). Every combination was run on the
+same planted sets: Milo's neighbourhood matrix from its own run, with cacoa's tests applied to its per-sample counts
+and mapped back to cells by the same inheritance; edgeR and limma-voom applied to cacoa's 1-hop and 2-hop counts;
+and a closed-form weighted-least-squares permutation test (`permWLS()` in `common.R`, verified against `lm()`) with
+voom precision weights, the prototype of observation weights in cacoa's engine. Library-size normalization is
+reported next to Milo's TMM, which assumes that most units do not change and is violated by a large depletion plus
+the compositional rise of everything else (PF closure 1.27). Recall at 100 % removal, mean over the three planted
+types, with the false-discovery proportion among other cells called down (`fdp`) and the same beyond two graph
+hops of any planted cell (`fdp2`, i.e. excluding the spill-over radius of a ~100-cell neighbourhood with inheritance):
+
+| unit, test, adjustment | SCC recall (fdp / fdp2) | PF recall (fdp / fdp2) |
+|---|---|---|
+| Milo: refined kNN, edgeR QL (TMM), spatial FDR + inheritance | 0.75 (0.26 / 0.19) | 0.92 (0.51 / 0.46) |
+| refined kNN, edgeR QL (library size), BH + inheritance | 0.51 (0.16 / 0.11) | 0.81 (0.46 / 0.43) |
+| refined kNN, voom + moderated t, BH + inheritance | 0.42 (0.009 / 0) | 0.56 (0.23 / 0.18) |
+| refined kNN, voom-weighted permutation, pooled FDR (standardized) + inheritance | 0.46 (0.014 / 0.001) | 0.69 (0.30 / 0.25) |
+| refined kNN, voom-weighted permutation, pooled FDR (raw) + inheritance | 0.42 (0.012 / 0) | 0.56 (0.15 / 0.12) |
+| refined kNN, unweighted permutation on the same log-CPM, pooled FDR + inheritance | 0.30 (0.03 / 0) | 0.51 (0.11 / 0.09) |
+| refined kNN, cacoa's permutation LM (moderated), pooled FDR + inheritance | 0.21 (0.019 / 0.005) | 0.51 (0.17 / 0.16) |
+| 1-hop counts, edgeR QL, BH | 0.16 (0.09 / 0.055) | 0.75 (0.51 / 0.50) |
+| 1-hop counts, voom-weighted permutation, pooled FDR (standardized) | 0.12 (0.007 / 0.001) | 0.24 (0.13 / 0.10) |
+| 1-hop counts, voom-weighted permutation, pooled FDR (raw) | 0.08 (0.011 / 0) | 0.19 (0.05 / 0.05) |
+| 1-hop counts, voom-weighted permutation + inheritance | 0.55 (0.054 / 0.008) | 0.61 (0.32 / 0.25) |
+| 2-hop counts (~1,200 cells), voom-weighted permutation, pooled FDR | 0.17 (0.007 / 0) | 0.57 (0.025 / 0.014) |
+| heat kernel, pooled FDR (cacoa default) | 0.14 (0 / 0) | 0.25 (0 / 0) |
+| heat kernel, pooled FDR + inheritance | 0.27 (0.04 / 0) | 0.54 (0.006 / 0.001) |
+| 1-hop counts (log), cacoa's permutation LM, pooled FDR | 0.04 (0.002 / 0) | 0.10 (0.004 / 0.003) |
+
+Control-only relabelings (`planted_null_calls.csv`): every edgeR-based row calls 1-3 % of the cells on SCC and
+11-26 % on PF (Milo 10 % and 26 %); every permutation-based row calls at most 0.1 % on SCC and at most 1.4 % on PF
+(the standardized weighted variant on the kNN unit; its raw-pooling counterpart 0.03 %).
+
+- **The test.** On the same unit and adjustment, precision weights double the permutation test's recall on SCC at
+  calibrated error (0.30 unweighted, 0.42-0.46 weighted, fdp2 0); cacoa's current log-count LM is at 0.21. voom with
+  BH reaches the same 0.42, so the count model's advantage over cacoa is the weighting, not the likelihood. edgeR
+  itself is not calibrated on these data (fdp2 0.11 on SCC, 0.43 on PF; 11-26 % of the cells called in PF's
+  control-only relabelings): its parametric error model does not carry PF's two processing sites, the permutation
+  framework does.
+- **Normalization.** TMM costs recall and adds false calls under a large planted depletion (kNN + edgeR 0.40 -> 0.51
+  with library size on SCC; the voom-weighted permutation 0.42 -> 0.46); library-size normalization is the right
+  default for neighbourhood counts.
+- **The unit and the inheritance.** The kNN unit with inheritance is worth about a factor of two on SCC (1-hop
+  weighted 0.12 -> kNN weighted 0.46) and inheritance alone, applied to cacoa's own per-cell results, gives most of
+  it (1-hop weighted + inheritance 0.55 with fdp2 0.008; heat kernel + inheritance 0.27 / 0.54 with fdp2 0 / 0.001).
+  On PF every row built on the kNN unit shows 0.1-0.25 false calls beyond the spill-over radius once an effect is
+  planted, although they are calibrated in the control-only sets; the per-cell units (heat kernel, 1-hop, 2-hop) do
+  not. So the kNN unit's extra power on PF is not trustworthy, and the heat kernel with inheritance is the best
+  calibrated combination there (0.54 at fdp2 0.001).
+- **Standardization under counts.** On PF the standardized pooled FDR of the count units is somewhat more liberal than
+  the raw pooling (fdp2 0.10 vs 0.05 for 1-hop weighted; 1.4 % vs 0.03 % calls in the control-only sets); for the heat
+  kernel the two coincide. Raw pooling of a pivotal weighted statistic is the safer default for count units.
+
+## Results: null round with the pooled variants (SCC, 15 relabelings, 4,999 permutations; `figures/null4/`)
+
+Every cacoa adjustment, the pooled-p ones included (`BH / spatial FDR / neighbourhood on the pooled p`, the raw /
+standardized / ter Braak pooled FDRs), calls at most 0.1 % of the cells at FDR 5 % in any relabeling (1-hop counts:
+one relabeling fires at 0.1-1.3 %; the heat kernel and the shifts: zero). QQ: the pooled p is uniform to 1e-5 for the
+1-hop counts and the shifts, conservative beyond 1e-3 for the heat kernel (the parametric t more so). Group level:
+the Cauchy of the pooled p is calibrated for the density maps (2.5-3.9 % of the groups at 5 %) but anti-conservative
+for the shifts (7.7 % at 5 %, 2 of 15 relabelings with a BH call), so the group permutation test stays the default
+summary and the Cauchy of the pooled p is an option for density only.
+
+## Conclusions (2026-10-12 update)
+
+8. **Power on real data, unpaired.** With 9-11 whole samples per arm cacoa's density map recovers a third to a half of
+   a medium or large type's cells at complete removal and nothing of a 2 % type, with no false calls; standardizing
+   the statistic per cell before pooling costs no power; the pooled p-values leave the BH-type adjustments unchanged.
+9. **Milo's advantage decomposed.** Half of it is precision weights (voom-type) in the test, reproducible inside
+   cacoa's permutation framework at calibrated error; the rest is the neighbourhood inheritance, which is cheap and
+   calibrated on cacoa's own per-cell units; Milo's own adjustment is not calibrated (fdp 0.2-0.5, 10-30 % of the
+   cells called in control-only relabelings), and neither is edgeR on PF. Library-size normalization beats TMM for
+   neighbourhood counts.
+10. **Package work this supports:** observation weights in the permutation LM; a kNN neighbourhood-count density with a
+    target size and a label-free k diagnostic (cells per sample, purity, minimum detectable fold change); an optional
+    inheritance step for the per-cell map; the Cauchy of the pooled p as a density-only group summary.
 
 ## Conclusions
 

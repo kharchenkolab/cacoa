@@ -1,0 +1,12 @@
+"dataset","test","source","relabelings","groups","frac.raw05","relabelings.with.bh.call"
+"SCC (18 samples, 35.6k cells)","density: heat kernel","group permutation test",15,19,0.0280701754385965,0
+"SCC (18 samples, 35.6k cells)","density: heat kernel","Cauchy (permutation p)",15,19,0.0350877192982456,0
+"SCC (18 samples, 35.6k cells)","density: heat kernel","Cauchy (parametric p)",15,19,0.0210526315789474,0
+"SCC (18 samples, 35.6k cells)","density: heat kernel","Cauchy (pooled p)",15,19,0.0245614035087719,0
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","group permutation test",15,19,0.0350877192982456,0.0666666666666667
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","Cauchy (permutation p)",15,19,0.0491228070175439,0
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","Cauchy (parametric p)",15,19,0.0631578947368421,0.133333333333333
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","Cauchy (pooled p)",15,19,0.0385964912280702,0.0666666666666667
+"SCC (18 samples, 35.6k cells)","expression shift","group permutation test",15,19,0.0350877192982456,0
+"SCC (18 samples, 35.6k cells)","expression shift","Cauchy (permutation p)",15,19,0.0315789473684211,0
+"SCC (18 samples, 35.6k cells)","expression shift","Cauchy (pooled p)",15,19,0.0771929824561404,0.133333333333333

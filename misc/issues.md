@@ -267,6 +267,17 @@ permutation set depends on the metadata row order for a fixed seed.
   shifts do) and measure the power cost for affected cells whose own permutation distribution is inflated by the
   effect; redefine the semi-synthetic truth with the expected compositional response; fit paired designs with the
   donor as a covariate in cacoa as in Milo.
+- (2026-10-12, planted-relabeling study, benchmark README) Standardizing per cell before pooling costs no power in
+  the realistic unpaired design (planted cells' permutation sd within 1-8 % of the others'); raw, standardized and
+  ter Braak pooled FDRs coincide. The pooled p-values feed the BH-type adjustments without changing them. The density
+  map is underpowered against Milo (a third to a half of a medium/large type at complete removal, nothing of a 2 %
+  type, zero false calls); Milo runs at 2-5x the nominal false-discovery proportion and calls 10-30 % of the cells in
+  control-only relabelings. Decomposition on Milo's refined kNN neighbourhoods (~95 cells): precision weights (voom)
+  double cacoa's permutation-test recall at calibrated error; the larger unit roughly doubles it again; Milo's
+  inheritance step is where its calibration breaks. Open package work: observation weights in the permutation LM,
+  a kNN neighbourhood-count density with a target size and a label-free k diagnostic (cells per sample, purity,
+  minimum detectable fold change); the Cauchy of the pooled p is anti-conservative for the shifts at the group level
+  (7.7 % at 5 %), keep the group permutation test as the default summary.
 - (2026-10-12) The unadjusted z-scores of both maps are now the signed tail z of the pooled p (`pooled` slot of the
   density results, `z.pooled` of the shifts; the permutation-standardized shift statistic is `z.std`); the adjusted
   z of q-values near 0 run to 37, so the default colour range of a z map is the 99.5 % quantile capped at 8.

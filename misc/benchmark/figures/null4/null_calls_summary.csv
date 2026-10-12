@@ -1,0 +1,69 @@
+"dataset","test","method","alpha","mean.frac","max.frac","relabelings.with.calls","n"
+"SCC (18 samples, 35.6k cells)","density: heat kernel","BH (parametric p)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","BH (parametric p)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","BH (permutation p)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","BH (permutation p)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","BH (pooled p)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","BH (pooled p)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","spatial FDR (parametric)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","spatial FDR (parametric)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","spatial FDR (pooled p)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","spatial FDR (pooled p)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","neighbourhood (parametric)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","neighbourhood (parametric)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","neighbourhood (pooled p)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","neighbourhood (pooled p)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","pooled permutation FDR",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","pooled permutation FDR",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","pooled FDR, raw t",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","pooled FDR, raw t",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","pooled FDR, standardized (sd)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","pooled FDR, standardized (sd)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","pooled FDR, standardized (mad)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","pooled FDR, standardized (mad)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","pooled FDR, ter Braak scale",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","pooled FDR, ter Braak scale",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","pooled FDR, ter Braak scale (label draws)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: heat kernel","pooled FDR, ter Braak scale (label draws)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","BH (parametric p)",0.05,0.000233819678264123,0.00350729517396184,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","BH (parametric p)",0.1,0.000778151889263,0.011672278338945,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","BH (permutation p)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","BH (permutation p)",0.1,0.000286195286195286,0.00429292929292929,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","BH (pooled p)",0.05,5.05050505050505e-05,0.000757575757575758,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","BH (pooled p)",0.1,0.000630377852600075,0.00945566778900112,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","spatial FDR (parametric)",0.05,6.17283950617284e-05,0.000925925925925926,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","spatial FDR (parametric)",0.1,0.000332959221848111,0.00499438832772166,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","spatial FDR (pooled p)",0.05,5.61167227833894e-06,8.41750841750842e-05,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","spatial FDR (pooled p)",0.1,0.000136550692106248,0.00204826038159372,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","neighbourhood (parametric)",0.05,0.000265619154508043,0.00398428731762065,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","neighbourhood (parametric)",0.1,0.00118593340815563,0.0177890011223345,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","neighbourhood (pooled p)",0.05,0.000866068088290311,0.0129910213243547,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","neighbourhood (pooled p)",0.1,0.00141975308641975,0.0212962962962963,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","pooled permutation FDR",0.05,6.73400673400673e-05,0.00101010101010101,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","pooled permutation FDR",0.1,0.000568649457538346,0.0085297418630752,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","pooled FDR, raw t",0.05,6.73400673400673e-05,0.00101010101010101,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","pooled FDR, raw t",0.1,0.000568649457538346,0.0085297418630752,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","pooled FDR, standardized (sd)",0.05,1.87055742611298e-06,2.80583613916947e-05,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","pooled FDR, standardized (sd)",0.1,0.000600448933782267,0.00900673400673401,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","pooled FDR, standardized (mad)",0.05,1.87055742611298e-06,2.80583613916947e-05,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","pooled FDR, standardized (mad)",0.1,0.000534979423868313,0.00802469135802469,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","pooled FDR, ter Braak scale",0.05,1.87055742611298e-06,2.80583613916947e-05,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","pooled FDR, ter Braak scale",0.1,0.00100074822297045,0.0150112233445567,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","pooled FDR, ter Braak scale (label draws)",0.05,0.000233819678264123,0.00350729517396184,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","density: 1-hop counts (log)","pooled FDR, ter Braak scale (label draws)",0.1,0.00133557800224467,0.02003367003367,0.0666666666666667,15
+"SCC (18 samples, 35.6k cells)","expression shift","BH (permutation p)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","expression shift","BH (permutation p)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","expression shift","BH (normal-tail z)",0.05,0.0042428686257575,0.0302790503956685,1,15
+"SCC (18 samples, 35.6k cells)","expression shift","BH (normal-tail z)",0.1,0.00618542565741572,0.0414410662224073,1,15
+"SCC (18 samples, 35.6k cells)","expression shift","BH (parametric F)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","expression shift","BH (parametric F)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","expression shift","BH (pooled p)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","expression shift","BH (pooled p)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","expression shift","spatial FDR (permutation)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","expression shift","spatial FDR (permutation)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","expression shift","spatial FDR (pooled p)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","expression shift","spatial FDR (pooled p)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","expression shift","neighbourhood (pooled p)",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","expression shift","neighbourhood (pooled p)",0.1,0,0,0,15
+"SCC (18 samples, 35.6k cells)","expression shift","pooled permutation FDR",0.05,0,0,0,15
+"SCC (18 samples, 35.6k cells)","expression shift","pooled permutation FDR",0.1,0,0,0,15

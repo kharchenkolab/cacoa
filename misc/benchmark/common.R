@@ -92,9 +92,9 @@ permWLS <- function(Y, w, x, P) {
   list(t.obs = setNames(t.obs, rownames(Y)), t.perm = Tp, effect = setNames({ Swx <- as.numeric(w %*% x); Swxy <- as.numeric(WY %*% x); (Sw * Swxy - Swx * Swy) / (Sw * Swx - Swx^2) }, rownames(Y)))
 }
 # voom precision weights and log-CPM of a count matrix (units x samples) under ~ condition
-voomWeights <- function(counts, meta) {
+voomWeights <- function(counts, meta, norm = "TMM") {
   design <- model.matrix(~ condition, data = meta[colnames(counts), , drop = FALSE])
-  y <- edgeR::DGEList(counts = counts, lib.size = colSums(counts)); y <- edgeR::calcNormFactors(y, method = "TMM")
+  y <- edgeR::DGEList(counts = counts, lib.size = colSums(counts)); if (norm == "TMM") y <- edgeR::calcNormFactors(y, method = "TMM")
   v <- limma::voom(y, design); list(E = v$E, w = v$weights, x = as.numeric(design[, 2]))
 }
 # pooled FDR of a permWLS result: raw t and per-unit standardized

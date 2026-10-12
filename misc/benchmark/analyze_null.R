@@ -22,6 +22,11 @@ for (ds in names(dsets)) {
     pools[["density, heat kernel: permutation"]] <- c(pools[["density, heat kernel: permutation"]], r$heat$p.perm)
     pools[["density, 1-hop counts (log): parametric (moderated t)"]] <- c(pools[["density, 1-hop counts (log): parametric (moderated t)"]], r$nb$p.param)
     pools[["density, 1-hop counts (log): permutation"]] <- c(pools[["density, 1-hop counts (log): permutation"]], r$nb$p.perm)
+    if (!is.null(r$heat$p.pooled)) {
+      pools[["density, heat kernel: pooled null"]] <- c(pools[["density, heat kernel: pooled null"]], r$heat$p.pooled)
+      pools[["density, 1-hop counts (log): pooled null"]] <- c(pools[["density, 1-hop counts (log): pooled null"]], r$nb$p.pooled)
+      pools[["expression shift: pooled null"]] <- c(pools[["expression shift: pooled null"]], r$shifts$p.pooled)
+    }
     pools[["expression shift: permutation"]] <- c(pools[["expression shift: permutation"]], r$shifts$p.perm)
     pools[["expression shift: normal tail of z"]] <- c(pools[["expression shift: normal tail of z"]], r$shifts$p.z)
     pools[["expression shift: parametric F"]] <- c(pools[["expression shift: parametric F"]], r$shifts$p.F)
@@ -46,8 +51,10 @@ ggsave(file.path(out.dir, "null_qq_cells.png"), p1, width = 11, height = 9, dpi 
 # --- figure 2: fraction of cells called per relabeling
 calls$frac <- calls$n.called / pmax(calls$n.tested, 1)
 calls$test <- factor(calls$test, levels = c("heat", "nb.log", "shifts"), labels = c("density: heat kernel", "density: 1-hop counts (log)", "expression shift"))
-calls$method <- factor(calls$method, levels = c("bh.param", "bh.perm", "bh.z", "bh.F", "spatial.param", "spatial.perm", "nbhd.param", "perm.fdr", "max.t"),
-                       labels = c("BH (parametric p)", "BH (permutation p)", "BH (normal-tail z)", "BH (parametric F)", "spatial FDR (parametric)", "spatial FDR (permutation)", "neighbourhood (index cells)", "pooled permutation FDR", "max-t"))
+lv <- c(bh.param = "BH (parametric p)", bh.perm = "BH (permutation p)", bh.z = "BH (normal-tail z)", bh.F = "BH (parametric F)", bh.pooled = "BH (pooled p)",
+        spatial.param = "spatial FDR (parametric)", spatial.perm = "spatial FDR (permutation)", spatial.pooled = "spatial FDR (pooled p)", nbhd.param = "neighbourhood (parametric)", nbhd.pooled = "neighbourhood (pooled p)",
+        perm.fdr = "pooled permutation FDR", fdr.raw = "pooled FDR, raw t", fdr.sd = "pooled FDR, standardized (sd)", fdr.mad = "pooled FDR, standardized (mad)", fdr.tb = "pooled FDR, ter Braak scale", fdr.tbscale = "pooled FDR, ter Braak scale (label draws)", max.t = "max-t")
+calls <- calls %>% filter(method %in% names(lv)); calls$method <- factor(lv[calls$method], levels = lv)
 cs <- calls %>% group_by(dataset, test, method, alpha) %>% summarise(mean.frac = mean(frac), max.frac = max(frac), relabelings.with.calls = mean(n.called > 0), n = n(), .groups = "drop")
 write.csv(cs, file.path(out.dir, "null_calls_summary.csv"), row.names = FALSE)
 p2 <- ggplot(calls %>% filter(alpha == 0.05), aes(method, frac, colour = test)) + geom_jitter(width = 0.2, height = 0, size = 1, alpha = 0.6) +
@@ -57,9 +64,10 @@ ggsave(file.path(out.dir, "null_calls_cells.png"), p2, width = 11, height = 7, d
 # --- figure 3: per-group p-values (exact group permutation test; Cauchy combination of the permutation p; Cauchy of the parametric p)
 grp$dataset <- factor(dsets[grp$dataset], levels = dsets)
 grp$test <- factor(grp$test, levels = c("heat", "nb", "shifts"), labels = c("density: heat kernel", "density: 1-hop counts (log)", "expression shift"))
-gl <- grp %>% select(dataset, test, k, group, p.perm, p.cauchy, p.cauchy.param) %>%
-  pivot_longer(c(p.perm, p.cauchy, p.cauchy.param), names_to = "source", values_to = "p") %>% filter(is.finite(p)) %>%
-  mutate(source = factor(source, levels = c("p.perm", "p.cauchy", "p.cauchy.param"), labels = c("group permutation test", "Cauchy (permutation p)", "Cauchy (parametric p)")))
+if (is.null(grp$p.cauchy.pooled)) grp$p.cauchy.pooled <- NA_real_
+gl <- grp %>% select(dataset, test, k, group, p.perm, p.cauchy, p.cauchy.param, p.cauchy.pooled) %>%
+  pivot_longer(c(p.perm, p.cauchy, p.cauchy.param, p.cauchy.pooled), names_to = "source", values_to = "p") %>% filter(is.finite(p)) %>%
+  mutate(source = factor(source, levels = c("p.perm", "p.cauchy", "p.cauchy.param", "p.cauchy.pooled"), labels = c("group permutation test", "Cauchy (permutation p)", "Cauchy (parametric p)", "Cauchy (pooled p)")))
 gq <- gl %>% group_by(dataset, test, source) %>% group_modify(~ qq.points(.x$p, n = 200)) %>% ungroup()
 p3 <- ggplot(gq, aes(expected, observed, colour = source)) + geom_abline(slope = 1, intercept = 0, colour = "grey50", linetype = 2) + geom_point(size = 0.8) + geom_line() +
   facet_grid(test ~ dataset) + coord_cartesian(xlim = c(0, 4), ylim = c(0, 4)) +

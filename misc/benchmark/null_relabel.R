@@ -1,5 +1,5 @@
 ## Null calibration of the per-cell tests by relabeling the condition across samples.
-## Usage: Rscript null_relabel.R <scc|ms|pf> <n.relabel> <B> <n.cores> [n.genes]
+## Usage: Rscript null_relabel.R <scc|ms|pf> <n.relabel> <B> <n.cores> [n.genes]   (CACOA_VARIANTS=1: pooled-null variants; round null4 = 4,999 permutations)
 ## Per relabeling: heat-kernel density test, 1-hop neighbourhood log-count density test, cluster-free expression shifts,
 ## every adjustment, and the per-group Cauchy summaries; results in $S/bench/null/<ds>/r<k>.rds
 args <- commandArgs(trailingOnly = TRUE)
@@ -28,8 +28,9 @@ for (k in seq_len(n.relabel)) {
   model <- buildCacoaModel(meta2, formula = ~ cond, test = "cond", block.vars = "stratum")
   t0 <- Sys.time()
   groups <- inp$cell.groups
-  heat <- runDensity(dm$heat, model, nn, B = B, n.cores = n.cores, seed = k, label = "heat", groups = groups)
-  nb <- runDensity(dm$nb, model, nn, B = B, n.cores = n.cores, seed = k, label = "nb.log", transform = "log", sizes = dm$sizes, groups = groups)
+  variants <- nzchar(Sys.getenv("CACOA_VARIANTS"))     # pooled-null variants (raw / sd / mad / ter Braak), see common.R
+  heat <- runDensity(dm$heat, model, nn, B = B, n.cores = n.cores, seed = k, label = "heat", groups = groups, variants = variants)
+  nb <- runDensity(dm$nb, model, nn, B = B, n.cores = n.cores, seed = k, label = "nb.log", transform = "log", sizes = dm$sizes, groups = groups, variants = variants)
   sh <- runShifts(cm.t, spc, nn, model, B = B, n.cores = n.cores, seed = k, groups = groups)
   gs <- list(heat = heat$groups, nb = nb$groups, shifts = sh$groups)
   calls <- rbind(cbind(test = "heat", callFractions(heat$q)), cbind(test = "nb.log", callFractions(nb$q)), cbind(test = "shifts", callFractions(sh$q)))

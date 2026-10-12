@@ -59,8 +59,72 @@ topGenes <- function(counts, n = 1000) { cs <- colSums(counts); names(sort(cs, d
 # a two-group model on a sample metadata frame with a `cond` column (levels A = reference, B)
 condModel <- function(meta) buildCacoaModel(meta, formula = ~ cond, test = "cond")
 
+# ter Braak null scale: residuals of the FULL model are permuted (Y* = F B + P E) and the statistic refitted, so the
+# permuted t* are centred at the observed t and their spread is the cell's null scale free of the effect (ter Braak
+# 1992). Returns the null sd per cell and the centred standardized draws (B x m) for a pooled null.
+terBraakScale <- function(Fm, cvec, Y, P, chunk = 200L) {
+  Fm <- as.matrix(Fm); n <- nrow(Fm); p <- ncol(Fm); cvec <- as.numeric(cvec)
+  XtXi <- solve(crossprod(Fm)); A <- XtXi %*% t(Fm); cc <- as.numeric(t(cvec) %*% XtXi %*% cvec)
+  Bh <- A %*% Y; fit <- Fm %*% Bh; E <- Y - fit
+  t.fun <- function(Ystar) { Bs <- A %*% Ystar; rss <- colSums((Ystar - Fm %*% Bs)^2); (as.numeric(cvec %*% Bs)) / sqrt(rss / (n - p) * cc) }
+  t.obs <- t.fun(Y)
+  Z <- matrix(NA_real_, ncol(P), ncol(Y))
+  for (b in seq_len(ncol(P))) Z[b, ] <- t.fun(fit + E[P[, b], , drop = FALSE])
+  Z <- sweep(Z, 2, t.obs)                       # centred at the observed statistic: effect-free null draws
+  sd.tb <- apply(Z, 2, sd)
+  list(sd = sd.tb, Z = sweep(Z, 2, sd.tb, "/"), t.obs = t.obs)
+}
+
+# Weighted-least-squares permutation test for a two-level contrast (design: intercept + indicator x), closed form per
+# unit, vectorized over units: Y (units x samples), w (units x samples, e.g. voom precision weights), x (0/1 per
+# sample), P (samples x B index permutations of the design rows, as the "block" scheme of the engine). Prototype of
+# observation weights in the permutation LM (the engine has none yet). Returns the observed t and the B x m permuted t.
+permWLS <- function(Y, w, x, P) {
+  n <- ncol(Y); WY <- w * Y; Sw <- rowSums(w); Swy <- rowSums(WY); Swyy <- rowSums(WY * Y)
+  tfun <- function(xb) {
+    Swx <- as.numeric(w %*% xb); Swxy <- as.numeric(WY %*% xb)          # x is 0/1: sum w x^2 = sum w x
+    det <- Sw * Swx - Swx^2; b1 <- (Sw * Swxy - Swx * Swy) / det; b0 <- (Swy - b1 * Swx) / Sw
+    rss <- Swyy - 2 * b0 * Swy - 2 * b1 * Swxy + b0^2 * Sw + 2 * b0 * b1 * Swx + b1^2 * Swx
+    rss <- pmax(rss, 0); se <- sqrt(rss / (n - 2) * Sw / det); b1 / se
+  }
+  t.obs <- tfun(x); Tp <- matrix(NA_real_, ncol(P), nrow(Y))
+  for (b in seq_len(ncol(P))) Tp[b, ] <- tfun(x[P[, b]])
+  list(t.obs = setNames(t.obs, rownames(Y)), t.perm = Tp, effect = setNames({ Swx <- as.numeric(w %*% x); Swxy <- as.numeric(WY %*% x); (Sw * Swxy - Swx * Swy) / (Sw * Swx - Swx^2) }, rownames(Y)))
+}
+# voom precision weights and log-CPM of a count matrix (units x samples) under ~ condition
+voomWeights <- function(counts, meta) {
+  design <- model.matrix(~ condition, data = meta[colnames(counts), , drop = FALSE])
+  y <- edgeR::DGEList(counts = counts, lib.size = colSums(counts)); y <- edgeR::calcNormFactors(y, method = "TMM")
+  v <- limma::voom(y, design); list(E = v$E, w = v$weights, x = as.numeric(design[, 2]))
+}
+# pooled FDR of a permWLS result: raw t and per-unit standardized
+permWLSq <- function(r) {
+  mu <- colMeans(r$t.perm); sdv <- apply(r$t.perm, 2, sd)
+  list(perm.fdr = permutationFDR(r$t.obs, r$t.perm)$q, fdr.sd = permutationFDR((r$t.obs - mu) / sdv, sweep(sweep(r$t.perm, 2, mu), 2, sdv, "/"))$q)
+}
+
+# pooled-null variants of the density test from the permuted statistics: raw t (the package's perm-fdr), per-cell
+# standardized by sd / by mad, and the ter Braak scale (needs the design and the permutation matrix)
+pooledVariants <- function(r, model = NULL, Y = NULL, P = NULL) {
+  st <- r$stat.obs; Pm <- r$stats.perm
+  mu <- colMeans(Pm, na.rm = TRUE); sdv <- apply(Pm, 2, sd, na.rm = TRUE)
+  med <- apply(Pm, 2, median, na.rm = TRUE); madv <- apply(Pm, 2, mad, na.rm = TRUE)
+  out <- list(scale = data.frame(sd = sdv, mad = madv, row.names = names(st)))
+  q <- list(fdr.raw = permutationFDR(st, Pm)$q)
+  Z <- sweep(sweep(Pm, 2, mu), 2, sdv, "/"); q$fdr.sd <- permutationFDR((st - mu) / sdv, Z)$q
+  Z <- sweep(sweep(Pm, 2, med), 2, madv, "/"); q$fdr.mad <- permutationFDR((st - med) / madv, Z)$q
+  if (!is.null(model) && !is.null(Y) && !is.null(P)) {
+    tb <- terBraakScale(model$F, model$contrast.F[colnames(model$F)], Y[rownames(model$F), , drop = FALSE], P)
+    out$scale$sd.tb <- tb$sd
+    q$fdr.tb <- permutationFDR(st / tb$sd, tb$Z)$q          # observed t against the pooled effect-free null
+    q$fdr.tbscale <- permutationFDR(st / tb$sd, sweep(sweep(Pm, 2, mu), 2, tb$sd, "/"))$q   # tb scale, label-permutation draws
+  }
+  out$q <- q
+  out
+}
+
 # density test with every adjustment of interest; returns per-cell p-values / q-values and the fraction called
-runDensity <- function(dmat, model, nn, B = 1999, n.cores = 8, seed = 1, label = "heat", transform = "none", sizes = NULL, max.t = FALSE, groups = NULL) {
+runDensity <- function(dmat, model, nn, B = 1999, n.cores = 8, seed = 1, label = "heat", transform = "none", sizes = NULL, max.t = FALSE, groups = NULL, variants = FALSE) {
   Y <- if (transform == "log") logCounts(dmat, sizes) else dmat
   r <- cacoa:::diffCellDensityPermutations(Y, model, perm.method = "freedman-lane", statistic = "t", n.permutations = B, n.cores = n.cores, seed = seed, moderate = TRUE)
   cells <- names(r$p.param)
@@ -80,6 +144,12 @@ runDensity <- function(dmat, model, nn, B = 1999, n.cores = 8, seed = 1, label =
   if (max.t) {
     zm <- cacoa:::adjustZScoresByPermutations(r$score, r$permut.scores, smooth = FALSE)
     q[["max.t"]] <- 2 * pnorm(-abs(zm))      # familywise-adjusted p from the adjusted z
+  }
+  if (variants) {
+    P <- modelPermutations(model, scheme = "freedman-lane", n.permutations = B, seed = seed)$P
+    v <- pooledVariants(r, model, t(Y), P)
+    for (m in names(v$q)) q[[m]] <- v$q[[m]]
+    out$scale <- v$scale
   }
   out$q <- as.data.frame(q); rownames(out$q) <- cells
   out$label <- label

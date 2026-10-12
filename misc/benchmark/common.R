@@ -64,12 +64,17 @@ runDensity <- function(dmat, model, nn, B = 1999, n.cores = 8, seed = 1, label =
   Y <- if (transform == "log") logCounts(dmat, sizes) else dmat
   r <- cacoa:::diffCellDensityPermutations(Y, model, perm.method = "freedman-lane", statistic = "t", n.permutations = B, n.cores = n.cores, seed = seed, moderate = TRUE)
   cells <- names(r$p.param)
-  out <- list(p.param = r$p.param, p.perm = r$p.perm, t = r$t, effect = r$effect, z = r$z.score)
+  zq <- function(p, eff) { z <- sign(eff) * qnorm(pmin(pmax(p, 1e-300), 1 - 1e-16) / 2, lower.tail = FALSE); z[!is.finite(p)] <- NA; names(z) <- cells; z }
+  zperm <- zq(r$p.perm, r$effect)                                       # the floored exact permutation p as a signed z
+  out <- list(p.param = r$p.param, p.perm = r$p.perm, p.pooled = r$p.pooled, t = r$t, effect = r$effect, z = r$z.score)
   q <- list()
   q[["bh.param"]] <- adjustCellScores(r$t, r$p.param, method = "bh")$p.adj
-  q[["bh.perm"]] <- adjustCellScores(r$z.score, r$p.perm, method = "bh")$p.adj
+  q[["bh.perm"]] <- adjustCellScores(zperm, r$p.perm, method = "bh")$p.adj
+  q[["bh.pooled"]] <- adjustCellScores(r$z.score, r$p.pooled, method = "bh")$p.adj
   q[["spatial.param"]] <- adjustCellScores(r$t, r$p.param, method = "spatial-fdr", nn.list = nn[cells])$p.adj
+  q[["spatial.pooled"]] <- adjustCellScores(r$z.score, r$p.pooled, method = "spatial-fdr", nn.list = nn[cells])$p.adj
   q[["nbhd.param"]] <- adjustCellScores(r$t, r$p.param, method = "neighbourhood", nn.list = nn[cells], seed = seed)$p.adj
+  q[["nbhd.pooled"]] <- adjustCellScores(r$z.score, r$p.pooled, method = "neighbourhood", nn.list = nn[cells], seed = seed)$p.adj
   pf <- adjustCellScores(r$stat.obs, NULL, method = "perm-fdr", perm = r$stats.perm)
   q[["perm.fdr"]] <- pf$p.adj; out$fdr.curve <- pf$fdr.curve
   if (max.t) {
@@ -81,6 +86,7 @@ runDensity <- function(dmat, model, nn, B = 1999, n.cores = 8, seed = 1, label =
   if (!is.null(groups)) {
     gs <- summarizeCellScoresByGroup(r$p.perm, groups, effect = r$effect, p.adj = q$bh.param, stat = r$stat.obs, stats.perm = r$stats.perm)
     gs$p.cauchy.param <- summarizeCellScoresByGroup(r$p.param, groups, method = "cauchy")$p.cauchy
+    gs$p.cauchy.pooled <- summarizeCellScoresByGroup(r$p.pooled, groups, method = "cauchy")$p.cauchy
     out$groups <- gs
   }
   out
@@ -91,15 +97,21 @@ runShifts <- function(cm.t, spc, nn, model, B = 1999, n.cores = 8, seed = 1, gro
   r <- clusterFreeExpressionShifts(cm.t, spc, nn, model, model$meta, dist = "cor", n.permutations = B, seed = seed, adjust = TRUE, smooth = FALSE,
                                    n.cores = n.cores, verbose = FALSE, adjust.method = "perm-fdr", groups = groups)
   cells <- names(r$p.value)
-  pz <- pnorm(r$z.score, lower.tail = FALSE); pz[!is.finite(r$z.score)] <- NA
+  pz <- pnorm(r$z.std, lower.tail = FALSE); pz[!is.finite(r$z.std)] <- NA
   q <- list(perm.fdr = r$p.adj)
   zin <- function(p) { z <- qnorm(pmin(pmax(p, 1e-300), 1 - 1e-16), lower.tail = FALSE); z[!is.finite(p)] <- NA; names(z) <- cells; z }
   q[["bh.perm"]] <- adjustCellScores(zin(r$p.value), r$p.value, method = "bh", alternative = "greater")$p.adj
   q[["bh.z"]] <- adjustCellScores(zin(pz), pz, method = "bh", alternative = "greater")$p.adj
   q[["bh.F"]] <- adjustCellScores(zin(r$p.param), r$p.param, method = "bh", alternative = "greater")$p.adj
+  q[["bh.pooled"]] <- adjustCellScores(zin(r$p.pooled), r$p.pooled, method = "bh", alternative = "greater")$p.adj
   q[["spatial.perm"]] <- adjustCellScores(zin(r$p.value), r$p.value, method = "spatial-fdr", nn.list = nn[cells], alternative = "greater")$p.adj
-  out <- list(p.perm = r$p.value, p.z = pz, p.F = r$p.param, z = r$z.score, shifts = r$shifts, n.samples = r$n.samples, q = as.data.frame(q), fdr.curve = r$fdr.curve, n.tested = r$settings$n.cells.tested)
-  if (!is.null(groups)) out$groups <- summarizeCellScoresByGroup(r$p.value, groups, effect = r$shifts, p.adj = r$p.adj, group.test = r$group.test, alternative = "greater")
+  q[["spatial.pooled"]] <- adjustCellScores(zin(r$p.pooled), r$p.pooled, method = "spatial-fdr", nn.list = nn[cells], alternative = "greater")$p.adj
+  q[["nbhd.pooled"]] <- adjustCellScores(zin(r$p.pooled), r$p.pooled, method = "neighbourhood", nn.list = nn[cells], alternative = "greater", seed = seed)$p.adj
+  out <- list(p.perm = r$p.value, p.z = pz, p.F = r$p.param, p.pooled = r$p.pooled, z = r$z.std, shifts = r$shifts, n.samples = r$n.samples, q = as.data.frame(q), fdr.curve = r$fdr.curve, n.tested = r$settings$n.cells.tested)
+  if (!is.null(groups)) {
+    out$groups <- summarizeCellScoresByGroup(r$p.value, groups, effect = r$shifts, p.adj = r$p.adj, group.test = r$group.test, alternative = "greater")
+    out$groups$p.cauchy.pooled <- summarizeCellScoresByGroup(r$p.pooled, groups, method = "cauchy", alternative = "greater")$p.cauchy
+  }
   out
 }
 

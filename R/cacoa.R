@@ -2878,7 +2878,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param verbose boolean Print messages (default=self$verbose)
     #' @param n.cores integer Number of cores to use for parallelization (default=self$n.cores)
     #' @param ... additional arguments to the function
-    #' @return estimated differential cell densities
+    #' @return estimated differential cell densities: `pooled` (unadjusted signed z-scores), `adj` (adjusted), `p.adj`,
+    #'   `effect` (the contrast estimate per cell: the density difference, or the log2 fold change with
+    #'   `transform = "log"`), `p.perm`, `p.pooled`, `p.param`, `t`, `group.test` (when cell groups are stored)
     #' @examples
     #' \dontrun{
     #' cao$estimateCellDensity()
@@ -2890,7 +2892,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param statistic test statistic of the fitter: `"t"` (studentized contrast, default) or `"coef"` (raw contrast estimate)
     #' @param robust.method robust fitting: 'none', 'huber' or 'winsor'
     #' @param na.mode handling of missing responses: 'drop' or 'impute_weak'
-    #' @param alternative alternative hypothesis for the z-scores: 'two-sided', 'greater' or 'less'
+    #' @param alternative alternative hypothesis for the z-scores: 'two-sided', 'greater' or 'less'. The unadjusted z-scores
+    #'   (`pooled`) are the signed tail z of the per-cell p-values of the pooled permutation null (`p.pooled`, see
+    #'   [pooledPermutationP()]; calibrated and not floored), two-sided: `sign(effect) * qnorm(1 - p / 2)`; `adj` holds
+    #'   the signed tail z of the adjusted p-values
     #' @param return.residuals also return residuals
     #' @param return.sampled.stats also return the permutation statistics
     #' @param adjust.method multiplicity adjustment across cells, see [adjustCellScores()]: `"perm-fdr"` (default: the
@@ -2949,15 +2954,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                       return.residuals=return.residuals, return.sampled.stats=return.sampled.stats,
                                       n.cores=n.cores, verbose=verbose, moderate=moderate)
 
-      alt2 <- if (alternative == "two-sided") "two.sided" else "greater"
-      p.pooled <- if (is.null(perm.res$stats.perm)) NULL else pooledPermutationP(perm.res$stat.obs, perm.res$stats.perm, alternative = alt2)
+      p.pooled <- perm.res$p.pooled   # the unadjusted z-scores (`pooled`) are the signed tail z of this p
+      if (is.null(p.pooled) && verbose) message("the permuted statistics were not kept (return.sampled.stats = FALSE): the unadjusted z-scores come from the floored per-cell permutation p-values")
       if (p.source == "pooled" && is.null(p.pooled)) stop("p.source = 'pooled' needs the permutation statistics (return.sampled.stats = TRUE)")
       if(!adjust){
         score <- perm.res %>% .$z.score
-        res <- list(raw=score, model=sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se,
+        res <- list(pooled=score, model=sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se,
                     t = perm.res$t, p.param = perm.res$p.param)
       } else if (adjust.method == "max-t") {
-        res <- list(raw=perm.res$z.score, adj=perm.res %$% adjustZScoresByPermutations(
+        res <- list(pooled=perm.res$z.score, adj=perm.res %$% adjustZScoresByPermutations(
                     score, permut.scores, smooth=smooth, graph=graph, n.cores=n.cores, verbose=verbose,
                     l.max=l.max, ...), model = sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se,
                     t = perm.res$t, p.param = perm.res$p.param, adjust.method = adjust.method)
@@ -2965,7 +2970,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (is.null(perm.res$stats.perm)) stop("perm-fdr needs the permutation statistics (return.sampled.stats = TRUE)")
         ad <- adjustCellScores(perm.res$stat.obs, NULL, method = "perm-fdr", perm = perm.res$stats.perm,
                                alternative = if (alternative == "two-sided") "two.sided" else "greater")
-        res <- list(raw=perm.res$z.score, adj=ad$z.adj, p.adj = ad$p.adj, fdr.curve = ad$fdr.curve,
+        res <- list(pooled=perm.res$z.score, adj=ad$z.adj, p.adj = ad$p.adj, fdr.curve = ad$fdr.curve,
                     model = sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se,
                     t = perm.res$t, p.param = perm.res$p.param, adjust.method = adjust.method, p.source = "permutation")
       } else {
@@ -2980,7 +2985,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           if (length(nn) != length(cells)) stop("the graph does not cover all tested cells")
         }
         ad <- adjustCellScores(z.in, p.in, method = adjust.method, nn.list = nn, seed = private$opt("seed") %||% 1)
-        res <- list(raw=perm.res$z.score, adj=ad$z.adj, p.adj = ad$p.adj, index.cells = if (!is.null(ad$index)) names(z.in)[ad$index] else NULL,
+        res <- list(pooled=perm.res$z.score, adj=ad$z.adj, p.adj = ad$p.adj, index.cells = if (!is.null(ad$index)) names(z.in)[ad$index] else NULL,
                     model = sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se,
                     t = perm.res$t, p.param = perm.res$p.param, adjust.method = adjust.method, p.source = p.source)
       }
@@ -3008,15 +3013,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param name character Slot with results from estimateCellDensity. New results will be appended there. (Default: 'cell.density')
     #' @param size numeric (default=0.2)
     #' @param palette color palette, default is c('blue','white','red')
-    #' @param adjust boolean Adjust P values (default=NULL)
+    #' @param adjust plot the adjusted z-scores (TRUE), the unadjusted pooled-null z-scores (FALSE) or the adjusted ones when
+    #'   they were estimated (NULL, default)
+    #' @param what `"z"` (default): the signed z-scores; `"effect"`: the contrast estimate per cell (the density
+    #'   difference, or the log2 fold change of the density with `transform = "log"`)
     #' @param contours character Specify cell types for contour, multiple cell types are also supported (default: NULL)
     #' @param contour.color character color for contour line (default: 'black')
     #' @param contour.conf character confidence interval of contour (default: '10%')
     #' @param plot.na boolean Plot NAs (default=FALSE)
-    #' @param color.range numeric, e.g. c(0,90) (default=NULL)
+    #' @param color.range symmetric colour range: a quantile of the absolute values as a string (default `"99.5%"`, so that
+    #'   a few extreme cells do not wash out the map; adjusted z-scores keep at least +-1.96) or a numeric vector whose
+    #'   largest absolute value sets the range; values beyond it are clipped to the range
     #' @param mid.color character Color code for medium value in color range (default='gray95')
-    #' @param scale.z.palette boolean Scale plot palette for Z scores (default=adjust)
+    #' @param scale.z.palette boolean Scale plot palette for Z scores (default: TRUE for z-scores, FALSE for the effect)
     #' @param min.z numeric Minimum Z score to plot (default=qnorm(0.9))
+    #' @param max.z cap of the colour range of a z map taken from a quantile (default 8: z-scores of smaller p-values are
+    #'   not distinguishable and would wash out the map); a numeric `color.range` is taken as given
     #' @param ... additional parameters
     #' @return ggplot2 object
     #' @examples
@@ -3026,9 +3038,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$plotDiffCellDensity()
     #' }
     plotDiffCellDensity=function(name='cell.density', size=0.2, palette=NULL,
-                                 adjust=NULL, contours=NULL, contour.color='black', contour.conf='10%',
-                                 plot.na=FALSE, color.range=NULL, mid.color='gray95',
-                                 scale.z.palette=adjust, min.z=qnorm(0.9), ...) {
+                                 adjust=NULL, what=c("z", "effect"), contours=NULL, contour.color='black', contour.conf='10%',
+                                 plot.na=FALSE, color.range="99.5%", max.z=8, mid.color='gray95',
+                                 scale.z.palette=NULL, min.z=qnorm(0.9), ...) {
+      what <- match.arg(what)
       if (is.null(palette)) {
         palette <- grDevices::colorRampPalette(c("blue", mid.color, "red"), space = "Lab")
       }
@@ -3044,25 +3057,33 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
          scores  <- dens.res$diff[[1]]                                    
       }
 
-      if (is.null(adjust)) {
-        if (!is.null(scores$adj)) {
-          scores <- scores$adj
+      res <- scores
+      unadj <- res$pooled %||% res$raw   # `raw` in results of earlier versions
+      if (what == "effect") {
+        if (is.null(res$effect)) stop("no per-cell effect in the results of '", name, "' (type = 'permutation' is needed)")
+        scores <- res$effect; adjust <- FALSE
+        leg.title <- if (identical(res$transform, "log")) "log2 FC" else "density diff."
+      } else if (is.null(adjust)) {
+        if (!is.null(res$adj)) {
+          scores <- res$adj
           adjust <- TRUE
         } else {
-          scores <- scores$raw
+          scores <- unadj
           adjust <- FALSE
         }
       } else if (adjust) {
-        if (is.null(scores$adj)) {
-          warning("Adjusted scores are not estimated. Using raw scores. ",
+        if (is.null(res$adj)) {
+          warning("Adjusted scores are not estimated. Using the unadjusted scores. ",
                   "Please, run estimateDiffCellDensity with adjust=TRUE")
-          scores <- scores$raw
+          scores <- unadj
         } else {
-          scores <- scores$adj
+          scores <- res$adj
         }
       } else {
-        scores <- scores$raw
+        scores <- unadj
       }
+      if (what == "z") leg.title <- if (adjust) 'Z adj.' else 'Z (pooled)'
+      if (is.null(scale.z.palette)) scale.z.palette <- (what == "z")
 
       if (dens.res$method == 'graph') {
         density.emb <- self$embedding
@@ -3073,16 +3094,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       density.emb <- density.emb[names(scores),]
 
-      if (is.null(color.range)) {
-        # adjusted scores: keep at least +-1.96 in the range so that a map without significant cells looks pale
-        color.range <- c(-1, 1) * max(abs(scores), if (adjust) stats::qnorm(0.975) else 0, na.rm = TRUE)
-      } else {
-        color.range %<>% parseLimitRange(scores)
-        color.range <- max(abs(color.range)) %>% {c(-., .)}
-        scores %<>% pmin(color.range[2]) %>% pmax(color.range[1])
-      }
+      # adjusted scores: keep at least +-1.96 in the range so that a map without significant cells looks pale
+      color.range <- symmetricColorRange(scores, color.range, floor = if (adjust) stats::qnorm(0.975) else 0, cap = if (what == "z") max.z else Inf)
+      scores %<>% pmin(color.range[2]) %>% pmax(color.range[1])
 
-      leg.title <- if (adjust) 'Z adj.' else 'Z-score'
       gg <- self$plotEmbedding(density.emb, colors=scores, size=size, legend.title=leg.title, palette=palette,
                                midpoint=0, plot.na=plot.na, color.range=color.range, ...)
 
@@ -3913,10 +3928,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         dens.res <- private$getResults(name, 'estimateDiffCellDensity')
         r <- if (is.null(type)) dens.res$diff[[1]] else dens.res$diff[[type]]
         if (is.null(r) || is.null(r$p.param)) stop("run estimateDiffCellDensity(type = 'permutation') first")
-        p <- r$p.perm %||% r$p.param; eff <- r$effect; z <- r$raw; padj <- r$p.adj; gt <- r$group.test
+        p <- r$p.perm %||% r$p.param; eff <- r$effect; z <- r$pooled %||% r$raw; padj <- r$p.adj; gt <- r$group.test
       } else {
         r <- private$getResults(name, 'estimateClusterFreeExpressionShifts')
-        p <- r$p.value; eff <- r$shifts; z <- r$z.score; padj <- r$p.adj; gt <- r$group.test
+        p <- r$p.value; eff <- r$shifts; z <- r$z.pooled; padj <- r$p.adj; gt <- r$group.test
       }
       groups <- as.factor(cell.groups[intersect(names(cell.groups), names(p))])
       if (!is.null(gt) && !identical(sort(unique(as.character(groups))), sort(gt$group[gt$n.tested > 0]))) gt <- NULL   # other groups than the stored test: Cauchy only
@@ -4196,13 +4211,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(self$plotGeneExpressionComparison(scores=scores, plots=plots, ncol=ncol, ...))
     },
 
-    #' @description Plot cluster-free expression shift z-scores
+    #' @description Plot the cluster-free expression shifts: the shift magnitude next to the signed z-scores
     #' @param cell.groups Indicates cell groups with cell names. Set to NULL if it shouldn't be shown. (default: stored vector)
     #' @param smooth boolean (default=TRUE)
     #' @param plot.na boolean (default=FALSE)
     #' @param scale.z.palette boolean (default=TRUE)
     #' @param min.z (default=qnorm(0.9))
-    #' @param color.range (default=c("0", "97.5%"))
+    #' @param color.range range of the shift panel (default=c("0", "97.5%"))
+    #' @param z.range symmetric colour range of the z panels: a quantile of the absolute z-scores as a string (default
+    #'   `"99.5%"`, so that a few extreme cells do not wash out the map; adjusted z-scores keep at least +-1.96) or a
+    #'   numeric vector whose largest absolute value sets the range; values beyond it are clipped
+    #' @param max.z cap of a z range taken from a quantile (default 8; a numeric `z.range` is taken as given)
     #' @param alpha numeric (default=0.2)
     #' @param font.size size range for cell type labels
     #' @param adj.list (default=NULL)
@@ -4214,65 +4233,61 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateClusterFreeExpressionShifts()
     #' cao$plotClusterFreeExpressionShifts()
     #' }
-    #' @param adjusted plot the adjusted z-scores (default TRUE)
+    #' @param adjusted `"both"` (default): the unadjusted (pooled-null) and the adjusted z-scores side by side; `TRUE`:
+    #'   the adjusted z-scores only; `FALSE`: the unadjusted only
     #' @param name results slot name
     #' @param pal.seq sequential palette for the shift magnitudes
     #' @param pal.div diverging palette for the z-scores
-    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=TRUE, plot.na=FALSE, adjusted=TRUE,
+    #' @return a panel (`build.panel = TRUE`) or a list of ggplot objects: the shift, then the z-score panel(s)
+    plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=TRUE, plot.na=FALSE, adjusted="both",
                                                name="cluster.free.expr.shifts", scale.z.palette=TRUE, min.z=qnorm(0.9),
-                                               color.range=c("0", "97.5%"), alpha=0.2, font.size=c(3, 5), adj.list=NULL,
-                                               pal.seq=brewerPalette("YlOrRd",rev=FALSE), pal.div=brewerPalette("RdBu",rev=TRUE), 
+                                               color.range=c("0", "97.5%"), z.range="99.5%", max.z=8, alpha=0.2, font.size=c(3, 5), adj.list=NULL,
+                                               pal.seq=brewerPalette("YlOrRd",rev=FALSE), pal.div=brewerPalette("RdBu",rev=TRUE),
                                                build.panel=TRUE, ...) {
-      shifts <- private$getResults(name, "estimateClusterFreeExpressionShifts")
+      res <- private$getResults(name, "estimateClusterFreeExpressionShifts")
       private$checkCellEmbedding()
-      z.scores <- if (adjusted) shifts$z.adj else shifts$z.score
-      shifts <- if (smooth) shifts$shifts.smoothed else shifts$shifts
+      z.unadj <- res$z.pooled %||% res$z.score   # `z.score` in results of earlier versions
+      if (identical(adjusted, "both") && is.null(res$z.adj)) {
+        message("adjusted z-scores were not estimated (adjust = FALSE): showing the unadjusted z-scores only")
+        adjusted <- FALSE
+      }
+      panels <- if (identical(adjusted, "both")) list(z.unadj, res$z.adj) else if (isTRUE(adjusted)) list(res$z.adj) else list(z.unadj)
+      is.adj <- if (identical(adjusted, "both")) c(FALSE, TRUE) else isTRUE(adjusted)
+      leg.titles <- ifelse(is.adj, "z (adj.)", "z (pooled)")
+      titles <- ifelse(is.adj, "Adjusted z-score", "z-score (pooled null)")
 
+      shifts <- if (smooth) res$shifts.smoothed else res$shifts
       shifts %<>% na.omit()
-      z.degenerate <- !any(abs(z.scores) >= min.z, na.rm = TRUE)
-      if (z.degenerate)
-        message(sprintf("no cell reaches |z| >= %.2f (%s z-scores): the z-score panel is uniform", min.z, if (adjusted) "adjusted" else "unadjusted"))
       color.range %<>% parseLimitRange(shifts)
       shifts %<>% pmax(color.range[1]) %>% pmin(color.range[2])
+      gg.shift <- self$plotEmbedding(colors=shifts, plot.na=plot.na, alpha=alpha, palette=pal.seq, legend.title="shift", ...) +
+        theme(legend.background = element_blank())
 
-      ggs <- mapply(function(cls, lt) {
-        self$plotEmbedding(colors=cls, plot.na=plot.na, alpha=alpha, palette=pal.seq, legend.title=lt, ...) +
+      gg.z <- mapply(function(z, adj, lt) {
+        degenerate <- !any(abs(z) >= min.z, na.rm = TRUE)
+        if (degenerate) message(sprintf("no cell reaches |z| >= %.2f (%s z-scores): the z-score panel is uniform", min.z, if (adj) "adjusted" else "unadjusted"))
+        cr <- symmetricColorRange(z, z.range, floor = if (adj) stats::qnorm(0.975) else 0, cap = max.z)
+        z %<>% pmin(cr[2]) %>% pmax(cr[1])
+        gg <- self$plotEmbedding(colors=z, plot.na=plot.na, alpha=alpha, palette=pal.div, legend.title=lt, ...) +
           theme(legend.background = element_blank())
-      }, list(shifts, z.scores), c("shift", if (adjusted) "z (adj.)" else "z"), SIMPLIFY=FALSE)
-
-
-      if (scale.z.palette) {
-       # remove existing color scales from the z panel
-       ggs[[2]]$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
-
-      has.pos <- any(z.scores > 0, na.rm = TRUE)
-      has.neg <- any(z.scores < 0, na.rm = TRUE)
-
-      # Decide the range to pass to getScaledZGradient():
-      # - two-sided: symmetric [-M, M]
-      # - one-sided (all negative): [min(z), 0]
-      # - one-sided (all nonnegative): scalar M (i.e., [0, M] per your helper)
-      if (has.pos && has.neg) {
-        lim <- max(abs(z.scores), na.rm = TRUE)
-        cr <- c(-lim, lim)
-      } else if (!has.pos && has.neg) {
-        cr <- c(min(z.scores, na.rm = TRUE), 0)
-      } else {
-        cr <- max(z.scores, na.rm = TRUE)
-      }
-
-        ggs[[2]] <- ggs[[2]] + getScaledZGradient(min.z = min.z, palette = pal.div, color.range = cr)
-      }
+        if (scale.z.palette) {
+          gg$scales$scales %<>% .[sapply(., function(s) !("colour" %in% s$aesthetics))]
+          # one-sided adjusted z-scores are non-negative: use the upper half of the range only
+          gg <- gg + getScaledZGradient(min.z = min.z, palette = pal.div, color.range = if (any(z < 0, na.rm = TRUE)) cr else cr[2])
+        }
+        if (degenerate) gg <- gg + theme(legend.position = "none")
+        gg
+      }, panels, is.adj, leg.titles, SIMPLIFY=FALSE)
+      ggs <- c(list(gg.shift), gg.z)
 
       if (!is.null(cell.groups)) {
         ggs %<>% lapply(transferLabelLayer, self$plotEmbedding(groups=cell.groups), font.size=font.size)
       }
-      if (z.degenerate) ggs[[2]] <- ggs[[2]] + theme(legend.position = "none")
-
       if (!is.null(adj.list)) ggs %<>% lapply(`+`, adj.list)
       if (build.panel) {
-        ggs[[1]] <- ggs[[1]] + ggtitle("Expression shift"); ggs[[2]] <- ggs[[2]] + ggtitle(if (adjusted) "Adjusted z-score" else "z-score")
-        ggs %<>% cowplot::plot_grid(plotlist=., ncol=2)
+        ggs[[1]] <- ggs[[1]] + ggtitle("Expression shift")
+        for (i in seq_along(gg.z)) ggs[[i + 1]] <- ggs[[i + 1]] + ggtitle(titles[i])
+        ggs %<>% cowplot::plot_grid(plotlist=., ncol=length(ggs))
       }
 
       return(ggs)

@@ -18,6 +18,8 @@ Scripts (this directory; scratch outputs under `$S/bench/`):
 | `tail_collect.R <ds> <n.cells> <B> <cores>` | per-cell tail study: full permutation matrices of a cell subset under one null relabeling |
 | `tail_analyze.R <rds> <prefix>` | tail approximations evaluated on held-out null draws (`CACOA_BSMALL`: training sizes) |
 | `tail_diag.R` | the relabeling-count diagnostic of the pooled tail (`$S/bench/tail/`) |
+| `pilot_pooled.R <B> <cores>` | pilot of the pooled p-values in the BH-type adjustments and the Cauchy summary: one SCC null relabeling and four paired semi-synthetic sets |
+| `diag_pooled.R <set> <B> <cores>` | per-cell vs raw pooling, unpaired model vs donor covariate, direction of the extra calls on one semi-synthetic set |
 | `$S/bench/run_milo_semi.R` | Milo (miloR 1.6.0) on the semi-synthetic sets (subagent) |
 
 Results: [null calibration](#results-null-by-relabeling), [semi-synthetic power and false discoveries](#results-semi-synthetic-depletion),
@@ -253,6 +255,49 @@ standardized null); `p.pooled` is returned by both cluster-free maps and `p.sour
 BH-type adjustments. The exact permutation p stays the default of `p.source`; the pooled FDR stays the default
 adjustment (it uses the same pooled null for the expected exceedance count and shares its dependence on the number
 of relabelings, but at the thresholds that matter for a 5-10 % FDR the null count is large and its noise small).
+
+## Pilot: pooled p-values in the BH-type adjustments (2026-10-12)
+
+`pilot_pooled.R` and `diag_pooled.R`; `$S/bench/pilot_pooled_B1999.log`. The battery in `common.R` now also feeds the
+pooled p-values (`p.pooled`, see [pooledPermutationP()]) to BH, the spatial FDR, the neighbourhood BH and the Cauchy
+summary (`bh.pooled`, `spatial.pooled`, `nbhd.pooled`, `p.cauchy.pooled`).
+
+- **Null** (SCC relabeling 1 of `null3`, 1,999 permutations): no cell called by any method at FDR 10 % (one cell by
+  BH on the normal tail of the shift z), no significant group by any summary; the smallest Cauchy-of-pooled-p group
+  p is 0.09 (shifts), where the Cauchy of the exact permutation p is 0.11 and the group permutation test 0.13: the
+  tie-at-1 conservativeness of the shift Cauchy is gone.
+- **Paired semi-synthetic sets** (SCC, FDR 10 %): BH / spatial FDR / neighbourhood BH on the pooled p call 7,000-9,000
+  cells at 100 % removal of `KC_Basal` (recall 0.68-0.78) where the pooled permutation FDR calls 1,167 (recall 0.66),
+  and at 80 % removal of `LC` 1,000-1,500 (recall 0.6-0.7) against 569 (recall 0.72); at 100 % removal of the small
+  `Tcell` type they call 0-37 cells (recall 0) against 180 (recall 0.70). For the 1-hop counts the pooled p variants
+  have recall 0.14-0.57 with lenient FDP 0-0.5, the pooled FDR 0.14-0.45 with FDP 0.03-0.07; Milo 0.86-0.97.
+- **Diagnosis** (`diag_pooled.R large_f100_r1`): the extra calls are the *other* cell types going up: removing 18 % of
+  the cells of one arm raises the relative density of every other cell by 22 %, and 85 % of the called other cells
+  have a positive effect (all 5,962 called by the standardized pooling). The exact per-cell permutation p of the other
+  cells is at its floor for a quarter of them, so the per-cell tests see the same thing. The pooled permutation FDR
+  misses them because it pools the *raw* studentized contrasts: the benchmark's paired sets were fitted with `~ cond`
+  and the donor only as a permutation block, so the between-donor variance stays in the residual and the null
+  permutation sd of t is 0.32 for the unaffected cells but 1.19 for the planted ones (the effect flips sign under
+  the within-donor swaps); the raw pool's tail is then set by the planted cells and is far too wide for the others.
+  Per-cell standardization removes the scale difference (and costs the planted cells of the small type their power,
+  since their own permutation sd is inflated by the effect). With the donor as a model covariate
+  (`~ patient + cond`, `block.vars = "patient"`) the null sd of t is 1.11 for every class and all four constructions
+  agree: pooled FDR on raw t 7,522 calls / recall 0.68, on standardized t 7,749 / 0.71, BH on the pooled p 7,522 /
+  0.68 (raw) and 7,737 / 0.71 (standardized), each with about 6,000 "other" cells called, all up.
+- Milo's extra calls in the same set are also mostly up (946 of 1,290 at 100 % removal; 0 of 115 at 80 % removal of
+  `LC`, 1 of 1 for `Tcell`), so its earlier "FDP 0.25-0.44" is largely the compositional response as well.
+- In the null collection (`tail/scc_r1_B19999.rds`, unpaired model blocked on the true condition) the per-cell
+  permutation sd of the heat-kernel t ranges from 0.76 to 1.12 (1st-99th percentile), of the 1-hop t 0.62-1.12 and
+  of the shift F 0.05-0.65: the raw pooling of the shift F would not be calibrated, which is why the shift kernel
+  always pooled the standardized z; for the density t the raw pooling is approximately calibrated only when the model
+  absorbs the blocking variance.
+
+Consequences for the benchmark design: (i) the truth of the semi-synthetic sets must account for compositional closure
+(cells of other types are expected to go up by `1 / (1 - f * pi)`, not to stay null); (ii) paired sets must be fitted
+with the donor as a covariate, for cacoa as for Milo; (iii) the pooled FDR and the pooled p-values should both be
+computed from the per-cell standardized statistics (the shifts already are), or the density statistic must be made
+pivotal by the model; the trade-off is the power loss for affected cells whose own permutation distribution is
+inflated by the effect, to be measured.
 
 ## Conclusions
 

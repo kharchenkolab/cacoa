@@ -23,9 +23,10 @@ test_that("batched kernel equals the R reference: whole-type and random neighbou
     res <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE)
     expect_equal(unname(res$stat), ref$F, tolerance = 1e-9); expect_equal(unname(res$p.value), ref$p, tolerance = 1e-12)
     expect_equal(unname(res$shifts), ref$shift, tolerance = 1e-9); expect_equal(unname(res$n.samples), ref$n)
-    expect_equal(unname(res$z.score), ref$z, tolerance = 1e-9)
+    expect_equal(unname(res$z.std), ref$z, tolerance = 1e-9)
+    expect_equal(unname(res$z.pooled), unname(qnorm(res$p.pooled, lower.tail = FALSE)), tolerance = 1e-9)   # z.pooled = tail z of the pooled p
     expect_true(sum(is.finite(res$stat)) == sum(is.finite(ref$F)))
-    expect_true(all(is.finite(res$z.adj[is.finite(res$z.score)])))
+    expect_true(all(is.finite(res$z.adj[is.finite(res$z.pooled)])))
   }
   # Freedman-Lane (continuous nuisance covariate) and a design with a third level
   cao$sample.meta$age <- c(41, 55, 62, 48, 70, 39, 58, 51, 66, 44)
@@ -34,7 +35,7 @@ test_that("batched kernel equals the R reference: whole-type and random neighbou
   expect_equal(inp$gplan$scheme, "freedman-lane")
   ref <- refClusterFreeShifts(inp$Y, inp$pairs, inp$samples, cao$model, inp$meta, inp$gplan, inp$P)
   res <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns.rand, cao$model, cao$sample.meta, permutation = "freedman-lane", n.permutations = 29, seed = 1, adjust = FALSE, smooth = FALSE)
-  expect_equal(unname(res$stat), ref$F, tolerance = 1e-9); expect_equal(unname(res$p.value), ref$p); expect_equal(unname(res$z.score), ref$z, tolerance = 1e-9)
+  expect_equal(unname(res$stat), ref$F, tolerance = 1e-9); expect_equal(unname(res$p.value), ref$p); expect_equal(unname(res$z.std), ref$z, tolerance = 1e-9)
   # results do not depend on the number of threads
   res4 <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns.rand, cao$model, cao$sample.meta, permutation = "freedman-lane", n.permutations = 29, seed = 1, adjust = TRUE, smooth = TRUE, n.cores = 4)
   res1 <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns.rand, cao$model, cao$sample.meta, permutation = "freedman-lane", n.permutations = 29, seed = 1, adjust = TRUE, smooth = TRUE, n.cores = 1)
@@ -86,7 +87,7 @@ test_that("label permutations are global relabelings: a cell is skipped where th
   set.seed(5); nns <- lapply(seq_along(cg), function(i) sample(seq_along(cg) - 1L, 60)); names(nns) <- names(cg)   # several samples absent per cell
   res <- clusterFreeExpressionShifts(Matrix::t(cao$data.object), cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 49, seed = 1,
                                      adjust = TRUE, smooth = FALSE, groups = cg, min.samp.per.level = 3)
-  ok <- is.finite(res$z.score)
+  ok <- is.finite(res$z.pooled)
   expect_true(any(res$n.samples[ok] < nlevels(cao$sample.per.cell)))
   expect_true(all(res$n.perm[ok] >= 1 & res$n.perm[ok] <= 49)); expect_true(any(res$n.perm[ok] < 49))
   pm <- attr(res$group.test, "perm.means"); expect_equal(dim(pm), c(49L, nlevels(cg)))
@@ -122,10 +123,10 @@ test_that("cluster-free shifts return pooled per-cell p-values and accept p.sour
   inp <- cfInputs(cao, nns)
   r <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 49, seed = 1, adjust = TRUE, smooth = FALSE,
                                    adjust.method = "bh", p.source = "pooled")
-  ok <- is.finite(r$z.score)
+  ok <- is.finite(r$z.pooled)
   expect_true(all(is.finite(r$p.pooled[ok]))); expect_true(all(r$p.pooled[ok] > 0 & r$p.pooled[ok] <= 1))
   expect_true(all(is.na(r$p.pooled[!ok])))
-  o <- order(r$z.score[ok]); expect_true(all(diff(r$p.pooled[ok][o]) <= 1e-12))    # non-increasing in z
+  o <- order(r$z.std[ok]); expect_true(all(diff(r$p.pooled[ok][o]) <= 1e-12))      # non-increasing in the standardized statistic
   expect_true(min(r$p.pooled[ok]) < 1 / 50)                                        # below the per-cell floor
   expect_equal(r$settings$p.source, "pooled"); expect_true(all(is.finite(r$p.adj[ok])))
   cao$embedding <- matrix(rnorm(2 * length(cg)), ncol = 2, dimnames = list(names(cg), c("x", "y")))

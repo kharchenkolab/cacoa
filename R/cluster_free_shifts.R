@@ -64,7 +64,10 @@ pairVectorToMatrix <- function(y, pairs, samples) {
 #' @param verbose progress
 #' @param robust `"none"`, `"huber"` or `"winsor"`: down-weight samples with outlying residual distances (re-estimated under every relabeling)
 #' @param robust.k robust tuning constant
-#' @return list: `stat` (shift F per cell), `p.value` (exact permutation p), `p.pooled` (pooled-null p, no floor), `p.param`, `z.score` (and `z.scores`), `z.adj`, `shifts` (bias-corrected shift
+#' @return list: `stat` (shift F per cell), `p.value` (exact permutation p), `p.pooled` (pooled-null p, no floor), `p.param`,
+#'   `z.pooled` (the tail z of `p.pooled`, `qnorm(1 - p)`), `z.std` (the permutation-standardized
+#'   statistic: observed minus permutation mean over permutation sd; the input of the max-t adjustment and of the
+#'   pooled null), `z.adj`, `shifts` (bias-corrected shift
 #'   estimate), `shifts.smoothed`, `n.samples`, `settings`
 #' @export
 clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, design, meta, dist = c("cor", "cosine", "js"), min.n.obs.per.samp = 3,
@@ -119,18 +122,22 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
   p.param <- stats::pf(Fobs, 1, pmax(n.samp - q, 1), lower.tail = FALSE); p.param[!is.finite(Fobs)] <- NA_real_
   names(p.param) <- cell.names
   p.pooled <- pooledPermutationP(z, perm.hist, alternative = "greater"); names(p.pooled) <- cell.names   # no per-cell floor
+  # the reported z-score (z.pooled) is the tail z of the pooled p (one-sided: z = qnorm(1 - p)), calibrated and not floored;
+  # the permutation-standardized statistic (observed minus permutation mean over permutation sd) is kept as z.std
+  z.std <- z
+  z <- stats::qnorm(pmin(pmax(p.pooled, 1e-300), 1 - 1e-16), lower.tail = FALSE); z[!is.finite(p.pooled)] <- NA_real_; names(z) <- cell.names
   if (adjust && length(valid)) {
     if (adjust.method == "max-t") {
-      z0 <- z; z0[!is.finite(z0)] <- 0
+      z0 <- z.std; z0[!is.finite(z0)] <- 0
       z.adj <- adjustedZScoresMaxStat(z_obs = z0, alt = 1L, max_vals_in = mx, min_vals_in = mn, wins = wins, smooth = smooth,
                                       nn_ids = nn.list, non_zero_ids = as.integer(valid - 1L))
-      z.adj[!is.finite(z)] <- NA_real_
+      z.adj[!is.finite(z.std)] <- NA_real_
     } else if (adjust.method == "perm-fdr") {
-      ad <- adjustCellScores(z, NULL, method = "perm-fdr", alternative = "greater", perm = perm.hist)
+      ad <- adjustCellScores(z.std, NULL, method = "perm-fdr", alternative = "greater", perm = perm.hist)
       z.adj <- ad$z.adj; p.adj <- ad$p.adj; names(p.adj) <- cell.names; fdr.curve <- ad$fdr.curve
     } else {
       p.in <- switch(p.source, parametric = p.param, permutation = pval, pooled = p.pooled,
-                     z = { pz <- stats::pnorm(z, lower.tail = FALSE); pz[!is.finite(z)] <- NA_real_; names(pz) <- cell.names; pz })   # normal tail of the permutation-standardized z: no floor
+                     z = { pz <- stats::pnorm(z.std, lower.tail = FALSE); pz[!is.finite(z.std)] <- NA_real_; names(pz) <- cell.names; pz })   # normal tail of the permutation-standardized z: no floor
       z.in <- stats::qnorm(pmin(pmax(p.in, 1e-300), 1 - 1e-16), lower.tail = FALSE); z.in[!is.finite(p.in)] <- NA_real_
       ad <- adjustCellScores(z.in, p.in, method = adjust.method, nn.list = nn.list, alternative = "greater", seed = seed)
       z.adj <- ad$z.adj; p.adj <- ad$p.adj; names(p.adj) <- cell.names
@@ -156,7 +163,7 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
   }
   stats.perm <- NULL
   if (return.perm) { stats.perm <- kr$perm; colnames(stats.perm) <- cell.names }
-  list(stat = Fobs, p.value = pval, p.param = p.param, p.pooled = p.pooled, z.score = z, z.scores = z, z.adj = z.adj, p.adj = p.adj, index.cells = index.cells,
+  list(stat = Fobs, p.value = pval, p.param = p.param, p.pooled = p.pooled, z.pooled = z, z.std = z.std, z.adj = z.adj, p.adj = p.adj, index.cells = index.cells,
        fdr.curve = fdr.curve, perm.hist = perm.hist, group.test = group.test, stats.perm = stats.perm,
        shifts = shifts, shifts.smoothed = shifts.smoothed, n.samples = n.samp, n.perm = n.perm,
        settings = list(dist = dist, permutation = gplan$scheme, block.vars = block.vars, n.permutations = B, seed = seed, min.n.obs.per.samp = min.n.obs.per.samp, robust = robust,

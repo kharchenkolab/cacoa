@@ -34,7 +34,7 @@ dens <- function(Y) {
 heat <- tm("heat", dens(dm$heat[cells, ]))
 nb <- tm("nb", dens(logCounts(dm$nb, dm$sizes)[cells, ]))
 res <- list(ds = ds, k = k, B = B, cells = cells, groups = cg[cells], labels = meta2$cond, n.samples = sh$n.samples,
-            shifts = list(stat = sh$stat, perm = sh$stats.perm, p.perm = sh$p.value, p.param = sh$p.param, z = sh$z.score, n.perm = sh$n.perm),
+            shifts = list(stat = sh$stat, perm = sh$stats.perm, p.perm = sh$p.value, p.param = sh$p.param, z = sh$z.std, n.perm = sh$n.perm),
             heat = heat, nb = nb)
 saveRDS(res, file.path(out.dir, sprintf("%s_r%d_B%d.rds", ds, k, B)))
 message("done")

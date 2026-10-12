@@ -255,4 +255,18 @@ permutation set depends on the metadata row order for a fixed seed.
   heat-kernel density (normalized per sample) shows nothing in the same relabelings and is the default.
 - Milo's spatial FDR on unpaired heterogeneous controls (PF, two processing sites): 15-28 % of the cells called in
   two of three control-only splits; its per-cell inheritance of the smallest neighbourhood FDR also inflates the
-  cell-level false-discovery proportion in the paired regime (0.2-0.5 at nominal 0.1).
+  cell-level false-discovery proportion in the paired regime (0.2-0.5 at nominal 0.1). Revised 2026-10-12: most of
+  those extra calls at 100 % removal are the other types going *up* (compositional closure), see the next item.
+- (2026-10-12, pilot in the benchmark README) The semi-synthetic truth ignores compositional closure: removing 18 %
+  of one arm's cells raises every other cell's relative density by 22 %, which the per-cell permutation tests and the
+  standardized pooled p detect (6,000 "other" cells called, all up). The pooled permutation FDR of the density map
+  pools the *raw* studentized contrast, whose null scale differed between cells in the paired benchmark sets (the
+  donor was a permutation block but not a model covariate: null sd of t 0.32 for unaffected cells, 1.19 for the
+  planted ones), so its "FDP 0" there was conservativeness, not accuracy. With the donor as a covariate all pooled
+  constructions agree. Open decision: standardize the density statistics per cell before pooling in the FDR (as the
+  shifts do) and measure the power cost for affected cells whose own permutation distribution is inflated by the
+  effect; redefine the semi-synthetic truth with the expected compositional response; fit paired designs with the
+  donor as a covariate in cacoa as in Milo.
+- (2026-10-12) The unadjusted z-scores of both maps are now the signed tail z of the pooled p (`pooled` slot of the
+  density results, `z.pooled` of the shifts; the permutation-standardized shift statistic is `z.std`); the adjusted
+  z of q-values near 0 run to 37, so the default colour range of a z map is the 99.5 % quantile capped at 8.

@@ -38,7 +38,7 @@ test_that("regression weights: balanced two-group weights, zero sums within stra
   expect_s3_class(res$model, "cacoaModel")
   expect_equal(sum(res$cond.densities$num), 1, tolerance = 1e-8)
   dd <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 19, adjust = FALSE, verbose = FALSE)
-  expect_true(length(dd$diff$permutation$raw) > 0)
+  expect_true(length(dd$diff$permutation$pooled) > 0)
 })
 
 test_that("sensitivity verdicts: robust under a null covariate, dependent under a confounded one", {
@@ -147,7 +147,7 @@ test_that("regressions found by the notebook run: test lookup by variable, CoDA 
   cao$embedding <- matrix(rnorm(2 * length(cao$cell.groups)), ncol = 2, dimnames = list(names(cao$cell.groups), c("x", "y")))
   cao$estimateCellDensity(method = "kde", bins = 20, verbose = FALSE)
   dd <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 19, adjust = FALSE, verbose = FALSE)   # default perm.method = freedman-lane
-  expect_true(all(is.finite(dd$diff$permutation$raw)))
+  expect_true(all(is.finite(dd$diff$permutation$pooled)))
   # CoDA loadings plot on the lmCoda structure
   skip_if_not_installed("coda.base"); skip_if_not_installed("psych")
   coda <- cao$estimateCellLoadings(n.permutations = 49, verbose = FALSE)

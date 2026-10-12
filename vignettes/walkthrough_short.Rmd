@@ -221,16 +221,21 @@ threshold under the permutations, pooled over all cells, against the observed nu
 p-values (`"bh"`) and the familywise max-statistic adjustment (`"max-t"`) remain available. The cluster-free expression
 shifts test the contrast in every cell's neighbourhood with the same adjustment.
 
-```{r density, fig.width=10, fig.height=4.5, purl=FALSE}
+```{r density, fig.width=14, fig.height=4.5, purl=FALSE}
 cao$estimateCellDensity(method = "graph")
 cao$estimateDiffCellDensity(type = "permutation")
-cowplot::plot_grid(cao$plotEmbedding(color.by = "cell.groups"), cao$plotDiffCellDensity(), ncol = 2)
+cowplot::plot_grid(cao$plotDiffCellDensity(what = "effect", contours = "L2/3"), cao$plotDiffCellDensity(adjust = FALSE),
+                   cao$plotDiffCellDensity(adjust = TRUE), ncol = 3)
 ```
 
-The density map agrees with the loadings: `L2/3` and `L5/6-CC` are depleted in the treated arm, `IN-PV`, `IN-SST`
-and `OPC` enriched. The expression shifts show the planted cell types (the adjusted z-scores are one-sided):
+Left to right: the effect (the density difference per cell), the unadjusted z-scores (the signed tail z of the
+per-cell p-values of the pooled permutation null, calibrated and not floored at 1 / (permutations + 1)) and the
+adjusted z-scores (the tail z of the FDR q-values). The colour range of a z map is the 99.5 % quantile of the absolute
+z-scores, so a few extreme cells do not wash out the map. The density map agrees with the loadings: `L2/3` and
+`L5/6-CC` are depleted in the treated arm, `IN-PV`, `IN-SST` and `OPC` enriched. The expression shifts show the planted
+cell types, again as the shift magnitude, the unadjusted and the adjusted z-scores (one-sided):
 
-```{r cluster-free-shifts, fig.width=9, fig.height=4, purl=FALSE}
+```{r cluster-free-shifts, fig.width=14, fig.height=4, purl=FALSE}
 cao$estimateClusterFreeExpressionShifts(n.top.genes = 500, n.permutations = 99)
 cao$plotClusterFreeExpressionShifts(font.size = 3)
 ```

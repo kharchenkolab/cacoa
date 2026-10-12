@@ -89,7 +89,10 @@ distribution of the group means is stored as \code{attr(group.test, "perm.means"
 FALSE; \code{n.permutations} x cells doubles, NaN where a cell is not tested under a relabeling)}
 }
 \value{
-list: \code{stat} (shift F per cell), \code{p.value} (exact permutation p), \code{p.pooled} (pooled-null p, no floor), \code{p.param}, \code{z.score} (and \code{z.scores}), \code{z.adj}, \code{shifts} (bias-corrected shift
+list: \code{stat} (shift F per cell), \code{p.value} (exact permutation p), \code{p.pooled} (pooled-null p, no floor), \code{p.param},
+\code{z.pooled} (the tail z of \code{p.pooled}, \code{qnorm(1 - p)}), \code{z.std} (the permutation-standardized
+statistic: observed minus permutation mean over permutation sd; the input of the max-t adjustment and of the
+pooled null), \code{z.adj}, \code{shifts} (bias-corrected shift
 estimate), \code{shifts.smoothed}, \code{n.samples}, \code{settings}
 }
 \description{

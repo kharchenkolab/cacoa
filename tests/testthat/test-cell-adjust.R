@@ -24,7 +24,7 @@ test_that("density and cluster-free shift tests accept the FDR adjustments", {
   for (m in c("bh", "spatial-fdr", "neighbourhood")) {
     r <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 19, adjust.method = m, verbose = FALSE)
     d <- r$diff$permutation
-    expect_equal(d$adjust.method, m); expect_equal(length(d$adj), length(d$raw)); expect_true(all(d$p.adj >= 0 & d$p.adj <= 1, na.rm = TRUE))
+    expect_equal(d$adjust.method, m); expect_equal(length(d$adj), length(d$pooled)); expect_true(all(d$p.adj >= 0 & d$p.adj <= 1, na.rm = TRUE))
     if (m == "neighbourhood") expect_true(length(d$index.cells) > 0)
   }
   expect_s3_class(cao$plotDiffCellDensity(), "ggplot")
@@ -102,8 +102,8 @@ test_that("neighbourhood-count density, log transform, perm-fdr and the group su
   nns <- lapply(cells, function(c) match(idx[[as.character(cg[c])]], cells) - 1L); names(nns) <- cells
   sh <- clusterFreeExpressionShifts(Matrix::t(cao$data.object), spc, nns, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE, groups = cg)
   expect_equal(sh$settings$adjust.method, "perm-fdr"); expect_equal(ncol(sh$perm.hist$hist), length(sh$perm.hist$grid) + 1L)
-  expect_equal(unname(rowSums(sh$perm.hist$hist)), rep(sum(is.finite(sh$z.score)), 29))                     # every tested cell in every permutation
-  expect_equal(nrow(sh$group.test), nlevels(cg)); expect_equal(sh$group.test$n.tested, as.integer(table(cg[is.finite(sh$z.score)])))
+  expect_equal(unname(rowSums(sh$perm.hist$hist)), rep(sum(is.finite(sh$z.pooled)), 29))                     # every tested cell in every permutation
+  expect_equal(nrow(sh$group.test), nlevels(cg)); expect_equal(sh$group.test$n.tested, as.integer(table(cg[is.finite(sh$z.pooled)])))
   expect_true(all(sh$group.test$p.perm > 0 & sh$group.test$p.perm <= 1))
   s <- summarizeCellScoresByGroup(sh$p.value, cg, effect = sh$shifts, p.adj = sh$p.adj, group.test = sh$group.test, alternative = "greater")
   expect_equal(s$method[1], "permutation"); expect_equal(s$p, sh$group.test$p.perm)
@@ -112,7 +112,18 @@ test_that("neighbourhood-count density, log transform, perm-fdr and the group su
   cao$estimateCellDensity(method = "kde", bins = 20, verbose = FALSE)
   rr <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 19, adjust.method = "perm-fdr", verbose = FALSE)$diff$permutation
   expect_equal(rr$adjust.method, "perm-fdr"); expect_false(is.null(rr$fdr.curve))
+  # the unadjusted z-scores are the signed tail z of the pooled p (two-sided), the adjusted ones of the q-values
+  ok <- is.finite(rr$pooled)
+  expect_equal(unname(rr$pooled[ok]), unname(sign(rr$effect[ok]) * qnorm(rr$p.pooled[ok] / 2, lower.tail = FALSE)), tolerance = 1e-9)
+  expect_true(all(is.finite(rr$adj[ok])))
   expect_s3_class(cao$plotDiffCellDensity(), "ggplot")
+  expect_s3_class(cao$plotDiffCellDensity(adjust = FALSE), "ggplot")
+  expect_s3_class(cao$plotDiffCellDensity(what = "effect"), "ggplot")
+  expect_s3_class(cao$plotDiffCellDensity(color.range = c(-2, 2)), "ggplot")
+  expect_equal(cacoa:::symmetricColorRange(c(-1, 0, 5, 100), "75%"), c(-1, 1) * unname(quantile(c(1, 0, 5, 100), 0.75)))   # quantile of |x|
+  expect_equal(cacoa:::symmetricColorRange(c(-1, 1), NULL, floor = 1.96), c(-1.96, 1.96))                 # the floor
+  expect_equal(cacoa:::symmetricColorRange(c(-3, 7), c(0, 4)), c(-4, 4))                                 # numeric range
+  expect_equal(cacoa:::symmetricColorRange(c(-3, 37), NULL, cap = 8), c(-8, 8))                               # the cap
 })
 
 test_that("pooled permutation p-values: uniform under an iid null, no per-cell floor, matrix and histogram inputs agree", {

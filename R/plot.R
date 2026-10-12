@@ -603,6 +603,27 @@ parseLimitRange <- function(lims, vals) {
   return(as.numeric(lims))
 }
 
+#' Symmetric colour range for signed scores
+#'
+#' @param x the scores
+#' @param range a quantile of `abs(x)` as a string (e.g. `"99.5%"`), or a numeric vector whose largest absolute value sets
+#'   the range (`NULL`: the full range)
+#' @param floor the smallest half-range (e.g. 1.96 for adjusted z-scores, so that a map without significant cells looks pale)
+#' @param cap the largest half-range from a quantile or `NULL` range (a numeric `range` is taken as given); adjusted
+#'   z-scores of q-values near 0 run to 37, which would wash out the rest of the map
+#' @return `c(-lim, lim)`
+#' @keywords internal
+symmetricColorRange <- function(x, range = "99.5%", floor = 0, cap = Inf) {
+  ax <- abs(x[is.finite(x)])
+  lim <- if (is.null(range)) max(ax, 0) else if (is.character(range)) {
+    q <- as.numeric(sub("%", "", range[grep("%", range)])) / 100
+    if (!length(q) || any(!is.finite(q))) stop("range must be a quantile string such as '99.5%' or numeric")
+    if (length(ax)) max(stats::quantile(ax, probs = max(q), names = FALSE)) else 0
+  } else max(abs(range), na.rm = TRUE)
+  lim <- max(min(lim, cap), floor, 1e-10)
+  c(-lim, lim)
+}
+
 #' @keywords internal
 prepareGeneExpressionComparisonPlotInfo <- function(de.info, genes, plots, smoothed, max.z, max.z.adj, max.lfc, z.palette, z.adj.palette, lfc.palette) {
   z.scores <- NULL
@@ -687,6 +708,7 @@ getScaledZGradient <- function(min.z, palette, color.range) {
 
     col.vals <- c(0, seq(min.z, color.range, length.out=20))
     color.range <- c(0, color.range)
+    pal.div <- palette; palette <- function(n) pal.div(2 * n - 1)[n:(2 * n - 1)]   # one-sided: the upper half of the diverging palette
   } else {
     col.vals <- c(seq(color.range[1], -min.z, length.out=10), 0, seq(min.z, color.range[2], length.out=10))
   }

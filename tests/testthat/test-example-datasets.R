@@ -150,7 +150,10 @@ test_that("simulated objects: the whole workflow runs end to end on a conos-back
   cf <- cao$estimateClusterFreeExpressionShifts(n.top.genes = 500, n.permutations = 49)
   z <- tapply(cf$z.adj, old$cell.groups[names(cf$z.adj)], median, na.rm = TRUE)
   expect_gt(z[["IN-SST"]], z[["Microglia"]])
-  expect_s3_class(cao$plotClusterFreeExpressionShifts(), "ggplot")
+  expect_s3_class(cao$plotClusterFreeExpressionShifts(), "ggplot")                       # shift, pooled z, adjusted z
+  ggs <- cao$plotClusterFreeExpressionShifts(build.panel = FALSE)
+  expect_length(ggs, 3); expect_length(cao$plotClusterFreeExpressionShifts(adjusted = TRUE, build.panel = FALSE), 2)
+  expect_equal(unname(cf$z.pooled[!is.na(cf$z.pooled)]), unname(qnorm(cf$p.pooled[!is.na(cf$z.pooled)], lower.tail = FALSE)), tolerance = 1e-9)
 })
 
 test_that("planted density simulation: the BH adjustment calls the changed cell types and max-t does not", {

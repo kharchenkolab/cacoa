@@ -3647,7 +3647,10 @@ Estimate differential cell density
 
 \item{\code{na.mode}}{handling of missing responses: 'drop' or 'impute_weak'}
 
-\item{\code{alternative}}{alternative hypothesis for the z-scores: 'two-sided', 'greater' or 'less'}
+\item{\code{alternative}}{alternative hypothesis for the z-scores: 'two-sided', 'greater' or 'less'. The unadjusted z-scores
+(\code{pooled}) are the signed tail z of the per-cell p-values of the pooled permutation null (\code{p.pooled}, see
+\code{\link[=pooledPermutationP]{pooledPermutationP()}}; calibrated and not floored), two-sided: \code{sign(effect) * qnorm(1 - p / 2)}; \code{adj} holds
+the signed tail z of the adjusted p-values}
 
 \item{\code{return.residuals}}{also return residuals}
 
@@ -3687,7 +3690,9 @@ then a log2 fold change of the density}
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-estimated differential cell densities
+estimated differential cell densities: \code{pooled} (unadjusted signed z-scores), \code{adj} (adjusted), \code{p.adj},
+\code{effect} (the contrast estimate per cell: the density difference, or the log2 fold change with
+\code{transform = "log"}), \code{p.perm}, \code{p.pooled}, \code{p.param}, \code{t}, \code{group.test} (when cell groups are stored)
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
@@ -3712,13 +3717,15 @@ Estimate differential cell density
   size = 0.2,
   palette = NULL,
   adjust = NULL,
+  what = c("z", "effect"),
   contours = NULL,
   contour.color = "black",
   contour.conf = "10\%",
   plot.na = FALSE,
-  color.range = NULL,
+  color.range = "99.5\%",
+  max.z = 8,
   mid.color = "gray95",
-  scale.z.palette = adjust,
+  scale.z.palette = NULL,
   min.z = qnorm(0.9),
   ...
 )}\if{html}{\out{</div>}}
@@ -3733,7 +3740,11 @@ Estimate differential cell density
 
 \item{\code{palette}}{color palette, default is c('blue','white','red')}
 
-\item{\code{adjust}}{boolean Adjust P values (default=NULL)}
+\item{\code{adjust}}{plot the adjusted z-scores (TRUE), the unadjusted pooled-null z-scores (FALSE) or the adjusted ones when
+they were estimated (NULL, default)}
+
+\item{\code{what}}{\code{"z"} (default): the signed z-scores; \code{"effect"}: the contrast estimate per cell (the density
+difference, or the log2 fold change of the density with \code{transform = "log"})}
 
 \item{\code{contours}}{character Specify cell types for contour, multiple cell types are also supported (default: NULL)}
 
@@ -3743,11 +3754,16 @@ Estimate differential cell density
 
 \item{\code{plot.na}}{boolean Plot NAs (default=FALSE)}
 
-\item{\code{color.range}}{numeric, e.g. c(0,90) (default=NULL)}
+\item{\code{color.range}}{symmetric colour range: a quantile of the absolute values as a string (default \code{"99.5\%"}, so that
+a few extreme cells do not wash out the map; adjusted z-scores keep at least +-1.96) or a numeric vector whose
+largest absolute value sets the range; values beyond it are clipped to the range}
+
+\item{\code{max.z}}{cap of the colour range of a z map taken from a quantile (default 8: z-scores of smaller p-values are
+not distinguishable and would wash out the map); a numeric \code{color.range} is taken as given}
 
 \item{\code{mid.color}}{character Color code for medium value in color range (default='gray95')}
 
-\item{\code{scale.z.palette}}{boolean Scale plot palette for Z scores (default=adjust)}
+\item{\code{scale.z.palette}}{boolean Scale plot palette for Z scores (default: TRUE for z-scores, FALSE for the effect)}
 
 \item{\code{min.z}}{numeric Minimum Z score to plot (default=qnorm(0.9))}
 
@@ -4789,17 +4805,19 @@ cao$plotGeneProgramGenes(program.id = 1) # program.id is any gene program ID in 
 \if{html}{\out{<a id="method-Cacoa-plotClusterFreeExpressionShifts"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotClusterFreeExpressionShifts}{}}}
 \subsection{Method \code{plotClusterFreeExpressionShifts()}}{
-Plot cluster-free expression shift z-scores
+Plot the cluster-free expression shifts: the shift magnitude next to the signed z-scores
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotClusterFreeExpressionShifts(
   cell.groups = self$cell.groups,
   smooth = TRUE,
   plot.na = FALSE,
-  adjusted = TRUE,
+  adjusted = "both",
   name = "cluster.free.expr.shifts",
   scale.z.palette = TRUE,
   min.z = qnorm(0.9),
   color.range = c("0", "97.5\%"),
+  z.range = "99.5\%",
+  max.z = 8,
   alpha = 0.2,
   font.size = c(3, 5),
   adj.list = NULL,
@@ -4819,7 +4837,8 @@ Plot cluster-free expression shift z-scores
 
 \item{\code{plot.na}}{boolean (default=FALSE)}
 
-\item{\code{adjusted}}{plot the adjusted z-scores (default TRUE)}
+\item{\code{adjusted}}{\code{"both"} (default): the unadjusted (pooled-null) and the adjusted z-scores side by side; \code{TRUE}:
+the adjusted z-scores only; \code{FALSE}: the unadjusted only}
 
 \item{\code{name}}{results slot name}
 
@@ -4827,7 +4846,13 @@ Plot cluster-free expression shift z-scores
 
 \item{\code{min.z}}{(default=qnorm(0.9))}
 
-\item{\code{color.range}}{(default=c("0", "97.5\%"))}
+\item{\code{color.range}}{range of the shift panel (default=c("0", "97.5\%"))}
+
+\item{\code{z.range}}{symmetric colour range of the z panels: a quantile of the absolute z-scores as a string (default
+\code{"99.5\%"}, so that a few extreme cells do not wash out the map; adjusted z-scores keep at least +-1.96) or a
+numeric vector whose largest absolute value sets the range; values beyond it are clipped}
+
+\item{\code{max.z}}{cap of a z range taken from a quantile (default 8; a numeric \code{z.range} is taken as given)}
 
 \item{\code{alpha}}{numeric (default=0.2)}
 
@@ -4844,6 +4869,9 @@ Plot cluster-free expression shift z-scores
 \item{\code{...}}{parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a panel (\code{build.panel = TRUE}) or a list of ggplot objects: the shift, then the z-score panel(s)
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}

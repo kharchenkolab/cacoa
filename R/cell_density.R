@@ -253,11 +253,24 @@ diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c
                                  robust.method = robust.method, na.mode = na.mode, alternative = alternative,
                                  return.sampled.stats = return.sampled.stats, return.residuals = return.residuals,
                                  n.cores = n.cores, ...)
-  # effect (contrast estimate) centred by its permutation mean; the z-scores come from the test statistic's p-values
+  # effect (contrast estimate) centred by its permutation mean; the z-scores are the signed tail z of the per-cell
+  # p-values: of the pooled permutation null when the permuted statistics are kept (calibrated, no floor), otherwise
+  # of the exact permutation p (floored at 1 / (n.permutations + 1))
   score.c <- as.numeric(if (is.null(res$effects.perm)) res$effect else res$effect - colMeans(res$effects.perm, na.rm = TRUE))
   names(score.c) <- colnames(Y)
   z.score <- res$z.score
   names(z.score) <- colnames(Y)
+  p.pooled <- NULL
+  if (!is.null(res$stats.perm)) {
+    sgn <- if (alternative == "less") -1 else 1
+    p.pooled <- pooledPermutationP(sgn * res$stat.obs, sgn * res$stats.perm, alternative = if (alternative == "two-sided") "two.sided" else "greater")
+    names(p.pooled) <- colnames(Y)
+    pp <- pmin(pmax(p.pooled, 1e-300), 1 - 1e-16)
+    z.score <- switch(alternative, "two-sided" = sign(res$effect) * stats::qnorm(pp / 2, lower.tail = FALSE),
+                      greater = stats::qnorm(pp, lower.tail = FALSE), less = stats::qnorm(pp))
+    z.score[!is.finite(p.pooled)] <- NA_real_
+    names(z.score) <- colnames(Y)
+  }
 
   # moderated t: the per-cell residual variances are shrunk towards a common prior estimated across cells (limma's
   # empirical Bayes), which borrows strength across the many cells the way Milo's count model does across neighbourhoods
@@ -270,7 +283,8 @@ diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c
   p.param <- if (alternative == "two-sided") 2 * stats::pt(-abs(tstat), dfr) else if (alternative == "greater") stats::pt(tstat, dfr, lower.tail = FALSE) else stats::pt(tstat, dfr)
   out <- list(score = score.c, permut.scores = if (is.null(res$effects.perm)) NULL else t(res$effects.perm), stats.perm = res$stats.perm, stat.obs = setNames(res$stat.obs, colnames(Y)), z.score = z.score,
               effect = setNames(res$effect, colnames(Y)), se = setNames(res$se, colnames(Y)), statistic = res$statistic,
-              t = setNames(tstat, colnames(Y)), df = dfr, p.param = setNames(p.param, colnames(Y)), p.perm = setNames(res$pval, colnames(Y)))
+              t = setNames(tstat, colnames(Y)), df = dfr, p.param = setNames(p.param, colnames(Y)), p.perm = setNames(res$pval, colnames(Y)),
+              p.pooled = p.pooled)
 
   if (return.residuals) {
     out$residuals <- res$residuals

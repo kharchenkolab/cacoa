@@ -5,7 +5,7 @@ suppressPackageStartupMessages({library(ggplot2); library(dplyr)})
 S <- Sys.getenv("CACOA_SCRATCH", "/tmp/claude-1001/-home-pkharchenko-cacoa-dev/7bdc188e-5fb7-49ad-9052-73aa7139e530/scratchpad")
 args <- commandArgs(trailingOnly = TRUE); out.dir <- if (length(args)) args[1] else "/home/pkharchenko/cacoa-dev/cacoa/misc/benchmark/figures"
 thr <- c(1e-6, 1e-5, 1e-4, 1e-3, 3e-3, 0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5)
-rows <- list()
+rows <- list(); neff.rows <- list()
 for (ds in c("scc", "pf", "ms")) for (d in list.dirs(file.path(S, "bench/planted", ds), recursive = FALSE)) {
   tr <- readRDS(file.path(d, "truth.rds")); if (is.na(tr$type)) next
   g <- readRDS(file.path(d, "inputs.rds"))$graph; cells.g <- igraph::V(g)$name
@@ -18,6 +18,8 @@ for (ds in c("scc", "pf", "ms")) for (d in list.dirs(file.path(S, "bench/planted
   if (file.exists(file.path(d, "milo.rds"))) { mi <- readRDS(file.path(d, "milo.rds"))$cells; methods[["Milo (graph, spatial FDR)"]] <- list(q = setNames(mi$milo.fdr, mi$cell), effect = setNames(mi$milo.logFC, mi$cell)) }
   if (file.exists(file.path(d, "decomp.rds"))) { dc <- readRDS(file.path(d, "decomp.rds"))$res; names(dc) <- sub("^Milo nhoods", "kNN nhoods", names(dc)); for (m in names(dc)) methods[[paste0("decomp: ", m)]] <- dc[[m]] }
   if (file.exists(file.path(d, "hw.rds"))) { hw <- readRDS(file.path(d, "hw.rds"))$res; for (m in names(hw)) methods[[paste0("weighted: ", m)]] <- hw[[m]][c("q", "effect")] }
+  if (file.exists(file.path(d, "grid.rds"))) { gr <- readRDS(file.path(d, "grid.rds")); for (m in names(gr$res)) methods[[paste0("grid: ", m)]] <- gr$res[[m]][c("q", "effect")]
+    for (u in names(gr$neff)) neff.rows[[length(neff.rows) + 1]] <- data.frame(dataset = ds, id = tr$id, unit = u, neff.median = unname(gr$neff[[u]]["50%"]), neff.q05 = unname(gr$neff[[u]]["5%"]), neff.q95 = unname(gr$neff[[u]]["95%"])) }
   for (m in names(methods)) {
     q <- methods[[m]]$q; e <- methods[[m]]$effect; cells <- names(q)[is.finite(q)]; q <- q[cells]; e <- e[cells]
     tpc <- tp[cells]; tpc[is.na(tpc)] <- FALSE; farc <- far[cells]; farc[is.na(farc)] <- FALSE
@@ -40,5 +42,20 @@ cm <- cv %>% filter(frac == 1, method %in% names(main)) %>% mutate(method = fact
 p <- ggplot(cm, aes(fdp2, recall, colour = method)) + geom_path() + geom_point(size = 1) + facet_grid(dataset ~ panel) + geom_vline(xintercept = 0.1, linetype = 2, colour = "grey40") + coord_cartesian(xlim = c(0, 0.6)) +
   labs(x = "realized false-call rate (other cells called down beyond 2 hops of the planted cells)", y = "recall of the planted cells (100 % removal)", colour = NULL, title = "Recall at matched realized error (threshold sweep)") + theme_bw() + theme(legend.position = "bottom") + guides(colour = guide_legend(ncol = 3))
 ggsave(file.path(out.dir, "planted_curves.png"), p, width = 12, height = 9, dpi = 110)
+# --- the unit x post-processing grid (grid_units.R): recall at realized error against the effective neighbourhood size
+if (length(neff.rows)) {
+  ne <- bind_rows(neff.rows) %>% group_by(dataset, unit) %>% summarise(neff = median(neff.median), .groups = "drop")
+  gr <- rat %>% filter(frac == 1, grepl("^grid: ", method)) %>% mutate(m = sub("^grid: ", "", method)) %>%
+    tidyr::separate(m, c("unit", "weighting", "post"), sep = " \\| ") %>% group_by(dataset, unit, weighting, post) %>%
+    summarise(recall.fdp10 = mean(recall.fdp10), recall.fdp05 = mean(recall.fdp05), recall.nominal10 = mean(recall.nominal10), fdp2.nominal10 = mean(fdp2.nominal10), .groups = "drop") %>%
+    left_join(ne, by = c("dataset", "unit")) %>% mutate(family = ifelse(grepl("^kernel", unit), "diffusion kernel", "kNN counts"))
+  write.csv(gr, file.path(out.dir, "planted_grid_summary.csv"), row.names = FALSE)
+  pg <- ggplot(gr, aes(neff, recall.fdp10, colour = post, shape = weighting, linetype = family)) + geom_line(aes(group = interaction(family, weighting, post))) + geom_point(size = 2) +
+    scale_x_log10() + facet_wrap(~ dataset, nrow = 1) + labs(x = "effective neighbourhood size (median cells)", y = "recall at realized false-call rate <= 10 % (100 % removal)", colour = "post-processing", shape = NULL, linetype = NULL,
+    title = "Unit x post-processing grid at matched effective size") + theme_bw() + theme(legend.position = "bottom")
+  ggsave(file.path(out.dir, "planted_grid.png"), pg, width = 12, height = 5, dpi = 110)
+  cat("\n== grid: recall at realized fdp2 <= 0.10 by unit, weighting and post-processing (100 % removal, mean over types)\n")
+  print(as.data.frame(gr %>% arrange(dataset, family, neff, weighting, post) %>% select(dataset, unit, neff, weighting, post, recall.fdp10, recall.nominal10, fdp2.nominal10)), digits = 2)
+}
 cat("\n== recall at realized fdp2 <= 0.10 (and <= 0.05), 100 % removal, mean over types\n")
 print(as.data.frame(rat %>% filter(frac == 1) %>% group_by(dataset, method) %>% summarise(r10 = mean(recall.fdp10), r05 = mean(recall.fdp05), r.nom = mean(recall.nominal10), fdp.nom = mean(fdp2.nominal10), .groups = "drop") %>% arrange(dataset, -r10)), digits = 2)

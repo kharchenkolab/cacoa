@@ -551,7 +551,7 @@ best kNN):
   edge on SCC at k >= 200 (0.63 vs 0.49) and on the kernel (0.63 vs 0.49 at the default).
 - **Choice of k.** Recall rises with k up to 200-400 cells for types of 4 % or more and for the 1-2 % types in PF
   and MS, and falls beyond k = 100-200 for the 4-8 % SCC types without post-processing (over-smoothing in a dataset
-  of 42k cells where a 4 % type is 1,500 cells). A k of 100-200 is a safe default across the three datasets, and
+  of 34k cells where a 4 % type is 1,500 cells). A k of 100-200 is a safe default across the three datasets, and
   the Hutchinson effective size makes the kernel comparable to it when the kernel is kept.
 - **Runtime.** The whole grid (54 configurations, 1,999 permutations) takes 14 minutes per SCC set (34k cells)
   and 34 per PF set (83k) on 8 cores; a

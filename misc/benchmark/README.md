@@ -15,10 +15,13 @@ Scripts (this directory; scratch outputs under `$S/bench/`):
 | `null_relabel.R <ds> <n> <B> <cores>` | null study: arm labels re-drawn across samples, balanced within the true condition, permutations blocked on it (`CACOA_NULL_DIR`, default `null`; the final round is `null3`) |
 | `semi_synthetic.R <ds> generate\|run [B] [cores] [unpaired\|paired]` | control-only semi-synthetic sets with a planted depletion of one cell type |
 | `analyze_null.R`, `analyze_semi.R` | figures and tables (`figures/`) |
+| `tail_collect.R <ds> <n.cells> <B> <cores>` | per-cell tail study: full permutation matrices of a cell subset under one null relabeling |
+| `tail_analyze.R <rds> <prefix>` | tail approximations evaluated on held-out null draws (`CACOA_BSMALL`: training sizes) |
+| `tail_diag.R` | the relabeling-count diagnostic of the pooled tail (`$S/bench/tail/`) |
 | `$S/bench/run_milo_semi.R` | Milo (miloR 1.6.0) on the semi-synthetic sets (subagent) |
 
 Results: [null calibration](#results-null-by-relabeling), [semi-synthetic power and false discoveries](#results-semi-synthetic-depletion),
-[conclusions](#conclusions).
+[per-cell tail approximations](#results-per-cell-tail-approximations), [conclusions](#conclusions).
 
 ## Methods under test
 
@@ -186,6 +189,71 @@ lenient FDP at 100 % removal:
 - Control-only splits (`figures/semi_null_calls.csv`, FDR 10 %): every cacoa method calls at most 1 % of the cells
   (mean 0-0.7 %), and most call none; Milo calls 1 % (PF paired) to 15 % on average and 28 % at most (PF unpaired).
 
+## Results: per-cell tail approximations
+
+Question: can a per-cell p-value with resolution below the permutation floor 1 / (B + 1) be obtained from B
+permutations, by a parametric tail or otherwise? Design (`tail_collect.R`, `tail_analyze.R`): one stratified null
+relabeling of SCC (2,000 cells, 19,999 permutations; a second set of 1,100 cells with 49,999 permutations) and of PF
+(2,000 cells, 19,999 permutations), with the full permutations x cells matrices kept for the three tests. For every
+cell the first B.small permutations play the part of a routine run's permutation sample and 4,000-6,000 of the
+remaining permutations are held-out null draws of the same cell's statistic. An approximation is calibrated when the
+pooled held-out p-values are uniform; the table reports the observed over the expected fraction below alpha, pooled
+over cells and draws (`figures/tail_calibration_*.csv`, `figures/tail_qq_scc.png`, `figures/tail_qq_pf.png`).
+
+Approximations: the normal tail of the permutation-standardized z (the former `p.source = "z"`); a moment-matched
+gamma on the statistic (F of the shift, t^2 of the density tests); a generalized Pareto tail on the top 10-25 % of
+the permutations (probability-weighted moments and maximum likelihood); and the **pooled null**: every cell's
+statistic standardized by the mean and sd of its own permutations, the standardized permuted statistics of all cells
+pooled into one null sample, and the cell's standardized observed statistic ranked in it (`pooledPermutationP()`;
+variants with leave-one-out standardization, median/IQR standardization, empirical-Bayes shrunk sd, strata by
+sample count or by the density's effective sample number, and an oracle that standardizes with the moments of all
+non-held permutations).
+
+Ratio of observed to expected false-positive rate at alpha = 1e-3 / 1e-4 / 1e-5 (SCC, 49,999-permutation set; the
+exact per-cell p is 0 below its floor):
+
+| method | B = 1,999 | B = 4,999 | B = 19,999 |
+|---|---|---|---|
+| shift F, normal tail of z | 10 / 42 / 190 | - | - |
+| shift F, gamma | 4.3 / 11 / 28 | - | - |
+| shift F, pooled | 1.13 / 1.33 / 1.8 | 1.07 / 1.03 / 0.6 | 1.02 / 1.04 / 1.4 |
+| heat kernel t, normal tail of z | 1.4 / 3.2 / 8.3 | - | - |
+| heat kernel t, gamma | 1.1 / 1.8 / 2.9 | - | - |
+| heat kernel t, pooled | 1.57 / 2.6 / 4.3 | 1.09 / 1.12 / 1.23 | 1.09 / 0.83 / 0.67 |
+| 1-hop counts t, pooled | 1.01 / 1.02 / 1.12 | 1.00 / 1.04 / 1.09 | 1.00 / 1.04 / 1.06 |
+| oracle (true moments, all permutations) | 1.0 / 1.0 / 0.6-1.1 | | |
+
+(The normal and gamma rows are from the 2,000-cell, 19,999-permutation set, `tail_calibration_scc2000.csv`; the
+generalized Pareto fits were either anti-conservative by 10-100x in the far tail or collapsed to 0 and are not shown.)
+On PF with 22 samples the pooled p-values are calibrated or slightly conservative at B = 1,999 already (shift
+1.01 / 0.82 / 0.74, heat 1.08 / 0.87 / 0.58, 1-hop 0.94 / 0.81 / 0.84); the normal tail is 11 / 48 / 240 for the
+shift and the gamma 5.5 / 16 / 50.
+
+- **No per-cell parametric tail works.** The normal tail of z overstates the evidence by one to two orders of
+  magnitude at 1e-4 for the shift F (its null is right-skewed) and by 3-5x for the density t; the moment-matched gamma
+  is still 10x off for the F at 1e-4 and 2-4x for the density tests; the generalized Pareto fits are unstable with
+  the exceedance counts a routine run affords. The per-cell shape is not a parametric family: a cell's extreme values
+  arise under the few relabelings that isolate its deviant samples, so the far tail is a finite mixture of such
+  relabelings.
+- **The pooled null is the construction that works**, and standardization is enough: with the true per-cell moments
+  (oracle) the pooled null of all cells is calibrated for all three tests, even for the heat kernel whose per-cell
+  nulls range from normal to a kurtosis of 50 (the kurtosis follows the effective number of samples carrying
+  density at the cell, Spearman 0.84-0.91). Robust or shrunk standardizations and strata change little.
+- **The far tail is governed by the number of relabelings, not by cells x permutations** (`tail_diag.R`): in a
+  1,999-permutation pool of 2,000 SCC cells, 358 of the 410 values beyond the 1e-4 quantile come from 10 relabelings
+  (those that isolate a deviant sample are extreme for many cells at once), and the calibration ratio at 1e-4 swings
+  between 0.6 and 2.1 depending on which 1,999 relabelings are drawn (true moments throughout). Leave-one-out or
+  split-half standardization cannot fix this; more relabelings do: 4,999 bring every test within 1.25x down to 1e-5,
+  19,999 reproduce the oracle. PF (22 samples, a richer permutation space) is already there at 1,999.
+- The 1-hop count statistic pools best (its discreteness decorrelates cells), the heat kernel worst (smooth densities
+  make neighbouring cells extreme under the same relabelings).
+
+Implementation: `pooledPermutationP()` (matrix or kernel-histogram input, chunked histogram of the pooled
+standardized null); `p.pooled` is returned by both cluster-free maps and `p.source = "pooled"` feeds it to the
+BH-type adjustments. The exact permutation p stays the default of `p.source`; the pooled FDR stays the default
+adjustment (it uses the same pooled null for the expected exceedance count and shares its dependence on the number
+of relabelings, but at the thresholds that matter for a 5-10 % FDR the null count is large and its noise small).
+
 ## Conclusions
 
 1. **Per-cell calling: pooled permutation FDR** (`adjust.method = "perm-fdr"`, now the default of both maps). It is
@@ -196,7 +264,11 @@ lenient FDP at 100 % removal:
    calls nothing on 89k cells; BH on parametric p-values ignores the blocking and calls nothing in paired designs.
 2. **The z scale is for plotting only.** The normal tail of the permutation-standardized z is anti-conservative at
    every quantile and BH on it calls cells in practically every null relabeling; the parametric F of the
-   neighbourhood shift is not calibrated either. Per-cell p-values of the shifts come from the permutations.
+   neighbourhood shift is not calibrated either, and no per-cell parametric tail (gamma, generalized Pareto) is.
+   Per-cell p-values of the shifts come from the permutations: exact (floored at 1 / (B + 1)) or pooled over cells
+   (`p.source = "pooled"`, no floor), the latter calibrated to 1e-5 with about 5,000 permutations on 18 samples and
+   with 2,000 on 22 samples; the far tail of the pooled null is set by the number of relabelings, so more permutations
+   are the only way to sharpen it.
 3. **Per-type summaries: the group permutation test** (default of `estimateClusterFreeSummary()`). It is calibrated for
    the density and the shift maps and carries the dependence between cells exactly through the shared permutations.
    The Cauchy combination is kept as the alternative (`method = "cauchy"`): calibrated on the density maps, strongly

@@ -240,6 +240,14 @@ permutation set depends on the metadata row order for a fixed seed.
   with the BH value. The Cauchy combination of the per-cell permutation p has no floor from the group count, but it
   is calibrated only for the density maps; for the shifts it is strongly conservative (tie-dominated per-cell p near 1
   in sparse neighbourhoods), so it is no substitute there.
+- Per-cell tail approximations (tail study in the benchmark README): no parametric tail of a cell's permutation null
+  is usable (normal tail of z 10-200x anti-conservative for the shift F, moment-matched gamma 4-30x, generalized
+  Pareto unstable). `pooledPermutationP()` (per-cell standardized statistic against the pooled null of all cells) is
+  calibrated given enough relabelings: the far tail of the pooled null is formed by the few relabelings that isolate
+  deviant samples, so its accuracy below 1e-3 scales with the number of permutations (SCC, 18 samples: within 2x at
+  1e-4 with 1,999, within 1.25x to 1e-5 with 4,999; PF, 22 samples: calibrated at 1,999). The pooled FDR shares this
+  dependence in its far tail. `p.source = "pooled"` is available for the BH-type adjustments of both maps; the exact
+  permutation p remains the default.
 - 1-hop neighbourhood counts on the log scale: the count of a sample among a cell's neighbours carries a sample-level
   factor (total cells, graph connectivity) shared by every cell type; in PF (22 samples of heterogeneous size and
   site) 2 of 25 null relabelings fire under every adjustment, the permutation ones included, and 3 of 25 put most

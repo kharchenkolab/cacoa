@@ -26,9 +26,10 @@ clusterFreeExpressionShifts(
   robust = c("none", "huber", "winsor"),
   robust.k = 1.345,
   adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
-  p.source = c("permutation", "z", "parametric"),
-  z.grid = seq(0, 25, by = 0.02),
-  groups = NULL
+  p.source = c("permutation", "pooled", "z", "parametric"),
+  z.grid = seq(-6, 25, by = 0.02),
+  groups = NULL,
+  return.perm = FALSE
 )
 }
 \arguments{
@@ -70,20 +71,25 @@ clusterFreeExpressionShifts(
 floor), \code{"bh"}, \code{"spatial-fdr"}, \code{"neighbourhood"} or \code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
 
 \item{p.source}{per-cell p-values for the BH-type adjustments: \code{"permutation"} (default; calibrated but floored at
-1 / (n.permutations + 1), so with many cells and sparse signal BH may call nothing), \code{"z"} (the normal tail of the
-permutation-standardized z-score: no floor, but anti-conservative in the tail, about three times the nominal false
-discovery rate on the simulation) or \code{"parametric"} (F statistic; not calibrated for this statistic)}
+1 / (n.permutations + 1), so with many cells and sparse signal BH may call nothing), \code{"pooled"} (the cell's
+standardized z against the pooled null of all cells' permuted z-scores, see \code{\link[=pooledPermutationP]{pooledPermutationP()}}: no floor,
+calibrated with enough permutations; about 2,000 keep the far tail within a factor of 2, 10,000 make it exact),
+\code{"z"} (the normal tail of the permutation-standardized z-score: no floor, but anti-conservative in the tail by
+orders of magnitude) or \code{"parametric"} (F statistic; not calibrated for this statistic)}
 
 \item{z.grid}{thresholds of the permutation-standardized z at which the pooled null exceedance counts are
-accumulated for \code{"perm-fdr"} (default 0 to 25 in steps of 0.02)}
+accumulated for \code{"perm-fdr"} and the pooled p-values (default -6 to 25 in steps of 0.02)}
 
 \item{groups}{optional factor of cell groups (named by cell): the kernel then also accumulates the sum of the
 permuted z-scores per group, from which \code{group.test} gives the exact group-level permutation test (the mean z of
 the group's cells against its permutation distribution; one-sided) with BH across groups; the permutation
 distribution of the group means is stored as \code{attr(group.test, "perm.means")}}
+
+\item{return.perm}{return the permutations x cells matrix of the permuted statistics as \code{stats.perm} (default
+FALSE; \code{n.permutations} x cells doubles, NaN where a cell is not tested under a relabeling)}
 }
 \value{
-list: \code{stat} (shift F per cell), \code{p.value}, \code{z.score} (and \code{z.scores}), \code{z.adj}, \code{shifts} (bias-corrected shift
+list: \code{stat} (shift F per cell), \code{p.value} (exact permutation p), \code{p.pooled} (pooled-null p, no floor), \code{p.param}, \code{z.score} (and \code{z.scores}), \code{z.adj}, \code{shifts} (bias-corrected shift
 estimate), \code{shifts.smoothed}, \code{n.samples}, \code{settings}
 }
 \description{

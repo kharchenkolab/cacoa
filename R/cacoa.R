@@ -2900,8 +2900,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   `"spatial-fdr"` (Milo's spatially weighted BH), `"neighbourhood"` (a covering set of index neighbourhoods is
     #'   tested; liberal) or `"max-t"` (the maximum statistic under permutations; the former default). Benchmarks:
     #'   `misc/benchmark/README.md`
-    #' @param p.source per-cell p-values for the BH-type alternatives: `"parametric"` (t statistic of the contrast, default)
-    #'   or `"permutation"` (floored at 1 / (n.permutations + 1))
+    #' @param p.source per-cell p-values for the BH-type alternatives: `"parametric"` (t statistic of the contrast, default),
+    #'   `"permutation"` (floored at 1 / (n.permutations + 1)) or `"pooled"` (the cell's standardized statistic against
+    #'   the pooled permutation null of all cells, see [pooledPermutationP()]: no floor, calibrated with enough
+    #'   permutations); `p.pooled` is returned whenever the permuted statistics are kept
     #' @param moderate shrink the per-cell residual variances towards a common prior across cells (limma's empirical
     #'   Bayes; a moderated t with extra degrees of freedom) before the parametric p-values (default TRUE)
     #' @param transform `"none"` (default): test the densities as they are; `"log"`: test `log2` counts per 10,000 cells
@@ -2912,7 +2914,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                      formula=NULL, contrast=NULL, test=NULL, block.vars=NULL, perm.method="freedman-lane", statistic=c("t", "coef"),
                                      robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=TRUE,
                                      n.permutations=999, smooth=TRUE, adjust.method=c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
-                                     p.source=c("parametric", "permutation"), moderate=TRUE, transform=c("none", "log"), verbose=self$verbose, n.cores=self$n.cores, ...){
+                                     p.source=c("parametric", "permutation", "pooled"), moderate=TRUE, transform=c("none", "log"), verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
       statistic <- match.arg(statistic); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source); transform <- match.arg(transform)
       if (is.null(adjust)) adjust <- (type != 'subtract') # NULL can be forwarded here
@@ -2947,6 +2949,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                       return.residuals=return.residuals, return.sampled.stats=return.sampled.stats,
                                       n.cores=n.cores, verbose=verbose, moderate=moderate)
 
+      alt2 <- if (alternative == "two-sided") "two.sided" else "greater"
+      p.pooled <- if (is.null(perm.res$stats.perm)) NULL else pooledPermutationP(perm.res$stat.obs, perm.res$stats.perm, alternative = alt2)
+      if (p.source == "pooled" && is.null(p.pooled)) stop("p.source = 'pooled' needs the permutation statistics (return.sampled.stats = TRUE)")
       if(!adjust){
         score <- perm.res %>% .$z.score
         res <- list(raw=score, model=sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se,
@@ -2966,7 +2971,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else {
         # false-discovery-rate alternatives on per-cell p-values (parametric t by default: no permutation floor)
         z.in <- if (p.source == "parametric") perm.res$t else perm.res$z.score
-        p.in <- if (p.source == "parametric") perm.res$p.param else perm.res$p.perm
+        p.in <- switch(p.source, parametric = perm.res$p.param, permutation = perm.res$p.perm, pooled = p.pooled)
         nn <- NULL
         if (adjust.method != "bh") {
           cells <- names(z.in)
@@ -2980,7 +2985,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                     t = perm.res$t, p.param = perm.res$p.param, adjust.method = adjust.method, p.source = p.source)
       }
 
-      res$transform <- transform; res$p.perm <- perm.res$p.perm
+      res$transform <- transform; res$p.perm <- perm.res$p.perm; res$p.pooled <- p.pooled
       if (!is.null(self$cell.groups) && !is.null(perm.res$stats.perm)) {   # exact group-level permutation test (shared permutations)
         res$group.test <- groupPermutationTest(perm.res$stat.obs, perm.res$stats.perm, self$cell.groups, alternative = if (alternative == "two-sided") "two.sided" else "greater")
       }
@@ -3850,14 +3855,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param adjust.method multiplicity adjustment across cells: `"perm-fdr"` (default; pooled permutation FDR, see
     #'   [permutationFDR()]), `"bh"`, `"spatial-fdr"`, `"neighbourhood"` or `"max-t"`, see [adjustCellScores()]
     #' @param p.source per-cell p-values for the BH-type adjustments: `"permutation"` (default; calibrated, floored at
-    #'   1 / (n.permutations + 1)), `"z"` (normal tail of the permutation-standardized z: no floor, anti-conservative) or
-    #'   `"parametric"` (the F of the neighbourhood shift; not calibrated)
+    #'   1 / (n.permutations + 1)), `"pooled"` (pooled permutation null of all cells, see [pooledPermutationP()]: no
+    #'   floor, calibrated with enough permutations), `"z"` (normal tail of the permutation-standardized z: no floor,
+    #'   anti-conservative) or `"parametric"` (the F of the neighbourhood shift; not calibrated)
     #' @param robust `"none"` (default, option `robust`), `"huber"` or `"winsor"`: robust per-cell shift test
     estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="expression", name="cluster.free.expr.shifts",
                                                  test=NULL, formula=NULL, contrast=NULL, block.vars=NULL,
                                                  min.n.obs.per.samp=3, min.samp.per.level=2, permutation=NULL, n.permutations=NULL, seed=NULL,
                                                  dist=c("cor", "cosine", "js"), adjust=TRUE, smooth=TRUE, wins=0.025, genes=NULL, min.expr.frac=0.0,
-                                                 min.edge.weight=0.0, adjust.method=c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"), p.source=c("permutation", "z", "parametric"),
+                                                 min.edge.weight=0.0, adjust.method=c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"), p.source=c("permutation", "pooled", "z", "parametric"),
                                                  verbose=NULL, n.cores=NULL, robust=NULL, ...) {
       dist <- match.arg(dist); robust <- private$opt("robust", robust); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source)
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)

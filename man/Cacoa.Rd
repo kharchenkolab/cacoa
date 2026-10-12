@@ -3611,7 +3611,7 @@ Estimate differential cell density
   n.permutations = 999,
   smooth = TRUE,
   adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
-  p.source = c("parametric", "permutation"),
+  p.source = c("parametric", "permutation", "pooled"),
   moderate = TRUE,
   transform = c("none", "log"),
   verbose = self$verbose,
@@ -3665,8 +3665,10 @@ parametric p-values ignore permutation blocks and are conservative where few sam
 tested; liberal) or \code{"max-t"} (the maximum statistic under permutations; the former default). Benchmarks:
 \code{misc/benchmark/README.md}}
 
-\item{\code{p.source}}{per-cell p-values for the BH-type alternatives: \code{"parametric"} (t statistic of the contrast, default)
-or \code{"permutation"} (floored at 1 / (n.permutations + 1))}
+\item{\code{p.source}}{per-cell p-values for the BH-type alternatives: \code{"parametric"} (t statistic of the contrast, default),
+\code{"permutation"} (floored at 1 / (n.permutations + 1)) or \code{"pooled"} (the cell's standardized statistic against
+the pooled permutation null of all cells, see \code{\link[=pooledPermutationP]{pooledPermutationP()}}: no floor, calibrated with enough
+permutations); \code{p.pooled} is returned whenever the permuted statistics are kept}
 
 \item{\code{moderate}}{shrink the per-cell residual variances towards a common prior across cells (limma's empirical
 Bayes; a moderated t with extra degrees of freedom) before the parametric p-values (default TRUE)}
@@ -4356,7 +4358,7 @@ median smoothing over the graph.
   min.expr.frac = 0,
   min.edge.weight = 0,
   adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
-  p.source = c("permutation", "z", "parametric"),
+  p.source = c("permutation", "pooled", "z", "parametric"),
   verbose = NULL,
   n.cores = NULL,
   robust = NULL,
@@ -4409,8 +4411,9 @@ median smoothing over the graph.
 \code{\link[=permutationFDR]{permutationFDR()}}), \code{"bh"}, \code{"spatial-fdr"}, \code{"neighbourhood"} or \code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
 
 \item{\code{p.source}}{per-cell p-values for the BH-type adjustments: \code{"permutation"} (default; calibrated, floored at
-1 / (n.permutations + 1)), \code{"z"} (normal tail of the permutation-standardized z: no floor, anti-conservative) or
-\code{"parametric"} (the F of the neighbourhood shift; not calibrated)}
+1 / (n.permutations + 1)), \code{"pooled"} (pooled permutation null of all cells, see \code{\link[=pooledPermutationP]{pooledPermutationP()}}: no
+floor, calibrated with enough permutations), \code{"z"} (normal tail of the permutation-standardized z: no floor,
+anti-conservative) or \code{"parametric"} (the F of the neighbourhood shift; not calibrated)}
 
 \item{\code{verbose}}{defaults from options (permutations capped at 499)}
 

@@ -114,3 +114,29 @@ test_that("neighbourhood-count density, log transform, perm-fdr and the group su
   expect_equal(rr$adjust.method, "perm-fdr"); expect_false(is.null(rr$fdr.curve))
   expect_s3_class(cao$plotDiffCellDensity(), "ggplot")
 })
+
+test_that("pooled permutation p-values: uniform under an iid null, no per-cell floor, matrix and histogram inputs agree", {
+  set.seed(11); B <- 299; m <- 400
+  # cells with different null scales and skews: standardization per cell makes them poolable
+  scl <- runif(m, 0.5, 3); perm <- matrix(rgamma(B * m, shape = 4), B, m) * rep(scl, each = B)
+  stat <- rgamma(m, shape = 4) * scl                                   # null draws from the same distributions
+  p <- pooledPermutationP(stat, perm, alternative = "greater")
+  expect_equal(length(p), m); expect_true(all(p > 0 & p <= 1))
+  expect_gt(suppressWarnings(ks.test(p, "punif"))$p.value, 0.01)        # calibrated
+  stat2 <- stat; stat2[7] <- 60 * scl[7]                                 # an extreme cell gets a p-value far below 1 / (B + 1)
+  p2 <- pooledPermutationP(stat2, perm, alternative = "greater")
+  expect_lt(p2[7], 1 / (B * m)); expect_equal(p2[-7], p[-7])
+  # direct computation for one cell
+  z <- (stat - colMeans(perm)) / apply(perm, 2, sd); Z <- scale(perm)
+  expect_equal(unname(p[3]), (sum(Z >= z[3] - 0.005) + 1) / (length(Z) + 1), tolerance = 0.02)
+  # two-sided on signed statistics; NA cells stay NA
+  stat.na <- stat; stat.na[c(2, 9)] <- NA
+  pt <- pooledPermutationP(stat.na - 4 * scl, perm - 4 * scl, alternative = "two.sided")
+  expect_true(all(is.na(pt[c(2, 9)]))); expect_true(all(is.finite(pt[-c(2, 9)])))
+  # histogram input (standardized z, one-sided) agrees with the matrix input up to the bin resolution
+  grid <- seq(-6, 25, by = 0.02)
+  H <- t(apply(Z, 1, function(v) tabulate(findInterval(v, grid) + 1L, nbins = length(grid) + 1L)))
+  ph <- pooledPermutationP(z, list(grid = grid, hist = H), alternative = "greater")
+  expect_equal(unname(ph), unname(p), tolerance = 0.05)
+  expect_error(pooledPermutationP(z, list(grid = grid, hist = H), alternative = "two.sided"), "one-sided")
+})

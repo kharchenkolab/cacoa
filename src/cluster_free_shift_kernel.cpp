@@ -54,7 +54,7 @@ inline double shift_estimate(const arma::mat& G, const arma::mat& X, const Hat& 
 }
 
 
-struct CellResult { double F = arma::datum::nan, p = arma::datum::nan, shift = arma::datum::nan, z = arma::datum::nan; int n = 0, n_perm = 0; bool ok = false; arma::vec zp; };
+struct CellResult { double F = arma::datum::nan, p = arma::datum::nan, shift = arma::datum::nan, z = arma::datum::nan; int n = 0, n_perm = 0; bool ok = false; arma::vec zp, Fp; };
 
 struct KernelInputs {
   const arma::imat& pairs; arma::uword n; const arma::mat& X; const arma::vec& cvec; const arma::ivec& level_code; int min_samp_per_level;
@@ -186,6 +186,7 @@ static CellResult test_cell(const arma::vec& y, const KernelInputs& in) {
   out.p = (ge + 1.0) / (B_adm + 1.0);
   const arma::vec Fa = Fp(adm); const double mu = arma::mean(Fa), sdv = arma::stddev(Fa);
   if (std::isfinite(sdv) && sdv > 0) { out.z = (Fo - mu) / sdv; out.zp = (Fp - mu) / sdv; }   // NaN under the skipped permutations
+  out.Fp = std::move(Fp);
   return out;
 }
 
@@ -199,14 +200,17 @@ static CellResult test_cell(const arma::vec& y, const KernelInputs& in) {
 struct Accum {
   arma::vec stat, pval, shift, z; arma::ivec nsamp, nperm; arma::vec mx, mn; arma::imat hist; arma::vec grid;
   const arma::ivec& group; arma::mat gsum; arma::imat gcount; arma::vec gobs; arma::ivec gn; std::mutex lock;
-  Accum(arma::uword m, arma::uword B, const arma::vec& z_grid, const arma::ivec& group_in, int n_groups)
+  arma::mat perm;   // permutations x cells matrix of the permuted statistics (keep_perm only; NaN where skipped)
+  Accum(arma::uword m, arma::uword B, const arma::vec& z_grid, const arma::ivec& group_in, int n_groups, bool keep_perm = false)
     : stat(m), pval(m), shift(m), z(m), nsamp(m, arma::fill::zeros), nperm(m, arma::fill::zeros), mx(B), mn(B), grid(z_grid), group(group_in) {
     stat.fill(arma::datum::nan); pval.fill(arma::datum::nan); shift.fill(arma::datum::nan); z.fill(arma::datum::nan); mx.fill(-arma::datum::inf); mn.fill(arma::datum::inf);
     if (grid.n_elem) hist.zeros(B, grid.n_elem + 1);
-    if (n_groups > 0) { gsum.zeros(B, n_groups); gcount.zeros(B, n_groups); gobs.zeros(n_groups); gn.zeros(n_groups); } }
+    if (n_groups > 0) { gsum.zeros(B, n_groups); gcount.zeros(B, n_groups); gobs.zeros(n_groups); gn.zeros(n_groups); }
+    if (keep_perm) { perm.set_size(B, m); perm.fill(arma::datum::nan); } }
   void add(arma::uword k, const CellResult& r) {
     if (!r.ok) return;
     stat[k] = r.F; pval[k] = r.p; shift[k] = r.shift; nsamp[k] = r.n; nperm[k] = r.n_perm; z[k] = r.z;
+    if (perm.n_elem && r.Fp.n_elem == perm.n_rows) perm.col(k) = r.Fp;   // column k is written by one worker only
     if (r.zp.n_elem) {
       std::vector<arma::uword> bins;
       if (grid.n_elem) { bins.resize(r.zp.n_elem); for (arma::uword b = 0; b < r.zp.n_elem; ++b) bins[b] = std::isfinite(r.zp[b]) ? (arma::uword)(std::upper_bound(grid.begin(), grid.end(), r.zp[b]) - grid.begin()) : 0; }
@@ -226,7 +230,7 @@ struct Accum {
   Rcpp::List result() const {
     return Rcpp::List::create(Rcpp::_["stat"] = stat, Rcpp::_["p"] = pval, Rcpp::_["shift"] = shift, Rcpp::_["n"] = nsamp, Rcpp::_["n_perm"] = nperm, Rcpp::_["z"] = z,
                               Rcpp::_["max"] = mx, Rcpp::_["min"] = mn, Rcpp::_["hist"] = hist, Rcpp::_["grid"] = grid,
-                              Rcpp::_["group_sum"] = gsum, Rcpp::_["group_count"] = gcount, Rcpp::_["group_obs"] = gobs, Rcpp::_["group_n"] = gn);
+                              Rcpp::_["group_sum"] = gsum, Rcpp::_["group_count"] = gcount, Rcpp::_["group_obs"] = gobs, Rcpp::_["group_n"] = gn, Rcpp::_["perm"] = perm);
   }
 };
 
@@ -238,12 +242,12 @@ struct Accum {
 Rcpp::List cluster_free_shift_batch(const arma::mat& Y, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec,
                                     const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset,
                                     const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust = 0, double robust_k = 1.345,
-                                    Rcpp::NumericVector z_grid = Rcpp::NumericVector::create(), Rcpp::IntegerVector group = Rcpp::IntegerVector::create()) {
+                                    Rcpp::NumericVector z_grid = Rcpp::NumericVector::create(), Rcpp::IntegerVector group = Rcpp::IntegerVector::create(), bool keep_perm = false) {
   const arma::uword m_cells = Y.n_cols, n = (arma::uword)n_samples;
   if ((arma::uword)X.n_rows != n || P.n_rows != n || level_code.n_elem != n || stratum.n_elem != n || inset.n_elem != n) Rcpp::stop("dimension mismatch in cluster_free_shift_batch");
   KernelInputs in{pairs, n, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, arma::any(level_code >= 0), robust, robust_k};
   arma::ivec grp(group.begin(), group.size()); const int n_groups = grp.n_elem ? (int)grp.max() + 1 : 0;
-  Accum acc(m_cells, P.n_cols, arma::vec(z_grid.begin(), z_grid.size()), grp, n_groups);
+  Accum acc(m_cells, P.n_cols, arma::vec(z_grid.begin(), z_grid.size()), grp, n_groups, keep_perm);
   cacoa::parallelFor(0, (int)m_cells, [&](int k) { acc.add(k, test_cell(Y.col(k), in)); }, n_cores, false);
   return acc.result();
 }
@@ -256,7 +260,7 @@ Rcpp::List cluster_free_shift_stream(const Eigen::SparseMatrix<double>& cm, Rcpp
                                      const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec,
                                      const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset,
                                      const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust = 0, double robust_k = 1.345,
-                                     Rcpp::NumericVector z_grid = Rcpp::NumericVector::create(), Rcpp::IntegerVector group = Rcpp::IntegerVector::create()) {
+                                     Rcpp::NumericVector z_grid = Rcpp::NumericVector::create(), Rcpp::IntegerVector group = Rcpp::IntegerVector::create(), bool keep_perm = false) {
   const arma::uword n = (arma::uword)n_samples, m_cells = nn_ids.size(), n_pairs = pairs.n_rows;
   if ((arma::uword)X.n_rows != n || P.n_rows != n || level_code.n_elem != n || stratum.n_elem != n || inset.n_elem != n) Rcpp::stop("dimension mismatch in cluster_free_shift_stream");
   if (cm.cols() != sample_per_cell.size()) Rcpp::stop("cm must have one column per cell");
@@ -272,7 +276,7 @@ Rcpp::List cluster_free_shift_stream(const Eigen::SparseMatrix<double>& cm, Rcpp
   KernelInputs in{pairs, n, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, arma::any(level_code >= 0), robust, robust_k};
   arma::ivec grp(group.begin(), group.size()); const int n_groups = grp.n_elem ? (int)grp.max() + 1 : 0;
   if (grp.n_elem && grp.n_elem != m_cells) Rcpp::stop("group must have one entry per cell");
-  Accum acc(m_cells, P.n_cols, arma::vec(z_grid.begin(), z_grid.size()), grp, n_groups);
+  Accum acc(m_cells, P.n_cols, arma::vec(z_grid.begin(), z_grid.size()), grp, n_groups, keep_perm);
   cacoa::parallelFor(0, (int)m_cells, [&](int k) {
     const auto& ids = nn[k];
     if ((int)ids.size() < min_n_obs_per_samp) return;

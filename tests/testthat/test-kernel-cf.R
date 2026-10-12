@@ -114,3 +114,24 @@ test_that("label permutations are global relabelings: a cell is skipped where th
   }
   expect_lt(mean(pg < 0.05), 0.2); expect_gt(mean(pg), 0.3)
 })
+
+test_that("cluster-free shifts return pooled per-cell p-values and accept p.source = 'pooled'", {
+  cao <- makeToyCacoa(n.per.group = c(A = 5, B = 5), cells.per.sample = 40, n.genes = 80, shift = 1.5)
+  cg <- cao$cell.groups; idx <- split(seq_along(cg) - 1L, cg)
+  set.seed(4); nns <- lapply(seq_along(cg), function(i) sample(idx[[as.character(cg[i])]], 60)); names(nns) <- names(cg)
+  inp <- cfInputs(cao, nns)
+  r <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 49, seed = 1, adjust = TRUE, smooth = FALSE,
+                                   adjust.method = "bh", p.source = "pooled")
+  ok <- is.finite(r$z.score)
+  expect_true(all(is.finite(r$p.pooled[ok]))); expect_true(all(r$p.pooled[ok] > 0 & r$p.pooled[ok] <= 1))
+  expect_true(all(is.na(r$p.pooled[!ok])))
+  o <- order(r$z.score[ok]); expect_true(all(diff(r$p.pooled[ok][o]) <= 1e-12))    # non-increasing in z
+  expect_true(min(r$p.pooled[ok]) < 1 / 50)                                        # below the per-cell floor
+  expect_equal(r$settings$p.source, "pooled"); expect_true(all(is.finite(r$p.adj[ok])))
+  cao$embedding <- matrix(rnorm(2 * length(cg)), ncol = 2, dimnames = list(names(cg), c("x", "y")))
+  cao$estimateCellDensity(method = "kde", bins = 20, verbose = FALSE)
+  d <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 49, adjust.method = "bh", p.source = "pooled", verbose = FALSE)$diff$permutation
+  expect_equal(d$p.source, "pooled"); expect_true(all(is.finite(d$p.pooled))); expect_true(all(d$p.pooled > 0 & d$p.pooled <= 1))
+  expect_gt(cor(d$p.pooled, d$p.perm, method = "spearman"), 0.4)        # both rank the statistic against permutation nulls (p.perm is coarse at 49 permutations)
+  expect_true(min(d$p.pooled) < min(d$p.perm))                             # the pooled null resolves below the per-cell floor
+})

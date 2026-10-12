@@ -25,12 +25,12 @@ clusterFreeGeneMat <- function(count_mat, sample_per_cell, nn_ids, min_n_obs_per
     .Call(`_cacoa_clusterFreeGeneMat`, count_mat, sample_per_cell, nn_ids, min_n_obs_per_samp, gi)
 }
 
-cluster_free_shift_batch <- function(Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust = 0L, robust_k = 1.345, z_grid = as.numeric( c()), group = as.integer( c())) {
-    .Call(`_cacoa_cluster_free_shift_batch`, Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group)
+cluster_free_shift_batch <- function(Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust = 0L, robust_k = 1.345, z_grid = as.numeric( c()), group = as.integer( c()), keep_perm = FALSE) {
+    .Call(`_cacoa_cluster_free_shift_batch`, Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group, keep_perm)
 }
 
-cluster_free_shift_stream <- function(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust = 0L, robust_k = 1.345, z_grid = as.numeric( c()), group = as.integer( c())) {
-    .Call(`_cacoa_cluster_free_shift_stream`, cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group)
+cluster_free_shift_stream <- function(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust = 0L, robust_k = 1.345, z_grid = as.numeric( c()), group = as.integer( c()), keep_perm = FALSE) {
+    .Call(`_cacoa_cluster_free_shift_stream`, cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group, keep_perm)
 }
 
 estimateExpressionShiftsPairsLM <- function(cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp = 1L, dist = "cor", log_vecs = TRUE, nn_one_based = FALSE, pairs_one_based = TRUE) {

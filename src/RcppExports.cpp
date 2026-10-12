@@ -122,8 +122,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cluster_free_shift_batch
-Rcpp::List cluster_free_shift_batch(const arma::mat& Y, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec, const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset, const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust, double robust_k, Rcpp::NumericVector z_grid, Rcpp::IntegerVector group);
-RcppExport SEXP _cacoa_cluster_free_shift_batch(SEXP YSEXP, SEXP pairsSEXP, SEXP n_samplesSEXP, SEXP XSEXP, SEXP cvecSEXP, SEXP level_codeSEXP, SEXP min_samp_per_levelSEXP, SEXP stratumSEXP, SEXP insetSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP bias_correctSEXP, SEXP n_coresSEXP, SEXP robustSEXP, SEXP robust_kSEXP, SEXP z_gridSEXP, SEXP groupSEXP) {
+Rcpp::List cluster_free_shift_batch(const arma::mat& Y, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec, const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset, const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust, double robust_k, Rcpp::NumericVector z_grid, Rcpp::IntegerVector group, bool keep_perm);
+RcppExport SEXP _cacoa_cluster_free_shift_batch(SEXP YSEXP, SEXP pairsSEXP, SEXP n_samplesSEXP, SEXP XSEXP, SEXP cvecSEXP, SEXP level_codeSEXP, SEXP min_samp_per_levelSEXP, SEXP stratumSEXP, SEXP insetSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP bias_correctSEXP, SEXP n_coresSEXP, SEXP robustSEXP, SEXP robust_kSEXP, SEXP z_gridSEXP, SEXP groupSEXP, SEXP keep_permSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -144,13 +144,14 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type robust_k(robust_kSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type z_grid(z_gridSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type group(groupSEXP);
-    rcpp_result_gen = Rcpp::wrap(cluster_free_shift_batch(Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group));
+    Rcpp::traits::input_parameter< bool >::type keep_perm(keep_permSEXP);
+    rcpp_result_gen = Rcpp::wrap(cluster_free_shift_batch(Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group, keep_perm));
     return rcpp_result_gen;
 END_RCPP
 }
 // cluster_free_shift_stream
-Rcpp::List cluster_free_shift_stream(const Eigen::SparseMatrix<double>& cm, Rcpp::IntegerVector sample_per_cell, Rcpp::List nn_ids, bool nn_one_based, int min_n_obs_per_samp, std::string dist, bool log_vecs, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec, const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset, const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust, double robust_k, Rcpp::NumericVector z_grid, Rcpp::IntegerVector group);
-RcppExport SEXP _cacoa_cluster_free_shift_stream(SEXP cmSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP nn_one_basedSEXP, SEXP min_n_obs_per_sampSEXP, SEXP distSEXP, SEXP log_vecsSEXP, SEXP pairsSEXP, SEXP n_samplesSEXP, SEXP XSEXP, SEXP cvecSEXP, SEXP level_codeSEXP, SEXP min_samp_per_levelSEXP, SEXP stratumSEXP, SEXP insetSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP bias_correctSEXP, SEXP n_coresSEXP, SEXP robustSEXP, SEXP robust_kSEXP, SEXP z_gridSEXP, SEXP groupSEXP) {
+Rcpp::List cluster_free_shift_stream(const Eigen::SparseMatrix<double>& cm, Rcpp::IntegerVector sample_per_cell, Rcpp::List nn_ids, bool nn_one_based, int min_n_obs_per_samp, std::string dist, bool log_vecs, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec, const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset, const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust, double robust_k, Rcpp::NumericVector z_grid, Rcpp::IntegerVector group, bool keep_perm);
+RcppExport SEXP _cacoa_cluster_free_shift_stream(SEXP cmSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP nn_one_basedSEXP, SEXP min_n_obs_per_sampSEXP, SEXP distSEXP, SEXP log_vecsSEXP, SEXP pairsSEXP, SEXP n_samplesSEXP, SEXP XSEXP, SEXP cvecSEXP, SEXP level_codeSEXP, SEXP min_samp_per_levelSEXP, SEXP stratumSEXP, SEXP insetSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP bias_correctSEXP, SEXP n_coresSEXP, SEXP robustSEXP, SEXP robust_kSEXP, SEXP z_gridSEXP, SEXP groupSEXP, SEXP keep_permSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -177,7 +178,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type robust_k(robust_kSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type z_grid(z_gridSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type group(groupSEXP);
-    rcpp_result_gen = Rcpp::wrap(cluster_free_shift_stream(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group));
+    Rcpp::traits::input_parameter< bool >::type keep_perm(keep_permSEXP);
+    rcpp_result_gen = Rcpp::wrap(cluster_free_shift_stream(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group, keep_perm));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -483,8 +485,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_estimateClusterFreeExpressionShiftsC", (DL_FUNC) &_cacoa_estimateClusterFreeExpressionShiftsC, 16},
     {"_cacoa_mapIds", (DL_FUNC) &_cacoa_mapIds, 2},
     {"_cacoa_clusterFreeGeneMat", (DL_FUNC) &_cacoa_clusterFreeGeneMat, 5},
-    {"_cacoa_cluster_free_shift_batch", (DL_FUNC) &_cacoa_cluster_free_shift_batch, 17},
-    {"_cacoa_cluster_free_shift_stream", (DL_FUNC) &_cacoa_cluster_free_shift_stream, 23},
+    {"_cacoa_cluster_free_shift_batch", (DL_FUNC) &_cacoa_cluster_free_shift_batch, 18},
+    {"_cacoa_cluster_free_shift_stream", (DL_FUNC) &_cacoa_cluster_free_shift_stream, 24},
     {"_cacoa_estimateExpressionShiftsPairsLM", (DL_FUNC) &_cacoa_estimateExpressionShiftsPairsLM, 9},
     {"_cacoa_applyMedianFilterES", (DL_FUNC) &_cacoa_applyMedianFilterES, 4},
     {"_cacoa_adjustedZScoresMaxStat", (DL_FUNC) &_cacoa_adjustedZScoresMaxStat, 8},

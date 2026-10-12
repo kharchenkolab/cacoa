@@ -150,6 +150,62 @@ permutationFDR <- function(stat, perm, alternative = c("two.sided", "greater"), 
   list(q = q, curve = data.frame(threshold = grid, n.observed = n.obs, n.null = n.null, fdr = fdr))
 }
 
+#' Per-cell p-values from the pooled null of the permutation-standardized statistics
+#'
+#' Every cell's statistic is standardized by the mean and standard deviation of its own permutation distribution,
+#' and the standardized permuted statistics of all cells are pooled into one null sample, against which each cell's
+#' standardized observed statistic is ranked. The resolution is set by the pooled count (cells x permutations) rather
+#' than by `1 / (B + 1)`, so the p-values have no per-cell floor. No parametric form is assumed: the normal tail of the
+#' standardized statistic and moment-matched gamma tails were both found to be anti-conservative by orders of magnitude
+#' in the far tail (`misc/benchmark/README.md`), whereas the pooled null is calibrated as long as the permutations
+#' sample the extreme relabelings well. The far tail of the pooled null is formed by few relabelings (those that
+#' isolate a deviant sample are extreme for many cells at once), so its accuracy below about p = 1e-3 is governed by
+#' the number of permutations, not by the number of cells: about 2,000 permutations keep the false-positive rate within
+#' a factor of about 2 of the nominal level down to 1e-4, and 10,000 or more make it exact there.
+#'
+#' @param stat observed per-cell statistics (`NA` for untested cells); with a histogram `perm` these must be the
+#'   per-cell standardized z-scores themselves
+#' @param perm either a permutations x cells matrix of the permuted statistics (`NA` allowed; standardized here per
+#'   column), or the kernel histogram list (`grid`, `hist`) of already standardized z-scores as returned by the
+#'   cluster-free shift kernel (see [permutationFDR()])
+#' @param alternative `"two.sided"` (ranks `abs(z)`) or `"greater"`; a histogram input is one-sided
+#' @param resolution bin width of the pooled standardized null when `perm` is a matrix (default 0.005; a cell's
+#'   p-value counts the pooled values at or above the lower edge of its bin)
+#' @return named numeric vector of p-values
+#' @export
+pooledPermutationP <- function(stat, perm, alternative = c("two.sided", "greater"), resolution = 0.005) {
+  alternative <- match.arg(alternative)
+  p <- rep(NA_real_, length(stat)); names(p) <- names(stat)
+  if (is.list(perm)) {
+    if (alternative != "greater") stop("histogram input is one-sided; use alternative = 'greater'")
+    grid <- as.numeric(perm$grid); H <- perm$hist
+    if (ncol(H) != length(grid) + 1L) stop("perm$hist must have length(perm$grid) + 1 columns")
+    counts <- colSums(H); z <- as.numeric(stat)
+  } else {
+    if (ncol(perm) != length(stat)) stop("perm must have one column per cell")
+    n <- colSums(is.finite(perm)); mu <- colMeans(perm, na.rm = TRUE)
+    v <- (colSums(perm^2, na.rm = TRUE) - n * mu^2) / pmax(n - 1, 1); sdv <- sqrt(pmax(v, 0)); sdv[n < 3 | sdv <= 0] <- NA_real_
+    z <- (as.numeric(stat) - mu) / sdv
+    if (alternative == "two.sided") z <- abs(z)
+    zf <- z[is.finite(z)]; lo <- if (length(zf)) min(zf) else 0; hi <- if (length(zf)) max(zf) else 0
+    grid <- seq(floor(min(lo, -1) / resolution) * resolution, max(hi, 1) + resolution, by = resolution)
+    counts <- numeric(length(grid) + 1L)
+    for (cols in split(seq_len(ncol(perm)), ceiling(seq_len(ncol(perm)) / 2000))) {   # chunked histogram of the pooled z
+      Z <- sweep(sweep(perm[, cols, drop = FALSE], 2, mu[cols]), 2, sdv[cols], "/")
+      if (alternative == "two.sided") Z <- abs(Z)
+      Z <- Z[is.finite(Z)]
+      counts <- counts + tabulate(findInterval(Z, grid) + 1L, nbins = length(grid) + 1L)
+    }
+  }
+  N <- sum(counts)
+  if (N == 0) return(p)
+  cum <- rev(cumsum(rev(counts)))                       # cum[j]: pooled values in bins j..end (bin 1: below grid[1])
+  ok <- is.finite(z)
+  k <- findInterval(z[ok], grid) + 1L                   # the bin holding the cell's z
+  p[ok] <- (cum[k] + 1) / (N + 1)
+  p
+}
+
 #' Cauchy combination of dependent p-values (Liu & Xie 2020)
 #'
 #' The weighted mean of `tan((0.5 - p) * pi)` is standard Cauchy under the global null for any dependence between the

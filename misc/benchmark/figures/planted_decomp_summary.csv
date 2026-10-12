@@ -1,4 +1,133 @@
 "dataset","method","frac","recall","fdp.down","fdp.down2","other.up"
+"ms","1-hop log: fdr.tb",0.5,0,NA,NA,0
+"ms","1-hop log: fdr.tb",0.8,0.000949683151571978,0.00373134328358209,0.00373134328358209,3.19275627456427e-06
+"ms","1-hop log: fdr.tb",1,0.223412332597127,0.00343476276775764,0.0025575697853015,0.00182293360075237
+"ms","1-hop log: fdr.tbscale",0.5,0,NA,NA,0
+"ms","1-hop log: fdr.tbscale",0.8,0.00804757581352359,0.00248756218905473,0.00248756218905473,6.39268459616987e-06
+"ms","1-hop log: fdr.tbscale",1,0.2331112249938,0.00377682735679229,0.00325517894781994,0.00226526214163667
+"ms","1-hop log: perm.fdr",0.5,0,NA,NA,0
+"ms","1-hop log: perm.fdr",0.8,0.000948210601222811,0,0,3.19275627456427e-06
+"ms","1-hop log: perm.fdr",1,0.22977681082422,0.00345415015464059,0.00293250174566824,0.00163370985208255
+"ms","Milo (graph, spatial FDR)",0.5,0.0413224446502384,0.0295792470737108,0.0200885795634293,3.02947680935502e-05
+"ms","Milo (graph, spatial FDR)",0.8,0.463513246095819,0.0387675652075877,0.0273390192558107,0.015185014256491
+"ms","Milo (graph, spatial FDR)",1,0.88908373731603,0.130985624473858,0.0918066694052303,0.032821727857273
+"ms","decomp: 1-hop + edgeR QL: bh",0.5,0.000705338161133453,0.513363363363363,0.441541541541542,0.000121427226908628
+"ms","decomp: 1-hop + edgeR QL: bh",0.8,0.0801599746390013,0.316240909874711,0.222332610394081,0.0029343334463127
+"ms","decomp: 1-hop + edgeR QL: bh",1,0.622982882516632,0.206082191081674,0.168697889976233,0.0065197872002434
+"ms","decomp: 1-hop + edgeR QL: spatial-fdr",0.5,0.039460163649967,0.526026550336342,0.423826648831693,0.0142261524743231
+"ms","decomp: 1-hop + edgeR QL: spatial-fdr",0.8,0.305686545332584,0.416040008563772,0.344705737738545,0.0157278129647822
+"ms","decomp: 1-hop + edgeR QL: spatial-fdr",1,0.757242211814714,0.344756877393503,0.293368707805562,0.0168447373806347
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd",0.5,0.000438076357970895,0,0,2.25475511748885e-05
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd",0.8,0.0994775771026696,0.0240700338110001,0.0205096544851926,0.00110089342399595
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd",1,0.44394178082612,0.0362808781276593,0.0273801097627224,0.00584145265959842
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd + inheritance",0.5,0.0695343561569216,0,0,0.00199062666086873
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd + inheritance",0.8,0.734390351207255,0.0782453739119312,0.0557291660568926,0.0555612568182845
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd + inheritance",1,0.96145053842341,0.185545116772426,0.12207640390611,0.1820841596389
+"ms","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr",0.5,5.00726052776526e-05,0,0,0
+"ms","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr",0.8,0.0762034147329338,0.0175333003435464,0.0171955766015674,0.000361727793831334
+"ms","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr",1,0.394369223598605,0.0208060321426996,0.0164122868613512,0.00341950988526132
+"ms","decomp: 1-hop + voom-weighted perm: fdr.sd",0.5,0.000830206235364304,0.0119047619047619,0.0119047619047619,3.22107873926978e-05
+"ms","decomp: 1-hop + voom-weighted perm: fdr.sd",0.8,0.116497682076216,0.0549092311571293,0.0462673935202232,0.00108947933617703
+"ms","decomp: 1-hop + voom-weighted perm: fdr.sd",1,0.524985113139719,0.0643016859271465,0.0493843032186893,0.00405372077006061
+"ms","decomp: 1-hop + voom-weighted perm: perm.fdr",0.5,0.00029144359248499,0,0,3.22107873926978e-06
+"ms","decomp: 1-hop + voom-weighted perm: perm.fdr",0.8,0.0936365732200841,0.0145294969413626,0.0142630434374991,0.000279929906809497
+"ms","decomp: 1-hop + voom-weighted perm: perm.fdr",1,0.463823029643283,0.031108826707116,0.0227425043881821,0.0023645347396654
+"ms","decomp: 1-hop + voom: bh",0.5,0,NA,NA,0
+"ms","decomp: 1-hop + voom: bh",0.8,0.0199980309012221,0.0223112397069312,0.0211432510608255,0.000265116819356797
+"ms","decomp: 1-hop + voom: bh",1,0.48129365278227,0.0272549346810778,0.0216264675534636,0.00166635101040142
+"ms","decomp: 2-hop + voom-weighted perm: fdr.sd",0.5,0.00025286484374102,0,0,0
+"ms","decomp: 2-hop + voom-weighted perm: fdr.sd",0.8,0.751069646757214,0.00231690447127442,0.00153698616659866,0.017190653095301
+"ms","decomp: 2-hop + voom-weighted perm: fdr.sd",1,0.895445841871696,0.00430364132704193,0.00209588107401537,0.0149305528517984
+"ms","decomp: 2-hop + voom-weighted perm: perm.fdr",0.5,1.14938565336827e-05,0,0,0
+"ms","decomp: 2-hop + voom-weighted perm: perm.fdr",0.8,0.766310007003125,0.00246875384250601,0.00160170906281204,0.0134903412474534
+"ms","decomp: 2-hop + voom-weighted perm: perm.fdr",1,0.89174307453919,0.0044900873233642,0.00214556085537244,0.0119411178142436
+"ms","decomp: 2-hop + voom: bh",0.5,0,NA,NA,0
+"ms","decomp: 2-hop + voom: bh",0.8,0.712810823835372,0.00046681185469529,0.000272153560113459,0.00773670993640563
+"ms","decomp: 2-hop + voom: bh",1,0.87447851271841,0.00115303528973765,0.000482311634518499,0.00622352779360103
+"ms","decomp: Milo (edgeR QL + spatial FDR)",0.5,0.0413224446502384,0.0295792470737108,0.0200885795634293,3.02947680935502e-05
+"ms","decomp: Milo (edgeR QL + spatial FDR)",0.8,0.463513246095819,0.0387675652075877,0.0273390192558107,0.015185014256491
+"ms","decomp: Milo (edgeR QL + spatial FDR)",1,0.88908373731603,0.130985624473858,0.0918066694052303,0.032821727857273
+"ms","decomp: heat + inheritance: perm.fdr",0.5,0,NA,NA,0
+"ms","decomp: heat + inheritance: perm.fdr",0.8,0.216837952502515,0.00515126900517768,0.000896252036936448,0.0312903454914795
+"ms","decomp: heat + inheritance: perm.fdr",1,0.855754697662702,0.021925498097062,0.000136135244177124,0.0727035403308415
+"ms","decomp: kNN nhoods + cacoa perm: bh.perm",0.5,0.095506283521137,0.00226884737190412,0,0
+"ms","decomp: kNN nhoods + cacoa perm: bh.perm",0.8,0.507645618502827,0.0476647685849296,0.0141295030564034,0
+"ms","decomp: kNN nhoods + cacoa perm: bh.perm",1,0.867914762529425,0.0646266163208343,0.0315943216244399,0.00596617437928487
+"ms","decomp: kNN nhoods + cacoa perm: bh.pooled",0.5,0.395737179434266,0.0226176304309885,0.0205795816403453,0.000238447054363576
+"ms","decomp: kNN nhoods + cacoa perm: bh.pooled",0.8,0.457803463714968,0.0622298768079123,0.0333585282331742,0.000521036022046881
+"ms","decomp: kNN nhoods + cacoa perm: bh.pooled",1,0.855817000869466,0.0649314032003988,0.0390718607091058,0.00986734669010711
+"ms","decomp: kNN nhoods + cacoa perm: fdr.sd",0.5,0.395156365213773,0.0225932501451909,0.0208439652590596,0.000238447054363576
+"ms","decomp: kNN nhoods + cacoa perm: fdr.sd",0.8,0.44934497103334,0.0404035762226965,0.0334949795896169,0.000441919191919192
+"ms","decomp: kNN nhoods + cacoa perm: fdr.sd",1,0.854618268328617,0.0649721767771518,0.0391008421796284,0.00986734669010711
+"ms","decomp: kNN nhoods + cacoa perm: perm.fdr",0.5,0.393604568723895,0.0229210960500335,0.0210758585804391,0.000238447054363576
+"ms","decomp: kNN nhoods + cacoa perm: perm.fdr",0.8,0.446363202751841,0.0376072699982061,0.0329229043305567,0.000259170653907496
+"ms","decomp: kNN nhoods + cacoa perm: perm.fdr",1,0.858867063518981,0.059785755197549,0.0375401766600999,0.00920889651831125
+"ms","decomp: kNN nhoods + edgeR QL (libsize): bh",0.5,0.00294608045933782,0,0,0
+"ms","decomp: kNN nhoods + edgeR QL (libsize): bh",0.8,0.534481710894508,0.0121881430046691,0.00890088301790562,0.00115987622445004
+"ms","decomp: kNN nhoods + edgeR QL (libsize): bh",1,0.889147144150631,0.0581298996873976,0.0416334335833868,0.0231086547000204
+"ms","decomp: kNN nhoods + edgeR QL: bh",0.5,0.00551606554088784,0,0,0
+"ms","decomp: kNN nhoods + edgeR QL: bh",0.8,0.531024881279133,0.0143052137826345,0.0104478106949319,0.000993741189893951
+"ms","decomp: kNN nhoods + edgeR QL: bh",1,0.883277564833285,0.0675973510076736,0.0477404892796051,0.00693043623315102
+"ms","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr",0.5,0.0921935720324926,0,0,0
+"ms","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr",0.8,0.631857435088095,0.0022517760192213,0.00151984923095629,0.00506307682762893
+"ms","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr",1,0.896584160044714,0.0388445381987423,0.0107963935859154,0.0290819527386961
+"ms","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr",0.5,0.347673488184276,3.81300999008617e-05,0,0.000305499323537212
+"ms","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr",0.8,0.643648677710568,0.0137884089287346,0.0102035523921994,0.00263816640032805
+"ms","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr",1,0.909876090056308,0.070688476697336,0.0329376255259178,0.0061725275778475
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd",0.5,0.485178572439432,0.126269129856676,0.0821512531318111,0.035492350405031
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd",0.8,0.694593201296103,0.192710728308181,0.139295795227182,0.0673794144378102
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd",1,0.922701142213,0.218057736568111,0.150721518904162,0.119294929238233
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr",0.5,0.192201262351423,4.50207095263821e-05,0,0.00239761175810139
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr",0.8,0.653007512616178,0.023433254461359,0.0220590046512785,0.0196727191154266
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr",1,0.912752450117649,0.105293991727328,0.0706697847031115,0.06469039935228
+"ms","decomp: kNN nhoods + voom-weighted perm: fdr.sd",0.5,0.462690547621241,0.139016363037773,0.0792585991903911,0.0397111294730413
+"ms","decomp: kNN nhoods + voom-weighted perm: fdr.sd",0.8,0.701733098170002,0.182911002056535,0.115096733321422,0.058232413783767
+"ms","decomp: kNN nhoods + voom-weighted perm: fdr.sd",1,0.930953673180316,0.243821804355888,0.160901869188839,0.0679425744637289
+"ms","decomp: kNN nhoods + voom-weighted perm: perm.fdr",0.5,0.271096848697529,0.00043624307464119,0,0.000429713334206189
+"ms","decomp: kNN nhoods + voom-weighted perm: perm.fdr",0.8,0.621460985238636,0.0188955688854412,0.0152939613834005,0.0103500629072627
+"ms","decomp: kNN nhoods + voom-weighted perm: perm.fdr",1,0.920895475032205,0.0895848216533539,0.0484484961569784,0.0235189601681944
+"ms","decomp: kNN nhoods + voom: bh",0.5,0,NA,NA,0
+"ms","decomp: kNN nhoods + voom: bh",0.8,0.557554354331797,0.0120920580667142,0.0101606839166613,0.00317682692901188
+"ms","decomp: kNN nhoods + voom: bh",1,0.909895152385209,0.0911746963517682,0.0662687404944598,0.0149668045177808
+"ms","heat: perm.fdr",0.5,0,NA,NA,0
+"ms","heat: perm.fdr",0.8,0.103738738194343,6.59804697809448e-05,0,0.0101913210606914
+"ms","heat: perm.fdr",1,0.540944104457405,0.000105108633897288,0,0.0246311906244425
+"ms","weighted: 1-hop + unweighted perm: perm.fdr",0.5,0,NA,NA,0
+"ms","weighted: 1-hop + unweighted perm: perm.fdr",0.8,0.0690660966384613,0.0037759308098834,0.0037759308098834,0.000121632682366443
+"ms","weighted: 1-hop + unweighted perm: perm.fdr",1,0.353239588158866,0.00780818070320138,0.005878013772293,0.00141618390953869
+"ms","weighted: 1-hop + unweighted perm: perm.fdr + inheritance",0.5,0,NA,NA,0
+"ms","weighted: 1-hop + unweighted perm: perm.fdr + inheritance",0.8,0.601563397647795,0.0272423353453237,0.0169436148109876,0.00587605351071181
+"ms","weighted: 1-hop + unweighted perm: perm.fdr + inheritance",1,0.942694921841142,0.0887284737573204,0.0515992550285248,0.0676160152426093
+"ms","weighted: 1-hop + weighted perm: fdr.sd",0.5,0.00142652789933101,0.0138095238095238,0.0138095238095238,7.63050707363187e-05
+"ms","weighted: 1-hop + weighted perm: fdr.sd",0.8,0.103439881643816,0.0311174682315556,0.027285283964538,0.00126315922744082
+"ms","weighted: 1-hop + weighted perm: fdr.sd",1,0.452727994188219,0.0386480841267797,0.0295828455568343,0.00624011315068042
+"ms","weighted: 1-hop + weighted perm: fdr.sd + inheritance",0.5,0.136092839728415,0.00952888656589414,0.00675044597711598,0.00657754046265058
+"ms","weighted: 1-hop + weighted perm: fdr.sd + inheritance",0.8,0.737624894068256,0.0999187390073897,0.0752735822523593,0.0630634095225792
+"ms","weighted: 1-hop + weighted perm: fdr.sd + inheritance",1,0.963491606359144,0.190414595345384,0.12536962950308,0.191544737903007
+"ms","weighted: 1-hop + weighted perm: perm.fdr",0.5,5.00726052776526e-05,0,0,0
+"ms","weighted: 1-hop + weighted perm: perm.fdr",0.8,0.0750845925963452,0.0142436696764648,0.0139059459344857,0.000322998625372511
+"ms","weighted: 1-hop + weighted perm: perm.fdr",1,0.395739546048893,0.020817557437774,0.01640483663497,0.00351982087266628
+"ms","weighted: 1-hop + weighted perm: perm.fdr + inheritance",0.5,0.00826197987081268,0,0,0
+"ms","weighted: 1-hop + weighted perm: perm.fdr + inheritance",0.8,0.622552195656681,0.0484962320448173,0.0336070085015349,0.0208500695858553
+"ms","weighted: 1-hop + weighted perm: perm.fdr + inheritance",1,0.950252448593311,0.15548504672091,0.112609927617034,0.126543929034727
+"ms","weighted: heat + unweighted perm: perm.fdr",0.5,0,NA,NA,0
+"ms","weighted: heat + unweighted perm: perm.fdr",0.8,0.103738738194343,6.59804697809448e-05,0,0.0101913210606914
+"ms","weighted: heat + unweighted perm: perm.fdr",1,0.540944104457405,0.000105108633897288,0,0.0246311906244425
+"ms","weighted: heat + unweighted perm: perm.fdr + inheritance",0.5,0,NA,NA,0
+"ms","weighted: heat + unweighted perm: perm.fdr + inheritance",0.8,0.216837952502515,0.00515126900517768,0.000896252036936448,0.0312903454914795
+"ms","weighted: heat + unweighted perm: perm.fdr + inheritance",1,0.855754697662702,0.021925498097062,0.000136135244177124,0.0727035403308415
+"ms","weighted: heat + weighted perm: fdr.sd",0.5,0.00118940225924831,0.314174711490443,0.235684262610349,0.0034627993183455
+"ms","weighted: heat + weighted perm: fdr.sd",0.8,0.323515338141361,0.175070415214279,0.142807352425938,0.00843075363790536
+"ms","weighted: heat + weighted perm: fdr.sd",1,0.749149724542749,0.0744660264025783,0.0637326586336271,0.0162604437512553
+"ms","weighted: heat + weighted perm: fdr.sd + inheritance",0.5,0.0157383433233459,0.323634759602653,0.223568417909842,0.0215114804284158
+"ms","weighted: heat + weighted perm: fdr.sd + inheritance",0.8,0.585045553805088,0.225436701341427,0.171185357040712,0.0606132007505247
+"ms","weighted: heat + weighted perm: fdr.sd + inheritance",1,0.978853678930725,0.178798346384617,0.122494937185256,0.107487187339706
+"ms","weighted: heat + weighted perm: perm.fdr",0.5,0,NA,NA,0
+"ms","weighted: heat + weighted perm: perm.fdr",0.8,0,NA,NA,0
+"ms","weighted: heat + weighted perm: perm.fdr",1,0.415602919755423,0,0,0.00010190868710806
+"ms","weighted: heat + weighted perm: perm.fdr + inheritance",0.5,0,NA,NA,0
+"ms","weighted: heat + weighted perm: perm.fdr + inheritance",0.8,0,NA,NA,0
+"ms","weighted: heat + weighted perm: perm.fdr + inheritance",1,0.741070039404581,0.0122421381850544,0,0.00253817074076012
 "pf","1-hop log: fdr.tb",0.5,0,NA,NA,0
 "pf","1-hop log: fdr.tb",0.8,2.75163722414837e-05,0,0,0
 "pf","1-hop log: fdr.tb",1,0.100950084285721,0.00358810163661623,0.00234273186850917,0.000154906939063553
@@ -92,6 +221,42 @@
 "pf","heat: perm.fdr",0.5,0,NA,NA,0
 "pf","heat: perm.fdr",0.8,0.0662954667567997,0,0,1.34453600734654e-06
 "pf","heat: perm.fdr",1,0.249561970118811,8.51643672287515e-05,8.51643672287515e-05,2.49010181877791e-05
+"pf","weighted: 1-hop + unweighted perm: perm.fdr",0.5,0,NA,NA,0
+"pf","weighted: 1-hop + unweighted perm: perm.fdr",0.8,0.021022416045468,0.0204373571983491,0.012647387998669,7.05225037165318e-05
+"pf","weighted: 1-hop + unweighted perm: perm.fdr",1,0.149438671336471,0.027389136789027,0.0239734234321549,0.000392381247904766
+"pf","weighted: 1-hop + unweighted perm: perm.fdr + inheritance",0.5,0,NA,NA,0
+"pf","weighted: 1-hop + unweighted perm: perm.fdr + inheritance",0.8,0.288623601167502,0.0971887420453981,0.0534622243314623,0.00494508850004823
+"pf","weighted: 1-hop + unweighted perm: perm.fdr + inheritance",1,0.513706093631063,0.219266255836116,0.177363089393965,0.0238827116964737
+"pf","weighted: 1-hop + weighted perm: fdr.sd",0.5,0,0,0,4.16323207126071e-06
+"pf","weighted: 1-hop + weighted perm: fdr.sd",0.8,0.0336128014881802,0.0820666080278544,0.0659567913269046,0.000640304915803992
+"pf","weighted: 1-hop + weighted perm: fdr.sd",1,0.240451596836683,0.131081652323102,0.0987034828574859,0.00278796600163263
+"pf","weighted: 1-hop + weighted perm: fdr.sd + inheritance",0.5,0,0,0,0.000249793924275642
+"pf","weighted: 1-hop + weighted perm: fdr.sd + inheritance",0.8,0.378731893910422,0.184443140902422,0.145727684198075,0.0318234509249669
+"pf","weighted: 1-hop + weighted perm: fdr.sd + inheritance",1,0.615037449615983,0.316241165425963,0.250460548687315,0.098454915757738
+"pf","weighted: 1-hop + weighted perm: perm.fdr",0.5,0,NA,NA,0
+"pf","weighted: 1-hop + weighted perm: perm.fdr",0.8,0.0258207466547856,0.0570735820134715,0.0432851494176255,0.0001661839154879
+"pf","weighted: 1-hop + weighted perm: perm.fdr",1,0.185661780715789,0.0531267896053775,0.0458323071230014,0.00109713441520841
+"pf","weighted: 1-hop + weighted perm: perm.fdr + inheritance",0.5,0,NA,NA,0
+"pf","weighted: 1-hop + weighted perm: perm.fdr + inheritance",0.8,0.311873686642318,0.18610186282536,0.126581435460736,0.0114224144057798
+"pf","weighted: 1-hop + weighted perm: perm.fdr + inheritance",1,0.537443488598174,0.287634188702402,0.243913461140342,0.0550804662800291
+"pf","weighted: heat + unweighted perm: perm.fdr",0.5,0,NA,NA,0
+"pf","weighted: heat + unweighted perm: perm.fdr",0.8,0.0662954667567997,0,0,1.34453600734654e-06
+"pf","weighted: heat + unweighted perm: perm.fdr",1,0.249561970118811,8.51643672287515e-05,8.51643672287515e-05,2.49010181877791e-05
+"pf","weighted: heat + unweighted perm: perm.fdr + inheritance",0.5,0,NA,NA,0
+"pf","weighted: heat + unweighted perm: perm.fdr + inheritance",0.8,0.166547572176377,0.0038323271682448,0,9.41175205142581e-05
+"pf","weighted: heat + unweighted perm: perm.fdr + inheritance",1,0.535626656699787,0.00578188218519571,0.000581364621320226,0.0013165438100469
+"pf","weighted: heat + weighted perm: fdr.sd",0.5,0.0561025572706368,0.407454474242616,0.388120320333398,0.0511228070251172
+"pf","weighted: heat + weighted perm: fdr.sd",0.8,0.314236664256946,0.349406407566205,0.333250316959864,0.0543576669739819
+"pf","weighted: heat + weighted perm: fdr.sd",1,0.58644165318181,0.323416475913297,0.308873222651389,0.0564265381796008
+"pf","weighted: heat + weighted perm: fdr.sd + inheritance",0.5,0.244714736865009,0.400675479776749,0.353935626078027,0.193326195522877
+"pf","weighted: heat + weighted perm: fdr.sd + inheritance",0.8,0.706770080095318,0.362913463791297,0.322136922602918,0.212939735042034
+"pf","weighted: heat + weighted perm: fdr.sd + inheritance",1,0.842392243363001,0.356442615933678,0.32152708673648,0.222224974317967
+"pf","weighted: heat + weighted perm: perm.fdr",0.5,0,NA,NA,0
+"pf","weighted: heat + weighted perm: perm.fdr",0.8,0,NA,NA,0
+"pf","weighted: heat + weighted perm: perm.fdr",1,0.289333130365129,0.00175091879897372,0.00175091879897372,0
+"pf","weighted: heat + weighted perm: perm.fdr + inheritance",0.5,0,NA,NA,0
+"pf","weighted: heat + weighted perm: perm.fdr + inheritance",0.8,0,NA,NA,0
+"pf","weighted: heat + weighted perm: perm.fdr + inheritance",1,0.570483619868285,0.0223044239592097,0.0120500396824959,0
 "scc","1-hop log: fdr.tb",0.5,0,NA,NA,0
 "scc","1-hop log: fdr.tb",0.8,0,NA,NA,0
 "scc","1-hop log: fdr.tb",1,0.0360012868615821,0.00142450142450142,0,0.000441951086121344
@@ -185,3 +350,39 @@
 "scc","heat: perm.fdr",0.5,0,NA,NA,0
 "scc","heat: perm.fdr",0.8,0.064809586548717,0,0,0
 "scc","heat: perm.fdr",1,0.139103624271686,0,0,0.0137420131587515
+"scc","weighted: 1-hop + unweighted perm: perm.fdr",0.5,0,NA,NA,0
+"scc","weighted: 1-hop + unweighted perm: perm.fdr",0.8,0,NA,NA,0
+"scc","weighted: 1-hop + unweighted perm: perm.fdr",1,0.0503630102214448,0.0011037527593819,0,0.000344731998780702
+"scc","weighted: 1-hop + unweighted perm: perm.fdr + inheritance",0.5,0,NA,NA,0
+"scc","weighted: 1-hop + unweighted perm: perm.fdr + inheritance",0.8,0,NA,NA,0
+"scc","weighted: 1-hop + unweighted perm: perm.fdr + inheritance",1,0.254444499963117,0.019490453975328,0.00167294019238812,0.012145853110951
+"scc","weighted: 1-hop + weighted perm: fdr.sd",0.5,0,NA,NA,0
+"scc","weighted: 1-hop + weighted perm: fdr.sd",0.8,0,NA,NA,0
+"scc","weighted: 1-hop + weighted perm: fdr.sd",1,0.106090900522512,0.00690515144968688,0.000750750750750751,0.0020159227809651
+"scc","weighted: 1-hop + weighted perm: fdr.sd + inheritance",0.5,0,NA,NA,0
+"scc","weighted: 1-hop + weighted perm: fdr.sd + inheritance",0.8,0,NA,NA,0
+"scc","weighted: 1-hop + weighted perm: fdr.sd + inheritance",1,0.533248760015751,0.042879058627108,0.00547471099234793,0.044694169643
+"scc","weighted: 1-hop + weighted perm: perm.fdr",0.5,0,NA,NA,0
+"scc","weighted: 1-hop + weighted perm: perm.fdr",0.8,0,NA,NA,0
+"scc","weighted: 1-hop + weighted perm: perm.fdr",1,0.0806485845299122,0.0115804749815047,0,0.000824111669048628
+"scc","weighted: 1-hop + weighted perm: perm.fdr + inheritance",0.5,0,NA,NA,0
+"scc","weighted: 1-hop + weighted perm: perm.fdr + inheritance",0.8,0,NA,NA,0
+"scc","weighted: 1-hop + weighted perm: perm.fdr + inheritance",1,0.451666369052945,0.0408536805410555,0.00754658968446939,0.0257661606447641
+"scc","weighted: heat + unweighted perm: perm.fdr",0.5,0,NA,NA,0
+"scc","weighted: heat + unweighted perm: perm.fdr",0.8,0.0559633603111864,0,0,0
+"scc","weighted: heat + unweighted perm: perm.fdr",1,0.171407814169497,0.000750976269149895,0,0.0255461181645175
+"scc","weighted: heat + unweighted perm: perm.fdr + inheritance",0.5,0,NA,NA,0
+"scc","weighted: heat + unweighted perm: perm.fdr + inheritance",0.8,0.098375054896794,0.00826044703595724,0,0
+"scc","weighted: heat + unweighted perm: perm.fdr + inheritance",1,0.303132211538572,0.0165512804130738,0.000102701037280477,0.0671266098120305
+"scc","weighted: heat + weighted perm: fdr.sd",0.5,0.00183136106127073,0.1708812733719,0.125453504735548,0.00482586163399113
+"scc","weighted: heat + weighted perm: fdr.sd",0.8,0.070297528935868,0.142745720808097,0.114922317696732,0.0206034635320998
+"scc","weighted: heat + weighted perm: fdr.sd",1,0.211186535160479,0.110633409880855,0.0944453130907368,0.0241548595648772
+"scc","weighted: heat + weighted perm: fdr.sd + inheritance",0.5,0.0149395493611007,0.190324927077767,0.0844736799402384,0.0269517106184438
+"scc","weighted: heat + weighted perm: fdr.sd + inheritance",0.8,0.167377139886835,0.176465796906328,0.0870253043636595,0.0705898247211358
+"scc","weighted: heat + weighted perm: fdr.sd + inheritance",1,0.538398053659535,0.160897047746473,0.0882333133226064,0.0787363429602213
+"scc","weighted: heat + weighted perm: perm.fdr",0.5,0,NA,NA,0
+"scc","weighted: heat + weighted perm: perm.fdr",0.8,0,NA,NA,0
+"scc","weighted: heat + weighted perm: perm.fdr",1,0.0160245080711677,0,0,0
+"scc","weighted: heat + weighted perm: perm.fdr + inheritance",0.5,0,NA,NA,0
+"scc","weighted: heat + weighted perm: perm.fdr + inheritance",0.8,0,NA,NA,0
+"scc","weighted: heat + weighted perm: perm.fdr + inheritance",1,0.066336750324025,0.104422604422604,0,0

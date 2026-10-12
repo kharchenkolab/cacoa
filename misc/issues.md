@@ -278,6 +278,15 @@ permutation set depends on the metadata row order for a fixed seed.
   a kNN neighbourhood-count density with a target size and a label-free k diagnostic (cells per sample, purity,
   minimum detectable fold change); the Cauchy of the pooled p is anti-conservative for the shifts at the group level
   (7.7 % at 5 %), keep the group permutation test as the default summary.
+- (2026-10-12, steps 1-4 of the benchmark plan, README "Recall at matched realized error") Compared at the same
+  realized false-call rate, Milo has no advantage over cacoa's default on SCC and MS and a small one on PF; its
+  nominal recall is bought with 0.2-0.5 false calls. Neighbourhood inheritance (min q over a cell and its graph
+  neighbours) is the one change that helps everywhere (+18-75 % recall) and is calibrated on 45 relabelings;
+  precision weights help count units only, a kernel weighting is neutral or harmful; the kNN unit buys little over
+  the kernel with inheritance. The kNN unit's far-away calls on PF are chance arm imbalances of single types (AT2,
+  fibroblasts 3-4x), not a site effect, not a normalization artefact. TO DO in the package: an `inherit` option for
+  the density map; weights for the neighbourhood-count route; per-cell pooled p of a weighted statistic needs
+  standardization with a scale floor (raw pooling is fine for the FDR, wrong for p).
 - (2026-10-12) The unadjusted z-scores of both maps are now the signed tail z of the pooled p (`pooled` slot of the
   density results, `z.pooled` of the shifts; the permutation-standardized shift statistic is `z.std`); the adjusted
   z of q-values near 0 run to 37, so the default colour range of a z map is the 99.5 % quantile capped at 8.

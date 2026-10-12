@@ -97,6 +97,43 @@ voomWeights <- function(counts, meta, norm = "TMM") {
   y <- edgeR::DGEList(counts = counts, lib.size = colSums(counts)); if (norm == "TMM") y <- edgeR::calcNormFactors(y, method = "TMM")
   v <- limma::voom(y, design); list(E = v$E, w = v$weights, x = as.numeric(design[, 2]))
 }
+# voom-type precision weights for soft counts: a density (fraction of the sample's cells) times the sample's cell
+# number, or neighbourhood counts; `cond` is the two-level condition per sample (reference level first)
+softVoom <- function(dmat, sizes, cond, norm = "libsize", target = 5) {
+  cnt <- t(t(dmat) * as.numeric(sizes[colnames(dmat)]))
+  # a kernel density at a cell is spread over the whole graph (columns sum to 1 over tens of thousands of cells), so
+  # density x sample size is far below one "count"; voom's log-CPM then is dominated by its 0.5 pseudo-count and the
+  # per-sample library size becomes a common offset of every cell (one arm with smaller samples -> every cell "changes").
+  # Scaling the soft counts to a count-like magnitude (median positive value = `target`) removes that; the scale
+  # cancels in the CPM normalization and only sets the pseudo-count's weight. Integer neighbourhood counts are left as they are.
+  md <- median(cnt[cnt > 0]); if (is.finite(md) && md < 1) cnt <- cnt * (target / md)
+  meta <- data.frame(row.names = colnames(dmat), condition = factor(as.character(cond[colnames(dmat)])))
+  voomWeights(cnt, meta, norm = norm)
+}
+# Precision weights on the LINEAR scale for a per-sample density (the scale cacoa's default test uses): the variance of
+# the density across samples is modelled as a smooth function of its mean (lowess of log residual variance on log
+# fitted mean over cells, as voom does on the log scale), and every observation is weighted by 1 / var(fitted mean of
+# its group). No log transform and no pseudo-count, so sample sizes cannot become a common offset of every cell.
+linearWeights <- function(dmat, cond, min.frac = 1e-3) {
+  x <- as.numeric(factor(as.character(cond[colnames(dmat)])) ) - 1          # 0/1 (reference level first)
+  mA <- rowMeans(dmat[, x == 0, drop = FALSE]); mB <- rowMeans(dmat[, x == 1, drop = FALSE])
+  fit <- outer(mA, 1 - x) + outer(mB, x); res <- dmat - fit; n <- ncol(dmat)
+  v <- rowSums(res^2) / (n - 2); mu <- rowMeans(dmat)
+  ok <- is.finite(v) & v > 0 & mu > 0; floor.mu <- quantile(mu[ok], min.frac)
+  lo <- lowess(log(pmax(mu[ok], floor.mu)), log(v[ok]), f = 0.3)
+  trend <- approxfun(lo$x, lo$y, rule = 2, ties = mean)
+  w <- matrix(exp(-trend(log(pmax(as.numeric(fit), floor.mu)))), nrow(fit), ncol(fit), dimnames = dimnames(dmat)); w[!is.finite(w)] <- 0
+  list(E = as.matrix(dmat), w = w, x = x)
+}
+# neighbourhood inheritance (as in Milo's cell-level map) on a per-cell result: every cell takes the smallest q among
+# itself and its graph neighbours, with that neighbour's effect; A is the (sparse) adjacency matrix over `cells`
+inheritQ <- function(q, eff, A, cells = rownames(A)) {
+  adj <- A; Matrix::diag(adj) <- 1; adj <- methods::as(adj, "TsparseMatrix")
+  qq <- q[cells]; qq[!is.finite(qq)] <- Inf; e <- eff[cells]
+  v <- qq[adj@j + 1L]; o <- order(adj@i, v); i <- adj@i[o] + 1L; j <- adj@j[o] + 1L; first <- !duplicated(i)
+  out <- rep(NA_real_, length(cells)); out[i[first]] <- qq[j[first]]; out[!is.finite(out)] <- NA; e2 <- e; e2[i[first]] <- e[j[first]]
+  names(out) <- names(e2) <- cells; list(q = out, effect = e2)
+}
 # pooled FDR of a permWLS result: raw t and per-unit standardized
 permWLSq <- function(r) {
   mu <- colMeans(r$t.perm); sdv <- apply(r$t.perm, 2, sd)

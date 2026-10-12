@@ -21,6 +21,10 @@ Scripts (this directory; scratch outputs under `$S/bench/`):
 | `planted_relabel.R <ds> generate\|run [B] [cores]` | unpaired power study: balanced relabeling (9-11 whole samples per arm) + planted depletion of one type in arm B; cacoa with the pooled-null variants (`$S/bench/planted/<ds>/<id>/`) |
 | `milo_decompose.R <ds> [B] [cores]` | Milo comparison decomposed into unit (refined kNN neighbourhoods of ~95 cells from Milo's run vs cacoa's 1-hop) x test (edgeR QL, voom, cacoa's permutation LM, voom-weighted permutation prototype) x adjustment, with TMM and library-size normalization |
 | `analyze_planted.R [out.dir]` | figures and tables of the planted study (`figures/planted_*`), compositional truth |
+| `weighted_units.R <ds> planted\|null <B> <cores>` | precision-weighted permutation tests on cacoa's units (kernel: linear-scale weights; 1-hop counts: voom) with and without neighbourhood inheritance; power on the planted sets (`hw.rds`), calibration on the balanced relabelings (`$S/bench/null_w/`) |
+| `analyze_curves.R [out.dir]` | threshold sweep: recall against the REALIZED false-call rate (`figures/planted_curves.png`, `planted_recall_at_fdp.csv`) |
+| `analyze_null_w.R [out.dir]` | calibration summary of the weighted tests (`figures/null_w_calls.csv`, `null_w_pooled_p.csv`) |
+| `diag_pf_knn.R`, `diag_pf_oracle.R` | where the far-away calls of the kNN unit on PF come from; oracle normalization without the planted type |
 | `pilot_pooled.R <B> <cores>` | pilot of the pooled p-values in the BH-type adjustments and the Cauchy summary: one SCC null relabeling and four paired semi-synthetic sets |
 | `diag_pooled.R <set> <B> <cores>` | per-cell vs raw pooling, unpaired model vs donor covariate, direction of the extra calls on one semi-synthetic set |
 | `$S/bench/run_milo_semi.R` | Milo (miloR 1.6.0) on the semi-synthetic sets (subagent) |
@@ -402,6 +406,50 @@ Control-only relabelings (`planted_null_calls.csv`): every edgeR-based row calls
   the raw pooling (fdp2 0.10 vs 0.05 for 1-hop weighted; 1.4 % vs 0.03 % calls in the control-only sets); for the heat
   kernel the two coincide. Raw pooling of a pivotal weighted statistic is the safer default for count units.
 
+### Recall at matched realized error (`analyze_curves.R`, `figures/planted_curves.png`, `planted_recall_at_fdp.csv`)
+
+Recall at a nominal FDR rewards a liberal method. Sweeping every method's own threshold and reading recall where the
+realized false-call rate (other cells called down beyond two hops of any planted cell) is at or below 10 % compares
+the methods at the same achieved error. 100 % removal, mean over the three planted types; MS added (21 samples,
+planted OL 15 %, EN-L4 7 %, IN-SV2C 2 %; control-only sets clean for every cacoa method):
+
+| method | SCC | PF | MS | control-only calls |
+|---|---|---|---|---|
+| heat kernel, pooled FDR (cacoa default) | 0.45 | 0.34 | 0.84 | 0 / 0 / 0 |
+| heat kernel, pooled FDR + neighbourhood inheritance | 0.63 | 0.59 | 0.99 | 0 / 0 / 0 |
+| heat kernel, linear-scale weights | 0.41 | 0.37 | 0.63 | 0 / 0 / 0 |
+| heat kernel, linear-scale weights + inheritance | 0.51 | 0.60 | 0.86 | 0 / 0 / 0 |
+| 1-hop counts, pooled FDR | 0.25 | 0.16 | 0.46 | 0 / 0 / 0 |
+| 1-hop counts, voom weights | 0.33 | 0.24 | 0.63 | 0 / 0 / 0 |
+| 1-hop counts, voom weights + inheritance | 0.62 | 0.49 | 0.97 | 0 / 0 / 0 |
+| 2-hop counts (~1,200 cells), voom weights | 0.39 | 0.69 | 0.94 | 0 / 0 / 0 |
+| refined kNN neighbourhoods (~95 cells), voom-weighted permutation + inheritance | 0.67 | 0.57 | 0.93 | 0 / 0.0003 / 0.0006 |
+| refined kNN neighbourhoods, edgeR QL, BH + inheritance | 0.42 | 0.48 | 0.93 | 0.013 / 0.11 / 0 |
+| Milo | 0.45 | 0.43 | 0.92 | 0.10 / 0.26 / 0 |
+
+- **At matched error Milo has no advantage over cacoa's default** on SCC and MS and a small one on PF; its recall
+  at the nominal threshold (0.75 / 0.92 / 0.89) is bought with a realized false-call rate of 0.19-0.46 on SCC and PF.
+- **Neighbourhood inheritance is the one change that helps everywhere**: for the heat kernel +40 % (SCC), +75 % (PF)
+  and +18 % (MS) relative, with no call in any of the 45 control-only relabelings and a realized false-call rate at
+  the nominal threshold of at most 0.0005. It is a per-cell map with a one-line post-processing step.
+- **Precision weights help count units, not the kernel.** On the 1-hop counts voom weights add 30-50 % relative; on the
+  kernel density a linear-scale mean-variance weighting is neutral on PF and costs recall on SCC and MS (the kernel's
+  noise depends on the effective neighbourhood size, not on the mean). Weighted kernel statistics need raw pooling:
+  per-cell standardization makes near-constant cells degenerate (6-26 % of the cells called under the null on PF).
+  A log-count weighting of the kernel density is unusable: the density is far below one count per cell, the
+  pseudo-count dominates and the per-sample library size becomes a common shift of every cell (98 % of the cells
+  called in one SCC relabeling).
+- **The larger kNN unit buys little over the kernel with inheritance** (0.67 vs 0.63, 0.57 vs 0.59, 0.93 vs 0.99)
+  and its far-away calls on PF are not a site effect: in each relabeling one type (AT2, fibroblasts) is genuinely
+  3-4x less abundant in one arm by chance of the sample draw (`diag_pf_knn.R`), the sets of flagged cells do not
+  overlap between relabelings, and an oracle normalization without the planted type does not remove them
+  consistently (`diag_pf_oracle.R`). The truth of a relabeling design cannot separate such chance imbalances from
+  errors; the control-only sets can, and there the weighted permutation rows are clean while edgeR calls 11 % on PF.
+- **cacoa's q-values are conservative** with respect to this truth: at the nominal 10 % the default calls 14 % of the
+  planted cells on SCC with a realized false-call rate near zero, and reaches 45 % at a realized 10 %. Part of this is
+  definitional (the graph neighbours of planted cells, whose smoothed density really changes, are excluded from the
+  false calls), part is the heat-kernel pooled null (its pooled p is conservative beyond 1e-3 in the null round).
+
 ## Results: null round with the pooled variants (SCC, 15 relabelings, 4,999 permutations; `figures/null4/`)
 
 Every cacoa adjustment, the pooled-p ones included (`BH / spatial FDR / neighbourhood on the pooled p`, the raw /
@@ -422,9 +470,13 @@ summary and the Cauchy of the pooled p is an option for density only.
    calibrated on cacoa's own per-cell units; Milo's own adjustment is not calibrated (fdp 0.2-0.5, 10-30 % of the
    cells called in control-only relabelings), and neither is edgeR on PF. Library-size normalization beats TMM for
    neighbourhood counts.
-10. **Package work this supports:** observation weights in the permutation LM; a kNN neighbourhood-count density with a
-    target size and a label-free k diagnostic (cells per sample, purity, minimum detectable fold change); an optional
-    inheritance step for the per-cell map; the Cauchy of the pooled p as a density-only group summary.
+10. **Package work this supports (revised after the matched-error analysis and the weighted runs):** (i) a
+    neighbourhood-inheritance option for the per-cell density map (every cell takes the smallest q among itself and
+    its graph neighbours; calibrated on 45 relabelings, +18-75 % recall); (ii) observation weights in the permutation
+    LM only for count units (the 1-hop / kNN neighbourhood-count density), not for the kernel; (iii) the Cauchy of the
+    pooled p as a density-only group summary; (iv) a look at why the heat-kernel pooled FDR is conservative with
+    respect to a localized truth. A kNN unit with a target size and its k diagnostic remain useful for the count
+    route but are not needed for power: the kernel with inheritance matches the best count configuration.
 
 ## Conclusions
 

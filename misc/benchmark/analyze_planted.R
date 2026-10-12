@@ -43,6 +43,10 @@ for (ds in c("scc", "pf", "ms")) for (d in list.dirs(file.path(S, "bench/planted
     mi <- readRDS(file.path(d, "milo.rds"))$cells
     res[[length(res) + 1]] <- score(mi$milo.fdr, mi$milo.logFC, "Milo (graph, spatial FDR)", mi$cell)
   }
+  if (file.exists(file.path(d, "hw.rds"))) {   # weighted permutation tests on cacoa's units (weighted_units.R)
+    hw <- readRDS(file.path(d, "hw.rds"))$res
+    for (m in names(hw)) res[[length(res) + 1]] <- score(hw[[m]]$q, hw[[m]]$effect, paste0("weighted: ", m), names(hw[[m]]$q))
+  }
   if (file.exists(file.path(d, "decomp.rds"))) {   # unit x test x adjustment decomposition (milo_decompose.R)
     dc <- readRDS(file.path(d, "decomp.rds"))$res; names(dc) <- sub("^Milo nhoods", "kNN nhoods", names(dc))   # earlier label of the same unit
     for (m in names(dc)) res[[length(res) + 1]] <- score(dc[[m]]$q, dc[[m]]$effect, paste0("decomp: ", m), names(dc[[m]]$q))
@@ -74,7 +78,9 @@ sm <- res %>% filter(!is.na(type)) %>% group_by(dataset, method, alpha, size.cla
 write.csv(sm, file.path(out.dir, "planted_cells_summary.csv"), row.names = FALSE)
 sm2 <- sm %>% filter(alpha == 0.1) %>% mutate(panel = paste0(size.class, ": ", type), size.class = factor(size.class, c("small", "medium", "large"))) %>% arrange(size.class)
 sm2$panel <- factor(sm2$panel, unique(sm2$panel))
-main <- c("heat: perm.fdr" = "heat kernel, pooled FDR (default)", "heat: fdr.sd" = "heat kernel, pooled FDR, standardized", "heat: fdr.tb" = "heat kernel, pooled FDR, ter Braak scale",
+main <- c("heat: perm.fdr" = "heat kernel, pooled FDR (default)", "weighted: heat + weighted perm: perm.fdr" = "heat kernel, weighted permutation, pooled FDR", "weighted: heat + weighted perm: perm.fdr + inheritance" = "heat kernel, weighted permutation + inheritance",
+          "weighted: 1-hop + weighted perm: perm.fdr" = "1-hop counts, weighted permutation, pooled FDR", "weighted: 1-hop + weighted perm: perm.fdr + inheritance" = "1-hop counts, weighted permutation + inheritance",
+          "heat: fdr.sd" = "heat kernel, pooled FDR, standardized", "heat: fdr.tb" = "heat kernel, pooled FDR, ter Braak scale",
           "heat: bh.pooled" = "heat kernel, BH on pooled p", "heat: spatial.pooled" = "heat kernel, spatial FDR on pooled p", "heat: nbhd.pooled" = "heat kernel, neighbourhood BH on pooled p",
           "1-hop log: perm.fdr" = "1-hop counts, pooled FDR", "1-hop log: fdr.tb" = "1-hop counts, pooled FDR, ter Braak scale",
           "decomp: kNN nhoods + edgeR QL: bh" = "refined kNN neighbourhoods (~95 cells), edgeR QL, BH", "decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd" = "refined kNN neighbourhoods (~95 cells), voom-weighted permutation, pooled FDR",
@@ -94,7 +100,7 @@ p3 <- ggplot(sm2, aes(frac, other.up, colour = method)) + geom_line() + geom_poi
 ggsave(file.path(out.dir, "planted_up.png"), p3, width = 12, height = 9.5, dpi = 110)
 cat("\n== recall / fdp.down / other.up at FDR 10 % (mean over replicates)\n")
 print(as.data.frame(sm2 %>% select(dataset, panel, frac, method, recall, fdp.down, other.up) %>% arrange(dataset, panel, frac, method)), digits = 2)
-dc <- sm %>% filter(alpha == 0.1, grepl("^decomp: |^Milo|1-hop log: perm.fdr|1-hop log: fdr.tb|heat: perm.fdr", method)) %>% group_by(dataset, method, frac) %>% summarise(recall = mean(recall), fdp.down = mean(fdp.down, na.rm = TRUE), fdp.down2 = mean(fdp.down2, na.rm = TRUE), other.up = mean(other.up), .groups = "drop")
+dc <- sm %>% filter(alpha == 0.1, grepl("^decomp: |^weighted: |^Milo|1-hop log: perm.fdr|1-hop log: fdr.tb|heat: perm.fdr", method)) %>% group_by(dataset, method, frac) %>% summarise(recall = mean(recall), fdp.down = mean(fdp.down, na.rm = TRUE), fdp.down2 = mean(fdp.down2, na.rm = TRUE), other.up = mean(other.up), .groups = "drop")
 write.csv(dc, file.path(out.dir, "planted_decomp_summary.csv"), row.names = FALSE)
 cat("\n== Milo decomposition (unit x test x adjustment), mean over planted types and replicates, FDR 10 %\n"); print(as.data.frame(dc %>% arrange(dataset, frac, method)), digits = 2)
 cat("\n== null sets: fraction called\n"); print(as.data.frame(null %>% filter(alpha == 0.1)), digits = 2)

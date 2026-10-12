@@ -1,0 +1,1702 @@
+"dataset","method","size.class","type","frac","recall.fdp05","recall.fdp10","recall.nominal10","fdp2.nominal10","n"
+"ms","1-hop log: bh.param","large","OL",0.5,0,0,0,0,3
+"ms","1-hop log: bh.param","large","OL",0.8,0.0659896658034975,0.0659896658034975,8.30426839395449e-05,0,3
+"ms","1-hop log: bh.param","large","OL",1,0.423274002482499,0.423274002482499,0.165192610117086,0.000410509031198686,3
+"ms","1-hop log: bh.param","medium","EN-L4",0.5,0,0,0,0,3
+"ms","1-hop log: bh.param","medium","EN-L4",0.8,0.0050561797752809,0.0050561797752809,0,0,3
+"ms","1-hop log: bh.param","medium","EN-L4",1,0.325706034060236,0.325706034060236,0.144338510454437,0.000960614793467819,3
+"ms","1-hop log: bh.param","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","1-hop log: bh.param","small","IN-SV2C",0.8,0,0,0,0,3
+"ms","1-hop log: bh.param","small","IN-SV2C",1,0.68766707943779,0.702435011927241,0.567358973979314,0.003003003003003,3
+"ms","1-hop log: bh.perm","large","OL",0.5,0,0,0,0,3
+"ms","1-hop log: bh.perm","large","OL",0.8,0.0625774728254083,0.0625774728254083,0,0,3
+"ms","1-hop log: bh.perm","large","OL",1,0.442449303249096,0.442449303249096,0.132781967164261,0.00165135500507078,3
+"ms","1-hop log: bh.perm","medium","EN-L4",0.5,0,0,0,0,3
+"ms","1-hop log: bh.perm","medium","EN-L4",0.8,0.0117977528089888,0.0117977528089888,0,0,3
+"ms","1-hop log: bh.perm","medium","EN-L4",1,0.24210861086499,0.24210861086499,0,0,3
+"ms","1-hop log: bh.perm","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","1-hop log: bh.perm","small","IN-SV2C",0.8,0,0.0790546047269764,0,0,3
+"ms","1-hop log: bh.perm","small","IN-SV2C",1,0.56631544320769,0.638045401013597,0,0,3
+"ms","1-hop log: bh.pooled","large","OL",0.5,0,0,0,0,3
+"ms","1-hop log: bh.pooled","large","OL",0.8,0.0885341357798498,0.0885341357798498,0.00415213419697725,0.00308641975308642,3
+"ms","1-hop log: bh.pooled","large","OL",1,0.44654326890307,0.44654326890307,0.162812008308118,0.00156401667536344,3
+"ms","1-hop log: bh.pooled","medium","EN-L4",0.5,0,0,0,0,3
+"ms","1-hop log: bh.pooled","medium","EN-L4",0.8,0.0165260725843468,0.0165260725843468,0.00299625468164794,0,3
+"ms","1-hop log: bh.pooled","medium","EN-L4",1,0.26766304924117,0.26766304924117,0.0908742958322001,0.00282485875706215,3
+"ms","1-hop log: bh.pooled","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","1-hop log: bh.pooled","small","IN-SV2C",0.8,0.0937267365601399,0.11573162653569,0.0236348818255909,0,3
+"ms","1-hop log: bh.pooled","small","IN-SV2C",1,0.64121844372558,0.660205785497732,0.480787980679852,0.00664940748616954,3
+"ms","1-hop log: fdr.mad","large","OL",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.mad","large","OL",0.8,0.087805415728391,0.087805415728391,0.00265736588606544,0,3
+"ms","1-hop log: fdr.mad","large","OL",1,0.446576178611028,0.446576178611028,0.163868441044002,0.00174454741959125,3
+"ms","1-hop log: fdr.mad","medium","EN-L4",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.mad","medium","EN-L4",0.8,0.0146846565377213,0.0146846565377213,0.000187265917602996,0,3
+"ms","1-hop log: fdr.mad","medium","EN-L4",1,0.276244192769752,0.276244192769752,0.0801840515110839,0.00156494522691706,3
+"ms","1-hop log: fdr.mad","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.mad","small","IN-SV2C",0.8,0.0603225583477605,0.0945523871986163,0.000814995925020375,0,3
+"ms","1-hop log: fdr.mad","small","IN-SV2C",1,0.628898520215091,0.675312022324796,0.448574125580267,0.00544363864267168,3
+"ms","1-hop log: fdr.raw","large","OL",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.raw","large","OL",0.8,0.080304628335011,0.080304628335011,0.00265736588606544,0,3
+"ms","1-hop log: fdr.raw","large","OL",1,0.451207905885411,0.451207905885411,0.16888920275779,0.00160158967323497,3
+"ms","1-hop log: fdr.raw","medium","EN-L4",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.raw","medium","EN-L4",0.8,0.0117977528089888,0.0117977528089888,0.000187265917602996,0,3
+"ms","1-hop log: fdr.raw","medium","EN-L4",1,0.256415425541973,0.256415425541973,0.0705109643957754,0.00156494522691706,3
+"ms","1-hop log: fdr.raw","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.raw","small","IN-SV2C",0.8,0.0761720061330255,0.104696863508739,0,0,3
+"ms","1-hop log: fdr.raw","small","IN-SV2C",1,0.633929530868777,0.660300838885655,0.449930265319095,0.00563097033685269,3
+"ms","1-hop log: fdr.sd","large","OL",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.sd","large","OL",0.8,0.0884031618176424,0.0884031618176424,0.00352931406743066,0.0037037037037037,3
+"ms","1-hop log: fdr.sd","large","OL",1,0.447037037864544,0.447037037864544,0.162173832957487,0.00156769560490876,3
+"ms","1-hop log: fdr.sd","medium","EN-L4",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.sd","medium","EN-L4",0.8,0.0161827838785452,0.0161827838785452,0.000187265917602996,0,3
+"ms","1-hop log: fdr.sd","medium","EN-L4",1,0.263285885442975,0.263285885442975,0.0862532833662652,0.00156494522691706,3
+"ms","1-hop log: fdr.sd","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.sd","small","IN-SV2C",0.8,0.0896026106143048,0.114867484289936,0.0203748981255094,0,3
+"ms","1-hop log: fdr.sd","small","IN-SV2C",1,0.626165416014325,0.650427019389852,0.464237261395648,0.00667670919047843,3
+"ms","1-hop log: fdr.tb","large","OL",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.tb","large","OL",0.8,0.086132280783346,0.086132280783346,0.00266178353711294,0.00497512437810945,3
+"ms","1-hop log: fdr.tb","large","OL",1,0.450528779978439,0.450528779978439,0.150458205678554,0.00111956178108509,3
+"ms","1-hop log: fdr.tb","medium","EN-L4",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.tb","medium","EN-L4",0.8,0.0150748099376295,0.0150748099376295,0.000187265917602996,0,3
+"ms","1-hop log: fdr.tb","medium","EN-L4",1,0.269536112226443,0.269536112226443,0.0821826509470081,0.00175438596491228,3
+"ms","1-hop log: fdr.tb","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.tb","small","IN-SV2C",0.8,0.0611533051290768,0.101903101380096,0,0,3
+"ms","1-hop log: fdr.tb","small","IN-SV2C",1,0.618063992599041,0.654983823822669,0.437596141165819,0.00392156862745098,3
+"ms","1-hop log: fdr.tbscale","large","OL",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.tbscale","large","OL",0.8,0.0837056096404786,0.0837056096404786,0.0035805633974584,0.00497512437810945,3
+"ms","1-hop log: fdr.tbscale","large","OL",1,0.441045503651588,0.441045503651588,0.157967123180949,0.001004676052773,3
+"ms","1-hop log: fdr.tbscale","medium","EN-L4",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.tbscale","medium","EN-L4",0.8,0.0150748099376295,0.0150748099376295,0.000187265917602996,0,3
+"ms","1-hop log: fdr.tbscale","medium","EN-L4",1,0.280674224822636,0.280674224822636,0.0916215875518684,0.00312989045383412,3
+"ms","1-hop log: fdr.tbscale","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","1-hop log: fdr.tbscale","small","IN-SV2C",0.8,0.10630204469299,0.122601963193398,0.0203748981255094,0,3
+"ms","1-hop log: fdr.tbscale","small","IN-SV2C",1,0.627175609911114,0.664095441134742,0.449744964248583,0.00563097033685269,3
+"ms","1-hop log: nbhd.param","large","OL",0.5,0,0,0,0,3
+"ms","1-hop log: nbhd.param","large","OL",0.8,0,0,0,0,3
+"ms","1-hop log: nbhd.param","large","OL",1,0.336556355977539,0.412544373030194,0.160769948810462,0.00533581389209157,3
+"ms","1-hop log: nbhd.param","medium","EN-L4",0.5,0,0,0,0,3
+"ms","1-hop log: nbhd.param","medium","EN-L4",0.8,0.0207865168539326,0.0207865168539326,0.0207865168539326,0,3
+"ms","1-hop log: nbhd.param","medium","EN-L4",1,0.309004544159209,0.309004544159209,0.155864498888987,0,3
+"ms","1-hop log: nbhd.param","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","1-hop log: nbhd.param","small","IN-SV2C",0.8,0,0,0,0,3
+"ms","1-hop log: nbhd.param","small","IN-SV2C",1,0.75528973943812,0.758326945208811,0.554599111957608,0,3
+"ms","1-hop log: nbhd.pooled","large","OL",0.5,0,0,0,0,3
+"ms","1-hop log: nbhd.pooled","large","OL",0.8,0.0144909483474506,0.0566856352900959,0,0,3
+"ms","1-hop log: nbhd.pooled","large","OL",1,0.296229182456881,0.443176866987495,0.166267599913989,0.00564751894754551,3
+"ms","1-hop log: nbhd.pooled","medium","EN-L4",0.5,0,0,0,0,3
+"ms","1-hop log: nbhd.pooled","medium","EN-L4",0.8,0.0207865168539326,0.0207865168539326,0.0207865168539326,0,3
+"ms","1-hop log: nbhd.pooled","medium","EN-L4",1,0.289299975941113,0.289299975941113,0.0982781287300408,0,3
+"ms","1-hop log: nbhd.pooled","small","IN-SV2C",0.5,0.0563765736179529,0.0563765736179529,0,0,3
+"ms","1-hop log: nbhd.pooled","small","IN-SV2C",0.8,0,0,0,0,3
+"ms","1-hop log: nbhd.pooled","small","IN-SV2C",1,0.656621183912785,0.682437432963658,0.410008405221923,0,3
+"ms","1-hop log: perm.fdr","large","OL",0.5,0,0,0,0,3
+"ms","1-hop log: perm.fdr","large","OL",0.8,0.080304628335011,0.080304628335011,0.00265736588606544,0,3
+"ms","1-hop log: perm.fdr","large","OL",1,0.451207905885411,0.451207905885411,0.16888920275779,0.00160158967323497,3
+"ms","1-hop log: perm.fdr","medium","EN-L4",0.5,0,0,0,0,3
+"ms","1-hop log: perm.fdr","medium","EN-L4",0.8,0.0117977528089888,0.0117977528089888,0.000187265917602996,0,3
+"ms","1-hop log: perm.fdr","medium","EN-L4",1,0.256415425541973,0.256415425541973,0.0705109643957754,0.00156494522691706,3
+"ms","1-hop log: perm.fdr","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","1-hop log: perm.fdr","small","IN-SV2C",0.8,0.0761720061330255,0.104696863508739,0,0,3
+"ms","1-hop log: perm.fdr","small","IN-SV2C",1,0.633929530868777,0.660300838885655,0.449930265319095,0.00563097033685269,3
+"ms","1-hop log: spatial.param","large","OL",0.5,0,0,0,0,3
+"ms","1-hop log: spatial.param","large","OL",0.8,0.00333794873860011,0.00333794873860011,0,0,3
+"ms","1-hop log: spatial.param","large","OL",1,0.335721974096872,0.335721974096872,0.125112829519713,0.000282007896221094,3
+"ms","1-hop log: spatial.param","medium","EN-L4",0.5,0,0,0,0,3
+"ms","1-hop log: spatial.param","medium","EN-L4",0.8,0,0,0,0,3
+"ms","1-hop log: spatial.param","medium","EN-L4",1,0.205786041044483,0.205786041044483,0.085052121989995,0,3
+"ms","1-hop log: spatial.param","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","1-hop log: spatial.param","small","IN-SV2C",0.8,0,0,0,0,3
+"ms","1-hop log: spatial.param","small","IN-SV2C",1,0.621237165194952,0.621237165194952,0.498749953782969,0,3
+"ms","1-hop log: spatial.pooled","large","OL",0.5,0,0,0,0,3
+"ms","1-hop log: spatial.pooled","large","OL",0.8,0.0375263116391676,0.0375263116391676,0.00112107623318386,0,3
+"ms","1-hop log: spatial.pooled","large","OL",1,0.364874277571583,0.364874277571583,0.124204915676122,0.000267308206361935,3
+"ms","1-hop log: spatial.pooled","medium","EN-L4",0.5,0,0,0,0,3
+"ms","1-hop log: spatial.pooled","medium","EN-L4",0.8,0.00553986970457885,0.00553986970457885,0.000561797752808989,0,3
+"ms","1-hop log: spatial.pooled","medium","EN-L4",1,0.146750028541195,0.146750028541195,0.0328291073140467,0,3
+"ms","1-hop log: spatial.pooled","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","1-hop log: spatial.pooled","small","IN-SV2C",0.8,0.0289492339520551,0.03954418097732,0,0,3
+"ms","1-hop log: spatial.pooled","small","IN-SV2C",1,0.573146385334615,0.573146385334615,0.365802540235227,0.00441501103752759,3
+"ms","Milo (graph, spatial FDR)","large","OL",0.5,0.355259702835457,0.631001462517243,0.123967333950715,0.0133923863756195,3
+"ms","Milo (graph, spatial FDR)","large","OL",0.8,0.797910334502642,0.912175605166367,0.875673167393722,0.0546780385116215,3
+"ms","Milo (graph, spatial FDR)","large","OL",1,0.960702219613394,0.983585653029009,0.986539213040143,0.170297533741481,3
+"ms","Milo (graph, spatial FDR)","medium","EN-L4",0.5,0,0.154872302266829,0,0,3
+"ms","Milo (graph, spatial FDR)","medium","EN-L4",0.8,0.271566685011924,0.294421818626552,0,0,3
+"ms","Milo (graph, spatial FDR)","medium","EN-L4",1,0.747545303495058,0.859924766121852,0.757198069863133,0.0528576661118401,3
+"ms","Milo (graph, spatial FDR)","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","Milo (graph, spatial FDR)","small","IN-SV2C",0.8,0.514866570893736,0.514866570893736,0.514866570893736,0,3
+"ms","Milo (graph, spatial FDR)","small","IN-SV2C",1,0.905970069395692,0.905970069395692,0.923513929044815,0.0522648083623693,3
+"ms","decomp: 1-hop + edgeR QL: bh","large","OL",0.5,0.000421767431335246,0.000603202949152214,0.00211601448340036,0.102402402402402,3
+"ms","decomp: 1-hop + edgeR QL: bh","large","OL",0.8,0.0113553984456829,0.195621606770989,0.178951989433939,0.123913930955486,3
+"ms","decomp: 1-hop + edgeR QL: bh","large","OL",1,0.73390878257075,0.908135765484304,0.940788676156895,0.0881670440049322,3
+"ms","decomp: 1-hop + edgeR QL: bh","medium","EN-L4",0.5,0,0,0,0.555555555555556,3
+"ms","decomp: 1-hop + edgeR QL: bh","medium","EN-L4",0.8,0,0,0.000374531835205993,0.277777777777778,3
+"ms","decomp: 1-hop + edgeR QL: bh","medium","EN-L4",1,0.0855682724413906,0.180993117952935,0.304934802797169,0.148105603996288,3
+"ms","decomp: 1-hop + edgeR QL: bh","small","IN-SV2C",0.5,0,0,0,0.666666666666667,3
+"ms","decomp: 1-hop + edgeR QL: bh","small","IN-SV2C",0.8,0,0,0.0611534026478596,0.26530612244898,3
+"ms","decomp: 1-hop + edgeR QL: bh","small","IN-SV2C",1,0.441231007830875,0.470709853765417,0.623225168595833,0.269821021927479,3
+"ms","decomp: 1-hop + edgeR QL: spatial-fdr","large","OL",0.5,0.000206889417606289,0.000206889417606289,0.0708883027756693,0.285281455523921,3
+"ms","decomp: 1-hop + edgeR QL: spatial-fdr","large","OL",0.8,0.00391840425446774,0.179263031392817,0.357188584440614,0.154969018273019,3
+"ms","decomp: 1-hop + edgeR QL: spatial-fdr","large","OL",1,0.743192035176832,0.841576485921946,0.954026301332791,0.102942394090521,3
+"ms","decomp: 1-hop + edgeR QL: spatial-fdr","medium","EN-L4",0.5,0,0,0.0184336132609244,0.38208784702094,3
+"ms","decomp: 1-hop + edgeR QL: spatial-fdr","medium","EN-L4",0.8,0,0,0.146762292404028,0.336474209559061,3
+"ms","decomp: 1-hop + edgeR QL: spatial-fdr","medium","EN-L4",1,0.0397679502980393,0.121808437427287,0.529408041068618,0.266906560597897,3
+"ms","decomp: 1-hop + edgeR QL: spatial-fdr","small","IN-SV2C",0.5,0,0,0.0290585749133071,0.604110643950217,3
+"ms","decomp: 1-hop + edgeR QL: spatial-fdr","small","IN-SV2C",0.8,0,0,0.413108759153109,0.542673985383556,3
+"ms","decomp: 1-hop + edgeR QL: spatial-fdr","small","IN-SV2C",1,0.425008137228085,0.480335616606197,0.788292293042733,0.510257168728268,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","large","OL",0.5,0.00401343208061073,0.00884903408500275,0.000553510647579117,0,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","large","OL",0.8,0.0977207842223932,0.320989827995955,0.0539610256353353,0.0226234973769019,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","large","OL",1,0.623966278973211,0.742817339730596,0.495423984320166,0.0209611891836506,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","medium","EN-L4",0.5,0.00399720092048503,0.00997120266675051,0.000150217815832958,0,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","medium","EN-L4",0.8,0.039080483095809,0.0835877855080584,0.0152616901375855,0.0104166666666667,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","medium","EN-L4",1,0.30260809505745,0.445504326789135,0.211613837440625,0.0155186236172152,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","small","IN-SV2C",0.5,0.00970306289455226,0.0452410962315584,0.000610500610500611,0,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","small","IN-SV2C",0.8,0.250248805804648,0.303954846865799,0.229210015535088,0.0284887994120091,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","small","IN-SV2C",1,0.612842940111473,0.679243457291956,0.624787520717569,0.0456605164873013,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","large","OL",0.5,7.07686731644418e-05,0.00859754873298484,0,0,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","large","OL",0.8,0.103347801966588,0.273296889280543,0.036339199714593,0.0108017682791082,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","large","OL",1,0.568288416382325,0.712359270631278,0.415794063624279,0.0139313469893999,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","medium","EN-L4",0.5,0.000709267431486347,0.00333508800041414,0.000150217815832958,0,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","medium","EN-L4",0.8,0.0415669186439158,0.0734977141048135,0.0093006167625175,0.0208333333333333,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","medium","EN-L4",1,0.319544320385564,0.451111220523588,0.171356789940824,0.00923432619688922,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","small","IN-SV2C",0.5,0.0126126828254488,0.0366958793224384,0,0,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","small","IN-SV2C",0.8,0.279736821594033,0.358543149791691,0.182970427721691,0.00953496152559384,3
+"ms","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","small","IN-SV2C",1,0.636753878528914,0.733535004108229,0.595956817230714,0.0260711873977645,3
+"ms","decomp: 1-hop + voom-weighted perm: fdr.sd","large","OL",0.5,0.00386627132657465,0.00660622670970718,0.00179484715321685,0.0238095238095238,3
+"ms","decomp: 1-hop + voom-weighted perm: fdr.sd","large","OL",0.8,0.0803157278683457,0.302416178137591,0.0750120575407384,0.0402025528541036,3
+"ms","decomp: 1-hop + voom-weighted perm: fdr.sd","large","OL",1,0.639808101796867,0.775576676373763,0.639808101796867,0.0425873215721481,3
+"ms","decomp: 1-hop + voom-weighted perm: fdr.sd","medium","EN-L4",0.5,0.00190076486178482,0.00836133550219939,0.000150217815832958,0,3
+"ms","decomp: 1-hop + voom-weighted perm: fdr.sd","medium","EN-L4",0.8,0.0207697381362895,0.0475481857770475,0.0166973312196006,0.0237511671335201,3
+"ms","decomp: 1-hop + voom-weighted perm: fdr.sd","medium","EN-L4",1,0.298878215916141,0.406100354551154,0.264480340801303,0.0343148408008748,3
+"ms","decomp: 1-hop + voom-weighted perm: fdr.sd","small","IN-SV2C",0.5,0.000545553737043099,0.000545553737043099,0.000545553737043099,0,3
+"ms","decomp: 1-hop + voom-weighted perm: fdr.sd","small","IN-SV2C",0.8,0.220120000385419,0.282109758717486,0.257783657468308,0.074848460573046,3
+"ms","decomp: 1-hop + voom-weighted perm: fdr.sd","small","IN-SV2C",1,0.631532826041347,0.683575021346424,0.670666896820987,0.071250747283045,3
+"ms","decomp: 1-hop + voom-weighted perm: perm.fdr","large","OL",0.5,0.00331402755697511,0.00614424368434283,0.000724112961622013,0,3
+"ms","decomp: 1-hop + voom-weighted perm: perm.fdr","large","OL",0.8,0.105995731399668,0.30437586554103,0.0439689078905318,0.0159639193537968,3
+"ms","decomp: 1-hop + voom-weighted perm: perm.fdr","large","OL",1,0.584028690899445,0.730728827183692,0.543762361385557,0.0306765523952225,3
+"ms","decomp: 1-hop + voom-weighted perm: perm.fdr","medium","EN-L4",0.5,0.000150217815832958,0.000150217815832958,0.000150217815832958,0,3
+"ms","decomp: 1-hop + voom-weighted perm: perm.fdr","medium","EN-L4",0.8,0.0236257844532645,0.0858818607871323,0.00908210771551009,0.0138888888888889,3
+"ms","decomp: 1-hop + voom-weighted perm: perm.fdr","medium","EN-L4",1,0.331765676361068,0.457753509061994,0.215025900758624,0.0144332947891139,3
+"ms","decomp: 1-hop + voom-weighted perm: perm.fdr","small","IN-SV2C",0.5,0.0247577481620035,0.0461042177843352,0,0,3
+"ms","decomp: 1-hop + voom-weighted perm: perm.fdr","small","IN-SV2C",0.8,0.279557056728239,0.320237369273673,0.22785870405421,0.0129363220698115,3
+"ms","decomp: 1-hop + voom-weighted perm: perm.fdr","small","IN-SV2C",1,0.661075336747895,0.725118092632005,0.632680826785668,0.02311766598021,3
+"ms","decomp: 1-hop + voom: bh","large","OL",0.5,0.000254392955080398,0.000944024347101363,0,0,3
+"ms","decomp: 1-hop + voom: bh","large","OL",0.8,0.100420106181125,0.244929018898893,0.04288885695524,0.0300964198491431,3
+"ms","decomp: 1-hop + voom: bh","large","OL",1,0.52423227013875,0.637372055970577,0.454492376326231,0.0226957180972942,3
+"ms","decomp: 1-hop + voom: bh","medium","EN-L4",0.5,0.000296096736328946,0.000296096736328946,0,0,3
+"ms","decomp: 1-hop + voom: bh","medium","EN-L4",0.8,0.0421341319876278,0.0512883608433492,0.00450223857281247,0,3
+"ms","decomp: 1-hop + voom: bh","medium","EN-L4",1,0.411781749049336,0.496738591197561,0.301772806734321,0.0121550671550672,3
+"ms","decomp: 1-hop + voom: bh","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","decomp: 1-hop + voom: bh","small","IN-SV2C",0.8,0.00831582926234097,0.200025789628537,0.0126029971756138,0.0333333333333333,3
+"ms","decomp: 1-hop + voom: bh","small","IN-SV2C",1,0.700651251003029,0.730241255932557,0.687615775286258,0.0300286174080295,3
+"ms","decomp: 2-hop + voom-weighted perm: fdr.sd","large","OL",0.5,0.59911804132853,0.59911804132853,0.000758594531223061,0,3
+"ms","decomp: 2-hop + voom-weighted perm: fdr.sd","large","OL",0.8,0.96896545140151,0.96896545140151,0.79853440160894,0.00181869775992555,3
+"ms","decomp: 2-hop + voom-weighted perm: fdr.sd","large","OL",1,0.993339125386952,0.993339125386952,0.979816607866745,0.00270492143164034,3
+"ms","decomp: 2-hop + voom-weighted perm: fdr.sd","medium","EN-L4",0.5,0.241867250182349,0.241867250182349,0,0,3
+"ms","decomp: 2-hop + voom-weighted perm: fdr.sd","medium","EN-L4",0.8,0.817039290063067,0.817039290063067,0.665794181408997,0.000537185778866684,3
+"ms","decomp: 2-hop + voom-weighted perm: fdr.sd","medium","EN-L4",1,0.882483582518767,0.882483582518767,0.807754399435098,0.00048422211656365,3
+"ms","decomp: 2-hop + voom-weighted perm: fdr.sd","small","IN-SV2C",0.5,0.404971974304329,0.404971974304329,0,0,3
+"ms","decomp: 2-hop + voom-weighted perm: fdr.sd","small","IN-SV2C",0.8,0.881407446060497,0.896077372710864,0.788880357253706,0.00225507496100373,3
+"ms","decomp: 2-hop + voom-weighted perm: fdr.sd","small","IN-SV2C",1,0.94988121248898,0.94988121248898,0.898766518313244,0.00309849967384214,3
+"ms","decomp: 2-hop + voom-weighted perm: perm.fdr","large","OL",0.5,0.561406348946593,0.587715786552192,3.44815696010482e-05,0,3
+"ms","decomp: 2-hop + voom-weighted perm: perm.fdr","large","OL",0.8,0.96179370071607,0.96179370071607,0.843723645805981,0.00257887278551182,3
+"ms","decomp: 2-hop + voom-weighted perm: perm.fdr","large","OL",1,0.991850569572774,0.992618950689808,0.981099598667937,0.00499666903860804,3
+"ms","decomp: 2-hop + voom-weighted perm: perm.fdr","medium","EN-L4",0.5,0.212983223924143,0.212983223924143,0,0,3
+"ms","decomp: 2-hop + voom-weighted perm: perm.fdr","medium","EN-L4",0.8,0.819670578131456,0.819670578131456,0.65712669368187,0.000191131498470948,3
+"ms","decomp: 2-hop + voom-weighted perm: perm.fdr","medium","EN-L4",1,0.885479904364556,0.885479904364556,0.800760909502546,0.000184774575018477,3
+"ms","decomp: 2-hop + voom-weighted perm: perm.fdr","small","IN-SV2C",0.5,0.452524731321503,0.452524731321503,0,0,3
+"ms","decomp: 2-hop + voom-weighted perm: perm.fdr","small","IN-SV2C",0.8,0.894312027936149,0.905721970886434,0.798079681521524,0.00203512290445336,3
+"ms","decomp: 2-hop + voom-weighted perm: perm.fdr","small","IN-SV2C",1,0.945965904776204,0.950185314058905,0.893368715447087,0.00125523895249079,3
+"ms","decomp: 2-hop + voom: bh","large","OL",0.5,0.57156806675728,0.57156806675728,0,0,3
+"ms","decomp: 2-hop + voom: bh","large","OL",0.8,0.950960559758885,0.950960559758885,0.85436593102769,0.000598310593080343,3
+"ms","decomp: 2-hop + voom: bh","large","OL",1,0.991806094053018,0.991806094053018,0.980617510154943,0.0012526847093053,3
+"ms","decomp: 2-hop + voom: bh","medium","EN-L4",0.5,0,0,0,0,3
+"ms","decomp: 2-hop + voom: bh","medium","EN-L4",0.8,0.778509446541808,0.778509446541808,0.600106399349369,0.000218150087260035,3
+"ms","decomp: 2-hop + voom: bh","medium","EN-L4",1,0.863226216420688,0.863226216420688,0.790796627112072,0.000194250194250194,3
+"ms","decomp: 2-hop + voom: bh","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","decomp: 2-hop + voom: bh","small","IN-SV2C",0.8,0.834994885092659,0.834994885092659,0.683960141129057,0,3
+"ms","decomp: 2-hop + voom: bh","small","IN-SV2C",1,0.922881764149317,0.922881764149317,0.852021400888216,0,3
+"ms","decomp: Milo (edgeR QL + spatial FDR)","large","OL",0.5,0.355259702835457,0.631001462517243,0.123967333950715,0.0133923863756195,3
+"ms","decomp: Milo (edgeR QL + spatial FDR)","large","OL",0.8,0.797910334502642,0.912175605166367,0.875673167393722,0.0546780385116215,3
+"ms","decomp: Milo (edgeR QL + spatial FDR)","large","OL",1,0.960702219613394,0.983585653029009,0.986539213040143,0.170297533741481,3
+"ms","decomp: Milo (edgeR QL + spatial FDR)","medium","EN-L4",0.5,0,0.154872302266829,0,0,3
+"ms","decomp: Milo (edgeR QL + spatial FDR)","medium","EN-L4",0.8,0.271566685011924,0.294421818626552,0,0,3
+"ms","decomp: Milo (edgeR QL + spatial FDR)","medium","EN-L4",1,0.747545303495058,0.859924766121852,0.757198069863133,0.0528576661118401,3
+"ms","decomp: Milo (edgeR QL + spatial FDR)","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","decomp: Milo (edgeR QL + spatial FDR)","small","IN-SV2C",0.8,0.514866570893736,0.514866570893736,0.514866570893736,0,3
+"ms","decomp: Milo (edgeR QL + spatial FDR)","small","IN-SV2C",1,0.905970069395692,0.905970069395692,0.923513929044815,0.0522648083623693,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.perm","large","OL",0.5,0.366037592383847,0.374311690695179,0.286518850563411,0,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.perm","large","OL",0.8,0.48061003501783,0.503690345975236,0.460959510194095,0.0423885091692102,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.perm","large","OL",1,0.861562738642803,0.90915241495801,0.904972414442673,0.0910358922737881,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.perm","medium","EN-L4",0.5,0.256775834697024,0.256775834697024,0,0,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.perm","medium","EN-L4",0.8,0.441601846755947,0.468676389653275,0.146272855133615,0,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.perm","medium","EN-L4",1,0.795371726961944,0.830845105505609,0.743465028075033,0.00374707259953162,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.perm","small","IN-SV2C",0.5,0.833396473541122,0.833396473541122,0,0,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.perm","small","IN-SV2C",0.8,0.929156233683449,0.95644745177765,0.915704490180772,0,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.perm","small","IN-SV2C",1,0.960091534065783,0.960091534065783,0.955306845070568,0,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.pooled","large","OL",0.5,0.362194237810543,0.379072791199769,0.303828529214906,0.0118735158105237,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.pooled","large","OL",0.8,0.464834669993623,0.568554926563042,0.354177470777004,0.0128569495195561,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.pooled","large","OL",1,0.910954547054475,0.940590511392224,0.935562575494719,0.0702305580119375,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.pooled","medium","EN-L4",0.5,0.140808391254388,0.140808391254388,0.046166813885504,0,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.pooled","medium","EN-L4",0.8,0.234262826392711,0.234262826392711,0.180922460710573,0,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.pooled","medium","EN-L4",1,0.798287209471267,0.831355656670033,0.718001379272679,0.00425985090521832,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.pooled","small","IN-SV2C",0.5,0.835977394761972,0.835977394761972,0.837216195202388,0.0498652291105121,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.pooled","small","IN-SV2C",0.8,0.836000610358011,0.842748248684597,0.838310459657329,0.0872186351799665,3
+"ms","decomp: kNN nhoods + cacoa perm: bh.pooled","small","IN-SV2C",1,0.913556895067831,0.913556895067831,0.913887047841001,0.0427251732101617,3
+"ms","decomp: kNN nhoods + cacoa perm: fdr.sd","large","OL",0.5,0.369407139990623,0.379072791199769,0.302086086553426,0.0126666666666667,3
+"ms","decomp: kNN nhoods + cacoa perm: fdr.sd","large","OL",0.8,0.464834669993623,0.568554926563042,0.347745305885667,0.0132663035888842,3
+"ms","decomp: kNN nhoods + cacoa perm: fdr.sd","large","OL",1,0.911330951850948,0.940590511392224,0.935693964274117,0.0702186015595929,3
+"ms","decomp: kNN nhoods + cacoa perm: fdr.sd","medium","EN-L4",0.5,0.140658443736019,0.140658443736019,0.046166813885504,0,3
+"ms","decomp: kNN nhoods + cacoa perm: fdr.sd","medium","EN-L4",0.8,0.234262826392711,0.234262826392711,0.161979147557023,0,3
+"ms","decomp: kNN nhoods + cacoa perm: fdr.sd","medium","EN-L4",1,0.798287209471267,0.831355656670033,0.715056265484192,0.00425985090521832,3
+"ms","decomp: kNN nhoods + cacoa perm: fdr.sd","small","IN-SV2C",0.5,0.823346222284841,0.823346222284841,0.837216195202388,0.0498652291105121,3
+"ms","decomp: kNN nhoods + cacoa perm: fdr.sd","small","IN-SV2C",0.8,0.836000610358011,0.842748248684597,0.838310459657329,0.0872186351799665,3
+"ms","decomp: kNN nhoods + cacoa perm: fdr.sd","small","IN-SV2C",1,0.911779238839197,0.918251730748582,0.913104575227543,0.0428240740740741,3
+"ms","decomp: kNN nhoods + cacoa perm: perm.fdr","large","OL",0.5,0.355536090821905,0.370279029631187,0.288497140411544,0.0134294599943455,3
+"ms","decomp: kNN nhoods + cacoa perm: perm.fdr","large","OL",0.8,0.403595161194862,0.549071412085462,0.353814720472764,0.0133501967397414,3
+"ms","decomp: kNN nhoods + cacoa perm: perm.fdr","large","OL",1,0.922705838482687,0.941052590195892,0.933339462133148,0.0658795954429268,3
+"ms","decomp: kNN nhoods + cacoa perm: perm.fdr","medium","EN-L4",0.5,0.140658443736019,0.140658443736019,0.046166813885504,0,3
+"ms","decomp: kNN nhoods + cacoa perm: perm.fdr","medium","EN-L4",0.8,0.208515257139363,0.208515257139363,0.139691799669785,0,3
+"ms","decomp: kNN nhoods + cacoa perm: perm.fdr","medium","EN-L4",1,0.804085616292134,0.815030179699224,0.728592207969336,0.0040650406504065,3
+"ms","decomp: kNN nhoods + cacoa perm: perm.fdr","small","IN-SV2C",0.5,0.839885825806081,0.841002520390113,0.846149751874638,0.0497981157469717,3
+"ms","decomp: kNN nhoods + cacoa perm: perm.fdr","small","IN-SV2C",0.8,0.839422923841927,0.846170562168512,0.845583088112974,0.0854185162519286,3
+"ms","decomp: kNN nhoods + cacoa perm: perm.fdr","small","IN-SV2C",1,0.922673080855697,0.922673080855697,0.91466952045446,0.0426758938869665,3
+"ms","decomp: kNN nhoods + edgeR QL (libsize): bh","large","OL",0.5,0.223058178247404,0.370111470962436,0.00883824137801346,0,3
+"ms","decomp: kNN nhoods + edgeR QL (libsize): bh","large","OL",0.8,0.864221983226912,0.941336005971265,0.748870851262248,0.0267026490537169,3
+"ms","decomp: kNN nhoods + edgeR QL (libsize): bh","large","OL",1,0.981768692867541,0.986959055181451,0.975490661802637,0.0440580058858503,3
+"ms","decomp: kNN nhoods + edgeR QL (libsize): bh","medium","EN-L4",0.5,0,0,0,0,3
+"ms","decomp: kNN nhoods + edgeR QL (libsize): bh","medium","EN-L4",0.8,0.226241668195438,0.590052781263681,0.0285990338164251,0,3
+"ms","decomp: kNN nhoods + edgeR QL (libsize): bh","medium","EN-L4",1,0.753255691536573,0.860504145135333,0.774799924745,0.0429276029211821,3
+"ms","decomp: kNN nhoods + edgeR QL (libsize): bh","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","decomp: kNN nhoods + edgeR QL (libsize): bh","small","IN-SV2C",0.8,0.882785651437841,0.889630278405671,0.82597524760485,0,3
+"ms","decomp: kNN nhoods + edgeR QL (libsize): bh","small","IN-SV2C",1,0.928296909663906,0.928296909663906,0.917150845904255,0.037914691943128,3
+"ms","decomp: kNN nhoods + edgeR QL: bh","large","OL",0.5,0.27124339775651,0.419025406124769,0.0165481966226635,0,3
+"ms","decomp: kNN nhoods + edgeR QL: bh","large","OL",0.8,0.822190929947068,0.910832499989931,0.794084508018153,0.0313434320847957,3
+"ms","decomp: kNN nhoods + edgeR QL: bh","large","OL",1,0.967321657061613,0.983269103356431,0.978771064942768,0.0638788838276802,3
+"ms","decomp: kNN nhoods + edgeR QL: bh","medium","EN-L4",0.5,0,0,0,0,3
+"ms","decomp: kNN nhoods + edgeR QL: bh","medium","EN-L4",0.8,0.339814101388125,0.580906622790354,0.0285990338164251,0,3
+"ms","decomp: kNN nhoods + edgeR QL: bh","medium","EN-L4",1,0.76530638878441,0.854218874068723,0.75710057631631,0.0411867811494498,3
+"ms","decomp: kNN nhoods + edgeR QL: bh","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","decomp: kNN nhoods + edgeR QL: bh","small","IN-SV2C",0.8,0.868953730339576,0.888803148546283,0.77039110200282,0,3
+"ms","decomp: kNN nhoods + edgeR QL: bh","small","IN-SV2C",1,0.928281934111495,0.928281934111495,0.913961053240779,0.0381558028616852,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","large","OL",0.5,0.303044912190102,0.343776041604522,0.10017396217863,0,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","large","OL",0.8,0.715841774796514,0.732601551332827,0.586585033486991,0.00455954769286887,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","large","OL",1,0.932800594842143,0.945110996477866,0.896334193724991,0.0212283902881907,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","medium","EN-L4",0.5,0.215036700774132,0.215036700774132,0.0256529850746269,0,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","medium","EN-L4",0.8,0.722740047393058,0.753271448359242,0.377407618224296,0,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","medium","EN-L4",1,0.85860412233856,0.865565300384075,0.829900585851426,0.0111607904695556,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","small","IN-SV2C",0.5,0.415968732551647,0.415968732551647,0.150753768844221,0,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","small","IN-SV2C",0.8,0.948233899416254,0.975483506254695,0.931579653552998,0,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","small","IN-SV2C",1,0.965910045055331,0.978669215709238,0.963517700557723,0,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","large","OL",0.5,0.362754370301287,0.403742754257671,0.276345651751823,0,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","large","OL",0.8,0.655238171012101,0.73448220754664,0.598196001822126,0.0306106571765983,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","large","OL",1,0.890462413909089,0.910773857287431,0.922656875024649,0.0867593173514107,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","medium","EN-L4",0.5,0.157306906202232,0.157306906202232,0.0256529850746269,0,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","medium","EN-L4",0.8,0.724918614907909,0.743662576260566,0.377778192430864,0,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","medium","EN-L4",1,0.854026029358804,0.875146251635642,0.834711715866811,0.0120535592263426,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","small","IN-SV2C",0.5,0.836180904522613,0.836180904522613,0.741021827726378,0,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","small","IN-SV2C",0.8,0.963850456208645,0.971444622122868,0.954971838878715,0,3
+"ms","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","small","IN-SV2C",1,0.977841816438548,0.988864150148669,0.972259679277463,0,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","large","OL",0.5,0.402902597939309,0.477083694145686,0.350116018910203,0.0521104561196431,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","large","OL",0.8,0.600295660613825,0.811304366227922,0.630409117169345,0.0717550585335563,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","large","OL",1,0.907652378901047,0.96294103797226,0.937990483163549,0.0634103425584985,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","medium","EN-L4",0.5,0.247587909137451,0.364727244954036,0.270031960132082,0.0185990338164251,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","medium","EN-L4",0.8,0.490462517531373,0.633417995669788,0.515011282447746,0.0766693709633936,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","medium","EN-L4",1,0.746685483434169,0.78211341930327,0.845295936365772,0.102841534620238,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","small","IN-SV2C",0.5,0.745170295924065,0.745170295924065,0.835387738276011,0.175744269459365,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","small","IN-SV2C",0.8,0.897129824525647,0.897129824525647,0.938359204271219,0.269462956184596,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","small","IN-SV2C",1,0.967924075112428,0.967924075112428,0.98481700710968,0.285912679533751,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","large","OL",0.5,0.410848277991401,0.478529859935063,0.260242923568862,0,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","large","OL",0.8,0.749393268319236,0.824068659645898,0.622365432021399,0.0286516589842615,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","large","OL",1,0.934537720262219,0.96232175150589,0.922572867018622,0.0315617983194262,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","medium","EN-L4",0.5,0.287917431686424,0.287917431686424,0.112622545728398,0,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","medium","EN-L4",0.8,0.668415870239552,0.710927947534238,0.403050344976899,0,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","medium","EN-L4",1,0.85136983562938,0.858031743790218,0.83399736667848,0.0196367986462096,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","small","IN-SV2C",0.5,0.762479061976549,0.762479061976549,0.203738317757009,0,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","small","IN-SV2C",0.8,0.910141051877124,0.954686504553505,0.933606760850236,0.037525354969574,3
+"ms","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","small","IN-SV2C",1,0.951469359765329,0.965025978585105,0.981687116655846,0.160810757143699,3
+"ms","decomp: kNN nhoods + voom-weighted perm: fdr.sd","large","OL",0.5,0.320961092427313,0.39371395473808,0.313370870291597,0.0699259618564644,3
+"ms","decomp: kNN nhoods + voom-weighted perm: fdr.sd","large","OL",0.8,0.429829176036873,0.605063968961875,0.650433984696245,0.116851709386845,3
+"ms","decomp: kNN nhoods + voom-weighted perm: fdr.sd","large","OL",1,0.883711453275091,0.891438754328247,0.957542902430986,0.191232351807909,3
+"ms","decomp: kNN nhoods + voom-weighted perm: fdr.sd","medium","EN-L4",0.5,0.251705513145026,0.448188563753844,0.271697177233021,0.0469570590052518,3
+"ms","decomp: kNN nhoods + voom-weighted perm: fdr.sd","medium","EN-L4",0.8,0.547124896784127,0.699123662115535,0.506132282025935,0.0504043905257077,3
+"ms","decomp: kNN nhoods + voom-weighted perm: fdr.sd","medium","EN-L4",1,0.783724914308423,0.823169487748507,0.848108765502673,0.117069566679093,3
+"ms","decomp: kNN nhoods + voom-weighted perm: fdr.sd","small","IN-SV2C",0.5,0.724585544545156,0.740219268721593,0.803003595339105,0.120892776709457,3
+"ms","decomp: kNN nhoods + voom-weighted perm: fdr.sd","small","IN-SV2C",0.8,0.880774679117327,0.880774679117327,0.948633027787827,0.178034100051714,3
+"ms","decomp: kNN nhoods + voom-weighted perm: fdr.sd","small","IN-SV2C",1,0.958469921639332,0.958469921639332,0.987209351607288,0.174403689079514,3
+"ms","decomp: kNN nhoods + voom-weighted perm: perm.fdr","large","OL",0.5,0.363271084420905,0.406179566498223,0.262291203059945,0,3
+"ms","decomp: kNN nhoods + voom-weighted perm: perm.fdr","large","OL",0.8,0.592597732254666,0.766605183911363,0.634238895848492,0.0458818841502016,3
+"ms","decomp: kNN nhoods + voom-weighted perm: perm.fdr","large","OL",1,0.896152563135073,0.918403773442414,0.943417768074826,0.133766472950909,3
+"ms","decomp: kNN nhoods + voom-weighted perm: perm.fdr","medium","EN-L4",0.5,0.211433672405985,0.211433672405985,0.0256529850746269,0,3
+"ms","decomp: kNN nhoods + voom-weighted perm: perm.fdr","medium","EN-L4",0.8,0.720153779180211,0.720153779180211,0.284933345563505,0,3
+"ms","decomp: kNN nhoods + voom-weighted perm: perm.fdr","medium","EN-L4",1,0.853747368602099,0.864315958752173,0.835189195868338,0.0115790155200265,3
+"ms","decomp: kNN nhoods + voom-weighted perm: perm.fdr","small","IN-SV2C",0.5,0.808028720967245,0.808028720967245,0.525346357958014,0,3
+"ms","decomp: kNN nhoods + voom-weighted perm: perm.fdr","small","IN-SV2C",0.8,0.9501058248875,0.962251573875354,0.945210714303912,0,3
+"ms","decomp: kNN nhoods + voom-weighted perm: perm.fdr","small","IN-SV2C",1,0.986471805651061,0.988864150148669,0.984079461153453,0,3
+"ms","decomp: kNN nhoods + voom: bh","large","OL",0.5,0.276126488357958,0.276126488357958,0,0,3
+"ms","decomp: kNN nhoods + voom: bh","large","OL",0.8,0.607386764451997,0.755797057210671,0.63403374421276,0.0304820517499839,3
+"ms","decomp: kNN nhoods + voom: bh","large","OL",1,0.925100856064113,0.931394867405797,0.935929956646189,0.0834242052878223,3
+"ms","decomp: kNN nhoods + voom: bh","medium","EN-L4",0.5,0,0,0,0,3
+"ms","decomp: kNN nhoods + voom: bh","medium","EN-L4",0.8,0.682957499619806,0.682957499619806,0.163619519354247,0,3
+"ms","decomp: kNN nhoods + voom: bh","medium","EN-L4",1,0.856371245529094,0.888619883946168,0.838859974252169,0.010798682862224,3
+"ms","decomp: kNN nhoods + voom: bh","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","decomp: kNN nhoods + voom: bh","small","IN-SV2C",0.8,0.886480784583579,0.919587745534344,0.875009799428384,0,3
+"ms","decomp: kNN nhoods + voom: bh","small","IN-SV2C",1,0.954910501809679,0.954910501809679,0.954895526257268,0.104583333333333,3
+"ms","heat: bh.param","large","OL",0.5,0.194924312954726,0.194924312954726,0,0,3
+"ms","heat: bh.param","large","OL",0.8,0.48180497714083,0.48180497714083,0.137684769971765,0,3
+"ms","heat: bh.param","large","OL",1,0.891733436181809,0.891733436181809,0.471774777909175,0,3
+"ms","heat: bh.param","medium","EN-L4",0.5,0,0,0,0,3
+"ms","heat: bh.param","medium","EN-L4",0.8,0.173408239700375,0.173408239700375,0,0,3
+"ms","heat: bh.param","medium","EN-L4",1,0.654388059837396,0.654388059837396,0.346929688935996,0,3
+"ms","heat: bh.param","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","heat: bh.param","small","IN-SV2C",0.8,0.507510637120753,0.507510637120753,0,0,3
+"ms","heat: bh.param","small","IN-SV2C",1,0.82648834209487,0.82648834209487,0.530770519950474,0,3
+"ms","heat: bh.perm","large","OL",0.5,0.247543188165925,0.247543188165925,0,0,3
+"ms","heat: bh.perm","large","OL",0.8,0.754370775620211,0.754370775620211,0.221267231356917,0,3
+"ms","heat: bh.perm","large","OL",1,0.934699936696806,0.934699936696806,0.762081299462111,4.492060283449e-05,3
+"ms","heat: bh.perm","medium","EN-L4",0.5,0.173158278628738,0.173158278628738,0,0,3
+"ms","heat: bh.perm","medium","EN-L4",0.8,0.64163434669419,0.64163434669419,0,0,3
+"ms","heat: bh.perm","medium","EN-L4",1,0.830448855415968,0.830448855415968,0.702309005802072,0,3
+"ms","heat: bh.perm","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","heat: bh.perm","small","IN-SV2C",0.8,0.56180208972622,0.56180208972622,0,0,3
+"ms","heat: bh.perm","small","IN-SV2C",1,0.882737586062173,0.882737586062173,0.542910792341316,0,3
+"ms","heat: bh.pooled","large","OL",0.5,0.252543015758077,0.252543015758077,0,0,3
+"ms","heat: bh.pooled","large","OL",0.8,0.7607460045608,0.7607460045608,0.289906770624754,0,3
+"ms","heat: bh.pooled","large","OL",1,0.922294694055987,0.922294694055987,0.545166253932552,0,3
+"ms","heat: bh.pooled","medium","EN-L4",0.5,0.169219547775346,0.169219547775346,0,0,3
+"ms","heat: bh.pooled","medium","EN-L4",0.8,0.480177970122311,0.480177970122311,0,0,3
+"ms","heat: bh.pooled","medium","EN-L4",1,0.76804848194088,0.76804848194088,0.588066224788485,0,3
+"ms","heat: bh.pooled","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","heat: bh.pooled","small","IN-SV2C",0.8,0.548786654160732,0.548786654160732,0,0,3
+"ms","heat: bh.pooled","small","IN-SV2C",1,0.854840098597487,0.854840098597487,0.544403743150896,0,3
+"ms","heat: fdr.mad","large","OL",0.5,0.21250991345126,0.21250991345126,0,0,3
+"ms","heat: fdr.mad","large","OL",0.8,0.427224715333891,0.427224715333891,0,0,3
+"ms","heat: fdr.mad","large","OL",1,0.822959520104486,0.822959520104486,0,0,3
+"ms","heat: fdr.mad","medium","EN-L4",0.5,0,0,0,0,3
+"ms","heat: fdr.mad","medium","EN-L4",0.8,0,0,0,0,3
+"ms","heat: fdr.mad","medium","EN-L4",1,0,0,0,0,3
+"ms","heat: fdr.mad","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","heat: fdr.mad","small","IN-SV2C",0.8,0,0,0,0,3
+"ms","heat: fdr.mad","small","IN-SV2C",1,0,0,0,0,3
+"ms","heat: fdr.raw","large","OL",0.5,0.248612116823558,0.248612116823558,0,0,3
+"ms","heat: fdr.raw","large","OL",0.8,0.753073451036112,0.753073451036112,0.311216214583028,0,3
+"ms","heat: fdr.raw","large","OL",1,0.906854352258571,0.906854352258571,0.545269942062721,0,3
+"ms","heat: fdr.raw","medium","EN-L4",0.5,0,0,0,0,3
+"ms","heat: fdr.raw","medium","EN-L4",0.8,0.448235148906298,0.448235148906298,0,0,3
+"ms","heat: fdr.raw","medium","EN-L4",1,0.746935089837312,0.746935089837312,0.542995344145658,0,3
+"ms","heat: fdr.raw","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","heat: fdr.raw","small","IN-SV2C",0.8,0.552079111615466,0.552079111615466,0,0,3
+"ms","heat: fdr.raw","small","IN-SV2C",1,0.854333594573207,0.854333594573207,0.534567027163838,0,3
+"ms","heat: fdr.sd","large","OL",0.5,0.252439571049274,0.252439571049274,0,0,3
+"ms","heat: fdr.sd","large","OL",0.8,0.761712256093996,0.761712256093996,0.289322816668672,0,3
+"ms","heat: fdr.sd","large","OL",1,0.922529170910477,0.922529170910477,0.544789982163217,0,3
+"ms","heat: fdr.sd","medium","EN-L4",0.5,0.16980306345733,0.16980306345733,0,0,3
+"ms","heat: fdr.sd","medium","EN-L4",0.8,0.478804815299105,0.478804815299105,0,0,3
+"ms","heat: fdr.sd","medium","EN-L4",1,0.765761896575026,0.765761896575026,0.582738267878904,0,3
+"ms","heat: fdr.sd","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","heat: fdr.sd","small","IN-SV2C",0.8,0.533095051535515,0.533095051535515,0,0,3
+"ms","heat: fdr.sd","small","IN-SV2C",1,0.831630511743542,0.831630511743542,0.534567027163838,0,3
+"ms","heat: fdr.tb","large","OL",0.5,0.23750905141202,0.23750905141202,0,0,3
+"ms","heat: fdr.tb","large","OL",0.8,0.695008207811203,0.695008207811203,0.274474839714802,0,3
+"ms","heat: fdr.tb","large","OL",1,0.892217449815203,0.892217449815203,0.539364653579661,0,3
+"ms","heat: fdr.tb","medium","EN-L4",0.5,0.210503282275711,0.210503282275711,0,0,3
+"ms","heat: fdr.tb","medium","EN-L4",0.8,0.616185055007078,0.616185055007078,0.191385767790262,0,3
+"ms","heat: fdr.tb","medium","EN-L4",1,0.763798679464834,0.763798679464834,0.620403528378609,0,3
+"ms","heat: fdr.tb","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","heat: fdr.tb","small","IN-SV2C",0.8,0.534404829452248,0.534404829452248,0,0,3
+"ms","heat: fdr.tb","small","IN-SV2C",1,0.839318579558192,0.839318579558192,0.534567027163838,0,3
+"ms","heat: fdr.tbscale","large","OL",0.5,0.244888107306645,0.244888107306645,0,0,3
+"ms","heat: fdr.tbscale","large","OL",0.8,0.721781807732918,0.721781807732918,0.273134643411785,0,3
+"ms","heat: fdr.tbscale","large","OL",1,0.902081422496319,0.902081422496319,0.538566714098341,0,3
+"ms","heat: fdr.tbscale","medium","EN-L4",0.5,0.214296134208607,0.214296134208607,0,0,3
+"ms","heat: fdr.tbscale","medium","EN-L4",0.8,0.630242561708635,0.630242561708635,0.19625468164794,0,3
+"ms","heat: fdr.tbscale","medium","EN-L4",1,0.766252934947501,0.766252934947501,0.628162515988748,0,3
+"ms","heat: fdr.tbscale","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","heat: fdr.tbscale","small","IN-SV2C",0.8,0.546146512426807,0.546146512426807,0,0,3
+"ms","heat: fdr.tbscale","small","IN-SV2C",1,0.839318579558192,0.839318579558192,0.534567027163838,0,3
+"ms","heat: nbhd.param","large","OL",0.5,0,0,0,0,3
+"ms","heat: nbhd.param","large","OL",0.8,0.419896862268353,0.515395948798829,0,0,3
+"ms","heat: nbhd.param","large","OL",1,0.711251796287081,0.798847243628963,0.526230455829411,0,3
+"ms","heat: nbhd.param","medium","EN-L4",0.5,0,0,0,0,3
+"ms","heat: nbhd.param","medium","EN-L4",0.8,0,0,0,0,3
+"ms","heat: nbhd.param","medium","EN-L4",1,0.709856976183754,0.709856976183754,0,0,3
+"ms","heat: nbhd.param","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","heat: nbhd.param","small","IN-SV2C",0.8,0,0,0,0,3
+"ms","heat: nbhd.param","small","IN-SV2C",1,0.595711314959606,0.595711314959606,0.281700835231587,0,3
+"ms","heat: nbhd.pooled","large","OL",0.5,0.203441260646185,0.203441260646185,0,0,3
+"ms","heat: nbhd.pooled","large","OL",0.8,0.515096807443701,0.515096807443701,0.199136356087029,0.000226572412543049,3
+"ms","heat: nbhd.pooled","large","OL",1,0.873560732285123,0.873560732285123,0.594109448051673,0.000518995225243928,3
+"ms","heat: nbhd.pooled","medium","EN-L4",0.5,0,0,0,0,3
+"ms","heat: nbhd.pooled","medium","EN-L4",0.8,0.260299625468165,0.260299625468165,0,0,3
+"ms","heat: nbhd.pooled","medium","EN-L4",1,0.783676711381936,0.783676711381936,0.656340194316559,0,3
+"ms","heat: nbhd.pooled","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","heat: nbhd.pooled","small","IN-SV2C",0.8,0.297172912557528,0.297172912557528,0,0,3
+"ms","heat: nbhd.pooled","small","IN-SV2C",1,0.890478862992631,0.890478862992631,0.291571753986333,0,3
+"ms","heat: perm.fdr","large","OL",0.5,0.248612116823558,0.248612116823558,0,0,3
+"ms","heat: perm.fdr","large","OL",0.8,0.753073451036112,0.753073451036112,0.311216214583028,0,3
+"ms","heat: perm.fdr","large","OL",1,0.906854352258571,0.906854352258571,0.545269942062721,0,3
+"ms","heat: perm.fdr","medium","EN-L4",0.5,0,0,0,0,3
+"ms","heat: perm.fdr","medium","EN-L4",0.8,0.448235148906298,0.448235148906298,0,0,3
+"ms","heat: perm.fdr","medium","EN-L4",1,0.746935089837312,0.746935089837312,0.542995344145658,0,3
+"ms","heat: perm.fdr","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","heat: perm.fdr","small","IN-SV2C",0.8,0.552079111615466,0.552079111615466,0,0,3
+"ms","heat: perm.fdr","small","IN-SV2C",1,0.854333594573207,0.854333594573207,0.534567027163838,0,3
+"ms","heat: spatial.param","large","OL",0.5,0,0,0,0,3
+"ms","heat: spatial.param","large","OL",0.8,0.346559208334959,0.479302938612321,0.114017605048995,0,3
+"ms","heat: spatial.param","large","OL",1,0.75615303840507,0.75615303840507,0.443707750071007,0,3
+"ms","heat: spatial.param","medium","EN-L4",0.5,0,0,0,0,3
+"ms","heat: spatial.param","medium","EN-L4",0.8,0,0,0,0,3
+"ms","heat: spatial.param","medium","EN-L4",1,0.594305934189312,0.594305934189312,0,0,3
+"ms","heat: spatial.param","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","heat: spatial.param","small","IN-SV2C",0.8,0,0,0,0,3
+"ms","heat: spatial.param","small","IN-SV2C",1,0.557942908740175,0.557942908740175,0.23538344722855,0,3
+"ms","heat: spatial.pooled","large","OL",0.5,0.193786421157891,0.193786421157891,0,0,3
+"ms","heat: spatial.pooled","large","OL",0.8,0.476144157887672,0.476144157887672,0.155206776283009,0,3
+"ms","heat: spatial.pooled","large","OL",1,0.852126916706402,0.852126916706402,0.5025393684814,0,3
+"ms","heat: spatial.pooled","medium","EN-L4",0.5,0,0,0,0,3
+"ms","heat: spatial.pooled","medium","EN-L4",0.8,0.350394010576378,0.350394010576378,0,0,3
+"ms","heat: spatial.pooled","medium","EN-L4",1,0.704075629351831,0.704075629351831,0.513856780329036,0,3
+"ms","heat: spatial.pooled","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","heat: spatial.pooled","small","IN-SV2C",0.8,0.239973701512163,0.239973701512163,0,0,3
+"ms","heat: spatial.pooled","small","IN-SV2C",1,0.810818560551844,0.810818560551844,0.268033409263478,0,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr","large","OL",0.5,0,0,0,0,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr","large","OL",0.8,0.115843870950541,0.176465030226409,0.0224606514576881,0.00452507134121484,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr","large","OL",1,0.507083099136137,0.601590415829856,0.292939792077263,0.00798705629458577,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr","medium","EN-L4",0.5,0.000150217815832958,0.000150217815832958,0,0,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr","medium","EN-L4",0.8,0.0502034988735605,0.0502034988735605,0.00655430711610487,0,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr","medium","EN-L4",1,0.392739910194841,0.392739910194841,0.167482752792283,0.00431973996902077,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr","small","IN-SV2C",0.5,0.000545553737043099,0.000545553737043099,0,0,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr","small","IN-SV2C",0.8,0.311757214570883,0.375330335046005,0.178183331341591,0.00680272108843537,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr","small","IN-SV2C",1,0.691912140796256,0.739163762245565,0.599296219607053,0.00532724505327245,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","large","OL",0.5,0,0,0,0,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","large","OL",0.8,0.714285715196428,0.795136668404347,0.611971285885631,0.00747540532745719,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","large","OL",1,0.926542974948105,0.970601750626656,0.953446074656722,0.0654768432763136,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","medium","EN-L4",0.5,0.024785939612438,0.024785939612438,0,0,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","medium","EN-L4",0.8,0.769861580328953,0.790086299430076,0.225093632958801,0,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","medium","EN-L4",1,0.898998714900521,0.934802637257085,0.876140192368205,0.0214838816426082,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","small","IN-SV2C",0.5,0.0714675395526459,0.0714675395526459,0,0,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","small","IN-SV2C",0.8,0.968212280547231,0.984279113428057,0.967625274098952,0.0433554391055057,3
+"ms","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","small","IN-SV2C",1,0.995165741849805,0.998498498498498,0.998498498498498,0.0678370401666524,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd","large","OL",0.5,0.00530238274044344,0.00948064615831656,0.00162243930521161,0.0142857142857143,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd","large","OL",0.8,0.100842087671211,0.321181053010479,0.0578188856522638,0.0238340353676992,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd","large","OL",1,0.625339705439886,0.742048684713449,0.496759521271209,0.0209476521187336,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd","medium","EN-L4",0.5,0.00512141666837445,0.0113076615400576,0.00204664378228081,0.0133333333333333,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd","medium","EN-L4",0.8,0.0405938462836882,0.0877384931070817,0.0150588026552803,0.0173611111111111,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd","medium","EN-L4",1,0.295535912458599,0.459125023988423,0.220605107583751,0.0164743716334408,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd","small","IN-SV2C",0.5,0.0103135635050529,0.0507777052164433,0.000610500610500611,0,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd","small","IN-SV2C",0.8,0.236866476266591,0.311529325758691,0.237441956623903,0.0406607054148038,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd","small","IN-SV2C",1,0.631280028622954,0.700590400382794,0.640819353709697,0.0513265129183284,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd + inheritance","large","OL",0.5,0.353449902227838,0.476453045907795,0.128215155805231,0.00651486401012018,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd + inheritance","large","OL",0.8,0.644058791814826,0.76751377855437,0.746118250376527,0.0614144359426129,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd + inheritance","large","OL",1,0.961574323963933,0.973957448261902,0.984828178547166,0.110242083205359,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd + inheritance","medium","EN-L4",0.5,0.37003975211368,0.512100437132955,0.171394254710906,0.00698602794411178,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd + inheritance","medium","EN-L4",0.8,0.771849251296141,0.829648654976659,0.483756217466228,0.0204955485021383,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd + inheritance","medium","EN-L4",1,0.891399996159389,0.925083502493961,0.905646640530265,0.0491159607937224,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd + inheritance","small","IN-SV2C",0.5,0.577546566908269,0.577546566908269,0.108669108669109,0,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd + inheritance","small","IN-SV2C",0.8,0.96249223140997,0.977582983065527,0.983000214362013,0.143910762312327,3
+"ms","weighted: 1-hop + weighted perm: fdr.sd + inheritance","small","IN-SV2C",1,0.993951240534384,0.998498498498498,1,0.216750844510157,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr","large","OL",0.5,7.07686731644418e-05,0.00859754873298484,0,0,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr","large","OL",0.8,0.102683460495072,0.272258855731299,0.03572904295124,0.01134954294453,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr","large","OL",1,0.569239397574699,0.712359270631278,0.417474897317791,0.014150618329376,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr","medium","EN-L4",0.5,0.000709267431486347,0.00333508800041414,0.000150217815832958,0,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr","medium","EN-L4",0.8,0.0415669186439158,0.0734977141048135,0.00655430711610487,0.00694444444444444,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr","medium","EN-L4",1,0.320759387214239,0.449726178972341,0.173786923598175,0.00899270417776956,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr","small","IN-SV2C",0.5,0.0126126828254488,0.0366958793224384,0,0,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr","small","IN-SV2C",0.8,0.279736821594033,0.358543149791691,0.182970427721691,0.00953496152559384,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr","small","IN-SV2C",1,0.636753878528914,0.733535004108229,0.595956817230714,0.0260711873977645,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr + inheritance","large","OL",0.5,0.136559695648685,0.239383311343588,0,0,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr + inheritance","large","OL",0.8,0.727742083158861,0.807783886811308,0.678595730815814,0.0280991621928059,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr + inheritance","large","OL",1,0.954174632554481,0.977224454890164,0.975842537519985,0.0944287037547539,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr + inheritance","medium","EN-L4",0.5,0.104730034650873,0.270010851572827,0.024785939612438,0,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr + inheritance","medium","EN-L4",0.8,0.672988112009411,0.857703936835799,0.21685393258427,0.00762527233115468,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr + inheritance","medium","EN-L4",1,0.892503641499435,0.934287894368242,0.874914808259948,0.040903395599872,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr + inheritance","small","IN-SV2C",0.5,0.405450341620554,0.405450341620554,0,0,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr + inheritance","small","IN-SV2C",0.8,0.926239224414372,0.978077765057239,0.972206923569959,0.0498460463183347,3
+"ms","weighted: 1-hop + weighted perm: perm.fdr + inheritance","small","IN-SV2C",1,0.98786827830108,0.998498498498498,1,0.202497683496475,3
+"ms","weighted: heat + unweighted perm: perm.fdr","large","OL",0.5,0.248612116823558,0.248612116823558,0,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr","large","OL",0.8,0.753073451036112,0.753073451036112,0.311216214583028,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr","large","OL",1,0.906854352258571,0.906854352258571,0.545269942062721,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr","medium","EN-L4",0.5,0,0,0,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr","medium","EN-L4",0.8,0.448235148906298,0.448235148906298,0,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr","medium","EN-L4",1,0.746935089837312,0.746935089837312,0.542995344145658,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr","small","IN-SV2C",0.8,0.552079111615466,0.552079111615466,0,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr","small","IN-SV2C",1,0.854333594573207,0.854333594573207,0.534567027163838,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr + inheritance","large","OL",0.5,0.32829902417158,0.331229957587669,0,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr + inheritance","large","OL",0.8,0.991366383870638,0.991823118632305,0.650513857507544,0.000597501357957632,3
+"ms","weighted: heat + unweighted perm: perm.fdr + inheritance","large","OL",1,0.998729961402747,0.998729961402747,0.989920182117146,0.000408405732531373,3
+"ms","weighted: heat + unweighted perm: perm.fdr + inheritance","medium","EN-L4",0.5,0,0,0,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr + inheritance","medium","EN-L4",0.8,0.627858842769916,0.627858842769916,0,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr + inheritance","medium","EN-L4",1,0.960222126642511,0.960222126642511,0.912938047148468,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr + inheritance","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr + inheritance","small","IN-SV2C",0.8,0.664052257308316,0.664052257308316,0,0,3
+"ms","weighted: heat + unweighted perm: perm.fdr + inheritance","small","IN-SV2C",1,0.998945147679325,0.998945147679325,0.664405863722492,0,3
+"ms","weighted: heat + weighted perm: fdr.sd","large","OL",0.5,0,0.0114419352327115,0.000680427297892751,0.133769114426049,3
+"ms","weighted: heat + weighted perm: fdr.sd","large","OL",0.8,0.361150663966086,0.361150663966086,0.105347107425259,0.0879308321447675,3
+"ms","weighted: heat + weighted perm: fdr.sd","large","OL",1,0.787383218849559,0.787383218849559,0.679409292178573,0.0277022607350267,3
+"ms","weighted: heat + weighted perm: fdr.sd","medium","EN-L4",0.5,0,0,0.00288777947985219,0.208196535718329,3
+"ms","weighted: heat + weighted perm: fdr.sd","medium","EN-L4",0.8,0.428088344769862,0.497199882741835,0.416887606886246,0.0829699560222581,3
+"ms","weighted: heat + weighted perm: fdr.sd","medium","EN-L4",1,0.750450346474515,0.806131611504307,0.720801347970835,0.036944503038192,3
+"ms","weighted: heat + weighted perm: fdr.sd","small","IN-SV2C",0.5,0,0,0,0.365087137686669,3
+"ms","weighted: heat + weighted perm: fdr.sd","small","IN-SV2C",0.8,0,0.279843444227006,0.448311300112579,0.257521269110787,3
+"ms","weighted: heat + weighted perm: fdr.sd","small","IN-SV2C",1,0.281531531531532,0.28978978978979,0.847238533478838,0.126551212127663,3
+"ms","weighted: heat + weighted perm: fdr.sd + inheritance","large","OL",0.5,0,0.0930138725893466,0.00890906445756838,0.131457865880066,3
+"ms","weighted: heat + weighted perm: fdr.sd + inheritance","large","OL",0.8,0.320212589270885,0.636957459805784,0.470722455594437,0.0995261020225651,3
+"ms","weighted: heat + weighted perm: fdr.sd + inheritance","large","OL",1,0.702600942876254,0.997450579931214,0.99407174169204,0.0584789248590494,3
+"ms","weighted: heat + weighted perm: fdr.sd + inheritance","medium","EN-L4",0.5,0,0,0.0366639293876745,0.161223757100153,3
+"ms","weighted: heat + weighted perm: fdr.sd + inheritance","medium","EN-L4",0.8,0.314528633749523,0.633507099133293,0.62802355571913,0.109779297495311,3
+"ms","weighted: heat + weighted perm: fdr.sd + inheritance","medium","EN-L4",1,0.925837275329415,0.96653851741734,0.946859802685658,0.0628961480821351,3
+"ms","weighted: heat + weighted perm: fdr.sd + inheritance","small","IN-SV2C",0.5,0,0,0.00164203612479475,0.378023630749307,3
+"ms","weighted: heat + weighted perm: fdr.sd + inheritance","small","IN-SV2C",0.8,0,0,0.656390650101698,0.30425067160426,3
+"ms","weighted: heat + weighted perm: fdr.sd + inheritance","small","IN-SV2C",1,0,0.331831831831832,0.995629492414476,0.246109738614585,3
+"ms","weighted: heat + weighted perm: perm.fdr","large","OL",0.5,0,0,0,0,3
+"ms","weighted: heat + weighted perm: perm.fdr","large","OL",0.8,0.165462547749543,0.165462547749543,0,0,3
+"ms","weighted: heat + weighted perm: perm.fdr","large","OL",1,0.682735984320286,0.682735984320286,0.477392554387457,0,3
+"ms","weighted: heat + weighted perm: perm.fdr","medium","EN-L4",0.5,0,0,0,0,3
+"ms","weighted: heat + weighted perm: perm.fdr","medium","EN-L4",0.8,0.197003745318352,0.197003745318352,0,0,3
+"ms","weighted: heat + weighted perm: perm.fdr","medium","EN-L4",1,0.659837623823432,0.659837623823432,0.294100342319213,0,3
+"ms","weighted: heat + weighted perm: perm.fdr","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","weighted: heat + weighted perm: perm.fdr","small","IN-SV2C",0.8,0.274624918460535,0.274624918460535,0,0,3
+"ms","weighted: heat + weighted perm: perm.fdr","small","IN-SV2C",1,0.561602604882787,0.561602604882787,0.475315862559598,0,3
+"ms","weighted: heat + weighted perm: perm.fdr + inheritance","large","OL",0.5,0,0,0,0,3
+"ms","weighted: heat + weighted perm: perm.fdr + inheritance","large","OL",0.8,0.326856003986049,0.326856003986049,0,0,3
+"ms","weighted: heat + weighted perm: perm.fdr + inheritance","large","OL",1,0.993858562060422,0.993858562060422,0.980170926421368,0,3
+"ms","weighted: heat + weighted perm: perm.fdr + inheritance","medium","EN-L4",0.5,0,0,0,0,3
+"ms","weighted: heat + weighted perm: perm.fdr + inheritance","medium","EN-L4",0.8,0.31123595505618,0.31123595505618,0,0,3
+"ms","weighted: heat + weighted perm: perm.fdr + inheritance","medium","EN-L4",1,0.933959561162291,0.933959561162291,0.583948438168592,0,3
+"ms","weighted: heat + weighted perm: perm.fdr + inheritance","small","IN-SV2C",0.5,0,0,0,0,3
+"ms","weighted: heat + weighted perm: perm.fdr + inheritance","small","IN-SV2C",0.8,0.331376386170907,0.331376386170907,0,0,3
+"ms","weighted: heat + weighted perm: perm.fdr + inheritance","small","IN-SV2C",1,0.665156614473243,0.665156614473243,0.659090753623783,0,3
+"pf","1-hop log: bh.param","large","Ciliated",0.5,0,0,0,0,3
+"pf","1-hop log: bh.param","large","Ciliated",0.8,0.00563253868873508,0.00563253868873508,0,0,3
+"pf","1-hop log: bh.param","large","Ciliated",1,0.175955689038858,0.175955689038858,0.121610519444709,0.00325398475715683,3
+"pf","1-hop log: bh.param","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","1-hop log: bh.param","medium","Endothelial Cells",0.8,0.0182766615061508,0.0182766615061508,0.000330196466897804,0,3
+"pf","1-hop log: bh.param","medium","Endothelial Cells",1,0.311427957666073,0.311427957666073,0.213908907739904,0.0023111014765036,3
+"pf","1-hop log: bh.param","small","MUC5B+",0.5,0,0,0,0,3
+"pf","1-hop log: bh.param","small","MUC5B+",0.8,0,0,0,0,3
+"pf","1-hop log: bh.param","small","MUC5B+",1,0.00168471720818291,0.00168471720818291,0,0,3
+"pf","1-hop log: bh.perm","large","Ciliated",0.5,0,0,0,0,3
+"pf","1-hop log: bh.perm","large","Ciliated",0.8,0,0,0,0,3
+"pf","1-hop log: bh.perm","large","Ciliated",1,0.163825730411336,0.163825730411336,0.076241134751773,0.00224971878515186,3
+"pf","1-hop log: bh.perm","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","1-hop log: bh.perm","medium","Endothelial Cells",0.8,0.0202245335974905,0.0202245335974905,0,0,3
+"pf","1-hop log: bh.perm","medium","Endothelial Cells",1,0.293650096730399,0.293650096730399,0.116903703686932,0.00232909158461824,3
+"pf","1-hop log: bh.perm","small","MUC5B+",0.5,0,0,0,0,3
+"pf","1-hop log: bh.perm","small","MUC5B+",0.8,0,0,0,0,3
+"pf","1-hop log: bh.perm","small","MUC5B+",1,0,0,0,0,3
+"pf","1-hop log: bh.pooled","large","Ciliated",0.5,0,0,0,0,3
+"pf","1-hop log: bh.pooled","large","Ciliated",0.8,0.0102118914901611,0.0102118914901611,5.85103270727283e-05,0,3
+"pf","1-hop log: bh.pooled","large","Ciliated",1,0.171637653808888,0.171637653808888,0.118483075883561,0.00245562588658823,3
+"pf","1-hop log: bh.pooled","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","1-hop log: bh.pooled","medium","Endothelial Cells",0.8,0.0328393856225863,0.0328393856225863,0.00462275053656926,0.0112994350282486,3
+"pf","1-hop log: bh.pooled","medium","Endothelial Cells",1,0.304041350533913,0.304041350533913,0.202092593343245,0.0030164589883423,3
+"pf","1-hop log: bh.pooled","small","MUC5B+",0.5,0,0,0,0,3
+"pf","1-hop log: bh.pooled","small","MUC5B+",0.8,0,0,0,0,3
+"pf","1-hop log: bh.pooled","small","MUC5B+",1,0.000240673886883273,0.000240673886883273,0,0,3
+"pf","1-hop log: fdr.mad","large","Ciliated",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.mad","large","Ciliated",0.8,0.00807442513603651,0.00807442513603651,5.85103270727283e-05,0,3
+"pf","1-hop log: fdr.mad","large","Ciliated",1,0.170731169204173,0.170731169204173,0.115739115395708,0.00210526315789474,3
+"pf","1-hop log: fdr.mad","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.mad","medium","Endothelial Cells",0.8,0.0207952376336234,0.0294628948896908,0.00338451378570249,0.0151515151515152,3
+"pf","1-hop log: fdr.mad","medium","Endothelial Cells",1,0.301140415895225,0.301140415895225,0.197974415398775,0.00347696985548474,3
+"pf","1-hop log: fdr.mad","small","MUC5B+",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.mad","small","MUC5B+",0.8,0,0,0,0,3
+"pf","1-hop log: fdr.mad","small","MUC5B+",1,0,0,0,0,3
+"pf","1-hop log: fdr.raw","large","Ciliated",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.raw","large","Ciliated",0.8,0.00813293546310924,0.00813293546310924,5.85103270727283e-05,0,3
+"pf","1-hop log: fdr.raw","large","Ciliated",1,0.17281491365672,0.17281491365672,0.116202580068799,0.00248218800275799,3
+"pf","1-hop log: fdr.raw","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.raw","medium","Endothelial Cells",0.8,0.0296032615108174,0.0296032615108174,8.2549116724451e-05,0,3
+"pf","1-hop log: fdr.raw","medium","Endothelial Cells",1,0.295337229523177,0.295337229523177,0.195959140879371,0.00272926825474596,3
+"pf","1-hop log: fdr.raw","small","MUC5B+",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.raw","small","MUC5B+",0.8,0,0,0,0,3
+"pf","1-hop log: fdr.raw","small","MUC5B+",1,0,0,0,0,3
+"pf","1-hop log: fdr.sd","large","Ciliated",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.sd","large","Ciliated",0.8,0.00988824527529109,0.00988824527529109,5.85103270727283e-05,0,3
+"pf","1-hop log: fdr.sd","large","Ciliated",1,0.170879658221534,0.170879658221534,0.117361077254235,0.00248218800275799,3
+"pf","1-hop log: fdr.sd","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.sd","medium","Endothelial Cells",0.8,0.0294628948896908,0.0294628948896908,0.00338451378570249,0.0151515151515152,3
+"pf","1-hop log: fdr.sd","medium","Endothelial Cells",1,0.302209490098138,0.302209490098138,0.198656320959177,0.00307194757925954,3
+"pf","1-hop log: fdr.sd","small","MUC5B+",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.sd","small","MUC5B+",0.8,0,0,0,0,3
+"pf","1-hop log: fdr.sd","small","MUC5B+",1,0,0,0,0,3
+"pf","1-hop log: fdr.tb","large","Ciliated",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.tb","large","Ciliated",0.8,0.00602656368849102,0.00602656368849102,0,0,3
+"pf","1-hop log: fdr.tb","large","Ciliated",1,0.169731413989638,0.169731413989638,0.111194025931782,0.00182949140139041,3
+"pf","1-hop log: fdr.tb","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.tb","medium","Endothelial Cells",0.8,0.0246747148927218,0.0246747148927218,8.2549116724451e-05,0,3
+"pf","1-hop log: fdr.tb","medium","Endothelial Cells",1,0.302524778302164,0.302524778302164,0.191656226925381,0.00285597233562793,3
+"pf","1-hop log: fdr.tb","small","MUC5B+",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.tb","small","MUC5B+",0.8,0,0,0,0,3
+"pf","1-hop log: fdr.tb","small","MUC5B+",1,0,0,0,0,3
+"pf","1-hop log: fdr.tbscale","large","Ciliated",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.tbscale","large","Ciliated",0.8,0.0078403838277456,0.0078403838277456,5.85103270727283e-05,0,3
+"pf","1-hop log: fdr.tbscale","large","Ciliated",1,0.171797583722088,0.171797583722088,0.116927322002609,0.00248218800275799,3
+"pf","1-hop log: fdr.tbscale","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.tbscale","medium","Endothelial Cells",0.8,0.0318571505016506,0.0318571505016506,0.00346706290242694,0.00757575757575758,3
+"pf","1-hop log: fdr.tbscale","medium","Endothelial Cells",1,0.30590101411093,0.30590101411093,0.205756768741073,0.00340763474953115,3
+"pf","1-hop log: fdr.tbscale","small","MUC5B+",0.5,0,0,0,0,3
+"pf","1-hop log: fdr.tbscale","small","MUC5B+",0.8,0,0,0,0,3
+"pf","1-hop log: fdr.tbscale","small","MUC5B+",1,0,0,0,0,3
+"pf","1-hop log: nbhd.param","large","Ciliated",0.5,0,0,0,0,3
+"pf","1-hop log: nbhd.param","large","Ciliated",0.8,0,0,0,0,3
+"pf","1-hop log: nbhd.param","large","Ciliated",1,0.203640939917132,0.203640939917132,0.166121188832371,0,3
+"pf","1-hop log: nbhd.param","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","1-hop log: nbhd.param","medium","Endothelial Cells",0.8,0.0178306092124814,0.0178306092124814,0.0178306092124814,0,3
+"pf","1-hop log: nbhd.param","medium","Endothelial Cells",1,0.299289861581041,0.299289861581041,0.242622538234239,0,3
+"pf","1-hop log: nbhd.param","small","MUC5B+",0.5,0,0,0,0,3
+"pf","1-hop log: nbhd.param","small","MUC5B+",0.8,0,0,0,0,3
+"pf","1-hop log: nbhd.param","small","MUC5B+",1,0,0,0,0,3
+"pf","1-hop log: nbhd.pooled","large","Ciliated",0.5,0,0,0,0,3
+"pf","1-hop log: nbhd.pooled","large","Ciliated",0.8,0,0,0,0,3
+"pf","1-hop log: nbhd.pooled","large","Ciliated",1,0.196721009785898,0.196721009785898,0.159977498357795,0,3
+"pf","1-hop log: nbhd.pooled","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","1-hop log: nbhd.pooled","medium","Endothelial Cells",0.8,0.0265808155852732,0.0265808155852732,0.0265808155852732,0,3
+"pf","1-hop log: nbhd.pooled","medium","Endothelial Cells",1,0.297492171571586,0.297492171571586,0.236724065474911,0,3
+"pf","1-hop log: nbhd.pooled","small","MUC5B+",0.5,0,0,0,0,3
+"pf","1-hop log: nbhd.pooled","small","MUC5B+",0.8,0,0,0,0,3
+"pf","1-hop log: nbhd.pooled","small","MUC5B+",1,0,0,0,0,3
+"pf","1-hop log: perm.fdr","large","Ciliated",0.5,0,0,0,0,3
+"pf","1-hop log: perm.fdr","large","Ciliated",0.8,0.00813293546310924,0.00813293546310924,5.85103270727283e-05,0,3
+"pf","1-hop log: perm.fdr","large","Ciliated",1,0.17281491365672,0.17281491365672,0.116202580068799,0.00248218800275799,3
+"pf","1-hop log: perm.fdr","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","1-hop log: perm.fdr","medium","Endothelial Cells",0.8,0.0296032615108174,0.0296032615108174,8.2549116724451e-05,0,3
+"pf","1-hop log: perm.fdr","medium","Endothelial Cells",1,0.295337229523177,0.295337229523177,0.195959140879371,0.00272926825474596,3
+"pf","1-hop log: perm.fdr","small","MUC5B+",0.5,0,0,0,0,3
+"pf","1-hop log: perm.fdr","small","MUC5B+",0.8,0,0,0,0,3
+"pf","1-hop log: perm.fdr","small","MUC5B+",1,0,0,0,0,3
+"pf","1-hop log: spatial.param","large","Ciliated",0.5,0,0,0,0,3
+"pf","1-hop log: spatial.param","large","Ciliated",0.8,0,0,0,0,3
+"pf","1-hop log: spatial.param","large","Ciliated",1,0.129302660586751,0.129302660586751,0.0959667803233823,0,3
+"pf","1-hop log: spatial.param","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","1-hop log: spatial.param","medium","Endothelial Cells",0.8,0.000247647350173353,0.000247647350173353,0,0,3
+"pf","1-hop log: spatial.param","medium","Endothelial Cells",1,0.22784057724435,0.22784057724435,0.163533403226182,0.000533333333333333,3
+"pf","1-hop log: spatial.param","small","MUC5B+",0.5,0,0,0,0,3
+"pf","1-hop log: spatial.param","small","MUC5B+",0.8,0,0,0,0,3
+"pf","1-hop log: spatial.param","small","MUC5B+",1,0,0,0,0,3
+"pf","1-hop log: spatial.pooled","large","Ciliated",0.5,0,0,0,0,3
+"pf","1-hop log: spatial.pooled","large","Ciliated",0.8,9.55391354856736e-05,9.55391354856736e-05,0,0,3
+"pf","1-hop log: spatial.pooled","large","Ciliated",1,0.126915485896568,0.126915485896568,0.0912970999849587,0.000888888888888889,3
+"pf","1-hop log: spatial.pooled","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","1-hop log: spatial.pooled","medium","Endothelial Cells",0.8,0.00454020141984481,0.00454020141984481,0.000412745583622255,0,3
+"pf","1-hop log: spatial.pooled","medium","Endothelial Cells",1,0.222789829287608,0.222789829287608,0.149600032022884,0.0015600624024961,3
+"pf","1-hop log: spatial.pooled","small","MUC5B+",0.5,0,0,0,0,3
+"pf","1-hop log: spatial.pooled","small","MUC5B+",0.8,0,0,0,0,3
+"pf","1-hop log: spatial.pooled","small","MUC5B+",1,0,0,0,0,3
+"pf","Milo (graph, spatial FDR)","large","Ciliated",0.5,0,0,0.509180863193806,0.40057410021422,3
+"pf","Milo (graph, spatial FDR)","large","Ciliated",0.8,0,0,0.849995215955547,0.402005793760452,3
+"pf","Milo (graph, spatial FDR)","large","Ciliated",1,0.532196968629563,0.544046910300834,0.987661847466482,0.459660277845947,3
+"pf","Milo (graph, spatial FDR)","medium","Endothelial Cells",0.5,0,0,0.682788523833864,0.443982375632266,3
+"pf","Milo (graph, spatial FDR)","medium","Endothelial Cells",0.8,0,0,0.921463885125256,0.418626067027727,3
+"pf","Milo (graph, spatial FDR)","medium","Endothelial Cells",1,0.58474851835643,0.744854666377078,0.994268356744985,0.465571838809193,3
+"pf","Milo (graph, spatial FDR)","small","MUC5B+",0.5,0,0,0.301108630378928,0.449529369927379,3
+"pf","Milo (graph, spatial FDR)","small","MUC5B+",0.8,0,0,0.584729273477312,0.426211585553865,3
+"pf","Milo (graph, spatial FDR)","small","MUC5B+",1,0,0,0.766649368595161,0.451909580661715,3
+"pf","decomp: 1-hop + edgeR QL: bh","large","Ciliated",0.5,0,0,0.145217070725565,0.568629245303232,3
+"pf","decomp: 1-hop + edgeR QL: bh","large","Ciliated",0.8,0,0,0.342286285560598,0.540908328635164,3
+"pf","decomp: 1-hop + edgeR QL: bh","large","Ciliated",1,0.134851058476184,0.204265952093205,0.951844778104483,0.4481770152586,3
+"pf","decomp: 1-hop + edgeR QL: bh","medium","Endothelial Cells",0.5,0,0,0.0988234531144131,0.565441054504975,3
+"pf","decomp: 1-hop + edgeR QL: bh","medium","Endothelial Cells",0.8,0,0,0.330922098667081,0.529732969221173,3
+"pf","decomp: 1-hop + edgeR QL: bh","medium","Endothelial Cells",1,0.287532493405857,0.371980407757782,0.976373637884898,0.475228190427073,3
+"pf","decomp: 1-hop + edgeR QL: bh","small","MUC5B+",0.5,0,0,0.0460565022632359,0.587790367809889,3
+"pf","decomp: 1-hop + edgeR QL: bh","small","MUC5B+",0.8,0,0,0.128400175494687,0.584329455456344,3
+"pf","decomp: 1-hop + edgeR QL: bh","small","MUC5B+",1,0,0,0.327961933013604,0.575581942745012,3
+"pf","decomp: 1-hop + edgeR QL: spatial-fdr","large","Ciliated",0.5,0,0,0.172588960963293,0.552787313386665,3
+"pf","decomp: 1-hop + edgeR QL: spatial-fdr","large","Ciliated",0.8,0,0,0.425281123480683,0.518968259844879,3
+"pf","decomp: 1-hop + edgeR QL: spatial-fdr","large","Ciliated",1,0.12607305210273,0.12607305210273,0.960998043678742,0.460180574438875,3
+"pf","decomp: 1-hop + edgeR QL: spatial-fdr","medium","Endothelial Cells",0.5,0,0,0.136811042806044,0.5476137482325,3
+"pf","decomp: 1-hop + edgeR QL: spatial-fdr","medium","Endothelial Cells",0.8,0,0,0.444769396184991,0.508687938895715,3
+"pf","decomp: 1-hop + edgeR QL: spatial-fdr","medium","Endothelial Cells",1,0.216778133392904,0.216778133392904,0.982538136543485,0.481604359649591,3
+"pf","decomp: 1-hop + edgeR QL: spatial-fdr","small","MUC5B+",0.5,0,0,0.0725851363537326,0.572125725032088,3
+"pf","decomp: 1-hop + edgeR QL: spatial-fdr","small","MUC5B+",0.8,0,0,0.193805979785139,0.566975523903632,3
+"pf","decomp: 1-hop + edgeR QL: spatial-fdr","small","MUC5B+",1,0,0,0.415846379899926,0.55959182020611,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","large","Ciliated",0.5,0,0,0,0,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","large","Ciliated",0.8,0.0180959184644051,0.0272077417089839,0.0325338674167665,0.111191005879549,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","large","Ciliated",1,0.220746396762208,0.293790756014913,0.280088148900298,0.0745919880419493,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","medium","Endothelial Cells",0.8,0.043300600013941,0.0771614383673246,0.0622260839313014,0.0769742422213294,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","medium","Endothelial Cells",1,0.400734459622549,0.461534550410811,0.428073141992421,0.0650608788152074,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","small","MUC5B+",0.5,0,0,0,0,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","small","MUC5B+",0.8,0,0,0,0,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","small","MUC5B+",1,0,0,0.00601684717208183,0.0524344569288389,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","large","Ciliated",0.5,0,0.000715469197168248,0,0,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","large","Ciliated",0.8,0.0241300517336838,0.038161844799997,0.0272765357342723,0.0614337602015327,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","large","Ciliated",1,0.196345445699581,0.276875845124684,0.210622055004871,0.0523733419421917,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","medium","Endothelial Cells",0.8,0.0542724927573547,0.0943399037861633,0.0501857042300847,0.0167576924224789,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","medium","Endothelial Cells",1,0.363967762298797,0.440811628443579,0.346363287142495,0.0392912723038111,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","small","MUC5B+",0.5,0,0,0,0,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","small","MUC5B+",0.8,0,0,0,0,3
+"pf","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","small","MUC5B+",1,0,0,0,0,3
+"pf","decomp: 1-hop + voom-weighted perm: fdr.sd","large","Ciliated",0.5,0,0,0.00469629104808439,0.312705183561834,3
+"pf","decomp: 1-hop + voom-weighted perm: fdr.sd","large","Ciliated",0.8,0.00404126787947239,0.0131418141392176,0.0653013741667615,0.228555173802403,3
+"pf","decomp: 1-hop + voom-weighted perm: fdr.sd","large","Ciliated",1,0.260743918825789,0.297695114336353,0.417188780924692,0.194685301202658,3
+"pf","decomp: 1-hop + voom-weighted perm: fdr.sd","medium","Endothelial Cells",0.5,0,0,0.00454366189063979,0.17384370015949,3
+"pf","decomp: 1-hop + voom-weighted perm: fdr.sd","medium","Endothelial Cells",0.8,0.0316029154154569,0.0474703792938698,0.0840488804311863,0.149606678254487,3
+"pf","decomp: 1-hop + voom-weighted perm: fdr.sd","medium","Endothelial Cells",1,0.42026247222454,0.484849687050367,0.538445045851086,0.145513114989778,3
+"pf","decomp: 1-hop + voom-weighted perm: fdr.sd","small","MUC5B+",0.5,0,0,0.00203364762432982,0.111940298507463,3
+"pf","decomp: 1-hop + voom-weighted perm: fdr.sd","small","MUC5B+",0.8,0,0,0.00494304749623899,0.110486891385768,3
+"pf","decomp: 1-hop + voom-weighted perm: fdr.sd","small","MUC5B+",1,0,0,0.0375103330201933,0.16373868735265,3
+"pf","decomp: 1-hop + voom-weighted perm: perm.fdr","large","Ciliated",0.5,0,0,0,0,3
+"pf","decomp: 1-hop + voom-weighted perm: perm.fdr","large","Ciliated",0.8,0.0247653491869198,0.038479012747994,0.0364499566648839,0.0773007412403361,3
+"pf","decomp: 1-hop + voom-weighted perm: perm.fdr","large","Ciliated",1,0.186248237463101,0.24962723717955,0.308009614715949,0.112322725126542,3
+"pf","decomp: 1-hop + voom-weighted perm: perm.fdr","medium","Endothelial Cells",0.5,6.46746863277713e-05,6.46746863277713e-05,0,0,3
+"pf","decomp: 1-hop + voom-weighted perm: perm.fdr","medium","Endothelial Cells",0.8,0.058259471563467,0.0740121837049442,0.0556178998282846,0.0309241579379139,3
+"pf","decomp: 1-hop + voom-weighted perm: perm.fdr","medium","Endothelial Cells",1,0.363932848191232,0.429045121495958,0.429045121495958,0.0749206846568538,3
+"pf","decomp: 1-hop + voom-weighted perm: perm.fdr","small","MUC5B+",0.5,0,0,0,0,3
+"pf","decomp: 1-hop + voom-weighted perm: perm.fdr","small","MUC5B+",0.8,0,0,0,0,3
+"pf","decomp: 1-hop + voom-weighted perm: perm.fdr","small","MUC5B+",1,0.000240673886883273,0.000240673886883273,0,0,3
+"pf","decomp: 1-hop + voom: bh","large","Ciliated",0.5,0,0,0,0.333333333333333,3
+"pf","decomp: 1-hop + voom: bh","large","Ciliated",0.8,0.0153022899454884,0.0248253494035632,0.0191674952734318,0.135144406421002,3
+"pf","decomp: 1-hop + voom: bh","large","Ciliated",1,0.194798045016944,0.246111132948176,0.229187036749382,0.062672357271507,3
+"pf","decomp: 1-hop + voom: bh","medium","Endothelial Cells",0.5,6.46746863277713e-05,6.46746863277713e-05,0,0,3
+"pf","decomp: 1-hop + voom: bh","medium","Endothelial Cells",0.8,0.0502824111550395,0.0684615815286878,0.0369800809073072,0.0453968253968254,3
+"pf","decomp: 1-hop + voom: bh","medium","Endothelial Cells",1,0.348629187007011,0.426429176203884,0.357164365784405,0.044807877047497,3
+"pf","decomp: 1-hop + voom: bh","small","MUC5B+",0.5,0,0,0,0.333333333333333,3
+"pf","decomp: 1-hop + voom: bh","small","MUC5B+",0.8,0,0,0,0.333333333333333,3
+"pf","decomp: 1-hop + voom: bh","small","MUC5B+",1,0.00735747030868886,0.0118155761356124,0.00716286759456888,0.358974358974359,3
+"pf","decomp: 2-hop + voom-weighted perm: fdr.sd","large","Ciliated",0.5,0,0,0,0,3
+"pf","decomp: 2-hop + voom-weighted perm: fdr.sd","large","Ciliated",0.8,0.53917649580416,0.557135467884438,0.344601728047205,0.0153489137496137,3
+"pf","decomp: 2-hop + voom-weighted perm: fdr.sd","large","Ciliated",1,0.796369098386291,0.824567026060907,0.78582568375284,0.0306590643578516,3
+"pf","decomp: 2-hop + voom-weighted perm: fdr.sd","medium","Endothelial Cells",0.5,0.418801243208594,0.435422637594831,0.18658647005562,0.0014654492165483,3
+"pf","decomp: 2-hop + voom-weighted perm: fdr.sd","medium","Endothelial Cells",0.8,0.623526641114161,0.623526641114161,0.53584922645018,0.00306514778428621,3
+"pf","decomp: 2-hop + voom-weighted perm: fdr.sd","medium","Endothelial Cells",1,0.938663659998196,0.945990271032831,0.907835611717785,0.0107105120971083,3
+"pf","decomp: 2-hop + voom-weighted perm: fdr.sd","small","MUC5B+",0.5,0,0,0,0,3
+"pf","decomp: 2-hop + voom-weighted perm: fdr.sd","small","MUC5B+",0.8,0.0538585209003215,0.0538585209003215,0,0,3
+"pf","decomp: 2-hop + voom-weighted perm: fdr.sd","small","MUC5B+",1,0.251762123673261,0.288585228366402,0.0222665337321369,0,3
+"pf","decomp: 2-hop + voom-weighted perm: perm.fdr","large","Ciliated",0.5,0.000181203328553429,0.000181203328553429,0,0,3
+"pf","decomp: 2-hop + voom-weighted perm: perm.fdr","large","Ciliated",0.8,0.566903897433855,0.581159988672839,0.363720162056789,0.014223197182802,3
+"pf","decomp: 2-hop + voom-weighted perm: perm.fdr","large","Ciliated",1,0.79530333972444,0.805546242855842,0.778004087160452,0.0368285947965813,3
+"pf","decomp: 2-hop + voom-weighted perm: perm.fdr","medium","Endothelial Cells",0.5,0.39590870031274,0.39590870031274,0.15205018755659,0.00069910514541387,3
+"pf","decomp: 2-hop + voom-weighted perm: perm.fdr","medium","Endothelial Cells",0.8,0.68208284422913,0.69226266292433,0.555601487655827,0.00786629513890962,3
+"pf","decomp: 2-hop + voom-weighted perm: perm.fdr","medium","Endothelial Cells",1,0.940403152429211,0.943286658772925,0.908648580341427,0.00784708339955126,3
+"pf","decomp: 2-hop + voom-weighted perm: perm.fdr","small","MUC5B+",0.5,0,0,0,0,3
+"pf","decomp: 2-hop + voom-weighted perm: perm.fdr","small","MUC5B+",0.8,0.000267952840300107,0.000267952840300107,0,0,3
+"pf","decomp: 2-hop + voom-weighted perm: perm.fdr","small","MUC5B+",1,0.221308892950851,0.304822731699346,0,0,3
+"pf","decomp: 2-hop + voom: bh","large","Ciliated",0.5,0,0,0,0,3
+"pf","decomp: 2-hop + voom: bh","large","Ciliated",0.8,0.572417735682144,0.587229259047322,0.321931884133144,0.0142525888364322,3
+"pf","decomp: 2-hop + voom: bh","large","Ciliated",1,0.806629723918261,0.806629723918261,0.782285395393411,0.0416032891534191,3
+"pf","decomp: 2-hop + voom: bh","medium","Endothelial Cells",0.5,0.24492303712327,0.24492303712327,0,0,3
+"pf","decomp: 2-hop + voom: bh","medium","Endothelial Cells",0.8,0.594353216964636,0.677024874807711,0.528569649409522,0.00120217576908991,3
+"pf","decomp: 2-hop + voom: bh","medium","Endothelial Cells",1,0.935414672026217,0.937375456339942,0.909441838180414,0.00896815285238548,3
+"pf","decomp: 2-hop + voom: bh","small","MUC5B+",0.5,0,0,0,0,3
+"pf","decomp: 2-hop + voom: bh","small","MUC5B+",0.8,0,0,0,0,3
+"pf","decomp: 2-hop + voom: bh","small","MUC5B+",1,0.123296776337654,0.123296776337654,0,0,3
+"pf","decomp: Milo (edgeR QL + spatial FDR)","large","Ciliated",0.5,0,0,0.509180863193806,0.40057410021422,3
+"pf","decomp: Milo (edgeR QL + spatial FDR)","large","Ciliated",0.8,0,0,0.849995215955547,0.402005793760452,3
+"pf","decomp: Milo (edgeR QL + spatial FDR)","large","Ciliated",1,0.532196968629563,0.544046910300834,0.987661847466482,0.459660277845947,3
+"pf","decomp: Milo (edgeR QL + spatial FDR)","medium","Endothelial Cells",0.5,0,0,0.682788523833864,0.443982375632266,3
+"pf","decomp: Milo (edgeR QL + spatial FDR)","medium","Endothelial Cells",0.8,0,0,0.921463885125256,0.418626067027727,3
+"pf","decomp: Milo (edgeR QL + spatial FDR)","medium","Endothelial Cells",1,0.58474851835643,0.744854666377078,0.994268356744985,0.465571838809193,3
+"pf","decomp: Milo (edgeR QL + spatial FDR)","small","MUC5B+",0.5,0,0,0.301108630378928,0.449529369927379,3
+"pf","decomp: Milo (edgeR QL + spatial FDR)","small","MUC5B+",0.8,0,0,0.584729273477312,0.426211585553865,3
+"pf","decomp: Milo (edgeR QL + spatial FDR)","small","MUC5B+",1,0,0,0.766649368595161,0.451909580661715,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.perm","large","Ciliated",0.5,0.0638039105622603,0.0915427074562635,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.perm","large","Ciliated",0.8,0.205850720585072,0.34468035362713,0.476910858123102,0.104604668271526,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.perm","large","Ciliated",1,0.254698318496538,0.270623145400593,0.657716764473722,0.223457540163904,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.perm","medium","Endothelial Cells",0.5,0.268187981902254,0.309222256678254,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.perm","medium","Endothelial Cells",0.8,0.215680880330124,0.224392480513526,0.400092997881556,0.0589273889608222,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.perm","medium","Endothelial Cells",1,0.272348606215956,0.541168804860717,0.800990022418852,0.192967363589702,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.perm","small","MUC5B+",0.5,0,0,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.perm","small","MUC5B+",0.8,0,0,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.perm","small","MUC5B+",1,0,0.109260661115317,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.pooled","large","Ciliated",0.5,0.190821163614552,0.247154027072451,0.203224273501005,0.0225434520736534,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.pooled","large","Ciliated",0.8,0.413509078860452,0.43122500992513,0.413898316093232,0.0694743329365315,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.pooled","large","Ciliated",1,0.634913053593626,0.658070169124591,0.686393427979484,0.162240023928161,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.pooled","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.pooled","medium","Endothelial Cells",0.8,0.0111057845957175,0.0111057845957175,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.pooled","medium","Endothelial Cells",1,0.81524747675675,0.823601695637285,0.845828212084165,0.147936927909524,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.pooled","small","MUC5B+",0.5,0.0331772053083529,0.0331772053083529,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.pooled","small","MUC5B+",0.8,0.0374685857893534,0.0374685857893534,0.0374685857893534,0,3
+"pf","decomp: kNN nhoods + cacoa perm: bh.pooled","small","MUC5B+",1,0.0502144839767853,0.0502144839767853,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: fdr.sd","large","Ciliated",0.5,0.180114816706898,0.247154027072451,0.183911909301958,0.0240986019131714,3
+"pf","decomp: kNN nhoods + cacoa perm: fdr.sd","large","Ciliated",0.8,0.413419844933713,0.4295646812009,0.407628661089731,0.0514765641286793,3
+"pf","decomp: kNN nhoods + cacoa perm: fdr.sd","large","Ciliated",1,0.634790256270608,0.668599697584838,0.684919860103264,0.154231266149871,3
+"pf","decomp: kNN nhoods + cacoa perm: fdr.sd","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: fdr.sd","medium","Endothelial Cells",0.8,0.00790987535953979,0.00790987535953979,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: fdr.sd","medium","Endothelial Cells",1,0.813610171069936,0.822242863913155,0.845507801959205,0.149894237313602,3
+"pf","decomp: kNN nhoods + cacoa perm: fdr.sd","small","MUC5B+",0.5,0.0331772053083529,0.0331772053083529,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: fdr.sd","small","MUC5B+",0.8,0.0315284441398218,0.0315284441398218,0.0315284441398218,0,3
+"pf","decomp: kNN nhoods + cacoa perm: fdr.sd","small","MUC5B+",1,0.0232147363108756,0.0232147363108756,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: perm.fdr","large","Ciliated",0.5,0.181377891504609,0.254764358482801,0.190937762864223,0.0240986019131714,3
+"pf","decomp: kNN nhoods + cacoa perm: perm.fdr","large","Ciliated",0.8,0.416422655799429,0.416422655799429,0.414349740133446,0.0567331539418605,3
+"pf","decomp: kNN nhoods + cacoa perm: perm.fdr","large","Ciliated",1,0.626606956839586,0.662236010768664,0.683015124272621,0.166348449284766,3
+"pf","decomp: kNN nhoods + cacoa perm: perm.fdr","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: perm.fdr","medium","Endothelial Cells",0.8,0,0,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: perm.fdr","medium","Endothelial Cells",1,0.803106737423443,0.825170898978434,0.848659223458724,0.147490971226877,3
+"pf","decomp: kNN nhoods + cacoa perm: perm.fdr","small","MUC5B+",0.5,0.0331772053083529,0.0331772053083529,0,0,3
+"pf","decomp: kNN nhoods + cacoa perm: perm.fdr","small","MUC5B+",0.8,0.0315284441398218,0.0315284441398218,0.0315284441398218,0,3
+"pf","decomp: kNN nhoods + cacoa perm: perm.fdr","small","MUC5B+",1,0.0232147363108756,0.0232147363108756,0,0,3
+"pf","decomp: kNN nhoods + edgeR QL (libsize): bh","large","Ciliated",0.5,0,0,0.13532044848263,0.568323160965996,3
+"pf","decomp: kNN nhoods + edgeR QL (libsize): bh","large","Ciliated",0.8,0.0639361085084549,0.0639361085084549,0.649779071649656,0.402243162757087,3
+"pf","decomp: kNN nhoods + edgeR QL (libsize): bh","large","Ciliated",1,0.574455038600901,0.64990639619454,0.980936356562032,0.374782792881072,3
+"pf","decomp: kNN nhoods + edgeR QL (libsize): bh","medium","Endothelial Cells",0.5,0,0,0.258369755340395,0.510006655124878,3
+"pf","decomp: kNN nhoods + edgeR QL (libsize): bh","medium","Endothelial Cells",0.8,0.073360843649702,0.073360843649702,0.688062968062944,0.425694309893074,3
+"pf","decomp: kNN nhoods + edgeR QL (libsize): bh","medium","Endothelial Cells",1,0.711013631708258,0.792847167202551,0.990518324255716,0.400296856223099,3
+"pf","decomp: kNN nhoods + edgeR QL (libsize): bh","small","MUC5B+",0.5,0,0,0.0580895878393402,0.526349773282755,3
+"pf","decomp: kNN nhoods + edgeR QL (libsize): bh","small","MUC5B+",0.8,0,0,0.171116698084383,0.520629068592315,3
+"pf","decomp: kNN nhoods + edgeR QL (libsize): bh","small","MUC5B+",1,0,0,0.455083996506433,0.519562778136597,3
+"pf","decomp: kNN nhoods + edgeR QL: bh","large","Ciliated",0.5,0,0,0.146304287397155,0.564356806753626,3
+"pf","decomp: kNN nhoods + edgeR QL: bh","large","Ciliated",0.8,0.0388821336432662,0.0388821336432662,0.680387231686807,0.401827517233433,3
+"pf","decomp: kNN nhoods + edgeR QL: bh","large","Ciliated",1,0.6034188929925,0.640710891362247,0.982080078798123,0.407863069844592,3
+"pf","decomp: kNN nhoods + edgeR QL: bh","medium","Endothelial Cells",0.5,0,0,0.337627195542175,0.50070569939415,3
+"pf","decomp: kNN nhoods + edgeR QL: bh","medium","Endothelial Cells",0.8,0.073360843649702,0.179305234828992,0.714245471222196,0.422740041890688,3
+"pf","decomp: kNN nhoods + edgeR QL: bh","medium","Endothelial Cells",1,0.479449183676911,0.7806523442709,0.992467641994508,0.422603172679923,3
+"pf","decomp: kNN nhoods + edgeR QL: bh","small","MUC5B+",0.5,0,0,0.0578944278081146,0.541675938568268,3
+"pf","decomp: kNN nhoods + edgeR QL: bh","small","MUC5B+",0.8,0,0,0.140502121890643,0.52851692818887,3
+"pf","decomp: kNN nhoods + edgeR QL: bh","small","MUC5B+",1,0,0,0.498027354178539,0.526986029778533,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","large","Ciliated",0.5,0.0276472516664845,0.0276472516664845,0,0,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","large","Ciliated",0.8,0.484857058280709,0.503915788139762,0.520013337419148,0.0798768696098859,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","large","Ciliated",1,0.616460823136069,0.645717355616818,0.674659464736828,0.115541685764943,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","medium","Endothelial Cells",0.5,0.0830212234706617,0.189207934526287,0,0.222222222222222,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","medium","Endothelial Cells",0.8,0.412949301098171,0.468244905118422,0.437877393140357,0.0342061422569897,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","medium","Endothelial Cells",1,0.769484058836821,0.799418835018021,0.811140333294692,0.15280066307791,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","small","MUC5B+",0.5,0,0,0,0,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","small","MUC5B+",0.8,0,0,0,0.148148148148148,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","small","MUC5B+",1,0.180379635203664,0.180379635203664,0.0587938430481958,0,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","large","Ciliated",0.5,0.0465522893672823,0.112975715319195,0.0465522893672823,0,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","large","Ciliated",0.8,0.475134632148535,0.484170003574173,0.529134938950067,0.101497949953603,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","large","Ciliated",1,0.596765176605972,0.630308767394037,0.681328297388237,0.232337833043887,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","medium","Endothelial Cells",0.5,0.169440976557081,0.169440976557081,0,0.222222222222222,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","medium","Endothelial Cells",0.8,0.414129589503702,0.469523268812893,0.457921744623553,0.0514137804884192,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","medium","Endothelial Cells",1,0.754249662308754,0.786552641980155,0.828060235064362,0.198252177726343,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","small","MUC5B+",0.5,0,0,0,0,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","small","MUC5B+",0.8,0,0,0,0.148148148148148,3
+"pf","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","small","MUC5B+",1,0.20763171695991,0.20763171695991,0.0860459248044411,0,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","large","Ciliated",0.5,0,0,0.0915746912905693,0.0963349597185975,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","large","Ciliated",0.8,0.342291634081758,0.425106998690683,0.547451433303536,0.206173466611629,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","large","Ciliated",1,0.602957561033925,0.618929889229662,0.736054984177127,0.202860112727372,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","medium","Endothelial Cells",0.5,0.121167984463865,0.157788875017339,0.352425755320929,0.341648123272475,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","medium","Endothelial Cells",0.8,0.374562870392473,0.390518853886283,0.660732836352308,0.194411912075635,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","medium","Endothelial Cells",1,0.804977494348527,0.828671188098489,0.872731848807532,0.225728310019493,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","small","MUC5B+",0.5,0,0,0.0396174863387978,0.424257888917241,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","small","MUC5B+",0.8,0.034330985915493,0.034330985915493,0.114574987048174,0.198477433512883,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","small","MUC5B+",1,0.116690366157128,0.116690366157128,0.468848690878241,0.313474998737059,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","large","Ciliated",0.5,0.0949631618640024,0.0949631618640024,0,0,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","large","Ciliated",0.8,0.393471846734593,0.485743061531196,0.542461288898535,0.15033896157928,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","large","Ciliated",1,0.629404529419942,0.647639931888168,0.695707211325916,0.179741555615579,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","medium","Endothelial Cells",0.5,0,0.177833263975586,0,0,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","medium","Endothelial Cells",0.8,0.513010400418283,0.555976366842334,0.629898843742095,0.115848063310553,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","medium","Endothelial Cells",1,0.802077964970527,0.808165757344766,0.850246337470161,0.178486292572076,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","small","MUC5B+",0.5,0,0,0,0,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","small","MUC5B+",0.8,0.0315284441398218,0.0315284441398218,0,0.148148148148148,3
+"pf","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","small","MUC5B+",1,0.258149537632689,0.258149537632689,0.137187091450282,0,3
+"pf","decomp: kNN nhoods + voom-weighted perm: fdr.sd","large","Ciliated",0.5,0.0108549156740611,0.0871950784582318,0.28383812177184,0.237620803125388,3
+"pf","decomp: kNN nhoods + voom-weighted perm: fdr.sd","large","Ciliated",0.8,0.397557439982344,0.412236749304888,0.550626140326056,0.271649592177328,3
+"pf","decomp: kNN nhoods + voom-weighted perm: fdr.sd","large","Ciliated",1,0.583860861078248,0.607376548436263,0.766855740230432,0.370574929353229,3
+"pf","decomp: kNN nhoods + voom-weighted perm: fdr.sd","medium","Endothelial Cells",0.5,0.247961092778105,0.253717785800716,0.366544905629664,0.412388099704133,3
+"pf","decomp: kNN nhoods + voom-weighted perm: fdr.sd","medium","Endothelial Cells",0.8,0.369185214589699,0.369185214589699,0.650210670397683,0.279948871215819,3
+"pf","decomp: kNN nhoods + voom-weighted perm: fdr.sd","medium","Endothelial Cells",1,0.805854243939525,0.813864497063524,0.883432089097072,0.353564812193676,3
+"pf","decomp: kNN nhoods + voom-weighted perm: fdr.sd","small","MUC5B+",0.5,0,0,0.0498928665278648,0.281259873875521,3
+"pf","decomp: kNN nhoods + voom-weighted perm: fdr.sd","small","MUC5B+",0.8,0.0658594300553147,0.0658594300553147,0.131593766390897,0.333552478376433,3
+"pf","decomp: kNN nhoods + voom-weighted perm: fdr.sd","small","MUC5B+",1,0.151532320180116,0.151532320180116,0.493130723732684,0.346560995465445,3
+"pf","decomp: kNN nhoods + voom-weighted perm: perm.fdr","large","Ciliated",0.5,0.0819342911854713,0.179932232994808,0.179932232994808,0.0173418056658724,3
+"pf","decomp: kNN nhoods + voom-weighted perm: perm.fdr","large","Ciliated",0.8,0.406990488999504,0.455444511218752,0.544283751188007,0.190057534417876,3
+"pf","decomp: kNN nhoods + voom-weighted perm: perm.fdr","large","Ciliated",1,0.606522943897123,0.635748706775493,0.724712694914778,0.299233769912285,3
+"pf","decomp: kNN nhoods + voom-weighted perm: perm.fdr","medium","Endothelial Cells",0.5,0.15598557358857,0.15598557358857,0.15598557358857,0.22599192749981,3
+"pf","decomp: kNN nhoods + voom-weighted perm: perm.fdr","medium","Endothelial Cells",0.8,0.498578826065917,0.516552232760094,0.556068969081756,0.0811754818495963,3
+"pf","decomp: kNN nhoods + voom-weighted perm: perm.fdr","medium","Endothelial Cells",1,0.802305407881378,0.802305407881378,0.863678015105297,0.262143174385774,3
+"pf","decomp: kNN nhoods + voom-weighted perm: perm.fdr","small","MUC5B+",0.5,0,0,0,0,3
+"pf","decomp: kNN nhoods + voom-weighted perm: perm.fdr","small","MUC5B+",0.8,0.0315284441398218,0.139803092027146,0.118089477003672,0.0224977043158861,3
+"pf","decomp: kNN nhoods + voom-weighted perm: perm.fdr","small","MUC5B+",1,0.152370551176412,0.152370551176412,0.234126796445148,0.106730386300279,3
+"pf","decomp: kNN nhoods + voom: bh","large","Ciliated",0.5,0,0,0,0,3
+"pf","decomp: kNN nhoods + voom: bh","large","Ciliated",0.8,0.337483004453698,0.37172500866336,0.506732242926379,0.104186761346275,3
+"pf","decomp: kNN nhoods + voom: bh","large","Ciliated",1,0.6115424252231,0.645340050681165,0.689583803315142,0.252461053500732,3
+"pf","decomp: kNN nhoods + voom: bh","medium","Endothelial Cells",0.5,0.0276043834096269,0.0276043834096269,0,0,3
+"pf","decomp: kNN nhoods + voom: bh","medium","Endothelial Cells",0.8,0.42774581135871,0.454751244404411,0.566589250634941,0.0928978401001382,3
+"pf","decomp: kNN nhoods + voom: bh","medium","Endothelial Cells",1,0.79872499159568,0.810418072542318,0.842701183542707,0.212688493192848,3
+"pf","decomp: kNN nhoods + voom: bh","small","MUC5B+",0.5,0,0,0,0,3
+"pf","decomp: kNN nhoods + voom: bh","small","MUC5B+",0.8,0,0,0,0,3
+"pf","decomp: kNN nhoods + voom: bh","small","MUC5B+",1,0.32002014419313,0.32002014419313,0.146192256823897,0.0476190476190476,3
+"pf","heat: bh.param","large","Ciliated",0.5,0,0,0,0,3
+"pf","heat: bh.param","large","Ciliated",0.8,0,0,0,0,3
+"pf","heat: bh.param","large","Ciliated",1,0.337547620527613,0.337547620527613,0.0797297709613116,0,3
+"pf","heat: bh.param","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","heat: bh.param","medium","Endothelial Cells",0.8,0.229332413552894,0.229332413552894,0,0,3
+"pf","heat: bh.param","medium","Endothelial Cells",1,0.522017951158186,0.522017951158186,0.41268937071512,0,3
+"pf","heat: bh.param","small","MUC5B+",0.5,0,0,0,0,3
+"pf","heat: bh.param","small","MUC5B+",0.8,0,0,0,0,3
+"pf","heat: bh.param","small","MUC5B+",1,0,0,0,0,3
+"pf","heat: bh.perm","large","Ciliated",0.5,0,0,0,0,3
+"pf","heat: bh.perm","large","Ciliated",0.8,0.177437948602194,0.235017745684324,0,0,3
+"pf","heat: bh.perm","large","Ciliated",1,0.943219028212619,0.945088584193074,0.915155997247256,0.00328780981284775,3
+"pf","heat: bh.perm","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","heat: bh.perm","medium","Endothelial Cells",0.8,0.428557143751981,0.428557143751981,0.27427420630478,0,3
+"pf","heat: bh.perm","medium","Endothelial Cells",1,0.984056868786994,0.984056868786994,0.972977196287422,0.000921128382268279,3
+"pf","heat: bh.perm","small","MUC5B+",0.5,0,0,0,0,3
+"pf","heat: bh.perm","small","MUC5B+",0.8,0,0,0,0,3
+"pf","heat: bh.perm","small","MUC5B+",1,0.193983152827918,0.193983152827918,0,0,3
+"pf","heat: bh.pooled","large","Ciliated",0.5,0,0,0,0,3
+"pf","heat: bh.pooled","large","Ciliated",0.8,0.116893441956891,0.116893441956891,0,0,3
+"pf","heat: bh.pooled","large","Ciliated",1,0.46038962271151,0.46038962271151,0.278985849020194,0.000159261028826246,3
+"pf","heat: bh.pooled","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","heat: bh.pooled","medium","Endothelial Cells",0.8,0.377780420232785,0.377780420232785,0.220647826919344,0,3
+"pf","heat: bh.pooled","medium","Endothelial Cells",1,0.631087393909963,0.631087393909963,0.485224463943382,0,3
+"pf","heat: bh.pooled","small","MUC5B+",0.5,0,0,0,0,3
+"pf","heat: bh.pooled","small","MUC5B+",0.8,0,0,0,0,3
+"pf","heat: bh.pooled","small","MUC5B+",1,0,0,0,0,3
+"pf","heat: fdr.mad","large","Ciliated",0.5,0,0,0,0,3
+"pf","heat: fdr.mad","large","Ciliated",0.8,0,0,0,0,3
+"pf","heat: fdr.mad","large","Ciliated",1,4.87757291971515e-05,4.87757291971515e-05,4.87757291971515e-05,0,3
+"pf","heat: fdr.mad","medium","Endothelial Cells",0.5,0,0,0,0.333333333333333,3
+"pf","heat: fdr.mad","medium","Endothelial Cells",0.8,0,0,0,0.333333333333333,3
+"pf","heat: fdr.mad","medium","Endothelial Cells",1,0,0,0,0.333333333333333,3
+"pf","heat: fdr.mad","small","MUC5B+",0.5,0,0,0,0.333333333333333,3
+"pf","heat: fdr.mad","small","MUC5B+",0.8,0,0,0,0.333333333333333,3
+"pf","heat: fdr.mad","small","MUC5B+",1,0,0,0,0.333333333333333,3
+"pf","heat: fdr.raw","large","Ciliated",0.5,0,0,0,0,3
+"pf","heat: fdr.raw","large","Ciliated",0.8,0.0211222280732549,0.114508882890703,0,0,3
+"pf","heat: fdr.raw","large","Ciliated",1,0.405988313753175,0.405988313753175,0.276767940159068,0.000170328734457503,3
+"pf","heat: fdr.raw","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","heat: fdr.raw","medium","Endothelial Cells",0.8,0.34526858126149,0.34526858126149,0.198886400270399,0,3
+"pf","heat: fdr.raw","medium","Endothelial Cells",1,0.609375935330466,0.609375935330466,0.471917970197366,0,3
+"pf","heat: fdr.raw","small","MUC5B+",0.5,0,0,0,0,3
+"pf","heat: fdr.raw","small","MUC5B+",0.8,0,0,0,0,3
+"pf","heat: fdr.raw","small","MUC5B+",1,0,0,0,0,3
+"pf","heat: fdr.sd","large","Ciliated",0.5,0,0,0,0,3
+"pf","heat: fdr.sd","large","Ciliated",0.8,0.112821455977427,0.112821455977427,0,0,3
+"pf","heat: fdr.sd","large","Ciliated",1,0.459012119257672,0.459012119257672,0.276279394609563,0.000160179400929041,3
+"pf","heat: fdr.sd","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","heat: fdr.sd","medium","Endothelial Cells",0.8,0.374899445018203,0.374899445018203,0.219277467418125,0,3
+"pf","heat: fdr.sd","medium","Endothelial Cells",1,0.627629780009073,0.627629780009073,0.479195684075966,0,3
+"pf","heat: fdr.sd","small","MUC5B+",0.5,0,0,0,0,3
+"pf","heat: fdr.sd","small","MUC5B+",0.8,0,0,0,0,3
+"pf","heat: fdr.sd","small","MUC5B+",1,0,0,0,0,3
+"pf","heat: fdr.tb","large","Ciliated",0.5,0,0,0,0,3
+"pf","heat: fdr.tb","large","Ciliated",0.8,0.0856106050507295,0.0856106050507295,0,0,3
+"pf","heat: fdr.tb","large","Ciliated",1,0.435791084555097,0.435791084555097,0.253902859987234,0,3
+"pf","heat: fdr.tb","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","heat: fdr.tb","medium","Endothelial Cells",0.8,0.36291992308763,0.36291992308763,0.2121535117675,0,3
+"pf","heat: fdr.tb","medium","Endothelial Cells",1,0.613376921815704,0.613376921815704,0.470138612704221,0,3
+"pf","heat: fdr.tb","small","MUC5B+",0.5,0,0,0,0,3
+"pf","heat: fdr.tb","small","MUC5B+",0.8,0,0,0,0,3
+"pf","heat: fdr.tb","small","MUC5B+",1,0,0,0,0,3
+"pf","heat: fdr.tbscale","large","Ciliated",0.5,0,0,0,0,3
+"pf","heat: fdr.tbscale","large","Ciliated",0.8,0.0714037815610469,0.112320614857351,0,0,3
+"pf","heat: fdr.tbscale","large","Ciliated",1,0.436966290518307,0.436966290518307,0.27223861559777,0.00015701051970482,3
+"pf","heat: fdr.tbscale","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","heat: fdr.tbscale","medium","Endothelial Cells",0.8,0.368344206042007,0.368344206042007,0.215051416359564,0,3
+"pf","heat: fdr.tbscale","medium","Endothelial Cells",1,0.622022987311945,0.622022987311945,0.477952291603188,0,3
+"pf","heat: fdr.tbscale","small","MUC5B+",0.5,0,0,0,0,3
+"pf","heat: fdr.tbscale","small","MUC5B+",0.8,0,0,0,0,3
+"pf","heat: fdr.tbscale","small","MUC5B+",1,0,0,0,0,3
+"pf","heat: nbhd.param","large","Ciliated",0.5,0,0,0,0,3
+"pf","heat: nbhd.param","large","Ciliated",0.8,0,0,0,0,3
+"pf","heat: nbhd.param","large","Ciliated",1,0.347655507892614,0.347655507892614,0,0,3
+"pf","heat: nbhd.param","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","heat: nbhd.param","medium","Endothelial Cells",0.8,0.119854361717937,0.119854361717937,0,0,3
+"pf","heat: nbhd.param","medium","Endothelial Cells",1,0.559341216299677,0.559341216299677,0.444969509734927,0,3
+"pf","heat: nbhd.param","small","MUC5B+",0.5,0,0,0,0,3
+"pf","heat: nbhd.param","small","MUC5B+",0.8,0,0,0,0,3
+"pf","heat: nbhd.param","small","MUC5B+",1,0,0,0,0,3
+"pf","heat: nbhd.pooled","large","Ciliated",0.5,0,0,0,0,3
+"pf","heat: nbhd.pooled","large","Ciliated",0.8,0.114974450122195,0.114974450122195,0,0,3
+"pf","heat: nbhd.pooled","large","Ciliated",1,0.474407212823712,0.474407212823712,0.285969070278486,0,3
+"pf","heat: nbhd.pooled","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","heat: nbhd.pooled","medium","Endothelial Cells",0.8,0.343746961452764,0.343746961452764,0.134418189924209,0,3
+"pf","heat: nbhd.pooled","medium","Endothelial Cells",1,0.643379476276883,0.662064597384149,0.550329530701998,0,3
+"pf","heat: nbhd.pooled","small","MUC5B+",0.5,0,0,0,0,3
+"pf","heat: nbhd.pooled","small","MUC5B+",0.8,0,0,0,0,3
+"pf","heat: nbhd.pooled","small","MUC5B+",1,0,0,0,0,3
+"pf","heat: perm.fdr","large","Ciliated",0.5,0,0,0,0,3
+"pf","heat: perm.fdr","large","Ciliated",0.8,0.0211222280732549,0.114508882890703,0,0,3
+"pf","heat: perm.fdr","large","Ciliated",1,0.405988313753175,0.405988313753175,0.276767940159068,0.000170328734457503,3
+"pf","heat: perm.fdr","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","heat: perm.fdr","medium","Endothelial Cells",0.8,0.34526858126149,0.34526858126149,0.198886400270399,0,3
+"pf","heat: perm.fdr","medium","Endothelial Cells",1,0.609375935330466,0.609375935330466,0.471917970197366,0,3
+"pf","heat: perm.fdr","small","MUC5B+",0.5,0,0,0,0,3
+"pf","heat: perm.fdr","small","MUC5B+",0.8,0,0,0,0,3
+"pf","heat: perm.fdr","small","MUC5B+",1,0,0,0,0,3
+"pf","heat: spatial.param","large","Ciliated",0.5,0,0,0,0,3
+"pf","heat: spatial.param","large","Ciliated",0.8,0,0,0,0,3
+"pf","heat: spatial.param","large","Ciliated",1,0.258416267649612,0.258416267649612,0,0,3
+"pf","heat: spatial.param","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","heat: spatial.param","medium","Endothelial Cells",0.8,0.0827017387427552,0.0827017387427552,0,0,3
+"pf","heat: spatial.param","medium","Endothelial Cells",1,0.461477460291326,0.461477460291326,0.252312351509882,0,3
+"pf","heat: spatial.param","small","MUC5B+",0.5,0,0,0,0,3
+"pf","heat: spatial.param","small","MUC5B+",0.8,0,0,0,0,3
+"pf","heat: spatial.param","small","MUC5B+",1,0,0,0,0,3
+"pf","heat: spatial.pooled","large","Ciliated",0.5,0,0,0,0,3
+"pf","heat: spatial.pooled","large","Ciliated",0.8,0,0.102236540028142,0,0,3
+"pf","heat: spatial.pooled","large","Ciliated",1,0.388473280575778,0.388473280575778,0.199499037633294,0,3
+"pf","heat: spatial.pooled","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","heat: spatial.pooled","medium","Endothelial Cells",0.8,0.264963747946301,0.264963747946301,0.099791945311339,0,3
+"pf","heat: spatial.pooled","medium","Endothelial Cells",1,0.576206563505158,0.576206563505158,0.446517142785618,0,3
+"pf","heat: spatial.pooled","small","MUC5B+",0.5,0,0,0,0,3
+"pf","heat: spatial.pooled","small","MUC5B+",0.8,0,0,0,0,3
+"pf","heat: spatial.pooled","small","MUC5B+",1,0,0,0,0,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr","large","Ciliated",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr","large","Ciliated",0.8,0.0293868330636718,0.0415966575660429,0.0189329130844445,0.0148121853620756,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr","large","Ciliated",1,0.195148682604284,0.233978110186525,0.169845513746693,0.0278187463448848,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr","medium","Endothelial Cells",0.8,0.0590445162397262,0.109442521364408,0.0441343350519596,0.00698839375684159,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr","medium","Endothelial Cells",1,0.346580829934218,0.395493280824619,0.278470500262719,0.020128100519425,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr","small","MUC5B+",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr","small","MUC5B+",0.8,0,0,0,0,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr","small","MUC5B+",1,0.000240673886883273,0.000240673886883273,0,0,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","large","Ciliated",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","large","Ciliated",0.8,0.346203848826477,0.39448292829329,0.390525571172195,0.0579450976784948,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","large","Ciliated",1,0.606973623367102,0.640893781643579,0.680207359532676,0.189744300077458,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","medium","Endothelial Cells",0.8,0.459741130680735,0.481536416084646,0.475345232330312,0.0326529006562865,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","medium","Endothelial Cells",1,0.817315993034438,0.841640914638905,0.860910921360514,0.164981878710473,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","small","MUC5B+",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","small","MUC5B+",0.8,0,0,0,0,3
+"pf","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","small","MUC5B+",1,0.0293622141997593,0.0293622141997593,0,0,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd","large","Ciliated",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd","large","Ciliated",0.8,0.0123619064112778,0.0225854258702383,0.0354999648920651,0.112915790060256,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd","large","Ciliated",1,0.207590233481822,0.296583477845892,0.282388495311754,0.0744190041283984,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd","medium","Endothelial Cells",0.8,0.0428550997651895,0.0800508782706475,0.0653384395724754,0.0849545839204578,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd","medium","Endothelial Cells",1,0.404368410916281,0.463390205186193,0.432949448026214,0.0643880736575425,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd","small","MUC5B+",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd","small","MUC5B+",0.8,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd","small","MUC5B+",1,0,0,0.00601684717208183,0.0524344569288389,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd + inheritance","large","Ciliated",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd + inheritance","large","Ciliated",0.8,0.304620838082587,0.365043681253702,0.48786293620292,0.227422492365537,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd + inheritance","large","Ciliated",1,0.635619061759352,0.651894951812631,0.765181784926271,0.270645532537148,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd + inheritance","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd + inheritance","medium","Endothelial Cells",0.8,0.42625993763659,0.455317226723596,0.648332745528345,0.20976056022869,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd + inheritance","medium","Endothelial Cells",1,0.844628098739748,0.853993542164824,0.921807820239367,0.253697688032765,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd + inheritance","small","MUC5B+",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd + inheritance","small","MUC5B+",0.8,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: fdr.sd + inheritance","small","MUC5B+",1,0,0,0.15812274368231,0.0756794751640112,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr","large","Ciliated",0.5,0,0.000715469197168248,0,0,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr","large","Ciliated",0.8,0.0241300517336838,0.038161844799997,0.0272765357342723,0.0614337602015327,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr","large","Ciliated",1,0.196345445699581,0.276875845124684,0.210622055004871,0.0523733419421917,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr","medium","Endothelial Cells",0.8,0.0542724927573547,0.0930767146050071,0.0501857042300847,0.0167576924224789,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr","medium","Endothelial Cells",1,0.361911164733808,0.439742197709785,0.346363287142495,0.0392912723038111,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr","small","MUC5B+",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr","small","MUC5B+",0.8,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr","small","MUC5B+",1,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr + inheritance","large","Ciliated",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr + inheritance","large","Ciliated",0.8,0.300894205189761,0.372392232445382,0.448173199649374,0.15603722744197,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr + inheritance","large","Ciliated",1,0.615546697862497,0.639151073166646,0.72198589894284,0.257013247064404,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr + inheritance","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr + inheritance","medium","Endothelial Cells",0.8,0.447218396550941,0.46537920223032,0.487447860277578,0.0647504289863347,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr + inheritance","medium","Endothelial Cells",1,0.820138755943326,0.838497498522927,0.890344566851683,0.230813675216279,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr + inheritance","small","MUC5B+",0.5,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr + inheritance","small","MUC5B+",0.8,0,0,0,0,3
+"pf","weighted: 1-hop + weighted perm: perm.fdr + inheritance","small","MUC5B+",1,0,0,0,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr","large","Ciliated",0.5,0,0,0,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr","large","Ciliated",0.8,0.0211222280732549,0.114508882890703,0,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr","large","Ciliated",1,0.405988313753175,0.405988313753175,0.276767940159068,0.000170328734457503,3
+"pf","weighted: heat + unweighted perm: perm.fdr","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr","medium","Endothelial Cells",0.8,0.34526858126149,0.34526858126149,0.198886400270399,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr","medium","Endothelial Cells",1,0.609375935330466,0.609375935330466,0.471917970197366,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr","small","MUC5B+",0.5,0,0,0,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr","small","MUC5B+",0.8,0,0,0,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr","small","MUC5B+",1,0,0,0,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr + inheritance","large","Ciliated",0.5,0,0,0,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr + inheritance","large","Ciliated",0.8,0.0977707565385291,0.0977707565385291,0,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr + inheritance","large","Ciliated",1,0.804236605548005,0.81086503129689,0.720555747773321,0.00116272924264045,3
+"pf","weighted: heat + unweighted perm: perm.fdr + inheritance","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr + inheritance","medium","Endothelial Cells",0.8,0.60055196395132,0.60055196395132,0.49964271652913,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr + inheritance","medium","Endothelial Cells",1,0.953751096660527,0.953751096660527,0.88632422232604,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr + inheritance","small","MUC5B+",0.5,0,0,0,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr + inheritance","small","MUC5B+",0.8,0,0,0,0,3
+"pf","weighted: heat + unweighted perm: perm.fdr + inheritance","small","MUC5B+",1,0,0,0,0,3
+"pf","weighted: heat + weighted perm: fdr.sd","large","Ciliated",0.5,0,0,0.0473899963635507,0.359936667686583,3
+"pf","weighted: heat + weighted perm: fdr.sd","large","Ciliated",0.8,0,0,0.265122878648657,0.278605739538889,3
+"pf","weighted: heat + weighted perm: fdr.sd","large","Ciliated",1,0,0,0.614897952586531,0.245266467315586,3
+"pf","weighted: heat + weighted perm: fdr.sd","medium","Endothelial Cells",0.5,0,0,0.0512694474298676,0.390578545632785,3
+"pf","weighted: heat + weighted perm: fdr.sd","medium","Endothelial Cells",0.8,0,0,0.414006113130968,0.326658446414841,3
+"pf","weighted: heat + weighted perm: fdr.sd","medium","Endothelial Cells",1,0,0,0.770166712638977,0.294143383298809,3
+"pf","weighted: heat + weighted perm: fdr.sd","small","MUC5B+",0.5,0,0,0.0696482280184922,0.413845747680825,3
+"pf","weighted: heat + weighted perm: fdr.sd","small","MUC5B+",0.8,0,0,0.263581000991215,0.394486764925862,3
+"pf","weighted: heat + weighted perm: fdr.sd","small","MUC5B+",1,0,0,0.374260294319922,0.387209817339772,3
+"pf","weighted: heat + weighted perm: fdr.sd + inheritance","large","Ciliated",0.5,0,0,0.232790539029925,0.333127039643741,3
+"pf","weighted: heat + weighted perm: fdr.sd + inheritance","large","Ciliated",0.8,0,0,0.68744556657904,0.278592006799929,3
+"pf","weighted: heat + weighted perm: fdr.sd + inheritance","large","Ciliated",1,0,0,0.896441328125583,0.272717338859528,3
+"pf","weighted: heat + weighted perm: fdr.sd + inheritance","medium","Endothelial Cells",0.5,0,0,0.2160612069312,0.371540433198797,3
+"pf","weighted: heat + weighted perm: fdr.sd + inheritance","medium","Endothelial Cells",0.8,0,0,0.863333002336582,0.3385998040232,3
+"pf","weighted: heat + weighted perm: fdr.sd + inheritance","medium","Endothelial Cells",1,0,0,0.980894412054736,0.341026763781756,3
+"pf","weighted: heat + weighted perm: fdr.sd + inheritance","small","MUC5B+",0.5,0,0,0.285292464633902,0.357139405391544,3
+"pf","weighted: heat + weighted perm: fdr.sd + inheritance","small","MUC5B+",0.8,0,0,0.569531671370332,0.349218956985625,3
+"pf","weighted: heat + weighted perm: fdr.sd + inheritance","small","MUC5B+",1,0,0,0.649840989908685,0.350837157568155,3
+"pf","weighted: heat + weighted perm: perm.fdr","large","Ciliated",0.5,0,0,0,0,3
+"pf","weighted: heat + weighted perm: perm.fdr","large","Ciliated",0.8,0,0,0,0,3
+"pf","weighted: heat + weighted perm: perm.fdr","large","Ciliated",1,0.45063541494319,0.45063541494319,0.346797358803292,0.001906941266209,3
+"pf","weighted: heat + weighted perm: perm.fdr","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","weighted: heat + weighted perm: perm.fdr","medium","Endothelial Cells",0.8,0.108411353841581,0.108411353841581,0,0,3
+"pf","weighted: heat + weighted perm: perm.fdr","medium","Endothelial Cells",1,0.634613939247336,0.645686603607198,0.521202032292095,0.00159489633173844,3
+"pf","weighted: heat + weighted perm: perm.fdr","small","MUC5B+",0.5,0,0,0,0,3
+"pf","weighted: heat + weighted perm: perm.fdr","small","MUC5B+",0.8,0,0,0,0,3
+"pf","weighted: heat + weighted perm: perm.fdr","small","MUC5B+",1,0,0,0,0,3
+"pf","weighted: heat + weighted perm: perm.fdr + inheritance","large","Ciliated",0.5,0,0,0,0,3
+"pf","weighted: heat + weighted perm: perm.fdr + inheritance","large","Ciliated",0.8,0,0,0,0,3
+"pf","weighted: heat + weighted perm: perm.fdr + inheritance","large","Ciliated",1,0.825017719076889,0.837679711853605,0.786191667856147,0.0105473204104903,3
+"pf","weighted: heat + weighted perm: perm.fdr + inheritance","medium","Endothelial Cells",0.5,0,0,0,0,3
+"pf","weighted: heat + weighted perm: perm.fdr + inheritance","medium","Endothelial Cells",0.8,0.286075196908902,0.286075196908902,0,0,3
+"pf","weighted: heat + weighted perm: perm.fdr + inheritance","medium","Endothelial Cells",1,0.955682401791848,0.957643186105574,0.925259191748709,0.0135527589545015,3
+"pf","weighted: heat + weighted perm: perm.fdr + inheritance","small","MUC5B+",0.5,0,0,0,0,3
+"pf","weighted: heat + weighted perm: perm.fdr + inheritance","small","MUC5B+",0.8,0,0,0,0,3
+"pf","weighted: heat + weighted perm: perm.fdr + inheritance","small","MUC5B+",1,0,0,0,0,3
+"scc","1-hop log: bh.param","large","CD1C",0.5,0,0,0,0,3
+"scc","1-hop log: bh.param","large","CD1C",0.8,0.0515705578996718,0.0515705578996718,0,0,3
+"scc","1-hop log: bh.param","large","CD1C",1,0.313708158395473,0.313708158395473,0.0983380836594983,0,3
+"scc","1-hop log: bh.param","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","1-hop log: bh.param","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","1-hop log: bh.param","medium","KC_Cyc",1,0.334108380436213,0.334108380436213,0.0715476594801853,0.00226757369614512,3
+"scc","1-hop log: bh.param","small","MDSC",0.5,0,0,0,0,3
+"scc","1-hop log: bh.param","small","MDSC",0.8,0,0,0,0,3
+"scc","1-hop log: bh.param","small","MDSC",1,0,0,0,0,3
+"scc","1-hop log: bh.perm","large","CD1C",0.5,0,0,0,0,3
+"scc","1-hop log: bh.perm","large","CD1C",0.8,0.0944678856071261,0.0944678856071261,0,0,3
+"scc","1-hop log: bh.perm","large","CD1C",1,0.344675010092922,0.344675010092922,0,0,3
+"scc","1-hop log: bh.perm","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","1-hop log: bh.perm","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","1-hop log: bh.perm","medium","KC_Cyc",1,0.159157444417254,0.265908946714885,0,0,3
+"scc","1-hop log: bh.perm","small","MDSC",0.5,0,0,0,0,3
+"scc","1-hop log: bh.perm","small","MDSC",0.8,0,0,0,0,3
+"scc","1-hop log: bh.perm","small","MDSC",1,0,0,0,0,3
+"scc","1-hop log: bh.pooled","large","CD1C",0.5,0,0,0,0,3
+"scc","1-hop log: bh.pooled","large","CD1C",0.8,0.0921237693389592,0.0921237693389592,0,0,3
+"scc","1-hop log: bh.pooled","large","CD1C",1,0.350570633576691,0.350570633576691,0.0563285269483507,0,3
+"scc","1-hop log: bh.pooled","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","1-hop log: bh.pooled","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","1-hop log: bh.pooled","medium","KC_Cyc",1,0.295095326697799,0.367559094813741,0.0812554948291958,0,3
+"scc","1-hop log: bh.pooled","small","MDSC",0.5,0,0,0,0,3
+"scc","1-hop log: bh.pooled","small","MDSC",0.8,0,0,0,0,3
+"scc","1-hop log: bh.pooled","small","MDSC",1,0,0,0,0,3
+"scc","1-hop log: fdr.mad","large","CD1C",0.5,0,0,0,0,3
+"scc","1-hop log: fdr.mad","large","CD1C",0.8,0.0973980309423347,0.0973980309423347,0,0,3
+"scc","1-hop log: fdr.mad","large","CD1C",1,0.353503302601363,0.353503302601363,0.0599192392861795,0,3
+"scc","1-hop log: fdr.mad","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","1-hop log: fdr.mad","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","1-hop log: fdr.mad","medium","KC_Cyc",1,0.32438344361111,0.396140248135677,0.0769230769230769,0,3
+"scc","1-hop log: fdr.mad","small","MDSC",0.5,0,0,0,0,3
+"scc","1-hop log: fdr.mad","small","MDSC",0.8,0,0,0,0,3
+"scc","1-hop log: fdr.mad","small","MDSC",1,0,0,0,0,3
+"scc","1-hop log: fdr.raw","large","CD1C",0.5,0,0,0,0,3
+"scc","1-hop log: fdr.raw","large","CD1C",0.8,0.0833333333333333,0.0833333333333333,0,0,3
+"scc","1-hop log: fdr.raw","large","CD1C",1,0.342197398770815,0.342197398770815,0.0549693890842777,0,3
+"scc","1-hop log: fdr.raw","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","1-hop log: fdr.raw","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","1-hop log: fdr.raw","medium","KC_Cyc",1,0.404082792041208,0.404082792041208,0.0733791953304148,0,3
+"scc","1-hop log: fdr.raw","small","MDSC",0.5,0,0,0,0,3
+"scc","1-hop log: fdr.raw","small","MDSC",0.8,0,0,0,0,3
+"scc","1-hop log: fdr.raw","small","MDSC",1,0,0,0,0,3
+"scc","1-hop log: fdr.sd","large","CD1C",0.5,0,0,0,0,3
+"scc","1-hop log: fdr.sd","large","CD1C",0.8,0.0921237693389592,0.0921237693389592,0,0,3
+"scc","1-hop log: fdr.sd","large","CD1C",1,0.350169776346994,0.350169776346994,0.0547088706525987,0,3
+"scc","1-hop log: fdr.sd","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","1-hop log: fdr.sd","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","1-hop log: fdr.sd","medium","KC_Cyc",1,0.290150413637007,0.363321145344324,0.069626850114655,0,3
+"scc","1-hop log: fdr.sd","small","MDSC",0.5,0,0,0,0,3
+"scc","1-hop log: fdr.sd","small","MDSC",0.8,0,0,0,0,3
+"scc","1-hop log: fdr.sd","small","MDSC",1,0,0,0,0,3
+"scc","1-hop log: fdr.tb","large","CD1C",0.5,0.000611246943765281,0.000611246943765281,0,0,3
+"scc","1-hop log: fdr.tb","large","CD1C",0.8,0.119432723863104,0.119432723863104,0,0,3
+"scc","1-hop log: fdr.tb","large","CD1C",1,0.404551748391485,0.404551748391485,0.0649993487039208,0,3
+"scc","1-hop log: fdr.tb","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","1-hop log: fdr.tb","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","1-hop log: fdr.tb","medium","KC_Cyc",1,0.328446751399865,0.424947281622558,0.0430045118808255,0,3
+"scc","1-hop log: fdr.tb","small","MDSC",0.5,0,0,0,0,3
+"scc","1-hop log: fdr.tb","small","MDSC",0.8,0,0,0,0,3
+"scc","1-hop log: fdr.tb","small","MDSC",1,0,0,0,0,3
+"scc","1-hop log: fdr.tbscale","large","CD1C",0.5,0.00224123879380603,0.00224123879380603,0,0,3
+"scc","1-hop log: fdr.tbscale","large","CD1C",0.8,0.112517580872011,0.112517580872011,0,0,3
+"scc","1-hop log: fdr.tbscale","large","CD1C",1,0.390543325995998,0.390543325995998,0.0708610134166992,0,3
+"scc","1-hop log: fdr.tbscale","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","1-hop log: fdr.tbscale","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","1-hop log: fdr.tbscale","medium","KC_Cyc",1,0.326910805844634,0.411746436809639,0.0592646744824516,0,3
+"scc","1-hop log: fdr.tbscale","small","MDSC",0.5,0,0,0,0,3
+"scc","1-hop log: fdr.tbscale","small","MDSC",0.8,0,0,0,0,3
+"scc","1-hop log: fdr.tbscale","small","MDSC",1,0,0,0,0,3
+"scc","1-hop log: nbhd.param","large","CD1C",0.5,0,0,0,0,3
+"scc","1-hop log: nbhd.param","large","CD1C",0.8,0.0880215658696671,0.0880215658696671,0,0,3
+"scc","1-hop log: nbhd.param","large","CD1C",1,0.337765823343292,0.337765823343292,0.150949163156237,0,3
+"scc","1-hop log: nbhd.param","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","1-hop log: nbhd.param","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","1-hop log: nbhd.param","medium","KC_Cyc",1,0.365792411219251,0.365792411219251,0.0604453870625663,0,3
+"scc","1-hop log: nbhd.param","small","MDSC",0.5,0,0,0,0,3
+"scc","1-hop log: nbhd.param","small","MDSC",0.8,0,0,0,0,3
+"scc","1-hop log: nbhd.param","small","MDSC",1,0,0,0,0,3
+"scc","1-hop log: nbhd.pooled","large","CD1C",0.5,0.00560309698451508,0.00560309698451508,0,0,3
+"scc","1-hop log: nbhd.pooled","large","CD1C",0.8,0.0860290670417253,0.0860290670417253,0,0,3
+"scc","1-hop log: nbhd.pooled","large","CD1C",1,0.497129876908709,0.497129876908709,0.0652598671355998,0.00158730158730159,3
+"scc","1-hop log: nbhd.pooled","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","1-hop log: nbhd.pooled","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","1-hop log: nbhd.pooled","medium","KC_Cyc",1,0.467341349939673,0.467341349939673,0.118198874296435,0,3
+"scc","1-hop log: nbhd.pooled","small","MDSC",0.5,0,0,0,0,3
+"scc","1-hop log: nbhd.pooled","small","MDSC",0.8,0,0,0,0,3
+"scc","1-hop log: nbhd.pooled","small","MDSC",1,0,0,0,0,3
+"scc","1-hop log: perm.fdr","large","CD1C",0.5,0,0,0,0,3
+"scc","1-hop log: perm.fdr","large","CD1C",0.8,0.0833333333333333,0.0833333333333333,0,0,3
+"scc","1-hop log: perm.fdr","large","CD1C",1,0.342197398770815,0.342197398770815,0.0549693890842777,0,3
+"scc","1-hop log: perm.fdr","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","1-hop log: perm.fdr","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","1-hop log: perm.fdr","medium","KC_Cyc",1,0.404082792041208,0.404082792041208,0.0733791953304148,0,3
+"scc","1-hop log: perm.fdr","small","MDSC",0.5,0,0,0,0,3
+"scc","1-hop log: perm.fdr","small","MDSC",0.8,0,0,0,0,3
+"scc","1-hop log: perm.fdr","small","MDSC",1,0,0,0,0,3
+"scc","1-hop log: spatial.param","large","CD1C",0.5,0,0,0,0,3
+"scc","1-hop log: spatial.param","large","CD1C",0.8,0.000117205813408345,0.000117205813408345,0,0,3
+"scc","1-hop log: spatial.param","large","CD1C",1,0.203827539999684,0.203827539999684,0.0520538053265681,0,3
+"scc","1-hop log: spatial.param","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","1-hop log: spatial.param","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","1-hop log: spatial.param","medium","KC_Cyc",1,0.227322682513507,0.227322682513507,0.0197949805585012,0,3
+"scc","1-hop log: spatial.param","small","MDSC",0.5,0,0,0,0,3
+"scc","1-hop log: spatial.param","small","MDSC",0.8,0,0,0,0,3
+"scc","1-hop log: spatial.param","small","MDSC",1,0,0,0,0,3
+"scc","1-hop log: spatial.pooled","large","CD1C",0.5,0,0,0,0,3
+"scc","1-hop log: spatial.pooled","large","CD1C",0.8,0.0457102672292546,0.0457102672292546,0,0,3
+"scc","1-hop log: spatial.pooled","large","CD1C",1,0.266728245493735,0.266728245493735,0.028526768268855,0,3
+"scc","1-hop log: spatial.pooled","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","1-hop log: spatial.pooled","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","1-hop log: spatial.pooled","medium","KC_Cyc",1,0.265413956432576,0.265413956432576,0.0410673337502606,0,3
+"scc","1-hop log: spatial.pooled","small","MDSC",0.5,0,0,0,0,3
+"scc","1-hop log: spatial.pooled","small","MDSC",0.8,0,0,0,0,3
+"scc","1-hop log: spatial.pooled","small","MDSC",1,0,0,0,0,3
+"scc","Milo (graph, spatial FDR)","large","CD1C",0.5,0.257465227117985,0.526599480568424,0.0507886696892824,0.190642909164541,3
+"scc","Milo (graph, spatial FDR)","large","CD1C",0.8,0.29975324535994,0.607107800793529,0.51730858427009,0.14018797982642,3
+"scc","Milo (graph, spatial FDR)","large","CD1C",1,0.318547738534448,0.630947094412064,0.717185474208377,0.125240505387677,3
+"scc","Milo (graph, spatial FDR)","medium","KC_Cyc",0.5,0,0.0368928439006303,0.00875731827307818,0.16187924731258,3
+"scc","Milo (graph, spatial FDR)","medium","KC_Cyc",0.8,0.0185312285518188,0.293754289636239,0.29472337023671,0.13051791726911,3
+"scc","Milo (graph, spatial FDR)","medium","KC_Cyc",1,0.381910870636309,0.4114144167356,0.825127345864481,0.13522185865219,3
+"scc","Milo (graph, spatial FDR)","small","MDSC",0.5,0,0,0.0640788662969809,0.27566311872638,3
+"scc","Milo (graph, spatial FDR)","small","MDSC",0.8,0,0,0.215193432298695,0.347018538884582,3
+"scc","Milo (graph, spatial FDR)","small","MDSC",1,0.132034632034632,0.296536796536797,0.704562966698889,0.302418352325,3
+"scc","decomp: 1-hop + edgeR QL: bh","large","CD1C",0.5,0.00152163575844032,0.0197812648597242,0.00152163575844032,0.0153077416523178,3
+"scc","decomp: 1-hop + edgeR QL: bh","large","CD1C",0.8,0.00362769485903814,0.064469320066335,0.00362769485903814,0.0155404329831264,3
+"scc","decomp: 1-hop + edgeR QL: bh","large","CD1C",1,0.0519829222697972,0.249739934274121,0.15654127449672,0.0863681088364546,3
+"scc","decomp: 1-hop + edgeR QL: bh","medium","KC_Cyc",0.5,0,0.00018037518037518,0,0.0123580494321977,3
+"scc","decomp: 1-hop + edgeR QL: bh","medium","KC_Cyc",0.8,0.00112536574386676,0.0102295809661573,0.00112536574386676,0.0123076923076923,3
+"scc","decomp: 1-hop + edgeR QL: bh","medium","KC_Cyc",1,0.148365870796648,0.305085197187237,0.305085197187237,0.0639462475081775,3
+"scc","decomp: 1-hop + edgeR QL: bh","small","MDSC",0.5,0,0,0,0.0133517495395948,3
+"scc","decomp: 1-hop + edgeR QL: bh","small","MDSC",0.8,0,0,0,0.0134486071085495,3
+"scc","decomp: 1-hop + edgeR QL: bh","small","MDSC",1,0.0193548387096774,0.0193548387096774,0.0193548387096774,0.0157593123209169,3
+"scc","decomp: 1-hop + edgeR QL: spatial-fdr","large","CD1C",0.5,0.00171184022824536,0.0718972895863053,0.0132857451231593,0.213749140606032,3
+"scc","decomp: 1-hop + edgeR QL: spatial-fdr","large","CD1C",0.8,0.00476782752902156,0.172160033167496,0.051577993460066,0.201478959884231,3
+"scc","decomp: 1-hop + edgeR QL: spatial-fdr","large","CD1C",1,0.0408246572225067,0.246292029356546,0.274369585913756,0.159349754024677,3
+"scc","decomp: 1-hop + edgeR QL: spatial-fdr","medium","KC_Cyc",0.5,0,0,0.00126262626262626,0.177355351086274,3
+"scc","decomp: 1-hop + edgeR QL: spatial-fdr","medium","KC_Cyc",0.8,0.00135043889264011,0.00135043889264011,0.0173348456425715,0.187858720401284,3
+"scc","decomp: 1-hop + edgeR QL: spatial-fdr","medium","KC_Cyc",1,0.107249731162818,0.107249731162818,0.461906011386462,0.1960349611393,3
+"scc","decomp: 1-hop + edgeR QL: spatial-fdr","small","MDSC",0.5,0,0,0,0.223172915225339,3
+"scc","decomp: 1-hop + edgeR QL: spatial-fdr","small","MDSC",0.8,0,0,0.0138396294710679,0.311629351666004,3
+"scc","decomp: 1-hop + edgeR QL: spatial-fdr","small","MDSC",1,0,0.0236559139784946,0.148915466956759,0.325860277815816,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","large","CD1C",0.5,0.0308679706601467,0.0308679706601467,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","large","CD1C",0.8,0.0769014040451322,0.146287245582872,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","large","CD1C",1,0.384855522820674,0.480680084666489,0.140765241878958,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","medium","KC_Cyc",0.5,0.000195963158926122,0.000587889476778366,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","medium","KC_Cyc",0.8,0.118517860579414,0.124938406325803,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","medium","KC_Cyc",1,0.470272780340325,0.586260530495848,0.203652598328597,0.0012970168612192,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","small","MDSC",0.8,0,0.00474495848161329,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): fdr.sd","small","MDSC",1,0.00385356454720617,0.0481695568400771,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","large","CD1C",0.5,0.00682559087204564,0.00682559087204564,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","large","CD1C",0.8,0.135138302859822,0.135138302859822,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","large","CD1C",1,0.463695072446601,0.463695072446601,0.112923811831525,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","medium","KC_Cyc",0.5,0.000195963158926122,0.000195963158926122,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","medium","KC_Cyc",0.8,0.0856294820632876,0.0856294820632876,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","medium","KC_Cyc",1,0.449881021279343,0.518456489642723,0.132940185491813,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm (libsize): perm.fdr","small","MDSC",1,0,0,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: fdr.sd","large","CD1C",0.5,0.0222030293200888,0.0222030293200888,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: fdr.sd","large","CD1C",0.8,0.173852915825191,0.173852915825191,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: fdr.sd","large","CD1C",1,0.493472945300934,0.509909197221057,0.185020047613645,0.0043050430504305,3
+"scc","decomp: 1-hop + voom-weighted perm: fdr.sd","medium","KC_Cyc",0.5,0.000195963158926122,0.000195963158926122,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: fdr.sd","medium","KC_Cyc",0.8,0.155553642997596,0.15689125669476,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: fdr.sd","medium","KC_Cyc",1,0.551654169583498,0.610685629463314,0.220369071395783,0.00174931006854803,3
+"scc","decomp: 1-hop + voom-weighted perm: fdr.sd","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: fdr.sd","small","MDSC",0.8,0.0025062656641604,0.0108099430069837,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: fdr.sd","small","MDSC",1,0.0551556964385605,0.0879109950898129,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: perm.fdr","large","CD1C",0.5,0.000203748981255094,0.000203748981255094,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: perm.fdr","large","CD1C",0.8,0.100679793717768,0.100679793717768,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: perm.fdr","large","CD1C",1,0.466442210462209,0.501158032274805,0.123818436194427,0.00314465408805031,3
+"scc","decomp: 1-hop + voom-weighted perm: perm.fdr","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: perm.fdr","medium","KC_Cyc",0.8,0.0858272162619989,0.0858272162619989,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: perm.fdr","medium","KC_Cyc",1,0.41703751188265,0.48985476179428,0.136960600375235,0,3
+"scc","decomp: 1-hop + voom-weighted perm: perm.fdr","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: perm.fdr","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: 1-hop + voom-weighted perm: perm.fdr","small","MDSC",1,0.00192678227360308,0.00192678227360308,0,0,3
+"scc","decomp: 1-hop + voom: bh","large","CD1C",0.5,0,0,0,0,3
+"scc","decomp: 1-hop + voom: bh","large","CD1C",0.8,0.051647091546487,0.051647091546487,0,0,3
+"scc","decomp: 1-hop + voom: bh","large","CD1C",1,0.386748351633986,0.386748351633986,0.161325660311844,0.000691562932226833,3
+"scc","decomp: 1-hop + voom: bh","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","decomp: 1-hop + voom: bh","medium","KC_Cyc",0.8,0.0176924524750612,0.0176924524750612,0,0,3
+"scc","decomp: 1-hop + voom: bh","medium","KC_Cyc",1,0.431572784728531,0.431572784728531,0.200795823857639,0,3
+"scc","decomp: 1-hop + voom: bh","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: 1-hop + voom: bh","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: 1-hop + voom: bh","small","MDSC",1,0.00770712909441233,0.00770712909441233,0,0,3
+"scc","decomp: 2-hop + voom-weighted perm: fdr.sd","large","CD1C",0.5,0,0,0,0,3
+"scc","decomp: 2-hop + voom-weighted perm: fdr.sd","large","CD1C",0.8,0.310595405532114,0.310595405532114,0,0,3
+"scc","decomp: 2-hop + voom-weighted perm: fdr.sd","large","CD1C",1,0.432297136444894,0.457489148733681,0.00738536155202822,0,3
+"scc","decomp: 2-hop + voom-weighted perm: fdr.sd","medium","KC_Cyc",0.5,0.0799396077173855,0.0799396077173855,0.0244953948657652,0,3
+"scc","decomp: 2-hop + voom-weighted perm: fdr.sd","medium","KC_Cyc",0.8,0.449472922306802,0.449472922306802,0.199254979304141,0.00119904076738609,3
+"scc","decomp: 2-hop + voom-weighted perm: fdr.sd","medium","KC_Cyc",1,0.699650805296713,0.699650805296713,0.512162831374896,0.000808219439202455,3
+"scc","decomp: 2-hop + voom-weighted perm: fdr.sd","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: 2-hop + voom-weighted perm: fdr.sd","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: 2-hop + voom-weighted perm: fdr.sd","small","MDSC",1,0.00578034682080925,0.00578034682080925,0,0,3
+"scc","decomp: 2-hop + voom-weighted perm: perm.fdr","large","CD1C",0.5,0,0,0,0,3
+"scc","decomp: 2-hop + voom-weighted perm: perm.fdr","large","CD1C",0.8,0.310478199718706,0.310478199718706,0,0,3
+"scc","decomp: 2-hop + voom-weighted perm: perm.fdr","large","CD1C",1,0.470208425917089,0.470208425917089,0,0,3
+"scc","decomp: 2-hop + voom-weighted perm: perm.fdr","medium","KC_Cyc",0.5,0.068812017886092,0.068812017886092,0.0258671369782481,0,3
+"scc","decomp: 2-hop + voom-weighted perm: perm.fdr","medium","KC_Cyc",0.8,0.437733779491633,0.437733779491633,0.217549775441844,0.00112994350282486,3
+"scc","decomp: 2-hop + voom-weighted perm: perm.fdr","medium","KC_Cyc",1,0.715751332140143,0.715751332140143,0.524305326354378,0.000537634408602151,3
+"scc","decomp: 2-hop + voom-weighted perm: perm.fdr","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: 2-hop + voom-weighted perm: perm.fdr","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: 2-hop + voom-weighted perm: perm.fdr","small","MDSC",1,0,0,0,0,3
+"scc","decomp: 2-hop + voom: bh","large","CD1C",0.5,0,0,0,0,3
+"scc","decomp: 2-hop + voom: bh","large","CD1C",0.8,0.294421003281763,0.294421003281763,0,0,3
+"scc","decomp: 2-hop + voom: bh","large","CD1C",1,0.39897118480061,0.39897118480061,0,0,3
+"scc","decomp: 2-hop + voom: bh","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","decomp: 2-hop + voom: bh","medium","KC_Cyc",0.8,0.0470840021401819,0.0470840021401819,0,0,3
+"scc","decomp: 2-hop + voom: bh","medium","KC_Cyc",1,0.612768514514863,0.612768514514863,0.35800739286407,0,3
+"scc","decomp: 2-hop + voom: bh","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: 2-hop + voom: bh","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: 2-hop + voom: bh","small","MDSC",1,0,0,0,0,3
+"scc","decomp: Milo (edgeR QL + spatial FDR)","large","CD1C",0.5,0.257465227117985,0.526599480568424,0.0507886696892824,0.190642909164541,3
+"scc","decomp: Milo (edgeR QL + spatial FDR)","large","CD1C",0.8,0.29975324535994,0.607107800793529,0.51730858427009,0.14018797982642,3
+"scc","decomp: Milo (edgeR QL + spatial FDR)","large","CD1C",1,0.318547738534448,0.630947094412064,0.717185474208377,0.125240505387677,3
+"scc","decomp: Milo (edgeR QL + spatial FDR)","medium","KC_Cyc",0.5,0,0.0368928439006303,0.00875731827307818,0.16187924731258,3
+"scc","decomp: Milo (edgeR QL + spatial FDR)","medium","KC_Cyc",0.8,0.0185312285518188,0.293754289636239,0.29472337023671,0.13051791726911,3
+"scc","decomp: Milo (edgeR QL + spatial FDR)","medium","KC_Cyc",1,0.381910870636309,0.4114144167356,0.825127345864481,0.13522185865219,3
+"scc","decomp: Milo (edgeR QL + spatial FDR)","small","MDSC",0.5,0,0,0.0640788662969809,0.27566311872638,3
+"scc","decomp: Milo (edgeR QL + spatial FDR)","small","MDSC",0.8,0,0,0.215193432298695,0.347018538884582,3
+"scc","decomp: Milo (edgeR QL + spatial FDR)","small","MDSC",1,0.132034632034632,0.296536796536797,0.704562966698889,0.302418352325,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.perm","large","CD1C",0.5,0.0150564617314931,0.0150564617314931,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.perm","large","CD1C",0.8,0.0986409264622115,0.0986409264622115,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.perm","large","CD1C",1,0.606182129499691,0.606182129499691,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.perm","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.perm","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.perm","medium","KC_Cyc",1,0.649463738111989,0.684398235928583,0.226046314000425,0.00753158406219631,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.perm","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.perm","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.perm","small","MDSC",1,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.pooled","large","CD1C",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.pooled","large","CD1C",0.8,0.0582997926576412,0.0582997926576412,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.pooled","large","CD1C",1,0.651792674510553,0.651792674510553,0.341536735162766,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.pooled","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.pooled","medium","KC_Cyc",0.8,0.144585253456221,0.144585253456221,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.pooled","medium","KC_Cyc",1,0.688160276767493,0.737196228982117,0.31344541206398,0.00625504439063761,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.pooled","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.pooled","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: bh.pooled","small","MDSC",1,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: fdr.sd","large","CD1C",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: fdr.sd","large","CD1C",0.8,0.0582997926576412,0.0582997926576412,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: fdr.sd","large","CD1C",1,0.651792674510553,0.651792674510553,0.336120108052242,0,3
+"scc","decomp: kNN nhoods + cacoa perm: fdr.sd","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: fdr.sd","medium","KC_Cyc",0.8,0.144585253456221,0.144585253456221,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: fdr.sd","medium","KC_Cyc",1,0.695674843121813,0.742586299904103,0.31344541206398,0.00625504439063761,3
+"scc","decomp: kNN nhoods + cacoa perm: fdr.sd","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: fdr.sd","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: fdr.sd","small","MDSC",1,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: perm.fdr","large","CD1C",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: perm.fdr","large","CD1C",0.8,0.0302475911696548,0.0302475911696548,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: perm.fdr","large","CD1C",1,0.667760478312385,0.667760478312385,0.326189507110027,0,3
+"scc","decomp: kNN nhoods + cacoa perm: perm.fdr","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: perm.fdr","medium","KC_Cyc",0.8,0.170506912442396,0.170506912442396,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: perm.fdr","medium","KC_Cyc",1,0.674356480700973,0.704814694473456,0.313020512977513,0.00626262626262626,3
+"scc","decomp: kNN nhoods + cacoa perm: perm.fdr","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: perm.fdr","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: kNN nhoods + cacoa perm: perm.fdr","small","MDSC",1,0,0,0,0,3
+"scc","decomp: kNN nhoods + edgeR QL (libsize): bh","large","CD1C",0.5,0,0.0584573485069546,0.00330707129656648,0.0267639902676399,3
+"scc","decomp: kNN nhoods + edgeR QL (libsize): bh","large","CD1C",0.8,0.220577191288488,0.258508646343983,0.077090343586768,0.0407875863041279,3
+"scc","decomp: kNN nhoods + edgeR QL (libsize): bh","large","CD1C",1,0.540798909816651,0.645875182255434,0.59584982854542,0.0578691989213021,3
+"scc","decomp: kNN nhoods + edgeR QL (libsize): bh","medium","KC_Cyc",0.5,0,0.000185391175380052,0.000185391175380052,0.0194125159642401,3
+"scc","decomp: kNN nhoods + edgeR QL (libsize): bh","medium","KC_Cyc",0.8,0,0.0807595515900252,0,0.0387731481481481,3
+"scc","decomp: kNN nhoods + edgeR QL (libsize): bh","medium","KC_Cyc",1,0.475699298012467,0.475699298012467,0.554313067407617,0.0830540573976789,3
+"scc","decomp: kNN nhoods + edgeR QL (libsize): bh","small","MDSC",0.5,0.044362292051756,0.044362292051756,0,0,3
+"scc","decomp: kNN nhoods + edgeR QL (libsize): bh","small","MDSC",0.8,0,0,0,0.0238959467634604,3
+"scc","decomp: kNN nhoods + edgeR QL (libsize): bh","small","MDSC",1,0.12621359223301,0.12621359223301,0.380952380952381,0.122151747764989,3
+"scc","decomp: kNN nhoods + edgeR QL: bh","large","CD1C",0.5,0,0.0327789125571442,0.00330707129656648,0.0693725490196078,3
+"scc","decomp: kNN nhoods + edgeR QL: bh","large","CD1C",0.8,0.238708293101599,0.238708293101599,0.0478489432464328,0.0143109824730664,3
+"scc","decomp: kNN nhoods + edgeR QL: bh","large","CD1C",1,0.325949374685597,0.356813572216461,0.476949502785205,0.116942552894131,3
+"scc","decomp: kNN nhoods + edgeR QL: bh","medium","KC_Cyc",0.5,0.000185391175380052,0.000185391175380052,0,0,3
+"scc","decomp: kNN nhoods + edgeR QL: bh","medium","KC_Cyc",0.8,0.0185312285518188,0.0185312285518188,0,0.0213128729752771,3
+"scc","decomp: kNN nhoods + edgeR QL: bh","medium","KC_Cyc",1,0.475701829326173,0.475701829326173,0.57834900768022,0.12201000268517,3
+"scc","decomp: kNN nhoods + edgeR QL: bh","small","MDSC",0.5,0.044362292051756,0.044362292051756,0,0,3
+"scc","decomp: kNN nhoods + edgeR QL: bh","small","MDSC",0.8,0.0526315789473684,0.0526315789473684,0,0.0469157254561251,3
+"scc","decomp: kNN nhoods + edgeR QL: bh","small","MDSC",1,0.132034632034632,0.132034632034632,0.132034632034632,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","large","CD1C",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","large","CD1C",0.8,0.312511331744333,0.312511331744333,0.0169514510442094,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","large","CD1C",1,0.769327508019431,0.795186858382092,0.453445822083236,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","medium","KC_Cyc",0.8,0.261328725038402,0.261328725038402,0.015937019969278,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","medium","KC_Cyc",1,0.836727681907035,0.845461306361183,0.442117008673322,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E (libsize)): perm.fdr","small","MDSC",1,0,0,0,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","large","CD1C",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","large","CD1C",0.8,0.49516622496148,0.49516622496148,0.0169514510442094,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","large","CD1C",1,0.772110652332788,0.783148179926607,0.481835956964457,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","medium","KC_Cyc",0.8,0.225230414746544,0.262288786482335,0,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","medium","KC_Cyc",1,0.756657856810666,0.777471649888522,0.405215729059108,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: kNN nhoods + unweighted perm (voom E): perm.fdr","small","MDSC",1,0,0,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","large","CD1C",0.5,0.269238812212463,0.269238812212463,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","large","CD1C",0.8,0.498931791752652,0.645934775208036,0.126878937549919,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","large","CD1C",1,0.835080773927292,0.848641164971126,0.654320687441457,0.00200185537815536,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","medium","KC_Cyc",0.5,0,0.0685151697809926,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","medium","KC_Cyc",0.8,0.322057135426476,0.37543495027218,0.192780337941628,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","medium","KC_Cyc",1,0.807018983925072,0.880227273045786,0.733791709951559,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","small","MDSC",0.5,0.00165016501650165,0.00165016501650165,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","small","MDSC",0.8,0.00128205128205128,0.00128205128205128,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): fdr.sd","small","MDSC",1,0.238383838383838,0.280808080808081,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","large","CD1C",0.5,0.252509410288582,0.252509410288582,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","large","CD1C",0.8,0.434621319462941,0.434621319462941,0.0590297532761889,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","large","CD1C",1,0.803794978430352,0.82429324396173,0.579496038682908,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","medium","KC_Cyc",0.8,0.370960855756653,0.370960855756653,0.206797235023041,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","medium","KC_Cyc",1,0.848679148309263,0.910644213811447,0.672792950362387,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm (libsize): perm.fdr","small","MDSC",1,0,0.280808080808081,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: fdr.sd","large","CD1C",0.5,0.0906524466750314,0.0906524466750314,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: fdr.sd","large","CD1C",0.8,0.625741897279973,0.659373576151684,0.0979115812313534,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: fdr.sd","large","CD1C",1,0.833524264497855,0.840462138985398,0.626578158361588,0.0100068007383659,3
+"scc","decomp: kNN nhoods + voom-weighted perm: fdr.sd","medium","KC_Cyc",0.5,0.0305404862366888,0.0305404862366888,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: fdr.sd","medium","KC_Cyc",0.8,0.268375984573651,0.285849102853221,0.0666282642089094,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: fdr.sd","medium","KC_Cyc",1,0.803659765027213,0.864795136206252,0.643336480105254,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: fdr.sd","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: fdr.sd","small","MDSC",0.8,0.00128205128205128,0.00128205128205128,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: fdr.sd","small","MDSC",1,0.132034632034632,0.374458874458874,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: perm.fdr","large","CD1C",0.5,0.0607486407360937,0.0607486407360937,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: perm.fdr","large","CD1C",0.8,0.532770332941503,0.574403096706081,0.0169514510442094,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: perm.fdr","large","CD1C",1,0.8033585830539,0.820072553410254,0.565308405003071,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: perm.fdr","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: perm.fdr","medium","KC_Cyc",0.8,0.250768049155146,0.276881720430108,0.015937019969278,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: perm.fdr","medium","KC_Cyc",1,0.810347053294437,0.843680757718676,0.474453638221621,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: perm.fdr","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: perm.fdr","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: kNN nhoods + voom-weighted perm: perm.fdr","small","MDSC",1,0,0,0,0,3
+"scc","decomp: kNN nhoods + voom: bh","large","CD1C",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + voom: bh","large","CD1C",0.8,0.295879494169929,0.295879494169929,0,0,3
+"scc","decomp: kNN nhoods + voom: bh","large","CD1C",1,0.77436401714572,0.77436401714572,0.604796459903961,0,3
+"scc","decomp: kNN nhoods + voom: bh","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + voom: bh","medium","KC_Cyc",0.8,0.2571044546851,0.2571044546851,0.106758832565284,0,3
+"scc","decomp: kNN nhoods + voom: bh","medium","KC_Cyc",1,0.80853711543657,0.80853711543657,0.648651398605105,0,3
+"scc","decomp: kNN nhoods + voom: bh","small","MDSC",0.5,0,0,0,0,3
+"scc","decomp: kNN nhoods + voom: bh","small","MDSC",0.8,0,0,0,0,3
+"scc","decomp: kNN nhoods + voom: bh","small","MDSC",1,0.145454545454545,0.145454545454545,0,0,3
+"scc","heat: bh.param","large","CD1C",0.5,0.281275468622657,0.281275468622657,0,0,3
+"scc","heat: bh.param","large","CD1C",0.8,0.300750117205813,0.300750117205813,0,0,3
+"scc","heat: bh.param","large","CD1C",1,0.488658660893909,0.488658660893909,0,0,3
+"scc","heat: bh.param","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","heat: bh.param","medium","KC_Cyc",0.8,0.204404291360813,0.204404291360813,0,0,3
+"scc","heat: bh.param","medium","KC_Cyc",1,0.449465698670365,0.449465698670365,0.155513862830936,0,3
+"scc","heat: bh.param","small","MDSC",0.5,0,0,0,0,3
+"scc","heat: bh.param","small","MDSC",0.8,0,0.111506524317912,0,0,3
+"scc","heat: bh.param","small","MDSC",1,0,0.275529865125241,0,0,3
+"scc","heat: bh.perm","large","CD1C",0.5,0.287999185004075,0.287999185004075,0,0,3
+"scc","heat: bh.perm","large","CD1C",0.8,0.456421304168329,0.456421304168329,0,0,3
+"scc","heat: bh.perm","large","CD1C",1,0.539244077857794,0.539244077857794,0,0,3
+"scc","heat: bh.perm","medium","KC_Cyc",0.5,0.0246913580246914,0.0246913580246914,0,0,3
+"scc","heat: bh.perm","medium","KC_Cyc",0.8,0.396853594215587,0.396853594215587,0,0,3
+"scc","heat: bh.perm","medium","KC_Cyc",1,0.509457903943588,0.509457903943588,0.196581196581197,0,3
+"scc","heat: bh.perm","small","MDSC",0.5,0,0.00150829562594268,0,0,3
+"scc","heat: bh.perm","small","MDSC",0.8,0,0,0,0,3
+"scc","heat: bh.perm","small","MDSC",1,0.0500963391136802,0.0500963391136802,0,0,3
+"scc","heat: bh.pooled","large","CD1C",0.5,0.283007334963325,0.283007334963325,0,0,3
+"scc","heat: bh.pooled","large","CD1C",0.8,0.48756437573035,0.48756437573035,0,0,3
+"scc","heat: bh.pooled","large","CD1C",1,0.527730222825963,0.527730222825963,0.12504884720594,0,3
+"scc","heat: bh.pooled","medium","KC_Cyc",0.5,0.0268469527728787,0.0268469527728787,0,0,3
+"scc","heat: bh.pooled","medium","KC_Cyc",0.8,0.407651784789059,0.407651784789059,0.193111236589497,0,3
+"scc","heat: bh.pooled","medium","KC_Cyc",1,0.62782527980202,0.62782527980202,0.287906390769593,0,3
+"scc","heat: bh.pooled","small","MDSC",0.5,0,0,0,0,3
+"scc","heat: bh.pooled","small","MDSC",0.8,0,0,0,0,3
+"scc","heat: bh.pooled","small","MDSC",1,0.0809248554913295,0.0809248554913295,0,0,3
+"scc","heat: fdr.mad","large","CD1C",0.5,0.267114914425428,0.267114914425428,0,0,3
+"scc","heat: fdr.mad","large","CD1C",0.8,0.278481012658228,0.278481012658228,0,0,3
+"scc","heat: fdr.mad","large","CD1C",1,0.283183535235118,0.283183535235118,0,0,3
+"scc","heat: fdr.mad","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","heat: fdr.mad","medium","KC_Cyc",0.8,0.304824714448554,0.304824714448554,0,0,3
+"scc","heat: fdr.mad","medium","KC_Cyc",1,0.411688464710734,0.411688464710734,0,0,3
+"scc","heat: fdr.mad","small","MDSC",0.5,0,0,0,0,3
+"scc","heat: fdr.mad","small","MDSC",0.8,0,0.0569395017793594,0,0,3
+"scc","heat: fdr.mad","small","MDSC",1,0,0.25626204238921,0,0,3
+"scc","heat: fdr.raw","large","CD1C",0.5,0.284535452322738,0.284535452322738,0,0,3
+"scc","heat: fdr.raw","large","CD1C",0.8,0.486167527342192,0.486167527342192,0,0,3
+"scc","heat: fdr.raw","large","CD1C",1,0.525235009335244,0.525235009335244,0.137162954279015,0,3
+"scc","heat: fdr.raw","medium","KC_Cyc",0.5,0.177414845121981,0.177414845121981,0,0,3
+"scc","heat: fdr.raw","medium","KC_Cyc",0.8,0.415459642132822,0.415459642132822,0.194428759646151,0,3
+"scc","heat: fdr.raw","medium","KC_Cyc",1,0.663022894575474,0.663022894575474,0.280147918536042,0,3
+"scc","heat: fdr.raw","small","MDSC",0.5,0,0,0,0,3
+"scc","heat: fdr.raw","small","MDSC",0.8,0.00237247924080664,0.00237247924080664,0,0,3
+"scc","heat: fdr.raw","small","MDSC",1,0.15606936416185,0.15606936416185,0,0,3
+"scc","heat: fdr.sd","large","CD1C",0.5,0.283312958435208,0.283312958435208,0,0,3
+"scc","heat: fdr.sd","large","CD1C",0.8,0.486437800449231,0.486437800449231,0,0,3
+"scc","heat: fdr.sd","large","CD1C",1,0.527730222825963,0.527730222825963,0.12765403152273,0,3
+"scc","heat: fdr.sd","medium","KC_Cyc",0.5,0.0268469527728787,0.0268469527728787,0,0,3
+"scc","heat: fdr.sd","medium","KC_Cyc",0.8,0.407919307528492,0.407919307528492,0.1914172783738,0,3
+"scc","heat: fdr.sd","medium","KC_Cyc",1,0.6276143762511,0.6276143762511,0.284616290978963,0,3
+"scc","heat: fdr.sd","small","MDSC",0.5,0,0,0,0,3
+"scc","heat: fdr.sd","small","MDSC",0.8,0,0,0,0,3
+"scc","heat: fdr.sd","small","MDSC",1,0.0828516377649326,0.0828516377649326,0,0,3
+"scc","heat: fdr.tb","large","CD1C",0.5,0.290036674816626,0.290036674816626,0,0,3
+"scc","heat: fdr.tb","large","CD1C",0.8,0.497344938458201,0.497344938458201,0,0,3
+"scc","heat: fdr.tb","large","CD1C",1,0.534554099960509,0.534554099960509,0.177803829620946,0,3
+"scc","heat: fdr.tb","medium","KC_Cyc",0.5,0.0286106212032138,0.0286106212032138,0,0,3
+"scc","heat: fdr.tb","medium","KC_Cyc",0.8,0.413893629575115,0.413893629575115,0.194240542066629,0,3
+"scc","heat: fdr.tb","medium","KC_Cyc",1,0.656028544722928,0.656028544722928,0.378261775928796,0,3
+"scc","heat: fdr.tb","small","MDSC",0.5,0,0,0,0,3
+"scc","heat: fdr.tb","small","MDSC",0.8,0,0.00355871886120996,0,0,3
+"scc","heat: fdr.tb","small","MDSC",1,0.00578034682080925,0.177263969171484,0,0,3
+"scc","heat: fdr.tbscale","large","CD1C",0.5,0.286165444172779,0.286165444172779,0,0,3
+"scc","heat: fdr.tbscale","large","CD1C",0.8,0.495118028003443,0.495118028003443,0,0,3
+"scc","heat: fdr.tbscale","large","CD1C",1,0.53291086961466,0.53291086961466,0.150579653510486,0,3
+"scc","heat: fdr.tbscale","medium","KC_Cyc",0.5,0.0248873211836175,0.0248873211836175,0,0,3
+"scc","heat: fdr.tbscale","medium","KC_Cyc",0.8,0.408275652047025,0.408275652047025,0.194240542066629,0,3
+"scc","heat: fdr.tbscale","medium","KC_Cyc",1,0.64860542701349,0.64860542701349,0.278579909544915,0,3
+"scc","heat: fdr.tbscale","small","MDSC",0.5,0,0,0,0,3
+"scc","heat: fdr.tbscale","small","MDSC",0.8,0,0.00118623962040332,0,0,3
+"scc","heat: fdr.tbscale","small","MDSC",1,0,0.102119460500963,0,0,3
+"scc","heat: nbhd.param","large","CD1C",0.5,0.273023634881826,0.273023634881826,0,0,3
+"scc","heat: nbhd.param","large","CD1C",0.8,0.30450070323488,0.30450070323488,0,0,3
+"scc","heat: nbhd.param","large","CD1C",1,0.517037207614582,0.517037207614582,0,0,3
+"scc","heat: nbhd.param","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","heat: nbhd.param","medium","KC_Cyc",0.8,0.412512662390532,0.412512662390532,0,0,3
+"scc","heat: nbhd.param","medium","KC_Cyc",1,0.37623152151254,0.55155849217355,0,0,3
+"scc","heat: nbhd.param","small","MDSC",0.5,0,0,0,0,3
+"scc","heat: nbhd.param","small","MDSC",0.8,0,0,0,0,3
+"scc","heat: nbhd.param","small","MDSC",1,0,0,0,0,3
+"scc","heat: nbhd.pooled","large","CD1C",0.5,0.296047269763651,0.296047269763651,0,0,3
+"scc","heat: nbhd.pooled","large","CD1C",0.8,0.310009376465073,0.310009376465073,0,0,3
+"scc","heat: nbhd.pooled","large","CD1C",1,0.574837408585943,0.574837408585943,0,0,3
+"scc","heat: nbhd.pooled","medium","KC_Cyc",0.5,0.0215559474818734,0.0215559474818734,0,0,3
+"scc","heat: nbhd.pooled","medium","KC_Cyc",0.8,0.435472034885811,0.435472034885811,0.230378317334839,0,3
+"scc","heat: nbhd.pooled","medium","KC_Cyc",1,0.694191668288339,0.694191668288339,0.357107250002266,0,3
+"scc","heat: nbhd.pooled","small","MDSC",0.5,0,0.00301659125188537,0,0,3
+"scc","heat: nbhd.pooled","small","MDSC",0.8,0,0.0711743772241993,0,0,3
+"scc","heat: nbhd.pooled","small","MDSC",1,0.0635838150289017,0.0635838150289017,0,0,3
+"scc","heat: perm.fdr","large","CD1C",0.5,0.284535452322738,0.284535452322738,0,0,3
+"scc","heat: perm.fdr","large","CD1C",0.8,0.486167527342192,0.486167527342192,0,0,3
+"scc","heat: perm.fdr","large","CD1C",1,0.525235009335244,0.525235009335244,0.137162954279015,0,3
+"scc","heat: perm.fdr","medium","KC_Cyc",0.5,0.177414845121981,0.177414845121981,0,0,3
+"scc","heat: perm.fdr","medium","KC_Cyc",0.8,0.415459642132822,0.415459642132822,0.194428759646151,0,3
+"scc","heat: perm.fdr","medium","KC_Cyc",1,0.663022894575474,0.663022894575474,0.280147918536042,0,3
+"scc","heat: perm.fdr","small","MDSC",0.5,0,0,0,0,3
+"scc","heat: perm.fdr","small","MDSC",0.8,0.00237247924080664,0.00237247924080664,0,0,3
+"scc","heat: perm.fdr","small","MDSC",1,0.15606936416185,0.15606936416185,0,0,3
+"scc","heat: spatial.param","large","CD1C",0.5,0.235941320293399,0.235941320293399,0,0,3
+"scc","heat: spatial.param","large","CD1C",0.8,0.281411157993436,0.281411157993436,0,0,3
+"scc","heat: spatial.param","large","CD1C",1,0.443816667390329,0.443816667390329,0,0,3
+"scc","heat: spatial.param","medium","KC_Cyc",0.5,0.00254752106603958,0.00254752106603958,0,0,3
+"scc","heat: spatial.param","medium","KC_Cyc",0.8,0.314783327729102,0.314783327729102,0,0,3
+"scc","heat: spatial.param","medium","KC_Cyc",1,0.294831008510754,0.486064659977703,0,0,3
+"scc","heat: spatial.param","small","MDSC",0.5,0,0,0,0,3
+"scc","heat: spatial.param","small","MDSC",0.8,0,0,0,0,3
+"scc","heat: spatial.param","small","MDSC",1,0,0,0,0,3
+"scc","heat: spatial.pooled","large","CD1C",0.5,0.267828035859821,0.267828035859821,0,0,3
+"scc","heat: spatial.pooled","large","CD1C",0.8,0.289615564932021,0.289615564932021,0,0,3
+"scc","heat: spatial.pooled","large","CD1C",1,0.499161456298033,0.499161456298033,0,0,3
+"scc","heat: spatial.pooled","medium","KC_Cyc",0.5,0.0194003527336861,0.0194003527336861,0,0,3
+"scc","heat: spatial.pooled","medium","KC_Cyc",0.8,0.376414011001212,0.376414011001212,0.178618482966309,0,3
+"scc","heat: spatial.pooled","medium","KC_Cyc",1,0.486735369025931,0.486735369025931,0.269960391911611,0,3
+"scc","heat: spatial.pooled","small","MDSC",0.5,0,0.000754147812971342,0,0,3
+"scc","heat: spatial.pooled","small","MDSC",0.8,0,0.113879003558719,0,0,3
+"scc","heat: spatial.pooled","small","MDSC",1,0.00963391136801541,0.273603082851638,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr","large","CD1C",0.5,0,0,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr","large","CD1C",0.8,0.0921237693389592,0.0921237693389592,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr","large","CD1C",1,0.347764891419639,0.347764891419639,0.061032745486098,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr","medium","KC_Cyc",1,0.416826945378816,0.416826945378816,0.0900562851782364,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr","small","MDSC",0.5,0,0,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr","small","MDSC",0.8,0,0,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr","small","MDSC",1,0,0,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","large","CD1C",0.5,0,0,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","large","CD1C",0.8,0.310243788091889,0.310243788091889,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","large","CD1C",1,0.867626886515943,0.927163496859005,0.455224264950847,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","medium","KC_Cyc",0.5,0,0,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","medium","KC_Cyc",0.8,0,0,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","medium","KC_Cyc",1,0.870432095171077,0.938877258199911,0.308109234938503,0.00111529346159208,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","small","MDSC",0.5,0,0,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","small","MDSC",0.8,0,0,0,0,3
+"scc","weighted: 1-hop + unweighted perm: perm.fdr + inheritance","small","MDSC",1,0,0,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd","large","CD1C",0.5,0.0258761206193969,0.0258761206193969,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd","large","CD1C",0.8,0.0735024354562901,0.139137690964963,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd","large","CD1C",1,0.365726155777083,0.462723050565454,0.127768654463653,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd","medium","KC_Cyc",0.5,0.000195963158926122,0.000587889476778366,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd","medium","KC_Cyc",0.8,0.118517860579414,0.12467088358637,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd","medium","KC_Cyc",1,0.503522072448022,0.567148795671776,0.190504047103884,0.0015015015015015,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd","small","MDSC",0.5,0,0,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd","small","MDSC",0.8,0,0.00237247924080664,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd","small","MDSC",1,0.00192678227360308,0.0366088631984586,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd + inheritance","large","CD1C",0.5,0.274857375713121,0.274857375713121,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd + inheritance","large","CD1C",0.8,0.320506778251745,0.348401761842931,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd + inheritance","large","CD1C",1,0.886748130700216,0.924906973543506,0.759530954438554,0.000404987127194886,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd + inheritance","medium","KC_Cyc",0.5,0.00607485792670978,0.00607485792670978,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd + inheritance","medium","KC_Cyc",0.8,0.421607378129117,0.421607378129117,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd + inheritance","medium","KC_Cyc",1,0.924570290792576,0.953754868306288,0.840215325608698,0.010544434857501,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd + inheritance","small","MDSC",0.5,0,0,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd + inheritance","small","MDSC",0.8,0,0,0,0,3
+"scc","weighted: 1-hop + weighted perm: fdr.sd + inheritance","small","MDSC",1,0.0732177263969171,0.0732177263969171,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr","large","CD1C",0.5,0.0103911980440098,0.0103911980440098,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr","large","CD1C",0.8,0.138185654008439,0.138185654008439,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr","large","CD1C",1,0.396601367481657,0.464075641286529,0.109005568097924,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr","medium","KC_Cyc",0.5,0.000195963158926122,0.000195963158926122,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr","medium","KC_Cyc",0.8,0.0856294820632876,0.0856294820632876,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr","medium","KC_Cyc",1,0.44287482348899,0.51145029185237,0.132940185491813,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr","small","MDSC",0.5,0,0,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr","small","MDSC",0.8,0,0,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr","small","MDSC",1,0,0,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr + inheritance","large","CD1C",0.5,0.223920130399348,0.223920130399348,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr + inheritance","large","CD1C",0.8,0.299251807068735,0.331131788315805,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr + inheritance","large","CD1C",1,0.866156361348536,0.937055186120944,0.726462335611102,0.000249768072504103,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr + inheritance","medium","KC_Cyc",0.5,0.00607485792670978,0.00607485792670978,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr + inheritance","medium","KC_Cyc",0.8,0.420777317455383,0.420777317455383,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr + inheritance","medium","KC_Cyc",1,0.911922327762656,0.935345920620561,0.628536771547733,0.0148434112964347,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr + inheritance","small","MDSC",0.5,0,0,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr + inheritance","small","MDSC",0.8,0,0,0,0,3
+"scc","weighted: 1-hop + weighted perm: perm.fdr + inheritance","small","MDSC",1,0,0,0,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr","large","CD1C",0.5,0.285656071719641,0.285656071719641,0,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr","large","CD1C",0.8,0.476366409863481,0.476366409863481,0,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr","large","CD1C",1,0.5200641836779,0.5200641836779,0.158004428813339,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr","medium","KC_Cyc",0.5,0.0331177738585146,0.0331177738585146,0,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr","medium","KC_Cyc",0.8,0.40729755507479,0.40729755507479,0.167890080933559,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr","medium","KC_Cyc",1,0.658092276707422,0.658092276707422,0.356219013695154,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr","small","MDSC",0.5,0,0,0,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr","small","MDSC",0.8,0.00355871886120996,0.00355871886120996,0,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr","small","MDSC",1,0.18111753371869,0.18111753371869,0,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr + inheritance","large","CD1C",0.5,0.327526487367563,0.327526487367563,0,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr + inheritance","large","CD1C",0.8,0.638473420520464,0.638473420520464,0,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr + inheritance","large","CD1C",1,0.650403002371545,0.650403002371545,0.303764491337762,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr + inheritance","medium","KC_Cyc",0.5,0.175191064079953,0.175191064079953,0,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr + inheritance","medium","KC_Cyc",0.8,0.597221781638001,0.613005623264539,0.295125164690382,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr + inheritance","medium","KC_Cyc",1,0.929032383901731,0.931860238267232,0.605632143277955,0.000136934716373969,3
+"scc","weighted: heat + unweighted perm: perm.fdr + inheritance","small","MDSC",0.5,0,0,0,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr + inheritance","small","MDSC",0.8,0.036773428232503,0.036773428232503,0,0,3
+"scc","weighted: heat + unweighted perm: perm.fdr + inheritance","small","MDSC",1,0.304431599229287,0.304431599229287,0,0,3
+"scc","weighted: heat + weighted perm: fdr.sd","large","CD1C",0.5,0.480734014808832,0.481383998559238,0.0054940831838122,0.0536502929247409,3
+"scc","weighted: heat + weighted perm: fdr.sd","large","CD1C",0.8,0.522135134796582,0.522135134796582,0.197328232256439,0.0119888457493452,3
+"scc","weighted: heat + weighted perm: fdr.sd","large","CD1C",1,0.540444280136417,0.540444280136417,0.337240851357694,0.00562389959417169,3
+"scc","weighted: heat + weighted perm: fdr.sd","medium","KC_Cyc",0.5,0.0274348422496571,0.0274348422496571,0,0.111413272925095,3
+"scc","weighted: heat + weighted perm: fdr.sd","medium","KC_Cyc",0.8,0.223915475503165,0.302633996422142,0.0135643545511645,0.119213028927107,3
+"scc","weighted: heat + weighted perm: fdr.sd","medium","KC_Cyc",1,0.489875710003426,0.516386844679991,0.226666561742443,0.0687478572421814,3
+"scc","weighted: heat + weighted perm: fdr.sd","small","MDSC",0.5,0,0.0052790346907994,0,0.211296948356808,3
+"scc","weighted: heat + weighted perm: fdr.sd","small","MDSC",0.8,0,0.0771055753262159,0,0.213565078413745,3
+"scc","weighted: heat + weighted perm: fdr.sd","small","MDSC",1,0.258636335384424,0.285611287214867,0.0696521923813008,0.208964182435857,3
+"scc","weighted: heat + weighted perm: fdr.sd + inheritance","large","CD1C",0.5,0.660214316122529,0.660214316122529,0.0400663606418419,0.0167653546963892,3
+"scc","weighted: heat + weighted perm: fdr.sd + inheritance","large","CD1C",0.8,0.668354826174078,0.668354826174078,0.343102088012819,0.00838989380795778,3
+"scc","weighted: heat + weighted perm: fdr.sd + inheritance","large","CD1C",1,0.671917276927425,0.671917276927425,0.600920782754507,0.00646365861559189,3
+"scc","weighted: heat + weighted perm: fdr.sd + inheritance","medium","KC_Cyc",0.5,0,0.167045950731127,0.00018037518037518,0.0882351363653382,3
+"scc","weighted: heat + weighted perm: fdr.sd + inheritance","medium","KC_Cyc",0.8,0.491718426501035,0.522917791816432,0.151711214290236,0.0844385258950396,3
+"scc","weighted: heat + weighted perm: fdr.sd + inheritance","medium","KC_Cyc",1,0,0.853003082581365,0.635562510742002,0.06854704835652,3
+"scc","weighted: heat + weighted perm: fdr.sd + inheritance","small","MDSC",0.5,0.00457191226108493,0.00457191226108493,0.00457191226108493,0.148420548758988,3
+"scc","weighted: heat + weighted perm: fdr.sd + inheritance","small","MDSC",0.8,0.00731811735745057,0.00731811735745057,0.00731811735745057,0.168247493387981,3
+"scc","weighted: heat + weighted perm: fdr.sd + inheritance","small","MDSC",1,0.0122319597240351,0.393635403070421,0.378710867482095,0.189689232995707,3
+"scc","weighted: heat + weighted perm: perm.fdr","large","CD1C",0.5,0.237978810105949,0.237978810105949,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr","large","CD1C",0.8,0.473955381321242,0.473955381321242,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr","large","CD1C",1,0.506397562498578,0.506397562498578,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr","medium","KC_Cyc",0.5,0.0248873211836175,0.0248873211836175,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr","medium","KC_Cyc",0.8,0.209417434869316,0.209417434869316,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr","medium","KC_Cyc",1,0.469194207681689,0.469194207681689,0.048073524213503,0,3
+"scc","weighted: heat + weighted perm: perm.fdr","small","MDSC",0.5,0.000754147812971342,0.000754147812971342,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr","small","MDSC",0.8,0,0.0842230130486358,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr","small","MDSC",1,0,0.262042389210019,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr + inheritance","large","CD1C",0.5,0.324062754686227,0.324062754686227,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr + inheritance","large","CD1C",0.8,0.647251611142599,0.647251611142599,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr + inheritance","large","CD1C",1,0.653349212552026,0.653349212552026,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr + inheritance","medium","KC_Cyc",0.5,0.161473642955124,0.161473642955124,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr + inheritance","medium","KC_Cyc",0.8,0.496103473143043,0.496103473143043,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr + inheritance","medium","KC_Cyc",1,0.866114338813228,0.866114338813228,0.199010250972075,0,3
+"scc","weighted: heat + weighted perm: perm.fdr + inheritance","small","MDSC",0.5,0,0.0173453996983409,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr + inheritance","small","MDSC",0.8,0,0.211150652431791,0,0,3
+"scc","weighted: heat + weighted perm: perm.fdr + inheritance","small","MDSC",1,0,0,0,0,3

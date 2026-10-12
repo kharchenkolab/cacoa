@@ -1,0 +1,267 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsfonts} % For \mathbb
+\usepackage{amsmath} 
+
+\title{Cacoa-LM Methods}
+\author{ }
+\date{ }
+
+\begin{document}
+
+\maketitle
+
+\section{Linear models and contrasts}
+
+\paragraph{General linear model framework.}
+Linear models were used to analyze different types of observable response features as a function of sample characteristics. For example, a differential expression test would correspond to modeling the average expression of a particular gene in a given cell type, conditioned on sample metadata such as disease status, batch identity, or age. 
+
+Let $n$ denote the number of samples and $\mathbf{y} \in \mathbb{R}^n$ denote the response vector for a specific feature (e.g. log-transformed gene expression magnitude). The response was modeled using the general linear equation:
+\begin{equation}
+\mathbf{y} \;=\; \mathbf{F} \boldsymbol{\beta} + \boldsymbol{\epsilon},
+\end{equation}
+where $\mathbf{F} \in \mathbb{R}^{n \times p}$ is the full design matrix constructed from the sample metadata, $\boldsymbol{\beta} \in \mathbb{R}^p$ is the vector of regression coefficients, and $\boldsymbol{\epsilon}$ represents the residual error term. If an explicit formula was not provided, $\mathbf{F}$ was constructed automatically using all factor and continuous variable columns in the sample metadata. If possible, the default procedure aims to build a saturated design (no intercept); terms with zero variance were automatically pruned.
+
+\paragraph{Contrasts and design partitioning.}
+Hypothesis testing was governed by a user-defined linear contrast vector $\boldsymbol{\theta} \in \mathbb{R}^p$. The scalar test statistic $S$ was computed as the estimated linear combination of coefficients, $S = \boldsymbol{\theta}^\top \hat{\boldsymbol{\beta}}$. The interpretation of $\boldsymbol{\theta}$ depends on the nature of the covariate. For categorical factors, non-zero elements in $\boldsymbol{\theta}$ typically specify a comparison between group means (e.g., $\mu_{Disease} - \mu_{Healthy}$). For continuous covariates (e.g., Age), the contrast vector places weight on the specific slope coefficient associated with the variable, representing the expected rate of change in $\mathbf{y}$ per unit increase in the covariate. The default contrast was defined on the first column of sample metadata, in case of a factor covariate contrasting between the first two levels of the factor.
+
+To facilitate efficient computation and restricted randomization, the contrast vector $\boldsymbol{\theta}$ was used to explicitly partition the full design matrix $\mathbf{F}$ into a \textbf{core} component and a \textbf{nuisance} component. Let $\mathcal{J} = \{1, \dots, p\}$ be the set of coefficient indices. The indices corresponding to the core design are identified as $\mathcal{J}_{core} = \{j \in \mathcal{J} : |\theta_j| > \epsilon \}$, where $\epsilon$ is a numerical tolerance threshold. Consequently, the matrix $\mathbf{F}$ was partitioned column-wise into:
+\begin{equation}
+\mathbf{F} \;=\; \begin{bmatrix} \mathbf{X} & \mathbf{Z} \end{bmatrix},
+\end{equation}
+where $\mathbf{X} = \mathbf{F}_{\cdot, \mathcal{J}_{core}} \in \mathbb{R}^{n \times d_X}$ contains the predictors of interest, and $\mathbf{Z} = \mathbf{F}_{\cdot, \mathcal{J} \setminus \mathcal{J}_{core}} \in \mathbb{R}^{n \times d_Z}$ contains the nuisance variables (e.g., batch effects or covariates not involved in the contrast). Furthermore, a subset of samples affected by the contrast was marked using a binary vector  \textit{core rows}, $\mathbf{r} \in \{0,1\}^n$, such that $r_i = 1$ if and only if the $i$-th row of $\mathbf{X}$ exhibits non-negligible magnitude under $\boldsymbol{\theta}$. This allowed subsequent permutation procedures to be optionally restricted to the subset of samples that actively contribute to the estimation of the contrast.
+
+
+\section{Statistics and background models}
+
+\paragraph{Statistical Approach.}
+Statistical significance was assessed by comparing the observed statistic $S_{obs}$ to a null distribution $\{S_{perm}^{(r)}\}_{r=1}^R$ generated via $R$ (default $R=1000$) potentially constrained sample randomizations. The empirical p-value is computed with add-one smoothing, before multiple hypothesis corrections:
+\begin{equation}
+P \;=\; \frac{1 + \sum_{r=1}^R \mathbb{I}(|S_{perm}^{(r)}| \ge |S_{obs}|)}{1 + R}.
+\end{equation}
+
+
+\paragraph{Randomization Strategies.}
+The generation of the null distribution was adapted to the study design, supporting two user-selected modes:
+\begin{itemize}
+    \item \textbf{Block Randomization:} To preserve the stratification of the study, rows of the design matrix were permuted only within exchangeable blocks. By default, these blocks were defined by the intersection of all nuisance factors (all categorical variables present in $\mathbf{Z}$), ensuring that permutations do not confound variables such as batch or sex.
+    \item \textbf{Freedman-Lane Procedure:} To control for nuisance variables $\mathbf{Z}$ while maintaining exact Type I error rates, the Freedman-Lane procedure is employed. The nuisance matrix was projected out of both the response and the core design. Let $\mathbf{H}_Z = \mathbf{Z}(\mathbf{Z}^\top \mathbf{Z})^{-1}\mathbf{Z}^\top$. The residualized response $\mathbf{R}_y = (\mathbf{I} - \mathbf{H}_Z)\mathbf{y}$ was computed, permuted within blocks to yield $\tilde{\mathbf{y}}^*$, and regressed against the residualized core design $\mathbf{R}_X = (\mathbf{I} - \mathbf{H}_Z)\mathbf{X}$ to obtain null statistics.
+\end{itemize}
+
+
+
+Permutations were performed observing block and (for paired designs, see below) sample pair constrains. For block designs, permutations are stratified so they only exchange indices within defined blocks. For paired designs (see below), permuting rows (edges) destroys the network topology. Therefore, for paired designs (graph randomization), we permute the sample indices (nodes) $\pi \in S_n$ and map this to the induced permutation on pairs (edges):
+\begin{equation}
+\pi_{edge}((i,j)) \;\mapsto\; (\pi(i), \pi(j)),
+\end{equation}
+preserving the geometric dependence structure of the data (MRQAP). A combination of both block and pair constraints were observed when both constraints were present.
+
+\paragraph{Handling of Missing Data.}
+Missing values (NAs) in the response vector were handled via two distinct user-selected modes:
+\begin{itemize}
+    \item \textbf{Drop Mode:} Observations containing NAs were explicitly excluded from the model fit for the specific feature. The design matrix was subset to the valid rows.
+    \item \textbf{Impute-Weak Mode:} NAs were imputed with the mean of the observed values (or zero) and assigned a negligible weight ($w \approx 10^{-4}$) in the resulting (weighted) linear model fit. This approach maintains constant vector dimensions, while minimizing the influence of missing data on the estimated coefficients.
+\end{itemize}
+
+\paragraph{Robust estimation.}
+To mitigate the effect of outliers, coefficients were estimated using robust methods when specified. The ``Winsorized'' approach truncates residuals $r_i$ based on the median absolute deviation (MAD):
+\begin{equation}
+\tilde{r}_i \;=\; \text{sign}(r_i) \cdot \min(|r_i|, k \cdot \text{MAD}(\mathbf{r})),
+\end{equation}
+where $k=1.345$. Alternatively, Huber Iteratively Reweighted Least Squares (IRLS) is used to minimize a robust loss function.
+
+\section{Paired design matrices}
+
+\paragraph{Pairwise distance analysis context.}
+Paired design matrices were constructed to analyze properties defined over pairs of samples rather than individual samples. A primary application of this approach is the analysis of expression impact on cell types. For example, in analyzing expression distances between "Healthy" and "Disease" samples for different cell types, one could quantify whether the transcriptomic distance between discordant sample pairs (one Healthy, one Disease) significantly exceeds the baseline variation observed within concordant sample pairs (Healthy-Healthy or Disease-Disease). Such comparisons necessitate construction of design matrices where each row corresponds to a pair of samples, and the columns correspond to differences in covariate values.
+
+\paragraph{Construction and Metadata.}
+Let $\mathcal{P} = \{(i,j) : 1 \le i < j \le n\}$ represent the set of all unordered sample pairs. Sample-level metadata was transformed into pair-level metadata as follows: numeric covariates $v$ were mirrored into pair-means ($\frac{v_i+v_j}{2}$) and pair-differences ($v_i-v_j$), while factor variables were mapped to composition levels denoted as $L_i:L_j$.
+
+\paragraph{Default Paired Contrast Schemes.}
+Three default contrast schemes were defined to interpret changes in interaction structure. Let $\mu_{A:B}$ represent the coefficient for the discordant pairing (e.g., Healthy:Disease), and $\mu_{A:A}, \mu_{B:B}$ represent coefficients for the concordant pairings.
+
+\begin{itemize}
+    \item \textbf{Shift Contrast ($\theta_{shift}$):} This contrast normalizes the inter-group distances by the average intra-group variation. In the context of the example, it tests if the Healthy-Disease distances are shifted relative to the mean of Healthy-Healthy and Disease-Disease distances.
+    \begin{equation}
+    \theta_{shift} \;=\; \mu_{A:B} \;-\; \frac{1}{2}(\mu_{A:A} + \mu_{B:B}).
+    \end{equation}
+
+    \item \textbf{Total Contrast ($\theta_{total}$):} This contrast compares the inter-group interactions directly against the reference group's internal baseline. It assesses, for example, the magnitude of Healthy-Disease distances relative specifically to Healthy-Healthy distances.
+    \begin{equation}
+    \theta_{total} \;=\; \mu_{A:B} \;-\; \mu_{Ref:Ref}.
+    \end{equation}
+
+    \item \textbf{Variance Contrast ($\theta_{var}$):} This contrast compares the internal variation of the alternative group against that of the reference group, serving as a proxy for differential heterogeneity (e.g., is the Disease group more variable than the Healthy group?).
+    \begin{equation}
+    \theta_{var} \;=\; \mu_{Alt:Alt} \;-\; \mu_{Ref:Ref}.
+    \end{equation}
+\end{itemize}
+
+\section{CoDA Linear Model and Statistics}
+
+\paragraph{Compositional linear model in ILR space and cell-type loadings.}
+Let $n$ denote the number of samples and $D$ the number of cell types (parts). For each sample $i \in \{1,\dots,n\}$ we observe a composition (cell-type frequency vector) $x_i = (x_{i1},\dots,x_{iD})$ with $x_{ic} > 0$ and $\sum_{c=1}^D x_{ic}=1$. Note that a pseudocount value of 0.1 was in place of all $x_{ij}$ that were equal to zero. Let $K = D-1$ and $\Psi \in \mathbb{R}^{D \times K}$ be an ILR basis matrix with orthonormal columns, i.e.\ $\Psi^\top \Psi = I_K$, spanning the clr subspace.
+
+We compute ILR coordinates by
+\begin{equation}
+Z \;=\; \log(X)\,\Psi \in \mathbb{R}^{n \times K},
+\end{equation}
+where $X \in \mathbb{R}^{n \times D}$ stacks the $x_i$ row-wise. We then fit a multivariate linear model in ILR space,
+\begin{equation}
+Z \;=\; F B + E,
+\end{equation}
+where $F \in \mathbb{R}^{n \times p}$ is the design matrix (with $p$ columns, e.g. intercept, group indicators, other covariates), $B \in \mathbb{R}^{p \times K}$ is the matrix of regression coefficients, and $E$ are the residuals.
+
+\paragraph{Coefficients, contrasts, and mapping back to cell types.}
+For a specific model coefficient (column of $F$ design matrix) $j$, the ILR-space effect is the $j$-th row of $B$,
+\begin{equation}
+\beta^{(j)} \;=\; B_{j,\cdot} \in \mathbb{R}^{K}.
+\end{equation}
+For a user-defined contrast vector $\theta \in \mathbb{R}^{p}$ (defined on the same coefficient ordering as $B$), the ILR-space contrast effect is:
+\begin{equation}
+\beta^{(\theta)} \;=\; \theta^\top B \in \mathbb{R}^{K}.
+\end{equation}
+
+To obtain effects for a given covariate or contrast at the level of individual cell types, this ILR-space
+coefficient vector is mapped back to the cell-type (clr) space using the
+ILR basis matrix $\Psi \in \mathbf{R}^{D \times (D-1)}$,
+\begin{equation}
+\ell^{(j)} \;=\; \Psi\,\beta^{(j)} \in \mathbf{R}^{D}.
+\end{equation}
+Each element $\ell^{(j)}_c$ represents the loading for cell type $c$
+associated with covariate $j$. By construction, the loadings satisfy the
+zero-sum constraint
+\begin{equation}
+\sum_{c=1}^{D} \ell^{(j)}_c \;=\; 0,
+\end{equation}
+and are therefore interpretable only in relative terms, i.e.\ as changes
+in log-ratios of cell-type proportions rather than absolute changes.
+
+
+\paragraph{Interpretation of $\ell$ as log-fold changes of proportions.}
+The loadings $\ell$ live in clr (log-ratio) space and are interpretable only in relative terms. For any two cell types $a,b$,
+\begin{equation}
+\ell_a - \ell_b
+\;=\;
+\Delta \log\!\left(\frac{x_a}{x_b}\right),
+\end{equation}
+where $\Delta$ denotes the expected change associated with a one-unit change in the covariate (or moving along the contrast). Hence, differences of loadings correspond to changes in log-ratios of cell-type proportions. Equivalently, each $\ell_c$ can be viewed as the expected change in $\log(x_c)$ relative to the average change across all parts (the geometric mean change), i.e.
+\begin{equation}
+\ell_c
+\;\approx\;
+\Delta \log(x_c)
+\;-\;
+\frac{1}{D}\sum_{m=1}^{D}\Delta \log(x_m).
+\end{equation}
+For presentation as log$_2$-fold changes, we report $\ell_c/\log(2)$, so that a value of $+1$ corresponds to an approximate two-fold increase of cell type $c$ relative to the chosen baseline (e.g.\ a reference set), and $-1$ to an approximate two-fold decrease.
+
+
+
+\paragraph{Statistical assessment of covariate and contrast effects.}
+Statistical significance of compositional effects was assessed using
+sample randomization, either via block permutations or the
+Freedman-Lane procedure, applied consistently to the fitted linear
+model in ILR space. For each covariate or user-defined contrast, both
+global (composition-level) and cell-type–specific statistics were
+computed and evaluated against corresponding null distributions
+obtained under randomization.
+
+For each covariate $j$ (with ILR-space effect $\beta^{(j)}$) and
+for each user-defined contrast $\theta$ (with effect
+$\beta^{(\theta)}$), a global composition-level statistic was computed
+based on the fraction of ILR variance explained by the corresponding
+fitted component. For each covariate $j$ (with ILR-space effect
+$\beta^{(j)} = B_{j,\cdot}$) we define $v = F_{\cdot j} \in \mathbf{R}^{n}$
+as the $j$-th column of the design matrix; for a user-defined contrast
+$\theta \in \mathbf{R}^{p}$ (with effect $\beta^{(\theta)} = \theta^\top B$)
+we define $v = F\theta \in \mathbf{R}^{n}$. The fitted ILR contribution
+of the covariate/contrast is then
+$\widehat{Z}_{\mathrm{effect}} = v\,\beta^\top$, and the global
+composition-level statistic is the fraction of ILR variance explained,
+\[
+T \;=\; \frac{\|\widehat{Z}_{\mathrm{effect}}\|_F^2}{\|Z\|_F^2}.
+\]
+Empirical p-values for $T$ were obtained by comparing the observed value
+to its null distribution computed from analogous quantities derived
+from randomized fits. 
+
+To assess cell-type–specific contributions, the ILR-space effect
+$\beta$ was mapped back to the cell-type (clr) space as
+$\ell = \Psi\,\beta$. For each cell type $c$, the loading $\ell_c$ was
+used as a cell-type–level test statistic and evaluated against its
+corresponding null distribution obtained from randomized fits,
+yielding empirical p-values that were subsequently adjusted for
+multiple testing across cell types using false discovery rate (FDR)
+control.
+
+
+\paragraph{Predicted cell-type compositions for contrast endpoints.}
+To obtain model-predicted cell-type compositions for the two endpoints
+defined by a contrast, we evaluate the fitted linear model in ILR space
+at the corresponding design points and then map the resulting ILR
+coordinates back to the simplex. Let $\theta \in \mathbf{R}^{p}$ denote a
+contrast vector defined on the rows of the coefficient matrix $B$, with
+two associated design vectors $f_{\mathrm{base}}$ and $f_{\mathrm{target}}
+\in \mathbf{R}^{p}$ representing the baseline and target endpoints of the
+contrast, respectively (e.g.\ two factor levels being compared, with
+other covariates held fixed at reference values). The predicted ILR
+coordinates at each endpoint are
+\begin{equation}
+z_{\mathrm{base}} \;=\; f_{\mathrm{base}}^{\top} B,
+\qquad
+z_{\mathrm{target}} \;=\; f_{\mathrm{target}}^{\top} B,
+\end{equation}
+with $z_{\mathrm{base}}, z_{\mathrm{target}} \in \mathbf{R}^{D-1}$.
+These ILR-space predictions are then mapped back to clr space via
+\begin{equation}
+\ell_{\mathrm{base}} \;=\; \Psi\, z_{\mathrm{base}},
+\qquad
+\ell_{\mathrm{target}} \;=\; \Psi\, z_{\mathrm{target}},
+\end{equation}
+yielding clr-scale log-frequency vectors in $\mathbf{R}^{D}$. Finally,
+predicted cell-type proportions are obtained by applying the inverse
+clr transform,
+\begin{equation}
+\hat{x}_{\mathrm{base},c}
+\;=\;
+\frac{\exp\!\left(\ell_{\mathrm{base},c}\right)}
+     {\sum_{m=1}^{D} \exp\!\left(\ell_{\mathrm{base},m}\right)},
+\qquad
+\hat{x}_{\mathrm{target},c}
+\;=\;
+\frac{\exp\!\left(\ell_{\mathrm{target},c}\right)}
+     {\sum_{m=1}^{D} \exp\!\left(\ell_{\mathrm{target},m}\right)},
+\end{equation}
+for $c = 1,\dots,D$. The resulting vectors
+$\hat{x}_{\mathrm{base}}$ and $\hat{x}_{\mathrm{target}}$ are valid
+compositions (non-negative and summing to one) and represent the
+model-implied expected cell-type proportions at the two contrast
+endpoints. These predicted compositions are uniquely defined, invariant
+to the choice of reference or clr centering, and are used for
+visualization and interpretation rather than for primary statistical
+inference.
+
+\paragraph{Reference set selection and reference-centered effects.}
+For interpretability of cell-type loadings, we additionally define a
+reference set of cell types that exhibit minimal evidence of association
+with the contrast. Specifically, reference cell types are selected as
+those with weak statistical evidence for differential contribution
+(e.g.\ large empirical p-values), subject to a minimum size constraint;
+if insufficient such cell types are identified, the reference set is
+chosen as those with the smallest absolute loadings. Let $R \subset
+\{1,\dots,D\}$ denote the resulting reference set. For visualization and
+interpretation, reference-centered loadings are computed by subtracting
+the mean loading over the reference set, for a cell type $c$:
+\[
+\tilde{\ell}_c \;=\; \ell_c - \frac{1}{|R|}\sum_{r \in R} \ell_r .
+\]
+This centering preserves relative differences between cell types while
+anchoring effects to a set of approximately unchanged cell types. The
+choice of reference affects only the presentation of loadings: the p-values are assessed as described above.
+
+
+\end{document}
+
+
+

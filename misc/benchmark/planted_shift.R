@@ -14,7 +14,8 @@ args <- commandArgs(trailingOnly = TRUE); ds <- args[1]; mode <- args[2]; B <- i
 n.cores <- if (length(args) > 3) as.integer(args[4]) else 8; n.relabel <- if (length(args) > 4) as.integer(args[5]) else 15
 only <- if (length(args) > 5) args[6] else NULL   # run mode: a single set id (pilot)
 source(file.path(Sys.getenv("CACOA_BENCH", "/home/pkharchenko/cacoa-dev/cacoa/misc/benchmark"), "common.R"))
-root <- file.path(BENCH, "shift", ds); n.genes <- 1000; strengths <- c(0.1, 0.25); n.rep <- 3; ks <- c(100, 200, 400)
+root <- file.path(BENCH, "shift", ds); n.genes <- 1000; n.rep <- 3; ks <- c(100, 200, 400)
+strengths <- as.numeric(strsplit(Sys.getenv("CACOA_SHIFT_STRENGTHS", "0.1,0.25"), ",")[[1]])   # generate mode: mixing strengths (sets that exist are skipped)
 geneSet <- function(counts) { cn <- setdiff(colnames(counts), c("Patient", "Tissue: 0=Normal, 1=Tumor")); topGenes(counts[, cn, drop = FALSE], n.genes) }
 # mean log-normalized profile per type over the gene set, and the most distant type (correlation) from a reference profile
 typeProfiles <- function(cm, cg) { cpm <- Matrix::Diagonal(x = 1 / pmax(Matrix::rowSums(cm), 1)) %*% cm; sapply(split(seq_len(nrow(cm)), cg), function(i) log1p(1e4 * Matrix::colMeans(cpm[i, , drop = FALSE]))) }

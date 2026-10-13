@@ -11,6 +11,9 @@
 
 \maketitle
 
+\paragraph{Overview.}
+All analyses share one sample-level linear model, built from the sample metadata, and one set of sample relabelings drawn from that model. Each analysis differs only in the response it models: a gene's expression, a cell type's proportion, the distances between samples' expression profiles, or the same quantities measured in the neighbourhood of every single cell.
+
 \section{Linear models and contrasts}
 
 \paragraph{General linear model framework.}
@@ -20,26 +23,30 @@ Let $n$ denote the number of samples and $\mathbf{y} \in \mathbb{R}^n$ denote th
 \begin{equation}
 \mathbf{y} \;=\; \mathbf{F} \boldsymbol{\beta} + \boldsymbol{\epsilon},
 \end{equation}
-where $\mathbf{F} \in \mathbb{R}^{n \times p}$ is the full design matrix constructed from the sample metadata, $\boldsymbol{\beta} \in \mathbb{R}^p$ is the vector of regression coefficients, and $\boldsymbol{\epsilon}$ represents the residual error term. If an explicit formula was not provided, $\mathbf{F}$ was constructed automatically using all factor and continuous variable columns in the sample metadata. If possible, the default procedure aims to build a saturated design (no intercept); terms with zero variance were automatically pruned.
+where $\mathbf{F} \in \mathbb{R}^{n \times p}$ is the design matrix constructed from the sample metadata, $\boldsymbol{\beta} \in \mathbb{R}^p$ is the vector of regression coefficients, and $\boldsymbol{\epsilon}$ represents the residual error term. A model is specified by the variable to be tested and, optionally, a formula naming the covariates to adjust for; without a formula the design holds the tested variable alone (plus any variables used to stratify the permutations, see below). A tested factor is coded without an intercept and placed first, so that its coefficients are the level means at the reference setting of the other covariates; other factors keep treatment coding and a tested numeric variable keeps the intercept. Terms without variation across the samples are pruned.
 
 \paragraph{Contrasts and design partitioning.}
-Hypothesis testing was governed by a user-defined linear contrast vector $\boldsymbol{\theta} \in \mathbb{R}^p$. The scalar test statistic $S$ was computed as the estimated linear combination of coefficients, $S = \boldsymbol{\theta}^\top \hat{\boldsymbol{\beta}}$. The interpretation of $\boldsymbol{\theta}$ depends on the nature of the covariate. For categorical factors, non-zero elements in $\boldsymbol{\theta}$ typically specify a comparison between group means (e.g., $\mu_{Disease} - \mu_{Healthy}$). For continuous covariates (e.g., Age), the contrast vector places weight on the specific slope coefficient associated with the variable, representing the expected rate of change in $\mathbf{y}$ per unit increase in the covariate. The default contrast was defined on the first column of sample metadata, in case of a factor covariate contrasting between the first two levels of the factor.
-
-To facilitate efficient computation and restricted randomization, the contrast vector $\boldsymbol{\theta}$ was used to explicitly partition the full design matrix $\mathbf{F}$ into a \textbf{core} component and a \textbf{nuisance} component. Let $\mathcal{J} = \{1, \dots, p\}$ be the set of coefficient indices. The indices corresponding to the core design are identified as $\mathcal{J}_{core} = \{j \in \mathcal{J} : |\theta_j| > \epsilon \}$, where $\epsilon$ is a numerical tolerance threshold. Consequently, the matrix $\mathbf{F}$ was partitioned column-wise into:
+A test compares two settings of the metadata, for example two levels of a factor at the reference setting of the other covariates, or a step of one unit (one standard deviation by default) in a numeric variable. Each setting corresponds to a row of the design, and the contrast is their difference,
 \begin{equation}
-\mathbf{F} \;=\; \begin{bmatrix} \mathbf{X} & \mathbf{Z} \end{bmatrix},
+\mathbf{c} \;=\; \mathbf{f}_{\mathrm{target}} - \mathbf{f}_{\mathrm{reference}} \in \mathbb{R}^p ,
 \end{equation}
-where $\mathbf{X} = \mathbf{F}_{\cdot, \mathcal{J}_{core}} \in \mathbb{R}^{n \times d_X}$ contains the predictors of interest, and $\mathbf{Z} = \mathbf{F}_{\cdot, \mathcal{J} \setminus \mathcal{J}_{core}} \in \mathbb{R}^{n \times d_Z}$ contains the nuisance variables (e.g., batch effects or covariates not involved in the contrast). Furthermore, a subset of samples affected by the contrast was marked using a binary vector  \textit{core rows}, $\mathbf{r} \in \{0,1\}^n$, such that $r_i = 1$ if and only if the $i$-th row of $\mathbf{X}$ exhibits non-negligible magnitude under $\boldsymbol{\theta}$. This allowed subsequent permutation procedures to be optionally restricted to the subset of samples that actively contribute to the estimation of the contrast.
+so that transformed covariates and interactions are handled uniformly; a comparison may also be averaged over the levels of another factor. The estimated effect is $\mathbf{c}^\top \hat{\boldsymbol{\beta}}$ and the test statistic $S$ its studentized form, the estimate divided by its standard error.
+
+For the permutation procedures the design is split along the contrast direction into one column carrying the tested effect and the remaining directions,
+\begin{equation}
+\mathbf{X} \;=\; \mathbf{F}\,\mathbf{c}\,/\,\mathbf{c}^\top\mathbf{c}, \qquad \mathbf{Z} \;=\; \mathbf{F}\,\mathbf{N},
+\end{equation}
+where $\mathbf{N}$ is an orthonormal basis of the null space of $\mathbf{c}$; the coefficient of $\mathbf{X}$ is the contrast itself, $\mathbf{Z}$ holds the nuisance directions (batch, other covariates), and $[\mathbf{X}\;\mathbf{Z}]$ spans the same space as $\mathbf{F}$.
 
 
 \section{Statistics and background models}
 
 \paragraph{Statistical Approach.}
-Statistical significance was assessed by comparing the observed statistic $S_{obs}$ to a null distribution $\{S_{perm}^{(r)}\}_{r=1}^R$ generated via $R$ (default $R=1000$) potentially constrained sample randomizations. The empirical p-value is computed with add-one smoothing, before multiple hypothesis corrections:
+Statistical significance was assessed by comparing the observed statistic $S_{obs}$ to a null distribution $\{S_{perm}^{(r)}\}_{r=1}^R$ generated by $R$ relabelings of the samples (one setting per analysis object, $R = 999$ by default, so that the smallest attainable p-value is $1/1000$). The p-value is the exceedance fraction with add-one smoothing,
 \begin{equation}
-P \;=\; \frac{1 + \sum_{r=1}^R \mathbb{I}(|S_{perm}^{(r)}| \ge |S_{obs}|)}{1 + R}.
+P \;=\; \frac{1 + \sum_{r=1}^R \mathbb{I}(|S_{perm}^{(r)}| \ge |S_{obs}|)}{1 + R},
 \end{equation}
-
+where ties count as exceedances; one-sided tests drop the absolute values. The same relabelings are used for every response tested in an analysis (every gene, cell type or cell), so that statistics combined across responses are compared against a coherent null.
 
 \paragraph{Randomization Strategies.}
 The generation of the null distribution was adapted to the study design, supporting two user-selected modes:
@@ -47,14 +54,7 @@ The generation of the null distribution was adapted to the study design, support
     \item \textbf{Block Randomization:} To preserve the stratification of the study, rows of the design matrix were permuted only within exchangeable blocks. By default, these blocks were defined by the intersection of all nuisance factors (all categorical variables present in $\mathbf{Z}$), ensuring that permutations do not confound variables such as batch or sex.
     \item \textbf{Freedman-Lane Procedure:} To control for nuisance variables $\mathbf{Z}$ while maintaining exact Type I error rates, the Freedman-Lane procedure is employed. The nuisance matrix was projected out of both the response and the core design. Let $\mathbf{H}_Z = \mathbf{Z}(\mathbf{Z}^\top \mathbf{Z})^{-1}\mathbf{Z}^\top$. The residualized response $\mathbf{R}_y = (\mathbf{I} - \mathbf{H}_Z)\mathbf{y}$ was computed, permuted within blocks to yield $\tilde{\mathbf{y}}^*$, and regressed against the residualized core design $\mathbf{R}_X = (\mathbf{I} - \mathbf{H}_Z)\mathbf{X}$ to obtain null statistics.
 \end{itemize}
-
-
-
-Permutations were performed observing block and (for paired designs, see below) sample pair constrains. For block designs, permutations are stratified so they only exchange indices within defined blocks. For paired designs (see below), permuting rows (edges) destroys the network topology. Therefore, for paired designs (graph randomization), we permute the sample indices (nodes) $\pi \in S_n$ and map this to the induced permutation on pairs (edges):
-\begin{equation}
-\pi_{edge}((i,j)) \;\mapsto\; (\pi(i), \pi(j)),
-\end{equation}
-preserving the geometric dependence structure of the data (MRQAP). A combination of both block and pair constraints were observed when both constraints were present.
+A relabeling is a permutation of the samples. For the pairwise distance models of Section 3 the distances are left in place: under block randomization the permutation is applied to the rows of the design, under the Freedman-Lane procedure to the residual part of the samples' embedding, which preserves the dependence between pairs that share a sample.
 
 \paragraph{Handling of Missing Data.}
 Missing values (NAs) in the response vector were handled via two distinct user-selected modes:
@@ -62,46 +62,96 @@ Missing values (NAs) in the response vector were handled via two distinct user-s
     \item \textbf{Drop Mode:} Observations containing NAs were explicitly excluded from the model fit for the specific feature. The design matrix was subset to the valid rows.
     \item \textbf{Impute-Weak Mode:} NAs were imputed with the mean of the observed values (or zero) and assigned a negligible weight ($w \approx 10^{-4}$) in the resulting (weighted) linear model fit. This approach maintains constant vector dimensions, while minimizing the influence of missing data on the estimated coefficients.
 \end{itemize}
+In the per-cell analyses (Section 4) a sample that has too few cells in a cell's neighbourhood is dropped for that cell only, as in drop mode; a cell is left untested under a relabeling that leaves fewer than two samples in a compared group.
 
 \paragraph{Robust estimation.}
-To mitigate the effect of outliers, coefficients were estimated using robust methods when specified. The ``Winsorized'' approach truncates residuals $r_i$ based on the median absolute deviation (MAD):
-\begin{equation}
-\tilde{r}_i \;=\; \text{sign}(r_i) \cdot \min(|r_i|, k \cdot \text{MAD}(\mathbf{r})),
-\end{equation}
-where $k=1.345$. Alternatively, Huber Iteratively Reweighted Least Squares (IRLS) is used to minimize a robust loss function.
+To mitigate the effect of outliers, coefficients were estimated using robust methods when specified. The ``Winsorized'' approach clamps the residuals $r_i$ at $k$ robust standard deviations, $\tilde{r}_i = \text{sign}(r_i) \cdot \min(|r_i|, k \cdot \text{MAD}(\mathbf{r}))$, and refits the model to the clamped responses; Huber iteratively reweighted least squares down-weights the observations with large residuals instead, with the same tuning constant $k = 1.345$. Under either scheme the weights are re-estimated under every relabeling.
 
-\section{Paired design matrices}
+\paragraph{Inference across many units.}
+Several analyses test thousands of units at once (every cell of a map, every cell type of a table), with one relabeling set shared by all of them. Let $s_i$ be the statistic of unit $i$, $s_i^{(r)}$ its value under relabeling $r$, $m$ the number of units, and let the statistics be on a common scale across units (a studentized or standardized statistic). Two quantities are computed from the pooled null, the collection of all $m R$ permuted values:
+\begin{itemize}
+    \item \textbf{Pooled p-value.} The rank of a unit's statistic among all permuted values of all units,
+    \begin{equation}
+    P_i \;=\; \frac{1 + \sum_{j=1}^{m}\sum_{r=1}^{R} \mathbb{I}\big(s_j^{(r)} \ge s_i\big)}{1 + mR},
+    \end{equation}
+    which has no per-unit floor at $1/(R+1)$ and is calibrated whenever the units' null distributions are alike.
+    \item \textbf{Pooled false-discovery rate.} For a threshold $t$, the expected number of null units above it, estimated from the relabelings, against the observed number:
+    \begin{equation}
+    \mathrm{FDR}(t) \;=\; \frac{\frac{1}{R}\sum_{r=1}^{R} \#\{j : s_j^{(r)} \ge t\}}{\#\{i : s_i \ge t\}},
+    \qquad
+    q_i \;=\; \min_{t \le s_i} \mathrm{FDR}(t),
+    \end{equation}
+    the q-value of a unit being the smallest rate of any rejection set that contains it.
+\end{itemize}
+For units that sit on a graph (cells), the statistic of a unit is replaced, before these two steps, by its mean over the unit and its graph neighbours, in the observed data and under every relabeling alike,
+\begin{equation}
+\bar{s}_i \;=\; \frac{1}{|\mathcal{N}_i|}\sum_{j \in \mathcal{N}_i} s_j ,
+\end{equation}
+which borrows strength from the neighbours while remaining an exact permutation test. Group-level summaries use the same relabelings: the mean statistic of a cell type's cells is compared with the distribution of the same mean under the relabelings, and the resulting p-values are adjusted across cell types by the Benjamini--Hochberg procedure. Per-unit p-values are reported as z-scores, the signed normal quantile of the p-value ($\mathrm{sign}(\text{effect}) \cdot \Phi^{-1}(1 - P_i/2)$ for a two-sided test), and adjusted z-scores are the same transform of the q-values.
+
+\section{Pairwise distance models}
 
 \paragraph{Pairwise distance analysis context.}
-Paired design matrices were constructed to analyze properties defined over pairs of samples rather than individual samples. A primary application of this approach is the analysis of expression impact on cell types. For example, in analyzing expression distances between "Healthy" and "Disease" samples for different cell types, one could quantify whether the transcriptomic distance between discordant sample pairs (one Healthy, one Disease) significantly exceeds the baseline variation observed within concordant sample pairs (Healthy-Healthy or Disease-Disease). Such comparisons necessitate construction of design matrices where each row corresponds to a pair of samples, and the columns correspond to differences in covariate values.
+The expression state of a cell type in a sample is a vector over thousands of genes, and a condition may change it in many genes at once, each by a little. To ask whether the state changes between conditions without choosing genes, the analysis works with the distances between samples: for each cell type, expression is summed over the cells of each sample (pseudobulk), log-transformed, and a distance is computed between every pair of samples (the correlation distance by default). The questions are then whether samples of different conditions lie farther apart than samples of the same condition, and whether the samples of one condition scatter more than those of the other.
 
-\paragraph{Construction and Metadata.}
-Let $\mathcal{P} = \{(i,j) : 1 \le i < j \le n\}$ represent the set of all unordered sample pairs. Sample-level metadata was transformed into pair-level metadata as follows: numeric covariates $v$ were mirrored into pair-means ($\frac{v_i+v_j}{2}$) and pair-differences ($v_i-v_j$), while factor variables were mapped to composition levels denoted as $L_i:L_j$.
+A direct regression of the pair distances on pair-level covariates answers these questions poorly: pairs that share a sample are not independent, the mean distance between two groups mixes the separation of the groups with the scatter inside each of them, and covariates are awkward to express at the level of pairs. The approach taken here instead treats the distance matrix as a description of where the samples sit relative to one another. A distance matrix of this kind can always be realized by points in a Euclidean space (the space that classical multidimensional scaling would draw), and in that space the questions become ordinary questions about samples rather than pairs: where does a sample's position depend on its metadata, and how far does it scatter around that position. The sample-level design, contrasts and relabelings of Sections 1 and 2 then apply unchanged.
 
-\paragraph{Default Paired Contrast Schemes.}
-Three default contrast schemes were defined to interpret changes in interaction structure. Let $\mu_{A:B}$ represent the coefficient for the discordant pairing (e.g., Healthy:Disease), and $\mu_{A:A}, \mu_{B:B}$ represent coefficients for the concordant pairings.
+\paragraph{Embedding of the samples.}
+The positions are never computed. Every quantity needed below depends on the positions only through their inner products, and those are obtained from the $n \times n$ distance matrix $\mathbf{D}$ by double centring its squared entries,
+\begin{equation}
+\mathbf{G} \;=\; -\tfrac{1}{2}\,\mathbf{J}\,\mathbf{D}^{2}\,\mathbf{J}, \qquad \mathbf{J} = \mathbf{I} - \tfrac{1}{n}\mathbf{1}\mathbf{1}^\top ,
+\end{equation}
+so that $G_{ij}$ is the inner product of the positions of samples $i$ and $j$ about their common centre. This is also what makes the method indifferent to the choice of distance, as long as it is of Euclidean type.
 
-\begin{itemize}
-    \item \textbf{Shift Contrast ($\theta_{shift}$):} This contrast normalizes the inter-group distances by the average intra-group variation. In the context of the example, it tests if the Healthy-Disease distances are shifted relative to the mean of Healthy-Healthy and Disease-Disease distances.
-    \begin{equation}
-    \theta_{shift} \;=\; \mu_{A:B} \;-\; \frac{1}{2}(\mu_{A:A} + \mu_{B:B}).
-    \end{equation}
+\paragraph{Location and dispersion models.}
+Two models are fitted on this space, one for each question. The location model places the position $\mathbf{y}_i$ of sample $i$ according to its row $\mathbf{x}_i$ of the sample-level design, $\mathbf{y}_i = \mathbf{B}^\top \mathbf{x}_i + \mathbf{e}_i$. Its least-squares fit depends on the data only through
+\begin{equation}
+\mathbf{M} \;=\; \mathbf{A}\,\mathbf{G}\,\mathbf{A}^\top, \qquad \mathbf{A} = (\mathbf{X}^\top\mathbf{X})^{-}\mathbf{X}^\top,
+\end{equation}
+the matrix of inner products between the fitted effects of the design columns ($\mathbf{M} = \mathbf{B}\mathbf{B}^\top$ for Euclidean data); the squared distance between the fitted positions of any two settings of the metadata is read off $\mathbf{M}$. The dispersion model describes how far each sample scatters around its fitted position, $s_i = \mathbb{E}\|\mathbf{e}_i\|^2 = \mathbf{z}_i^\top \boldsymbol{\gamma}$, where $\mathbf{z}_i$ is a row of a dispersion design (by default the compared groups, so that each group has its own scatter). It is fitted from the squared residual distances $r_i = (\mathbf{R}\mathbf{G}\mathbf{R})_{ii}$, $\mathbf{R} = \mathbf{I} - \mathbf{X}\mathbf{A}$, through the identity $\mathbb{E}[\mathbf{r}] = (\mathbf{R} \circ \mathbf{R})\,\mathbf{Z}\boldsymbol{\gamma}$, which holds whatever the pattern of unequal scatter. The dispersions are needed for a second reason: the fitted separation of two groups contains their scatter (two groups with the same centre and scatter $s$ still show an expected squared distance $s/n_T + s/n_R$ between their fitted positions), so the location effect is corrected, $\mathbf{M} \leftarrow \mathbf{M} - \mathbf{A}\,\mathrm{diag}(\mathbf{s})\,\mathbf{A}^\top$, and a true shift of zero is reported as zero on average.
 
-    \item \textbf{Total Contrast ($\theta_{total}$):} This contrast compares the inter-group interactions directly against the reference group's internal baseline. It assesses, for example, the magnitude of Healthy-Disease distances relative specifically to Healthy-Healthy distances.
-    \begin{equation}
-    \theta_{total} \;=\; \mu_{A:B} \;-\; \mu_{Ref:Ref}.
-    \end{equation}
+\paragraph{Effects.}
+For a contrast between two endpoints with design rows $\mathbf{x}_T$ and $\mathbf{x}_R$ (target and reference) and $\mathbf{c} = \mathbf{x}_T - \mathbf{x}_R$, three effects are reported:
+\begin{equation}
+\mathrm{shift} \;=\; \mathbf{c}^\top \mathbf{M}\,\mathbf{c}, \qquad
+\mathrm{var} \;=\; 2\,(s_T - s_R), \qquad
+\mathrm{total} \;=\; \mathrm{shift} + \tfrac{1}{2}\,\mathrm{var}.
+\end{equation}
+The shift is the squared distance between the two endpoints' positions, free of their scatter; the variance effect compares the scatter of the two groups; the total is the expected excess of a between-group distance over a within-reference distance. In a one-factor design they equal the classical quantities computed from mean pair distances, $m_{RT} - \tfrac{1}{2}(m_{RR} + m_{TT})$, $m_{TT} - m_{RR}$ and $m_{RT} - m_{RR}$. For reporting they are normalized by the scatter: $\mathrm{shift}/(s_T + s_R)$, $\log_2(s_T/s_R)$ and $\mathrm{total}/(2 s_R)$.
 
-    \item \textbf{Variance Contrast ($\theta_{var}$):} This contrast compares the internal variation of the alternative group against that of the reference group, serving as a proxy for differential heterogeneity (e.g., is the Disease group more variable than the Healthy group?).
-    \begin{equation}
-    \theta_{var} \;=\; \mu_{Alt:Alt} \;-\; \mu_{Ref:Ref}.
-    \end{equation}
-\end{itemize}
+\paragraph{Tests.}
+The shift of a contrast is tested with the permutation F statistic of the distance-based linear model,
+\begin{equation}
+F \;=\; \frac{\mathbf{a}^\top \mathbf{G}\,\mathbf{a}\;/\;\mathbf{c}^\top(\mathbf{X}^\top\mathbf{X})^{-}\mathbf{c}}{\mathrm{tr}(\mathbf{R}\mathbf{G})\;/\;(n - q)}, \qquad \mathbf{a} = \mathbf{A}^\top \mathbf{c},
+\end{equation}
+with $q$ the rank of the design, under the relabelings of Section 2. A multi-level term is tested by the same ratio with the term's sum of squares, $\mathrm{tr}((\mathbf{H}_{full} - \mathbf{H}_{reduced})\mathbf{G})$, in the numerator. The variance effect is tested by regressing the square roots of the leverage-corrected per-sample dispersions, $\sqrt{r_i/(1 - h_i)}$, on the dispersion design. The influence of single samples is assessed by refitting the effects without each sample in turn.
+
+\section{Cluster-free maps}
+
+\paragraph{The unit.}
+Density and expression changes are also mapped at the level of single cells, without clusters. Each cell is tested in its own neighbourhood on the cell graph: the cell, all of its graph neighbours and, if those are fewer than $k - 1$, the two-hop neighbours with the most shared neighbours, up to $k$ cells. The size is set from the data as the larger of 100 cells and 10 cells per sample, capped at 1\% of the cells but never below 5 cells per sample. The neighbourhood is never reduced to the cell's strongest edges: when expression differs between the compared conditions, the strongest edges join cells of the same condition, and a unit built from them would hide the very composition change it is meant to test. A diffusion kernel on the graph is available as an alternative unit, with its width stated as the equivalent number of equally weighted cells.
+
+\paragraph{Density map.}
+For cell $i$ and sample $s$ let $c_{is}$ be the number of the sample's cells in the neighbourhood and $n_s$ the sample's size. The response
+\begin{equation}
+y_{is} \;=\; \log_2\!\left(\frac{c_{is} + 1/2}{n_s + 1}\cdot 10^{4}\right)
+\end{equation}
+is modeled across samples with the linear model and contrast of Section 1; the reported effect is the $\log_2$ fold change of the neighbourhood's share of a sample between the contrast endpoints, and the statistic is the studentized contrast $t$.
+
+\paragraph{Expression-shift map.}
+For each cell, the neighbourhood's cells are summed per sample into expression profiles, the distances between samples are computed, and the location model of Section 3 is fitted and tested exactly as for a cell type, with the shift as the effect and its $F$ as the statistic.
+
+\paragraph{Inference.}
+Both maps are adjusted as described in Section 2: the per-cell statistic is averaged over the cell and its graph neighbours, pooled p-values and pooled false-discovery rates are computed over all cells, and the maps show the corresponding z-scores. The pooled statistic is the studentized $t$ for the density map and the permutation-standardized $F$ for the shift map. Per-cell-type summaries use the group-level test of Section 2.
+
+\section{Covariate screen}
+
+Before a model is fixed, each metadata variable can be screened for association with a cell type's expression state. For every cell type and variable, the term test of Section 3 is applied to the variable alone and to the variable added to the other variables, giving marginal and partial effects (as fractions of distance variance explained) with Freedman--Lane permutation p-values on the same distance matrices; the association of the variable with the per-sample dispersions is tested alongside. P-values are adjusted over the whole grid of cell types and variables, and a global p-value per variable is obtained from the maximum statistic across cell types under the shared relabelings.
 
 \section{CoDA Linear Model and Statistics}
 
 \paragraph{Compositional linear model in ILR space and cell-type loadings.}
-Let $n$ denote the number of samples and $D$ the number of cell types (parts). For each sample $i \in \{1,\dots,n\}$ we observe a composition (cell-type frequency vector) $x_i = (x_{i1},\dots,x_{iD})$ with $x_{ic} > 0$ and $\sum_{c=1}^D x_{ic}=1$. Note that a pseudocount value of 0.1 was in place of all $x_{ij}$ that were equal to zero. Let $K = D-1$ and $\Psi \in \mathbb{R}^{D \times K}$ be an ILR basis matrix with orthonormal columns, i.e.\ $\Psi^\top \Psi = I_K$, spanning the clr subspace.
+Let $n$ denote the number of samples and $D$ the number of cell types (parts). For each sample $i \in \{1,\dots,n\}$ we observe a composition (cell-type frequency vector) $x_i = (x_{i1},\dots,x_{iD})$ with $x_{ic} > 0$ and $\sum_{c=1}^D x_{ic}=1$. Zero counts were replaced by a pseudocount of 0.1 before forming the proportions. Let $K = D-1$ and $\Psi \in \mathbb{R}^{D \times K}$ be an ILR basis matrix with orthonormal columns, i.e.\ $\Psi^\top \Psi = I_K$, spanning the clr subspace.
 
 We compute ILR coordinates by
 \begin{equation}
@@ -247,9 +297,9 @@ For interpretability of cell-type loadings, we additionally define a
 reference set of cell types that exhibit minimal evidence of association
 with the contrast. Specifically, reference cell types are selected as
 those with weak statistical evidence for differential contribution
-(e.g.\ large empirical p-values), subject to a minimum size constraint;
-if insufficient such cell types are identified, the reference set is
-chosen as those with the smallest absolute loadings. Let $R \subset
+(empirical p-value above 0.3), between one and three of them: if too few
+qualify, the cell types with the smallest absolute loadings are taken,
+if too many, those closest to zero are kept. Let $R \subset
 \{1,\dots,D\}$ denote the resulting reference set. For visualization and
 interpretation, reference-centered loadings are computed by subtracting
 the mean loading over the reference set, for a cell type $c$:
@@ -262,6 +312,3 @@ choice of reference affects only the presentation of loadings: the p-values are 
 
 
 \end{document}
-
-
-

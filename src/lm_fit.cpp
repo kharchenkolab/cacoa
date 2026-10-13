@@ -1,6 +1,8 @@
 // [[Rcpp::depends(RcppArmadillo)]]
 
 #include "lm_common.h"
+#include "cf_accum.h"
+#include <memory>
 
 /*
  * PER-COLUMN LINEAR-MODEL FITTER WITH PERMUTATION INFERENCE
@@ -156,7 +158,10 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
                              std::string na_mode = "drop", double na_weight = 1e-4, std::string na_center = "mean",
                              double illcond_rcond = 1e-12, double pinv_tol = 0.0, int n_cores = 1,
                              Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix = R_NilValue,
-                             std::string statistic = "t") {
+                             std::string statistic = "t",
+                             bool pooled = false, Rcpp::NumericVector z_grid = Rcpp::NumericVector::create(), bool use_abs = true,
+                             Rcpp::IntegerVector group = Rcpp::IntegerVector::create(), bool average = false,
+                             Rcpp::Nullable<Rcpp::List> nn_graph = R_NilValue, bool closed_form = true, bool pooled_standardize = false) {
 
   Config cfg;
   cfg.robust = robust; cfg.na_mode = na_mode; cfg.huber_k = huber_k; cfg.huber_maxit = huber_maxit; cfg.huber_tol = huber_tol;
@@ -293,13 +298,72 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
   arma::mat Resid; if (cfg.ret_res) { Resid.set_size(n, m); Resid.fill(datum::nan); }
   std::vector<arma::mat> SampledFits(m);
   arma::mat SampledStats, SampledEffects;
-  if (cfg.ret_stats && n_randomizations > 0) {
+  if (cfg.ret_stats && n_randomizations > 0 && !pooled) {
     SampledStats.set_size(n_randomizations, m); SampledStats.fill(datum::nan);
     if (use_t) { SampledEffects.set_size(n_randomizations, m); SampledEffects.fill(datum::nan); }
   }
+  arma::vec EffMean(m); EffMean.fill(datum::nan);   // permutation mean of the contrast estimate (centring of the effect)
+  // the shared accumulator of the cluster-free maps: exact p, standardized z, pooled histograms, group sums, extremes,
+  // optional neighbour averaging; nothing cells x permutations is kept unless the matrix is requested
+  std::vector<std::vector<int>> nn_lists;
+  if (pooled && average) { if (nn_graph.isNull()) Rcpp::stop("average needs nn_graph"); nn_lists = cacoa_cf::neighbour_lists(Rcpp::List(nn_graph), false, (int)m, true); }
+  arma::ivec grp(group.begin(), group.size()); const int n_groups = grp.n_elem ? (int)grp.max() + 1 : 0;
+  if (grp.n_elem && grp.n_elem != m) Rcpp::stop("group must have one entry per column of Y");
+  std::unique_ptr<cacoa_cf::Accum> acc;
+  if (pooled && n_randomizations > 0) acc.reset(new cacoa_cf::Accum(m, (arma::uword)n_randomizations, arma::vec(z_grid.begin(), z_grid.size()), use_abs, cfg.alt_code, grp, n_groups,
+                                                                     cfg.ret_stats, average, average ? &nn_lists : nullptr, pooled_standardize));
   const arma::vec no_w;
 
-  cacoa::parallelFor(0, (int)jobs.size(), [&](int k) {
+  // Closed form for the default case (every column complete, no robust weighting, no permuted fits): the contrast
+  // estimate under permutation b is alpha_b' y with alpha_b = alpha[q_b] (alpha = B' c), and the residual sum of
+  // squares is y'y - |Q_b' y|^2 with Q the orthonormal basis of the (residualized) design and Q_b its rows permuted,
+  // so all cells and all permutations are a few matrix products, done in blocks of columns.
+  const bool fast = closed_form && n_randomizations > 0 && grp_cnt == 1 && designs[0].valid_design && designs[0].can_permute && is_drop && !is_huber && !is_winsor && !cfg.ret_fits
+                    && raw_groups[0].obs.n_elem == n;
+  if (fast) {
+    const DesignGroup& grp0 = designs[0];
+    arma::mat Yw = has_Z ? project_out_Q(grp0.Qz, Y) : Y;
+    const arma::vec alpha = grp0.B.t() * contrast; const double cXc = arma::as_scalar(contrast.t() * grp0.invXtX * contrast);
+    arma::mat Q; if (!qr_basis(grp0.X_sub, Q)) Rcpp::stop("closed form: design factorization failed");
+    const arma::uword pq = Q.n_cols; const int B_ = n_randomizations;
+    arma::mat AlphaP(n, B_); arma::mat Qstack(B_ * pq, n);
+    for (int b = 0; b < B_; ++b) { arma::uvec q = induced_perm(Pm.col(b), grp0.perm_units_global, grp0.perm_blocks); AlphaP.col(b) = alpha.elem(q); Qstack.rows(b * pq, (b + 1) * pq - 1) = Q.rows(q).t(); }
+    const arma::mat AlphaPt = AlphaP.t();
+    const arma::uword blk = 2048; const int n_blk = (int)((m + blk - 1) / blk);
+    cacoa::parallelFor(0, n_blk, [&](int ib) {
+      const arma::uword c0 = (arma::uword)ib * blk, c1 = std::min(m, c0 + blk) - 1, mb = c1 - c0 + 1;
+      const arma::mat Yb = Yw.cols(c0, c1);
+      const arma::rowvec yy = arma::sum(arma::square(Yb), 0), ysc = arma::max(arma::abs(Yb), 0);
+      const arma::rowvec eff = alpha.t() * Yb; const arma::mat QY = Q.t() * Yb;
+      const arma::rowvec rss = yy - arma::sum(arma::square(QY), 0);
+      const arma::mat Num = AlphaPt * Yb;                                   // B x mb permuted contrast estimates
+      arma::mat R2 = arma::square(Qstack * Yb);                             // (B pq) x mb
+      arma::mat Proj(B_, mb, arma::fill::zeros);
+      for (int b = 0; b < B_; ++b) Proj.row(b) = arma::sum(R2.rows(b * pq, (b + 1) * pq - 1), 0);
+      for (arma::uword t = 0; t < mb; ++t) {
+        const arma::uword j = c0 + t; Df[j] = grp0.df;
+        const double se = std::sqrt(cXc * rss[t] / grp0.df);
+        const double stat_obs = use_t ? studentize(eff[t], se, ysc[t]) : eff[t];
+        Coef.col(j) = grp0.B * Yb.col(t); Effect[j] = eff[t]; Se[j] = se; Stat[j] = stat_obs;
+        if (cfg.ret_res) Resid.col(j) = Yb.col(t) - grp0.X_sub * Coef.col(j);
+        if (!std::isfinite(stat_obs)) continue;
+        arma::vec sp(B_), ep(B_); int ge = 0, le = 0, ge_abs = 0; double esum = 0; int ecnt = 0;
+        for (int b = 0; b < B_; ++b) {
+          const double e = Num(b, t); ep[b] = e;
+          const double rb = yy[t] - Proj(b, t); const double seb = std::sqrt(cXc * rb / grp0.df);
+          const double v = use_t ? studentize(e, seb, ysc[t]) : e; sp[b] = v;
+          if (std::isfinite(e)) { esum += e; ++ecnt; }
+          if (std::isfinite(v)) { if (std::abs(v) >= std::abs(stat_obs) - 1e-12) ge_abs++; if (v >= stat_obs - 1e-12) ge++; if (v <= stat_obs + 1e-12) le++; }   // ties count (exact test)
+        }
+        const double pv = (cfg.alt_code == 0) ? (ge_abs + 1.0) : (cfg.alt_code == 1) ? (ge + 1.0) : (le + 1.0);
+        Pval[j] = pv / (B_ + 1.0); if (ecnt) EffMean[j] = esum / ecnt;
+        if (acc) acc->add(j, stat_obs, sp);
+        else if (cfg.ret_stats) { SampledStats.col(j) = sp; if (use_t) SampledEffects.col(j) = ep; }
+      }
+    }, n_cores, false);
+  }
+
+  if (!fast) cacoa::parallelFor(0, (int)jobs.size(), [&](int k) {
     const Job& job = jobs[k]; const DesignGroup& grp = designs[job.group_idx];
     const arma::uword j = job.col_idx;
     if (!grp.valid_design) return;
@@ -396,25 +460,29 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
         }
       }
       stats_perm[r] = s_p; effects_perm[r] = eff_p;
-      if (std::isfinite(s_p)) {
-        if (std::abs(s_p) >= std::abs(stat_obs)) ge_abs++;
-        if (s_p >= stat_obs) ge++;
-        if (s_p <= stat_obs) le++;
+      if (std::isfinite(s_p)) {   // ties count (exact test): a label swap gives exactly the opposite t up to rounding
+        if (std::abs(s_p) >= std::abs(stat_obs) - 1e-12) ge_abs++;
+        if (s_p >= stat_obs - 1e-12) ge++;
+        if (s_p <= stat_obs + 1e-12) le++;
       }
       if (cfg.ret_fits) fits_perm.row(r) = b_p.t();
     }
 
     double pval = (cfg.alt_code==0)?(ge_abs+1.0):(cfg.alt_code==1)?(ge+1.0):(le+1.0);
     Pval[j] = pval / (cfg.n_randomizations + 1.0);
-    if (cfg.ret_stats) { SampledStats.col(j) = stats_perm; if (use_t) SampledEffects.col(j) = effects_perm; }
+    { const arma::uvec fe = arma::find_finite(effects_perm); if (fe.n_elem) EffMean[j] = arma::mean(effects_perm(fe)); }
+    if (acc) acc->add(j, stat_obs, stats_perm);
+    else if (cfg.ret_stats) { SampledStats.col(j) = stats_perm; if (use_t) SampledEffects.col(j) = effects_perm; }
     if (cfg.ret_fits) SampledFits[j] = fits_perm;
   }, n_cores, false);
+  if (acc) acc->finalize(n_cores);
 
   if (cfg.ret_fits) for (uword j = 0; j < m; ++j) if (SampledFits[j].n_elem == 0) { SampledFits[j].set_size(std::max(n_randomizations, 0), p); SampledFits[j].fill(datum::nan); }   // failed / unpermuted columns
 
-  Rcpp::List out = Rcpp::List::create(_["coef"]=Coef, _["effect"]=Effect, _["se"]=Se, _["df"]=Df, _["stat"]=Stat, _["p_value"]=Pval);
+  Rcpp::List out = Rcpp::List::create(_["coef"]=Coef, _["effect"]=Effect, _["se"]=Se, _["df"]=Df, _["stat"]=Stat, _["p_value"]=Pval, _["effect_perm_mean"]=EffMean, _["closed_form"]=fast);
   if (cfg.ret_res) out["residuals"] = Resid;
-  if (cfg.ret_stats && n_randomizations > 0) { out["sampled_stats"] = SampledStats; if (use_t) out["sampled_effects"] = SampledEffects; }
+  if (cfg.ret_stats && n_randomizations > 0 && !pooled) { out["sampled_stats"] = SampledStats; if (use_t) out["sampled_effects"] = SampledEffects; }
+  if (acc) out["pooled"] = acc->result();
   if (cfg.ret_fits) {
     Rcpp::List L(m); for(uword j=0; j<m; ++j) L[j]=Rcpp::wrap(SampledFits[j]);
     out["sampled_fits"] = L;

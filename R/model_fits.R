@@ -49,7 +49,8 @@ performLMPermutations <- function(x, y,
                   return.sampled.stats = TRUE,
                   return.sampled.fits = FALSE,
                   n.permutations = 1000,
-                  n.cores=1, seed = NULL, P = NULL, perm.cells = NULL, block.vars = NULL) {
+                  n.cores=1, seed = NULL, P = NULL, perm.cells = NULL, block.vars = NULL,
+                  pooled = FALSE, z.grid = NULL, use.abs = TRUE, group = NULL, average = FALSE, nn.graph = NULL, closed.form = TRUE, pooled.standardize = FALSE) {
 
   robust.method <- match.arg(robust.method)
   perm.method   <- match.arg(perm.method)
@@ -97,7 +98,9 @@ performLMPermutations <- function(x, y,
     return_residuals = return.residuals, return_sampled_fits = return.sampled.fits, return_sampled_stats = return.sampled.stats,
     robust = robust.method, huber_k = 1.345, huber_maxit = 8, huber_tol = 1e-6,
     na_mode = na.mode, na_weight = 1e-4, na_center = na.center,
-    illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores
+    illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = n.cores,
+    pooled = pooled, z_grid = if (is.null(z.grid)) numeric(0) else as.numeric(z.grid), use_abs = use.abs,
+    group = if (is.null(group)) integer(0) else as.integer(group), average = average, nn_graph = if (is.null(nn.graph)) NULL else unname(nn.graph), closed_form = closed.form, pooled_standardize = pooled.standardize
   )
 
   coef <- fit$coef
@@ -111,6 +114,9 @@ performLMPermutations <- function(x, y,
 
   ## --- permutation statistics and effects ---
   stats.perm <- effects.perm <- NULL
+  if (pooled && !is.null(fit$pooled) && return.sampled.stats && length(fit$pooled$perm)) {   # the accumulator's matrix (averaged statistics under `average`)
+    stats.perm <- fit$pooled$perm; dimnames(stats.perm) <- list(paste0("perm", seq_len(nrow(stats.perm))), y.names); stats.perm[!is.finite(stats.perm)] <- NA_real_
+  }
   if (return.sampled.stats && !is.null(fit$sampled_stats)) {
     S <- fit$sampled_stats; dimnames(S) <- list(paste0("perm", seq_len(nrow(S))), y.names); S[!is.finite(S)] <- NA_real_
     E <- if (is.null(fit$sampled_effects)) S else fit$sampled_effects
@@ -144,7 +150,7 @@ performLMPermutations <- function(x, y,
     P = P, perm.cells = perm.cells, statistic = statistic, perm.method = perm.method,
     coef = coef, effect = effect, se = se, df = df,
     stat.obs = stat, stats.perm = stats.perm, effects.perm = effects.perm,
-    sampled.fits = fit$sampled_fits,
+    sampled.fits = fit$sampled_fits, pooled = fit$pooled, effect.perm.mean = setNames(as.numeric(fit$effect_perm_mean), y.names), closed.form = isTRUE(fit$closed_form),
     pval = p, z.score = z,
     residuals = residuals, residuals.pearson = residuals.pearson
   )

@@ -308,3 +308,32 @@ summarizeCellScoresByGroup <- function(p, groups, effect = NULL, z = NULL, p.adj
   res$method <- method
   res[, c("group", "n.cells", "n.tested", "p", "padj", "p.perm", "p.cauchy", "median.effect", "median.z", "frac.sig", "direction", "significant", "method")]
 }
+
+#' Group-level permutation test from the accumulated per-group sums of the C++ kernels
+#'
+#' The kernels accumulate, per permutation and group, the sum and the count of the permuted standardized
+#' statistics of the group's tested cells (and the observed sum): the mean per group is compared with its own
+#' permutation distribution, one-sided or two-sided, with BH across groups (see [groupPermutationTest()]).
+#' @param acc the `pooled` list of a kernel result (`group_sum`, `group_count`, `group_obs`, `group_n`)
+#' @param levels group levels in the order of the codes
+#' @param alternative `"greater"` or `"two.sided"`
+#' @param min.cells groups with fewer tested cells get `NA`
+#' @param negate test `-z` (the one-sided "less" alternative)
+#' @keywords internal
+groupTestFromAccum <- function(acc, levels, alternative = c("greater", "two.sided"), min.cells = 10, negate = FALSE) {
+  alternative <- match.arg(alternative)
+  if (!length(acc$group_n) || length(acc$group_n) != length(levels)) return(NULL)
+  gn <- as.integer(acc$group_n); gobs <- as.numeric(acc$group_obs)
+  pm <- acc$group_sum / acc$group_count; pm[acc$group_count == 0] <- NA_real_
+  mean.obs <- ifelse(gn > 0, gobs / pmax(gn, 1), NA_real_)
+  if (negate) { pm <- -pm; mean.obs <- -mean.obs }   # one-sided "less": the test of -z
+  p.g <- vapply(seq_along(levels), function(g) { ok <- is.finite(pm[, g]); if (gn[g] < min.cells || !any(ok)) return(NA_real_)
+    if (alternative == "greater") (sum(pm[ok, g] >= mean.obs[g] - 1e-12) + 1) / (sum(ok) + 1) else (sum(abs(pm[ok, g]) >= abs(mean.obs[g]) - 1e-12) + 1) / (sum(ok) + 1) }, numeric(1))
+  gt <- data.frame(group = levels, n.tested = gn, mean.z = mean.obs, p.perm = p.g, padj = stats::p.adjust(p.g, "BH"), stringsAsFactors = FALSE)
+  attr(gt, "perm.means") <- `colnames<-`(pm, levels); gt
+}
+
+#' Fixed grids for the pooled histograms of the standardized statistic
+#' @param abs nonnegative grid for `|z|` (two-sided maps) or a signed grid (one-sided)
+#' @keywords internal
+pooledZGrid <- function(abs = FALSE) if (abs) seq(0, 25, by = 0.01) else seq(-6, 25, by = 0.02)

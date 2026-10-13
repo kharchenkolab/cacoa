@@ -15,7 +15,8 @@ estimateCellDensityGraph(
   smoothing = c("knn", "heat", "neighbourhood"),
   k = NULL,
   target.size = NULL,
-  n.hops = 1
+  n.hops = 1,
+  neighbourhoods = NULL
 )
 }
 \arguments{
@@ -41,6 +42,8 @@ within \code{n.hops} graph hops. The raw counts of the count units are kept in \
 by \code{\link[=solveKernelBeta]{solveKernelBeta()}}. The effective size at the \code{beta} used is returned as \code{effective.size}}
 
 \item{n.hops}{neighbourhood radius for \code{smoothing = "neighbourhood"} (default 1)}
+
+\item{neighbourhoods}{precomputed kNN lists (\code{\link[=knnNeighbourhoodLists]{knnNeighbourhoodLists()}}) for \code{smoothing = "knn"} (cached by the class)}
 }
 \value{
 list with \code{density.mat} (cells x samples: the fraction of each sample's cells in the unit), \code{cond.densities},

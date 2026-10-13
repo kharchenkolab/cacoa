@@ -25,12 +25,12 @@ clusterFreeGeneMat <- function(count_mat, sample_per_cell, nn_ids, min_n_obs_per
     .Call(`_cacoa_clusterFreeGeneMat`, count_mat, sample_per_cell, nn_ids, min_n_obs_per_samp, gi)
 }
 
-cluster_free_shift_batch <- function(Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust = 0L, robust_k = 1.345, z_grid = as.numeric( c()), group = as.integer( c()), keep_perm = FALSE) {
-    .Call(`_cacoa_cluster_free_shift_batch`, Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group, keep_perm)
+cluster_free_shift_batch <- function(Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust = 0L, robust_k = 1.345, z_grid = as.numeric( c()), group = as.integer( c()), keep_perm = FALSE, average = FALSE, avg_nn = NULL, vectorize = TRUE, standardize = TRUE) {
+    .Call(`_cacoa_cluster_free_shift_batch`, Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group, keep_perm, average, avg_nn, vectorize, standardize)
 }
 
-cluster_free_shift_stream <- function(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust = 0L, robust_k = 1.345, z_grid = as.numeric( c()), group = as.integer( c()), keep_perm = FALSE) {
-    .Call(`_cacoa_cluster_free_shift_stream`, cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group, keep_perm)
+cluster_free_shift_stream <- function(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust = 0L, robust_k = 1.345, z_grid = as.numeric( c()), group = as.integer( c()), keep_perm = FALSE, average = FALSE, avg_nn = NULL, vectorize = TRUE, standardize = TRUE) {
+    .Call(`_cacoa_cluster_free_shift_stream`, cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group, keep_perm, average, avg_nn, vectorize, standardize)
 }
 
 estimateExpressionShiftsPairsLM <- function(cm, sample_per_cell, nn_ids, pairs_mat, min_n_obs_per_samp = 1L, dist = "cor", log_vecs = TRUE, nn_one_based = FALSE, pairs_one_based = TRUE) {
@@ -45,8 +45,16 @@ adjustedZScoresMaxStat <- function(z_obs, alt, max_vals_in, min_vals_in, wins = 
     .Call(`_cacoa_adjustedZScoresMaxStat`, z_obs, alt, max_vals_in, min_vals_in, wins, smooth, nn_ids, non_zero_ids)
 }
 
-fit_and_randomize <- function(X, Y, contrast, Z = NULL, perm_groups = NULL, n_randomizations = 100L, alternative = "two-sided", return_residuals = TRUE, return_sampled_fits = FALSE, return_sampled_stats = FALSE, robust = "none", huber_k = 1.345, huber_maxit = 8L, huber_tol = 1e-6, na_mode = "drop", na_weight = 1e-4, na_center = "mean", illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = 1L, perm_matrix = NULL, statistic = "t") {
-    .Call(`_cacoa_fit_and_randomize`, X, Y, contrast, Z, perm_groups, n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, perm_matrix, statistic)
+fit_and_randomize <- function(X, Y, contrast, Z = NULL, perm_groups = NULL, n_randomizations = 100L, alternative = "two-sided", return_residuals = TRUE, return_sampled_fits = FALSE, return_sampled_stats = FALSE, robust = "none", huber_k = 1.345, huber_maxit = 8L, huber_tol = 1e-6, na_mode = "drop", na_weight = 1e-4, na_center = "mean", illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = 1L, perm_matrix = NULL, statistic = "t", pooled = FALSE, z_grid = as.numeric( c()), use_abs = TRUE, group = as.integer( c()), average = FALSE, nn_graph = NULL, closed_form = TRUE, pooled_standardize = FALSE) {
+    .Call(`_cacoa_fit_and_randomize`, X, Y, contrast, Z, perm_groups, n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, perm_matrix, statistic, pooled, z_grid, use_abs, group, average, nn_graph, closed_form, pooled_standardize)
+}
+
+knn_neighbourhoods <- function(adj, k, n_cores = 1L) {
+    .Call(`_cacoa_knn_neighbourhoods`, adj, k, n_cores)
+}
+
+neighbourhood_counts <- function(nn_ids, sample_of_cell, n_samples, one_based = FALSE) {
+    .Call(`_cacoa_neighbourhood_counts`, nn_ids, sample_of_cell, n_samples, one_based)
 }
 
 permuted_contrast_F <- function(G, a, H, cXc, q, P) {

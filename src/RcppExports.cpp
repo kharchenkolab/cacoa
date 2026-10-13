@@ -122,8 +122,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cluster_free_shift_batch
-Rcpp::List cluster_free_shift_batch(const arma::mat& Y, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec, const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset, const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust, double robust_k, Rcpp::NumericVector z_grid, Rcpp::IntegerVector group, bool keep_perm);
-RcppExport SEXP _cacoa_cluster_free_shift_batch(SEXP YSEXP, SEXP pairsSEXP, SEXP n_samplesSEXP, SEXP XSEXP, SEXP cvecSEXP, SEXP level_codeSEXP, SEXP min_samp_per_levelSEXP, SEXP stratumSEXP, SEXP insetSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP bias_correctSEXP, SEXP n_coresSEXP, SEXP robustSEXP, SEXP robust_kSEXP, SEXP z_gridSEXP, SEXP groupSEXP, SEXP keep_permSEXP) {
+Rcpp::List cluster_free_shift_batch(const arma::mat& Y, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec, const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset, const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust, double robust_k, Rcpp::NumericVector z_grid, Rcpp::IntegerVector group, bool keep_perm, bool average, Rcpp::Nullable<Rcpp::List> avg_nn, bool vectorize, bool standardize);
+RcppExport SEXP _cacoa_cluster_free_shift_batch(SEXP YSEXP, SEXP pairsSEXP, SEXP n_samplesSEXP, SEXP XSEXP, SEXP cvecSEXP, SEXP level_codeSEXP, SEXP min_samp_per_levelSEXP, SEXP stratumSEXP, SEXP insetSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP bias_correctSEXP, SEXP n_coresSEXP, SEXP robustSEXP, SEXP robust_kSEXP, SEXP z_gridSEXP, SEXP groupSEXP, SEXP keep_permSEXP, SEXP averageSEXP, SEXP avg_nnSEXP, SEXP vectorizeSEXP, SEXP standardizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -145,13 +145,17 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type z_grid(z_gridSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type group(groupSEXP);
     Rcpp::traits::input_parameter< bool >::type keep_perm(keep_permSEXP);
-    rcpp_result_gen = Rcpp::wrap(cluster_free_shift_batch(Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group, keep_perm));
+    Rcpp::traits::input_parameter< bool >::type average(averageSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::List> >::type avg_nn(avg_nnSEXP);
+    Rcpp::traits::input_parameter< bool >::type vectorize(vectorizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type standardize(standardizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(cluster_free_shift_batch(Y, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group, keep_perm, average, avg_nn, vectorize, standardize));
     return rcpp_result_gen;
 END_RCPP
 }
 // cluster_free_shift_stream
-Rcpp::List cluster_free_shift_stream(const Eigen::SparseMatrix<double>& cm, Rcpp::IntegerVector sample_per_cell, Rcpp::List nn_ids, bool nn_one_based, int min_n_obs_per_samp, std::string dist, bool log_vecs, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec, const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset, const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust, double robust_k, Rcpp::NumericVector z_grid, Rcpp::IntegerVector group, bool keep_perm);
-RcppExport SEXP _cacoa_cluster_free_shift_stream(SEXP cmSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP nn_one_basedSEXP, SEXP min_n_obs_per_sampSEXP, SEXP distSEXP, SEXP log_vecsSEXP, SEXP pairsSEXP, SEXP n_samplesSEXP, SEXP XSEXP, SEXP cvecSEXP, SEXP level_codeSEXP, SEXP min_samp_per_levelSEXP, SEXP stratumSEXP, SEXP insetSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP bias_correctSEXP, SEXP n_coresSEXP, SEXP robustSEXP, SEXP robust_kSEXP, SEXP z_gridSEXP, SEXP groupSEXP, SEXP keep_permSEXP) {
+Rcpp::List cluster_free_shift_stream(const Eigen::SparseMatrix<double>& cm, Rcpp::IntegerVector sample_per_cell, Rcpp::List nn_ids, bool nn_one_based, int min_n_obs_per_samp, std::string dist, bool log_vecs, const arma::imat& pairs, int n_samples, const arma::mat& X, const arma::vec& cvec, const arma::ivec& level_code, int min_samp_per_level, const arma::ivec& stratum, const arma::uvec& inset, const arma::imat& P, bool freedman_lane, bool bias_correct, int n_cores, int robust, double robust_k, Rcpp::NumericVector z_grid, Rcpp::IntegerVector group, bool keep_perm, bool average, Rcpp::Nullable<Rcpp::List> avg_nn, bool vectorize, bool standardize);
+RcppExport SEXP _cacoa_cluster_free_shift_stream(SEXP cmSEXP, SEXP sample_per_cellSEXP, SEXP nn_idsSEXP, SEXP nn_one_basedSEXP, SEXP min_n_obs_per_sampSEXP, SEXP distSEXP, SEXP log_vecsSEXP, SEXP pairsSEXP, SEXP n_samplesSEXP, SEXP XSEXP, SEXP cvecSEXP, SEXP level_codeSEXP, SEXP min_samp_per_levelSEXP, SEXP stratumSEXP, SEXP insetSEXP, SEXP PSEXP, SEXP freedman_laneSEXP, SEXP bias_correctSEXP, SEXP n_coresSEXP, SEXP robustSEXP, SEXP robust_kSEXP, SEXP z_gridSEXP, SEXP groupSEXP, SEXP keep_permSEXP, SEXP averageSEXP, SEXP avg_nnSEXP, SEXP vectorizeSEXP, SEXP standardizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -179,7 +183,11 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type z_grid(z_gridSEXP);
     Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type group(groupSEXP);
     Rcpp::traits::input_parameter< bool >::type keep_perm(keep_permSEXP);
-    rcpp_result_gen = Rcpp::wrap(cluster_free_shift_stream(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group, keep_perm));
+    Rcpp::traits::input_parameter< bool >::type average(averageSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::List> >::type avg_nn(avg_nnSEXP);
+    Rcpp::traits::input_parameter< bool >::type vectorize(vectorizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type standardize(standardizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(cluster_free_shift_stream(cm, sample_per_cell, nn_ids, nn_one_based, min_n_obs_per_samp, dist, log_vecs, pairs, n_samples, X, cvec, level_code, min_samp_per_level, stratum, inset, P, freedman_lane, bias_correct, n_cores, robust, robust_k, z_grid, group, keep_perm, average, avg_nn, vectorize, standardize));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -235,8 +243,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // fit_and_randomize
-Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma::vec& contrast, Rcpp::Nullable<Rcpp::NumericMatrix> Z, Rcpp::Nullable<Rcpp::List> perm_groups, int n_randomizations, std::string alternative, bool return_residuals, bool return_sampled_fits, bool return_sampled_stats, std::string robust, double huber_k, int huber_maxit, double huber_tol, std::string na_mode, double na_weight, std::string na_center, double illcond_rcond, double pinv_tol, int n_cores, Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix, std::string statistic);
-RcppExport SEXP _cacoa_fit_and_randomize(SEXP XSEXP, SEXP YSEXP, SEXP contrastSEXP, SEXP ZSEXP, SEXP perm_groupsSEXP, SEXP n_randomizationsSEXP, SEXP alternativeSEXP, SEXP return_residualsSEXP, SEXP return_sampled_fitsSEXP, SEXP return_sampled_statsSEXP, SEXP robustSEXP, SEXP huber_kSEXP, SEXP huber_maxitSEXP, SEXP huber_tolSEXP, SEXP na_modeSEXP, SEXP na_weightSEXP, SEXP na_centerSEXP, SEXP illcond_rcondSEXP, SEXP pinv_tolSEXP, SEXP n_coresSEXP, SEXP perm_matrixSEXP, SEXP statisticSEXP) {
+Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma::vec& contrast, Rcpp::Nullable<Rcpp::NumericMatrix> Z, Rcpp::Nullable<Rcpp::List> perm_groups, int n_randomizations, std::string alternative, bool return_residuals, bool return_sampled_fits, bool return_sampled_stats, std::string robust, double huber_k, int huber_maxit, double huber_tol, std::string na_mode, double na_weight, std::string na_center, double illcond_rcond, double pinv_tol, int n_cores, Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix, std::string statistic, bool pooled, Rcpp::NumericVector z_grid, bool use_abs, Rcpp::IntegerVector group, bool average, Rcpp::Nullable<Rcpp::List> nn_graph, bool closed_form, bool pooled_standardize);
+RcppExport SEXP _cacoa_fit_and_randomize(SEXP XSEXP, SEXP YSEXP, SEXP contrastSEXP, SEXP ZSEXP, SEXP perm_groupsSEXP, SEXP n_randomizationsSEXP, SEXP alternativeSEXP, SEXP return_residualsSEXP, SEXP return_sampled_fitsSEXP, SEXP return_sampled_statsSEXP, SEXP robustSEXP, SEXP huber_kSEXP, SEXP huber_maxitSEXP, SEXP huber_tolSEXP, SEXP na_modeSEXP, SEXP na_weightSEXP, SEXP na_centerSEXP, SEXP illcond_rcondSEXP, SEXP pinv_tolSEXP, SEXP n_coresSEXP, SEXP perm_matrixSEXP, SEXP statisticSEXP, SEXP pooledSEXP, SEXP z_gridSEXP, SEXP use_absSEXP, SEXP groupSEXP, SEXP averageSEXP, SEXP nn_graphSEXP, SEXP closed_formSEXP, SEXP pooled_standardizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -262,7 +270,42 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
     Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::IntegerMatrix> >::type perm_matrix(perm_matrixSEXP);
     Rcpp::traits::input_parameter< std::string >::type statistic(statisticSEXP);
-    rcpp_result_gen = Rcpp::wrap(fit_and_randomize(X, Y, contrast, Z, perm_groups, n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, perm_matrix, statistic));
+    Rcpp::traits::input_parameter< bool >::type pooled(pooledSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type z_grid(z_gridSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_abs(use_absSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type group(groupSEXP);
+    Rcpp::traits::input_parameter< bool >::type average(averageSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::List> >::type nn_graph(nn_graphSEXP);
+    Rcpp::traits::input_parameter< bool >::type closed_form(closed_formSEXP);
+    Rcpp::traits::input_parameter< bool >::type pooled_standardize(pooled_standardizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(fit_and_randomize(X, Y, contrast, Z, perm_groups, n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, perm_matrix, statistic, pooled, z_grid, use_abs, group, average, nn_graph, closed_form, pooled_standardize));
+    return rcpp_result_gen;
+END_RCPP
+}
+// knn_neighbourhoods
+Rcpp::List knn_neighbourhoods(const Eigen::SparseMatrix<double>& adj, int k, int n_cores);
+RcppExport SEXP _cacoa_knn_neighbourhoods(SEXP adjSEXP, SEXP kSEXP, SEXP n_coresSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double>& >::type adj(adjSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
+    rcpp_result_gen = Rcpp::wrap(knn_neighbourhoods(adj, k, n_cores));
+    return rcpp_result_gen;
+END_RCPP
+}
+// neighbourhood_counts
+Rcpp::NumericMatrix neighbourhood_counts(Rcpp::List nn_ids, Rcpp::IntegerVector sample_of_cell, int n_samples, bool one_based);
+RcppExport SEXP _cacoa_neighbourhood_counts(SEXP nn_idsSEXP, SEXP sample_of_cellSEXP, SEXP n_samplesSEXP, SEXP one_basedSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::List >::type nn_ids(nn_idsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type sample_of_cell(sample_of_cellSEXP);
+    Rcpp::traits::input_parameter< int >::type n_samples(n_samplesSEXP);
+    Rcpp::traits::input_parameter< bool >::type one_based(one_basedSEXP);
+    rcpp_result_gen = Rcpp::wrap(neighbourhood_counts(nn_ids, sample_of_cell, n_samples, one_based));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -485,12 +528,14 @@ static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_estimateClusterFreeExpressionShiftsC", (DL_FUNC) &_cacoa_estimateClusterFreeExpressionShiftsC, 16},
     {"_cacoa_mapIds", (DL_FUNC) &_cacoa_mapIds, 2},
     {"_cacoa_clusterFreeGeneMat", (DL_FUNC) &_cacoa_clusterFreeGeneMat, 5},
-    {"_cacoa_cluster_free_shift_batch", (DL_FUNC) &_cacoa_cluster_free_shift_batch, 18},
-    {"_cacoa_cluster_free_shift_stream", (DL_FUNC) &_cacoa_cluster_free_shift_stream, 24},
+    {"_cacoa_cluster_free_shift_batch", (DL_FUNC) &_cacoa_cluster_free_shift_batch, 22},
+    {"_cacoa_cluster_free_shift_stream", (DL_FUNC) &_cacoa_cluster_free_shift_stream, 28},
     {"_cacoa_estimateExpressionShiftsPairsLM", (DL_FUNC) &_cacoa_estimateExpressionShiftsPairsLM, 9},
     {"_cacoa_applyMedianFilterES", (DL_FUNC) &_cacoa_applyMedianFilterES, 4},
     {"_cacoa_adjustedZScoresMaxStat", (DL_FUNC) &_cacoa_adjustedZScoresMaxStat, 8},
-    {"_cacoa_fit_and_randomize", (DL_FUNC) &_cacoa_fit_and_randomize, 22},
+    {"_cacoa_fit_and_randomize", (DL_FUNC) &_cacoa_fit_and_randomize, 30},
+    {"_cacoa_knn_neighbourhoods", (DL_FUNC) &_cacoa_knn_neighbourhoods, 3},
+    {"_cacoa_neighbourhood_counts", (DL_FUNC) &_cacoa_neighbourhood_counts, 4},
     {"_cacoa_permuted_contrast_F", (DL_FUNC) &_cacoa_permuted_contrast_F, 6},
     {"_cacoa_permuted_contrast_F_fl", (DL_FUNC) &_cacoa_permuted_contrast_F_fl, 9},
     {"_cacoa_permuted_contrast_stats", (DL_FUNC) &_cacoa_permuted_contrast_stats, 14},

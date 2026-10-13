@@ -22,7 +22,15 @@ performLMPermutations(
   seed = NULL,
   P = NULL,
   perm.cells = NULL,
-  block.vars = NULL
+  block.vars = NULL,
+  pooled = FALSE,
+  z.grid = NULL,
+  use.abs = TRUE,
+  group = NULL,
+  average = FALSE,
+  nn.graph = NULL,
+  closed.form = TRUE,
+  pooled.standardize = FALSE
 )
 }
 \arguments{

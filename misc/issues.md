@@ -307,6 +307,16 @@ permutation set depends on the metadata row order for a fixed seed.
   sample sweep (large types recovered at 4 samples per arm on MS/PF with the averaged statistic; rule k >= fixed 200).
   Caveat: on a very dense graph (degree in the hundreds) the unit is the whole cluster and the averaged shift statistic
   gives near per-type verdicts; neighbourhoods mixing types whose abundance changes show composition-driven shifts.
+- (2026-10-13, done) Cluster-free implementation harmonized in C++: one accumulator (`src/cf_accum.h`) for both maps
+  (exact p, standardized z, pooled histograms, group sums, extremes, neighbour averaging in a float32 buffer; no
+  permutations x cells matrix unless requested), kNN units and counts in C++ (`src/neighbourhoods.cpp`, cached on the
+  object per k), closed-form density fitter for the default case (complete, unweighted), two-group closed form for the
+  permuted shift F (no hat matrix per relabeling; both design codings). SCC 35k cells, 1,999 permutations: density
+  127 s -> 7 s, shifts 31 s -> 6 s. Pooled statistic is a switch (`pooled.statistic`): density pools the raw t (the
+  standardized t called 24 % of an unchanged type on the simulation), shifts the standardized F; both calibrated on
+  SCC/PF relabelings (`misc/benchmark/null_pipeline.R`). Every analysis takes the object option `n.permutations` (999)
+  unless a value is passed; the per-method caps at 499 are gone. Methods document `misc/doc/main.tex` rewritten and
+  verified against the code.
 - (2026-10-12) The unadjusted z-scores of both maps are now the signed tail z of the pooled p (`pooled` slot of the
   density results, `z.pooled` of the shifts; the permutation-standardized shift statistic is `z.std`); the adjusted
   z of q-values near 0 run to 37, so the default colour range of a z map is the 99.5 % quantile capped at 8.

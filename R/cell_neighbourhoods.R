@@ -30,34 +30,50 @@ defaultNeighbourhoodSize <- function(n.cells, n.samples, per.sample = 10, min.k 
 #' arms, the strongest edges join cells of the same arm, and a unit built from them hides the composition change
 #' it is meant to test (on a dense simulated graph the own-arm share of such a unit was 0.60 against 0.50 for the
 #' full neighbourhood, and the planted changes vanished). Cells with more than `k - 1` neighbours therefore get a
-#' larger unit; `Matrix::rowSums()` of the result gives the sizes.
+#' larger unit; `lengths()` of the lists or `Matrix::rowSums()` of the matrix give the sizes. Computed in C++.
 #' @param graph igraph cell graph
 #' @param k minimum neighbourhood size including the cell itself
 #' @param cells cells to use (default: all vertices)
-#' @param chunk rows per block of the two-hop product (default 4000)
-#' @return a sparse `cells x cells` 0/1 matrix, row i marking the neighbourhood of cell i
+#' @param n.cores threads
+#' @return `knnNeighbourhoodLists()`: a list named by cell of 0-based integer vectors into `cells` (the cell itself
+#'   first); `knnNeighbourhoodMatrix()`: the same as a sparse `cells x cells` 0/1 matrix, row i marking the
+#'   neighbourhood of cell i
 #' @export
-knnNeighbourhoodMatrix <- function(graph, k, cells = NULL, chunk = 4000L) {
-  cells <- cells %||% igraph::V(graph)$name; n <- length(cells); k <- as.integer(k)
+knnNeighbourhoodLists <- function(graph, k, cells = NULL, n.cores = 1) {
+  cells <- cells %||% igraph::V(graph)$name; k <- as.integer(k)
   if (k < 2) stop("k must be at least 2")
-  A <- igraph::as_adjacency_matrix(graph, sparse = TRUE)[cells, cells, drop = FALSE]; A@x[] <- 1; Matrix::diag(A) <- 1; A <- methods::as(A, "CsparseMatrix")
-  deg <- Matrix::rowSums(A) - 1
-  out.i <- vector("list", 0); out.j <- vector("list", 0)
-  for (s in seq(1, n, by = chunk)) {
-    rows <- s:min(n, s + chunk - 1L)
-    A1 <- A[rows, , drop = FALSE]; T1 <- methods::as(A1, "TsparseMatrix")
-    sel.i <- T1@i + 1L; sel.j <- T1@j + 1L                                               # self and every graph neighbour
-    need <- pmax(0L, k - 1L - as.integer(deg[rows]))
-    if (any(need > 0)) {
-      A2 <- A1 %*% A
-      M <- Matrix::drop0(A2 - A2 * A1); M <- methods::as(M, "TsparseMatrix")      # two-hop candidates scored by shared neighbours
-      i2 <- M@i + 1L; j2 <- M@j + 1L; x2 <- M@x; o <- order(i2, -x2); i2 <- i2[o]; j2 <- j2[o]
-      r2 <- stats::ave(seq_along(i2), i2, FUN = seq_along); keep2 <- r2 <= need[i2]
-      sel.i <- c(sel.i, i2[keep2]); sel.j <- c(sel.j, j2[keep2])
-    }
-    out.i[[length(out.i) + 1]] <- rows[sel.i]; out.j[[length(out.j) + 1]] <- sel.j
-  }
-  Matrix::sparseMatrix(i = unlist(out.i), j = unlist(out.j), x = 1, dims = c(n, n), dimnames = list(cells, cells))
+  A <- igraph::as_adjacency_matrix(graph, sparse = TRUE)[cells, cells, drop = FALSE]; A@x[] <- 1
+  nn <- knn_neighbourhoods(methods::as(A, "dgCMatrix"), k, as.integer(n.cores)); names(nn) <- cells
+  nn
+}
+
+#' @rdname knnNeighbourhoodLists
+#' @export
+knnNeighbourhoodMatrix <- function(graph, k, cells = NULL, n.cores = 1) {
+  nn <- knnNeighbourhoodLists(graph, k, cells = cells, n.cores = n.cores); cells <- names(nn)
+  Matrix::sparseMatrix(i = rep(seq_along(nn), lengths(nn)), j = unlist(nn, use.names = FALSE) + 1L, x = 1, dims = c(length(cells), length(cells)), dimnames = list(cells, cells))
+}
+
+#' Per-sample counts of the cells of each neighbourhood
+#' @param nn neighbourhood lists (0-based, see [knnNeighbourhoodLists()])
+#' @param sample.per.cell factor of samples named by cell, in the order of the cells the lists index
+#' @param samples column order (default: the sorted samples present)
+#' @return numeric cells x samples matrix
+#' @export
+neighbourhoodCounts <- function(nn, sample.per.cell, samples = NULL) {
+  spc <- as.character(sample.per.cell[names(nn)]); samples <- samples %||% sort(unique(spc)); spc <- factor(spc, levels = samples)
+  cnt <- neighbourhood_counts(unname(nn), as.integer(spc), length(samples), FALSE)
+  dimnames(cnt) <- list(names(nn), samples); cnt
+}
+
+#' 1-hop graph neighbourhoods as 0-based lists (cell itself first)
+#' @param graph igraph cell graph
+#' @param cells cells (the index space of the lists)
+#' @keywords internal
+graphNeighbourLists0 <- function(graph, cells) {
+  A <- igraph::as_adjacency_matrix(graph, sparse = TRUE)[cells, cells, drop = FALSE]; A@x[] <- 1; Matrix::diag(A) <- 1
+  A <- methods::as(A, "TsparseMatrix"); o <- order(A@i, A@j != A@i, A@j)
+  nn <- split(A@j[o], factor(A@i[o] + 1L, levels = seq_along(cells))); nn <- lapply(nn, as.integer); names(nn) <- cells; nn
 }
 
 #' Effective neighbourhood size of the heat kernel
@@ -184,4 +200,13 @@ inheritNeighbourQList <- function(q, effect, nn.list, cells) {
   for (i in seq_along(cells)) { nb <- unique(c(i, nn.list[[i]] + 1L)); j <- nb[which.min(qq[nb])]; if (is.finite(qq[j])) { out[i] <- qq[j]; e2[i] <- ee[j] } }
   names(out) <- names(e2) <- cells
   list(q = out, effect = e2)
+}
+
+#' Average a per-cell vector over 0-based neighbour lists (cell itself included in the lists)
+#' @param x named numeric vector (non-finite as 0)
+#' @param nn neighbour lists (0-based into `names(x)`)
+#' @keywords internal
+averageVectorOverLists <- function(x, nn) {
+  v <- as.numeric(x); v[!is.finite(v)] <- 0
+  out <- vapply(nn, function(ids) mean(v[ids + 1L]), numeric(1)); names(out) <- names(x); out
 }

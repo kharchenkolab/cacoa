@@ -85,12 +85,13 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.weights, bins, b
 #' @param target.size heat kernel only: median effective neighbourhood size in cells; when given, `beta` is solved
 #'   by [solveKernelBeta()]. The effective size at the `beta` used is returned as `effective.size`
 #' @param n.hops neighbourhood radius for `smoothing = "neighbourhood"` (default 1)
+#' @param neighbourhoods precomputed kNN lists ([knnNeighbourhoodLists()]) for `smoothing = "knn"` (cached by the class)
 #' @return list with `density.mat` (cells x samples: the fraction of each sample's cells in the unit), `cond.densities`,
 #'   `counts.mat` (count units), `sample.sizes`, `unit.size` (cells per unit: exact for the count units, the
 #'   effective size for the kernel), `beta` and `smoothing`
 #' @keywords internal
 estimateCellDensityGraph <- function(graph, sample.per.cell, sample.weights, n.cores=1, beta=30, m=50, verbose=TRUE,
-                                     smoothing=c("knn", "heat", "neighbourhood"), k=NULL, target.size=NULL, n.hops=1) {
+                                     smoothing=c("knn", "heat", "neighbourhood"), k=NULL, target.size=NULL, n.hops=1, neighbourhoods=NULL) {
   smoothing <- match.arg(smoothing)
   sig.mat <- unique(sample.per.cell) %>% sapply(function(s) as.numeric(sample.per.cell == s)) %>%
     set_rownames(names(sample.per.cell)) %>% set_colnames(unique(sample.per.cell))
@@ -99,10 +100,11 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.weights, n.c
   if (smoothing == "knn") {
     cells <- intersect(igraph::V(graph)$name, rownames(sig.mat))
     k <- k %||% defaultNeighbourhoodSize(length(cells), ncol(sig.mat))
-    if (verbose) message(sprintf("kNN neighbourhoods of %d cells (%.1f per sample)", k, k / ncol(sig.mat)))
-    N <- knnNeighbourhoodMatrix(graph, k, cells = cells)
-    counts.mat <- as.matrix(N %*% sig.mat[cells, , drop = FALSE]); rownames(counts.mat) <- cells
-    unit.size <- stats::setNames(as.numeric(Matrix::rowSums(N)), cells)
+    if (verbose) message(sprintf("kNN neighbourhoods of at least %d cells (%.1f per sample)", k, k / ncol(sig.mat)))
+    nn <- neighbourhoods %||% knnNeighbourhoodLists(graph, k, cells = cells, n.cores = n.cores)
+    if (!identical(names(nn), cells)) stop("the neighbourhood lists do not match the graph's cells")
+    counts.mat <- neighbourhoodCounts(nn, sample.per.cell[cells], samples = colnames(sig.mat))
+    unit.size <- stats::setNames(as.numeric(lengths(nn)), cells)
     score.mat <- t(t(counts.mat) / sample.sizes[colnames(counts.mat)])
   } else if (smoothing == "neighbourhood") {
     cells <- intersect(igraph::V(graph)$name, rownames(sig.mat))
@@ -152,7 +154,7 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.weights, n.c
   # ------------------------------------------------------
 
   return(list(density.mat=score.mat, cond.densities=cond.densities, method='graph', smoothing=smoothing, counts.mat=counts.mat, sample.sizes=sample.sizes,
-              unit.size=unit.size, beta=if (smoothing == "heat") beta else NULL, k=if (smoothing == "knn") k else NULL))
+              unit.size=unit.size, beta=if (smoothing == "heat") beta else NULL, k=if (smoothing == "knn") k else NULL, neighbourhoods=if (smoothing == "knn") nn else NULL))
 }
 
 
@@ -284,11 +286,18 @@ pooledPermutationSummaries <- function(stat.obs, stats.perm, effect, alternative
 diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c("block", "freedman-lane"), 
                                         n.permutations=999, robust.method=c("none","huber","winsor"), na.mode=c("drop", "impute_weak"),
                                         alternative=c("two-sided","greater","less"), return.residuals=FALSE, return.sampled.stats=TRUE,
-                                        n.cores=1, verbose=TRUE, moderate=TRUE, ...) {
+                                        n.cores=1, verbose=TRUE, moderate=TRUE, pooled=FALSE, group=NULL, average=FALSE, nn.graph=NULL, closed.form=TRUE,
+                                        pooled.statistic=c("raw", "standardized"), ...) {
+  pooled.statistic <- match.arg(pooled.statistic); standardize <- pooled.statistic == "standardized"
+  if (pooled) {   # the pooled histograms: of |t| (raw; t is studentized already) on 0..50 or of the standardized statistic on the z grid
+    z.grid <- if (standardize) pooledZGrid(abs = alternative[1] == "two-sided") else if (alternative[1] == "two-sided") seq(0, 50, by = 0.01) else seq(-30, 50, by = 0.01)
+  }
   perm.method <- match.arg(perm.method)
   robust.method <- match.arg(robust.method)
   na.mode <- match.arg(na.mode)
   alternative <- match.arg(alternative)
+  two.sided <- alternative == "two-sided"
+  if (average && is.null(nn.graph)) stop("average needs nn.graph (0-based neighbour lists, the cell itself included)")
   
     if (is.null(sample.model)) {
       stop("sample.model must be provided for testing.")
@@ -301,17 +310,32 @@ diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c
     res <- performLMPermutations(x = sample.model, y = Y, n.permutations = n.permutations, perm.method = perm.method,
                                  robust.method = robust.method, na.mode = na.mode, alternative = alternative,
                                  return.sampled.stats = return.sampled.stats, return.residuals = return.residuals,
-                                 n.cores = n.cores, ...)
+                                 n.cores = n.cores, pooled = pooled, z.grid = if (pooled) z.grid else NULL, use.abs = two.sided,
+                                 group = group, average = average, nn.graph = nn.graph, closed.form = closed.form, pooled.standardize = standardize, ...)
+  cells <- colnames(Y)
   # effect (contrast estimate) centred by its permutation mean; the z-scores are the signed tail z of the per-cell
   # p-values: of the pooled permutation null when the permuted statistics are kept (calibrated, no floor), otherwise
   # of the exact permutation p (floored at 1 / (n.permutations + 1))
-  score.c <- as.numeric(if (is.null(res$effects.perm)) res$effect else res$effect - colMeans(res$effects.perm, na.rm = TRUE))
-  names(score.c) <- colnames(Y)
-  z.score <- res$z.score
-  names(z.score) <- colnames(Y)
-  p.pooled <- NULL
-  if (!is.null(res$stats.perm)) {
-    ps <- pooledPermutationSummaries(stats::setNames(res$stat.obs, colnames(Y)), res$stats.perm, stats::setNames(res$effect, colnames(Y)), alternative)
+  em <- if (!is.null(res$effect.perm.mean) && any(is.finite(res$effect.perm.mean))) res$effect.perm.mean else if (!is.null(res$effects.perm)) colMeans(res$effects.perm, na.rm = TRUE) else NULL
+  score.c <- as.numeric(if (is.null(em)) res$effect else res$effect - ifelse(is.finite(em), em, 0))
+  names(score.c) <- cells
+  z.score <- res$z.score; names(z.score) <- cells
+  effect <- stats::setNames(res$effect, cells); p.perm <- stats::setNames(res$pval, cells); stat.obs <- stats::setNames(res$stat.obs, cells)
+  p.pooled <- NULL; z.std <- NULL; pooled.hist <- NULL; group.acc <- NULL
+  if (!is.null(res$pooled)) {
+    acc <- res$pooled
+    stat.obs <- stats::setNames(as.numeric(acc$stat), cells); p.perm <- stats::setNames(as.numeric(acc$p), cells); z.std <- stats::setNames(as.numeric(acc$z), cells)
+    if (average) { effect <- averageVectorOverLists(effect, nn.graph); score.c <- averageVectorOverLists(score.c, nn.graph); effect[!is.finite(stat.obs)] <- NA_real_ }
+    base <- if (standardize) z.std else stat.obs   # the statistic the histograms were accumulated on
+    s.obs <- if (two.sided) abs(base) else if (alternative == "greater") base else -base
+    pooled.hist <- list(grid = as.numeric(acc$grid), hist = acc$hist, abs = two.sided, negate = alternative == "less", statistic = pooled.statistic, s.obs = s.obs)
+    p.pooled <- pooledPermutationP(s.obs, pooled.hist, alternative = "greater"); names(p.pooled) <- cells
+    pp <- pmin(pmax(p.pooled, 1e-300), 1 - 1e-16)
+    z.score <- switch(alternative, "two-sided" = sign(effect) * stats::qnorm(pp / 2, lower.tail = FALSE), greater = stats::qnorm(pp, lower.tail = FALSE), less = stats::qnorm(pp))
+    z.score[!is.finite(p.pooled)] <- NA_real_; names(z.score) <- cells
+    group.acc <- acc[c("group_sum", "group_count", "group_obs", "group_n")]
+  } else if (!is.null(res$stats.perm)) {
+    ps <- pooledPermutationSummaries(stat.obs, res$stats.perm, effect, alternative)
     p.pooled <- ps$p.pooled; z.score <- ps$z.score
   }
 
@@ -324,10 +348,12 @@ diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c
     tstat <- res$effect / se.mod
   } else tstat <- res$effect / res$se
   p.param <- if (alternative == "two-sided") 2 * stats::pt(-abs(tstat), dfr) else if (alternative == "greater") stats::pt(tstat, dfr, lower.tail = FALSE) else stats::pt(tstat, dfr)
-  out <- list(score = score.c, permut.scores = if (is.null(res$effects.perm)) NULL else t(res$effects.perm), stats.perm = res$stats.perm, stat.obs = setNames(res$stat.obs, colnames(Y)), z.score = z.score,
-              effect = setNames(res$effect, colnames(Y)), se = setNames(res$se, colnames(Y)), statistic = res$statistic,
-              t = setNames(tstat, colnames(Y)), df = dfr, p.param = setNames(p.param, colnames(Y)), p.perm = setNames(res$pval, colnames(Y)),
-              p.pooled = p.pooled)
+  if (average) { tstat[] <- NA_real_; p.param[] <- NA_real_ }   # the parametric tail does not apply to the averaged statistic
+  out <- list(score = score.c, permut.scores = if (is.null(res$effects.perm)) NULL else t(res$effects.perm), stats.perm = res$stats.perm, stat.obs = stat.obs, z.score = z.score,
+              effect = effect, se = setNames(res$se, cells), statistic = res$statistic,
+              t = setNames(tstat, cells), df = dfr, p.param = setNames(p.param, cells), p.perm = p.perm,
+              p.pooled = p.pooled, z.std = z.std, pooled.hist = pooled.hist, group.acc = group.acc, max.z = if (!is.null(res$pooled)) as.numeric(res$pooled$max) else NULL, min.z = if (!is.null(res$pooled)) as.numeric(res$pooled$min) else NULL,
+              averaged = average, closed.form = isTRUE(res$closed.form), pooled.statistic = if (pooled) pooled.statistic else NULL)
 
   if (return.residuals) {
     out$residuals <- res$residuals

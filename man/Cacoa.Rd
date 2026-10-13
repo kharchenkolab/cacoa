@@ -1071,7 +1071,7 @@ the current result. Prints one verdict per cell type: "robust", "sign / signific
 
 \item{\code{shifts.name}}{results slot of the expression shifts the sensitivity refers to (default "expression.shifts")}
 
-\item{\code{n.permutations}}{defaults from options (permutations capped at 499)}
+\item{\code{n.permutations}}{number of permutations (default: the object option \code{n.permutations}, 999)}
 
 \item{\code{verbose}}{defaults from options (permutations capped at 499)}
 
@@ -1164,7 +1164,7 @@ across cell types; a dispersion association is reported alongside. Ends with a s
 
 \item{\code{min.samples.per.type}}{cell types with fewer samples are skipped (default 6)}
 
-\item{\code{n.permutations}}{number of permutations (default: option \code{n.permutations}, capped at 499 for the screen)}
+\item{\code{n.permutations}}{number of permutations (default: the object option \code{n.permutations}, 999)}
 
 \item{\code{name}}{results slot (default "covariate.screen")}
 
@@ -3130,7 +3130,7 @@ cao$plotCompositionSimilarity()
 Estimate cell loadings
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateCellLoadings(
-  n.permutations = 1000,
+  n.permutations = NULL,
   name = "coda",
   n.seed = 239,
   cells.to.remove = NULL,
@@ -3617,14 +3617,15 @@ Estimate differential cell density
   na.mode = "drop",
   alternative = "two-sided",
   return.residuals = FALSE,
-  return.sampled.stats = TRUE,
-  n.permutations = 999,
+  return.sampled.stats = FALSE,
+  n.permutations = NULL,
   smooth = TRUE,
   adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
   p.source = c("parametric", "permutation", "pooled"),
   moderate = TRUE,
   transform = c("auto", "none", "log"),
   post = c("averaged", "none", "inherit"),
+  pooled.statistic = c("raw", "standardized"),
   verbose = self$verbose,
   n.cores = self$n.cores,
   ...
@@ -3665,7 +3666,8 @@ the signed tail z of the adjusted p-values}
 
 \item{\code{return.residuals}}{also return residuals}
 
-\item{\code{return.sampled.stats}}{also return the permutation statistics}
+\item{\code{return.sampled.stats}}{also return the permutations x cells matrix of the permuted statistics (default FALSE:
+the pooled quantities are accumulated in C++ without it; max-t keeps it regardless)}
 
 \item{\code{n.permutations}}{numeric Number of permutations (default=400)}
 
@@ -3699,6 +3701,10 @@ at matched error in the benchmark, q-values stay calibrated); \code{"inherit"}: 
 q among itself and its neighbours after the test (\code{\link[=inheritNeighbourQ]{inheritNeighbourQ()}}; Milo's rule, more reach but
 the realized false-call rate at a nominal threshold is about the nominal rate); \code{"none"}. The unadjusted
 z-scores, effects and q-values of the result are those of the averaged statistic under \code{"averaged"}}
+
+\item{\code{pooled.statistic}}{the per-cell statistic pooled over cells for the pooled p-values and FDR: \code{"raw"}
+(default; the studentized contrast t, as benchmarked) or \code{"standardized"} (t minus its permutation mean over
+its permutation sd, the shift map's convention)}
 
 \item{\code{verbose}}{boolean Print messages (default=self$verbose)}
 
@@ -3991,7 +3997,7 @@ Project samples to 2D space with MDS. Plots results from cao$estimateExpressionS
   title = NULL,
   both.ncol = 2,
   both.align = "hv",
-  n.permutations = 2000,
+  n.permutations = NULL,
   show.pvalues = FALSE,
   sample.subset = NULL,
   n.cores = self$n.cores,
@@ -4209,7 +4215,7 @@ Estimate differential expression Z-scores between two conditions per individual 
   robust = FALSE,
   smooth = TRUE,
   wins = 0.01,
-  n.permutations = 200,
+  n.permutations = NULL,
   lfc.pseudocount = 1e-05,
   block.vars = NULL,
   min.edge.weight = 0.6,
@@ -4426,7 +4432,7 @@ median smoothing over the graph.
 
 \item{\code{permutation}}{defaults from options (permutations capped at 499)}
 
-\item{\code{n.permutations}}{defaults from options (permutations capped at 499)}
+\item{\code{n.permutations}}{number of permutations (default: the object option \code{n.permutations}, 999)}
 
 \item{\code{seed}}{defaults from options (permutations capped at 499)}
 

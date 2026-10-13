@@ -475,7 +475,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param top.k number of screened covariates to try adding (default 3)
     #' @param name results slot (default "sensitivity")
     #' @param shifts.name results slot of the expression shifts the sensitivity refers to (default "expression.shifts")
-    #' @param n.permutations defaults from options (permutations capped at 499)
+    #' @param n.permutations number of permutations (default: the object option `n.permutations`, 999)
     #' @param verbose defaults from options (permutations capped at 499)
     #' @param n.cores defaults from options (permutations capped at 499)
     #' @param seed defaults from options (permutations capped at 499)
@@ -483,7 +483,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     checkSensitivity = function(covariate.sets = "auto", screen.name = "covariate.screen", top.k = 3, name = "sensitivity",
                                 shifts.name = "expression.shifts", n.permutations = NULL, verbose = NULL, n.cores = NULL, seed = NULL) {
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
-      n.permutations <- n.permutations %||% min(private$opt("n.permutations"), 499)
+      n.permutations <- n.permutations %||% private$opt("n.permutations")
       seed <- if (missing(seed)) private$opt("seed") else seed
       res <- self$test.results[[shifts.name]]
       if (is.null(res)) stop("run estimateExpressionShiftMagnitudes() first")
@@ -528,7 +528,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param genes as in `estimateExpressionShiftMagnitudes()`
     #' @param min.samples.per.type cell types with fewer samples are skipped (default 6)
     #' @param p.values `"permutation"` (default) or `"analytic"` (instant preview, approximate)
-    #' @param n.permutations number of permutations (default: option `n.permutations`, capped at 499 for the screen)
+    #' @param n.permutations number of permutations (default: the object option `n.permutations`, 999)
     #' @param name results slot (default "covariate.screen")
     #' @param verbose defaults from options
     #' @param n.cores defaults from options
@@ -545,7 +545,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                 n.permutations = NULL, name = "covariate.screen", verbose = NULL, n.cores = NULL, seed = NULL, robust = NULL) {
       space <- match.arg(space); mode <- match.arg(mode); robust <- private$opt("robust", robust)
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores); dist <- private$opt("dist", dist)
-      n.permutations <- n.permutations %||% min(private$opt("n.permutations"), 499)
+      n.permutations <- n.permutations %||% private$opt("n.permutations")
       seed <- if (missing(seed)) private$opt("seed") else seed
       D.list <- private$distancesForSpace(space, dist = dist, n.pcs = n.pcs, cell.groups = cell.groups, min.cells.per.sample = min.cells.per.sample,
                                           min.gene.frac = min.gene.frac, genes = genes, verbose = verbose)
@@ -590,7 +590,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.null(model)) stop("no model is set")
       tv <- model$tests[[1]]$variable; if (!is.null(tv) && is.na(tv)) tv <- NULL
       out <- screenResidualCovariates(resid, self$sample.meta, covariates = covariates, exclude = all.vars(model$formula),
-                                      n.permutations = n.permutations %||% min(private$opt("n.permutations"), 499),
+                                      n.permutations = n.permutations %||% private$opt("n.permutations"),
                                       seed = (if (missing(seed)) private$opt("seed") else seed) %||% sample.int(.Machine$integer.max, 1),
                                       n.cores = n.cores, test.variable = tv, robust = robust, robust.k = private$opt("robust.k"), verbose = verbose)
       out$settings$source <- name
@@ -2452,12 +2452,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ref.max.size maximum number of reference cell types (default 3)
     #' @param block.vars metadata columns defining permutation strata (default: stored)
     #' @param ... further arguments passed to the underlying function
-    estimateCellLoadings=function(n.permutations=1000, name='coda', n.seed=239,
+    estimateCellLoadings=function(n.permutations=NULL, name='coda', n.seed=239,
                                   cells.to.remove=NULL, cells.to.remain=NULL, 
                                   filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose, method="lda",
                                   formula=NULL, contrast=NULL, test=NULL, perm.method=c("freedman-lane", "block"), statistic=c("t", "coef"), zero.pseudocount=0.1,
                                   basis.type = c("default"), ref.p.thresh = 0.3, ref.min.size = 1,ref.max.size = 3,
                                   block.vars = NULL, ...) {
+      n.permutations <- private$opt("n.permutations", n.permutations)
       # Checks
       checkPackageInstalled(c("coda.base", "psych"), cran=TRUE)
       #method <- match.arg(method)
@@ -2698,7 +2699,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else if (method == 'graph') {
         res <-  extractCellGraph(self$data.object) %>%
           estimateCellDensityGraph(sample.per.cell=sample.per.cell, sample.weights=sample.weights,
-                                   n.cores=n.cores, beta=beta, verbose=verbose, smoothing=smoothing, k=k, target.size=target.size, n.hops=n.hops, ...)
+                                   n.cores=n.cores, beta=beta, verbose=verbose, smoothing=smoothing, k=k, target.size=target.size, n.hops=n.hops,
+                                   neighbourhoods=if (smoothing == "knn") private$knnUnits(k %||% defaultNeighbourhoodSize(length(sample.per.cell), length(unique(sample.per.cell))), n.cores) else NULL, ...)
       } else stop("Unknown method: ", method)
       
 
@@ -2903,7 +2905,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   [pooledPermutationP()]; calibrated and not floored), two-sided: `sign(effect) * qnorm(1 - p / 2)`; `adj` holds
     #'   the signed tail z of the adjusted p-values
     #' @param return.residuals also return residuals
-    #' @param return.sampled.stats also return the permutation statistics
+    #' @param return.sampled.stats also return the permutations x cells matrix of the permuted statistics (default FALSE:
+    #'   the pooled quantities are accumulated in C++ without it; max-t keeps it regardless)
     #' @param adjust.method multiplicity adjustment across cells, see [adjustCellScores()]: `"perm-fdr"` (default: the
     #'   pooled permutation FDR of the studentized contrast over cells, see [permutationFDR()]; no per-cell floor, uses
     #'   the permutation blocks of the design), `"bh"` (Benjamini-Hochberg over the tested cells' p-values; the
@@ -2921,6 +2924,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   `"none"` for the heat kernel and the kde; `"none"`: test the densities as they are; `"log"`: test `log2` counts
     #'   per 10,000 cells of the sample (`log2((density * n + 0.5) / (n + 1) * 1e4)`, `n` the sample's cell number), the
     #'   log-count model of a neighbourhood abundance test; the effect is then a log2 fold change of the density
+    #' @param pooled.statistic the per-cell statistic pooled over cells for the pooled p-values and FDR: `"raw"`
+    #'   (default; the studentized contrast t, as benchmarked) or `"standardized"` (t minus its permutation mean over
+    #'   its permutation sd, the shift map's convention)
     #' @param post post-processing of the per-cell test on the cell graph (graph density only): `"averaged"`
     #'   (default): the statistic is averaged over each cell and its graph neighbours, under every permutation alike,
     #'   before the pooled FDR, an exact test of the one-hop-larger unit ([averageOverNeighbours()]; +10-40 % recall
@@ -2930,16 +2936,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   z-scores, effects and q-values of the result are those of the averaged statistic under `"averaged"`
     estimateDiffCellDensity=function(type='permutation', adjust=NULL, name='cell.density', sample.metadata=self$sample.meta, 
                                      formula=NULL, contrast=NULL, test=NULL, block.vars=NULL, perm.method="freedman-lane", statistic=c("t", "coef"),
-                                     robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=TRUE,
-                                     n.permutations=999, smooth=TRUE, adjust.method=c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
+                                     robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=FALSE,
+                                     n.permutations=NULL, smooth=TRUE, adjust.method=c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
                                      p.source=c("parametric", "permutation", "pooled"), moderate=TRUE, transform=c("auto", "none", "log"),
-                                     post=c("averaged", "none", "inherit"), verbose=self$verbose, n.cores=self$n.cores, ...){
+                                     post=c("averaged", "none", "inherit"), pooled.statistic=c("raw", "standardized"), verbose=self$verbose, n.cores=self$n.cores, ...){
+      n.permutations <- private$opt("n.permutations", n.permutations)
       dens.res <- private$getResults(name, 'estimateCellDensity')
-      statistic <- match.arg(statistic); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source); transform <- match.arg(transform); post <- match.arg(post)
+      statistic <- match.arg(statistic); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source); transform <- match.arg(transform); post <- match.arg(post); pooled.statistic <- match.arg(pooled.statistic)
       if (is.null(adjust)) adjust <- (type != 'subtract') # NULL can be forwarded here
       if (transform == "auto") transform <- if (isTRUE(dens.res$smoothing %in% c("knn", "neighbourhood"))) "log" else "none"
       if (post != "none" && dens.res$method != "graph") { if (verbose) message("post-processing on the cell graph applies to the graph density only: post = 'none'"); post <- "none" }
-      if (post != "none" && !return.sampled.stats) { if (verbose) message("post-processing needs the permutation statistics (return.sampled.stats = TRUE): post = 'none'"); post <- "none" }
       if (post != "none" && !adjust) post <- "none"
       density.mat <- dens.res$density.mat
       if (transform == "log") {
@@ -2966,21 +2972,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose, what = "estimateDiffCellDensity()")
       } else dens.res$model %||% private$resolveModel(verbose = verbose, what = "estimateDiffCellDensity()")
 
+      # the C++ accumulator (exact p, standardized z, pooled histograms, group sums, optional neighbour averaging) replaces
+      # the permutations x cells matrix for every adjustment but max-t, which smooths the permuted maps on the graph
+      use.acc <- adjust.method != "max-t"
+      cells.d <- rownames(density.mat); grp.levels <- NULL; cg.codes <- NULL
+      if (!is.null(self$cell.groups) && dens.res$method == "graph") { gf <- as.factor(self$cell.groups[cells.d]); grp.levels <- levels(gf); cg.codes <- as.integer(gf) - 1L; cg.codes[is.na(cg.codes)] <- -1L
+        if (!any(cg.codes >= 0)) { grp.levels <- NULL; cg.codes <- NULL } }
+      nn.graph <- if (post != "none" && dens.res$method == "graph") graphNeighbourLists0(extractCellGraph(self$data.object), cells.d) else NULL
       perm.res <- density.mat %>%
           diffCellDensityPermutations(sample.model=sample.model, seed = private$opt("seed"), perm.method=perm.method, statistic=statistic, robust.method = robust.method,
                                       na.mode = na.mode, alternative = alternative, n.permutations=n.permutations,
-                                      return.residuals=return.residuals, return.sampled.stats=return.sampled.stats,
-                                      n.cores=n.cores, verbose=verbose, moderate=moderate)
-
-      if (post == "averaged") {   # the one-hop-larger unit: observed and permuted statistics averaged over the cell and its neighbours
-        if (is.null(perm.res$stats.perm)) stop("post = 'averaged' needs the permutation statistics (return.sampled.stats = TRUE)")
-        cg <- extractCellGraph(self$data.object)
-        av <- averageOverNeighbours(perm.res$stat.obs, perm.res$stats.perm, cg, effect = perm.res$effect)
-        perm.res$stat.obs <- av$stat; perm.res$stats.perm <- av$stats.perm; perm.res$effect <- av$effect; perm.res$score <- av$effect
-        ps <- pooledPermutationSummaries(av$stat, av$stats.perm, av$effect, alternative)
-        perm.res$p.pooled <- ps$p.pooled; perm.res$z.score <- ps$z.score; perm.res$p.perm <- ps$p.perm
-        perm.res$t <- av$stat; perm.res$p.param[] <- NA_real_   # the parametric tail does not apply to the averaged statistic
-      }
+                                      return.residuals=return.residuals, return.sampled.stats=return.sampled.stats || !use.acc,
+                                      n.cores=n.cores, verbose=verbose, moderate=moderate,
+                                      pooled = use.acc, group = if (use.acc) cg.codes else NULL, average = use.acc && post == "averaged", nn.graph = nn.graph, pooled.statistic = pooled.statistic)
+      if (post == "averaged" && !use.acc) { if (verbose) message("post = 'averaged' is not available with max-t: post = 'none'"); post <- "none" }
       p.pooled <- perm.res$p.pooled   # the unadjusted z-scores (`pooled`) are the signed tail z of this p
       if (is.null(p.pooled) && verbose) message("the permuted statistics were not kept (return.sampled.stats = FALSE): the unadjusted z-scores come from the floored per-cell permutation p-values")
       if (p.source == "pooled" && is.null(p.pooled)) stop("p.source = 'pooled' needs the permutation statistics (return.sampled.stats = TRUE)")
@@ -2994,9 +2999,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                     l.max=l.max, ...), model = sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se,
                     t = perm.res$t, p.param = perm.res$p.param, adjust.method = adjust.method)
       } else if (adjust.method == "perm-fdr") {
-        if (is.null(perm.res$stats.perm)) stop("perm-fdr needs the permutation statistics (return.sampled.stats = TRUE)")
-        ad <- adjustCellScores(perm.res$stat.obs, NULL, method = "perm-fdr", perm = perm.res$stats.perm,
-                               alternative = if (alternative == "two-sided") "two.sided" else "greater")
+        if (!is.null(perm.res$pooled.hist)) {   # pooled FDR of the pooled statistic (|t| by default) from the accumulated histograms
+          pf <- permutationFDR(perm.res$pooled.hist$s.obs, perm.res$pooled.hist, alternative = "greater")
+          pa <- pmin(pmax(pf$q, 1e-300), 1 - 1e-16)
+          z.adj <- switch(alternative, "two-sided" = sign(perm.res$effect) * stats::qnorm(pa / 2, lower.tail = FALSE), greater = pmax(stats::qnorm(pa, lower.tail = FALSE), 0), less = pmin(stats::qnorm(pa), 0))
+          z.adj[!is.finite(pf$q)] <- NA_real_; names(z.adj) <- names(pf$q)
+          ad <- list(z.adj = z.adj, p.adj = pf$q, fdr.curve = pf$curve)
+        } else {
+          if (is.null(perm.res$stats.perm)) stop("perm-fdr needs the permutation statistics (return.sampled.stats = TRUE)")
+          ad <- adjustCellScores(perm.res$stat.obs, NULL, method = "perm-fdr", perm = perm.res$stats.perm,
+                                 alternative = if (alternative == "two-sided") "two.sided" else "greater")
+        }
         res <- list(pooled=perm.res$z.score, adj=ad$z.adj, p.adj = ad$p.adj, fdr.curve = ad$fdr.curve,
                     model = sample.model, perm.method=perm.method, statistic=statistic, robust = robust.method, effect = perm.res$effect, se = perm.res$se,
                     t = perm.res$t, p.param = perm.res$p.param, adjust.method = adjust.method, p.source = "permutation")
@@ -3025,8 +3038,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         res$adj[!is.finite(ih$q)] <- NA_real_; names(res$adj) <- names(ih$q)
       }
       res$post <- post; res$unit.size <- dens.res$unit.size
-      res$transform <- transform; res$p.perm <- perm.res$p.perm; res$p.pooled <- p.pooled
-      if (!is.null(self$cell.groups) && !is.null(perm.res$stats.perm)) {   # exact group-level permutation test (shared permutations)
+      res$transform <- transform; res$p.perm <- perm.res$p.perm; res$p.pooled <- p.pooled; res$z.std <- perm.res$z.std; res$closed.form <- perm.res$closed.form; res$pooled.statistic <- perm.res$pooled.statistic
+      res$z.pooled <- res$pooled; res$z.adj <- res$adj   # the names of the shift map
+      if (!is.null(perm.res$group.acc) && !is.null(grp.levels) && length(perm.res$group.acc$group_n) == length(grp.levels)) {   # exact group-level permutation test from the accumulated group sums
+        res$group.test <- groupTestFromAccum(perm.res$group.acc, grp.levels, alternative = if (alternative == "two-sided") "two.sided" else "greater", negate = alternative == "less")
+      } else if (!is.null(self$cell.groups) && !is.null(perm.res$stats.perm)) {
         res$group.test <- groupPermutationTest(perm.res$stat.obs, perm.res$stats.perm, self$cell.groups, alternative = if (alternative == "two-sided") "two.sided" else "greater")
       }
       if (return.residuals) {
@@ -3531,7 +3547,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                  name=NULL, cell.type=NULL, sample.meta=NULL, color.by=NULL, shape.by=NULL,
                                  palette=NULL, show.sample.size=FALSE, sample.colors=NULL, color.title=NULL,
                                  shape.title=NULL, title=NULL, both.ncol = 2, both.align = "hv",
-                                 n.permutations=2000, show.pvalues=FALSE, sample.subset=NULL, n.cores=self$n.cores, adjust.for=NULL, ...) {
+                                 n.permutations=NULL, show.pvalues=FALSE, sample.subset=NULL, n.cores=self$n.cores, adjust.for=NULL, ...) {
+      n.permutations <- private$opt("n.permutations", n.permutations)
       values <- match.arg(values, c("unadjusted","adjusted","both"))
       if (!is.null(adjust.for) && values != "unadjusted") { values <- "unadjusted" }   # adjust.for replaces the model-adjusted view
       if (identical(color.by, "test") && !is.null(self$model)) {   # the active test's groups / values
@@ -3700,7 +3717,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                         show.warning=TRUE, verbose=NULL, n.cores=NULL,
                                         adjust.pvalues=TRUE, p.adjust.method="BH", pvalue.cutoff=0.05, mode=c("marginal", "partial", "both")) {
       mode <- match.arg(mode); verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
-      n.permutations <- n.permutations %||% min(private$opt("n.permutations"), 499)
+      n.permutations <- n.permutations %||% private$opt("n.permutations")
       if (!is.null(trim) || !is.null(k)) message("`trim` and `k` are deprecated (the graph-based pseudo-R2 was replaced by the covariate screen)")
       p.dists <- self$getSampleDistanceMatrix(space=space, cell.type=NULL, dist=dist, name=space.name, sample.subset=sample.subset)
       if (is.null(p.dists)) {
@@ -3791,10 +3808,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    sample.per.cell=self$sample.per.cell, formula=NULL, test=NULL, contrast=NULL,
                                    perm.method = "freedman-lane", statistic = c("t", "coef"), robust.method = "none", na.mode = "drop", alternative = "two-sided",
                                    min.n.obs.per.samp=2, adjust.pvalues=FALSE, keep.means=FALSE, robust=FALSE,
-                                   smooth=TRUE, wins=0.01, n.permutations=200, lfc.pseudocount=1e-5, block.vars=NULL,
+                                   smooth=TRUE, wins=0.01, n.permutations=NULL, lfc.pseudocount=1e-5, block.vars=NULL,
                                    min.edge.weight=0.6, verbose=self$verbose, n.cores=self$n.cores, 
                                    name="cluster.free.de", ...){
-      statistic <- match.arg(statistic)
+      statistic <- match.arg(statistic); n.permutations <- private$opt("n.permutations", n.permutations)
       if (is.null(genes)) {
         genes <- private$getTopGenes(n.top.genes, gene.selection="expression", min.expr.frac=min.expr.frac)
       }
@@ -3891,7 +3908,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param min.n.obs.per.samp minimum cells of a sample in a neighbourhood (default 3)
     #' @param min.samp.per.level minimum samples per compared level in a neighbourhood (default 2)
     #' @param permutation defaults from options (permutations capped at 499)
-    #' @param n.permutations defaults from options (permutations capped at 499)
+    #' @param n.permutations number of permutations (default: the object option `n.permutations`, 999)
     #' @param seed defaults from options (permutations capped at 499)
     #' @param verbose defaults from options (permutations capped at 499)
     #' @param n.cores defaults from options (permutations capped at 499)
@@ -3928,7 +3945,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (post == "averaged" && adjust.method != "perm-fdr") { if (verbose) message("post = 'averaged' needs adjust.method = 'perm-fdr': post = 'none'"); post <- "none" }
       legacy <- private$legacyShiftArgs(list(...), verbose)
       permutation <- private$opt("permutation", legacy$permutation %||% permutation)
-      n.permutations <- n.permutations %||% min(private$opt("n.permutations"), 499)
+      n.permutations <- n.permutations %||% private$opt("n.permutations")
       seed <- if (missing(seed)) private$opt("seed") else seed
       model <- private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose,
                                     what = "estimateClusterFreeExpressionShifts()")
@@ -4916,6 +4933,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     ## genes
     ## min.edge.weight numeric (default=0.6)
     ## list with fields 'cm', 'adj.mat', 'is.ref', 'nns.per.cell'
+    ## kNN neighbourhood lists of the cell graph for a size k, computed once per object and size (both cluster-free maps use them)
+    knnUnits = function(k, n.cores = 1) {
+      g <- extractCellGraph(self$data.object); cells <- igraph::V(g)$name; key <- sprintf("k%d_n%d", as.integer(k), length(cells))
+      if (is.null(private$knn.cache[[key]])) private$knn.cache[[key]] <- knnNeighbourhoodLists(g, k, cells = cells, n.cores = n.cores)
+      private$knn.cache[[key]]
+    },
+    knn.cache = list(),
     getClusterFreeDEInput = function(genes, raw=FALSE, min.edge.weight=0.0, k=NULL) {
       cm <- self$getJointCountMatrix(raw=raw)
       genes <- intersect(genes, colnames(cm))
@@ -4942,9 +4966,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         nns.per.cell[[id]] <- numeric()
       }
       nns.graph <- nns.per.cell
-      if (!is.null(k)) {   # kNN unit of k cells per cell (self, strongest edges, then two-hop by shared neighbours); the 1-hop graph is kept for post-processing
-        N <- knnNeighbourhoodMatrix(extractCellGraph(self$data.object), k, cells = cell.names) %>% as("TsparseMatrix")
-        nns.per.cell <- split(N@j, factor(N@i + 1L, levels = seq_along(cell.names))) %>% lapply(as.integer) %>% setNames(cell.names)
+      if (!is.null(k)) {   # kNN unit of at least k cells per cell (self, every graph neighbour, then two-hop by shared neighbours); the 1-hop graph is kept for post-processing
+        nn <- private$knnUnits(k)
+        if (!identical(names(nn), cell.names)) { idx <- match(cell.names, names(nn)); if (anyNA(idx)) stop("the kNN units do not cover the tested cells")
+          remap <- match(names(nn), cell.names); nns.per.cell <- lapply(nn[idx], function(v) { w <- remap[v + 1L]; as.integer(w[!is.na(w)] - 1L) }) } else nns.per.cell <- nn
+        names(nns.per.cell) <- cell.names
       }
 
       return(list(cm=cm, adj.mat=adj.mat, is.ref=is.ref, nns.per.cell=nns.per.cell, nns.graph=nns.graph))

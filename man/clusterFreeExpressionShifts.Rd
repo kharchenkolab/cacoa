@@ -31,7 +31,9 @@ clusterFreeExpressionShifts(
   groups = NULL,
   return.perm = FALSE,
   post = c("none", "averaged", "inherit"),
-  nns.graph = NULL
+  nns.graph = NULL,
+  vectorize = TRUE,
+  pooled.statistic = c("standardized", "raw")
 )
 }
 \arguments{
@@ -98,6 +100,10 @@ graph neighbours after the test, \code{\link[=inheritNeighbourQ]{inheritNeighbou
 
 \item{nns.graph}{the 1-hop graph neighbourhoods used by \code{post} (list of 0-based indices per cell, the cell
 itself included; default: \code{nns.per.cell}, which is the 1-hop graph unless a kNN unit was passed)}
+
+\item{vectorize}{permutation loop of the complete-sample cells as matrix products (default TRUE; FALSE for the reference loop)}
+
+\item{pooled.statistic}{statistic pooled over cells for the pooled p-values and FDR: \code{"standardized"} (default) or \code{"raw"} (the shift F itself)}
 }
 \value{
 list: \code{stat} (shift F per cell), \code{p.value} (exact permutation p), \code{p.pooled} (pooled-null p, no floor), \code{p.param},

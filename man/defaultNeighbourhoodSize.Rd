@@ -9,7 +9,8 @@ defaultNeighbourhoodSize(
   n.samples,
   per.sample = 10,
   min.k = 100,
-  max.frac = 0.01
+  max.frac = 0.01,
+  min.per.sample = 5
 )
 }
 \arguments{
@@ -22,12 +23,15 @@ defaultNeighbourhoodSize(
 \item{min.k}{lower bound (default 100)}
 
 \item{max.frac}{upper bound as a fraction of the cells (default 0.01)}
+
+\item{min.per.sample}{the cap's own floor in cells per sample (default 5)}
 }
 \value{
 integer neighbourhood size
 }
 \description{
 The power of the neighbourhood test is set by the cells each sample contributes to a neighbourhood (about
-\code{k / n.samples}), its resolution by how far the neighbourhood reaches: the default takes the larger of 100 cells
-and 10 cells per sample, capped at 1 \% of the cells (never below 20).
+\code{k / n.samples}), its resolution by how far the neighbourhood reaches. The default takes the larger of \code{min.k}
+cells and \code{per.sample} cells per sample, capped at \code{max.frac} of the cells, but the cap never goes below
+\code{min.per.sample} cells per sample (a count test on one cell per sample has no power, whatever the dataset size).
 }

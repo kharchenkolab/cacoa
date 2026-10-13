@@ -235,29 +235,6 @@ kernelNeff <- function(graph, beta, n.vec = 24, n.cores = 1) {
   KR <- as.matrix(sccore::smoothSignalOnGraph(R, filter = function(...) sccore::heatFilter(..., beta = beta), graph = graph, m = 50, n.cores = n.cores, progress = FALSE))
   r <- KR[, 1]; list(neff = setNames(r^2 / rowMeans(KR[, -1, drop = FALSE]^2), cells), rowsum = setNames(r, cells))
 }
-# kNN neighbourhoods on the graph: 1-hop by edge weight, then 2-hop by shared neighbours, up to k cells (self included)
-knnNeighbourhoods <- function(graph, k, chunk = 4000L) {
-  cells <- V(graph)$name; n <- length(cells)
-  W <- igraph::as_adjacency_matrix(graph, attr = if (!is.null(igraph::edge_attr(graph, "weight"))) "weight" else NULL, sparse = TRUE)[cells, cells]
-  A <- W; A@x[] <- 1; Matrix::diag(A) <- 1; A <- methods::as(A, "CsparseMatrix")
-  deg <- Matrix::rowSums(A)
-  out.i <- list(); out.j <- list()
-  for (s in seq(1, n, by = chunk)) {
-    rows <- s:min(n, s + chunk - 1L)
-    W1 <- methods::as(W[rows, , drop = FALSE], "TsparseMatrix"); i1 <- W1@i + 1L; j1 <- W1@j + 1L; x1 <- W1@x
-    o <- order(i1, -x1); i1 <- i1[o]; j1 <- j1[o]; r1 <- ave(seq_along(i1), i1, FUN = seq_along)
-    keep1 <- r1 <= k - 1L                                                     # 1-hop neighbours kept (self is added below)
-    sel.i <- c(seq_along(rows), i1[keep1]); sel.j <- c(rows, j1[keep1])
-    need <- pmax(0L, k - 1L - as.integer(table(factor(i1[keep1], levels = seq_along(rows)))))
-    if (any(need > 0)) {
-      A2 <- A[rows, , drop = FALSE] %*% A; A1 <- A[rows, , drop = FALSE]
-      M <- A2 - A2 * A1; M <- Matrix::drop0(M); M <- methods::as(M, "TsparseMatrix")       # 2-hop candidates with shared-neighbour counts
-      i2 <- M@i + 1L; j2 <- M@j + 1L; x2 <- M@x; o <- order(i2, -x2); i2 <- i2[o]; j2 <- j2[o]
-      r2 <- ave(seq_along(i2), i2, FUN = seq_along); keep2 <- r2 <= need[i2]
-      sel.i <- c(sel.i, i2[keep2]); sel.j <- c(sel.j, j2[keep2])
-    }
-    out.i[[length(out.i) + 1]] <- rows[sel.i]; out.j[[length(out.j) + 1]] <- sel.j
-  }
-  N <- Matrix::sparseMatrix(i = unlist(out.i), j = unlist(out.j), x = 1, dims = c(n, n), dimnames = list(cells, cells))
-  N
-}
+# kNN neighbourhoods on the graph: every 1-hop neighbour (never cut by weight: the strongest edges are own-arm edges
+# when expression differs between arms), then 2-hop by shared-neighbour count up to k cells (self included); k is a minimum
+knnNeighbourhoods <- function(graph, k, chunk = 4000L) knnNeighbourhoodMatrix(graph, k, chunk = chunk)

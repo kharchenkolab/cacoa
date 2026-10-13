@@ -7,9 +7,9 @@
 knnNeighbourhoodMatrix(graph, k, cells = NULL, chunk = 4000L)
 }
 \arguments{
-\item{graph}{igraph cell graph (edge attribute \code{weight} used for ranking when present)}
+\item{graph}{igraph cell graph}
 
-\item{k}{neighbourhood size including the cell itself}
+\item{k}{minimum neighbourhood size including the cell itself}
 
 \item{cells}{cells to use (default: all vertices)}
 
@@ -19,6 +19,11 @@ knnNeighbourhoodMatrix(graph, k, cells = NULL, chunk = 4000L)
 a sparse \verb{cells x cells} 0/1 matrix, row i marking the neighbourhood of cell i
 }
 \description{
-Every cell is the centre of its own neighbourhood of \code{k} cells (itself included): its graph neighbours ranked by
-edge weight, then, if those are fewer than \code{k - 1}, two-hop neighbours ranked by the number of shared neighbours.
+Every cell is the centre of its own neighbourhood of at least \code{k} cells (itself included): all of its graph
+neighbours, then, if those are fewer than \code{k - 1}, two-hop neighbours ranked by the number of shared neighbours.
+The 1-hop neighbourhood is never cut down to the strongest edges: when expression differs between the compared
+arms, the strongest edges join cells of the same arm, and a unit built from them hides the composition change
+it is meant to test (on a dense simulated graph the own-arm share of such a unit was 0.60 against 0.50 for the
+full neighbourhood, and the planted changes vanished). Cells with more than \code{k - 1} neighbours therefore get a
+larger unit; \code{Matrix::rowSums()} of the result gives the sizes.
 }

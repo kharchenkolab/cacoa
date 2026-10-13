@@ -5,26 +5,34 @@
 #' Default neighbourhood size for the kNN density unit
 #'
 #' The power of the neighbourhood test is set by the cells each sample contributes to a neighbourhood (about
-#' `k / n.samples`), its resolution by how far the neighbourhood reaches: the default takes the larger of 100 cells
-#' and 10 cells per sample, capped at 1 % of the cells (never below 20).
+#' `k / n.samples`), its resolution by how far the neighbourhood reaches. The default takes the larger of `min.k`
+#' cells and `per.sample` cells per sample, capped at `max.frac` of the cells, but the cap never goes below
+#' `min.per.sample` cells per sample (a count test on one cell per sample has no power, whatever the dataset size).
 #' @param n.cells number of cells in the graph
 #' @param n.samples number of samples
 #' @param per.sample cells per sample (default 10)
 #' @param min.k lower bound (default 100)
 #' @param max.frac upper bound as a fraction of the cells (default 0.01)
+#' @param min.per.sample the cap's own floor in cells per sample (default 5)
 #' @return integer neighbourhood size
 #' @export
-defaultNeighbourhoodSize <- function(n.cells, n.samples, per.sample = 10, min.k = 100, max.frac = 0.01) {
-  k <- max(min.k, per.sample * n.samples)
-  as.integer(max(20, min(k, floor(max.frac * n.cells))))
+defaultNeighbourhoodSize <- function(n.cells, n.samples, per.sample = 10, min.k = 100, max.frac = 0.01, min.per.sample = 5) {
+  k.power <- max(min.k, per.sample * n.samples)
+  k.cap <- max(floor(max.frac * n.cells), min.per.sample * n.samples, 20)
+  as.integer(min(k.power, k.cap))
 }
 
 #' kNN neighbourhoods on the cell graph
 #'
-#' Every cell is the centre of its own neighbourhood of `k` cells (itself included): its graph neighbours ranked by
-#' edge weight, then, if those are fewer than `k - 1`, two-hop neighbours ranked by the number of shared neighbours.
-#' @param graph igraph cell graph (edge attribute `weight` used for ranking when present)
-#' @param k neighbourhood size including the cell itself
+#' Every cell is the centre of its own neighbourhood of at least `k` cells (itself included): all of its graph
+#' neighbours, then, if those are fewer than `k - 1`, two-hop neighbours ranked by the number of shared neighbours.
+#' The 1-hop neighbourhood is never cut down to the strongest edges: when expression differs between the compared
+#' arms, the strongest edges join cells of the same arm, and a unit built from them hides the composition change
+#' it is meant to test (on a dense simulated graph the own-arm share of such a unit was 0.60 against 0.50 for the
+#' full neighbourhood, and the planted changes vanished). Cells with more than `k - 1` neighbours therefore get a
+#' larger unit; `Matrix::rowSums()` of the result gives the sizes.
+#' @param graph igraph cell graph
+#' @param k minimum neighbourhood size including the cell itself
 #' @param cells cells to use (default: all vertices)
 #' @param chunk rows per block of the two-hop product (default 4000)
 #' @return a sparse `cells x cells` 0/1 matrix, row i marking the neighbourhood of cell i
@@ -32,19 +40,16 @@ defaultNeighbourhoodSize <- function(n.cells, n.samples, per.sample = 10, min.k 
 knnNeighbourhoodMatrix <- function(graph, k, cells = NULL, chunk = 4000L) {
   cells <- cells %||% igraph::V(graph)$name; n <- length(cells); k <- as.integer(k)
   if (k < 2) stop("k must be at least 2")
-  has.w <- !is.null(igraph::edge_attr(graph, "weight"))
-  W <- igraph::as_adjacency_matrix(graph, attr = if (has.w) "weight" else NULL, sparse = TRUE)[cells, cells, drop = FALSE]
-  A <- W; A@x[] <- 1; Matrix::diag(A) <- 1; A <- methods::as(A, "CsparseMatrix")
+  A <- igraph::as_adjacency_matrix(graph, sparse = TRUE)[cells, cells, drop = FALSE]; A@x[] <- 1; Matrix::diag(A) <- 1; A <- methods::as(A, "CsparseMatrix")
+  deg <- Matrix::rowSums(A) - 1
   out.i <- vector("list", 0); out.j <- vector("list", 0)
   for (s in seq(1, n, by = chunk)) {
     rows <- s:min(n, s + chunk - 1L)
-    W1 <- methods::as(W[rows, , drop = FALSE], "TsparseMatrix"); i1 <- W1@i + 1L; j1 <- W1@j + 1L; x1 <- W1@x
-    o <- order(i1, -x1); i1 <- i1[o]; j1 <- j1[o]; r1 <- stats::ave(seq_along(i1), i1, FUN = seq_along)
-    keep1 <- r1 <= k - 1L
-    sel.i <- c(seq_along(rows), i1[keep1]); sel.j <- c(rows, j1[keep1])
-    need <- pmax(0L, k - 1L - as.integer(table(factor(i1[keep1], levels = seq_along(rows)))))
+    A1 <- A[rows, , drop = FALSE]; T1 <- methods::as(A1, "TsparseMatrix")
+    sel.i <- T1@i + 1L; sel.j <- T1@j + 1L                                               # self and every graph neighbour
+    need <- pmax(0L, k - 1L - as.integer(deg[rows]))
     if (any(need > 0)) {
-      A1 <- A[rows, , drop = FALSE]; A2 <- A1 %*% A
+      A2 <- A1 %*% A
       M <- Matrix::drop0(A2 - A2 * A1); M <- methods::as(M, "TsparseMatrix")      # two-hop candidates scored by shared neighbours
       i2 <- M@i + 1L; j2 <- M@j + 1L; x2 <- M@x; o <- order(i2, -x2); i2 <- i2[o]; j2 <- j2[o]
       r2 <- stats::ave(seq_along(i2), i2, FUN = seq_along); keep2 <- r2 <= need[i2]

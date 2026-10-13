@@ -6,26 +6,31 @@ toyGraph <- function(cells, cg, per.cell = 8, seed = 5, cross = 1) {   # per.cel
   g <- igraph::simplify(igraph::graph_from_edgelist(el, directed = FALSE)); igraph::E(g)$weight <- runif(igraph::ecount(g)); g
 }
 
-test_that("default neighbourhood size: 10 cells per sample, at least 100, at most 1 % of the cells", {
+test_that("default neighbourhood size: 10 cells per sample, at least 100, capped at 1 % of the cells but never below 5 per sample", {
   expect_equal(defaultNeighbourhoodSize(35000, 18), 180L)
   expect_equal(defaultNeighbourhoodSize(90000, 8), 100L)
   expect_equal(defaultNeighbourhoodSize(49000, 40), 400L)
-  expect_equal(defaultNeighbourhoodSize(5000, 18), 50L)
+  expect_equal(defaultNeighbourhoodSize(5000, 18), 90L)        # the 1 % cap (50) is lifted to 5 per sample
+  expect_equal(defaultNeighbourhoodSize(2557, 20), 100L)       # the planted simulation: 20 samples, 2.6k cells
   expect_equal(defaultNeighbourhoodSize(1000, 4), 20L)
 })
 
-test_that("kNN neighbourhoods: self plus the strongest edges, then two-hop neighbours by shared neighbours", {
+test_that("kNN neighbourhoods: k is a minimum; every graph neighbour is kept, two-hop neighbours fill up by shared neighbours", {
   cao <- makeToyCacoa(n.per.group = c(A = 3, B = 3), cells.per.sample = 30, n.genes = 40)
   cg <- cao$cell.groups; cells <- names(cg); g <- toyGraph(cells, cg)
-  N5 <- knnNeighbourhoodMatrix(g, 5)
-  expect_equal(dim(N5), c(length(cells), length(cells))); expect_equal(unname(Matrix::rowSums(N5)), rep(5, length(cells)))
-  expect_true(all(Matrix::diag(N5) == 1))
-  W <- igraph::as_adjacency_matrix(g, attr = "weight", sparse = TRUE)[cells, cells]
-  for (c in cells[1:5]) { nb <- setdiff(names(which(N5[c, ] > 0)), c); w <- W[c, ]; top <- names(sort(w[w > 0], decreasing = TRUE))[1:4]; expect_setequal(nb, top) }
   deg <- igraph::degree(g)[cells]
-  N40 <- knnNeighbourhoodMatrix(g, 40)
-  expect_true(all(Matrix::rowSums(N40) <= 40)); expect_true(all(Matrix::rowSums(N40) >= pmin(40, deg + 1)))
+  N5 <- knnNeighbourhoodMatrix(g, 5, cells = cells)
+  expect_equal(dim(N5), c(length(cells), length(cells))); expect_equal(unname(Matrix::rowSums(N5)), unname(pmax(5, deg + 1)))   # no truncation of the 1-hop neighbourhood
+  expect_true(all(Matrix::diag(N5) == 1))
+  A <- igraph::as_adjacency_matrix(g, sparse = TRUE)[cells, cells]; A@x[] <- 1
+  expect_true(all(N5[A > 0] == 1))                                                                   # every graph neighbour is in
+  N40 <- knnNeighbourhoodMatrix(g, 40, cells = cells)
+  expect_equal(unname(Matrix::rowSums(N40)), unname(pmax(40, deg + 1)))
   d <- igraph::distances(g, v = cells[1], to = cells, weights = NA); expect_true(all(d[1, names(which(N40[cells[1], ] > 0))] <= 2))   # nothing beyond two hops
+  # the two-hop fill takes the candidates with the most shared neighbours
+  two <- setdiff(names(which(N40[cells[1], ] > 0)), c(cells[1], names(which(A[cells[1], ] > 0))))
+  shared <- as.numeric(A[cells[1], ] %*% A); names(shared) <- cells; cand <- setdiff(names(which(shared > 0)), c(cells[1], names(which(A[cells[1], ] > 0))))
+  expect_true(min(shared[two]) >= max(shared[setdiff(cand, two)]))
 })
 
 test_that("kernel effective size: Hutchinson estimate agrees with the exact kernel; beta solved for a target size", {
@@ -65,16 +70,17 @@ test_that("graph density with the kNN unit and the post-processing options run a
   cg <- cao$cell.groups; cells <- names(cg); spc <- cao$sample.per.cell; g <- toyGraph(cells, cg, per.cell = 6)
   w <- stats::setNames(rep(1, nlevels(spc)), levels(spc))
   d <- cacoa:::estimateCellDensityGraph(g, spc, w, smoothing = "knn", k = 12, verbose = FALSE)
-  expect_equal(d$smoothing, "knn"); expect_equal(d$k, 12); expect_equal(unname(rowSums(d$counts.mat)), rep(12, length(cells))); expect_equal(unname(d$unit.size), rep(12, length(cells)))
+  deg <- igraph::degree(g)
+  expect_equal(d$smoothing, "knn"); expect_equal(d$k, 12); expect_equal(unname(rowSums(d$counts.mat)), unname(pmax(12, deg[rownames(d$counts.mat)] + 1))); expect_equal(unname(d$unit.size), unname(pmax(12, deg[names(d$unit.size)] + 1)))
   expect_equal(unname(d$density.mat[cells[1], ]), unname(d$counts.mat[cells[1], ] / d$sample.sizes[colnames(d$density.mat)]))
   dh <- cacoa:::estimateCellDensityGraph(g, spc, w, smoothing = "heat", beta = 3, verbose = FALSE)
   expect_equal(dh$beta, 3); expect_equal(length(dh$unit.size), length(cells)); expect_true(all(dh$unit.size > 1))
   # class level on a Conos-like object holding the graph: default unit is kNN with the size rule, log transform, averaged post-processing
   cao$data.object <- structure(list(graph = g), class = "Conos")
-  expect_message(cao$estimateCellDensity(method = "graph", verbose = TRUE), "kNN neighbourhoods of 20 cells")
+  expect_message(cao$estimateCellDensity(method = "graph", verbose = TRUE), "kNN neighbourhoods of 40 cells")
   r0 <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 29, verbose = FALSE)$diff$permutation
   expect_equal(r0$post, "averaged"); expect_equal(r0$transform, "log"); expect_equal(r0$adjust.method, "perm-fdr")
-  expect_setequal(names(r0$pooled), cells); expect_true(all(is.finite(r0$pooled))); expect_true(all(r0$p.adj >= 0 & r0$p.adj <= 1)); expect_equal(unname(r0$unit.size), rep(20, length(cells)))
+  expect_setequal(names(r0$pooled), cells); expect_true(all(is.finite(r0$pooled))); expect_true(all(r0$p.adj >= 0 & r0$p.adj <= 1)); expect_equal(unname(r0$unit.size), unname(pmax(40, deg[names(r0$unit.size)] + 1)))
   r1 <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 29, post = "none", verbose = FALSE)$diff$permutation
   expect_equal(r1$post, "none"); expect_false(isTRUE(all.equal(r0$pooled, r1$pooled)))
   expect_equal(unname(r0$effect), unname(as.numeric(cacoa:::neighbourAveragingMatrix(g, names(r1$effect)) %*% r1$effect)), tolerance = 1e-10)   # averaged effect

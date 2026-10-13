@@ -298,6 +298,15 @@ permutation set depends on the metadata row order for a fixed seed.
   on the kernel and on SCC at k >= 200. TO DO in the package: a kNN count unit with a target size (100-200) for the
   density map; the averaged statistic as default post-processing, inheritance as an option; the effective-size
   diagnostic for the kernel; no observation weights.
+- (2026-10-13, done) The above is implemented: `estimateCellDensity(smoothing = "knn", k, target.size)` (kNN count unit
+  by default, `k` by `defaultNeighbourhoodSize()`; `k` is a minimum size, the 1-hop neighbourhood is never cut to the
+  strongest edges because those are own-arm edges when expression differs between arms), `estimateDiffCellDensity(post
+  = "averaged" | "inherit" | "none", transform = "auto")`, `estimateClusterFreeExpressionShifts(k, post)` with the same
+  defaults. Benchmarks behind the defaults: diffuse/gradient changes (kNN >= kernel everywhere, kernel finds nothing on
+  the PF bumps), planted expression shifts (kNN 200-400 > 100 > 1-hop; averaged calibrated, inheritance liberal on PF),
+  sample sweep (large types recovered at 4 samples per arm on MS/PF with the averaged statistic; rule k >= fixed 200).
+  Caveat: on a very dense graph (degree in the hundreds) the unit is the whole cluster and the averaged shift statistic
+  gives near per-type verdicts; neighbourhoods mixing types whose abundance changes show composition-driven shifts.
 - (2026-10-12) The unadjusted z-scores of both maps are now the signed tail z of the pooled p (`pooled` slot of the
   density results, `z.pooled` of the shifts; the permutation-standardized shift statistic is `z.std`); the adjusted
   z of q-values near 0 run to 37, so the default colour range of a z map is the 99.5 % quantile capped at 8.

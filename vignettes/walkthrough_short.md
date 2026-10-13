@@ -1,7 +1,7 @@
 Getting started with Cacoa
 ================
 Cacoa developers
-2026-10-12
+2026-10-13
 
 - <a href="#load-data" id="toc-load-data">Load data</a>
 - <a href="#check-the-design" id="toc-check-the-design">Check the
@@ -330,16 +330,25 @@ cao$plotCellLoadings(show.pvals = FALSE)
 
 ## Cluster-free analyses
 
-Cell density is compared between the arms in every neighbourhood of the
-cell graph with the same model. The per-cell statistics are strongly
-dependent and permutation p-values are floored at 1 / (permutations +
-1), so the maps are adjusted by a pooled permutation false-discovery
-rate (`adjust.method = "perm-fdr"`): the number of cells beyond a
-threshold under the permutations, pooled over all cells, against the
-observed number. Benjamini-Hochberg on per-cell p-values (`"bh"`) and
-the familywise max-statistic adjustment (`"max-t"`) remain available.
-The cluster-free expression shifts test the contrast in every cell’s
-neighbourhood with the same adjustment.
+Cell density is compared between the arms in every cell’s neighbourhood
+with the same model. The unit is a kNN neighbourhood of the cell graph:
+the cell, its graph neighbours and, up to a minimum size, their
+neighbours, sized by default to the larger of 100 cells and 10 cells per
+sample (`k`). Each sample’s share of the neighbourhood’s cells is tested
+on the log scale, and the statistic is then averaged over each cell and
+its graph neighbours under every permutation alike
+(`post = "averaged"`), an exact test of a slightly larger unit that
+borrows strength from the neighbours without inflating the error. The
+per-cell statistics are strongly dependent and permutation p-values are
+floored at 1 / (permutations + 1), so the maps are adjusted by a pooled
+permutation false-discovery rate (`adjust.method = "perm-fdr"`): the
+number of cells beyond a threshold under the permutations, pooled over
+all cells, against the observed number. The heat-kernel density
+(`smoothing = "heat"`, width in cells with `target.size`),
+Benjamini-Hochberg on per-cell p-values (`"bh"`) and the familywise
+max-statistic adjustment (`"max-t"`) remain available. The cluster-free
+expression shifts test the contrast in the same kNN neighbourhoods with
+the same post-processing and adjustment.
 
 ``` r
 cao$estimateCellDensity(method = "graph")
@@ -350,10 +359,10 @@ cowplot::plot_grid(cao$plotDiffCellDensity(what = "effect", contours = "L2/3"), 
 
 ![](walkthrough_short_files/figure-gfm/density-1.png)<!-- -->
 
-Left to right: the effect (the density difference per cell), the
-unadjusted z-scores (the signed tail z of the per-cell p-values of the
-pooled permutation null, calibrated and not floored at 1 /
-(permutations + 1)) and the adjusted z-scores (the tail z of the FDR
+Left to right: the effect (the log2 fold change of the density per
+cell), the unadjusted z-scores (the signed tail z of the per-cell
+p-values of the pooled permutation null, calibrated and not floored at 1
+/ (permutations + 1)) and the adjusted z-scores (the tail z of the FDR
 q-values). The colour range of a z map is the 99.5 % quantile of the
 absolute z-scores, so a few extreme cells do not wash out the map. The
 density map agrees with the loadings: `L2/3` and `L5/6-CC` are depleted

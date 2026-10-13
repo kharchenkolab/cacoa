@@ -4395,7 +4395,7 @@ median smoothing over the graph.
   adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
   p.source = c("permutation", "pooled", "z", "parametric"),
   k = NULL,
-  post = c("none", "averaged", "inherit"),
+  post = c("averaged", "inherit", "none"),
   verbose = NULL,
   n.cores = NULL,
   robust = NULL,
@@ -4452,13 +4452,14 @@ median smoothing over the graph.
 floor, calibrated with enough permutations), \code{"z"} (normal tail of the permutation-standardized z: no floor,
 anti-conservative) or \code{"parametric"} (the F of the neighbourhood shift; not calibrated)}
 
-\item{\code{k}}{neighbourhood unit size: NULL (default) tests each cell with its 1-hop graph neighbours; an integer
-uses kNN neighbourhoods of \code{k} cells (\code{\link[=knnNeighbourhoodMatrix]{knnNeighbourhoodMatrix()}}; see \code{\link[=defaultNeighbourhoodSize]{defaultNeighbourhoodSize()}} for the
-rule used by the density map)}
+\item{\code{k}}{neighbourhood unit: NULL (default) uses kNN neighbourhoods sized by \code{\link[=defaultNeighbourhoodSize]{defaultNeighbourhoodSize()}}
+(the larger of 100 and 10 cells per sample, capped at 1 \% of the cells; the unit with the best power at
+matched error in the benchmark, \code{misc/benchmark/README.md}); an integer sets the size
+(\code{\link[=knnNeighbourhoodMatrix]{knnNeighbourhoodMatrix()}}); \code{"1-hop"} tests each cell with its graph neighbours only (the former unit)}
 
-\item{\code{post}}{post-processing on the cell graph: \code{"none"} (default), \code{"averaged"} (neighbour-averaged statistic,
-exact; needs \code{adjust.method = "perm-fdr"}) or \code{"inherit"} (smallest q among the cell and its neighbours);
-see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
+\item{\code{post}}{post-processing on the cell graph: \code{"averaged"} (default; the shift statistic averaged over each
+cell and its graph neighbours under every permutation, exact and calibrated; needs \code{adjust.method = "perm-fdr"}), \code{"inherit"} (smallest q among the cell and its neighbours; more reach, realized error at the
+nominal threshold above the nominal rate) or \code{"none"}; see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
 
 \item{\code{verbose}}{defaults from options (permutations capped at 499)}
 

@@ -3900,12 +3900,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param smooth see [clusterFreeExpressionShifts()]
     #' @param wins see [clusterFreeExpressionShifts()]
     #' @param min.edge.weight minimum graph edge weight between cells of different samples (default 0)
-    #' @param k neighbourhood unit size: NULL (default) tests each cell with its 1-hop graph neighbours; an integer
-    #'   uses kNN neighbourhoods of `k` cells ([knnNeighbourhoodMatrix()]; see [defaultNeighbourhoodSize()] for the
-    #'   rule used by the density map)
-    #' @param post post-processing on the cell graph: `"none"` (default), `"averaged"` (neighbour-averaged statistic,
-    #'   exact; needs `adjust.method = "perm-fdr"`) or `"inherit"` (smallest q among the cell and its neighbours);
-    #'   see [clusterFreeExpressionShifts()]
+    #' @param k neighbourhood unit: NULL (default) uses kNN neighbourhoods sized by [defaultNeighbourhoodSize()]
+    #'   (the larger of 100 and 10 cells per sample, capped at 1 % of the cells; the unit with the best power at
+    #'   matched error in the benchmark, `misc/benchmark/README.md`); an integer sets the size
+    #'   ([knnNeighbourhoodMatrix()]); `"1-hop"` tests each cell with its graph neighbours only (the former unit)
+    #' @param post post-processing on the cell graph: `"averaged"` (default; the shift statistic averaged over each
+    #'   cell and its graph neighbours under every permutation, exact and calibrated; needs `adjust.method =
+    #'   "perm-fdr"`), `"inherit"` (smallest q among the cell and its neighbours; more reach, realized error at the
+    #'   nominal threshold above the nominal rate) or `"none"`; see [clusterFreeExpressionShifts()]
     #' @param ... deprecated arguments of the previous implementation are accepted and ignored with a message
     #' @return list (see [clusterFreeExpressionShifts()]), also stored in `cao$test.results[[name]]`
     #' @param adjust.method multiplicity adjustment across cells: `"perm-fdr"` (default; pooled permutation FDR, see
@@ -3920,9 +3922,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                  min.n.obs.per.samp=3, min.samp.per.level=2, permutation=NULL, n.permutations=NULL, seed=NULL,
                                                  dist=c("cor", "cosine", "js"), adjust=TRUE, smooth=TRUE, wins=0.025, genes=NULL, min.expr.frac=0.0,
                                                  min.edge.weight=0.0, adjust.method=c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"), p.source=c("permutation", "pooled", "z", "parametric"),
-                                                 k=NULL, post=c("none", "averaged", "inherit"), verbose=NULL, n.cores=NULL, robust=NULL, ...) {
+                                                 k=NULL, post=c("averaged", "inherit", "none"), verbose=NULL, n.cores=NULL, robust=NULL, ...) {
       dist <- match.arg(dist); robust <- private$opt("robust", robust); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source); post <- match.arg(post)
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
+      if (post == "averaged" && adjust.method != "perm-fdr") { if (verbose) message("post = 'averaged' needs adjust.method = 'perm-fdr': post = 'none'"); post <- "none" }
       legacy <- private$legacyShiftArgs(list(...), verbose)
       permutation <- private$opt("permutation", legacy$permutation %||% permutation)
       n.permutations <- n.permutations %||% min(private$opt("n.permutations"), 499)
@@ -3930,6 +3933,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       model <- private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose,
                                     what = "estimateClusterFreeExpressionShifts()")
       if (is.null(genes)) genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, min.expr.frac=min.expr.frac)
+      if (identical(k, "1-hop")) k <- NULL else if (is.null(k)) k <- defaultNeighbourhoodSize(length(self$sample.per.cell), nlevels(droplevels(as.factor(self$sample.per.cell))))
+      if (verbose && !is.null(k)) message(sprintf("kNN neighbourhoods of at least %d cells (%.1f per sample)", k, k / nlevels(droplevels(as.factor(self$sample.per.cell)))))
       inp <- private$getClusterFreeDEInput(genes, raw=TRUE, min.edge.weight=min.edge.weight, k=k)
       shifts <- clusterFreeExpressionShifts(cm = Matrix::t(inp$cm), sample.per.cell = self$sample.per.cell[rownames(inp$cm)], nns.per.cell = inp$nns.per.cell, nns.graph = inp$nns.graph, post = post,
                                             design = model, meta = model$meta, dist = dist, min.n.obs.per.samp = min.n.obs.per.samp,

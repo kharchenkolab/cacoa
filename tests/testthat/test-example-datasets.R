@@ -183,6 +183,11 @@ test_that("planted density simulation: the BH adjustment calls the changed cell 
   expect_equal(s$settings$adjust.method, "perm-fdr"); expect_false(is.null(s$group.test))
   ss <- cao$estimateClusterFreeSummary("cluster.free.expr.shifts"); expect_true(all(ss$significant[ss$group %in% c("L2/3", "IN-PV", "IN-SST")]))
   fs <- tapply(s$z.adj[names(ct)] > qnorm(0.95), ct, mean, na.rm = TRUE)
-  expect_gt(fs[["L2/3"]], 0.5); expect_gt(fs[["IN-PV"]], 0.5); expect_lt(fs[["Neu-NRGN"]], 0.2)
+  # on this graph every cell has 340+ neighbours, so the kNN unit is the whole cluster and the averaged statistic gives a
+  # near per-type verdict; Neu-NRGN (nothing planted, but a fifth of its unit cells are types whose abundance changes
+  # between the arms) is the least called type by far; without the averaging it is below 0.2
+  expect_gt(fs[["L2/3"]], 0.5); expect_gt(fs[["IN-PV"]], 0.5); expect_equal(names(which.min(fs)), "Neu-NRGN"); expect_lt(fs[["Neu-NRGN"]], 0.5)
+  s0 <- cao$estimateClusterFreeExpressionShifts(n.top.genes = 300, n.permutations = 99, post = "none", verbose = FALSE)
+  expect_lt(mean(s0$z.adj[names(ct)[ct == "Neu-NRGN"]] > qnorm(0.95), na.rm = TRUE), 0.2)
   expect_true(all(s$z.adj >= 0, na.rm = TRUE))
 })

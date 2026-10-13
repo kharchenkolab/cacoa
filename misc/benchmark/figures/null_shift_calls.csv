@@ -1,0 +1,73 @@
+"dataset","method","alpha","mean.frac","max.frac","relabelings.with.calls","n"
+"ms","1-hop | averaged",0.05,0,0,0,15
+"ms","1-hop | averaged",0.1,0,0,0,15
+"ms","1-hop | inherit",0.05,0,0,0,15
+"ms","1-hop | inherit",0.1,0,0,0,15
+"ms","1-hop | none",0.05,0,0,0,15
+"ms","1-hop | none",0.1,0,0,0,15
+"ms","knn k=100 | averaged",0.05,0,0,0,15
+"ms","knn k=100 | averaged",0.1,0,0,0,15
+"ms","knn k=100 | inherit",0.05,0,0,0,15
+"ms","knn k=100 | inherit",0.1,0,0,0,15
+"ms","knn k=100 | none",0.05,0,0,0,15
+"ms","knn k=100 | none",0.1,0,0,0,15
+"ms","knn k=200 | averaged",0.05,0,0,0,15
+"ms","knn k=200 | averaged",0.1,0,0,0,15
+"ms","knn k=200 | inherit",0.05,0,0,0,15
+"ms","knn k=200 | inherit",0.1,0,0,0,15
+"ms","knn k=200 | none",0.05,0,0,0,15
+"ms","knn k=200 | none",0.1,0,0,0,15
+"ms","knn k=400 | averaged",0.05,0,0,0,15
+"ms","knn k=400 | averaged",0.1,0,0,0,15
+"ms","knn k=400 | inherit",0.05,0,0,0,15
+"ms","knn k=400 | inherit",0.1,0,0,0,15
+"ms","knn k=400 | none",0.05,0,0,0,15
+"ms","knn k=400 | none",0.1,0,0,0,15
+"pf","1-hop | averaged",0.05,0,0,0,15
+"pf","1-hop | averaged",0.1,0,0,0,15
+"pf","1-hop | inherit",0.05,0,0,0,15
+"pf","1-hop | inherit",0.1,0,0,0,15
+"pf","1-hop | none",0.05,0,0,0,15
+"pf","1-hop | none",0.1,0,0,0,15
+"pf","knn k=100 | averaged",0.05,0,0,0,15
+"pf","knn k=100 | averaged",0.1,0,0,0,15
+"pf","knn k=100 | inherit",0.05,0,0,0,15
+"pf","knn k=100 | inherit",0.1,2.54059345274123e-05,0.000381089017911184,0.0666666666666667,15
+"pf","knn k=100 | none",0.05,0,0,0,15
+"pf","knn k=100 | none",0.1,7.91624611609175e-07,1.18743691741376e-05,0.0666666666666667,15
+"pf","knn k=200 | averaged",0.05,0,0,0,15
+"pf","knn k=200 | averaged",0.1,0,0,0,15
+"pf","knn k=200 | inherit",0.05,0,0,0,15
+"pf","knn k=200 | inherit",0.1,0,0,0,15
+"pf","knn k=200 | none",0.05,0,0,0,15
+"pf","knn k=200 | none",0.1,0,0,0,15
+"pf","knn k=400 | averaged",0.05,0,0,0,15
+"pf","knn k=400 | averaged",0.1,0,0,0,15
+"pf","knn k=400 | inherit",0.05,1.49429924836748e-05,0.000224144887255122,0.0666666666666667,15
+"pf","knn k=400 | inherit",0.1,1.49429924836748e-05,0.000224144887255122,0.0666666666666667,15
+"pf","knn k=400 | none",0.05,1.56794493377393e-06,2.35191740066089e-05,0.0666666666666667,15
+"pf","knn k=400 | none",0.1,1.56794493377393e-06,2.35191740066089e-05,0.0666666666666667,15
+"scc","1-hop | averaged",0.05,0,0,0,15
+"scc","1-hop | averaged",0.1,0,0,0,15
+"scc","1-hop | inherit",0.05,0,0,0,15
+"scc","1-hop | inherit",0.1,0,0,0,15
+"scc","1-hop | none",0.05,0,0,0,15
+"scc","1-hop | none",0.1,0,0,0,15
+"scc","knn k=100 | averaged",0.05,0,0,0,15
+"scc","knn k=100 | averaged",0.1,0,0,0,15
+"scc","knn k=100 | inherit",0.05,0,0,0,15
+"scc","knn k=100 | inherit",0.1,0,0,0,15
+"scc","knn k=100 | none",0.05,0,0,0,15
+"scc","knn k=100 | none",0.1,0,0,0,15
+"scc","knn k=200 | averaged",0.05,0,0,0,15
+"scc","knn k=200 | averaged",0.1,0,0,0,15
+"scc","knn k=200 | inherit",0.05,0,0,0,15
+"scc","knn k=200 | inherit",0.1,0,0,0,15
+"scc","knn k=200 | none",0.05,0,0,0,15
+"scc","knn k=200 | none",0.1,0,0,0,15
+"scc","knn k=400 | averaged",0.05,0,0,0,15
+"scc","knn k=400 | averaged",0.1,0,0,0,15
+"scc","knn k=400 | inherit",0.05,0,0,0,15
+"scc","knn k=400 | inherit",0.1,0,0,0,15
+"scc","knn k=400 | none",0.05,0,0,0,15
+"scc","knn k=400 | none",0.1,0,0,0,15

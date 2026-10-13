@@ -8,7 +8,8 @@ neighbourhoodDiagnostics(
   nn,
   sample.per.cell,
   cell.groups = NULL,
-  min.cells = 3
+  min.cells = 3,
+  k = NULL
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ neighbourhoodDiagnostics(
 \item{cell.groups}{optional factor of cell groups named by cell}
 
 \item{min.cells}{cells per sample below which a sample is dropped from a unit's test (default 3)}
+
+\item{k}{the requested minimum size (reported; default: the smallest unit)}
 }
 \value{
 list: \code{size} (quantiles of the unit size), \code{per.sample} (data.frame: sample, median cells per unit,

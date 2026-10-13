@@ -350,6 +350,16 @@ max-statistic adjustment (`"max-t"`) remain available. The cluster-free
 expression shifts test the contrast in the same kNN neighbourhoods with
 the same post-processing and adjustment.
 
+Before the density test, the neighbourhood unit is checked: how many
+cells each sample contributes to a unit, how large the units are, and
+how pure they are against the annotation.
+
+``` r
+nb <- cao$checkNeighbourhoods(verbose = FALSE); cat(nb$text, "\n")
+```
+
+    kNN units of 100 cells (median size 345): a sample contributes 17 cells to a unit (median), 1% of the unit-sample pairs have fewer than 3 cells; median purity 0.85 against the annotation (lowest: Microglia, AST-FB, L5/6-CC) 
+
 ``` r
 cao$estimateCellDensity(method = "graph")
 cao$estimateDiffCellDensity(type = "permutation")

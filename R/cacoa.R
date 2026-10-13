@@ -2651,7 +2651,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' }
     checkNeighbourhoods = function(k = NULL, min.cells = 3, verbose = self$verbose) {
       k <- k %||% defaultNeighbourhoodSize(length(self$sample.per.cell), length(unique(self$sample.per.cell)))
-      d <- neighbourhoodDiagnostics(private$knnUnits(k, self$n.cores), self$sample.per.cell, self$cell.groups, min.cells = min.cells)
+      d <- neighbourhoodDiagnostics(private$knnUnits(k, self$n.cores), self$sample.per.cell, self$cell.groups, min.cells = min.cells, k = k)
       if (verbose) message(d$text)
       invisible(d)
     },

@@ -210,5 +210,5 @@ test_that("neighbourhood diagnostics report sizes, cells per sample and purity",
   expect_equal(nrow(d$per.sample), nlevels(spc)); expect_equal(nrow(d$purity), nlevels(cg)); expect_equal(d$summary$k, 24)
   expect_true(all(d$purity$median.purity > 0.5)); expect_true(all(d$per.sample$median.cells >= 1)); expect_match(d$text, "median purity")
   cao$data.object <- structure(list(graph = g), class = "Conos")
-  expect_message(dd <- cao$checkNeighbourhoods(verbose = TRUE), "kNN units of at least 40 cells"); expect_equal(dd$summary$k, 40)
+  expect_message(dd <- cao$checkNeighbourhoods(verbose = TRUE), "kNN units of 40 cells"); expect_equal(dd$summary$k, 40)
 })

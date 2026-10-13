@@ -221,13 +221,14 @@ averageVectorOverLists <- function(x, nn) {
 #' @param sample.per.cell factor of samples named by cell
 #' @param cell.groups optional factor of cell groups named by cell
 #' @param min.cells cells per sample below which a sample is dropped from a unit's test (default 3)
+#' @param k the requested minimum size (reported; default: the smallest unit)
 #' @return list: `size` (quantiles of the unit size), `per.sample` (data.frame: sample, median cells per unit,
 #'   fraction of units with fewer than `min.cells` of the sample's cells), `purity` (data.frame per cell group:
 #'   number of cells, median purity, fraction of cells with purity below 0.5; `NULL` without groups), `summary`
 #'   (one row: k, median size, median cells per sample per unit, fraction of unit-sample pairs below `min.cells`,
 #'   median purity) and `text` (one sentence)
 #' @export
-neighbourhoodDiagnostics <- function(nn, sample.per.cell, cell.groups = NULL, min.cells = 3) {
+neighbourhoodDiagnostics <- function(nn, sample.per.cell, cell.groups = NULL, min.cells = 3, k = NULL) {
   cells <- names(nn); spc <- as.character(sample.per.cell[cells]); samples <- sort(unique(spc))
   cnt <- neighbourhoodCounts(nn, sample.per.cell, samples = samples)
   size <- stats::quantile(lengths(nn), c(0.05, 0.25, 0.5, 0.75, 0.95))
@@ -238,8 +239,8 @@ neighbourhoodDiagnostics <- function(nn, sample.per.cell, cell.groups = NULL, mi
     purity <- do.call(rbind, lapply(split(seq_along(cells), cg), function(idx) data.frame(n.cells = length(idx), median.purity = stats::median(pur[idx]), frac.below.0.5 = mean(pur[idx] < 0.5))))
     purity <- data.frame(group = rownames(purity), purity, row.names = NULL, stringsAsFactors = FALSE); med.purity <- stats::median(pur)
   }
-  summary <- data.frame(k = min(lengths(nn)), median.size = unname(size["50%"]), median.cells.per.sample = stats::median(cnt), frac.below.min = mean(cnt < min.cells), median.purity = med.purity)
-  text <- sprintf("kNN units of at least %d cells (median %d): a sample contributes %d cells to a unit (median), %.0f%% of the unit-sample pairs have fewer than %d cells%s",
+  summary <- data.frame(k = as.integer(k %||% min(lengths(nn))), median.size = unname(size["50%"]), median.cells.per.sample = stats::median(cnt), frac.below.min = mean(cnt < min.cells), median.purity = med.purity)
+  text <- sprintf("kNN units of %d cells (median size %d): a sample contributes %d cells to a unit (median), %.0f%% of the unit-sample pairs have fewer than %d cells%s",
                   summary$k, as.integer(summary$median.size), as.integer(summary$median.cells.per.sample), 100 * summary$frac.below.min, min.cells,
                   if (is.na(med.purity)) "" else sprintf("; median purity %.2f against the annotation (lowest: %s)", med.purity, paste(utils::head(purity$group[order(purity$median.purity)], 3), collapse = ", ")))
   list(size = size, per.sample = per.sample, purity = purity, summary = summary, text = text)

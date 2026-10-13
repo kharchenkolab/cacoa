@@ -202,6 +202,35 @@ test_that("shift kernel: the vectorized complete-sample loop equals the referenc
   expect_equal(unname(sa$pooled), unname(sa$z.pooled)); expect_equal(unname(sa$adj), unname(sa$z.adj)); expect_equal(unname(sa$effect), unname(sa$shifts))   # the density map's names
 })
 
+test_that("exchangeability: the permutation path reproduces the observed statistic under the identity relabeling; the histogram pooled p equals the exact rank", {
+  cao <- makeToyCacoa(n.per.group = c(A = 4, B = 4), cells.per.sample = 30, n.genes = 60, shift = 1.5)
+  cg <- cao$cell.groups; cells <- names(cg); spc <- cao$sample.per.cell; g <- toyGraph(cells, cg, per.cell = 6)
+  nn1 <- cacoa:::graphNeighbourLists0(g, cells); nnk <- knnNeighbourhoodLists(g, 20, cells = cells)
+  cm.t <- Matrix::t(cao$data.object)
+  # force the identity into the first column of every drawn permutation matrix
+  orig <- cacoa:::drawPermutations
+  assignInNamespace("drawPermutations", function(plan, B = plan$n.permutations) { P <- orig(plan, B); P[, 1] <- seq_len(nrow(P)); P }, "cacoa")
+  on.exit(assignInNamespace("drawPermutations", orig, "cacoa"), add = TRUE)
+  exact.p <- function(obs, P) { ok <- is.finite(obs); pool <- sort(P[, ok][is.finite(P[, ok])]); p <- rep(NA_real_, length(obs))
+    p[ok] <- 1 - findInterval(obs[ok] - 1e-9 * pmax(1, abs(obs[ok])), pool) / length(pool); p }
+  for (post in c("none", "averaged")) {
+    s <- clusterFreeExpressionShifts(cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 99, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, post = post, pooled.statistic = "standardized", return.perm = TRUE)
+    ok <- is.finite(s$stat); expect_true(sum(ok) > 50)
+    expect_equal(unname(s$stats.perm[1, ok]), unname(s$stat[ok]), tolerance = 1e-5)                     # float32 accumulation under averaging
+    mu <- colMeans(s$stats.perm, na.rm = TRUE); sdv <- apply(s$stats.perm, 2, stats::sd, na.rm = TRUE); Z <- sweep(sweep(s$stats.perm, 2, mu), 2, sdv, "/"); z.obs <- (s$stat - mu) / sdv
+    pe <- exact.p(z.obs, Z); i <- ok & pe > 0.01; expect_true(sum(i) > 20)                               # the binned null (grid 0.02 in z) is compared where the bins hold enough values
+    expect_true(max(abs(log10(s$p.pooled[i] / pe[i]))) < 0.1); expect_true(all(s$p.pooled[ok] >= pe[ok] - 0.02))   # the histogram p is never below the exact rank by more than a bin
+  }
+  w <- stats::setNames(rep(1, nlevels(spc)), levels(spc)); d <- cacoa:::estimateCellDensityGraph(g, spc, w, smoothing = "knn", k = 15, verbose = FALSE)
+  Y <- log2(t((t(d$density.mat) * d$sample.sizes[colnames(d$density.mat)] + 0.5) / (d$sample.sizes[colnames(d$density.mat)] + 1)) * 1e4); Y[, 1] <- Y[, 1] + stats::rnorm(ncol(Y), 0, 0.3)
+  P <- cacoa:::drawPermutations(cacoa:::permutationPlan(cao$model, cao$sample.meta, rownames(cao$sample.meta), scheme = "block", n.permutations = 99), 99); expect_true(all(P[, 1] == seq_len(nrow(P))))
+  for (pm in c("block", "freedman-lane")) for (avg in c(FALSE, TRUE)) {
+    r <- cacoa:::diffCellDensityPermutations(Y, cao$model, perm.method = pm, n.permutations = 99, n.cores = 2, seed = 3, pooled = TRUE, average = avg, nn.graph = if (avg) nn1 else NULL, return.sampled.stats = TRUE, pooled.statistic = "raw", P = P)
+    ok <- is.finite(r$stat.obs); expect_equal(unname(r$stats.perm[1, ok]), unname(r$stat.obs[ok]), tolerance = 1e-5)
+    pe <- exact.p(abs(r$stat.obs), abs(r$stats.perm)); i <- ok & pe > 0.01; expect_true(max(abs(log10(r$p.pooled[i] / pe[i]))) < 0.1); expect_true(all(r$p.pooled[ok] >= pe[ok] - 0.02))   # grid 0.01 in |t|
+  }
+})
+
 test_that("neighbourhood diagnostics report sizes, cells per sample and purity", {
   cao <- makeToyCacoa(n.per.group = c(A = 4, B = 4), cells.per.sample = 30, n.genes = 40, n.cell.types = 3)
   cg <- cao$cell.groups; cells <- names(cg); spc <- cao$sample.per.cell; g <- toyGraph(cells, cg, per.cell = 6)

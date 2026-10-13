@@ -52,6 +52,13 @@ pairVectorToMatrix <- function(y, pairs, samples) {
 #'   distribution of the group means is stored as `attr(group.test, "perm.means")`
 #' @param return.perm return the permutations x cells matrix of the permuted statistics as `stats.perm` (default
 #'   FALSE; `n.permutations` x cells doubles, NaN where a cell is not tested under a relabeling)
+#' @param post post-processing on the cell graph: `"none"` (default), `"averaged"` (the shift statistic averaged over
+#'   each cell and its graph neighbours, under every permutation alike, before the pooled FDR: an exact test of the
+#'   one-hop-larger unit with calibrated q-values, [averageOverNeighbours()]; needs `adjust.method = "perm-fdr"` and
+#'   keeps the permutation matrix in memory) or `"inherit"` (every cell takes the smallest q among itself and its
+#'   graph neighbours after the test, [inheritNeighbourQ()])
+#' @param nns.graph the 1-hop graph neighbourhoods used by `post` (list of 0-based indices per cell, the cell
+#'   itself included; default: `nns.per.cell`, which is the 1-hop graph unless a kNN unit was passed)
 #' @details Label permutations (the block scheme) are applied as global relabelings of the samples: in a neighbourhood
 #'   where some samples are absent, a present sample takes the design row of the sample it is mapped to, so that one
 #'   permutation means the same relabeling in every cell and statistics pooled over cells (the group test, the
@@ -75,8 +82,11 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
                                         adjust = TRUE, smooth = TRUE, wins = 0.025, log.vectors = TRUE, n.cores = 1, verbose = FALSE,
                                         robust = c("none", "huber", "winsor"), robust.k = 1.345,
                                         adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"), p.source = c("permutation", "pooled", "z", "parametric"),
-                                        z.grid = seq(-6, 25, by = 0.02), groups = NULL, return.perm = FALSE) {
-  dist <- match.arg(dist); robust <- match.arg(robust); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source)
+                                        z.grid = seq(-6, 25, by = 0.02), groups = NULL, return.perm = FALSE, post = c("none", "averaged", "inherit"), nns.graph = NULL) {
+  dist <- match.arg(dist); robust <- match.arg(robust); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source); post <- match.arg(post)
+  if (post == "averaged" && adjust.method != "perm-fdr") { if (verbose) message("post = 'averaged' needs adjust.method = 'perm-fdr': post = 'none'"); post <- "none" }
+  if (post == "averaged" && !adjust) post <- "none"
+  keep.perm <- return.perm || post == "averaged"
   block.vars <- block.vars %||% design$block.vars   # the model's permutation strata unless overridden
   if (identical(design$contrast_spec$type, "term")) stop("cluster-free shifts need a contrast test (two groups or a numeric step)")
   samples <- intersect(rownames(design$F), levels(droplevels(factor(sample.per.cell))))
@@ -111,7 +121,7 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
   kr <- cluster_free_shift_stream(cm, as.integer(spc), nn.list, FALSE, as.integer(min.n.obs.per.samp), dist, log.vectors,
                                   pairs - 1L, n, des$F, cF, as.integer(level.code), as.integer(min.samp.per.level), as.integer(gplan$strata), as.integer(gplan$in.set),
                                   P.global, gplan$scheme == "freedman-lane", TRUE, as.integer(n.cores), c(none = 0L, huber = 1L, winsor = 2L)[[robust]], robust.k,
-                                  as.numeric(z.grid), as.integer(grp.code), return.perm)
+                                  as.numeric(z.grid), as.integer(grp.code), keep.perm)
   Fobs <- as.numeric(kr$stat); pval <- as.numeric(kr$p); shifts <- as.numeric(kr$shift); n.samp <- as.integer(kr$n); n.perm <- as.integer(kr$n_perm); z <- as.numeric(kr$z)
   mx <- as.numeric(kr$max); mn <- as.numeric(kr$min)
   valid <- which(is.finite(z))
@@ -126,6 +136,22 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
   # the permutation-standardized statistic (observed minus permutation mean over permutation sd) is kept as z.std
   z.std <- z
   z <- stats::qnorm(pmin(pmax(p.pooled, 1e-300), 1 - 1e-16), lower.tail = FALSE); z[!is.finite(p.pooled)] <- NA_real_; names(z) <- cell.names
+  stats.perm <- NULL
+  if (keep.perm) { stats.perm <- kr$perm; colnames(stats.perm) <- cell.names }
+  nn.graph <- if (is.null(nns.graph)) nn.list else { g <- lapply(nns.graph[cell.names], as.integer); if (!is.null(nn.map)) g <- lapply(g, function(v) { w <- nn.map[v + 1L]; w[!is.na(w)] }); g }
+  if (post == "averaged") {
+    # the one-hop-larger unit: the shift statistic averaged over the cell and its graph neighbours, observed and permuted
+    An <- neighbourAveragingList(nn.graph, cell.names)
+    s0 <- Fobs; s0[!is.finite(s0)] <- 0; P0 <- stats.perm; P0[!is.finite(P0)] <- 0
+    Fobs <- stats::setNames(as.numeric(An %*% s0), cell.names); stats.perm <- as.matrix(Matrix::t(An %*% Matrix::t(P0))); colnames(stats.perm) <- cell.names
+    tested <- is.finite(z); Fobs[!tested] <- NA_real_
+    e0 <- shifts; e0[!is.finite(e0)] <- 0; shifts <- stats::setNames(as.numeric(An %*% e0), cell.names); shifts[!tested] <- NA_real_
+    pval <- (colSums(stats.perm >= rep(Fobs, each = nrow(stats.perm)), na.rm = TRUE) + 1) / (nrow(stats.perm) + 1); pval[!tested] <- NA_real_; names(pval) <- cell.names
+    mu <- colMeans(stats.perm); sdv <- apply(stats.perm, 2, stats::sd); z.std.av <- (Fobs - mu) / sdv; z.std.av[!tested | !is.finite(z.std.av)] <- NA_real_
+    p.pooled <- pooledPermutationP(Fobs, stats.perm, alternative = "greater"); p.pooled[!tested] <- NA_real_; names(p.pooled) <- cell.names
+    z <- stats::qnorm(pmin(pmax(p.pooled, 1e-300), 1 - 1e-16), lower.tail = FALSE); z[!is.finite(p.pooled)] <- NA_real_; names(z) <- cell.names
+    p.param[] <- NA_real_
+  }
   if (adjust && length(valid)) {
     if (adjust.method == "max-t") {
       z0 <- z.std; z0[!is.finite(z0)] <- 0
@@ -133,7 +159,7 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
                                       nn_ids = nn.list, non_zero_ids = as.integer(valid - 1L))
       z.adj[!is.finite(z.std)] <- NA_real_
     } else if (adjust.method == "perm-fdr") {
-      ad <- adjustCellScores(z.std, NULL, method = "perm-fdr", alternative = "greater", perm = perm.hist)
+      ad <- if (post == "averaged") adjustCellScores(Fobs, NULL, method = "perm-fdr", alternative = "greater", perm = stats.perm) else adjustCellScores(z.std, NULL, method = "perm-fdr", alternative = "greater", perm = perm.hist)
       z.adj <- ad$z.adj; p.adj <- ad$p.adj; names(p.adj) <- cell.names; fdr.curve <- ad$fdr.curve
     } else {
       p.in <- switch(p.source, parametric = p.param, permutation = pval, pooled = p.pooled,
@@ -144,6 +170,11 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
       if (!is.null(ad$index)) index.cells <- cell.names[ad$index]
     }
     names(z.adj) <- cell.names
+    if (post == "inherit" && !is.null(p.adj)) {
+      ih <- inheritNeighbourQList(p.adj, shifts, nn.graph, cell.names)
+      p.adj.cell <- p.adj; p.adj <- ih$q
+      z.adj <- pmax(stats::qnorm(pmin(pmax(p.adj, 1e-300), 1 - 1e-16), lower.tail = FALSE), 0); z.adj[!is.finite(p.adj)] <- NA_real_; names(z.adj) <- cell.names
+    }
   }
   group.test <- NULL
   if (length(grp.levels)) {
@@ -161,10 +192,11 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
     shifts.smoothed[!is.finite(shifts)] <- NA_real_
     names(shifts.smoothed) <- cell.names
   }
-  stats.perm <- NULL
-  if (return.perm) { stats.perm <- kr$perm; colnames(stats.perm) <- cell.names }
+  if (!return.perm) stats.perm <- NULL
+  if (post == "averaged") z.std <- z.std.av
+  out.post <- list(post = post); if (post == "inherit" && exists("p.adj.cell", inherits = FALSE)) out.post$p.adj.cell <- p.adj.cell
   list(stat = Fobs, p.value = pval, p.param = p.param, p.pooled = p.pooled, z.pooled = z, z.std = z.std, z.adj = z.adj, p.adj = p.adj, index.cells = index.cells,
-       fdr.curve = fdr.curve, perm.hist = perm.hist, group.test = group.test, stats.perm = stats.perm,
+       fdr.curve = fdr.curve, perm.hist = perm.hist, group.test = group.test, stats.perm = stats.perm, post = post, p.adj.cell = out.post$p.adj.cell,
        shifts = shifts, shifts.smoothed = shifts.smoothed, n.samples = n.samp, n.perm = n.perm,
        settings = list(dist = dist, permutation = gplan$scheme, block.vars = block.vars, n.permutations = B, seed = seed, min.n.obs.per.samp = min.n.obs.per.samp, robust = robust,
                        adjust = adjust, adjust.method = adjust.method, p.source = p.source, smooth = smooth, n.cells.tested = length(valid)))

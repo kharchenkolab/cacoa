@@ -12,7 +12,9 @@ estimateCellDensityGraph(
   beta = 30,
   m = 50,
   verbose = TRUE,
-  smoothing = c("heat", "neighbourhood"),
+  smoothing = c("knn", "heat", "neighbourhood"),
+  k = NULL,
+  target.size = NULL,
   n.hops = 1
 )
 }
@@ -27,12 +29,23 @@ estimateCellDensityGraph(
 
 \item{m}{numeric Maximum order of Chebyshev coeff to compute (default=50)}
 
-\item{smoothing}{\code{"heat"} (default): the heat-kernel smooth of each sample's cell indicator (a soft, wide
-neighbourhood set by \code{beta}); \code{"neighbourhood"}: the number of each sample's cells among the cell's graph
-neighbours within \code{n.hops} hops (itself included), i.e. the per-neighbourhood sample counts of a Milo-type
-abundance test; the raw counts are kept in \code{counts.mat} for a log-count test}
+\item{smoothing}{\code{"knn"} (default): the number of each sample's cells in the cell's kNN neighbourhood of \code{k}
+cells (itself, its graph neighbours by edge weight, then two-hop neighbours by shared neighbours; see
+\code{\link[=knnNeighbourhoodMatrix]{knnNeighbourhoodMatrix()}}); \code{"heat"}: the heat-kernel smooth of each sample's cell indicator (a soft
+neighbourhood whose width is set by \code{beta} or, better, by \code{target.size} cells); \code{"neighbourhood"}: the counts
+within \code{n.hops} graph hops. The raw counts of the count units are kept in \code{counts.mat}}
+
+\item{k}{neighbourhood size for \code{smoothing = "knn"} (default: \code{\link[=defaultNeighbourhoodSize]{defaultNeighbourhoodSize()}})}
+
+\item{target.size}{heat kernel only: median effective neighbourhood size in cells; when given, \code{beta} is solved
+by \code{\link[=solveKernelBeta]{solveKernelBeta()}}. The effective size at the \code{beta} used is returned as \code{effective.size}}
 
 \item{n.hops}{neighbourhood radius for \code{smoothing = "neighbourhood"} (default 1)}
+}
+\value{
+list with \code{density.mat} (cells x samples: the fraction of each sample's cells in the unit), \code{cond.densities},
+\code{counts.mat} (count units), \code{sample.sizes}, \code{unit.size} (cells per unit: exact for the count units, the
+effective size for the kernel), \code{beta} and \code{smoothing}
 }
 \description{
 Estimate graph smooth based cell density

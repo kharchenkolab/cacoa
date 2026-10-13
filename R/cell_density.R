@@ -76,20 +76,35 @@ estimateCellDensityKde <- function(emb, sample.per.cell, sample.weights, bins, b
 #' @param sample.weights Named numeric vector: per-sample signed weights.
 #' @param n.cores number of cores
 #' @param m numeric Maximum order of Chebyshev coeff to compute (default=50)
-#' @param smoothing `"heat"` (default): the heat-kernel smooth of each sample's cell indicator (a soft, wide
-#'   neighbourhood set by `beta`); `"neighbourhood"`: the number of each sample's cells among the cell's graph
-#'   neighbours within `n.hops` hops (itself included), i.e. the per-neighbourhood sample counts of a Milo-type
-#'   abundance test; the raw counts are kept in `counts.mat` for a log-count test
+#' @param smoothing `"knn"` (default): the number of each sample's cells in the cell's kNN neighbourhood of `k`
+#'   cells (itself, its graph neighbours by edge weight, then two-hop neighbours by shared neighbours; see
+#'   [knnNeighbourhoodMatrix()]); `"heat"`: the heat-kernel smooth of each sample's cell indicator (a soft
+#'   neighbourhood whose width is set by `beta` or, better, by `target.size` cells); `"neighbourhood"`: the counts
+#'   within `n.hops` graph hops. The raw counts of the count units are kept in `counts.mat`
+#' @param k neighbourhood size for `smoothing = "knn"` (default: [defaultNeighbourhoodSize()])
+#' @param target.size heat kernel only: median effective neighbourhood size in cells; when given, `beta` is solved
+#'   by [solveKernelBeta()]. The effective size at the `beta` used is returned as `effective.size`
 #' @param n.hops neighbourhood radius for `smoothing = "neighbourhood"` (default 1)
+#' @return list with `density.mat` (cells x samples: the fraction of each sample's cells in the unit), `cond.densities`,
+#'   `counts.mat` (count units), `sample.sizes`, `unit.size` (cells per unit: exact for the count units, the
+#'   effective size for the kernel), `beta` and `smoothing`
 #' @keywords internal
 estimateCellDensityGraph <- function(graph, sample.per.cell, sample.weights, n.cores=1, beta=30, m=50, verbose=TRUE,
-                                     smoothing=c("heat", "neighbourhood"), n.hops=1) {
+                                     smoothing=c("knn", "heat", "neighbourhood"), k=NULL, target.size=NULL, n.hops=1) {
   smoothing <- match.arg(smoothing)
   sig.mat <- unique(sample.per.cell) %>% sapply(function(s) as.numeric(sample.per.cell == s)) %>%
     set_rownames(names(sample.per.cell)) %>% set_colnames(unique(sample.per.cell))
-  counts.mat <- NULL; sample.sizes <- colSums(sig.mat)
+  counts.mat <- NULL; sample.sizes <- colSums(sig.mat); unit.size <- NULL
 
-  if (smoothing == "neighbourhood") {
+  if (smoothing == "knn") {
+    cells <- intersect(igraph::V(graph)$name, rownames(sig.mat))
+    k <- k %||% defaultNeighbourhoodSize(length(cells), ncol(sig.mat))
+    if (verbose) message(sprintf("kNN neighbourhoods of %d cells (%.1f per sample)", k, k / ncol(sig.mat)))
+    N <- knnNeighbourhoodMatrix(graph, k, cells = cells)
+    counts.mat <- as.matrix(N %*% sig.mat[cells, , drop = FALSE]); rownames(counts.mat) <- cells
+    unit.size <- stats::setNames(as.numeric(Matrix::rowSums(N)), cells)
+    score.mat <- t(t(counts.mat) / sample.sizes[colnames(counts.mat)])
+  } else if (smoothing == "neighbourhood") {
     cells <- intersect(igraph::V(graph)$name, rownames(sig.mat))
     A <- igraph::as_adj(graph, sparse = TRUE)[cells, cells, drop = FALSE]
     A@x[] <- 1; Matrix::diag(A) <- 1
@@ -97,8 +112,16 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.weights, n.c
     if (n.hops > 1) for (h in seq_len(n.hops - 1)) { M <- M %*% A; M@x[] <- 1 }
     counts.mat <- as.matrix(M %*% sig.mat[cells, , drop = FALSE])
     rownames(counts.mat) <- cells
+    unit.size <- stats::setNames(as.numeric(Matrix::rowSums(M)), cells)
     score.mat <- t(t(counts.mat) / sample.sizes[colnames(counts.mat)])   # fraction of the sample's cells in the neighbourhood
   } else {
+    if (!is.null(target.size)) {
+      sb <- solveKernelBeta(graph, target.size, n.cores = n.cores, verbose = verbose); beta <- sb$beta; unit.size <- sb$size
+      if (verbose) message(sprintf("heat kernel beta = %.3g for a median effective size of %.0f cells (target %d)", beta, stats::median(unit.size), as.integer(target.size)))
+    } else {
+      unit.size <- kernelEffectiveSize(graph, beta, n.cores = n.cores)$size
+      if (verbose) message(sprintf("heat kernel beta = %.3g: median effective neighbourhood size %.0f cells (5-95 %%: %.0f-%.0f)", beta, stats::median(unit.size), stats::quantile(unit.size, 0.05), stats::quantile(unit.size, 0.95)))
+    }
     score.mat <- sccore::smoothSignalOnGraph(
       sig.mat, filter=function(...) sccore::heatFilter(..., beta=beta), graph=graph,
       m=m, n.cores=n.cores, progress.chunk=(verbose + 1), progress=verbose,
@@ -128,7 +151,8 @@ estimateCellDensityGraph <- function(graph, sample.per.cell, sample.weights, n.c
   cond.densities <- list(num = dens.num, den = dens.den)
   # ------------------------------------------------------
 
-  return(list(density.mat=score.mat, cond.densities=cond.densities, method='graph', smoothing=smoothing, counts.mat=counts.mat, sample.sizes=sample.sizes))
+  return(list(density.mat=score.mat, cond.densities=cond.densities, method='graph', smoothing=smoothing, counts.mat=counts.mat, sample.sizes=sample.sizes,
+              unit.size=unit.size, beta=if (smoothing == "heat") beta else NULL, k=if (smoothing == "knn") k else NULL))
 }
 
 
@@ -231,6 +255,31 @@ diffCellDensity <- function(density.mat, sample.groups, ref.level, target.level,
 #' @param target.level target/disease level for sample.group vector
 #' @param type method to calculate differential cell density of each bin;
 #' @param block.id block variable for permutation test
+#' Pooled p-values, tail z-scores and exact permutation p-values of per-cell statistics
+#'
+#' The unadjusted z-score of the density map: the signed tail z of the per-cell p-value against the pooled
+#' permutation null of all cells (`pooledPermutationP`, no per-cell floor). Also recomputes the exact per-cell
+#' permutation p, which is needed when the statistics have been post-processed (`averageOverNeighbours`).
+#' @param stat.obs named vector of observed statistics
+#' @param stats.perm permutations x cells matrix
+#' @param effect named vector of effects (sign of the two-sided z)
+#' @param alternative `"two-sided"`, `"greater"` or `"less"`
+#' @return list with `p.pooled`, `z.score` and `p.perm`
+#' @keywords internal
+pooledPermutationSummaries <- function(stat.obs, stats.perm, effect, alternative = "two-sided") {
+  cells <- names(stat.obs); sgn <- if (alternative == "less") -1 else 1
+  p.pooled <- pooledPermutationP(sgn * stat.obs, sgn * stats.perm, alternative = if (alternative == "two-sided") "two.sided" else "greater")
+  names(p.pooled) <- cells
+  pp <- pmin(pmax(p.pooled, 1e-300), 1 - 1e-16)
+  z.score <- switch(alternative, "two-sided" = sign(effect[cells]) * stats::qnorm(pp / 2, lower.tail = FALSE),
+                    greater = stats::qnorm(pp, lower.tail = FALSE), less = stats::qnorm(pp))
+  z.score[!is.finite(p.pooled)] <- NA_real_; names(z.score) <- cells
+  so <- sgn * stat.obs; P <- sgn * stats.perm
+  p.perm <- if (alternative == "two-sided") (colSums(abs(P) >= rep(abs(so), each = nrow(P)), na.rm = TRUE) + 1) / (nrow(P) + 1) else (colSums(P >= rep(so, each = nrow(P)), na.rm = TRUE) + 1) / (nrow(P) + 1)
+  p.perm[!is.finite(so)] <- NA_real_; names(p.perm) <- cells
+  list(p.pooled = p.pooled, z.score = z.score, p.perm = p.perm)
+}
+
 #' @keywords internal
 diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c("block", "freedman-lane"), 
                                         n.permutations=999, robust.method=c("none","huber","winsor"), na.mode=c("drop", "impute_weak"),
@@ -262,14 +311,8 @@ diffCellDensityPermutations <- function(density.mat, sample.model, perm.method=c
   names(z.score) <- colnames(Y)
   p.pooled <- NULL
   if (!is.null(res$stats.perm)) {
-    sgn <- if (alternative == "less") -1 else 1
-    p.pooled <- pooledPermutationP(sgn * res$stat.obs, sgn * res$stats.perm, alternative = if (alternative == "two-sided") "two.sided" else "greater")
-    names(p.pooled) <- colnames(Y)
-    pp <- pmin(pmax(p.pooled, 1e-300), 1 - 1e-16)
-    z.score <- switch(alternative, "two-sided" = sign(res$effect) * stats::qnorm(pp / 2, lower.tail = FALSE),
-                      greater = stats::qnorm(pp, lower.tail = FALSE), less = stats::qnorm(pp))
-    z.score[!is.finite(p.pooled)] <- NA_real_
-    names(z.score) <- colnames(Y)
+    ps <- pooledPermutationSummaries(stats::setNames(res$stat.obs, colnames(Y)), res$stats.perm, stats::setNames(res$effect, colnames(Y)), alternative)
+    p.pooled <- ps$p.pooled; z.score <- ps$z.score
   }
 
   # moderated t: the per-cell residual variances are shrunk towards a common prior estimated across cells (limma's

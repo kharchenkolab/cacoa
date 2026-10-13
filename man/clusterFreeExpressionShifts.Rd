@@ -29,7 +29,9 @@ clusterFreeExpressionShifts(
   p.source = c("permutation", "pooled", "z", "parametric"),
   z.grid = seq(-6, 25, by = 0.02),
   groups = NULL,
-  return.perm = FALSE
+  return.perm = FALSE,
+  post = c("none", "averaged", "inherit"),
+  nns.graph = NULL
 )
 }
 \arguments{
@@ -87,6 +89,15 @@ distribution of the group means is stored as \code{attr(group.test, "perm.means"
 
 \item{return.perm}{return the permutations x cells matrix of the permuted statistics as \code{stats.perm} (default
 FALSE; \code{n.permutations} x cells doubles, NaN where a cell is not tested under a relabeling)}
+
+\item{post}{post-processing on the cell graph: \code{"none"} (default), \code{"averaged"} (the shift statistic averaged over
+each cell and its graph neighbours, under every permutation alike, before the pooled FDR: an exact test of the
+one-hop-larger unit with calibrated q-values, \code{\link[=averageOverNeighbours]{averageOverNeighbours()}}; needs \code{adjust.method = "perm-fdr"} and
+keeps the permutation matrix in memory) or \code{"inherit"} (every cell takes the smallest q among itself and its
+graph neighbours after the test, \code{\link[=inheritNeighbourQ]{inheritNeighbourQ()}})}
+
+\item{nns.graph}{the 1-hop graph neighbourhoods used by \code{post} (list of 0-based indices per cell, the cell
+itself included; default: \code{nns.per.cell}, which is the 1-hop graph unless a kNN unit was passed)}
 }
 \value{
 list: \code{stat} (shift F per cell), \code{p.value} (exact permutation p), \code{p.pooled} (pooled-null p, no floor), \code{p.param},

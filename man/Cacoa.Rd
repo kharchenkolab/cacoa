@@ -3403,7 +3403,9 @@ Estimate cell density in giving embedding
   sample.metadata = self$sample.meta,
   block.vars = NULL,
   bandwidth = 0.05,
-  smoothing = c("heat", "neighbourhood"),
+  smoothing = c("knn", "heat", "neighbourhood"),
+  k = NULL,
+  target.size = NULL,
   n.hops = 1,
   ...
 )}\if{html}{\out{</div>}}
@@ -3439,9 +3441,17 @@ Estimate cell density in giving embedding
 \item{\code{bandwidth}}{numeric KDE bandwidth multiplier (default=0.5). The full bandwidth is estimated by multiplying this value on the difference between 90\% and 10\%
 of the corresponding embedding dimension. Set it to NULL to use \link[MASS:bandwidth.nrd]{bandwidth.nrd} estimator. (default=0.05)}
 
-\item{\code{smoothing}}{graph method only: \code{"heat"} (default; heat-kernel smooth with \code{beta}) or \code{"neighbourhood"}
-(per-sample counts of the cell's graph neighbours within \code{n.hops} hops, the unit of a Milo-type abundance
-test; use with \code{estimateDiffCellDensity(transform = "log")})}
+\item{\code{smoothing}}{graph method only: \code{"knn"} (default): per-sample counts in each cell's kNN neighbourhood of
+\code{k} cells (the unit with the best power at matched error in the benchmark, \code{misc/benchmark/README.md});
+\code{"heat"}: the heat-kernel smooth, width set by \code{beta} or by \code{target.size}; \code{"neighbourhood"}: counts within
+\code{n.hops} graph hops. The count units are tested on the log scale by default (\code{estimateDiffCellDensity(transform)})}
+
+\item{\code{k}}{neighbourhood size for \code{smoothing = "knn"} (default: the larger of 100 and 10 cells per sample, capped
+at 1 \% of the cells; \code{\link[=defaultNeighbourhoodSize]{defaultNeighbourhoodSize()}})}
+
+\item{\code{target.size}}{heat kernel: median effective neighbourhood size in cells, from which \code{beta} is solved
+(\code{\link[=solveKernelBeta]{solveKernelBeta()}}); the same \code{beta} is 20x wider on one graph than another, so a width in cells is the
+comparable setting. The effective size per cell is stored as \code{unit.size}}
 
 \item{\code{n.hops}}{neighbourhood radius for \code{smoothing = "neighbourhood"} (default 1)}
 
@@ -3613,7 +3623,8 @@ Estimate differential cell density
   adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
   p.source = c("parametric", "permutation", "pooled"),
   moderate = TRUE,
-  transform = c("none", "log"),
+  transform = c("auto", "none", "log"),
+  post = c("averaged", "none", "inherit"),
   verbose = self$verbose,
   n.cores = self$n.cores,
   ...
@@ -3676,10 +3687,18 @@ permutations); \code{p.pooled} is returned whenever the permuted statistics are 
 \item{\code{moderate}}{shrink the per-cell residual variances towards a common prior across cells (limma's empirical
 Bayes; a moderated t with extra degrees of freedom) before the parametric p-values (default TRUE)}
 
-\item{\code{transform}}{\code{"none"} (default): test the densities as they are; \code{"log"}: test \code{log2} counts per 10,000 cells
-of the sample (\code{log2((density * n + 0.5) / (n + 1) * 1e4)}, \code{n} the sample's cell number), the log-count model
-of a Milo-type abundance test, natural with \code{estimateCellDensity(smoothing = "neighbourhood")}; the effect is
-then a log2 fold change of the density}
+\item{\code{transform}}{\code{"auto"} (default): \code{"log"} for the count units (\code{smoothing = "knn"} or \code{"neighbourhood"}),
+\code{"none"} for the heat kernel and the kde; \code{"none"}: test the densities as they are; \code{"log"}: test \code{log2} counts
+per 10,000 cells of the sample (\code{log2((density * n + 0.5) / (n + 1) * 1e4)}, \code{n} the sample's cell number), the
+log-count model of a neighbourhood abundance test; the effect is then a log2 fold change of the density}
+
+\item{\code{post}}{post-processing of the per-cell test on the cell graph (graph density only): \code{"averaged"}
+(default): the statistic is averaged over each cell and its graph neighbours, under every permutation alike,
+before the pooled FDR, an exact test of the one-hop-larger unit (\code{\link[=averageOverNeighbours]{averageOverNeighbours()}}; +10-40 \% recall
+at matched error in the benchmark, q-values stay calibrated); \code{"inherit"}: every cell takes the smallest
+q among itself and its neighbours after the test (\code{\link[=inheritNeighbourQ]{inheritNeighbourQ()}}; Milo's rule, more reach but
+the realized false-call rate at a nominal threshold is about the nominal rate); \code{"none"}. The unadjusted
+z-scores, effects and q-values of the result are those of the averaged statistic under \code{"averaged"}}
 
 \item{\code{verbose}}{boolean Print messages (default=self$verbose)}
 
@@ -4375,6 +4394,8 @@ median smoothing over the graph.
   min.edge.weight = 0,
   adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
   p.source = c("permutation", "pooled", "z", "parametric"),
+  k = NULL,
+  post = c("none", "averaged", "inherit"),
   verbose = NULL,
   n.cores = NULL,
   robust = NULL,
@@ -4430,6 +4451,14 @@ median smoothing over the graph.
 1 / (n.permutations + 1)), \code{"pooled"} (pooled permutation null of all cells, see \code{\link[=pooledPermutationP]{pooledPermutationP()}}: no
 floor, calibrated with enough permutations), \code{"z"} (normal tail of the permutation-standardized z: no floor,
 anti-conservative) or \code{"parametric"} (the F of the neighbourhood shift; not calibrated)}
+
+\item{\code{k}}{neighbourhood unit size: NULL (default) tests each cell with its 1-hop graph neighbours; an integer
+uses kNN neighbourhoods of \code{k} cells (\code{\link[=knnNeighbourhoodMatrix]{knnNeighbourhoodMatrix()}}; see \code{\link[=defaultNeighbourhoodSize]{defaultNeighbourhoodSize()}} for the
+rule used by the density map)}
+
+\item{\code{post}}{post-processing on the cell graph: \code{"none"} (default), \code{"averaged"} (neighbour-averaged statistic,
+exact; needs \code{adjust.method = "perm-fdr"}) or \code{"inherit"} (smallest q among the cell and its neighbours);
+see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
 
 \item{\code{verbose}}{defaults from options (permutations capped at 499)}
 

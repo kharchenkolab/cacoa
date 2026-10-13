@@ -2659,13 +2659,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param test optional test for a temporary model (see `Cacoa$new()`)
     #' @param sample.metadata sample metadata (default: stored)
     #' @param block.vars metadata columns defining permutation strata (default: stored)
-    #' @param smoothing graph method only: `"heat"` (default; heat-kernel smooth with `beta`) or `"neighbourhood"`
-    #'   (per-sample counts of the cell's graph neighbours within `n.hops` hops, the unit of a Milo-type abundance
-    #'   test; use with `estimateDiffCellDensity(transform = "log")`)
+    #' @param smoothing graph method only: `"knn"` (default): per-sample counts in each cell's kNN neighbourhood of
+    #'   `k` cells (the unit with the best power at matched error in the benchmark, `misc/benchmark/README.md`);
+    #'   `"heat"`: the heat-kernel smooth, width set by `beta` or by `target.size`; `"neighbourhood"`: counts within
+    #'   `n.hops` graph hops. The count units are tested on the log scale by default (`estimateDiffCellDensity(transform)`)
+    #' @param k neighbourhood size for `smoothing = "knn"` (default: the larger of 100 and 10 cells per sample, capped
+    #'   at 1 % of the cells; [defaultNeighbourhoodSize()])
+    #' @param target.size heat kernel: median effective neighbourhood size in cells, from which `beta` is solved
+    #'   ([solveKernelBeta()]); the same `beta` is 20x wider on one graph than another, so a width in cells is the
+    #'   comparable setting. The effective size per cell is stored as `unit.size`
     #' @param n.hops neighbourhood radius for `smoothing = "neighbourhood"` (default 1)
     estimateCellDensity = function(bins=400, method='kde', name='cell.density', beta=30, estimate.variation=TRUE, contrast=NULL,
                                    formula=NULL, test=NULL, verbose=self$verbose, n.cores=self$n.cores, sample.metadata=self$sample.meta,
-                                   block.vars=NULL, bandwidth=0.05, smoothing=c("heat", "neighbourhood"), n.hops=1, ...){
+                                   block.vars=NULL, bandwidth=0.05, smoothing=c("knn", "heat", "neighbourhood"), k=NULL, target.size=NULL, n.hops=1, ...){
       smoothing <- match.arg(smoothing)
       sample.per.cell <- self$sample.per.cell
 
@@ -2692,7 +2698,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       } else if (method == 'graph') {
         res <-  extractCellGraph(self$data.object) %>%
           estimateCellDensityGraph(sample.per.cell=sample.per.cell, sample.weights=sample.weights,
-                                   n.cores=n.cores, beta=beta, verbose=verbose, smoothing=smoothing, n.hops=n.hops, ...)
+                                   n.cores=n.cores, beta=beta, verbose=verbose, smoothing=smoothing, k=k, target.size=target.size, n.hops=n.hops, ...)
       } else stop("Unknown method: ", method)
       
 
@@ -2911,18 +2917,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   permutations); `p.pooled` is returned whenever the permuted statistics are kept
     #' @param moderate shrink the per-cell residual variances towards a common prior across cells (limma's empirical
     #'   Bayes; a moderated t with extra degrees of freedom) before the parametric p-values (default TRUE)
-    #' @param transform `"none"` (default): test the densities as they are; `"log"`: test `log2` counts per 10,000 cells
-    #'   of the sample (`log2((density * n + 0.5) / (n + 1) * 1e4)`, `n` the sample's cell number), the log-count model
-    #'   of a Milo-type abundance test, natural with `estimateCellDensity(smoothing = "neighbourhood")`; the effect is
-    #'   then a log2 fold change of the density
+    #' @param transform `"auto"` (default): `"log"` for the count units (`smoothing = "knn"` or `"neighbourhood"`),
+    #'   `"none"` for the heat kernel and the kde; `"none"`: test the densities as they are; `"log"`: test `log2` counts
+    #'   per 10,000 cells of the sample (`log2((density * n + 0.5) / (n + 1) * 1e4)`, `n` the sample's cell number), the
+    #'   log-count model of a neighbourhood abundance test; the effect is then a log2 fold change of the density
+    #' @param post post-processing of the per-cell test on the cell graph (graph density only): `"averaged"`
+    #'   (default): the statistic is averaged over each cell and its graph neighbours, under every permutation alike,
+    #'   before the pooled FDR, an exact test of the one-hop-larger unit ([averageOverNeighbours()]; +10-40 % recall
+    #'   at matched error in the benchmark, q-values stay calibrated); `"inherit"`: every cell takes the smallest
+    #'   q among itself and its neighbours after the test ([inheritNeighbourQ()]; Milo's rule, more reach but
+    #'   the realized false-call rate at a nominal threshold is about the nominal rate); `"none"`. The unadjusted
+    #'   z-scores, effects and q-values of the result are those of the averaged statistic under `"averaged"`
     estimateDiffCellDensity=function(type='permutation', adjust=NULL, name='cell.density', sample.metadata=self$sample.meta, 
                                      formula=NULL, contrast=NULL, test=NULL, block.vars=NULL, perm.method="freedman-lane", statistic=c("t", "coef"),
                                      robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=TRUE,
                                      n.permutations=999, smooth=TRUE, adjust.method=c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
-                                     p.source=c("parametric", "permutation", "pooled"), moderate=TRUE, transform=c("none", "log"), verbose=self$verbose, n.cores=self$n.cores, ...){
+                                     p.source=c("parametric", "permutation", "pooled"), moderate=TRUE, transform=c("auto", "none", "log"),
+                                     post=c("averaged", "none", "inherit"), verbose=self$verbose, n.cores=self$n.cores, ...){
       dens.res <- private$getResults(name, 'estimateCellDensity')
-      statistic <- match.arg(statistic); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source); transform <- match.arg(transform)
+      statistic <- match.arg(statistic); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source); transform <- match.arg(transform); post <- match.arg(post)
       if (is.null(adjust)) adjust <- (type != 'subtract') # NULL can be forwarded here
+      if (transform == "auto") transform <- if (isTRUE(dens.res$smoothing %in% c("knn", "neighbourhood"))) "log" else "none"
+      if (post != "none" && dens.res$method != "graph") { if (verbose) message("post-processing on the cell graph applies to the graph density only: post = 'none'"); post <- "none" }
+      if (post != "none" && !return.sampled.stats) { if (verbose) message("post-processing needs the permutation statistics (return.sampled.stats = TRUE): post = 'none'"); post <- "none" }
+      if (post != "none" && !adjust) post <- "none"
       density.mat <- dens.res$density.mat
       if (transform == "log") {
         sizes <- dens.res$sample.sizes %||% table(self$sample.per.cell)
@@ -2954,6 +2972,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                       return.residuals=return.residuals, return.sampled.stats=return.sampled.stats,
                                       n.cores=n.cores, verbose=verbose, moderate=moderate)
 
+      if (post == "averaged") {   # the one-hop-larger unit: observed and permuted statistics averaged over the cell and its neighbours
+        if (is.null(perm.res$stats.perm)) stop("post = 'averaged' needs the permutation statistics (return.sampled.stats = TRUE)")
+        cg <- extractCellGraph(self$data.object)
+        av <- averageOverNeighbours(perm.res$stat.obs, perm.res$stats.perm, cg, effect = perm.res$effect)
+        perm.res$stat.obs <- av$stat; perm.res$stats.perm <- av$stats.perm; perm.res$effect <- av$effect; perm.res$score <- av$effect
+        ps <- pooledPermutationSummaries(av$stat, av$stats.perm, av$effect, alternative)
+        perm.res$p.pooled <- ps$p.pooled; perm.res$z.score <- ps$z.score; perm.res$p.perm <- ps$p.perm
+        perm.res$t <- av$stat; perm.res$p.param[] <- NA_real_   # the parametric tail does not apply to the averaged statistic
+      }
       p.pooled <- perm.res$p.pooled   # the unadjusted z-scores (`pooled`) are the signed tail z of this p
       if (is.null(p.pooled) && verbose) message("the permuted statistics were not kept (return.sampled.stats = FALSE): the unadjusted z-scores come from the floored per-cell permutation p-values")
       if (p.source == "pooled" && is.null(p.pooled)) stop("p.source = 'pooled' needs the permutation statistics (return.sampled.stats = TRUE)")
@@ -2990,6 +3017,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                     t = perm.res$t, p.param = perm.res$p.param, adjust.method = adjust.method, p.source = p.source)
       }
 
+      if (post == "inherit" && !is.null(res$p.adj)) {
+        ih <- inheritNeighbourQ(res$p.adj, res$effect, extractCellGraph(self$data.object))
+        res$p.adj.cell <- res$p.adj; res$p.adj <- ih$q; res$effect.inherited <- ih$effect
+        pa <- pmin(pmax(ih$q, 1e-300), 1 - 1e-16)
+        res$adj <- if (alternative == "two-sided") sign(ih$effect) * stats::qnorm(pa / 2, lower.tail = FALSE) else pmax(stats::qnorm(pa, lower.tail = FALSE), 0)
+        res$adj[!is.finite(ih$q)] <- NA_real_; names(res$adj) <- names(ih$q)
+      }
+      res$post <- post; res$unit.size <- dens.res$unit.size
       res$transform <- transform; res$p.perm <- perm.res$p.perm; res$p.pooled <- p.pooled
       if (!is.null(self$cell.groups) && !is.null(perm.res$stats.perm)) {   # exact group-level permutation test (shared permutations)
         res$group.test <- groupPermutationTest(perm.res$stat.obs, perm.res$stats.perm, self$cell.groups, alternative = if (alternative == "two-sided") "two.sided" else "greater")
@@ -3865,6 +3900,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param smooth see [clusterFreeExpressionShifts()]
     #' @param wins see [clusterFreeExpressionShifts()]
     #' @param min.edge.weight minimum graph edge weight between cells of different samples (default 0)
+    #' @param k neighbourhood unit size: NULL (default) tests each cell with its 1-hop graph neighbours; an integer
+    #'   uses kNN neighbourhoods of `k` cells ([knnNeighbourhoodMatrix()]; see [defaultNeighbourhoodSize()] for the
+    #'   rule used by the density map)
+    #' @param post post-processing on the cell graph: `"none"` (default), `"averaged"` (neighbour-averaged statistic,
+    #'   exact; needs `adjust.method = "perm-fdr"`) or `"inherit"` (smallest q among the cell and its neighbours);
+    #'   see [clusterFreeExpressionShifts()]
     #' @param ... deprecated arguments of the previous implementation are accepted and ignored with a message
     #' @return list (see [clusterFreeExpressionShifts()]), also stored in `cao$test.results[[name]]`
     #' @param adjust.method multiplicity adjustment across cells: `"perm-fdr"` (default; pooled permutation FDR, see
@@ -3879,8 +3920,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                  min.n.obs.per.samp=3, min.samp.per.level=2, permutation=NULL, n.permutations=NULL, seed=NULL,
                                                  dist=c("cor", "cosine", "js"), adjust=TRUE, smooth=TRUE, wins=0.025, genes=NULL, min.expr.frac=0.0,
                                                  min.edge.weight=0.0, adjust.method=c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"), p.source=c("permutation", "pooled", "z", "parametric"),
-                                                 verbose=NULL, n.cores=NULL, robust=NULL, ...) {
-      dist <- match.arg(dist); robust <- private$opt("robust", robust); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source)
+                                                 k=NULL, post=c("none", "averaged", "inherit"), verbose=NULL, n.cores=NULL, robust=NULL, ...) {
+      dist <- match.arg(dist); robust <- private$opt("robust", robust); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source); post <- match.arg(post)
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
       legacy <- private$legacyShiftArgs(list(...), verbose)
       permutation <- private$opt("permutation", legacy$permutation %||% permutation)
@@ -3889,8 +3930,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       model <- private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose,
                                     what = "estimateClusterFreeExpressionShifts()")
       if (is.null(genes)) genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, min.expr.frac=min.expr.frac)
-      inp <- private$getClusterFreeDEInput(genes, raw=TRUE, min.edge.weight=min.edge.weight)
-      shifts <- clusterFreeExpressionShifts(cm = Matrix::t(inp$cm), sample.per.cell = self$sample.per.cell[rownames(inp$cm)], nns.per.cell = inp$nns.per.cell,
+      inp <- private$getClusterFreeDEInput(genes, raw=TRUE, min.edge.weight=min.edge.weight, k=k)
+      shifts <- clusterFreeExpressionShifts(cm = Matrix::t(inp$cm), sample.per.cell = self$sample.per.cell[rownames(inp$cm)], nns.per.cell = inp$nns.per.cell, nns.graph = inp$nns.graph, post = post,
                                             design = model, meta = model$meta, dist = dist, min.n.obs.per.samp = min.n.obs.per.samp,
                                             min.samp.per.level = min.samp.per.level, permutation = permutation, n.permutations = n.permutations,
                                             block.vars = block.vars %||% model$block.vars, seed = seed %||% sample.int(.Machine$integer.max, 1),
@@ -4870,7 +4911,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     ## genes
     ## min.edge.weight numeric (default=0.6)
     ## list with fields 'cm', 'adj.mat', 'is.ref', 'nns.per.cell'
-    getClusterFreeDEInput = function(genes, raw=FALSE, min.edge.weight=0.0) {
+    getClusterFreeDEInput = function(genes, raw=FALSE, min.edge.weight=0.0, k=NULL) {
       cm <- self$getJointCountMatrix(raw=raw)
       genes <- intersect(genes, colnames(cm))
       is.ref <- if (!is.null(self$sample.groups)) (as.character(self$sample.groups[levels(self$sample.per.cell)]) == self$ref.level) else rep(NA, nlevels(self$sample.per.cell))
@@ -4895,8 +4936,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
          # If there are cells without neighbors. May be a consequence of graph modification
         nns.per.cell[[id]] <- numeric()
       }
+      nns.graph <- nns.per.cell
+      if (!is.null(k)) {   # kNN unit of k cells per cell (self, strongest edges, then two-hop by shared neighbours); the 1-hop graph is kept for post-processing
+        N <- knnNeighbourhoodMatrix(extractCellGraph(self$data.object), k, cells = cell.names) %>% as("TsparseMatrix")
+        nns.per.cell <- split(N@j, factor(N@i + 1L, levels = seq_along(cell.names))) %>% lapply(as.integer) %>% setNames(cell.names)
+      }
 
-      return(list(cm=cm, adj.mat=adj.mat, is.ref=is.ref, nns.per.cell=nns.per.cell))
+      return(list(cm=cm, adj.mat=adj.mat, is.ref=is.ref, nns.per.cell=nns.per.cell, nns.graph=nns.graph))
     }
   )
 )

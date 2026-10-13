@@ -227,6 +227,13 @@ Benjamini-Hochberg on per-cell p-values (`"bh"`) and the familywise max-statisti
 available. The cluster-free expression shifts test the contrast in the same kNN neighbourhoods with the same
 post-processing and adjustment.
 
+Before the density test, the neighbourhood unit is checked: how many cells each sample contributes to a unit, how large
+the units are, and how pure they are against the annotation.
+
+```{r neighbourhoods}
+nb <- cao$checkNeighbourhoods(verbose = FALSE); cat(nb$text, "\n")
+```
+
 ```{r density, fig.width=14, fig.height=4.5, purl=FALSE}
 cao$estimateCellDensity(method = "graph")
 cao$estimateDiffCellDensity(type = "permutation")

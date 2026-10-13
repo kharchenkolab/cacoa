@@ -341,6 +341,14 @@ cao$plotCellLoadings()
 }
 
 ## ------------------------------------------------
+## Method `Cacoa$checkNeighbourhoods`
+## ------------------------------------------------
+
+\dontrun{
+cao$checkNeighbourhoods()
+}
+
+## ------------------------------------------------
 ## Method `Cacoa$estimateCellDensity`
 ## ------------------------------------------------
 
@@ -646,6 +654,7 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item \href{#method-Cacoa-plotCodaHeatmap}{\code{Cacoa$plotCodaHeatmap()}}
 \item \href{#method-Cacoa-plotCodaCellTypes}{\code{Cacoa$plotCodaCellTypes()}}
 \item \href{#method-Cacoa-plotCellLoadings}{\code{Cacoa$plotCellLoadings()}}
+\item \href{#method-Cacoa-checkNeighbourhoods}{\code{Cacoa$checkNeighbourhoods()}}
 \item \href{#method-Cacoa-estimateCellDensity}{\code{Cacoa$estimateCellDensity()}}
 \item \href{#method-Cacoa-plotCellDensity}{\code{Cacoa$plotCellDensity()}}
 \item \href{#method-Cacoa-plotCellDensityVariation}{\code{Cacoa$plotCellDensityVariation()}}
@@ -3376,6 +3385,41 @@ ggplot2 object
 \preformatted{\dontrun{
 cao$estimateCellLoadings()
 cao$plotCellLoadings()
+}
+}
+\if{html}{\out{</div>}}
+
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-checkNeighbourhoods"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-checkNeighbourhoods}{}}}
+\subsection{Method \code{checkNeighbourhoods()}}{
+Diagnostics of the kNN neighbourhood units used by the cluster-free maps: cells per sample per
+unit (power), unit sizes, and purity against the cell annotation (resolution), for a size \code{k}; no test is run.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$checkNeighbourhoods(k = NULL, min.cells = 3, verbose = self$verbose)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{k}}{neighbourhood size (default: \code{\link[=defaultNeighbourhoodSize]{defaultNeighbourhoodSize()}} for this object)}
+
+\item{\code{min.cells}}{cells per sample below which a sample is dropped from a unit's test (default 3)}
+
+\item{\code{verbose}}{print the one-sentence summary}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+invisibly, the list of \code{\link[=neighbourhoodDiagnostics]{neighbourhoodDiagnostics()}}
+}
+\subsection{Examples}{
+\if{html}{\out{<div class="r example copy">}}
+\preformatted{\dontrun{
+cao$checkNeighbourhoods()
 }
 }
 \if{html}{\out{</div>}}

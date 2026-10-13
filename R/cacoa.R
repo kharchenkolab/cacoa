@@ -2639,6 +2639,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     ### Cluster-free cell density
 
+    #' @description Diagnostics of the kNN neighbourhood units used by the cluster-free maps: cells per sample per
+    #'   unit (power), unit sizes, and purity against the cell annotation (resolution), for a size `k`; no test is run.
+    #' @param k neighbourhood size (default: [defaultNeighbourhoodSize()] for this object)
+    #' @param min.cells cells per sample below which a sample is dropped from a unit's test (default 3)
+    #' @param verbose print the one-sentence summary
+    #' @return invisibly, the list of [neighbourhoodDiagnostics()]
+    #' @examples
+    #' \dontrun{
+    #' cao$checkNeighbourhoods()
+    #' }
+    checkNeighbourhoods = function(k = NULL, min.cells = 3, verbose = self$verbose) {
+      k <- k %||% defaultNeighbourhoodSize(length(self$sample.per.cell), length(unique(self$sample.per.cell)))
+      d <- neighbourhoodDiagnostics(private$knnUnits(k, self$n.cores), self$sample.per.cell, self$cell.groups, min.cells = min.cells)
+      if (verbose) message(d$text)
+      invisible(d)
+    },
+
     #' @description Estimate cell density in giving embedding
     #' @param bins numeric Number of bins for density estimation (default=400)
     #' @param method character string Density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')

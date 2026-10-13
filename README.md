@@ -37,6 +37,8 @@ Cacoa currently supports inputs in several formats (see below). Most of them req
 Additionally, the `embedding` parameter containing a matrix or data.frame with a cell embedding can be provided. Rownames should match to the cell ids. 
 It is used for visualization and some cluster-free analysis.
 
+The cluster-free analyses (cell density and expression shifts per cell) test every cell in a kNN neighbourhood of the cell graph whose size follows the data (the larger of 100 cells and 10 cells per sample, capped at 1% of the cells; `cao$checkNeighbourhoods()` reports what that size means on a dataset), with the same sample-level model and relabelings as the other analyses, and adjust across cells with a pooled permutation false-discovery rate; see `misc/doc/main.tex` for the method.
+
 ### No expression data
 
 Cacoa can be ran without any expression data by passing `NULL` instead of a data object:

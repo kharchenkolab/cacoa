@@ -201,3 +201,14 @@ test_that("shift kernel: the vectorized complete-sample loop equals the referenc
   expect_equal(unname(sa$shifts[ok]), unname(av$effect[cells][ok]), tolerance = 1e-8)
   expect_equal(unname(sa$pooled), unname(sa$z.pooled)); expect_equal(unname(sa$adj), unname(sa$z.adj)); expect_equal(unname(sa$effect), unname(sa$shifts))   # the density map's names
 })
+
+test_that("neighbourhood diagnostics report sizes, cells per sample and purity", {
+  cao <- makeToyCacoa(n.per.group = c(A = 4, B = 4), cells.per.sample = 30, n.genes = 40, n.cell.types = 3)
+  cg <- cao$cell.groups; cells <- names(cg); spc <- cao$sample.per.cell; g <- toyGraph(cells, cg, per.cell = 6)
+  nn <- knnNeighbourhoodLists(g, 24, cells = cells)
+  d <- neighbourhoodDiagnostics(nn, spc, cg)
+  expect_equal(nrow(d$per.sample), nlevels(spc)); expect_equal(nrow(d$purity), nlevels(cg)); expect_equal(d$summary$k, 24)
+  expect_true(all(d$purity$median.purity > 0.5)); expect_true(all(d$per.sample$median.cells >= 1)); expect_match(d$text, "median purity")
+  cao$data.object <- structure(list(graph = g), class = "Conos")
+  expect_message(dd <- cao$checkNeighbourhoods(verbose = TRUE), "kNN units of at least 40 cells"); expect_equal(dd$summary$k, 40)
+})

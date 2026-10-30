@@ -6,26 +6,31 @@
 \usage{
 plotSensitivity(
   x,
-  effect = "shift",
+  effect = NULL,
   cell.types = NULL,
   normalized = TRUE,
+  interval = c("jackknife", "none"),
   plot.theme = ggplot2::theme_bw()
 )
 }
 \arguments{
 \item{x}{\code{cacoaSensitivity}}
 
-\item{effect}{effect to show (default \code{"shift"})}
+\item{effect}{effect to show (default: the result's, \code{"shift"} or \code{"loading"})}
 
 \item{cell.types}{optional subset}
 
 \item{normalized}{plot normalized estimates (default TRUE)}
 
+\item{interval}{\code{"jackknife"} (default): the jackknife 95 \% interval as an error bar and the leave-one-sample-out range as a thin
+line, for every model that has them (\code{jackknife = TRUE} in \code{checkSensitivity()}; the current model always); \code{"none"}}
+
 \item{plot.theme}{ggplot2 theme}
 }
 \value{
-ggplot2 object: cell types as panels, models on the y-axis, estimate with jackknife CI (when available)
-on the x-axis, filled points significant, the current model highlighted
+ggplot2 object: cell types as panels (titled with the magnitude and significance verdicts), models on the y-axis,
+distance-model estimate with jackknife CI (when available) on the x-axis, filled points significant by the test named in
+the subtitle, the current model highlighted
 }
 \description{
 Forest plot of a sensitivity analysis

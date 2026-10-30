@@ -33,7 +33,8 @@ estimateCellDensityGraph(
 \item{smoothing}{\code{"knn"} (default): the number of each sample's cells in the cell's kNN neighbourhood of \code{k}
 cells (itself, its graph neighbours by edge weight, then two-hop neighbours by shared neighbours; see
 \code{\link[=knnNeighbourhoodMatrix]{knnNeighbourhoodMatrix()}}); \code{"heat"}: the heat-kernel smooth of each sample's cell indicator (a soft
-neighbourhood whose width is set by \code{beta} or, better, by \code{target.size} cells); \code{"neighbourhood"}: the counts
+neighbourhood whose width is set by \code{beta} or, better, by \code{target.size} cells; the cell itself counted as one
+cell of its neighbourhood, \code{\link[=ownCellDensity]{ownCellDensity()}}); \code{"neighbourhood"}: the counts
 within \code{n.hops} graph hops. The raw counts of the count units are kept in \code{counts.mat}}
 
 \item{k}{neighbourhood size for \code{smoothing = "knn"} (default: \code{\link[=defaultNeighbourhoodSize]{defaultNeighbourhoodSize()}})}

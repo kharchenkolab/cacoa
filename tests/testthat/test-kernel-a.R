@@ -21,16 +21,16 @@ test_that("kernel A contrast statistics equal the R reference over the grid (blo
     pre <- cacoa:::inferencePrecompute(G, X, Z, cvec)
     for (scheme in c("block", "freedman-lane")) for (bias in c(TRUE, FALSE)) {
       ref <- refPermStats(G, X, Z, cvec, zend, P, scheme, bias)
-      cpp <- if (scheme == "block") cacoa:::permuted_contrast_stats(G, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, zend$num, zend$den, P, bias, TRUE) else {
+      cpp <- if (scheme == "block") cacoa:::permuted_contrast_stats(G, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, zend$num, zend$den, P, integer(0), bias, TRUE) else {
         parts <- cacoa:::flGowerParts(G, X %*% cacoa:::contrastNullBasis(cvec))
         cacoa:::permuted_contrast_stats_fl(parts$K1, parts$K2, parts$K3, parts$K4, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, zend$num, zend$den, P, bias, TRUE) }
       expect_equal(unname(cpp), unname(ref), tolerance = 1e-10, info = paste(scheme, bias, length(cell$groups)))
     }
     # F-only mode agrees with the dedicated F kernel; identity relabeling reproduces the observed estimates
-    fo <- cacoa:::permuted_contrast_stats(G, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, zend$num, zend$den, P, TRUE, FALSE)
+    fo <- cacoa:::permuted_contrast_stats(G, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, zend$num, zend$den, P, integer(0), TRUE, FALSE)
     expect_equal(fo[, 1], as.numeric(cacoa:::permuted_contrast_F(G, pre$a, pre$H, pre$cXc, pre$q, P)), tolerance = 1e-12)
     expect_true(all(is.na(fo[, 2:4])))
-    obs <- cacoa:::permuted_contrast_stats(G, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, zend$num, zend$den, cbind(seq_len(nrow(X))), TRUE, TRUE)
+    obs <- cacoa:::permuted_contrast_stats(G, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, zend$num, zend$den, cbind(seq_len(nrow(X))), integer(0), TRUE, TRUE)
     eff <- cacoa:::estimatePairwiseEffects(NULL, X, cvec, Z, zend, TRUE, G = G)
     expect_equal(obs[1, 2], eff$shift, tolerance = 1e-10); expect_equal(obs[1, 3], eff$var, tolerance = 1e-10)
   }

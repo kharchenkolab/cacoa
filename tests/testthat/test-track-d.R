@@ -106,7 +106,7 @@ test_that("cluster-free shifts on the engine: constant within whole-type neighbo
   # neighbourhood of every cell = all cells of its type (0-based indices)
   idx <- split(seq_along(cg) - 1L, cg)
   nns <- lapply(as.character(cg), function(t) idx[[t]]); names(nns) <- names(cg)
-  res <- clusterFreeExpressionShifts(cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 49, seed = 1, min.n.obs.per.samp = 3)
+  res <- clusterFreeExpressionShifts(statistic = "distance", cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 49, seed = 1, min.n.obs.per.samp = 3, profile = "raw")
   expect_equal(length(res$stat), length(cg))
   for (t in levels(cg)) expect_equal(length(unique(round(res$stat[cg == t], 10))), 1)   # identical statistic within a type
   expect_true(all(is.finite(res$z.adj)))
@@ -120,25 +120,26 @@ test_that("cluster-free shifts on the engine: constant within whole-type neighbo
     expect_equal(unname(res$stat[cg == ct][1]), r$results$F, tolerance = 1e-8, info = ct)
   }
   # smoothing and adjustment can be switched off
-  res2 <- clusterFreeExpressionShifts(cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 19, seed = 1, adjust = FALSE, smooth = FALSE)
+  res2 <- clusterFreeExpressionShifts(statistic = "distance", cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 19, seed = 1, adjust = FALSE, smooth = FALSE, profile = "raw")
   expect_null(res2$z.adj); expect_null(res2$shifts.smoothed)
   # a whole-factor model is refused
   cao$sample.meta$stage <- factor(rep(c("I", "II", "III"), length.out = 10))
   m3 <- buildCacoaModel(cao$sample.meta, formula = ~ stage, test = "stage: all")
-  expect_error(clusterFreeExpressionShifts(cm, cao$sample.per.cell, nns, m3, cao$sample.meta, n.permutations = 9), "contrast test")
+  expect_error(clusterFreeExpressionShifts(statistic = "distance", cm, cao$sample.per.cell, nns, m3, cao$sample.meta, n.permutations = 9, profile = "raw"), "contrast test")
 })
 
 test_that("regressions found by the notebook run: test lookup by variable, CoDA plot, volcano tables, FL fitter without residuals", {
   cao <- makeToyCacoa(n.per.group = c(A = 5, B = 5), cells.per.sample = 60, n.genes = 80, n.cell.types = 4, shift = 1.5)
   cao$sample.meta$stage <- factor(rep(c("I", "II", "III"), length.out = 10))
   cao$setModel(~ group + stage, test = c("group: B vs A", "stage: all"), verbose = FALSE)
-  res <- cao$estimateExpressionShiftMagnitudes(n.permutations = 19, verbose = FALSE)
+  res <- cao$estimateExpressionShiftMagnitudes(n.permutations = 19, verbose = FALSE)   # the whole-factor test is skipped for shifts
   # a test can be addressed by label, by variable name or by index
   expect_equal(cacoa:::matchModelTest(cao$model, "stage"), 2L); expect_equal(cacoa:::matchModelTest(cao$model, "stage (3 levels)"), 2L)
   expect_equal(cacoa:::matchModelTest(cao$model, "group"), 1L); expect_equal(cacoa:::matchModelTest(cao$model, 2), 2L)
   expect_error(cacoa:::matchModelTest(cao$model, "nothing"), "test not found")
-  expect_s3_class(cao$plotExpressionShiftMagnitudes(test = "stage"), "ggplot")
-  expect_s3_class(cao$plotExpressionShiftMagnitudes(test = 2), "ggplot")
+  expect_s3_class(cao$plotExpressionShiftMagnitudes(test = "group"), "ggplot")
+  expect_s3_class(cao$plotExpressionShiftMagnitudes(test = 1), "ggplot")
+  expect_error(cao$plotExpressionShiftMagnitudes(test = "stage"), "test not found")
   expect_equal(as.character(unname(cao$getSampleGroups("stage"))), as.character(cao$sample.meta$stage))
   # Freedman-Lane fitter: columns with missing values, residuals not requested
   X <- cbind(1, as.numeric(cao$sample.meta$group == "B")); Y <- matrix(rnorm(30), 10, 3); Y[c(2, 14)] <- NA

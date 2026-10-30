@@ -937,6 +937,7 @@ estimateDEForTypeLimma <- function(cm, model) {
     }
     
     # limma-voom pipeline
+    checkPackageInstalled("limma", bioc = TRUE); checkPackageInstalled("edgeR", bioc = TRUE)
     dge <- edgeR::DGEList(counts = cm)
     dge <- edgeR::calcNormFactors(dge)
     v   <- limma::voom(dge, design = design, plot = FALSE)
@@ -1212,7 +1213,7 @@ getExpressionFractionPerGroup <- function(cm, cell.groups) {
 #' 
 #' @param counts sparse count matrix 
 #' @param cell.groups factor containing cell groups with cell names as names
-#' @param threshold minimum fraction of expressing cells per cell type (default=0.05)
+#' @param threshold minimum fraction of cells per cell type in which the gene is detected (count > 0; default=0.05)
 #
 #' @keywords internal
 getPerCellTypeGeneFilter <- function(counts, cell.groups, threshold = 0.05) {
@@ -1234,11 +1235,11 @@ getPerCellTypeGeneFilter <- function(counts, cell.groups, threshold = 0.05) {
   cell.groups <- cell.groups[common.cells]
   stopifnot(identical(colnames(counts), names(cell.groups)))
 
-  # binarize counts (>1)
+  # binarize counts: detected (count > 0)
   if (!inherits(counts, "dgCMatrix")) {
     counts <- Matrix::Matrix(counts, sparse = TRUE)
   }
-  counts@x <- as.numeric(counts@x > 1)
+  counts@x <- as.numeric(counts@x > 0)
 
   # build indicator 
   cell.types <- sort(unique(cell.groups))

@@ -1,2 +1,2 @@
-PKG_CXXFLAGS=-I"./include"
+PKG_CXXFLAGS=-I"./include" -fno-math-errno
 PKG_LIBS=$(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)

@@ -28,6 +28,19 @@ inline arma::vec disp_gamma_w(const arma::mat& R, const arma::mat& Z, const arma
   arma::mat Ws = Wm.each_col() % sw;
   return arma::pinv(Ws.t() * Ws) * (Ws.t() * (r % sw));
 }
+// studentized dispersion change: (znum - zden)' gamma over its standard error from the (weighted) least-squares fit of the
+// squared residual distances r on Wm = (R o R) Z (residual variance on n - ncol(Z) degrees of freedom); NaN when not estimable.
+// The permutation test of `var` uses it: each relabeling's precision enters, so the statistic stays pivotal when the dispersion
+// design has sample-level columns (cell numbers) correlated with the tested variable.
+inline double disp_t(const arma::mat& Wm, const arma::vec& r, const arma::vec& gamma, const arma::vec& d, const arma::vec& w) {
+  const double dfw = arma::accu(w) - static_cast<double>(Wm.n_cols);
+  if (dfw <= 0.5) return arma::datum::nan;
+  arma::vec res = r - Wm * gamma; const double s2 = arma::dot(w, res % res) / dfw;
+  arma::vec sw = arma::sqrt(w); arma::mat Ws = Wm.each_col() % sw;
+  const double v = arma::as_scalar(d.t() * arma::pinv(Ws.t() * Ws) * d) * s2;
+  if (!(v > 0)) return arma::datum::nan;
+  return arma::dot(d, gamma) / std::sqrt(v);
+}
 struct WFitState { WHat hi; arma::mat R; arma::vec r, score; };
 inline WFitState wfit(const arma::mat& G, const arma::mat& X, const arma::vec& w, double h_cut) {
   WFitState st; st.hi = what_of(X, w); st.R = -st.hi.H; st.R.diag() += 1.0;
@@ -49,7 +62,7 @@ inline arma::vec iterate_weights(const arma::mat& G, const arma::mat& X, const a
 }
 inline arma::rowvec contrast_stats_w(const arma::mat& G, const arma::mat& X, const arma::mat& Z, const arma::vec& base, const arma::vec& c,
                                      const arma::vec& znum, const arma::vec& zden, bool bias, bool need_var, int robust, double k, int maxit) {
-  arma::rowvec out(4); out.fill(arma::datum::nan);
+  arma::rowvec out(5); out.fill(arma::datum::nan);
   WFitState st; arma::vec w = iterate_weights(G, X, base, robust, k, maxit, 1.0 - 1e-8, st);
   arma::vec a = st.hi.A.t() * c; const double cXc = arma::as_scalar(c.t() * st.hi.XtWXi * c);
   const double ss = arma::dot(a, G * a) / cXc, rss = arma::dot(w, st.r), df = arma::accu(w) - st.hi.rank;
@@ -62,6 +75,7 @@ inline arma::rowvec contrast_stats_w(const arma::mat& G, const arma::mat& X, con
   if (bias) M -= st.hi.A * (st.hi.A.each_row() % s.t()).t();
   const double shift = arma::as_scalar(c.t() * M * c), var = 2.0 * (arma::dot(znum, gamma) - arma::dot(zden, gamma));
   out(1) = shift; out(2) = var; out(3) = shift + var / 2.0;
+  out(4) = disp_t((st.R % st.R) * Z, st.r, gamma, znum - zden, w);
   return out;
 }
 inline double rss_wls(const arma::mat& Z, const arma::vec& v, const arma::vec& w) {

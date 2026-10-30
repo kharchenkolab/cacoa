@@ -37,7 +37,7 @@ Cacoa currently supports inputs in several formats (see below). Most of them req
 Additionally, the `embedding` parameter containing a matrix or data.frame with a cell embedding can be provided. Rownames should match to the cell ids. 
 It is used for visualization and some cluster-free analysis.
 
-The cluster-free analyses (cell density and expression shifts per cell) test every cell in a kNN neighbourhood of the cell graph whose size follows the data (the larger of 100 cells and 10 cells per sample, capped at 1% of the cells; `cao$checkNeighbourhoods()` reports what that size means on a dataset), with the same sample-level model and relabelings as the other analyses, and adjust across cells with a pooled permutation false-discovery rate; see `misc/doc/main.tex` for the method.
+The cluster-free analyses (cell density and expression shifts per cell) test every cell in a diffusion neighborhood of the cell graph whose width is a share of the cells (`scale`; by default a scan over 1, 3 and 5 % of the cells reports the scale whose own map calls the most cells, the finest one when a scale calls nearly every cell), with the same sample-level model and relabelings as the other analyses, and adjust across cells with a pooled permutation false-discovery rate. The kNN neighborhood, whose size follows the data (the larger of 100 cells and 10 cells per sample, capped at 1 % of the cells; `scale = NULL`), remains available and is the smallest neighborhood of the expression-shift map; `cao$checkNeighbourhoods()` reports what that size means on a dataset. See `misc/doc/main.tex` for the method.
 
 ### No expression data
 

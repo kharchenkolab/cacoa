@@ -20,7 +20,7 @@ test_that("batched kernel equals the R reference: whole-type and random neighbou
     inp <- cfInputs(cao, nns)
     expect_true(any(is.na(inp$Y)) || identical(nns, nns.type))
     ref <- refClusterFreeShifts(inp$Y, inp$pairs, inp$samples, cao$model, inp$meta, inp$gplan, inp$P)
-    res <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE)
+    res <- clusterFreeExpressionShifts(statistic = "distance", inp$cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE, profile = "raw")
     expect_equal(unname(res$stat), ref$F, tolerance = 1e-9); expect_equal(unname(res$p.value), ref$p, tolerance = 1e-12)
     expect_equal(unname(res$shifts), ref$shift, tolerance = 1e-9); expect_equal(unname(res$n.samples), ref$n)
     expect_equal(unname(res$z.std), ref$z, tolerance = 1e-9)
@@ -34,11 +34,11 @@ test_that("batched kernel equals the R reference: whole-type and random neighbou
   inp <- cfInputs(cao, nns.rand, permutation = "freedman-lane")
   expect_equal(inp$gplan$scheme, "freedman-lane")
   ref <- refClusterFreeShifts(inp$Y, inp$pairs, inp$samples, cao$model, inp$meta, inp$gplan, inp$P)
-  res <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns.rand, cao$model, cao$sample.meta, permutation = "freedman-lane", n.permutations = 29, seed = 1, adjust = FALSE, smooth = FALSE)
+  res <- clusterFreeExpressionShifts(statistic = "distance", inp$cm, cao$sample.per.cell, nns.rand, cao$model, cao$sample.meta, permutation = "freedman-lane", n.permutations = 29, seed = 1, adjust = FALSE, smooth = FALSE, profile = "raw")
   expect_equal(unname(res$stat), ref$F, tolerance = 1e-9); expect_equal(unname(res$p.value), ref$p); expect_equal(unname(res$z.std), ref$z, tolerance = 1e-9)
   # results do not depend on the number of threads
-  res4 <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns.rand, cao$model, cao$sample.meta, permutation = "freedman-lane", n.permutations = 29, seed = 1, adjust = TRUE, smooth = TRUE, n.cores = 4)
-  res1 <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns.rand, cao$model, cao$sample.meta, permutation = "freedman-lane", n.permutations = 29, seed = 1, adjust = TRUE, smooth = TRUE, n.cores = 1)
+  res4 <- clusterFreeExpressionShifts(statistic = "distance", inp$cm, cao$sample.per.cell, nns.rand, cao$model, cao$sample.meta, permutation = "freedman-lane", n.permutations = 29, seed = 1, adjust = TRUE, smooth = TRUE, n.cores = 4, profile = "raw")
+  res1 <- clusterFreeExpressionShifts(statistic = "distance", inp$cm, cao$sample.per.cell, nns.rand, cao$model, cao$sample.meta, permutation = "freedman-lane", n.permutations = 29, seed = 1, adjust = TRUE, smooth = TRUE, n.cores = 1, profile = "raw")
   expect_equal(res4$stat, res1$stat); expect_equal(res4$z.adj, res1$z.adj); expect_equal(res4$shifts.smoothed, res1$shifts.smoothed)
 })
 
@@ -50,7 +50,7 @@ test_that("streaming kernel equals the batched kernel on a precomputed distance 
   lev <- rep(-1L, length(inp$samples))
   bat <- cacoa:::cluster_free_shift_batch(inp$Y, inp$pairs - 1L, length(inp$samples), cao$model$F[inp$samples, ], cao$model$contrast.F, lev, 2L,
                                           as.integer(inp$gplan$strata), as.integer(inp$gplan$in.set), inp$P, FALSE, TRUE, 1L)
-  res <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = FALSE, smooth = FALSE, n.cores = 3)
+  res <- clusterFreeExpressionShifts(statistic = "distance", inp$cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = FALSE, smooth = FALSE, n.cores = 3, profile = "raw")
   expect_equal(unname(res$stat), as.numeric(bat$stat), tolerance = 1e-10); expect_equal(unname(res$p.value), as.numeric(bat$p))
   expect_equal(unname(res$shifts), as.numeric(bat$shift), tolerance = 1e-10)
   # every whole-type neighbourhood reproduces the cell-type engine's F on the same mean profiles (regression: the
@@ -74,7 +74,7 @@ test_that("a sample with too few cells in a neighbourhood drops itself, not the 
   cg <- cao$cell.groups; spc <- cao$sample.per.cell
   thin <- levels(spc)[1]; drop <- which(spc == thin)[-(1:2)]                         # every neighbourhood keeps only two cells of the first sample
   nns <- lapply(seq_along(cg), function(i) setdiff(seq_along(cg) - 1L, drop - 1L)); names(nns) <- names(cg)
-  res <- clusterFreeExpressionShifts(Matrix::t(cao$data.object), spc, nns, cao$model, cao$sample.meta, n.permutations = 19, seed = 1, adjust = FALSE, smooth = FALSE)
+  res <- clusterFreeExpressionShifts(statistic = "distance", Matrix::t(cao$data.object), spc, nns, cao$model, cao$sample.meta, n.permutations = 19, seed = 1, adjust = FALSE, smooth = FALSE, profile = "raw")
   expect_true(all(res$n.samples == nlevels(spc) - 1)); expect_true(all(is.finite(res$stat)))
   # the R helper applies the same rule
   n <- nlevels(spc); pairs <- t(utils::combn(n, 2)); y <- runif(nrow(pairs)); y[pairs[, 1] == 1 | pairs[, 2] == 1] <- NA
@@ -85,8 +85,8 @@ test_that("label permutations are global relabelings: a cell is skipped where th
   cao <- makeToyCacoa(n.per.group = c(A = 5, B = 5), cells.per.sample = 40, n.genes = 80, shift = 1.2)
   cg <- cao$cell.groups
   set.seed(5); nns <- lapply(seq_along(cg), function(i) sample(seq_along(cg) - 1L, 60)); names(nns) <- names(cg)   # several samples absent per cell
-  res <- clusterFreeExpressionShifts(Matrix::t(cao$data.object), cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 49, seed = 1,
-                                     adjust = TRUE, smooth = FALSE, groups = cg, min.samp.per.level = 3)
+  res <- clusterFreeExpressionShifts(statistic = "distance", Matrix::t(cao$data.object), cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 49, seed = 1,
+                                     adjust = TRUE, smooth = FALSE, groups = cg, min.samp.per.level = 3, profile = "raw")
   ok <- is.finite(res$z.pooled)
   expect_true(any(res$n.samples[ok] < nlevels(cao$sample.per.cell)))
   expect_true(all(res$n.perm[ok] >= 1 & res$n.perm[ok] <= 49)); expect_true(any(res$n.perm[ok] < 49))
@@ -121,8 +121,8 @@ test_that("cluster-free shifts return pooled per-cell p-values and accept p.sour
   cg <- cao$cell.groups; idx <- split(seq_along(cg) - 1L, cg)
   set.seed(4); nns <- lapply(seq_along(cg), function(i) sample(idx[[as.character(cg[i])]], 60)); names(nns) <- names(cg)
   inp <- cfInputs(cao, nns)
-  r <- clusterFreeExpressionShifts(inp$cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 49, seed = 1, adjust = TRUE, smooth = FALSE,
-                                   adjust.method = "bh", p.source = "pooled")
+  r <- clusterFreeExpressionShifts(statistic = "distance", inp$cm, cao$sample.per.cell, nns, cao$model, cao$sample.meta, n.permutations = 49, seed = 1, adjust = TRUE, smooth = FALSE,
+                                   adjust.method = "bh", p.source = "pooled", profile = "raw")
   ok <- is.finite(r$z.pooled)
   expect_true(all(is.finite(r$p.pooled[ok]))); expect_true(all(r$p.pooled[ok] > 0 & r$p.pooled[ok] <= 1))
   expect_true(all(is.na(r$p.pooled[!ok])))

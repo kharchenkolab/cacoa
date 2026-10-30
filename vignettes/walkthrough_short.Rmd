@@ -32,7 +32,8 @@ The recommended order is
 
 1. `Cacoa$new()` with the sample metadata.
 2. `cao$checkDesign()`: is the planned comparison identifiable from the metadata alone?
-3. `cao$screenCovariates()`: which covariates are associated with sample-level variation, in which cell types?
+3. `cao$screenCovariates()` and `cao$plotSampleDistances()`: which covariates are associated with sample-level
+   variation, in which cell types, and what does the sample structure look like?
 4. `cao$setModel()`: the model and the contrast used from here on.
 5. `cao$estimateExpressionShiftMagnitudes()` and the other analyses.
 6. `cao$checkSensitivity()`: does the result depend on the covariate set or on single samples?
@@ -94,8 +95,9 @@ the unadjusted result, which `checkSensitivity()` does below.
 ## Screen covariates
 
 The screen tests every usable covariate against the sample-to-sample expression distances of each cell type, alone
-(marginal) and adjusted for the other covariates (partial). The last column is a global test over all cell types.
-The screen ends with a suggested model; it is not applied automatically.
+(marginal) and adjusted for the other covariates (partial). Two summary columns come first: all cell types combined
+and the cell-type composition. The last column is a global test over the cell types. The screen ends with a suggested
+model; it is not applied automatically.
 
 ```{r screen, purl=FALSE}
 cao$screenCovariates(n.permutations = 199)
@@ -112,6 +114,23 @@ cao$plotVariancePartition(c("treatment", "age"))
 Treatment explains a large part of the between-sample variation in the planted cell types and none in `Microglia`
 and `Neu-NRGN`; age explains nothing, as simulated.
 
+### Sample maps
+
+`plotSampleDistances()` draws the samples in two dimensions (MDS of the sample distances) in one of three spaces:
+`"expression"` (one cell type, or all cell types combined when `cell.type` is not given), `"pseudobulk"` (all cells of a
+sample pooled) and `"composition"` (cell-type proportions). The subtitle gives the chance-corrected R² and permutation
+p-value of each color and shape variable on its own, the screen's marginal numbers (its summary lines print the
+partial ones where the degrees of freedom allow them). No model is needed.
+
+```{r plot-sample-maps, fig.width=10, fig.height=3.6, purl=FALSE}
+cowplot::plot_grid(cao$plotSampleDistances(color.by = "treatment"),
+                   cao$plotSampleDistances(space = "composition", color.by = "treatment"),
+                   cao$plotSampleDistances(space = "composition", color.by = "age"), ncol = 3)
+```
+
+Over all cell types the two arms are apart (adj. R² 0.13); in the composition they are further apart (0.44), the
+unplanned composition differences described above. Age structures neither.
+
 ## Set the model
 
 `test` names the variable to test. For a two-level factor the contrast compares its two levels; the reference level
@@ -124,35 +143,59 @@ cao$setModel(~ treatment + age, test = "treatment")
 
 ## Expression shifts per cell type
 
-For every cell type, each sample's cells are pooled into a pseudobulk profile and the sample-to-sample distances
-are modelled with the formula above. The contrast gives three effects:
+For every cell type, the question is which cell types changed, and how much. Each sample's cells of the type are pooled
+into a profile, and two things are estimated:
+
+- **Is there a change?** For every gene, the contrast of its profile across the samples is divided by its standard
+  error (sampling noise of the profile plus donor-level variation), and the gene z-scores are combined adaptively, so
+  that both a strong change in a few genes and a weak change in many are detected (`statistic = "gsd"`, the default).
+  Permutations of the sample labels give the p-values, adjusted across cell types (`padj`).
+- **How big is the change?** The sample-to-sample distances of the type are modeled with the formula above, which
+  gives three effects:
 
 | effect | meaning |
 |---|---|
-| `shift` | the arms differ in a common direction, beyond the within-arm variability |
-| `var`   | the treated arm is more (or less) heterogeneous than the control arm |
+| `shift` | the arms differ in a common direction: squared distance between the arm means relative to the within-arm spread |
+| `var`   | the treated arm is more (or less) heterogeneous than the control arm: log2 ratio of the arm dispersions, at equal cell numbers |
 | `total` | treated samples are farther from control samples than control samples are from each other |
 
-The effects are reported on a normalized scale: `shift` relative to the within-arm distances, `var` as the log2
-ratio of the arm dispersions. P-values come from permutations and are adjusted across cell types
-(Benjamini-Hochberg `padj`, and the familywise `p.fwer`); a global p-value per effect summarizes all cell types.
+The normalized shift is comparable across cell types and does not depend on the numbers of cells; `var` is tested by
+the distance model.
 
 ```{r shifts, purl=FALSE}
 res <- cao$estimateExpressionShiftMagnitudes()
 res
 ```
 
-```{r plot-shifts, fig.width=9, fig.height=4, purl=FALSE}
+```{r plot-shifts, fig.width=8, fig.height=3.8, purl=FALSE}
 cao$plotExpressionShiftMagnitudes()
 ```
 
-Points are normalized effects with jackknife intervals; filled points are significant after adjustment across cell
-types. The planted ordering is recovered: the three strong cell types on top, the two unchanged ones at zero.
+All seven cell types with a planted change are called, including the weak one (`AST-FB`), and the two without a
+planted change are not. The sizes follow the planted strengths only roughly (`L5/6-CC`, planted as moderate, lies
+above `IN-SST`): the normalized shift measures the change relative to each type's own within-arm spread.
+
+Cell types are ordered by the size of the shift; filled points have a significant change. The gray band is the range
+of the shift with shuffled labels (what noise alone gives). Significance and size answer different questions: a small
+but consistent change can be significant, and a large estimate based on few or heterogeneous samples may not be. The
+jackknife intervals (`show.ci = TRUE`) show how firmly the samples determine the size; they are not a test. The genes
+changed at a gene-level FDR can be added as a margin (`show.genes = TRUE`); their number depends on the numbers of
+samples and cells, so it is a cross-check rather than a ranking.
+
+```{r plot-shifts-full, fig.width=9, fig.height=3.8, purl=FALSE}
+cao$plotExpressionShiftMagnitudes(show.ci = TRUE, show.genes = TRUE)
+```
+
+The dispersion change, on the same layout:
+
+```{r plot-var, fig.width=8, fig.height=3.8, purl=FALSE}
+cao$plotExpressionShiftMagnitudes(effect = "var")
+```
 
 ### Behind one cell type
 
-`plotShiftDetail()` shows the sample-level picture for one cell type: the samples in the adjusted distance space,
-the distribution of pair distances within and between the arms, and the per-sample dispersion.
+`plotShiftDetail()` shows the sample-level picture of the distance model for one cell type: the samples in the adjusted
+distance space, the distribution of pair distances within and between the arms, and the per-sample dispersion.
 
 ```{r plot-shift-detail, fig.width=12, fig.height=3.8, purl=FALSE}
 cao$plotShiftDetail("IN-SST")
@@ -167,9 +210,10 @@ cao$plotSampleInfluence()
 
 ## Robustness
 
-The shifts are re-estimated without adjustment, with the current model, and with the covariates proposed by the
-screen. Per cell type, one verdict summarizes the comparison: robust, sign or significance depends on the model, the
-estimate changes by more than half, or the result is driven by one sample.
+The shifts are re-estimated without adjustment, with the current model, and with the covariates proposed by the screen,
+and two questions are answered per cell type. The size (the distance-model magnitude, as in the main result): near zero (inside the noise band of shuffled labels),
+stable, changing by more than half, sign depending on the model, or driven by one sample. The significance (by gsd, the
+test of the main result, refitted under each model): significant in all, some or none of the models.
 
 ```{r sensitivity, purl=FALSE}
 cao$checkSensitivity(n.permutations = 199)
@@ -179,16 +223,16 @@ cao$checkSensitivity(n.permutations = 199)
 cao$plotSensitivity()
 ```
 
-Adjusting for age changes nothing here. The two cell types without a planted effect are flagged as driven by one
-sample: their estimates are at zero and a single sample decides the sign.
+Adjusting for age changes nothing here: the seven changed cell types are significant with and without it, and the
+two unchanged ones in neither model.
 
-## Sample structure
+## Sample structure after the model
 
-The sample distances of one cell type can be shown before and after the model adjustment, coloured by the tested
-variable or by any covariate.
+Once a model is set, the maps can also be drawn with its covariates removed (`values = "adjusted"`, or `"both"` side by
+side): a covariate that was adjusted for should no longer structure the samples.
 
 ```{r plot-sample-distances, fig.width=9, fig.height=3.8, purl=FALSE}
-cao$plotSampleDistances(cell.type = "IN-SST", color.by = "test")
+cao$plotSampleDistances(cell.type = "IN-SST", values = "both", color.by = "age", shape.by = "test")
 ```
 
 ## Differential expression and composition on the same model
@@ -209,25 +253,25 @@ Compositional changes are tested on the same contrast (cell-type loadings of the
 
 ```{r loadings, fig.width=5, fig.height=5, purl=FALSE}
 cao$estimateCellLoadings()
-cao$plotCellLoadings(show.pvals = FALSE)
+cao$plotCellLoadings()
 ```
 
 ## Cluster-free analyses
 
-Cell density is compared between the arms in every cell's neighbourhood with the same model. The unit is a kNN
-neighbourhood of the cell graph: the cell, its graph neighbours and, up to a minimum size, their neighbours, sized by
-default to the larger of 100 cells and 10 cells per sample (`k`). Each sample's share of the neighbourhood's cells is
-tested on the log scale, and the statistic is then averaged over each cell and its graph neighbours under every
+Cell density is compared between the arms in every cell's neighborhood with the same model. The unit is a kNN
+neighborhood of the cell graph: the cell, its graph neighbors and, up to a minimum size, their neighbors, sized by
+default to the larger of 100 cells and 10 cells per sample (`k`). Each sample's share of the neighborhood's cells is
+tested on the log scale, and the statistic is then averaged over each cell and its graph neighbors under every
 permutation alike (`post = "averaged"`), an exact test of a slightly larger unit that borrows strength from the
-neighbours without inflating the error. The per-cell statistics are strongly dependent and permutation p-values are
+neighbors without inflating the error. The per-cell statistics are strongly dependent and permutation p-values are
 floored at 1 / (permutations + 1), so the maps are adjusted by a pooled permutation false-discovery rate
 (`adjust.method = "perm-fdr"`): the number of cells beyond a threshold under the permutations, pooled over all cells,
 against the observed number. The heat-kernel density (`smoothing = "heat"`, width in cells with `target.size`),
 Benjamini-Hochberg on per-cell p-values (`"bh"`) and the familywise max-statistic adjustment (`"max-t"`) remain
-available. The cluster-free expression shifts test the contrast in the same kNN neighbourhoods with the same
+available. The cluster-free expression shifts test the contrast in the same kNN neighborhoods with the same
 post-processing and adjustment.
 
-Before the density test, the neighbourhood unit is checked: how many cells each sample contributes to a unit, how large
+Before the density test, the neighborhood unit is checked: how many cells each sample contributes to a unit, how large
 the units are, and how pure they are against the annotation.
 
 ```{r neighbourhoods}
@@ -243,19 +287,25 @@ cowplot::plot_grid(cao$plotDiffCellDensity(what = "effect", contours = "L2/3"), 
 
 Left to right: the effect (the log2 fold change of the density per cell), the unadjusted z-scores (the signed tail z of the
 per-cell p-values of the pooled permutation null, calibrated and not floored at 1 / (permutations + 1)) and the
-adjusted z-scores (the tail z of the FDR q-values). The colour range of a z map is the 99.5 % quantile of the absolute
+adjusted z-scores (the tail z of the FDR q-values). The color range of a z map is the 99.5 % quantile of the absolute
 z-scores, so a few extreme cells do not wash out the map. The density map agrees with the loadings: `L2/3` and
 `L5/6-CC` are depleted in the treated arm, `IN-PV`, `IN-SST` and `OPC` enriched. The expression shifts show the planted
 cell types, again as the shift magnitude, the unadjusted and the adjusted z-scores (one-sided):
 
-```{r cluster-free-shifts, fig.width=14, fig.height=4, purl=FALSE}
-cao$estimateClusterFreeExpressionShifts(n.top.genes = 500, n.permutations = 99)
+```{r cluster-free-shifts, fig.width=12, fig.height=4.8, purl=FALSE}
+cao$estimateClusterFreeExpressionShifts(n.permutations = 99)
 cao$plotClusterFreeExpressionShifts(font.size = 3)
 ```
 
+The map also calls the microglia, which carry no planted change (and part of `Neu-NRGN`), while the per-type test
+does not (adjusted p 0.68). The three types form one cloud on the graph: 40 % of the cells in a microglial neighborhood
+belong to other types, mostly `AST-FB` (21 %) and the strongly changed `L5/6-CC` and `L2/3` (9 %). The map reports a
+neighborhood effect there, the risk of any test that borrows neighboring cells across cell-type boundaries; the
+per-type test and `checkNeighbourhoods()` (purity of the units) are the checks.
+
 Both cluster-free maps are summarized per cell type by an exact group-level permutation test: the mean per-cell
 statistic of the type is compared with the same mean under the permutations shared by all cells, so the dependence
-between neighbouring cells is carried along, and the result is adjusted across types. This gives a verdict per type
+between neighboring cells is carried along, and the result is adjusted across types. This gives a verdict per type
 where the per-cell map is too sparse to call single cells (a Cauchy combination of the cells' p-values is the
 alternative, `method = "cauchy"`).
 
@@ -266,16 +316,16 @@ cowplot::plot_grid(cao$plotClusterFreeSummary("cell.density"), cao$plotClusterFr
 ```
 
 The density summary recovers the composition differences of the simulation and the shift summary the planted cell
-types. `Microglia` is also called by the shift summary although nothing was planted there: its neighbourhoods border
-`AST-FB`, whose frequency differs between the arms, so the neighbourhood profiles shift with the composition. The
-per-cell-type test above, which pools the cells of a type, puts `Microglia` at zero; a neighbourhood-level expression
+types. `Microglia` is also called by the shift summary although nothing was planted there: its neighborhoods border
+`AST-FB`, whose frequency differs between the arms, so the neighborhood profiles shift with the composition. The
+per-cell-type test above, which pools the cells of a type, puts `Microglia` at zero; a neighborhood-level expression
 test cannot separate the two.
 
 ## Functional interpretation
 
 The DE tables feed a gene set enrichment analysis per cell type (GSEA on GO biological processes, through
 clusterProfiler), and the enriched terms are summarized by grouping related terms: terms are first clustered by the genes
-they share, then by their enrichment pattern across cell types, and each cluster is labelled by its most frequent words.
+they share, then by their enrichment pattern across cell types, and each cluster is labeled by its most frequent words.
 The simulated genes have no annotation, so the chunks below are shown but not run; see the real-data examples in
 `examples/` for executed versions.
 

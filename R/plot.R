@@ -731,7 +731,15 @@ plotSampleDistanceMatrix <- function(p.dists, sample.labels=NULL, n.cells.per.sa
         checkPackageInstalled('uwot', cran=TRUE, details='for `method="UMAP"`')
         emb <- estimateUMAPOnDistances(p.dists, n.neighbors=n.neighbors, n_epochs=max.iter)
       } else if (method == 'MDS') {
-        emb <- cmdscale(p.dists, eig=TRUE, k=2)$points # k is the number of dim
+        # classical MDS of the geometry the models use: "cor" and "l1" distances are already squared distances there
+        # (asSquaredDistance), so their square root is embedded; "l2" (and an untyped matrix) as is
+        dt <- attr(p.dists, "dist.type")
+        Dm <- if (!is.null(dt) && dt %in% c("cor", "l1")) sqrt(pmax(as.matrix(p.dists), 0)) else as.matrix(p.dists)
+        emb <- suppressWarnings(cmdscale(Dm, eig=TRUE, k=2)$points)
+        if (is.null(dim(emb)) || ncol(emb) < 2) {   # fewer than two positive eigenvalues: pad with zero coordinates
+          if (!any(abs(Dm) > 1e-12)) warning("the samples do not differ in this space: all distances are zero")
+          emb <- cbind(matrix(emb, nrow(Dm)), matrix(0, nrow(Dm), 2))[, 1:2, drop = FALSE]
+        }
       } else if (method == 'heatmap') {
         color.per.group <- NULL
         if (!is.null(palette)) {
@@ -824,7 +832,10 @@ plotSampleDistanceMatrix <- function(p.dists, sample.labels=NULL, n.cells.per.sa
       gg <- gg + plot.theme
       # nothing mapped to colour / shape: one neutral colour, no legend entries
       if (is.null(sample.labels) && is.null(sample.colors)) gg <- gg + (if (is.null(palette)) scale_color_manual(values = "grey30", guide = "none") else guides(color = "none"))
-      if (is.null(shape.labels)) gg <- gg + guides(shape = "none")
+      if (is.null(shape.labels)) gg <- gg + guides(shape = "none") else {
+        n.sh <- nlevels(df$shape)                                      # solid shapes first, then the outlined ones
+        if (n.sh <= 9) gg <- gg + scale_shape_manual(values = c(16, 17, 15, 18, 8, 4, 3, 1, 2)[seq_len(n.sh)], na.value = 1)
+      }
 
       if (show.sample.size) {
         if (length(size) == 1) {
@@ -832,6 +843,9 @@ plotSampleDistanceMatrix <- function(p.dists, sample.labels=NULL, n.cells.per.sa
         }
         gg <- gg + geom_point(aes(size=n.cells)) +
           scale_size_continuous(trans="log10", range=size, name="Num. cells")
+        # readable legend keys (the point size of the keys would otherwise follow the smallest cell count)
+        if (!is.null(sample.labels) && is.null(sample.colors) && !is.cont) gg <- gg + guides(color = guide_legend(override.aes = list(size = 4.5)))
+        if (!is.null(shape.labels)) gg <- gg + guides(shape = guide_legend(override.aes = list(size = 4.5)))
       } else {
         gg <- gg + geom_point(size=size)
       }
@@ -949,194 +963,84 @@ distTreeOrder <- function(t, tree.order){
   return(s)
 }
 
-#' helper function for creating dendograms
-#' @keywords internal
-plotContrastTree <- function(d.counts, d.groups, ref.level, target.level, plot.theme=theme_get(), label.angle=90,
-                             p.threshold=0.05, adjust.pvalues=TRUE, h.methods='both', font.size=3, label.hjust=1,
-                             show.text='pvalue.code', tree.order=NULL, loadings.mean=NULL, palette=NULL,
-                             verbose=FALSE) {
-  checkPackageInstalled(c("ggdendro"), cran=TRUE)
-  
-  log.f <- getLogFreq(d.counts)
-  
-  if (h.methods == 'up') {
-    if (verbose) message('up')
-    t.cur <- constructTreeUp(d.counts, d.groups)
-  } else if (h.methods == 'down') {
-    if (verbose) message('down')
-    t.cur <- constructTree(d.counts, d.groups)
-  } else {
-    if (verbose) message('up and down')
-    t.cur <- constructTreeUpDown(d.counts, d.groups)
-  }
-  
-  if (!is.null(loadings.mean) && is.null(tree.order)) {
-    tree.order <- names(sort(loadings.mean))
-  }
-  
-  # Order the tree in the as similar as possible way
-  if (!is.null(tree.order)) {
-    t <- t.cur$tree
-    tree.order <- intersect(tree.order, t$tip.label)
-    # distance of the initial tree
-    d <- distTreeOrder(t, tree.order)
-    idx <- min(t$edge[,1]):max(t$edge[,1])
-    for (i.node in idx) {
-      
-      # alternative tree
-      t.alt <- ape::rotate(t, i.node)
-      d.alt <- distTreeOrder(t.alt, tree.order)
-      
-      if (d.alt <= d) {
-        t <- t.alt
-        d <- d.alt
-      }
+#' Plot the contrast tree of a compositional result
+#'
+#' The tree of [contrastTree()] as a dendrogram: the cell types in the order of their loadings at the leaves (reference cell
+#' types marked "(ref)"), the height of a node the number of cell types below it. Each node is labeled with the log2 ratio of
+#' the geometric-mean proportions of its two sides between the contrast's endpoints (the right-hand side is the one that is
+#' higher at the target), the significance code of its Benjamini-Hochberg adjusted permutation p-value and the share of
+#' the compositional shift it explains; the point of a significant node is filled. Below the significant nodes the
+#' samples' own log2 ratios of the two sides are shown (adjusted for the model's covariates, [codaSampleLogFreq()]), one
+#' row per side of the contrast with the median and the quartiles, so that the separation behind a node is visible.
+#' Tiles under the leaves show the reference-centered loadings (log2) of the cell types.
+#'
+#' @param res result of [lmCoda()] (as stored by `cao$estimateCellLoadings()`)
+#' @param tree result of [contrastTree()] (default: computed from `res`, or `res$tree` when present)
+#' @param alpha significance level on the adjusted node p-values (default 0.05)
+#' @param show.samples show the samples' balances at the significant nodes (default TRUE)
+#' @param show.text label the nodes (default TRUE)
+#' @param leaf.values tiles under the leaves: `"reference-centered"` (default), `"clr"` or `"none"`
+#' @param palette colors of the contrast's sides (named by the endpoint labels, by `"baseline"` / `"target"`, or two colors)
+#' @param plot.theme ggplot2 theme
+#' @param font.size size of the node labels and leaf labels
+#' @param label.angle angle of the leaf labels
+#' @param legend.position legend position (default "bottom")
+#' @param min.share nodes explaining less than this share of the shift are not labeled unless significant (default 0.02)
+#' @return ggplot2 object
+#' @export
+plotContrastTree <- function(res, tree = NULL, alpha = 0.05, show.samples = TRUE, show.text = TRUE, leaf.values = c("reference-centered", "clr", "none"),
+                             palette = NULL, plot.theme = ggplot2::theme_bw(), font.size = 3, label.angle = 90, legend.position = "bottom", min.share = 0.02) {
+  leaf.values <- match.arg(leaf.values)
+  if (is.null(res$contrast)) stop("not a contrast result of lmCoda()")
+  if (is.null(tree)) tree <- if (!is.null(res$tree) && identical(res$tree$order, names(res$contrast$loadings$obs)[order(res$contrast$loadings$obs)])) res$tree else contrastTree(res, alpha = alpha)
+  nodes <- tree$nodes; nodes$significant <- is.finite(nodes$padj) & nodes$padj <= alpha
+  cts <- tree$order; D <- length(cts); x.leaf <- stats::setNames(seq_len(D), cts); H <- D - 1
+  members <- lapply(tree$sides, function(s) c(s$plus, s$minus))
+  nodes$x <- vapply(members, function(m) mean(x.leaf[m]), numeric(1)); nodes$y <- vapply(members, length, integer(1)) - 1; nodes$range <- vapply(members, function(m) diff(range(x.leaf[m])), numeric(1))
+  childOf <- function(side) { j <- which(vapply(members, function(m) setequal(m, side), logical(1))); if (length(j)) c(nodes$x[j[1]], nodes$y[j[1]]) else c(x.leaf[[side]], 0) }
+  seg <- do.call(rbind, lapply(seq_len(nrow(nodes)), function(k) { a <- childOf(tree$sides[[k]]$minus); b <- childOf(tree$sides[[k]]$plus)
+    data.frame(x = c(a[1], b[1], a[1]), y = c(a[2], b[2], nodes$y[k]), xend = c(a[1], b[1], b[1]), yend = c(nodes$y[k], nodes$y[k], nodes$y[k])) }))
+  ref <- res$reference$celltypes; lab <- ifelse(cts %in% ref, paste0(cts, " (ref)"), cts)
+  gg <- createDendrogram(list(segments = seg, labels = data.frame(x = unname(x.leaf), label = lab)), plot.theme = plot.theme, font.size = font.size, angle = label.angle)
+  # node labels: log2 ratio, significance code, share
+  nodes$code <- pvalueToCode(nodes$padj, ns.symbol = ""); nodes$label <- sprintf("%+.2f%s  %.0f%%", nodes$log2.ratio, ifelse(nodes$code == "", "", paste0(" ", nodes$code)), 100 * nodes$share)
+  gg <- gg + ggplot2::geom_point(data = nodes, ggplot2::aes(x = .data$x, y = .data$y, shape = .data$significant), size = 2, colour = "black", show.legend = FALSE) +
+    ggplot2::scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1), drop = FALSE)
+  nodes$labeled <- nodes$significant | (is.finite(nodes$share) & nodes$share >= min.share)
+  if (show.text) gg <- gg + ggplot2::geom_text(data = nodes[nodes$labeled, , drop = FALSE], ggplot2::aes(x = .data$x, y = .data$y + 0.02 * H, label = .data$label), vjust = 0, hjust = 0.5, size = font.size, colour = "grey20")
+  # the samples' balances at the significant nodes
+  sig <- which(nodes$significant)
+  if (show.samples && length(sig)) {
+    sl <- codaSampleLogFreq(res); logf <- sl$logf; grp <- sl$group
+    pts <- do.call(rbind, lapply(sig, function(k) { s <- tree$sides[[k]]; lr <- (rowMeans(logf[, s$plus, drop = FALSE]) - rowMeans(logf[, s$minus, drop = FALSE])) / log(2)
+      z <- lr - mean(lr); w <- max(abs(z)); if (!is.finite(w) || w == 0) w <- 1; data.frame(node = k, sample = rownames(logf), x = nodes$x[k] + z / w * max(nodes$range[k] / 2, 0.6) * 0.9, lr = lr,
+                 group = if (is.null(grp)) "sample" else if (sl$numeric) grp else as.character(grp), stringsAsFactors = FALSE) }))
+    if (sl$numeric || is.null(grp)) {
+      pts$y <- nodes$y[pts$node] - 0.045 * H
+      gg <- if (sl$numeric) gg + ggplot2::geom_point(data = pts, ggplot2::aes(x = .data$x, y = .data$y, colour = .data$group), alpha = 0.6, size = 1.2) + ggplot2::labs(colour = res$model$contrast_spec$term %||% "sample")
+            else gg + ggplot2::geom_point(data = pts, ggplot2::aes(x = .data$x, y = .data$y), colour = "grey40", alpha = 0.5, size = 1.2)
+    } else {
+      pts <- pts[pts$group != "other", , drop = FALSE]; pts$group <- factor(pts$group, levels = c("baseline", "target"))
+      pts$y <- nodes$y[pts$node] - 0.03 * H - 0.035 * H * (as.integer(pts$group) - 1)
+      summ <- do.call(rbind, lapply(split(pts, list(pts$node, pts$group), drop = TRUE), function(d) data.frame(node = d$node[1], group = d$group[1], y = d$y[1], med = stats::median(d$x), lo = stats::quantile(d$x, 0.25), hi = stats::quantile(d$x, 0.75))))
+      labs <- c(baseline = sl$labels$baseline, target = sl$labels$target)
+      pal <- if (is.null(palette)) c(baseline = "#5b7fa6", target = "#c0504d") else if (!is.null(names(palette)) && all(c("baseline", "target") %in% names(palette))) palette[c("baseline", "target")]
+             else if (!is.null(names(palette)) && all(unlist(res$model$contrast_spec[c("den", "num")]) %in% names(palette))) stats::setNames(palette[unlist(res$model$contrast_spec[c("den", "num")])], c("baseline", "target"))
+             else stats::setNames(rep_len(unname(palette), 2), c("baseline", "target"))
+      gg <- gg + ggplot2::geom_point(data = pts, ggplot2::aes(x = .data$x, y = .data$y, colour = .data$group), alpha = 0.35, size = 1) +
+        ggplot2::geom_segment(data = summ, ggplot2::aes(x = .data$lo, xend = .data$hi, y = .data$y, yend = .data$y, colour = .data$group), linewidth = 0.7) +
+        ggplot2::geom_point(data = summ, ggplot2::aes(x = .data$med, y = .data$y, colour = .data$group), size = 2.2, shape = 18) +
+        ggplot2::scale_colour_manual(values = pal, labels = labs, name = NULL, drop = FALSE)
     }
-    t.cur$tree <- t
-    t.cur$dendro <- compute.brlen(t.cur$tree, method="Grafen") %>% as.hclust() %>% as.dendrogram()
   }
-  
-  
-  tree <- t.cur$tree
-  sbp <- sbpInNodes(tree)
-  
-  # Positions of the dendrogram
-  dend.data <- ggdendro::dendro_data(t.cur$dendro, type = "rectangle")
-  types.order <- dend.data$labels$label
-  # change the sign of sbp corresponding to the dendrodgram
-  for (k in 1:ncol(sbp)) {
-    p <- sbp[, k]
-    type.plus <- rownames(sbp)[p > 0]
-    type.minus <- rownames(sbp)[p < 0]
-    if (which(types.order == type.plus[1]) < which(types.order == type.minus[1])) {
-      sbp[, k] <- -sbp[, k]
-    }
+  if (leaf.values != "none") {
+    v <- if (leaf.values == "clr") res$contrast$loadings$obs[cts] else res$contrast$loadings$ref_centered[cts]
+    tiles <- data.frame(x = unname(x.leaf), y = -0.045 * H, value = unname(v) / log(2))
+    gg <- gg + ggplot2::geom_tile(data = tiles, ggplot2::aes(x = .data$x, y = .data$y, fill = .data$value), width = 0.9, height = 0.05 * H) +
+      ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "grey95", high = "#B2182B", midpoint = 0, name = if (leaf.values == "clr") "loading (log2)" else "reference-centered loading (log2)")
   }
-  
-  # Get positions of segments (nodes) of the dendrogram
-  # only inner nodes
-  node.pos <- dend.data$segments %$% .[(y == yend) & (yend != 0),]
-  node.pos$id <- tree$edge[,1]  # id of the inner node
-  node.pos$to <- tree$edge[,2]
-  
-  # Positions of inner nodes
-  innode.pos <- unique(node.pos[,c('x','y','id')])
-  rownames(innode.pos) <- innode.pos$id
-  # Ranges of inner nodes (length of branches)
-  innode.pos$range <- -1
-  for (i in 1:nrow(innode.pos)){
-    tmp <- node.pos$xend[node.pos$id == innode.pos$id[i]]
-    innode.pos$range[i] <- max(tmp) - min(tmp)
-  }
-  innode.pos <- innode.pos[order(innode.pos$id),]
-  
-  # Balances
-  balances <- getNodeBalances(log.f, sbp)
-  colnames(balances) <- rownames(innode.pos)
-  
-  p.val <- c()
-  for (i in 1:ncol(balances)) {
-    aov.data <- data.frame(balance = balances[,i], group = d.groups)
-    mod <- lm(group ~ balance, data=aov.data)
-    res <- summary(mod)
-    p.val <- c(p.val, res$coefficients[2,4])
-    
-  }
-  p.val[is.na(p.val)] <- 1
-  
-  p.adj <- if (adjust.pvalues) p.adjust(p.val, method='fdr') else p.val
-  
-  px.init <- createDendrogram(dend.data, plot.theme=plot.theme, font.size=font.size, angle=label.angle,
-                              hjust=label.hjust)
-  
-  if (sum(p.adj < p.threshold) == 0)
-    return(px.init)
-  
-  df.pval <- data.frame()
-  df.bals <- data.frame()
-  df.bal.quartile <- data.frame()
-  df.bal.median <- data.frame()
-  df.text <- data.frame()
-  group.levels <- c(ref.level, target.level)
-  
-  for(id.node in 1:ncol(balances)){
-    if (p.adj[id.node] > p.threshold) next
-    
-    df.pval <- rbind(df.pval, innode.pos[id.node, c('x', 'y')])
-    
-    # Normalization of values of balances according to the range between nodes
-    x.tmp <- balances[,id.node]
-    x.tmp <- x.tmp - mean(x.tmp)
-    
-    # DO NOT MOVE THIS LINE DOWN:
-    df.text %<>% rbind(data.frame(
-      x=innode.pos$x[id.node] + innode.pos$range[id.node]/2,
-      y=innode.pos$y[id.node],
-      range=sprintf('%2.1f', max(abs(x.tmp))),
-      pvalue=signif(p.adj[id.node], 2),
-      pvalue.code=pvalueToCode(p.adj[id.node])
-    ))
-    
-    x.tmp <- x.tmp / max(abs(x.tmp)) / 2 * innode.pos$range[id.node] * 0.9
-    x.tmp <- x.tmp + innode.pos$x[id.node]
-    y.tmp <- d.groups * 0.03 + innode.pos$y[id.node] - 0.05
-    
-    q.case <- quantile(x.tmp[d.groups], c(0.25, 0.75))
-    q.control <- quantile(x.tmp[!d.groups], c(0.25, 0.75))
-    
-    df.bal.quartile %<>% rbind(data.frame(
-      x=c(q.case, q.control),
-      y=c(rep(y.tmp[d.groups][1],2), rep(y.tmp[!d.groups][1],2)),
-      group=group.levels[1 + c(1, 1, 0, 0)],
-      node = id.node
-    ))
-    
-    df.bal.median %<>% rbind(data.frame(
-      x=c(median(x.tmp[d.groups]), median(x.tmp[!d.groups])),
-      y=c(y.tmp[d.groups][1], y.tmp[!d.groups][1]),
-      group=group.levels[1 + c(1, 0)],
-      node=id.node
-    ))
-    
-    df.bals %<>% rbind(data.frame(x=x.tmp, y=y.tmp, group=group.levels[1 + d.groups], node = id.node))
-  }
-  
-  px <- px.init + geom_point(data=df.bals,
-                             aes(x=x, y=y, col=as.factor(group), group=as.factor(node)), alpha = 0.1, size = 1) +
-    geom_point(data=df.bal.median,
-               aes(x=x, y=y, col=as.factor(group)),
-               size = 2.5, shape = 18) +
-    geom_point(data=df.pval, aes(x=x, y=y)) +
-    geom_line(data=df.bal.quartile, aes(x=x, y=y,
-                                        col=as.factor(group),
-                                        group=interaction(group, node)), size = 0.75) +
-    labs(col=" ")
-  
-  if (is.logical(show.text) && !show.text) show.text <- NULL
-  if (!is.null(show.text)) {
-    if (!(show.text %in% colnames(df.text)))
-      stop("Unexpected value for show.text: ", show.text)
-    
-    px <- px +
-      geom_text(data=df.text, mapping=aes_string(x='x', y='y', label=show.text), vjust=0, hjust=0, size=font.size)
-  }
-  
-  if (!is.null(loadings.mean)) {
-    node.leaves <- node.pos[node.pos$to < min(tree$edge[,1]),]
-    node.leaves$label <- tree$tip.label[node.leaves$to]
-    node.leaves$loadings <- loadings.mean[node.leaves$label]
-    
-    # node.leaves <- node.leaves[node.leaves$pval < 0.05,]
-    px <- px + geom_tile(data=node.leaves, mapping=aes(x=xend, y=-0.1, fill=loadings, width = 0.5, height = 0.1)) +
-      guides(fill=guide_colorbar(title='loadings', title.position="top", direction="horizontal", title.hjust = 0.5))
-  }
-  
-  if (!is.null(palette)) {
-    px <- px + scale_color_manual(values=palette) +
-      scale_fill_gradient2(low=palette[ref.level], high=palette[target.level], mid='grey80', midpoint=0)
-  }
-  
-  return(px)
+  gg + ggplot2::coord_cartesian(ylim = c(-0.1 * H, H * 1.12), clip = "off") + ggplot2::labs(x = NULL, y = NULL) +
+    ggplot2::theme(legend.position = legend.position, axis.text.x = ggplot2::element_text(angle = label.angle, hjust = 1, vjust = 0.5))
 }
 
 #' Internal function to plot global statistics from CoDA analysis (NEW)
@@ -1345,6 +1249,8 @@ plotCodaHeatmap <- function(x, coef.names = NULL, fdr.threshold = 0.05) {
 #' Internal function to plot cell-type effects from CoDA analysis (NEW)
 #' @param x lmCoda result object
 #' @param coef Coefficient to plot (default "contrast" for the main contrast)
+#' @param show.ci `value = "predicted"`: error bars with the intervals of the fitted proportions (default TRUE; `lmCoda(ci.level)`,
+#'   from the ILR fit: the endpoint's fitted ILR coordinates with their covariance, multivariate t draws mapped to proportions)
 #' @param value Type of effect to plot: "predicted" (predicted baseline vs target compositions; contrast only),
 #'   "reference-centered" (effects relative to reference clusters), or "volcano" (log2 effect vs -log10 p-value)    
 #' @param style Style of plot for reference-centered effects only: "bar" or "violin"
@@ -1353,13 +1259,16 @@ plotCodaHeatmap <- function(x, coef.names = NULL, fdr.threshold = 0.05) {
 #' @param labelCellTypes For volcano plots, which cell types to label: "significant", "all", or "none"
 #' @param celltype.palette Optional named vector of colors for cell types
 #' @param use.contrast.title Whether to use the contrast label as the plot title (if available)
+#' @param significance p-values behind the stars: `"clr"` (default: the primary test, each cell type relative to the geometric mean of
+#'   all cell types, which does not depend on the reference), or `"reference"` (relative to the reference cell types; the
+#'   reference is chosen from the data, so this test is conditional on it)
 #' @return ggplot2 object
 #' @keywords internal
 plotCodaCellTypes <- function(x, coef = c("contrast"), value = c("predicted", "reference-centered", "volcano"),
                               style = c("bar", "violin"), fdr.threshold = 0.05, sortCellTypes = FALSE,
                               labelCellTypes = c("significant", "all", "none"), celltype.palette = NULL,
-                              use.contrast.title = FALSE) {
-  value <- match.arg(value)
+                              use.contrast.title = FALSE, significance = c("clr", "reference"), show.ci = TRUE) {
+  value <- match.arg(value); significance <- match.arg(significance); use.ref <- FALSE
   coef  <- match.arg(coef, choices = c("contrast", names(x$coefficients)))
   style <- match.arg(style)
   labelCellTypes <- match.arg(labelCellTypes)
@@ -1373,6 +1282,10 @@ plotCodaCellTypes <- function(x, coef = c("contrast"), value = c("predicted", "r
     padj.cell <- x$contrast$per_cell$padj
     loadings  <- x$contrast$loadings$obs         # natural-log scale
     ref.loads <- x$contrast$loadings$ref_centered
+    # the stars: the primary test (relative to the geometric mean of all cell types, reference-free) by default; the test relative to the
+    # reference cell types only on request (the reference is chosen from the data and can change with the relabelings drawn)
+    use.ref <- significance == "reference"
+    if (use.ref) { if (is.null(x$contrast$per_cell$padj.ref)) stop("no reference-relative p-values in the result"); pval.cell <- x$contrast$per_cell$pval.ref; padj.cell <- x$contrast$per_cell$padj.ref }
   } else {
     if (!coef %in% names(x$coefficients)) {
       stop("Coefficient '", coef, "' not found in x$coefficients.")
@@ -1411,7 +1324,7 @@ plotCodaCellTypes <- function(x, coef = c("contrast"), value = c("predicted", "r
     )
   )
   
-  star.caption <- "Significance: * FDR < 0.05; ** FDR < 0.01; *** FDR < 0.001"
+  star.caption <- paste0("Stars: FDR relative to the ", if (use.ref) "reference cell types" else "geometric mean of all cell types", " (* < 0.05, ** < 0.01, *** < 0.001)")
   
   ## -----------------------------
   ## 3. Cell type ordering
@@ -1458,6 +1371,9 @@ plotCodaCellTypes <- function(x, coef = c("contrast"), value = c("predicted", "r
     
     baseline <- x$contrast$predicted$baseline
     target   <- x$contrast$predicted$target
+    pr <- x$contrast$predicted
+    show.ci <- show.ci && all(c("baseline.lo", "baseline.hi", "target.lo", "target.hi") %in% names(pr))
+    if (show.ci) star.caption <- paste0(star.caption, sprintf("\nError bars: %.0f%% intervals of the fitted proportions (ILR fit)", 100 * (pr$ci.level %||% 0.95)))
     
     # human-readable labels for endpoints (from lmCoda/model)
     label.baseline <- "baseline"
@@ -1474,6 +1390,13 @@ plotCodaCellTypes <- function(x, coef = c("contrast"), value = c("predicted", "r
                      target = as.numeric(target[celltypes.order]), stringsAsFactors = FALSE)
     
     df.long <- reshape2::melt(df, id.vars = "celltype", variable.name = "condition", value.name = "prop")
+    df.long$lo <- df.long$hi <- NA_real_
+    if (show.ci) {   # the intervals of the fitted proportions
+      b <- df.long$condition == "baseline"
+      df.long$lo[b] <- as.numeric(pr$baseline.lo[df.long$celltype[b]]); df.long$hi[b] <- as.numeric(pr$baseline.hi[df.long$celltype[b]])
+      df.long$lo[!b] <- as.numeric(pr$target.lo[df.long$celltype[!b]]); df.long$hi[!b] <- as.numeric(pr$target.hi[df.long$celltype[!b]])
+    }
+    df.long$top <- ifelse(is.finite(df.long$hi), pmax(df.long$hi, df.long$prop), df.long$prop)   # where the stars go
     
     # merge padj/stars/signif from df_common
     df.long <- merge(df.long, df.common[, c("celltype", "padj", "signif", "stars")], by = "celltype", all.x = TRUE)
@@ -1483,9 +1406,11 @@ plotCodaCellTypes <- function(x, coef = c("contrast"), value = c("predicted", "r
     
     p <- ggplot(df.long,aes(x = celltype, y = prop, fill = celltype, alpha = condition)) +
       geom_col(position = position_dodge(width = 0.8), color = NA) +
-      # 1–3 stars only on target bars (explicit aes + no legend)
+      { if (show.ci) geom_errorbar(aes(x = celltype, ymin = lo, ymax = hi, group = condition), position = position_dodge(width = 0.8), width = 0.3,
+                                   colour = "grey30", linewidth = 0.4, inherit.aes = FALSE, na.rm = TRUE) } +
+      # 1–3 stars only on target bars (explicit aes + no legend), above the bar or its interval
       geom_text(data = subset(df.long, condition == "target" & stars != ""),
-        aes(x = celltype, y = prop, label = stars),position = position_dodge(width = 0.8), vjust = 0, size = 6,
+        aes(x = celltype, y = top, label = stars), position = position_nudge(x = 0.2), vjust = 0, size = 6,
             color = "black", inherit.aes = FALSE, show.legend = FALSE) +
       scale_fill_manual(values = cols, guide = "none") +  # no cell-type legend
       scale_alpha_manual(values = c(baseline = 0.2, target = 1.0), name = "Condition",
@@ -1623,196 +1548,6 @@ plotCodaCellTypes <- function(x, coef = c("contrast"), value = c("predicted", "r
   }
 }
 
-#' Plot contrast tree using continuous contrast score (lmCoda)
-#' 
-#' Constructs and visualizes a supervised compositional tree where splits are driven
-#' by a continuous contrast score derived from an \code{lmCoda} fit, rather than by
-#' predefined sample groups. Each internal node represents a balance whose separation
-#' best explains variation along the contrast direction.
-#'
-#' Cell-type partitions are learned top-down using score-supervised balances, and
-#' node-level significance is assessed by regressing the contrast score on each balance.
-#' Sample-level contrast scores are displayed along significant nodes, colored by
-#' magnitude and direction of the contrast.
-#'
-#' This function replaces the old group-based contrast tree and is compatible
-#' with arbitrary contrasts defined in \code{lmCoda}.
-#'
-#' @param d.counts Matrix of cell-type counts (samples × cell types).
-#' @param score Numeric vector of per-sample contrast scores, typically obtained from
-#'   \code{getCodaContrastScore()}.
-#' @param plot.theme ggplot2 theme used for plotting.
-#' @param label.angle Angle of cell-type labels on the x-axis.
-#' @param p.threshold Significance threshold for node-level tests.
-#' @param adjust.pvalues Logical; whether to apply FDR correction to node p-values.
-#' @param font.size Font size for node annotations.
-#' @param label.hjust Horizontal justification of x-axis labels.
-#' @param show.text Which node annotation to display (e.g. \code{"pvalue"},
-#'   \code{"pvalue.code"}), or \code{FALSE} to hide text.
-#' @param tree.order Optional character vector specifying a desired leaf ordering;
-#'   used to rotate the tree for visual consistency.
-#' @param loadings.mean Optional named vector of cell-type loadings (e.g. contrast
-#'   loadings from \code{lmCoda}); if provided, can be used to guide tree reordering.
-#' @param verbose Logical; print progress messages.
-#' @param ... Additional graphical parameters, including color-scale controls such as
-#'   \code{score.palette}, \code{score.midpoint}, and \code{score.limits}.
-#'
-#' @return A \code{ggplot2} object representing the contrast-driven CoDA tree.
-#'
-#' @seealso \code{\link{lmCoda}}, \code{\link{getCodaContrastScore}},
-#'   \code{\link{constructTreeScore}}
-#'
-#' @keywords internal
-plotContrastTreeScore <- function(d.counts, score, plot.theme = theme_get(), label.angle = 90,
-                                  p.threshold = 0.05, adjust.pvalues = TRUE, font.size = 3,
-                                  label.hjust = 1, show.text = "pvalue.code", tree.order = NULL,
-                                  loadings.mean = NULL, verbose = FALSE, 
-                                  score.palette = c(low = "#2166AC", mid = "grey95", high = "#B2182B"),
-                                  score.midpoint = 0, score.limits = NULL, ...) {
-  checkPackageInstalled("ggdendro", cran = TRUE)
-  checkPackageInstalled("ape", cran = TRUE)
-
-  d.counts <- as.matrix(d.counts)
-  score <- score[rownames(d.counts)]
-  if (any(is.na(score))) stop("score has NA for some samples after alignment.")
-
-  log.f <- getLogFreq(d.counts)
-
-  # build supervised tree
-  t.cur <- constructTreeScore(d.counts, score)
-
-  if (!is.null(loadings.mean) && is.null(tree.order)) {
-    tree.order <- names(sort(loadings.mean))
-  }
-
-  # optional reorder to match a leaf order (same logic as before)
-  if (!is.null(tree.order)) {
-    t <- t.cur$tree
-    tree.order <- intersect(tree.order, t$tip.label)
-    d0 <- distTreeOrder(t, tree.order)
-    idx <- min(t$edge[, 1]):max(t$edge[, 1])
-    for (i.node in idx) {
-      t.alt <- ape::rotate(t, i.node)
-      d1 <- distTreeOrder(t.alt, tree.order)
-      if (d1 <= d0) { t <- t.alt; d0 <- d1 }
-    }
-    t.cur$tree <- t
-  }
-
-  # ------------------------------------------------------------------
-  # Canonical hclust-based node positions + SBP 
-  # ------------------------------------------------------------------
-  # Ensure branch lengths exist so as.hclust.phylo works
-  tree.bl <- ape::compute.brlen(t.cur$tree, method = "Grafen")
-  h <- stats::as.hclust(tree.bl)          # K = D-1 internal nodes
-  dend <- as.dendrogram(h)
-  dend.data <- ggdendro::dendro_data(dend, type = "rectangle")
-
-  sbp <- sbpFromHclust(h)                 # D x K
-  innode.pos <- innodePosFromHclust(h)    # K x 4
-
-  # balances: n_samples x K, aligned to innode.pos$id = 1..K
-  balances <- getNodeBalances(log.f, sbp)
-  colnames(balances) <- as.character(innode.pos$id)
-
-  # ------------------------------------------------------------------
-  # Node p-values: score ~ balance
-  # ------------------------------------------------------------------
-  p.val <- vapply(seq_len(ncol(balances)), function(i) {
-    df <- data.frame(balance = balances[, i], score = score)
-    fit <- lm(score ~ balance, data = df)
-    pv <- summary(fit)$coefficients[2, 4]
-    ifelse(is.na(pv), 1, pv)
-  }, numeric(1))
-
-  p.adj <- if (adjust.pvalues) p.adjust(p.val, method = "fdr") else p.val
-
-  # base dendrogram plot
-  px.init <- createDendrogram(dend.data, plot.theme = plot.theme, font.size = font.size,
-                              angle = label.angle, hjust = label.hjust)
-
-  if (sum(p.adj < p.threshold) == 0) return(px.init)
-
-  # ------------------------------------------------------------------
-  # Overlay balances as points near significant nodes
-  # ------------------------------------------------------------------
-  df.pval <- df.bals <- df.text <- data.frame()
-
-  for (id.node in seq_len(ncol(balances))) {
-    if (p.adj[id.node] > p.threshold) next
-
-    # node marker
-    df.pval <- rbind(df.pval, data.frame(x = innode.pos$x[id.node], y = innode.pos$y[id.node]))
-
-    x.tmp <- balances[, id.node]
-    x.tmp <- x.tmp - mean(x.tmp)
-
-    df.text <- rbind(df.text, data.frame(
-      x = innode.pos$x[id.node] + innode.pos$range[id.node] / 2,
-      y = innode.pos$y[id.node],
-      range = sprintf("%2.1f", max(abs(x.tmp))),
-      pvalue = signif(p.adj[id.node], 2),
-      pvalue.code = pvalueToCode(p.adj[id.node])
-    ))
-
-    # scale balance to node span, then place points
-    denom <- max(abs(x.tmp))
-    if (!is.finite(denom) || denom == 0) denom <- 1
-    x.tmp <- x.tmp / denom / 2 * innode.pos$range[id.node] * 0.9
-    x.tmp <- x.tmp + innode.pos$x[id.node]
-    y.tmp <- innode.pos$y[id.node] - 0.05 + runif(length(x.tmp), 0, 0.03)
-
-    df.bals <- rbind(df.bals, data.frame(
-      x = x.tmp, y = y.tmp, score = score, node = id.node
-    ))
-  }
-
-  px <- px.init +
-    geom_point(data = df.bals,
-               aes(x = x, y = y, col = score, group = factor(node)),
-               alpha = 0.15, size = 1) +
-    geom_point(data = df.pval, aes(x = x, y = y)) +
-    labs(col = "contrast score")
-
-  if (is.logical(show.text) && !show.text) show.text <- NULL
-  if (!is.null(show.text)) {
-    if (!(show.text %in% colnames(df.text)))
-      stop("Unexpected value for show.text: ", show.text)
-    px <- px +
-      geom_text(data = df.text,
-                aes_string(x = "x", y = "y", label = show.text),
-                vjust = 0, hjust = 0, size = font.size)
-  }
-
-  if (!is.null(loadings.mean)) {
-  leaf.df <- dend.data$labels
-  leaf.df$loadings <- as.numeric(loadings.mean[leaf.df$label])
-
-  px <- px +
-    geom_tile(data = leaf.df, aes(x = x, y = -0.1, fill = loadings), width = 0.5, height = 0.1) +
-    guides(fill = guide_colorbar(title = "loadings", title.position = "top", direction = "horizontal",
-           title.hjust = 0.5))
-           }
-  px <- px + scale_fill_gradient2(low="blue", mid="grey90", high="red", midpoint=0)
-
-  if (!is.null(score.palette)) {
-    # allow unnamed vectors of length 3
-    if (is.null(names(score.palette))) {
-      if (length(score.palette) != 3) stop("score.palette must have 3 colors (low, mid, high).")
-      names(score.palette) <- c("low", "mid", "high")
-    }
-    if (!all(c("low", "mid", "high") %in% names(score.palette))) {
-      stop("score.palette must be named c(low=..., mid=..., high=...).")
-    }
-
-    px <- px + scale_color_gradient2(low = score.palette[["low"]], mid = score.palette[["mid"]], 
-                                     high = score.palette[["high"]], midpoint = score.midpoint,
-                                     limits = score.limits)
-      }
-
-  px
-}
-
 #' Internal plotting function for cell loadings (old two group version)
 #' @keywords internal
 plotCellLoadings <- function(loadings, pval, ref.level, target.level, signif.threshold=0.05, jitter.alpha=0.1,
@@ -1937,74 +1672,6 @@ pickColsForKey <- function(pm, key) {
   character(0)
 }
 
-#' Build SBP (D x K) aligned to hclust internal nodes (1..K)
-#' @keywords internal
-sbpFromHclust <- function(h) {
-  labs <- h$labels
-  D <- length(labs)
-  K <- nrow(h$merge)
-
-  # each element will store the leaf indices under node i
-  members <- vector("list", K)
-  for (i in seq_len(K)) {
-    a <- h$merge[i, 1]
-    b <- h$merge[i, 2]
-    ma <- if (a < 0) -a else members[[a]]
-    mb <- if (b < 0) -b else members[[b]]
-    members[[i]] <- c(ma, mb)
-  }
-
-  sbp <- matrix(0, nrow = D, ncol = K,
-                dimnames = list(labs, paste0("node_", seq_len(K))))
-
-  for (i in seq_len(K)) {
-    a <- h$merge[i, 1]
-    b <- h$merge[i, 2]
-    left  <- if (a < 0) -a else members[[a]]
-    right <- if (b < 0) -b else members[[b]]
-
-    sbp[left,  i] <-  1
-    sbp[right, i] <- -1
-  }
-
-  sbp
-}
-
-#' Compute internal-node positions from hclust (matches ggdendro coords)
-#' @keywords internal
-innodePosFromHclust <- function(h) {
-  D <- length(h$labels)
-  K <- nrow(h$merge)
-
-  # leaf x positions follow h$order (same as dendrogram drawing)
-  x.leaf <- numeric(D)
-  x.leaf[h$order] <- seq_len(D)
-
-  # internal node x/range via recursion on merge
-  x.node <- numeric(K)
-  range.node <- numeric(K)
-
-  members <- vector("list", K)
-
-  for (i in seq_len(K)) {
-    a <- h$merge[i, 1]
-    b <- h$merge[i, 2]
-
-    ma <- if (a < 0) -a else members[[a]]
-    mb <- if (b < 0) -b else members[[b]]
-    members[[i]] <- c(ma, mb)
-
-    xs <- x.leaf[members[[i]]]
-    x.node[i] <- mean(xs)
-    range.node[i] <- max(xs) - min(xs)
-  }
-
-  data.frame(id = seq_len(K), x = x.node, y = h$height, range = range.node, stringsAsFactors = FALSE)
-}
-
-
-
-
 # ggplot2 volcano used when EnhancedVolcano is not installed
 plotVolcanoSimple <- function(de.df, p.name = "padj", color.var = "CellFrac", palette = brewerPalette("RdYlBu"), lf.cutoff = 1.5, p.cutoff = 0.05,
                               cell.frac.cutoff = 0.2, size = c(0.1, 1.0), lab.size = 2, sel.labels = NULL, plot.theme = theme_get(), legend.pos = "none",
@@ -2031,4 +1698,50 @@ plotVolcanoSimple <- function(de.df, p.name = "padj", color.var = "CellFrac", pa
   } else gg <- gg + geom_point(size = mean(size), colour = "grey40", alpha = 0.8)
   gg + ggrepel::geom_text_repel(aes(label = .data$label), size = lab.size, max.overlaps = Inf, min.segment.length = 0, segment.colour = "grey50") +
     labs(x = "log2 fold change", y = sprintf("-log10 %s", p.name)) + plot.theme + theme_legend_position(if (legend.pos == "none") "right" else legend.pos)
+}
+
+#' Outline of the significant regions of a cell map
+#'
+#' Where on the embedding the significant cells are: the local fraction of significant cells, estimated by a two-dimensional
+#' kernel density of the significant cells over that of all cells on a grid, is contoured at `level`. Grid points with too few
+#' cells around them (fewer than `min.cells` expected in a grid cell) are left out, so that no contour runs through empty space.
+#' @param embedding cells x 2 matrix with cell names as row names
+#' @param significant logical vector named by cell (`NA` = not tested; counts as not significant)
+#' @param level fraction of significant cells enclosed by the outline (default 0.5: regions where significant cells are the majority)
+#' @param bandwidth kernel bandwidth on each axis (default: 1/30 of the axis range)
+#' @param n grid size per axis (default 200)
+#' @param min.cells expected cells per grid cell below which the grid point is masked (default 1)
+#' @param min.area closed loops enclosing less than this fraction of the embedding's bounding box are dropped (default 0.001:
+#'   specks around a handful of cells)
+#' @return data.frame of contour paths (`x`, `y`, `group`), empty when there is nothing to outline
+#' @export
+significanceContours <- function(embedding, significant, level = 0.5, bandwidth = NULL, n = 200, min.cells = 1, min.area = 0.001) {
+  checkPackageInstalled("MASS", cran = TRUE)
+  emb <- as.matrix(embedding[, 1:2]); cells <- rownames(emb); ok <- is.finite(emb[, 1]) & is.finite(emb[, 2])
+  sig <- as.logical(significant[cells]); sig[is.na(sig)] <- FALSE
+  empty <- data.frame(x = numeric(0), y = numeric(0), group = character(0), stringsAsFactors = FALSE)
+  if (sum(sig & ok) < 10) return(empty)
+  rx <- range(emb[ok, 1]); ry <- range(emb[ok, 2]); pad <- c(diff(rx), diff(ry)) * 0.03
+  lims <- c(rx[1] - pad[1], rx[2] + pad[1], ry[1] - pad[2], ry[2] + pad[2])
+  h <- bandwidth %||% (c(diff(rx), diff(ry)) / 30)
+  d.all <- MASS::kde2d(emb[ok, 1], emb[ok, 2], h = h, n = n, lims = lims)
+  d.sig <- MASS::kde2d(emb[ok & sig, 1], emb[ok & sig, 2], h = h, n = n, lims = lims)
+  cell.area <- diff(d.all$x[1:2]) * diff(d.all$y[1:2])
+  expected <- d.all$z * sum(ok) * cell.area                       # cells expected in a grid cell
+  frac <- (d.sig$z * sum(ok & sig)) / pmax(d.all$z * sum(ok), 1e-300)
+  frac[expected < min.cells] <- 0                                  # masked: no contour through empty space
+  cl <- grDevices::contourLines(d.all$x, d.all$y, frac, levels = level)
+  if (!length(cl)) return(empty)
+  box <- diff(range(d.all$x)) * diff(range(d.all$y))
+  area <- vapply(cl, function(l) { x <- l$x; y <- l$y; abs(sum(x * c(y[-1], y[1]) - c(x[-1], x[1]) * y)) / 2 }, numeric(1))   # shoelace; open paths count as closed
+  cl <- cl[area >= min.area * box]
+  if (!length(cl)) return(empty)
+  do.call(rbind, lapply(seq_along(cl), function(i) data.frame(x = cl[[i]]$x, y = cl[[i]]$y, group = paste0("c", i), stringsAsFactors = FALSE)))
+}
+
+# the ggplot layer of significanceContours() for an embedding plot (NULL when there is nothing to outline)
+significanceContourLayer <- function(embedding, significant, level = 0.5, color = "black", linewidth = 0.25, ...) {
+  d <- significanceContours(embedding, significant, level = level, ...)
+  if (!nrow(d)) return(NULL)
+  ggplot2::geom_path(data = d, ggplot2::aes(x = .data$x, y = .data$y, group = .data$group), colour = color, linewidth = linewidth, inherit.aes = FALSE)
 }

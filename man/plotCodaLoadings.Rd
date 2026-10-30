@@ -10,10 +10,14 @@ plotCodaLoadings(
   target.level = "target",
   alpha = 0.05,
   palette = NULL,
-  ordering = c("pvalue", "loading"),
+  ordering = c("loading", "pvalue"),
   show.pvals = TRUE,
   show.null = TRUE,
-  plot.theme = ggplot2::theme_bw()
+  plot.theme = ggplot2::theme_bw(),
+  legend.position = "bottom",
+  significance = c("clr", "reference"),
+  center = c("reference", "none"),
+  title = NULL
 )
 }
 \arguments{
@@ -25,19 +29,33 @@ plotCodaLoadings(
 
 \item{palette}{named colours per cell type (optional)}
 
-\item{ordering}{\code{"pvalue"} (default) or \code{"loading"}}
+\item{ordering}{\code{"loading"} (default: by the loading) or \code{"pvalue"} (significant cell types first, by p-value)}
 
-\item{show.pvals}{add a panel of -log10 p-values (default TRUE)}
+\item{show.pvals}{print the adjusted p-values next to the points (default TRUE)}
 
-\item{show.null}{show the permutation null as grey boxes (default TRUE)}
+\item{show.null}{show the permutation band (default TRUE)}
 
 \item{plot.theme}{ggplot2 theme}
+
+\item{legend.position}{legend position (default "bottom"; "none" hides it)}
+
+\item{significance}{the test behind the filled points, the p-values and the band: \code{"clr"} (default: the primary per-cell-type
+test, each cell type relative to the geometric mean of all cell types, which does not depend on the reference) or
+\code{"reference"} (relative to the reference cell types; conditional on that data-chosen set)}
+
+\item{center}{\code{"reference"} (default): the loadings centred on the reference cell types (zero = no change relative to them; the
+geometric mean of all cell types is marked by a dashed line), or \code{"none"}: the loadings as they are (zero = the geometric
+mean; the reference block's mean is marked). The band is the null of the test behind the points placed on the same axis}
+
+\item{title}{plot title (optional)}
 }
 \value{
-ggplot object (a cowplot grid when \code{show.pvals})
+ggplot object
 }
 \description{
-One point per cell type: the loading of the contrast on that cell type, centred on the reference cell types
-chosen by \code{lmCoda()}. Filled points are significant after Benjamini-Hochberg adjustment. The grey box behind
-each point is the permutation null of the loading (centred the same way).
+One row per cell type, in the style of \code{\link[=plotShiftMagnitudes]{plotShiftMagnitudes()}}: the point is the loading of the contrast on the cell type (log2;
+the change of the cell type's log proportion relative to the geometric mean of all cell types), centered on the reference cell
+types chosen by \code{lmCoda()} (\code{\link[=referenceBlock]{referenceBlock()}}, marked "(ref)") or not (\code{center}), in the cell-type color, filled when the cell
+type is significant by the primary test (relative to the geometric mean; \code{significance}). The grey band is the 95 \% range of
+the tested quantity over the permutations on the same axis: what the loading is without a composition change.
 }

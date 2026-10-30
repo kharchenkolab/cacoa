@@ -311,7 +311,7 @@ cao$plotCodaSpace()
 
 \dontrun{
 cao$estimateCellLoadings()
-cao$plotContratsTree()
+cao$plotContrastTree()
 }
 
 ## ------------------------------------------------
@@ -338,6 +338,7 @@ cao$estimateCellLoadings()
 \dontrun{
 cao$estimateCellLoadings()
 cao$plotCellLoadings()
+cao$plotCellLoadings(center = "both")
 }
 
 ## ------------------------------------------------
@@ -398,7 +399,7 @@ cao$plotDiffCellDensity()
 ## ------------------------------------------------
 
 \dontrun{
-cao$getSampleDistanceMatrix()
+cao$getSampleDistanceMatrix(space = "composition")
 }
 
 ## ------------------------------------------------
@@ -406,27 +407,8 @@ cao$getSampleDistanceMatrix()
 ## ------------------------------------------------
 
 \dontrun{
-cao$estimateExpressionShiftMagnitudes()
-cao$plotSampleDistances()
-}
-
-## ------------------------------------------------
-## Method `Cacoa$estimateMetadataSeparation`
-## ------------------------------------------------
-
-\dontrun{
-cao$estimateExpressionShiftMagnitudes() # or estimateCellLoadings()
-cao$estimateMetadataSeparation(sample.meta = meta.data) # meta.data is a list or data.frame with metadata per sample
-}
-
-## ------------------------------------------------
-## Method `Cacoa$plotMetadataSeparation`
-## ------------------------------------------------
-
-\dontrun{
-cao$estimateExpressionShiftMagnitudes() # or estimateCellLoadings()
-cao$estimateMetadataSeparation(sample.meta = meta.data)
-cao$plotMetadataSeparation()
+cao$plotSampleDistances(color.by = "batch")
+cao$plotSampleDistances(space = "composition", color.by = "condition")
 }
 
 ## ------------------------------------------------
@@ -619,6 +601,7 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item \href{#method-Cacoa-plotVariancePartition}{\code{Cacoa$plotVariancePartition()}}
 \item \href{#method-Cacoa-plotShiftDetail}{\code{Cacoa$plotShiftDetail()}}
 \item \href{#method-Cacoa-estimateExpressionShiftMagnitudes}{\code{Cacoa$estimateExpressionShiftMagnitudes()}}
+\item \href{#method-Cacoa-plotExpressionShiftGenes}{\code{Cacoa$plotExpressionShiftGenes()}}
 \item \href{#method-Cacoa-plotExpressionShiftMagnitudes}{\code{Cacoa$plotExpressionShiftMagnitudes()}}
 \item \href{#method-Cacoa-plotSampleInfluence}{\code{Cacoa$plotSampleInfluence()}}
 \item \href{#method-Cacoa-plotExpressionShiftResiduals}{\code{Cacoa$plotExpressionShiftResiduals()}}
@@ -646,8 +629,8 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item \href{#method-Cacoa-plotCellGroupSizes}{\code{Cacoa$plotCellGroupSizes()}}
 \item \href{#method-Cacoa-plotCellGroupAbundanceVariation}{\code{Cacoa$plotCellGroupAbundanceVariation()}}
 \item \href{#method-Cacoa-plotCodaSpace}{\code{Cacoa$plotCodaSpace()}}
-\item \href{#method-Cacoa-plotCodaContrastTree}{\code{Cacoa$plotCodaContrastTree()}}
 \item \href{#method-Cacoa-plotContrastTree}{\code{Cacoa$plotContrastTree()}}
+\item \href{#method-Cacoa-plotCodaContrastTree}{\code{Cacoa$plotCodaContrastTree()}}
 \item \href{#method-Cacoa-plotCompositionSimilarity}{\code{Cacoa$plotCompositionSimilarity()}}
 \item \href{#method-Cacoa-estimateCellLoadings}{\code{Cacoa$estimateCellLoadings()}}
 \item \href{#method-Cacoa-plotCodaGlobal}{\code{Cacoa$plotCodaGlobal()}}
@@ -1046,21 +1029,33 @@ named vector over samples (\code{NULL} when the test has no variable, e.g. coeff
 \if{html}{\out{<a id="method-Cacoa-checkSensitivity"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-checkSensitivity}{}}}
 \subsection{Method \code{checkSensitivity()}}{
-Robustness of the expression-shift result: alternative covariate sets and single-sample influence
+Robustness of a result: alternative covariate sets and single-sample influence
 
 Reruns the first test of the stored model under alternative adjustment sets (unadjusted; current; current
 minus each covariate; current plus each of the top screened covariates not yet in the model; all screened,
-if the degrees of freedom allow) on the cached distances, and reads the leave-one-sample-out influence of
-the current result. Prints one verdict per cell type: "robust", "sign / significance sensitive to the adjustment set",
-"estimate changes by x\%", or "driven by sample S".
+if the degrees of freedom allow) and refits every model with each sample left out. The two questions are kept apart:
+the size of the effect (stable, changes by x\%, sign depends on the model, or driven by sample S) and its significance
+(significant in all / k of m / no models). One line per cell type gives both.
+
+\code{analysis = "expression.shifts"}: the expression shifts on the cached distances; the size is the distance-model
+magnitude, as in the main result, the significance by the test of the main result (with \code{statistic = "gsd"} the gsd test
+is rerun under every alternative model, with the main result's gsd settings).
+\code{analysis = "composition"}: the compositional contrast (\code{\link[=lmCoda]{lmCoda()}}) refitted on the stored cell-type counts; the size
+is the loading of each cell type (log2, relative to the geometric mean of all cell types), the significance its
+permutation test (see \code{\link[=checkCompositionSensitivity]{checkCompositionSensitivity()}}).
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$checkSensitivity(
+  analysis = c("expression.shifts", "composition"),
   covariate.sets = "auto",
   screen.name = "covariate.screen",
   top.k = 3,
-  name = "sensitivity",
+  name = NULL,
   shifts.name = "expression.shifts",
+  coda.name = "coda",
+  jackknife = TRUE,
   n.permutations = NULL,
+  significance = c("main", "distance"),
+  cell.groups = self$cell.groups,
   verbose = NULL,
   n.cores = NULL,
   seed = NULL
@@ -1070,17 +1065,30 @@ the current result. Prints one verdict per cell type: "robust", "sign / signific
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{analysis}}{\code{"expression.shifts"} (default) or \code{"composition"}}
+
 \item{\code{covariate.sets}}{\code{"auto"} (default, see above) or a named list of location formulas}
 
 \item{\code{screen.name}}{results slot of a covariate screen used to propose additions (default "covariate.screen")}
 
 \item{\code{top.k}}{number of screened covariates to try adding (default 3)}
 
-\item{\code{name}}{results slot (default "sensitivity")}
+\item{\code{name}}{results slot (default "sensitivity" for the expression shifts, "composition.sensitivity" for the composition)}
 
 \item{\code{shifts.name}}{results slot of the expression shifts the sensitivity refers to (default "expression.shifts")}
 
-\item{\code{n.permutations}}{number of permutations (default: the object option \code{n.permutations}, 999)}
+\item{\code{coda.name}}{results slot of the compositional result the sensitivity refers to (default "coda")}
+
+\item{\code{jackknife}}{leave-one-sample-out refits under every alternative model (default TRUE), which give each estimate its
+jackknife standard error and leave-one-out range (shown by \code{plotSensitivity()}); the current model always has them}
+
+\item{\code{n.permutations}}{number of permutations of the refits (default: the object option \code{n.permutations}, 999); the
+gsd refits use the main result's count, so that their p-values have the resolution of the current model's}
+
+\item{\code{significance}}{expression shifts only: \code{"main"} (default: the test of the stored result, gsd or distance) or \code{"distance"}
+(the distance model's own test, faster: no gsd refits)}
+
+\item{\code{cell.groups}}{cell annotation of the gsd refits (default: the object's; the one the stored result was computed with)}
 
 \item{\code{verbose}}{defaults from options (permutations capped at 499)}
 
@@ -1098,15 +1106,25 @@ the current result. Prints one verdict per cell type: "robust", "sign / signific
 \if{html}{\out{<a id="method-Cacoa-plotSensitivity"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotSensitivity}{}}}
 \subsection{Method \code{plotSensitivity()}}{
-Forest plot of the sensitivity analysis (see \code{\link[=plotSensitivity]{plotSensitivity()}})
+Forest plot of a sensitivity analysis (see \code{\link[=plotSensitivity]{plotSensitivity()}})
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotSensitivity(name = "sensitivity", ...)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotSensitivity(
+  analysis = c("expression.shifts", "composition"),
+  name = NULL,
+  interval = c("jackknife", "none"),
+  ...
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{name}}{results slot (default "sensitivity")}
+\item{\code{analysis}}{\code{"expression.shifts"} (default) or \code{"composition"}: which stored sensitivity to plot when \code{name} is not given}
+
+\item{\code{name}}{results slot (default "sensitivity" or "composition.sensitivity", by \code{analysis})}
+
+\item{\code{interval}}{\code{"jackknife"} (default): jackknife 95 \% intervals and leave-one-sample-out ranges of the estimates, where
+computed; \code{"none"}}
 
 \item{\code{...}}{passed to \code{\link[=plotSensitivity]{plotSensitivity()}} (\code{effect}, \code{cell.types}, \code{normalized})}
 }
@@ -1129,7 +1147,7 @@ across cell types; a dispersion association is reported alongside. Ends with a s
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$screenCovariates(
   covariates = NULL,
-  space = c("expression.shifts", "composition"),
+  space = c("expression", "composition"),
   mode = c("both", "partial", "marginal"),
   adjust.for = NULL,
   dist = NULL,
@@ -1139,6 +1157,7 @@ across cell types; a dispersion association is reported alongside. Ends with a s
   min.gene.frac = 0.01,
   genes = NULL,
   min.samples.per.type = 6,
+  summary.rows = c("expression", "composition"),
   n.permutations = NULL,
   name = "covariate.screen",
   verbose = NULL,
@@ -1153,7 +1172,8 @@ across cell types; a dispersion association is reported alongside. Ends with a s
 \describe{
 \item{\code{covariates}}{covariates to screen (default: all usable metadata columns); transform strings allowed}
 
-\item{\code{space}}{\code{"expression.shifts"} (per cell type; default) or \code{"composition"} (CoDA ILR coordinates, one row)}
+\item{\code{space}}{\code{"expression"} (per cell type; default) or \code{"composition"} (ILR coordinates of the cell-type counts, one
+row); \code{"expression.shifts"} is accepted as the earlier name}
 
 \item{\code{mode}}{\code{"both"} (default), \code{"partial"} or \code{"marginal"}}
 
@@ -1172,6 +1192,12 @@ across cell types; a dispersion association is reported alongside. Ends with a s
 \item{\code{genes}}{as in \code{estimateExpressionShiftMagnitudes()}}
 
 \item{\code{min.samples.per.type}}{cell types with fewer samples are skipped (default 6)}
+
+\item{\code{summary.rows}}{with \code{space = "expression"}, rows screened next to the cell types on the combined sample spaces
+(see \code{getSampleDistanceMatrix()}): any of \code{"expression"} (all cell types, weighted by cells), \code{"expression.equal"}
+(all cell types, equal weights), \code{"pseudobulk"} (all cells pooled) and \code{"composition"}; default
+\code{c("expression", "composition")}. They are adjusted among themselves and do not enter the global p-values or the
+suggested model.}
 
 \item{\code{n.permutations}}{number of permutations (default: the object option \code{n.permutations}, 999)}
 
@@ -1381,7 +1407,15 @@ cowplot grid of ggplot2 panels
 \subsection{Method \code{estimateExpressionShiftMagnitudes()}}{
 Expression shift magnitudes per cell type
 
-For every cell type, pseudobulk profiles per sample are compared through sample-sample distances
+With \code{statistic = "gsd"} (default), every gene of a cell type is tested by a per-sample linear model of its
+expression profile, standardized by a moderated standard error (sampling-noise model and residual variance), and
+the gene z-scores are combined adaptively into one statistic per cell type (see \code{\link[=gsdShiftsPerCellType]{gsdShiftsPerCellType()}}), tested
+by relabeling the samples. The magnitude of the shift is reported separately: \code{estimate} is the bias-corrected mean
+squared change in log10 expression over the type's genes (independent of the numbers of cells), \code{estimate.norm}
+the same change relative to the donor-level variance; per-gene changes and z-scores are in \code{genes}. Whole-factor
+(term) tests use the distance test below; \code{plotShiftDetail()} and \code{checkSensitivity()} need the distance test.
+
+With \code{statistic = "distance"}, pseudobulk profiles per sample are compared through sample-sample distances
 (gene-centred cosine by default). An individual-level model (location: the design formula; dispersion:
 \code{dispersion.formula}) is fitted to the distances and, for each test of the model, three effects are
 estimated and tested by permuting sample labels:
@@ -1400,6 +1434,7 @@ a pairwise table over the levels. Unset arguments fall back to the stored option
   formula = NULL,
   contrast = NULL,
   dispersion.formula = NULL,
+  statistic = c("gsd", "distance"),
   dist = NULL,
   permutation = NULL,
   n.permutations = NULL,
@@ -1407,11 +1442,17 @@ a pairwise table over the levels. Unset arguments fall back to the stored option
   cell.groups = self$cell.groups,
   sample.per.cell = self$sample.per.cell,
   n.pcs = NULL,
-  min.cells.per.sample = 10,
+  min.cells.per.sample = NULL,
+  min.cells.magnitude = 10,
   min.samp.per.level = NULL,
   min.gene.frac = 0.01,
   genes = NULL,
+  type.gene.frac = NULL,
+  neighbourhood.gene.frac = NULL,
+  winsor.k = 3,
+  gsd.d0 = 3,
   bias.correct = TRUE,
+  cell.number.adjust = TRUE,
   influence = TRUE,
   seed = NULL,
   name = "expression.shifts",
@@ -1436,6 +1477,8 @@ a temporary model for this call; \code{cao$setModel()} changes the stored one.}
 
 \item{\code{dispersion.formula}}{dispersion formula for a temporary model}
 
+\item{\code{statistic}}{\code{"gsd"} (default: per-gene test combined over genes, see above) or \code{"distance"} (the distance test)}
+
 \item{\code{dist}}{\code{"cor"} (gene-centred cosine; default from options), \code{"l2"} or \code{"l1"} (\code{l1} does not separate shift
 from dispersion and is discouraged)}
 
@@ -1451,15 +1494,33 @@ from dispersion and is discouraged)}
 
 \item{\code{n.pcs}}{optional number of principal components to reduce the pseudobulk profiles to before the distance}
 
-\item{\code{min.cells.per.sample}}{minimum cells per (cell type, sample) (default 10)}
+\item{\code{min.cells.per.sample}}{minimum cells per (cell type, sample) of the test (default 5 with gsd, 10 with the distance test)}
 
-\item{\code{min.samp.per.level}}{minimum samples at each compared level per cell type (default from options)}
+\item{\code{min.cells.magnitude}}{with \code{statistic = "gsd"}: minimum cells per (cell type, sample) of the distance model that gives
+the magnitudes, the \code{var} / \code{total} tests, the noise bands and the jackknife (default 10). Profiles of fewer cells are
+dominated by sampling noise, which shrinks the distance-based shift; the gsd test models that noise gene by gene and
+keeps the thinner samples. Cell types tested by gsd with too few such samples get a p-value without a magnitude}
+
+\item{\code{min.samp.per.level}}{minimum samples at each compared level per cell type (default 2 with gsd, from options with the distance test)}
 
 \item{\code{min.gene.frac}}{gene filter: fraction of cells expressing the gene (default 0.01)}
 
 \item{\code{genes}}{optional gene subset}
 
+\item{\code{type.gene.frac}}{per cell type, the genes (of those passing \code{min.gene.frac}) detected in at least this fraction of the
+type's cells, for both the gsd test and the distance model (default: option \code{type.gene.frac}, 0.05; see \code{\link[=typeGeneSets]{typeGeneSets()}})}
+
+\item{\code{neighbourhood.gene.frac}}{earlier name of \code{type.gene.frac}}
+
+\item{\code{winsor.k}}{gsd with \code{robust = "winsor"}: winsorization threshold in robust sd units (default 3)}
+
+\item{\code{gsd.d0}}{gsd: prior degrees of freedom of the moderated per-gene variance (default 3); see \code{\link[=gsdShiftsPerCellType]{gsdShiftsPerCellType()}}}
+
 \item{\code{bias.correct}}{correct the shift for within-group dispersion (default TRUE)}
+
+\item{\code{cell.number.adjust}}{model the per-sample sampling noise in the dispersions with a 1 / (number of cells) term, so that the
+dispersion change (\code{var}) is compared at equal cell numbers (default TRUE; otherwise a condition with fewer cells per sample
+appears more dispersed)}
 
 \item{\code{influence}}{compute leave-one-sample-out effects and jackknife standard errors (default TRUE)}
 
@@ -1507,26 +1568,73 @@ cao$plotExpressionShiftMagnitudes()
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-plotExpressionShiftGenes"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-plotExpressionShiftGenes}{}}}
+\subsection{Method \code{plotExpressionShiftGenes()}}{
+Top genes of the cell-type expression shifts (gsd runs)
+
+Dot plot of the genes with the largest per-gene z-scores of the shift test in the selected cell types: genes changed at
+gene-level FDR \code{gene.fdr} as dots sized by |z| and coloured by the log2 fold change, the others as small grey dots.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionShiftGenes(
+  name = "expression.shifts",
+  test = NULL,
+  cell.types = NULL,
+  n.genes = 8,
+  gene.fdr = 0.1,
+  alpha = NULL
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{results slot (default "expression.shifts")}
+
+\item{\code{test}}{test label or index (default: the first test)}
+
+\item{\code{cell.types}}{cell types to show, in this order (default: the significant ones by the size of the shift, at most 6)}
+
+\item{\code{n.genes}}{top genes per cell type (default 8)}
+
+\item{\code{gene.fdr}}{gene-level FDR of the coloured dots (default 0.1)}
+
+\item{\code{alpha}}{significance level for the default cell types (default from options)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+ggplot2 object
+}
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-plotExpressionShiftMagnitudes"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotExpressionShiftMagnitudes}{}}}
 \subsection{Method \code{plotExpressionShiftMagnitudes()}}{
-Plot the expression-shift effects per cell type
+Plot the expression-shift magnitudes per cell type
 
-Dot plot with jackknife 95\% intervals, one panel per effect (shift | var | total, or location | dispersion
-for term tests), cell types ordered by the first effect. Filled points are significant at \code{alpha} by the
-chosen \code{significance} column; a provenance subtitle records test, adjustment and permutation scheme.
+For a contrast test: one row per cell type, ordered by the size of the effect. The point is the normalized effect of
+the distance model (\code{effect = "shift"}: the squared distance between the condition means relative to the summed
+within-group dispersions; \code{effect = "var"}: the dispersion change log2(s.alt / s.ref)), in the cell-type colour, filled
+when significant. With \code{statistic = "gsd"} (the default of \link{Cacoa} \code{estimateExpressionShiftMagnitudes()}) the
+significance of the shift is the gsd test's; the dispersion change is tested by the distance model. The grey band is the
+95 \% range of the effect over the test's relabelings (the size noise alone gives); the optional bar is the jackknife 95 \%
+interval (how firmly the samples determine the size, not a test).
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotExpressionShiftMagnitudes(
   name = "expression.shifts",
   test = NULL,
-  effects = NULL,
-  normalized = TRUE,
-  type = c("dot", "bar"),
-  order.by = NULL,
-  show.ci = TRUE,
+  effect = c("shift", "var"),
+  show.null = TRUE,
+  show.ci = FALSE,
+  show.pvalues = c("adjusted", "raw", "none"),
+  show.genes = FALSE,
+  gene.fdr = 0.1,
   significance = c("padj", "p.fwer", "p"),
   alpha = NULL,
+  order = c("magnitude", "significance"),
   show.provenance = NULL,
+  legend.position = "bottom",
   cell.types = NULL,
   ...
 )}\if{html}{\out{</div>}}
@@ -1537,28 +1645,34 @@ chosen \code{significance} column; a provenance subtitle records test, adjustmen
 \describe{
 \item{\code{name}}{results slot (default "expression.shifts")}
 
-\item{\code{test}}{test label or index to show (default: all tests, one row of panels each)}
+\item{\code{test}}{test label or index (default: the first test)}
 
-\item{\code{effects}}{which effects (default: all available)}
+\item{\code{effect}}{\code{"shift"} (default) or \code{"var"}}
 
-\item{\code{normalized}}{plot normalized effects (comparable across cell types; default TRUE) or absolute ones}
+\item{\code{show.null}}{show the relabeling band (default TRUE)}
 
-\item{\code{type}}{\code{"dot"} (default) or \code{"bar"}}
+\item{\code{show.ci}}{show the jackknife 95 \% interval (default FALSE)}
 
-\item{\code{order.by}}{effect used to order cell types (default: the first of \code{effects})}
+\item{\code{show.pvalues}}{print the p-values: \code{"adjusted"} (default), \code{"raw"} or \code{"none"}}
 
-\item{\code{show.ci}}{show jackknife intervals (default TRUE)}
+\item{\code{show.genes}}{add a margin with the number of genes changed at gene-level FDR \code{gene.fdr} (gsd runs; default FALSE).
+The count depends on power (samples, cells): a cross-check, not a ranking}
 
-\item{\code{significance}}{which p-value marks significance: \code{"padj"} (BH across cell types; default), \code{"p.fwer"}
-(familywise, max-statistic) or \code{"p"} (raw)}
+\item{\code{gene.fdr}}{FDR for \code{show.genes} (default 0.1)}
+
+\item{\code{significance}}{which p-value marks significance: \code{"padj"} (BH across cell types; default), \code{"p.fwer"} or \code{"p"}}
 
 \item{\code{alpha}}{significance level (default from options)}
 
+\item{\code{order}}{\code{"magnitude"} (default) or \code{"significance"}}
+
 \item{\code{show.provenance}}{add the provenance subtitle (default from options)}
 
-\item{\code{cell.types}}{optional subset / order of cell types}
+\item{\code{legend.position}}{legend position (default "bottom"; "none" hides it)}
 
-\item{\code{...}}{ignored (accepted for backward compatibility: \code{show.pvalues}, \code{notch}, \code{show.jitter}, ...)}
+\item{\code{cell.types}}{optional subset of cell types}
+
+\item{\code{...}}{ignored (accepted for backward compatibility: \code{effects}, \code{normalized}, \code{type}, \code{order.by}, ...)}
 }
 \if{html}{\out{</div>}}
 }
@@ -2979,70 +3093,22 @@ cao$plotCodaSpace()
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Cacoa-plotCodaContrastTree"></a>}}
-\if{latex}{\out{\hypertarget{method-Cacoa-plotCodaContrastTree}{}}}
-\subsection{Method \code{plotCodaContrastTree()}}{
-Plot contrast tree (NEW: lmCoda score-based)
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCodaContrastTree(
-  name = "coda",
-  cells.to.remain = NULL,
-  cells.to.remove = NULL,
-  filter.empty.cell.types = TRUE,
-  adjust.pvalues = TRUE,
-  reorder.tree = TRUE,
-  score.palette = c(low = "#2166AC", mid = "grey95", high = "#B2182B"),
-  score.midpoint = 0,
-  score.limits = NULL,
-  ...
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{character Results name slot (default='coda')}
-
-\item{\code{cells.to.remain}}{character Specific cell types to keep (default=NULL)}
-
-\item{\code{cells.to.remove}}{character Specific cell types to remove (default=NULL)}
-
-\item{\code{filter.empty.cell.types}}{boolean Remove cell types without cells (default=TRUE)}
-
-\item{\code{adjust.pvalues}}{boolean Adjust P values or not (default=TRUE)}
-
-\item{\code{reorder.tree}}{boolean Reorder tree or not (default=TRUE)}
-
-\item{\code{score.palette}}{colour palette for the node scores}
-
-\item{\code{score.midpoint}}{midpoint of the score colour scale}
-
-\item{\code{score.limits}}{limits of the score colour scale}
-
-\item{\code{...}}{passed to internal plotContrastTreeScore()}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A ggplot2 object
-}
-}
-\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-plotContrastTree"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotContrastTree}{}}}
 \subsection{Method \code{plotContrastTree()}}{
-Plot contrast tree (old: two-group version)
+Plot the contrast tree of the compositional result (see \code{\link[=contrastTree]{contrastTree()}} and \code{\link[=plotContrastTree]{plotContrastTree()}}): the
+sequential binary partition of the cell types that explains the compositional shift of the contrast with the fewest
+balances, each node labeled with the log2 ratio of its two sides between the contrast's endpoints, the significance
+code of its permutation p-value and the share of the shift it explains; the samples' own ratios at the significant
+nodes; the reference-centered loadings under the leaves.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotContrastTree(
-  cell.groups = self$cell.groups,
-  palette = self$sample.groups.palette,
   name = "coda",
-  cells.to.remain = NULL,
-  cells.to.remove = NULL,
-  filter.empty.cell.types = TRUE,
-  adjust.pvalues = TRUE,
-  h.method = c("both", "up", "down"),
-  reorder.tree = TRUE,
+  alpha = NULL,
+  split = c("effect", "evidence"),
+  show.samples = TRUE,
+  leaf.values = c("reference-centered", "clr", "none"),
+  palette = self$sample.groups.palette,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -3050,42 +3116,58 @@ Plot contrast tree (old: two-group version)
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{cell.groups}}{character Cell annotations with cell IDs as name (default=self$cell.groups)}
+\item{\code{name}}{name of the \code{estimateCellLoadings()} result (default: \code{"coda"})}
 
-\item{\code{palette}}{plot palette (default=self$sample.groups.palette)}
+\item{\code{alpha}}{significance level on the adjusted node p-values (default: option \code{alpha})}
 
-\item{\code{name}}{character Results name slot (default='coda')}
+\item{\code{split}}{how the tree is built: \code{"effect"} (default) or \code{"evidence"}, see \code{\link[=contrastTree]{contrastTree()}}}
 
-\item{\code{cells.to.remain}}{character Specific cell types to keep (default=NULL)}
+\item{\code{show.samples}}{show the samples' balances at the significant nodes (default TRUE)}
 
-\item{\code{cells.to.remove}}{character Specific cell types to remove (default=NULL)}
+\item{\code{leaf.values}}{tiles under the leaves: \code{"reference-centered"} (default), \code{"clr"} or \code{"none"}}
 
-\item{\code{filter.empty.cell.types}}{boolean Remove cell types without cells (default=TRUE)}
+\item{\code{palette}}{colors of the two sides of the contrast (default: \code{sample.groups.palette})}
 
-\item{\code{adjust.pvalues}}{boolean Adjust P values or not (default=TRUE)}
-
-\item{\code{h.method}}{character Must be one of 'both', 'up', 'down' (default='both')}
-
-\item{\code{reorder.tree}}{boolean Reorder tree or not (default=TRUE)}
-
-\item{\code{...}}{additional parameters}
+\item{\code{...}}{passed to \code{\link[=plotContrastTree]{plotContrastTree()}} (\code{show.text}, \code{min.share}, \code{font.size}, \code{label.angle}, \code{legend.position})}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-A ggplot2 object
+ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
 \preformatted{\dontrun{
 cao$estimateCellLoadings()
-cao$plotContratsTree()
+cao$plotContrastTree()
 }
 }
 \if{html}{\out{</div>}}
 
 }
 
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-plotCodaContrastTree"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-plotCodaContrastTree}{}}}
+\subsection{Method \code{plotCodaContrastTree()}}{
+The contrast tree (the former name of \code{plotContrastTree()})
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCodaContrastTree(name = "coda", ...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{name of the \code{estimateCellLoadings()} result (default: \code{"coda"})}
+
+\item{\code{...}}{passed to \code{plotContrastTree()}}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+ggplot2 object
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-plotCompositionSimilarity"></a>}}
@@ -3155,6 +3237,9 @@ Estimate cell loadings
   statistic = c("t", "coef"),
   zero.pseudocount = 0.1,
   basis.type = c("default"),
+  ref.method = c("block", "pvalue"),
+  ref.block.thresh = 0.05,
+  ref.size.frac = 0.5,
   ref.p.thresh = 0.3,
   ref.min.size = 1,
   ref.max.size = 3,
@@ -3198,7 +3283,16 @@ Estimate cell loadings
 
 \item{\code{basis.type}}{ILR basis type (default 'default')}
 
-\item{\code{ref.p.thresh}}{p-value threshold for picking the reference cell types (default 0.3)}
+\item{\code{ref.method}}{reference cell types for the presentation of the loadings: \code{"block"} (default) the largest set of cell
+types whose proportions do not change relative to each other (\code{\link[=referenceBlock]{referenceBlock()}}), or \code{"pvalue"} (the cell types with the
+weakest evidence of a change relative to the geometric mean; \code{ref.p.thresh}, \code{ref.min.size}, \code{ref.max.size})}
+
+\item{\code{ref.block.thresh}}{p-value below which two groups of cell types are kept apart in the block search (default 0.05)}
+
+\item{\code{ref.size.frac}}{blocks at least this fraction of the largest block's size compete for the reference, the one closest to
+the center of the composition winning (default 0.5)}
+
+\item{\code{ref.p.thresh}}{p-value threshold for picking the reference cell types (\code{ref.method = "pvalue"}; default 0.3)}
 
 \item{\code{ref.min.size}}{minimum number of reference cell types (default 1)}
 
@@ -3308,6 +3402,7 @@ Plot cell-type–level effects from lmCoda (contrast or coefficient)
   labelCellTypes = c("significant", "all", "none"),
   palette = self$cell.groups.palette,
   use.contrast.title = FALSE,
+  significance = c("clr", "reference"),
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -3333,7 +3428,10 @@ Plot cell-type–level effects from lmCoda (contrast or coefficient)
 
 \item{\code{use.contrast.title}}{logical Use contrast label as plot title (default=FALSE)}
 
-\item{\code{...}}{passed to plotCodaCellTypes()}
+\item{\code{significance}}{the test behind the stars: \code{"clr"} (default: the primary test, relative to the geometric mean of all cell
+types, reference-free) or \code{"reference"} (relative to the reference cell types, conditional on that choice)}
+
+\item{\code{...}}{passed to plotCodaCellTypes() (\code{show.ci}: error bars of the predicted proportions, default TRUE)}
 }
 \if{html}{\out{</div>}}
 }
@@ -3351,9 +3449,11 @@ Plot the compositional loadings of the contrast per cell type (see \code{\link[=
   alpha = NULL,
   palette = self$cell.groups.palette,
   name = "coda",
-  ordering = c("pvalue", "loading"),
+  ordering = c("loading", "pvalue"),
   show.pvals = TRUE,
   show.null = TRUE,
+  significance = c("clr", "reference"),
+  center = c("reference", "none", "both"),
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -3367,24 +3467,32 @@ Plot the compositional loadings of the contrast per cell type (see \code{\link[=
 
 \item{\code{name}}{name of the \code{estimateCellLoadings()} result (default: \code{"coda"})}
 
-\item{\code{ordering}}{\code{"pvalue"} (default) or \code{"loading"}}
+\item{\code{ordering}}{\code{"loading"} (default) or \code{"pvalue"}}
 
-\item{\code{show.pvals}}{add a panel of -log10 p-values (default TRUE)}
+\item{\code{show.pvals}}{print the adjusted p-values next to the points (default TRUE)}
 
-\item{\code{show.null}}{show the permutation null of each loading as a grey box (default TRUE)}
+\item{\code{show.null}}{show the 95 \% permutation range of each loading as a grey band (default TRUE)}
 
-\item{\code{...}}{passed to \code{\link[=plotCodaLoadings]{plotCodaLoadings()}}}
+\item{\code{significance}}{the test behind the filled points and p-values: \code{"clr"} (default: the primary test, relative to the
+geometric mean of all cell types, reference-free) or \code{"reference"} (relative to the reference cell types, conditional on
+that data-chosen set); see \code{\link[=plotCodaLoadings]{plotCodaLoadings()}}}
+
+\item{\code{center}}{\code{"reference"} (default): loadings centred on the reference cell types; \code{"none"}: as they are (zero = the
+geometric mean of all cell types); \code{"both"}: the two side by side (cowplot)}
+
+\item{\code{...}}{passed to \code{\link[=plotCodaLoadings]{plotCodaLoadings()}} (e.g. \code{legend.position})}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-ggplot2 object
+ggplot2 object (\code{center = "both"}: a cowplot grid)
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
 \preformatted{\dontrun{
 cao$estimateCellLoadings()
 cao$plotCellLoadings()
+cao$plotCellLoadings(center = "both")
 }
 }
 \if{html}{\out{</div>}}
@@ -3667,9 +3775,14 @@ Estimate differential cell density
   adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
   p.source = c("parametric", "permutation", "pooled"),
   moderate = TRUE,
+  moderate.d0.max = 4,
   transform = c("auto", "none", "log"),
   post = c("averaged", "none", "inherit"),
   pooled.statistic = c("raw", "standardized"),
+  scale = "auto",
+  auto.scales = c(0.01, 0.03, 0.05),
+  effect.scale = c("finest", "best"),
+  kernel.alpha = 0.3,
   verbose = self$verbose,
   n.cores = self$n.cores,
   ...
@@ -3730,13 +3843,21 @@ tested; liberal) or \code{"max-t"} (the maximum statistic under permutations; th
 the pooled permutation null of all cells, see \code{\link[=pooledPermutationP]{pooledPermutationP()}}: no floor, calibrated with enough
 permutations); \code{p.pooled} is returned whenever the permuted statistics are kept}
 
-\item{\code{moderate}}{shrink the per-cell residual variances towards a common prior across cells (limma's empirical
-Bayes; a moderated t with extra degrees of freedom) before the parametric p-values (default TRUE)}
+\item{\code{moderate}}{shrink the per-cell residual variances towards a prior across cells (a scaled-F prior with a trend on the
+cell's mean density, \code{\link[=fitFPrior]{fitFPrior()}}; a moderated t with extra degrees of freedom), in the permutation statistic of the
+diffusion neighborhoods and before the parametric p-values of the stored units (default TRUE)}
 
-\item{\code{transform}}{\code{"auto"} (default): \code{"log"} for the count units (\code{smoothing = "knn"} or \code{"neighbourhood"}),
-\code{"none"} for the heat kernel and the kde; \code{"none"}: test the densities as they are; \code{"log"}: test \code{log2} counts
-per 10,000 cells of the sample (\code{log2((density * n + 0.5) / (n + 1) * 1e4)}, \code{n} the sample's cell number), the
-log-count model of a neighbourhood abundance test; the effect is then a log2 fold change of the density}
+\item{\code{moderate.d0.max}}{cap on the prior degrees of freedom of the moderation (default 4; see \code{\link[=fitFPrior]{fitFPrior()}}): the cell's own
+variance keeps a share of at least \code{df / (df + moderate.d0.max)} of the moderated variance. Without the cap a homogeneous set of
+variances gives an infinite prior df, which replaces every cell's variance by the trend and costs the cells with a real
+difference (whose within-group variance is below the trend) part of their statistic}
+
+\item{\code{transform}}{\code{"auto"} (default): \code{"log"} for the graph units (\code{smoothing = "knn"}, \code{"neighbourhood"} or
+\code{"heat"}), \code{"none"} for the kde; \code{"none"}: test the densities as they are; \code{"log"}: for the count units \code{log2}
+counts per 10,000 cells of the sample (\code{log2((density * n + 0.5) / (n + 1) * 1e4)}, \code{n} the sample's cell
+number), the log-count model of a neighbourhood abundance test; for the heat kernel \code{log2(d + kernel.alpha / n.cells)} of the per-sample densities \code{d} per cell of the sample, the cell itself counted as one cell of its
+neighborhood (a count pseudo-count would swamp a kernel density; \code{\link[=heatLogDensity]{heatLogDensity()}}, \code{\link[=ownCellDensity]{ownCellDensity()}}); the
+effect is then a log2 fold change of the density}
 
 \item{\code{post}}{post-processing of the per-cell test on the cell graph (graph density only): \code{"averaged"}
 (default): the statistic is averaged over each cell and its graph neighbours, under every permutation alike,
@@ -3750,6 +3871,36 @@ z-scores, effects and q-values of the result are those of the averaged statistic
 (default; the studentized contrast t, as benchmarked) or \code{"standardized"} (t minus its permutation mean over
 its permutation sd, the shift map's convention)}
 
+\item{\code{scale}}{the neighborhoods of the test. \code{NULL}: the units of the stored density (\code{estimateCellDensity()}, the
+kNN count units by default). Otherwise diffusion neighborhoods on the cell graph, whose width is the share of
+the cells a typical neighborhood covers (the kernel strength is solved per graph so that the median cell's
+effective neighborhood, \code{\link[=kernelEffectiveSize]{kernelEffectiveSize()}}, holds that share; \code{\link[=solveKernelBeta]{solveKernelBeta()}}; the diffusion follows
+the graph, so a neighborhood stays mostly within its own population). \code{"auto"} (default): the scale scan over
+\code{auto.scales} chooses the scale whose own map calls the most cells at q < 0.1 (the finest of the scales calling at
+least 90 \% of the cells when there are such; the scale of its strongest 1 \% of the cells when none calls any), and
+the result is the single-scale map at that scale, so that its q-values and
+effects belong to one scale. One value (\code{scale = 0.1}) tests a single scale; several values (\code{scale = c(0.01, 0.03, 0.1)}) run the scale scan itself (\code{\link[=scanDensityScales]{scanDensityScales()}}): every scale is tested under the same relabelings,
+a cell's statistic is its smallest p over the scales and its q-value the pooled permutation false discovery rate
+of that statistic (against the same quantity under every relabeling, no Bonferroni factor), so that each cell
+may be called at its own scale. Each map is the same test on \code{log2(d + kernel.alpha / n.cells)} of the per-sample
+kernel densities (\code{\link[=heatLogDensity]{heatLogDensity()}}; at each cell the heat arriving from every sample's cells, the cell itself
+counted as one cell of its neighborhood, so that a weakly connected cell, whose own heat stays on it, is tested
+through the neighborhood its arriving heat comes from) with the trended moderation of the statistic
+(\code{moderate}; needs limma).
+The scan needs \code{adjust.method = "perm-fdr"}. The result records \code{scale} (the scale(s) used), \code{scale.mode}
+(\code{"single"}, \code{"scan"} or \code{"auto"}) and \code{scales} (per scale: strength, median size, and per cell the pooled p,
+the effect, the single-scale q and the best scale; under \code{"auto"} also the scan's q and p, \code{scan.q}, \code{scan.p})}
+
+\item{\code{auto.scales}}{the scales \code{scale = "auto"} chooses from (default 1, 3 and 5 \% of the cells, the expression-shift map's set;
+10 \% as the coarsest scale gives this map 0.007 more ranking recall on the benchmark at a higher false share on PF; ignored otherwise)}
+
+\item{\code{effect.scale}}{under the scan, the scale whose log2 fold change is reported as \code{effect}: \code{"finest"} (default;
+the smallest scale, the least attenuated estimate, noisy only where the scan is not significant) or \code{"best"}
+(each cell's scale of the smallest p)}
+
+\item{\code{kernel.alpha}}{pseudo-count of a heat-kernel density on the log scale, as a fraction of the mean density
+(default 0.3; the diffusion neighborhoods, and \code{smoothing = "heat"} with \code{transform = "log"})}
+
 \item{\code{verbose}}{boolean Print messages (default=self$verbose)}
 
 \item{\code{n.cores}}{integer Number of cores to use for parallelization (default=self$n.cores)}
@@ -3761,7 +3912,8 @@ its permutation sd, the shift map's convention)}
 \subsection{Returns}{
 estimated differential cell densities: \code{pooled} (unadjusted signed z-scores), \code{adj} (adjusted), \code{p.adj},
 \code{effect} (the contrast estimate per cell: the density difference, or the log2 fold change with
-\code{transform = "log"}), \code{p.perm}, \code{p.pooled}, \code{p.param}, \code{t}, \code{group.test} (when cell groups are stored)
+\code{transform = "log"}), \code{p.perm}, \code{p.pooled}, \code{p.param}, \code{t}, \code{group.test} (when cell groups are stored);
+with \code{scale}: \code{scale}, \code{scale.mode} and \code{scales} (the per-scale maps, see \code{scale})
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
@@ -3796,6 +3948,11 @@ Estimate differential cell density
   mid.color = "gray95",
   scale.z.palette = NULL,
   min.z = qnorm(0.9),
+  outline = FALSE,
+  outline.alpha = 0.05,
+  outline.level = 0.5,
+  outline.color = "black",
+  outline.linewidth = 0.25,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -3835,6 +3992,12 @@ not distinguishable and would wash out the map); a numeric \code{color.range} is
 \item{\code{scale.z.palette}}{boolean Scale plot palette for Z scores (default: TRUE for z-scores, FALSE for the effect)}
 
 \item{\code{min.z}}{numeric Minimum Z score to plot (default=qnorm(0.9))}
+
+\item{\code{outline}}{draw a thin outline around the regions where the significant cells are (default FALSE; see
+\code{\link[=significanceContours]{significanceContours()}}): the cells with adjusted p below \code{outline.alpha}, outlined where they make up at least
+\code{outline.level} of the cells around a point, in \code{outline.color} with line width \code{outline.linewidth}}
+
+\item{\code{outline.alpha, outline.level, outline.color, outline.linewidth}}{settings of the outline}
 
 \item{\code{...}}{additional parameters}
 }
@@ -3965,15 +4128,23 @@ A ggplot2 object
 \if{html}{\out{<a id="method-Cacoa-getSampleDistanceMatrix"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-getSampleDistanceMatrix}{}}}
 \subsection{Method \code{getSampleDistanceMatrix()}}{
-Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
+Sample x sample distance matrix of a sample space
+
+The spaces: \code{"expression"} (pseudobulk expression of one cell type, \code{cell.type = "X"}, or, with \code{cell.type = NULL},
+all cell types combined: the average of the per-type distances, each type weighted by its cells, \code{joint.weighting = "cells"}, or equally, \code{"equal"}); \code{"pseudobulk"} (one pseudobulk of all cells per sample, so differences in
+composition enter the distance); \code{"composition"} (Euclidean distance of the ILR coordinates of the cell-type
+counts). Expression distances are taken from the stored results of \code{estimateExpressionShiftMagnitudes()} when there
+are any (\code{name}), so that they are the distances behind the shift estimates; otherwise they are computed with the
+same defaults. Nothing requires a model, except \code{values = "adjusted"}.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getSampleDistanceMatrix(
-  space = c("expression.shifts", "coda", "pseudo.bulk"),
+  space = c("expression", "pseudobulk", "composition"),
   values = c("unadjusted", "adjusted"),
   cell.type = NULL,
+  joint.weighting = c("cells", "equal"),
   dist = NULL,
   name = NULL,
-  verbose = self$verbose,
+  verbose = NULL,
   sample.subset = NULL,
   adjust.for = NULL,
   ...
@@ -3983,33 +4154,38 @@ Plot inter-sample expression distance. The inputs to this function are the resul
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{space}}{character One of 'expression.shifts', 'coda', 'pseudo.bulk' (default="expression.shifts")}
+\item{\code{space}}{\code{"expression"} (default), \code{"pseudobulk"} or \code{"composition"} (\code{"expression.shifts"} and \code{"coda"} are
+accepted as the earlier names)}
 
-\item{\code{values}}{character One of "unadjusted" (observed raw distances), "adjusted" (core/partial fit covariate-adjusted) (default="unadjusted")}
+\item{\code{values}}{\code{"unadjusted"} (default) or \code{"adjusted"}: the model's nuisance part removed (the covariates of the
+model other than the tested variable; for stored expression-shift results, the adjusted distances of the fit)}
 
-\item{\code{cell.type}}{character Cell type reference for distancing (default=NULL)}
+\item{\code{cell.type}}{cell type for \code{space = "expression"} (default NULL: all cell types combined)}
 
-\item{\code{dist}}{character Must be one of "cor", "l1" (manhattan), "l2" (euclidian) (default=NULL)}
+\item{\code{joint.weighting}}{\code{"cells"} (default) or \code{"equal"}: weights of the cell types in the combined expression distance}
 
-\item{\code{name}}{character Results slot name (default=NULL)}
+\item{\code{dist}}{distance of the expression profiles (\code{"cor"}, \code{"l1"}, \code{"l2"}; default: the object option)}
 
-\item{\code{verbose}}{boolean Print messages (default=self$verbose)}
+\item{\code{name}}{results of \code{estimateExpressionShiftMagnitudes()} to take the expression distances from (default
+"expression.shifts" when present)}
+
+\item{\code{verbose}}{print messages (default: the object option)}
 
 \item{\code{sample.subset}}{optional subset of samples}
 
-\item{\code{adjust.for}}{optional formula of covariates regressed out of the distances before use (G_adj = R G R)}
+\item{\code{adjust.for}}{optional formula of covariates regressed out of the distances (G_adj = R G R)}
 
-\item{\code{...}}{additional arguments}
+\item{\code{...}}{\code{test} (which test's adjusted distances of stored shift results)}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-sample distance matrix
+sample x sample distance matrix with attributes \code{dist.type}, \code{space} and \code{n.cells}
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
 \preformatted{\dontrun{
-cao$getSampleDistanceMatrix()
+cao$getSampleDistanceMatrix(space = "composition")
 }
 }
 \if{html}{\out{</div>}}
@@ -4021,15 +4197,21 @@ cao$getSampleDistanceMatrix()
 \if{html}{\out{<a id="method-Cacoa-plotSampleDistances"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotSampleDistances}{}}}
 \subsection{Method \code{plotSampleDistances()}}{
-Project samples to 2D space with MDS. Plots results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoadings()
+MDS map of the samples in a sample space, colored by a metadata column
+
+Draws the samples in two dimensions (classical MDS of the distances of \code{getSampleDistanceMatrix()}), colored and
+shaped by metadata columns. The subtitle reports how much of the between-sample variation each of them explains on
+exactly these distances: the chance-corrected R2 and permutation p-value of the covariate screen (marginal, as in
+\code{screenCovariates()}). Works before a model is set; \code{values = "adjusted"} or \code{"both"} need one.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotSampleDistances(
-  space = "expression.shifts",
+  space = "expression",
   method = "MDS",
-  values = "both",
+  values = "unadjusted",
   dist = NULL,
   name = NULL,
   cell.type = NULL,
+  joint.weighting = c("cells", "equal"),
   sample.meta = NULL,
   color.by = NULL,
   shape.by = NULL,
@@ -4041,10 +4223,10 @@ Project samples to 2D space with MDS. Plots results from cao$estimateExpressionS
   title = NULL,
   both.ncol = 2,
   both.align = "hv",
+  show.r2 = TRUE,
   n.permutations = NULL,
-  show.pvalues = FALSE,
   sample.subset = NULL,
-  n.cores = self$n.cores,
+  n.cores = NULL,
   adjust.for = NULL,
   ...
 )}\if{html}{\out{</div>}}
@@ -4053,62 +4235,56 @@ Project samples to 2D space with MDS. Plots results from cao$estimateExpressionS
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{space}}{character string "expression.shifts" Results from cao$estimateExpressionShiftMagnitudes(); CDA- cell composition shifts result from cao$estimateCellLoadings(); sudo.bulk- expression distance of sudo bulk}
+\item{\code{space}}{\code{"expression"} (default), \code{"pseudobulk"} or \code{"composition"} (see \code{getSampleDistanceMatrix()})}
 
-\item{\code{method}}{character string "MDS"}
+\item{\code{method}}{\code{"MDS"} (default), \code{"tSNE"}, \code{"UMAP"} or \code{"heatmap"}}
 
-\item{\code{values}}{character One of "unadjusted" (observed distances), "adjusted" (core/partial fit covariate-adjusted), or both (default="both")}
+\item{\code{values}}{\code{"unadjusted"} (default), \code{"adjusted"} or \code{"both"} (side by side)}
 
-\item{\code{dist}}{'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default correlation distance)}
+\item{\code{dist}}{distance of the expression profiles (default: the object option)}
 
-\item{\code{name}}{character Results slot name (default=NULL)}
+\item{\code{name}}{results of \code{estimateExpressionShiftMagnitudes()} to take the expression distances from}
 
-\item{\code{cell.type}}{If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)}
+\item{\code{cell.type}}{cell type (\code{space = "expression"}; default NULL: all cell types combined)}
 
-\item{\code{sample.meta}}{data.frame containing Sample metadata (default=self$sample.meta)}
+\item{\code{joint.weighting}}{\code{"cells"} (default) or \code{"equal"} (see \code{getSampleDistanceMatrix()})}
 
-\item{\code{color.by}}{character Sample metadata column name for coloring points (default=NULL)}
+\item{\code{sample.meta}}{sample metadata (default: the object's)}
 
-\item{\code{shape.by}}{character Sample metadata column name for shaping points (default=NULL)}
+\item{\code{color.by, shape.by}}{metadata columns for colour and shape; \code{color.by = "test"} colours by the tested variable}
 
-\item{\code{palette}}{a set of colors to use for conditions (default: stored $sample.groups.palette)}
+\item{\code{palette}}{colours (default: the stored palette for the tested variable)}
 
-\item{\code{show.sample.size}}{make point size proportional to the log10 of the number of cells per sample (default: FALSE)}
+\item{\code{show.sample.size}}{point size proportional to log10 of the cells per sample (default FALSE)}
 
-\item{\code{sample.colors}}{(default=NULL)}
+\item{\code{sample.colors}}{per-sample colors (overrides the \code{color.by} colors)}
 
-\item{\code{color.title}}{(default=NULL)}
+\item{\code{color.title, shape.title, title}}{legend and plot titles}
 
-\item{\code{shape.title}}{(default=NULL)}
+\item{\code{both.ncol, both.align}}{layout of \code{values = "both"}}
 
-\item{\code{title}}{(default=NULL)}
+\item{\code{show.r2}}{report the chance-corrected R2 of \code{color.by} / \code{shape.by} in the subtitle (default TRUE)}
 
-\item{\code{both.ncol}}{numeric number of columns for both plots (default=2)}
+\item{\code{n.permutations}}{permutations of the R2 p-values (default: the object option)}
 
-\item{\code{both.align}}{character alignment for both plots, one of "h", "v", "hv" (default="hv")}
+\item{\code{sample.subset}}{optional subset of samples}
 
-\item{\code{n.permutations}}{numeric (default=2000)}
+\item{\code{n.cores}}{cores (default: the object option)}
 
-\item{\code{show.pvalues}}{boolean (default=FALSE)}
+\item{\code{adjust.for}}{optional formula of covariates regressed out of the distances}
 
-\item{\code{sample.subset}}{character vector of sample IDs to include (default=NULL, meaning all samples)}
-
-\item{\code{n.cores}}{number of cores (default: stored option)}
-
-\item{\code{adjust.for}}{optional formula of covariates regressed out of the distances before use (G_adj = R G R)}
-
-\item{\code{...}}{additional parameters passed to plotSampleDistanceMatrix()}
+\item{\code{...}}{passed to the embedding plot (\code{font.size}, \code{size}, \code{show.labels}, ...)}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-A ggplot2 object
+ggplot2 object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
 \preformatted{\dontrun{
-cao$estimateExpressionShiftMagnitudes()
-cao$plotSampleDistances()
+cao$plotSampleDistances(color.by = "batch")
+cao$plotSampleDistances(space = "composition", color.by = "condition")
 }
 }
 \if{html}{\out{</div>}}
@@ -4120,11 +4296,14 @@ cao$plotSampleDistances()
 \if{html}{\out{<a id="method-Cacoa-estimateMetadataSeparation"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-estimateMetadataSeparation}{}}}
 \subsection{Method \code{estimateMetadataSeparation()}}{
-Estimate metadata separation using variance on the sample distance graph
+Deprecated: use \code{screenCovariates()}, whose summary row "all cell types" gives the same R2
+
+Chance-corrected R2 and permutation p-value of each metadata column on the combined sample distances (the marginal
+covariate screen of one matrix).
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateMetadataSeparation(
   sample.meta = self$sample.meta,
-  space = "expression.shifts",
+  space = "expression",
   dist = NULL,
   space.name = NULL,
   sample.subset = NULL,
@@ -4145,61 +4324,45 @@ Estimate metadata separation using variance on the sample distance graph
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{sample.meta}}{sample metadata is a list or data.frame with metadata per sample}
+\item{\code{sample.meta}}{sample metadata (default: the object's)}
 
-\item{\code{space}}{(default="expression shifts")}
+\item{\code{space}}{sample space (see \code{getSampleDistanceMatrix()}; default "expression")}
 
-\item{\code{dist}}{(default=NULL)}
+\item{\code{dist}}{distance (default: the object option)}
 
-\item{\code{space.name}}{(default=NULL)}
+\item{\code{space.name}}{results to take the expression distances from}
 
 \item{\code{sample.subset}}{optional subset of samples}
 
-\item{\code{name}}{results slot name}
+\item{\code{name}}{results slot (default "metadata.separation")}
 
-\item{\code{n.permutations}}{number permutations for the test (default=5000)}
+\item{\code{n.permutations}}{permutations (default: the object option)}
 
-\item{\code{trim}}{trim distance matrix above the given quantile (default=0.05)}
+\item{\code{trim, k}}{unused (the graph-based statistic was replaced by the covariate screen)}
 
-\item{\code{k}}{if this parameter is supplied, k-NN graph is used for variance estimation, otherwise
-the function uses a fully-connected graph (default=20)}
+\item{\code{show.warning}}{warn about significant covariates (default TRUE)}
 
-\item{\code{show.warning}}{boolean (default=TRUE)}
+\item{\code{verbose, n.cores}}{defaults from options}
 
-\item{\code{verbose}}{boolean Print messages (default=self$verbose)}
+\item{\code{adjust.pvalues}}{BH-adjust the p-values (default TRUE)}
 
-\item{\code{n.cores}}{integer Number of cores to use for parallelization (default=self$n.cores)}
+\item{\code{p.adjust.method}}{adjustment method (default "BH")}
 
-\item{\code{adjust.pvalues}}{boolean (default=TRUE)}
+\item{\code{pvalue.cutoff}}{threshold of the warning (default 0.05)}
 
-\item{\code{p.adjust.method}}{p-value adjustment method (default='BH')}
-
-\item{\code{pvalue.cutoff}}{numeric (default=0.05)}
-
-\item{\code{mode}}{'marginal' (default), 'partial' or 'both' (see \code{screenCovariates()})}
+\item{\code{mode}}{\code{"marginal"} (default), \code{"partial"} or \code{"both"}}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-results
+list: \code{metadata}, \code{pvalues}, \code{pseudo.r2}, \code{padjust}, \code{screen}
 }
-\subsection{Examples}{
-\if{html}{\out{<div class="r example copy">}}
-\preformatted{\dontrun{
-cao$estimateExpressionShiftMagnitudes() # or estimateCellLoadings()
-cao$estimateMetadataSeparation(sample.meta = meta.data) # meta.data is a list or data.frame with metadata per sample
-}
-}
-\if{html}{\out{</div>}}
-
-}
-
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-plotMetadataSeparation"></a>}}
 \if{latex}{\out{\hypertarget{method-Cacoa-plotMetadataSeparation}{}}}
 \subsection{Method \code{plotMetadataSeparation()}}{
-Plot metadata separation
+Deprecated: bars of \code{estimateMetadataSeparation()} (see \code{plotCovariateScreen()})
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotMetadataSeparation(
   name = "metadata.separation",
@@ -4219,18 +4382,9 @@ Plot metadata separation
 }
 \if{html}{\out{</div>}}
 }
-\subsection{Examples}{
-\if{html}{\out{<div class="r example copy">}}
-\preformatted{\dontrun{
-cao$estimateExpressionShiftMagnitudes() # or estimateCellLoadings()
-cao$estimateMetadataSeparation(sample.meta = meta.data)
-cao$plotMetadataSeparation()
+\subsection{Returns}{
+ggplot2 object
 }
-}
-\if{html}{\out{</div>}}
-
-}
-
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-estimateClusterFreeDE"></a>}}
@@ -4423,7 +4577,8 @@ one set of sample permutations shared by all cells, the max-statistic adjustment
 median smoothing over the graph.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateClusterFreeExpressionShifts(
-  n.top.genes = 3000,
+  statistic = c("gsd", "distance"),
+  n.top.genes = NULL,
   gene.selection = "expression",
   name = "cluster.free.expr.shifts",
   test = NULL,
@@ -4435,16 +4590,28 @@ median smoothing over the graph.
   permutation = NULL,
   n.permutations = NULL,
   seed = NULL,
-  dist = c("cor", "cosine", "js"),
+  min.gene.frac = 0.01,
+  neighbourhood.gene.frac = 0.05,
+  centres.per.cell = 2,
+  gsd.d0 = 3,
+  dist = c("cor", "euclidean", "cosine", "js"),
+  profile = c("normalized", "raw"),
+  profile.scale = "median",
+  weighting = c("noise", "none"),
+  sample.floor = TRUE,
+  noise.correction = FALSE,
   adjust = TRUE,
   smooth = TRUE,
   wins = 0.025,
   genes = NULL,
   min.expr.frac = 0,
   min.edge.weight = 0,
-  adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
-  p.source = c("permutation", "pooled", "z", "parametric"),
+  adjust.method = NULL,
+  p.source = NULL,
   k = NULL,
+  scale = "auto",
+  auto.scales = c(0.01, 0.03, 0.05),
+  effect.scale = c("finest", "best"),
   post = c("averaged", "inherit", "none"),
   verbose = NULL,
   n.cores = NULL,
@@ -4456,9 +4623,13 @@ median smoothing over the graph.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.top.genes}}{gene set (default: 3000 most expressed genes)}
+\item{\code{statistic}}{\code{"gsd"} (default: per-gene test combined over the unit's genes, see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}) or
+\code{"distance"} (the sample-distance pseudo-F, the previous method)}
 
-\item{\code{gene.selection}}{gene set (default: 3000 most expressed genes)}
+\item{\code{n.top.genes}}{optional: restrict the gene universe to this many top genes by \code{gene.selection} (default NULL: no
+restriction; the distance map used the 3000 most expressed genes, with no per-neighbourhood selection, before 2026-10)}
+
+\item{\code{gene.selection}}{ranking used with \code{n.top.genes} (\code{"expression"} or \code{"od"})}
 
 \item{\code{name}}{results slot (default "cluster.free.expr.shifts")}
 
@@ -4480,7 +4651,31 @@ median smoothing over the graph.
 
 \item{\code{seed}}{defaults from options (permutations capped at 499)}
 
-\item{\code{dist}}{\code{"cor"} (default), \code{"cosine"} or \code{"js"}}
+\item{\code{min.gene.frac}}{the gene universe is every gene detected in at least this fraction of all cells (default 0.01)}
+
+\item{\code{neighbourhood.gene.frac}}{both statistics: in each neighbourhood, the genes of the universe detected in at least this
+fraction of its cells (default 0.05; 0: every gene of the universe)}
+
+\item{\code{centres.per.cell}}{gsd: test the neighbourhoods of a subset of cells, about this many centres among each cell's graph
+neighbours (default 2; \code{Inf} tests every cell's neighbourhood), see
+\code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
+
+\item{\code{gsd.d0}}{gsd: prior degrees of freedom of the moderated per-gene variance (the noise model's variance shrunk towards the
+residual variance; default 3); see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
+
+\item{\code{dist}}{\code{"cor"} (default) or \code{"euclidean"} with the normalized profiles; \code{"cor"}, \code{"cosine"} or \code{"js"} with
+\code{profile = "raw"}; see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
+
+\item{\code{profile}}{\code{"normalized"} (default: depth-normalized, noise-weighted neighbourhood profiles) or \code{"raw"} (the
+previous mean raw counts, unweighted); see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
+
+\item{\code{profile.scale}}{transform scale of the normalized profiles (default \code{"median"}: the median library size)}
+
+\item{\code{weighting}}{\code{"noise"} (default) or \code{"none"}; see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
+
+\item{\code{sample.floor}}{between-sample variance floor in the gene weights (default TRUE)}
+
+\item{\code{noise.correction}}{known-noise correction (default FALSE); see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
 
 \item{\code{adjust}}{see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
 
@@ -4488,16 +4683,18 @@ median smoothing over the graph.
 
 \item{\code{wins}}{see \code{\link[=clusterFreeExpressionShifts]{clusterFreeExpressionShifts()}}}
 
-\item{\code{genes}}{gene set (default: 3000 most expressed genes)}
+\item{\code{genes}}{explicit gene universe (default: see \code{min.gene.frac} and \code{n.top.genes})}
 
-\item{\code{min.expr.frac}}{gene set (default: 3000 most expressed genes)}
+\item{\code{min.expr.frac}}{minimum fraction of cells expressing a gene (default 0)}
 
 \item{\code{min.edge.weight}}{minimum graph edge weight between cells of different samples (default 0)}
 
-\item{\code{adjust.method}}{multiplicity adjustment across cells: \code{"perm-fdr"} (default; pooled permutation FDR, see
-\code{\link[=permutationFDR]{permutationFDR()}}), \code{"bh"}, \code{"spatial-fdr"}, \code{"neighbourhood"} or \code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
+\item{\code{adjust.method}}{multiplicity adjustment across cells: \code{"bh"} (default with gsd: BH on the pooled p), \code{"perm-fdr"}
+(default with the distance map; pooled permutation FDR, see \code{\link[=permutationFDR]{permutationFDR()}}), \code{"spatial-fdr"}, \code{"neighbourhood"} or
+\code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
 
-\item{\code{p.source}}{per-cell p-values for the BH-type adjustments: \code{"permutation"} (default; calibrated, floored at
+\item{\code{p.source}}{per-cell p-values for the BH-type adjustments (default \code{"pooled"} with gsd, \code{"permutation"} with the
+distance map): \code{"permutation"} (calibrated, floored at
 1 / (n.permutations + 1)), \code{"pooled"} (pooled permutation null of all cells, see \code{\link[=pooledPermutationP]{pooledPermutationP()}}: no
 floor, calibrated with enough permutations), \code{"z"} (normal tail of the permutation-standardized z: no floor,
 anti-conservative) or \code{"parametric"} (the F of the neighbourhood shift; not calibrated)}
@@ -4505,7 +4702,29 @@ anti-conservative) or \code{"parametric"} (the F of the neighbourhood shift; not
 \item{\code{k}}{neighbourhood unit: NULL (default) uses kNN neighbourhoods sized by \code{\link[=defaultNeighbourhoodSize]{defaultNeighbourhoodSize()}}
 (the larger of 100 and 10 cells per sample, capped at 1 \% of the cells; the unit with the best power at
 matched error in the benchmark, \code{misc/benchmark/README.md}); an integer sets the size
-(\code{\link[=knnNeighbourhoodMatrix]{knnNeighbourhoodMatrix()}}); \code{"1-hop"} tests each cell with its graph neighbours only (the former unit)}
+(\code{\link[=knnNeighbourhoodMatrix]{knnNeighbourhoodMatrix()}}); \code{"1-hop"} tests each cell with its graph neighbours only (the former unit);
+with diffusion neighbourhoods (\code{scale} given) it is the smallest neighbourhood: a weakly connected centre, whose kernel stays on
+itself, gets its \code{k} cells of largest kernel weight, so that its neighbourhood can be tested}
+
+\item{\code{scale}}{the neighbourhoods of the test. \code{NULL}: the kNN neighbourhoods (\code{k}). Otherwise diffusion
+neighbourhoods on the cell graph (\code{\link[=diffusionNeighbourhoodLists]{diffusionNeighbourhoodLists()}}; the scale is the share of the cells a typical
+neighbourhood covers, the kernel strength solved per graph, \code{\link[=solveKernelBeta]{solveKernelBeta()}}; each tested neighbourhood is
+the scale's number of cells its centre's heat reaches most, \code{\link[=diffusionNeighbourhoodLists]{diffusionNeighbourhoodLists()}}): \code{"auto"} (default)
+runs the scale scan over \code{auto.scales}, chooses the scale whose own map calls the most cells at q < 0.1 (the finest
+of the scales calling at least 90 \% of the cells when there are such; its strongest 1 \% of the cells when none
+calls any) and reports that single-scale map; one value tests a single
+scale; several values (\code{scale = c(0.01, 0.03, 0.05)}) report the scale scan itself (\code{\link[=scanShiftScales]{scanShiftScales()}}: every
+scale under the same relabelings, a cell's statistic its smallest p over the scales, its q-value the pooled
+permutation false discovery rate of that statistic; no Bonferroni factor). \code{statistic = "gsd"} only. A scale below the floor of
+\code{\link[=defaultNeighbourhoodSize]{defaultNeighbourhoodSize()}} cells is raised to it (enough cells per sample). The result records \code{scale}, \code{scale.mode}
+(\code{"single"}, \code{"scan"}, \code{"auto"}) and \code{scales} (per scale: strength, median size, centres, and per cell the pooled
+p, the shift, the single-scale q, the best scale); as for the density map, \code{estimateDiffCellDensity()}}
+
+\item{\code{auto.scales}}{the scales \code{scale = "auto"} chooses from (default 1, 3 and 5 \% of the cells, as for the density map: at 10 \% the
+scale-sized neighbourhoods of this map take in the halo around a changed population and call it; ignored otherwise)}
+
+\item{\code{effect.scale}}{under the scan, the scale whose shift estimate is reported as \code{shifts}: \code{"finest"} (default) or
+\code{"best"} (each cell's scale of the smallest p)}
 
 \item{\code{post}}{post-processing on the cell graph: \code{"averaged"} (default; the shift statistic averaged over each
 cell and its graph neighbours under every permutation, exact and calibrated; needs \code{adjust.method = "perm-fdr"}), \code{"inherit"} (smallest q among the cell and its neighbours; more reach, realized error at the
@@ -4898,12 +5117,19 @@ Plot the cluster-free expression shifts: the shift magnitude next to the signed 
   color.range = c("0", "97.5\%"),
   z.range = "99.5\%",
   max.z = 8,
+  z.floor = stats::qnorm(0.99),
   alpha = 0.2,
   font.size = c(3, 5),
   adj.list = NULL,
   pal.seq = brewerPalette("YlOrRd", rev = FALSE),
   pal.div = brewerPalette("RdBu", rev = TRUE),
   build.panel = TRUE,
+  ncol = NULL,
+  outline = FALSE,
+  outline.alpha = 0.05,
+  outline.level = 0.5,
+  outline.color = "black",
+  outline.linewidth = 0.25,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -4934,6 +5160,9 @@ numeric vector whose largest absolute value sets the range; values beyond it are
 
 \item{\code{max.z}}{cap of a z range taken from a quantile (default 8; a numeric \code{z.range} is taken as given)}
 
+\item{\code{z.floor}}{smallest half-range of the z panels (default \code{qnorm(0.99)} = 2.33): the colours saturate only beyond it, so
+a map whose z-scores barely reach significance stays pale (was 1.96 for the adjusted and 0 for the unadjusted panel)}
+
 \item{\code{alpha}}{numeric (default=0.2)}
 
 \item{\code{font.size}}{size range for cell type labels}
@@ -4945,6 +5174,13 @@ numeric vector whose largest absolute value sets the range; values beyond it are
 \item{\code{pal.div}}{diverging palette for the z-scores}
 
 \item{\code{build.panel}}{boolean (default=TRUE)}
+
+\item{\code{ncol}}{columns of the panel (default: all panels in one row); each map keeps the aspect ratio of the embedding}
+
+\item{\code{outline}}{draw a thin outline around the regions where the cells significant at \code{outline.alpha} (adjusted p) are,
+on every panel (default FALSE; see \code{\link[=significanceContours]{significanceContours()}})}
+
+\item{\code{outline.alpha, outline.level, outline.color, outline.linewidth}}{settings of the outline}
 
 \item{\code{...}}{parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}}
 }

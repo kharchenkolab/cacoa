@@ -125,12 +125,11 @@ test_that("simulated objects: the whole workflow runs end to end on a conos-back
   cao$setModel(~ Group + Batch, test = c("Group: Group2 vs Group1", "Group: all"))
   expect_length(cao$model$tests, 2); expect_equal(cao$model$tests[[2]]$kind, "term")
   expect_equal(cao$ref.level, "Group1")
-  res <- cao$estimateExpressionShiftMagnitudes()
-  expect_setequal(unique(res$results$effect), c("shift", "var", "total", "location", "dispersion"))
+  res <- suppressMessages(cao$estimateExpressionShiftMagnitudes())   # the whole-factor test of the model is skipped for shifts
+  expect_setequal(unique(res$results$effect), c("shift", "var", "total"))
+  expect_equal(unique(res$results$test), "Group: Group2 vs Group1")
   sh <- res$results[res$results$effect == "shift", ]
   expect_true(all(sh$padj[sh$celltype %in% c("IN-SST", "IN-PV", "L2/3")] < 0.05))
-  loc <- res$results[res$results$effect == "location", ]
-  expect_true(all(loc$padj[loc$celltype %in% c("IN-SST", "IN-PV", "L2/3")] < 0.05))
   expect_s3_class(cao$plotExpressionShiftMagnitudes(), "ggplot")
   expect_true(inherits(cao$plotShiftDetail("IN-SST"), "ggplot"))
   expect_s3_class(cao$plotSampleInfluence(), "ggplot")

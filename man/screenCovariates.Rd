@@ -24,7 +24,10 @@ screenCovariates(
 )
 }
 \arguments{
-\item{D.list}{named list of sample x sample distance matrices (one per cell type)}
+\item{D.list}{named list of sample x sample distance matrices (one per cell type). A matrix may carry its own distance
+type in \code{attr(D, "dist.type")} (overrides \code{dist}), and \code{attr(D, "summary") = TRUE} marks a summary row (all cell
+types combined, composition, pooled pseudobulk): such rows are screened like the others but are adjusted among
+themselves and do not enter the global p-values, the counts of significant cell types or the suggested model.}
 
 \item{meta}{sample metadata (rows named by sample)}
 

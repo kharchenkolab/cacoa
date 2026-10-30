@@ -12,9 +12,13 @@ lmCoda(
   perm.method = c("block", "freedman-lane"),
   zero.pseudocount = 0.1,
   basis.type = c("default"),
+  ref.method = c("block", "pvalue"),
+  ref.block.thresh = 0.05,
+  ref.size.frac = 0.5,
   ref.p.thresh = 0.3,
   ref.min.size = 1,
   ref.max.size = 3,
+  ci.level = 0.95,
   ...
 )
 }
@@ -33,12 +37,24 @@ sample-wise frequencies.}
 
 \item{basis.type}{ILR basis type passed to \code{coda.base::ilr_basis()}.}
 
+\item{ref.method}{reference cell types for the presentation of the loadings: \code{"block"} (default) the largest set of
+cell types whose proportions do not change relative to each other (\code{\link[=referenceBlock]{referenceBlock()}}: pairwise permutation tests of the
+loading differences, merged while p >= \code{ref.block.thresh}), or \code{"pvalue"} (the previous rule: the cell types with the
+weakest evidence of a change relative to the geometric mean, \code{ref.p.thresh}, \code{ref.min.size}, \code{ref.max.size})}
+
+\item{ref.block.thresh}{p-value below which two groups of cell types are kept apart in the block search (default 0.05)}
+
+\item{ref.size.frac}{blocks at least this fraction of the largest block's size compete for the reference, the one closest to the
+center of the composition winning (default 0.5; \code{\link[=referenceBlock]{referenceBlock()}})}
+
 \item{ref.p.thresh}{P-value threshold used to select a "least-affected" reference set for
-centering loadings (optional, used for presentation).}
+centering loadings (\code{ref.method = "pvalue"}).}
 
-\item{ref.min.size}{Minimum size of the reference set.}
+\item{ref.min.size}{Minimum size of the reference set (\code{ref.method = "pvalue"}).}
 
-\item{ref.max.size}{Maximum size of the reference set.}
+\item{ref.max.size}{Maximum size of the reference set (\code{ref.method = "pvalue"}).}
+
+\item{ci.level}{level of the intervals of the predicted endpoint compositions (default 0.95; \code{predicted$baseline.lo} etc.)}
 
 \item{...}{Additional arguments forwarded to the permutation/LM routine
 (e.g. \code{n.permutations}, na.mode, robust, alternative, etc.).}
@@ -46,8 +62,10 @@ centering loadings (optional, used for presentation).}
 \value{
 A list containing ILR coordinates and basis, fitted model/permutation output, and
 coefficient- and contrast-level results including global variance-explained statistics,
-clr-space cell-type loadings, empirical p-values/FDR, and (if available) predicted endpoint
-compositions for the specified contrast.
+clr-space cell-type loadings, empirical p-values/FDR (relative to the geometric mean of all cell types, \code{pval} /
+\code{padj}, and relative to the reference cell types, \code{pval.ref} / \code{padj.ref}), and (if available) predicted endpoint
+compositions for the specified contrast; \code{reference} (the reference cell types, \code{\link[=referenceBlock]{referenceBlock()}}) and \code{tree}
+(the contrast tree, \code{\link[=contrastTree]{contrastTree()}}).
 }
 \description{
 Given counts per sample and cell type, a small pseudocount is added to zeros and

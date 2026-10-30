@@ -238,7 +238,7 @@ inferencePrecompute <- function(G, X, Z, cvec) {
 
 # shift F, var, total for labels permuted by p (X[p, ], Z[p, ]) against a fixed Gower matrix G.
 # O(n^2 q): uses that X'X is invariant under row permutation.
-permutedStats <- function(G, X, Z, cvec, z.end, pre, p = NULL, bias.correct = TRUE, need.var = TRUE) {
+permutedStats <- function(G, X, Z, cvec, z.end, pre, p = NULL, bias.correct = TRUE, need.var = TRUE, z.fixed = integer(0)) {
   n <- pre$n
   if (is.null(p)) p <- seq_len(n)
   a <- pre$a[p]                                  # A_p' c = (A' c)[p]
@@ -246,14 +246,14 @@ permutedStats <- function(G, X, Z, cvec, z.end, pre, p = NULL, bias.correct = TR
   ss <- drop(crossprod(a, G %*% a)) / pre$cXc
   rss <- pre$trG - sum(Hp * G)
   Fs <- ss / (rss / (n - pre$q))
-  if (!need.var) return(c(F = Fs, shift = NA, var = NA, total = NA))
+  if (!need.var) return(c(F = Fs, shift = NA, var = NA, total = NA, var.t = NA))
   Xp <- X[p, , drop = FALSE]; Ap <- pre$A[, p, drop = FALSE]          # A_p = A[, p]
   AG <- Ap %*% G                                 # q x n
   M <- AG %*% t(Ap)                              # bias-uncorrected effect matrix
   hG <- rowSums(Xp * t(AG))                      # diag(H_p G)
   hGh <- rowSums((Xp %*% M) * Xp)                # diag(H_p G H_p)
   r <- pre$dG - 2 * hG + hGh                     # diag(R G R)
-  Zp <- Z[p, , drop = FALSE]
+  Zp <- Z[p, , drop = FALSE]; if (length(z.fixed)) Zp[, z.fixed] <- Z[, z.fixed]   # sample properties stay with the sample
   Rp <- -Hp; diag(Rp) <- diag(Rp) + 1            # residual projection under the relabeling
   gamma <- fitDispersion(Rp, Zp, r)
   s <- drop(Zp %*% gamma)
@@ -261,7 +261,17 @@ permutedStats <- function(G, X, Z, cvec, z.end, pre, p = NULL, bias.correct = TR
   shift <- drop(crossprod(cvec, M %*% cvec))
   s.alt <- sum(as.numeric(z.end$num) * gamma); s.ref <- sum(as.numeric(z.end$den) * gamma)
   var <- 2 * (s.alt - s.ref)
-  c(F = Fs, shift = shift, var = var, total = shift + var / 2)
+  c(F = Fs, shift = shift, var = var, total = shift + var / 2, var.t = dispersionT((Rp * Rp) %*% Zp, r, gamma, as.numeric(z.end$num) - as.numeric(z.end$den)))
+}
+
+# studentized dispersion change d' gamma / se (R reference of disp_t() in src/gower_stats.h): the residual variance of the
+# least-squares fit of the squared residual distances r on W = (R o R) Z, on n - ncol(Z) degrees of freedom
+dispersionT <- function(W, r, gamma, d, w = rep(1, length(r))) {
+  dfw <- sum(w) - ncol(W); if (dfw <= 0.5 || any(!is.finite(gamma))) return(NA_real_)
+  res <- r - drop(W %*% gamma); s2 <- sum(w * res^2) / dfw
+  Ws <- W * sqrt(w); v <- drop(t(d) %*% MASS::ginv(crossprod(Ws)) %*% d) * s2
+  if (!is.finite(v) || v <= 0) return(NA_real_)
+  sum(d * gamma) / sqrt(v)
 }
 
 # Freedman-Lane parts for the reduced design Xr: G* = K1 + K2[, p] + K3[p, ] + K4[p, p]
@@ -281,23 +291,34 @@ permutationStatsForCellType <- function(eff, plan, P, bias.correct = TRUE) {
   pre <- inferencePrecompute(G, X, Z, cvec)
   obs <- permutedStats(G, X, Z, cvec, z.end, pre, NULL, bias.correct, need.var)
   B <- ncol(P)
-  perm <- matrix(NA_real_, B, 4, dimnames = list(NULL, c("F", "shift", "var", "total")))
+  perm <- matrix(NA_real_, B, 5, dimnames = list(NULL, c("F", "shift", "var", "total", "var.t")))
   if (B == 0) return(list(obs = obs, perm = perm))                       # nothing to permute (a single relabeling)
   storage.mode(P) <- "integer"
   znum <- if (need.var) as.numeric(z.end$num) else numeric(ncol(Z)); zden <- if (need.var) as.numeric(z.end$den) else numeric(ncol(Z))
+  zfix <- as.integer(eff$z.fixed %||% integer(0)) - 1L   # dispersion-design columns that stay with their sample (0-based)
   if (isTRUE(eff$weighted)) {                   # weighted / robust path (C++; R reference: weightedContrastStats())
-    obs <- c(F = eff$F.shift, shift = eff$shift, var = if (need.var) eff$var else NA, total = if (need.var) eff$total else NA)
     code <- c(none = 0L, huber = 1L, winsor = 2L)[[eff$robust]]
-    perm[, ] <- permuted_contrast_stats_w(G, X, Z, eff$base.w, cvec, znum, zden, P, plan$scheme == "freedman-lane", eff$w, bias.correct, need.var, code, eff$robust.k, 5L)
+    id <- permuted_contrast_stats_w(G, X, Z, eff$base.w, cvec, znum, zden, matrix(seq_len(nrow(X)), ncol = 1), FALSE, eff$w, zfix, bias.correct, need.var, code, eff$robust.k, 5L)
+    obs <- c(F = eff$F.shift, shift = eff$shift, var = if (need.var) eff$var else NA, total = if (need.var) eff$total else NA, var.t = if (need.var) id[1, 5] else NA)
+    perm[, ] <- permuted_contrast_stats_w(G, X, Z, eff$base.w, cvec, znum, zden, P, plan$scheme == "freedman-lane", eff$w, zfix, bias.correct, need.var, code, eff$robust.k, 5L)
     return(list(obs = obs, perm = perm))
   }
   if (plan$scheme == "block") {                 # C++ kernel; R reference: permutedStats()
-    perm[, ] <- permuted_contrast_stats(G, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, znum, zden, P, bias.correct, need.var)
+    perm[, ] <- permuted_contrast_stats(G, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, znum, zden, P, zfix, bias.correct, need.var)
   } else {                                      # freedman-lane: Gower re-indexing of the reduced-model parts
     parts <- flGowerParts(G, X %*% contrastNullBasis(cvec))
     perm[, ] <- permuted_contrast_stats_fl(parts$K1, parts$K2, parts$K3, parts$K4, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, znum, zden, P, bias.correct, need.var)
   }
   list(obs = obs, perm = perm)
+}
+
+# 2.5-97.5 % of the normalized shift and of var.norm = log2(s.alt / s.ref) over relabelings (what noise alone gives), on the
+# observed scale S = s.ref + s.alt: shift / S, and the arm dispersions (S +- var / 2) / 2
+relabelingBands <- function(perm, S, var.ok = TRUE, probs = c(0.025, 0.975)) {
+  q <- function(x) { x <- x[is.finite(x)]; if (length(x) < 2) c(NA_real_, NA_real_) else unname(stats::quantile(x, probs)) }
+  if (!is.finite(S) || S <= 0) return(list(shift = c(NA_real_, NA_real_), var = c(NA_real_, NA_real_)))
+  v <- perm[, "var"]; ok <- is.finite(v) & abs(v) / 2 < S
+  list(shift = q(perm[, "shift"] / S), var = if (var.ok) q(log2((S + v[ok] / 2) / (S - v[ok] / 2))) else c(NA_real_, NA_real_))
 }
 
 permutationPValue <- function(obs, perm, alternative = c("greater", "two.sided"), exhaustive = FALSE) {
@@ -334,12 +355,14 @@ permutationPValue <- function(obs, perm, alternative = c("greater", "two.sided")
 #'   `perm.stats` (optional), `call.info`
 #' @export
 #' @param robust,na.mode,robust.k robust fit (`"none"`, `"huber"`, `"winsor"`), treatment of samples absent from a cell type
+#' @param cell.number.adjust per-sample 1 / n.cells term in the dispersion design, `var` at equal cell numbers (default TRUE; needs the
+#'   `n.cells` attribute of the distance matrices)
 #'   (`"drop"`, `"impute_weak"`) and robust tuning constant; recorded in `call.info`
 testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL, dist = c("cor", "l2", "l1"),
                                 permutation = c("auto", "block", "freedman-lane"), n.permutations = 999,
                                 block.vars = NULL, bias.correct = TRUE, influence = FALSE, min.samp.per.level = 3,
                                 seed = NULL, alpha = 0.05, n.cores = 1, return.perm.stats = FALSE, verbose = FALSE,
-                                robust = c("none", "huber", "winsor"), na.mode = c("drop", "impute_weak"), robust.k = 1.345) {
+                                robust = c("none", "huber", "winsor"), na.mode = c("drop", "impute_weak"), robust.k = 1.345, cell.number.adjust = TRUE) {
   dist <- match.arg(dist); permutation <- match.arg(permutation); robust <- match.arg(robust); na.mode <- match.arg(na.mode)
   block.vars <- block.vars %||% design$block.vars   # the model's permutation strata unless overridden
   if (is.null(names(D.list))) names(D.list) <- paste0("CT", seq_along(D.list))
@@ -356,7 +379,8 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
   # effects per cell type
   fits <- lapply(D.list, function(D) pairwiseEffectsFromDesign(D, design, meta, dispersion.formula = dispersion.formula,
                                                                dist = dist, bias.correct = bias.correct, influence = influence,
-                                                               min.samp.per.level = min.samp.per.level, robust = robust, na.mode = na.mode, robust.k = robust.k))
+                                                               min.samp.per.level = min.samp.per.level, robust = robust, na.mode = na.mode, robust.k = robust.k,
+                                                               cell.number.adjust = cell.number.adjust))
   ok <- vapply(fits, function(f) isTRUE(f$ok), logical(1))
   skipped <- data.frame(celltype = names(fits)[!ok], reason = vapply(fits[!ok], function(f) f$reason, character(1)),
                         stringsAsFactors = FALSE, row.names = NULL)
@@ -371,7 +395,16 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
     st.c <- permutationStatsForCellType(eff, plan, P.ind, bias.correct)
     # p-values: exhaustive enumeration when small, otherwise the coupled draws
     st.p <- if (plan$exhaustive) permutationStatsForCellType(eff, plan, drawPermutations(plan), bias.correct) else st.c
-    list(plan = plan, obs = st.c$obs, perm.coupled = st.c$perm, perm = st.p$perm)
+    # relabelings for the noise band: the half least associated with the tested contrast (|cor| of the permuted and the original
+    # per-sample contrast weights), so that relabelings close to the true labels (or to their mirror) do not carry the effect into it
+    Pp <- if (plan$exhaustive) drawPermutations(plan) else P.ind
+    a <- tryCatch(drop(t(hatInfo(eff$X)$A) %*% eff$contrast), error = function(e) NULL)
+    band <- rep(TRUE, ncol(Pp))
+    if (!is.null(a) && stats::sd(a) > 0 && ncol(Pp) >= 20) {
+      assoc <- abs(apply(Pp, 2, function(q) suppressWarnings(stats::cor(a[q], a)))); assoc[!is.finite(assoc)] <- 1
+      band <- assoc <= stats::median(assoc)
+    }
+    list(plan = plan, obs = st.c$obs, perm.coupled = st.c$perm, perm = st.p$perm, band = band)
   }
   cts <- names(fits)[ok]
   runs <- if (n.cores > 1 && length(cts) > 1) sccore::plapply(cts, runOne, n.cores = n.cores, progress = verbose, fail.on.error = TRUE)
@@ -382,18 +415,21 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
   rows <- lapply(cts, function(ct) {
     r <- runs[[ct]]; e <- fits[[ct]]; ex <- r$plan$exhaustive
     di <- is.null(e$disp.identifiable) || isTRUE(e$disp.identifiable)   # arm dispersions identifiable under the location model
+    nb <- relabelingBands(r$perm[r$band, , drop = FALSE], e$s.ref + e$s.alt, di)
     data.frame(celltype = ct, shift = e$shift, var = if (di) e$var else NA_real_, total = if (di) e$total else NA_real_, ratio = e$ratio,
                shift.norm = e$shift.norm, var.norm = if (di) e$var.norm else NA_real_, total.norm = if (di) e$total.norm else NA_real_,
                s.ref = e$s.ref, s.alt = e$s.alt, F = unname(r$obs["F"]), disp.identifiable = di,
                p.shift = permutationPValue(r$obs["F"], r$perm[, "F"], "greater", ex),
-               p.var = if (di) permutationPValue(r$obs["var"], r$perm[, "var"], "two.sided", ex) else NA_real_,
+               p.var = if (di) permutationPValue(r$obs["var.t"], r$perm[, "var.t"], "two.sided", ex) else NA_real_,
                p.total = if (di) permutationPValue(r$obs["total"], r$perm[, "total"], "two.sided", ex) else NA_real_,
                n = e$n, n.ref = e$n.ref, n.alt = e$n.alt,
                se.shift = if (!is.null(e$influence)) unname(e$influence$se["shift"]) else NA_real_,
                se.var = if (!is.null(e$influence)) unname(e$influence$se["var"]) else NA_real_,
                se.total = if (!is.null(e$influence)) unname(e$influence$se["total"]) else NA_real_,
                scheme = r$plan$scheme, n.perm = nrow(r$perm), n.perm.distinct = r$plan$n.distinct,
-               exhaustive = ex, p.floor = r$plan$p.floor, stringsAsFactors = FALSE, row.names = NULL)
+               exhaustive = ex, p.floor = r$plan$p.floor,
+               null.shift.lo = nb$shift[1], null.shift.hi = nb$shift[2], null.var.lo = nb$var[1], null.var.hi = nb$var[2],
+               cell.assoc = e$cell.assoc %||% NA_real_, stringsAsFactors = FALSE, row.names = NULL)
   })
   results <- do.call(rbind, rows)
   if (is.null(results)) results <- data.frame()
@@ -402,7 +438,7 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
     for (eff in c("shift", "var", "total")) results[[paste0("padj.", eff)]] <- stats::p.adjust(results[[paste0("p.", eff)]], "BH")
     # max-statistic combination over cell types from the coupled permutations
     for (eff in c("shift", "var", "total")) {
-      col <- if (eff == "shift") "F" else eff
+      col <- switch(eff, shift = "F", var = "var.t", eff)   # the studentized dispersion change, as its p-value
       obs <- vapply(runs, function(r) unname(r$obs[col]), numeric(1))
       perm <- sapply(runs, function(r) r$perm.coupled[, col])
       if (!is.matrix(perm)) perm <- matrix(perm, ncol = length(runs))
@@ -425,6 +461,7 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
       if (r$p.floor > alpha / 10) f <- c(f, "few-permutations")
       if (r$scheme == "freedman-lane") f <- c(f, "approximate-scheme")
       if (isFALSE(r$disp.identifiable)) f <- c(f, "dispersion-not-identifiable")
+      if (is.finite(r$cell.assoc) && r$cell.assoc > 0.5) f <- c(f, "cells-tied-to-contrast")   # var test anticonservative
       paste(f, collapse = ";")
     }, character(1))
     results <- results[order(results$shift, decreasing = TRUE), ]

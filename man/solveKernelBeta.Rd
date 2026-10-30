@@ -7,13 +7,14 @@
 solveKernelBeta(
   graph,
   target.size,
-  range = c(0.5, 500),
+  range = c(0.5, 5000),
   tol = 0.1,
   max.iter = 12,
   n.vec = 24,
   m = 50,
   n.cores = 1,
-  verbose = FALSE
+  verbose = FALSE,
+  start = 30
 )
 }
 \arguments{
@@ -21,7 +22,7 @@ solveKernelBeta(
 
 \item{target.size}{target median effective size in cells}
 
-\item{range}{search interval for beta (default c(0.5, 500))}
+\item{range}{search interval for beta (default c(0.5, 5000))}
 
 \item{tol}{relative tolerance on the size (default 0.1)}
 
@@ -32,12 +33,14 @@ solveKernelBeta(
 \item{m}{Chebyshev order (default 50)}
 
 \item{n.cores}{cores for the smoothing}
+
+\item{start}{first strength evaluated; the target is bracketed from there in steps of 4x (default 30)}
 }
 \value{
-list with \code{beta}, \code{size} (per cell at that beta) and the search \code{trace}
+list with \code{beta}, \code{size}, \code{self} and \code{off.size} (per cell at that beta, \code{\link[=kernelEffectiveSize]{kernelEffectiveSize()}}) and the search \code{trace}
 }
 \description{
-Bisection on \code{log(beta)} so that the median effective size (\code{kernelEffectiveSize}) matches \code{target.size}. The
+Brackets the target from \code{start} in steps of 4x, then bisection on \code{log(beta)} so that the median effective size (\code{kernelEffectiveSize}) matches \code{target.size}. The
 same \code{beta} gives very different widths on different graphs (a 20-fold spread between datasets in the benchmark),
 so the width is better stated in cells.
 }

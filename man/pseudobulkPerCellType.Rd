@@ -10,7 +10,9 @@ pseudobulkPerCellType(
   sample.per.cell,
   min.cells.per.sample = 10,
   min.gene.frac = 0.01,
-  genes = NULL
+  genes = NULL,
+  normalization = c("library", "selected"),
+  scale = if (match.arg(normalization) == "library") "median" else 1000
 )
 }
 \arguments{
@@ -25,13 +27,22 @@ pseudobulkPerCellType(
 \item{min.gene.frac}{gene filter (see above)}
 
 \item{genes}{optional explicit gene set (skips the gene filter)}
+
+\item{normalization}{\code{"library"} (default): normalize by the full library sizes, as above; \code{"selected"}: the previous
+normalization, by the total over the selected genes with \code{scale = 1e3}}
+
+\item{scale}{transform scale: \code{"median"} (default with \code{"library"}: the median per-cell library size) or a number}
 }
 \value{
 list: \code{cm.per.type} (per cell type: sample x gene matrix, absent samples as \code{NA} rows),
-\code{n.cells} (cell type x sample table of cell counts), \code{genes}
+\code{n.cells} (cell type x sample table of cell counts), \code{genes}, \code{det.frac} (cell type x gene: fraction of the type's
+cells, over all samples, in which the gene is detected; the basis of the per-type gene sets, see \code{\link[=typeGeneSets]{typeGeneSets()}}),
+\code{scale}, \code{normalization}
 }
 \description{
 Sums counts per (cell type, sample), drops (cell type, sample) cells with fewer than
-\code{min.cells.per.sample} cells, keeps genes expressed (count > 1) in at least \code{min.gene.frac} of the cells
-of at least 10\% of the samples, and transforms to \code{log10(1e3 * count / total + 1)}.
+\code{min.cells.per.sample} cells, keeps genes detected (count > 0) in at least \code{min.gene.frac} of the cells
+of at least 10\% of the samples, and transforms to \code{log10(scale * count / N + 1)}, with \code{N} the summed library
+sizes of the (cell type, sample) cells over all genes and \code{scale} the median library size of the cells (the same
+profiles as the cluster-free shift map, so that the pseudocount is about one count in a typical cell).
 }

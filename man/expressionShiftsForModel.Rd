@@ -21,7 +21,8 @@ expressionShiftsForModel(
   n.cells = NULL,
   robust = "none",
   na.mode = "drop",
-  robust.k = 1.345
+  robust.k = 1.345,
+  cell.number.adjust = TRUE
 )
 }
 \arguments{
@@ -35,7 +36,10 @@ expressionShiftsForModel(
 
 \item{n.cells}{optional cell type x sample table of cell counts (attached to the distance matrices)}
 
-\item{robust, na.mode, robust.k}{robust fit (\code{"none"}, \code{"huber"}, \code{"winsor"}), treatment of samples absent from a cell type
+\item{robust, na.mode, robust.k}{robust fit (\code{"none"}, \code{"huber"}, \code{"winsor"}), treatment of samples absent from a cell type}
+
+\item{cell.number.adjust}{per-sample 1 / n.cells term in the dispersion design, \code{var} at equal cell numbers (default TRUE; needs the
+\code{n.cells} attribute of the distance matrices)
 (\code{"drop"}, \code{"impute_weak"}) and robust tuning constant; recorded in \code{settings}}
 }
 \value{

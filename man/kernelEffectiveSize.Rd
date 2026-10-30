@@ -20,7 +20,7 @@ kernelEffectiveSize(graph, beta, n.vec = 24, m = 50, n.cores = 1, seed = 7)
 \item{seed}{seed of the probe}
 }
 \value{
-list with \code{size} (per cell), \code{row.sum} (per cell) and \code{beta}
+list with \code{size}, \code{row.sum}, \code{self} and \code{off.size} (per cell) and \code{beta}
 }
 \description{
 For the kernel K used by the graph density (\code{sccore::heatFilter}), the effective number of cells a cell averages

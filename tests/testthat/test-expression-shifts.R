@@ -48,15 +48,15 @@ test_that("per-call model override, options precedence and legacy arguments", {
   res <- cao$estimateExpressionShiftMagnitudes(test = "age", n.permutations = 19, verbose = FALSE, name = "age")
   expect_setequal(unique(res$results$effect), c("shift", "var", "total"))
   cao$sample.meta$stage <- factor(rep(c("I", "II", "III"), length.out = nrow(cao$sample.meta)))
-  res <- cao$estimateExpressionShiftMagnitudes(test = "stage: all", n.permutations = 19, verbose = FALSE, name = "stage")
-  expect_setequal(unique(res$results$effect), c("location", "dispersion"))
-  expect_true(all(c("R2.adj", "F", "p.location", "F.disp", "p.dispersion") %in% names(res$wide[[1]])))
-  expect_equal(dim(res$fits[[1]]$ct1$cell.table), c(3, 3))
-  expect_equal(nrow(res$fits[[1]]$ct1$pair.table), 3)
-  # several tests at once
-  res <- cao$estimateExpressionShiftMagnitudes(formula = ~ group + stage, test = c("group", "stage: all"), n.permutations = 19, verbose = FALSE, name = "two")
+  # whole-factor tests are not estimated for expression shifts: an error alone, skipped (with a message) next to contrasts
+  expect_error(cao$estimateExpressionShiftMagnitudes(test = "stage: all", n.permutations = 19, verbose = FALSE, name = "stage"), "contrasts")
+  expect_message(res <- cao$estimateExpressionShiftMagnitudes(formula = ~ group + stage, test = c("group", "stage: all"), n.permutations = 19,
+                                                              verbose = TRUE, name = "skip"), "Skipping whole-factor")
+  expect_equal(unique(res$results$test), "group: B vs A")
+  # several contrasts at once, including one of a three-level factor
+  res <- cao$estimateExpressionShiftMagnitudes(formula = ~ group + stage, test = c("group", "stage: II vs I"), n.permutations = 19, verbose = FALSE, name = "two")
   expect_equal(length(unique(res$results$test)), 2)
-  expect_equal(nrow(res$global), 5)
+  expect_equal(nrow(res$global), 6)
 })
 
 test_that("a null design gives no systematic signal and plots render", {

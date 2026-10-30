@@ -2,28 +2,58 @@
 % Please edit documentation in R/plot.R
 \name{plotContrastTree}
 \alias{plotContrastTree}
-\title{helper function for creating dendograms}
+\title{Plot the contrast tree of a compositional result}
 \usage{
 plotContrastTree(
-  d.counts,
-  d.groups,
-  ref.level,
-  target.level,
-  plot.theme = theme_get(),
-  label.angle = 90,
-  p.threshold = 0.05,
-  adjust.pvalues = TRUE,
-  h.methods = "both",
-  font.size = 3,
-  label.hjust = 1,
-  show.text = "pvalue.code",
-  tree.order = NULL,
-  loadings.mean = NULL,
+  res,
+  tree = NULL,
+  alpha = 0.05,
+  show.samples = TRUE,
+  show.text = TRUE,
+  leaf.values = c("reference-centered", "clr", "none"),
   palette = NULL,
-  verbose = FALSE
+  plot.theme = ggplot2::theme_bw(),
+  font.size = 3,
+  label.angle = 90,
+  legend.position = "bottom",
+  min.share = 0.02
 )
 }
-\description{
-helper function for creating dendograms
+\arguments{
+\item{res}{result of \code{\link[=lmCoda]{lmCoda()}} (as stored by \code{cao$estimateCellLoadings()})}
+
+\item{tree}{result of \code{\link[=contrastTree]{contrastTree()}} (default: computed from \code{res}, or \code{res$tree} when present)}
+
+\item{alpha}{significance level on the adjusted node p-values (default 0.05)}
+
+\item{show.samples}{show the samples' balances at the significant nodes (default TRUE)}
+
+\item{show.text}{label the nodes (default TRUE)}
+
+\item{leaf.values}{tiles under the leaves: \code{"reference-centered"} (default), \code{"clr"} or \code{"none"}}
+
+\item{palette}{colors of the contrast's sides (named by the endpoint labels, by \code{"baseline"} / \code{"target"}, or two colors)}
+
+\item{plot.theme}{ggplot2 theme}
+
+\item{font.size}{size of the node labels and leaf labels}
+
+\item{label.angle}{angle of the leaf labels}
+
+\item{legend.position}{legend position (default "bottom")}
+
+\item{min.share}{nodes explaining less than this share of the shift are not labeled unless significant (default 0.02)}
 }
-\keyword{internal}
+\value{
+ggplot2 object
+}
+\description{
+The tree of \code{\link[=contrastTree]{contrastTree()}} as a dendrogram: the cell types in the order of their loadings at the leaves (reference cell
+types marked "(ref)"), the height of a node the number of cell types below it. Each node is labeled with the log2 ratio of
+the geometric-mean proportions of its two sides between the contrast's endpoints (the right-hand side is the one that is
+higher at the target), the significance code of its Benjamini-Hochberg adjusted permutation p-value and the share of
+the compositional shift it explains; the point of a significant node is filled. Below the significant nodes the
+samples' own log2 ratios of the two sides are shown (adjusted for the model's covariates, \code{\link[=codaSampleLogFreq]{codaSampleLogFreq()}}), one
+row per side of the contrast with the median and the quartiles, so that the separation behind a node is visible.
+Tiles under the leaves show the reference-centered loadings (log2) of the cell types.
+}

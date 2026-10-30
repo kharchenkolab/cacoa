@@ -100,7 +100,7 @@ test_that("neighbourhood-count density, log transform, perm-fdr and the group su
   gt <- groupPermutationTest(r$stat.obs, r$stats.perm, cg); expect_equal(nrow(gt), nlevels(cg)); expect_true(all(gt$p.perm > 0 & gt$p.perm <= 1))
   # the shift kernel accumulates the per-group sums and the exceedance histogram
   nns <- lapply(cells, function(c) match(idx[[as.character(cg[c])]], cells) - 1L); names(nns) <- cells
-  sh <- clusterFreeExpressionShifts(Matrix::t(cao$data.object), spc, nns, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE, groups = cg)
+  sh <- clusterFreeExpressionShifts(statistic = "distance", Matrix::t(cao$data.object), spc, nns, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE, groups = cg, profile = "raw")
   expect_equal(sh$settings$adjust.method, "perm-fdr"); expect_equal(ncol(sh$perm.hist$hist), length(sh$perm.hist$grid) + 1L)
   expect_equal(unname(rowSums(sh$perm.hist$hist)), rep(sum(is.finite(sh$z.pooled)), 29))                     # every tested cell in every permutation
   expect_equal(nrow(sh$group.test), nlevels(cg)); expect_equal(sh$group.test$n.tested, as.integer(table(cg[is.finite(sh$z.pooled)])))

@@ -20,10 +20,12 @@ pairDistanceTable <- function(D2, groups) {
 #' @param palette colours for the groups
 #' @param plot.theme ggplot2 theme
 #' @param label.samples label the samples in the distance panel (default FALSE)
+#' @param effects optional named numeric (`shift`, `var`, `total`): the normalized effects of the results table, shown in the
+#'   pair-distance panel (default: the fit's own, unnormalized estimates)
 #' @return cowplot grid
 #' @export
 plotShiftDetailPanels <- function(eff, adjusted = NULL, groups = NULL, dist = "cor", title = NULL, palette = NULL, plot.theme = ggplot2::theme_bw(),
-                                  label.samples = FALSE) {
+                                  label.samples = FALSE, effects = NULL) {
   if (is.null(adjusted)) adjusted <- adjustedDistanceMatrix(eff$G, nuisanceColumns(eff, NULL), dist)
   D2 <- if (dist == "l2") adjusted^2 else adjusted
   samples <- rownames(D2)
@@ -41,7 +43,9 @@ plotShiftDetailPanels <- function(eff, adjusted = NULL, groups = NULL, dist = "c
   # (b) pair distances within / between, annotated with the three effects
   if (is.two) {
     pt <- pairDistanceTable(D2, grp)
-    ann <- sprintf("shift = %.3g   var = %.3g   total = %.3g", eff$shift, eff$var, eff$total)
+    ann <- if (!is.null(effects) && all(c("shift", "var", "total") %in% names(effects)))
+      sprintf("normalized (as in the results): shift %.2f   var %.2f   total %.2f", effects[["shift"]], effects[["var"]], effects[["total"]])
+      else sprintf("unnormalized: shift %.3g   var %.3g   total %.3g", eff$shift, eff$var, eff$total)
     kind.cols <- c("grey70", "grey70", "grey40"); names(kind.cols) <- levels(pt$kind)
     if (!is.null(palette) && all(levels(grp) %in% names(palette))) kind.cols[1:2] <- unname(palette[levels(grp)])
     gg.b <- ggplot2::ggplot(pt, ggplot2::aes(x = .data$kind, y = .data$d2, fill = .data$kind)) + ggplot2::geom_boxplot(outlier.shape = NA, alpha = 0.6) +

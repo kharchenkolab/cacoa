@@ -233,11 +233,13 @@ estimateOntologyFromIds <- function(de.gene.scores, go.environment, type="GO", o
     checkPackageInstalled("BiocParallel", bioc=TRUE)
     if (verbose) message("Estimating enriched ontologies ... \n")
     get_organism <- utils::getFromNamespace("get_organism", "DOSE")
+    # queried once here: forked workers sharing the org.db SQLite connection fail with "database disk image is malformed"
+    organism <- get_organism(org.db)
 
     ont.list <- plapply(de.gene.scores, function(scores) {suppressWarnings(suppressMessages(
       estimateEnrichedGSEGO(
         gene.ids=sort(scores$universe, decreasing=TRUE), org.db=org.db, go.environment=go.environment,
-        organism=get_organism(org.db), BPPARAM=BiocParallel::SerialParam(),
+        organism=organism, BPPARAM=BiocParallel::SerialParam(),
         pvalueCutoff=1, ...
       )
     ))}, progress=verbose, n.cores=n.cores, fail.on.error=TRUE)

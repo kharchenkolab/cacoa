@@ -77,21 +77,22 @@ test_that("graph density with the kNN unit and the post-processing options run a
   expect_equal(dh$beta, 3); expect_equal(length(dh$unit.size), length(cells)); expect_true(all(dh$unit.size > 1))
   # class level on a Conos-like object holding the graph: default unit is kNN with the size rule, log transform, averaged post-processing
   cao$data.object <- structure(list(graph = g), class = "Conos")
-  expect_message(cao$estimateCellDensity(method = "graph", verbose = TRUE), "kNN neighbourhoods of at least 40 cells")
-  r0 <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 29, verbose = FALSE)$diff$permutation
+  expect_message(cao$estimateCellDensity(method = "graph", verbose = TRUE), "kNN neighborhoods of at least 40 cells")
+  r0 <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 29, scale = NULL, verbose = FALSE)$diff$permutation
   expect_equal(r0$post, "averaged"); expect_equal(r0$transform, "log"); expect_equal(r0$adjust.method, "perm-fdr")
   expect_setequal(names(r0$pooled), cells); expect_true(all(is.finite(r0$pooled))); expect_true(all(r0$p.adj >= 0 & r0$p.adj <= 1)); expect_equal(unname(r0$unit.size), unname(pmax(40, deg[names(r0$unit.size)] + 1)))
-  r1 <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 29, post = "none", verbose = FALSE)$diff$permutation
+  r1 <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 29, scale = NULL, post = "none", verbose = FALSE)$diff$permutation
   expect_equal(r1$post, "none"); expect_false(isTRUE(all.equal(r0$pooled, r1$pooled)))
   expect_equal(unname(r0$effect), unname(as.numeric(cacoa:::neighbourAveragingMatrix(g, names(r1$effect)) %*% r1$effect)), tolerance = 1e-10)   # averaged effect
-  r2 <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 29, post = "inherit", verbose = FALSE)$diff$permutation
+  r2 <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 29, scale = NULL, post = "inherit", verbose = FALSE)$diff$permutation
   expect_equal(r2$post, "inherit"); expect_true(all(r2$p.adj <= r2$p.adj.cell, na.rm = TRUE)); expect_equal(unname(r2$pooled), unname(r1$pooled))
   cao$embedding <- matrix(rnorm(2 * length(cells)), ncol = 2, dimnames = list(cells, c("x", "y")))
   expect_s3_class(cao$plotDiffCellDensity(), "ggplot"); expect_s3_class(cao$plotDiffCellDensity(what = "effect"), "ggplot")
   # the heat kernel sized in cells
   expect_message(cao$estimateCellDensity(method = "graph", smoothing = "heat", target.size = 15, verbose = TRUE), "median effective size")
-  rh <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 29, verbose = FALSE)$diff$permutation
-  expect_equal(rh$transform, "none"); expect_lt(abs(log(median(rh$unit.size) / 15)), log(1.2))
+  rh <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 29, scale = NULL, verbose = FALSE)$diff$permutation
+  expect_equal(rh$transform, "log"); expect_lt(abs(log(median(rh$unit.size) / 15)), log(1.2))   # heat: log2(d + kernel.alpha / n.cells)
+  expect_null(rh$broad)                                                                            # the broad unit accompanies count units only
 })
 
 test_that("cluster-free shifts: kNN units and the post-processing options", {
@@ -101,19 +102,19 @@ test_that("cluster-free shifts: kNN units and the post-processing options", {
   nn1 <- split(adj@j, factor(adj@i + 1L, levels = seq_along(cells))); nn1 <- lapply(nn1, as.integer); names(nn1) <- cells
   N <- as(knnNeighbourhoodMatrix(g, 20, cells = cells), "TsparseMatrix"); nnk <- split(N@j, factor(N@i + 1L, levels = seq_along(cells))); nnk <- lapply(nnk, as.integer); names(nnk) <- cells
   cm.t <- Matrix::t(cao$data.object)
-  s0 <- clusterFreeExpressionShifts(cm.t, spc, nn1, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE)
-  sk <- clusterFreeExpressionShifts(cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1)
+  s0 <- clusterFreeExpressionShifts(statistic = "distance", cm.t, spc, nn1, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE, profile = "raw")
+  sk <- clusterFreeExpressionShifts(statistic = "distance", cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, profile = "raw")
   expect_equal(s0$post, "none"); expect_equal(names(sk$stat), cells); expect_false(isTRUE(all.equal(s0$stat, sk$stat)))
-  sa <- clusterFreeExpressionShifts(cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, post = "averaged", return.perm = TRUE)
+  sa <- clusterFreeExpressionShifts(statistic = "distance", cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, post = "averaged", return.perm = TRUE, profile = "raw")
   expect_equal(sa$post, "averaged"); expect_equal(dim(sa$stats.perm), c(29, length(cells)))
   An <- cacoa:::neighbourAveragingList(nn1, cells); f0 <- sk$stat; f0[!is.finite(f0)] <- 0
   ok <- is.finite(sk$stat); expect_true(any(ok) && any(!ok))                                              # the small unit leaves some cells untested
   expect_equal(unname(sa$stat[ok]), unname(as.numeric(An %*% f0)[ok]), tolerance = 1e-8); expect_true(all(is.na(sa$stat[!ok])))   # the averaged statistic; untested cells stay NA
   expect_true(all(sa$p.adj >= 0 & sa$p.adj <= 1, na.rm = TRUE)); expect_true(all(is.na(sa$p.param)))
   expect_equal(unname(sa$z.pooled), unname(qnorm(sa$p.pooled, lower.tail = FALSE)), tolerance = 1e-8)
-  si <- clusterFreeExpressionShifts(cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, post = "inherit")
+  si <- clusterFreeExpressionShifts(statistic = "distance", cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 29, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, post = "inherit", profile = "raw")
   expect_equal(si$post, "inherit"); expect_true(all(si$p.adj <= si$p.adj.cell, na.rm = TRUE)); expect_equal(si$p.adj.cell, sk$p.adj)
-  expect_message(clusterFreeExpressionShifts(cm.t, spc, nn1, cao$model, cao$sample.meta, n.permutations = 9, seed = 1, adjust = TRUE, smooth = FALSE, post = "averaged", adjust.method = "bh", verbose = TRUE), "needs adjust.method")
+  expect_message(clusterFreeExpressionShifts(statistic = "distance", cm.t, spc, nn1, cao$model, cao$sample.meta, n.permutations = 9, seed = 1, adjust = TRUE, smooth = FALSE, post = "averaged", adjust.method = "bh", verbose = TRUE, profile = "raw"), "needs adjust.method")
 })
 
 # ---- C++ units and the shared accumulator against the R references ----
@@ -191,11 +192,11 @@ test_that("shift kernel: the vectorized complete-sample loop equals the referenc
   cao <- makeToyCacoa(n.per.group = c(A = 4, B = 4), cells.per.sample = 30, n.genes = 60, shift = 1.5)
   cg <- cao$cell.groups; cells <- names(cg); spc <- cao$sample.per.cell; g <- toyGraph(cells, cg, per.cell = 6)
   nn1 <- cacoa:::graphNeighbourLists0(g, cells); nnk <- knnNeighbourhoodLists(g, 40, cells = cells); cm.t <- Matrix::t(cao$data.object)   # both lists index the columns of cm.t
-  s.vec <- clusterFreeExpressionShifts(cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 49, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, return.perm = TRUE, vectorize = TRUE)
-  s.ref <- clusterFreeExpressionShifts(cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 49, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, return.perm = TRUE, vectorize = FALSE)
+  s.vec <- clusterFreeExpressionShifts(statistic = "distance", cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 49, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, return.perm = TRUE, vectorize = TRUE, profile = "raw")
+  s.ref <- clusterFreeExpressionShifts(statistic = "distance", cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 49, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, return.perm = TRUE, vectorize = FALSE, profile = "raw")
   expect_true(sum(s.vec$n.samples == nlevels(spc), na.rm = TRUE) > 10)                                    # complete-sample cells exist
   expect_equal(s.vec$stat, s.ref$stat, tolerance = 1e-10); expect_equal(s.vec$stats.perm, s.ref$stats.perm, tolerance = 1e-10); expect_equal(s.vec$p.value, s.ref$p.value)
-  sa <- clusterFreeExpressionShifts(cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 49, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, post = "averaged", return.perm = TRUE)
+  sa <- clusterFreeExpressionShifts(statistic = "distance", cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 49, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, post = "averaged", return.perm = TRUE, profile = "raw")
   av <- averageOverNeighbours(s.ref$stat, s.ref$stats.perm, g, effect = s.ref$shifts); ok <- is.finite(s.ref$stat)
   expect_equal(unname(sa$stat[ok]), unname(av$stat[cells][ok]), tolerance = 1e-5); expect_equal(unname(sa$stats.perm[, ok]), unname(av$stats.perm[, cells][, ok]), tolerance = 1e-5)
   expect_equal(unname(sa$shifts[ok]), unname(av$effect[cells][ok]), tolerance = 1e-8)
@@ -214,7 +215,7 @@ test_that("exchangeability: the permutation path reproduces the observed statist
   exact.p <- function(obs, P) { ok <- is.finite(obs); pool <- sort(P[, ok][is.finite(P[, ok])]); p <- rep(NA_real_, length(obs))
     p[ok] <- 1 - findInterval(obs[ok] - 1e-9 * pmax(1, abs(obs[ok])), pool) / length(pool); p }
   for (post in c("none", "averaged")) {
-    s <- clusterFreeExpressionShifts(cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 99, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, post = post, pooled.statistic = "standardized", return.perm = TRUE)
+    s <- clusterFreeExpressionShifts(statistic = "distance", cm.t, spc, nnk, cao$model, cao$sample.meta, n.permutations = 99, seed = 1, adjust = TRUE, smooth = FALSE, nns.graph = nn1, post = post, pooled.statistic = "standardized", return.perm = TRUE, profile = "raw")
     ok <- is.finite(s$stat); expect_true(sum(ok) > 50)
     expect_equal(unname(s$stats.perm[1, ok]), unname(s$stat[ok]), tolerance = 1e-5)                     # float32 accumulation under averaging
     mu <- colMeans(s$stats.perm, na.rm = TRUE); sdv <- apply(s$stats.perm, 2, stats::sd, na.rm = TRUE); Z <- sweep(sweep(s$stats.perm, 2, mu), 2, sdv, "/"); z.obs <- (s$stat - mu) / sdv

@@ -1,8 +1,13 @@
 #' @importFrom sccore checkPackageInstalled
 NULL
 
+# Joint sample distance over cell types: the average of the per-type distance matrices. `weighting = "cells"` weights a
+# pair's distance in a type by sqrt(min(n.cells)) of the two samples (types with many cells in both samples count more);
+# `"equal"` gives every type in which both samples are present the same weight. Pairs that share no type are NA.
 #' @keywords internal
-prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, return.dists=TRUE) {
+prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, return.dists=TRUE, weighting=c("cells", "equal")) {
+  weighting <- match.arg(weighting)
+  pairWeight <- function(nc) if (weighting == "cells") sqrt(outer(nc, nc, FUN = 'pmin')) else 1 * outer(nc > 0, nc > 0, "&")
   checkPackageInstalled(c("abind"), cran=TRUE)
   # bring to a common set of cell types
   common.types <- lapply(p.dist.per.type, colnames) %>% unlist() %>% unique()
@@ -18,16 +23,12 @@ prepareJointExpressionDistance <- function(p.dist.per.type, sample.groups=NULL, 
   }) # reform the matrix to make sure all cell type have the same dimensions
 
   x <- abind::abind(lapply(p.dist.per.type, function(x) {
-    nc <- attr(x, 'n.cells')
-    #wm <- (outer(nc,nc,FUN='pmin'))
-    wm <- sqrt(outer(nc, nc, FUN = 'pmin'))
-    return(x * wm)
+    return(x * pairWeight(attr(x, 'n.cells')))
   }), along = 3)
 
   # just the weights (for total sum of weights normalization)
   y <- abind::abind(lapply(p.dist.per.type, function(x) {
-    nc <- attr(x, 'n.cells')
-    sqrt(outer(nc, nc, FUN = 'pmin'))
+    pairWeight(attr(x, 'n.cells'))
   }), along = 3)
 
   # normalize by total weight sums
@@ -98,3 +99,18 @@ parseDistance <- function(dist, n.dims = NULL) {
 
   return(dist)
 }
+# sample-space names: "expression" (per cell type or all cell types combined), "pseudobulk" (all cells pooled per sample),
+# "composition" (ILR of the cell-type counts); the earlier names are accepted
+#' @keywords internal
+normalizeSampleSpace <- function(space) {
+  space <- space[1]
+  alias <- c(expression.shifts = "expression", coda = "composition", pseudo.bulk = "pseudobulk")
+  if (space %in% names(alias)) space <- alias[[space]]
+  if (!space %in% c("expression", "pseudobulk", "composition"))
+    stop("space must be one of 'expression', 'pseudobulk', 'composition' (got '", space, "')")
+  space
+}
+
+# row labels of the combined sample spaces in the covariate screen
+SAMPLE.SPACE.LABELS <- list(expression = "all cell types", expression.equal = "all cell types (equal weights)",
+                            pseudobulk = "pooled pseudobulk", composition = "composition")

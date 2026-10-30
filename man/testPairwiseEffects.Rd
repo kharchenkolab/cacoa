@@ -23,7 +23,8 @@ testPairwiseEffects(
   verbose = FALSE,
   robust = c("none", "huber", "winsor"),
   na.mode = c("drop", "impute_weak"),
-  robust.k = 1.345
+  robust.k = 1.345,
+  cell.number.adjust = TRUE
 )
 }
 \arguments{
@@ -51,7 +52,10 @@ testPairwiseEffects(
 
 \item{verbose}{print notes}
 
-\item{robust, na.mode, robust.k}{robust fit (\code{"none"}, \code{"huber"}, \code{"winsor"}), treatment of samples absent from a cell type
+\item{robust, na.mode, robust.k}{robust fit (\code{"none"}, \code{"huber"}, \code{"winsor"}), treatment of samples absent from a cell type}
+
+\item{cell.number.adjust}{per-sample 1 / n.cells term in the dispersion design, \code{var} at equal cell numbers (default TRUE; needs the
+\code{n.cells} attribute of the distance matrices)
 (\code{"drop"}, \code{"impute_weak"}) and robust tuning constant; recorded in \code{call.info}}
 }
 \value{

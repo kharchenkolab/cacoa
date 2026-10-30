@@ -339,6 +339,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     setOptions = function(...) {
       new <- list(...)
       if (is.null(self$options)) self$options <- cacoaDefaultOptions()
+      def <- cacoaDefaultOptions(); miss <- setdiff(names(def), names(self$options))   # options added after the object was created
+      if (length(miss)) self$options[miss] <- def[miss]
       unknown <- setdiff(names(new), names(self$options))
       if (length(unknown) || (length(new) && is.null(names(new)))) stop("unknown option(s): ", paste(unknown, collapse = ", "),
                                                                       ". Known: ", paste(names(self$options), collapse = ", "))
@@ -463,51 +465,111 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.factor(x) || is.character(x)) droplevels(factor(x)) else x
     },
 
-    #' @description Robustness of the expression-shift result: alternative covariate sets and single-sample influence
+    #' @description Robustness of a result: alternative covariate sets and single-sample influence
     #'
     #' Reruns the first test of the stored model under alternative adjustment sets (unadjusted; current; current
     #' minus each covariate; current plus each of the top screened covariates not yet in the model; all screened,
-    #' if the degrees of freedom allow) on the cached distances, and reads the leave-one-sample-out influence of
-    #' the current result. Prints one verdict per cell type: "robust", "sign / significance sensitive to the adjustment set",
-    #' "estimate changes by x%", or "driven by sample S".
+    #' if the degrees of freedom allow) and refits every model with each sample left out. The two questions are kept apart:
+    #' the size of the effect (stable, changes by x%, sign depends on the model, or driven by sample S) and its significance
+    #' (significant in all / k of m / no models). One line per cell type gives both.
+    #'
+    #' `analysis = "expression.shifts"`: the expression shifts on the cached distances; the size is the distance-model
+    #' magnitude, as in the main result, the significance by the test of the main result (with `statistic = "gsd"` the gsd test
+    #' is rerun under every alternative model, with the main result's gsd settings).
+    #' `analysis = "composition"`: the compositional contrast ([lmCoda()]) refitted on the stored cell-type counts; the size
+    #' is the loading of each cell type (log2, relative to the geometric mean of all cell types), the significance its
+    #' permutation test (see [checkCompositionSensitivity()]).
+    #' @param analysis `"expression.shifts"` (default) or `"composition"`
     #' @param covariate.sets `"auto"` (default, see above) or a named list of location formulas
     #' @param screen.name results slot of a covariate screen used to propose additions (default "covariate.screen")
     #' @param top.k number of screened covariates to try adding (default 3)
-    #' @param name results slot (default "sensitivity")
+    #' @param name results slot (default "sensitivity" for the expression shifts, "composition.sensitivity" for the composition)
     #' @param shifts.name results slot of the expression shifts the sensitivity refers to (default "expression.shifts")
-    #' @param n.permutations number of permutations (default: the object option `n.permutations`, 999)
+    #' @param coda.name results slot of the compositional result the sensitivity refers to (default "coda")
+    #' @param jackknife leave-one-sample-out refits under every alternative model (default TRUE), which give each estimate its
+    #'   jackknife standard error and leave-one-out range (shown by `plotSensitivity()`); the current model always has them
+    #' @param n.permutations number of permutations of the refits (default: the object option `n.permutations`, 999); the
+    #'   gsd refits use the main result's count, so that their p-values have the resolution of the current model's
+    #' @param significance expression shifts only: `"main"` (default: the test of the stored result, gsd or distance) or `"distance"`
+    #'   (the distance model's own test, faster: no gsd refits)
+    #' @param cell.groups cell annotation of the gsd refits (default: the object's; the one the stored result was computed with)
     #' @param verbose defaults from options (permutations capped at 499)
     #' @param n.cores defaults from options (permutations capped at 499)
     #' @param seed defaults from options (permutations capped at 499)
     #' @return `cacoaSensitivity` (see [checkSensitivity()]), also stored in `cao$test.results[[name]]`
-    checkSensitivity = function(covariate.sets = "auto", screen.name = "covariate.screen", top.k = 3, name = "sensitivity",
-                                shifts.name = "expression.shifts", n.permutations = NULL, verbose = NULL, n.cores = NULL, seed = NULL) {
+    checkSensitivity = function(analysis = c("expression.shifts", "composition"), covariate.sets = "auto", screen.name = "covariate.screen", top.k = 3, name = NULL,
+                                shifts.name = "expression.shifts", coda.name = "coda", jackknife = TRUE, n.permutations = NULL, significance = c("main", "distance"),
+                                cell.groups = self$cell.groups, verbose = NULL, n.cores = NULL, seed = NULL) {
+      analysis <- match.arg(analysis); significance <- match.arg(significance)
+      name <- name %||% if (analysis == "composition") "composition.sensitivity" else "sensitivity"
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
       n.permutations <- n.permutations %||% private$opt("n.permutations")
       seed <- if (missing(seed)) private$opt("seed") else seed
+      screen <- self$test.results[[screen.name]]
+      formulas <- if (identical(covariate.sets, "auto")) NULL else covariate.sets
+      if (analysis == "composition") {
+        res <- self$test.results[[coda.name]]
+        if (is.null(res)) stop("run estimateCellLoadings() first")
+        if (identical(res$kind, "term") || is.null(res$contrast)) stop("the compositional sensitivity is defined for contrast tests")
+        st <- res$settings %||% list()
+        if (verbose) message(sprintf("checkSensitivity(): composition loadings refitted under alternative covariate sets%s", if (jackknife) " and with each sample left out" else ""))
+        out <- checkCompositionSensitivity(res$cnts, res$model, self$sample.meta, formulas = formulas, screen = screen, current = res,
+                                           n.permutations = n.permutations, seed = seed %||% sample.int(.Machine$integer.max, 1), alpha = private$opt("alpha"),
+                                           top.k = top.k, jackknife = jackknife, perm.method = res$perm.method %||% "block",
+                                           zero.pseudocount = st$zero.pseudocount %||% 0.1, basis.type = st$basis.type %||% "default",
+                                           ref.method = st$ref.method %||% "block", ref.block.thresh = st$ref.block.thresh %||% 0.05, ref.size.frac = st$ref.size.frac %||% 0.5)
+        self$test.results[[name]] <- out
+        if (verbose) print(out)
+        return(invisible(out))
+      }
       res <- self$test.results[[shifts.name]]
       if (is.null(res)) stop("run estimateExpressionShiftMagnitudes() first")
       model <- res$model
       D.list <- res$distances
-      screen <- self$test.results[[screen.name]]
-      formulas <- if (identical(covariate.sets, "auto")) NULL else covariate.sets
       infl <- if (!is.null(res$influence[[1]])) list(influence = res$influence[[1]], wide = res$wide[[1]]) else NULL
       cur <- res$results[res$results$test.id == res$results$test.id[1], ]        # the stored result stands in for the "current" model
+      gsd.run <- identical(res$settings$statistic, "gsd") && !is.null(res$settings$gsd) && "p.distance" %in% names(cur)
+      sig.fun <- NULL; sig.label <- "distance test"
+      if (gsd.run && significance == "distance") {   # compare the distance model's own tests across the models
+        i <- which(is.finite(cur$p.distance)); cur$p[i] <- cur$p.distance[i]; cur$padj[i] <- cur$padj.distance[i]
+        if (verbose) message("checkSensitivity(): magnitudes and significance from the distance model (the stored result was tested by gsd)")
+      } else if (gsd.run) {                          # significance by gsd, as in the stored result, refitted under every alternative model
+        gs <- res$settings$gsd; sig.label <- "gsd"
+        inp <- private$getGsdCellTypeInput(res$genes.tested)
+        types <- unique(cur$celltype[cur$effect == "shift"])
+        cg <- cell.groups[!is.na(cell.groups) & as.character(cell.groups) %in% types]
+        n.gsd <- gs$n.permutations
+        if (verbose) message(sprintf("checkSensitivity(): magnitudes from the distance model, significance from gsd (as the stored result; %d permutations per model)", n.gsd))
+        sig.fun <- function(m) {
+          g <- gsdShiftsPerCellType(inp$cm, self$sample.per.cell, cg, m, inp$lib, min.cells.per.sample = res$settings$min.cells.per.sample %||% 5,
+                                    min.samp.per.level = gs$min.samp.per.level, neighbourhood.gene.frac = gs$neighbourhood.gene.frac,
+                                    permutation = gs$permutation, n.permutations = n.gsd, block.vars = gs$block.vars, seed = gs$seed,
+                                    robust = gs$robust %||% "none", winsor.k = gs$winsor.k %||% 3, gsd.d0 = gs$gsd.d0 %||% 3, influence = FALSE, n.null = 0,
+                                    n.cores = n.cores, verbose = FALSE)
+          g$results[, c("celltype", "p", "padj")]
+        }
+      }
       out <- checkSensitivity(D.list, model, self$sample.meta, formulas = formulas, screen = screen, influence = infl, current.rows = cur, dist = res$settings$dist,
                               permutation = res$settings$permutation, n.permutations = n.permutations, seed = seed %||% sample.int(.Machine$integer.max, 1),
                               alpha = private$opt("alpha"), min.samp.per.level = res$settings$min.samp.per.level, n.cores = n.cores, top.k = top.k,
-                              robust = res$settings$robust %||% "none", na.mode = res$settings$na.mode %||% "drop", robust.k = res$settings$robust.k %||% 1.345)
+                              robust = res$settings$robust %||% "none", na.mode = res$settings$na.mode %||% "drop", robust.k = res$settings$robust.k %||% 1.345,
+                              significance = sig.fun, significance.label = sig.label, jackknife = jackknife)
       self$test.results[[name]] <- out
       if (verbose) print(out)
       invisible(out)
     },
 
-    #' @description Forest plot of the sensitivity analysis (see [plotSensitivity()])
-    #' @param name results slot (default "sensitivity")
+    #' @description Forest plot of a sensitivity analysis (see [plotSensitivity()])
+    #' @param analysis `"expression.shifts"` (default) or `"composition"`: which stored sensitivity to plot when `name` is not given
+    #' @param name results slot (default "sensitivity" or "composition.sensitivity", by `analysis`)
+    #' @param interval `"jackknife"` (default): jackknife 95 % intervals and leave-one-sample-out ranges of the estimates, where
+    #'   computed; `"none"`
     #' @param ... passed to [plotSensitivity()] (`effect`, `cell.types`, `normalized`)
     #' @return ggplot2 object
-    plotSensitivity = function(name = "sensitivity", ...) {
-      plotSensitivity(private$getResults(name, "checkSensitivity()"), plot.theme = self$plot.theme, ...)
+    plotSensitivity = function(analysis = c("expression.shifts", "composition"), name = NULL, interval = c("jackknife", "none"), ...) {
+      analysis <- match.arg(analysis); interval <- match.arg(interval)
+      name <- name %||% if (analysis == "composition") "composition.sensitivity" else "sensitivity"
+      plotSensitivity(private$getResults(name, "checkSensitivity()"), interval = interval, plot.theme = self$plot.theme, ...)
     },
 
     #' @description Screen covariates: which metadata variables are associated with sample-level variation, per cell type
@@ -517,7 +579,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' as chance-corrected R2 with permutation p-values (BH over the whole grid) and a per-covariate global p-value
     #' across cell types; a dispersion association is reported alongside. Ends with a suggested model (not applied).
     #' @param covariates covariates to screen (default: all usable metadata columns); transform strings allowed
-    #' @param space `"expression.shifts"` (per cell type; default) or `"composition"` (CoDA ILR coordinates, one row)
+    #' @param space `"expression"` (per cell type; default) or `"composition"` (ILR coordinates of the cell-type counts, one
+    #'   row); `"expression.shifts"` is accepted as the earlier name
+    #' @param summary.rows with `space = "expression"`, rows screened next to the cell types on the combined sample spaces
+    #'   (see `getSampleDistanceMatrix()`): any of `"expression"` (all cell types, weighted by cells), `"expression.equal"`
+    #'   (all cell types, equal weights), `"pseudobulk"` (all cells pooled) and `"composition"`; default
+    #'   `c("expression", "composition")`. They are adjusted among themselves and do not enter the global p-values or the
+    #'   suggested model.
     #' @param mode `"both"` (default), `"partial"` or `"marginal"`
     #' @param adjust.for optional formula of covariates always adjusted for
     #' @param dist as in `estimateExpressionShiftMagnitudes()`
@@ -539,16 +607,36 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$screenCovariates(); cao$plotCovariateScreen(); cao$plotCovariateSummary()
     #' }
     #' @param robust `"none"` (default, option `robust`), `"huber"` or `"winsor"`: robust location / dispersion statistics
-    screenCovariates = function(covariates = NULL, space = c("expression.shifts", "composition"), mode = c("both", "partial", "marginal"),
+    screenCovariates = function(covariates = NULL, space = c("expression", "composition"), mode = c("both", "partial", "marginal"),
                                 adjust.for = NULL, dist = NULL, n.pcs = NULL, cell.groups = self$cell.groups, min.cells.per.sample = 10,
-                                min.gene.frac = 0.01, genes = NULL, min.samples.per.type = 6,
+                                min.gene.frac = 0.01, genes = NULL, min.samples.per.type = 6, summary.rows = c("expression", "composition"),
                                 n.permutations = NULL, name = "covariate.screen", verbose = NULL, n.cores = NULL, seed = NULL, robust = NULL) {
-      space <- match.arg(space); mode <- match.arg(mode); robust <- private$opt("robust", robust)
+      space <- normalizeSampleSpace(space[1]); mode <- match.arg(mode); robust <- private$opt("robust", robust)
+      if (space == "pseudobulk") stop("space must be 'expression' or 'composition' (the pooled pseudobulk is a summary row: summary.rows = 'pseudobulk')")
+      bad <- setdiff(summary.rows, c("expression", "expression.equal", "pseudobulk", "composition"))
+      if (length(bad)) stop("unknown summary.rows: ", paste(bad, collapse = ", "))
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores); dist <- private$opt("dist", dist)
       n.permutations <- n.permutations %||% private$opt("n.permutations")
       seed <- if (missing(seed)) private$opt("seed") else seed
       D.list <- private$distancesForSpace(space, dist = dist, n.pcs = n.pcs, cell.groups = cell.groups, min.cells.per.sample = min.cells.per.sample,
                                           min.gene.frac = min.gene.frac, genes = genes, verbose = verbose)
+      if (space == "composition") attr(D.list[[1]], "dist.type") <- "l2"
+      if (space == "expression" && length(summary.rows)) {   # combined sample spaces, screened as summary rows
+        sums <- list()
+        for (sr in summary.rows) {
+          D <- tryCatch(switch(sr,
+            expression = private$sampleSpaceFromList(D.list, NULL, NULL, "cells"),
+            expression.equal = private$sampleSpaceFromList(D.list, NULL, NULL, "equal"),
+            pseudobulk = private$distancesForSpace("pseudobulk", dist = dist, n.pcs = n.pcs, min.cells.per.sample = min.cells.per.sample,
+                                                   min.gene.frac = min.gene.frac, genes = genes, verbose = verbose)[[1]],
+            composition = private$distancesForSpace("composition", dist = "l2")[[1]]), error = function(e) {
+              if (verbose) message("summary row '", sr, "' skipped: ", conditionMessage(e)); NULL })
+          if (is.null(D) || !any(abs(D) > 1e-12, na.rm = TRUE)) next   # absent, or no variation between the samples
+          attr(D, "dist.type") <- if (sr == "composition") "l2" else dist; attr(D, "summary") <- TRUE
+          sums[[SAMPLE.SPACE.LABELS[[sr]]]] <- D
+        }
+        D.list <- c(sums, D.list)
+      }
       test.variable <- if (!is.null(self$model)) self$model$tests[[1]]$variable else self$cache$design.check$test.variable
       if (!is.null(test.variable) && is.na(test.variable)) test.variable <- NULL
       res <- screenCovariates(D.list, self$sample.meta, covariates = covariates, mode = mode, adjust.for = adjust.for, dist = if (space == "composition") "l2" else dist,
@@ -648,18 +736,30 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotShiftDetail = function(cell.type, test = NULL, name = "expression.shifts", label.samples = FALSE) {
       res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
       if (is.null(test)) test <- 1
-      tn <- if (is.numeric(test)) names(res$fits)[test] else test
-      eff <- res$fits[[tn]][[cell.type]]
+      tn <- if (is.numeric(test)) names(res$wide)[test] else test
+      eff <- if (tn %in% names(res$fits)) res$fits[[tn]][[cell.type]] else NULL
+      if (is.null(eff) && identical(res$settings$statistic, "gsd")) stop("plotShiftDetail() shows the distance test: rerun with statistic = 'distance' (gsd results: per-gene changes in $genes)")
       if (is.null(eff) || !isTRUE(eff$ok)) stop("no fit for cell type '", cell.type, "' in test '", tn, "'")
       groups <- self$getSampleGroups(tn, model = res$model)
+      w <- res$wide[[tn]]; w <- if (!is.null(w)) w[match(cell.type, w$celltype), , drop = FALSE] else NULL
+      effects <- if (!is.null(w) && nrow(w) == 1 && all(c("shift.norm", "var.norm", "total.norm") %in% names(w)))
+        c(shift = w$shift.norm, var = w$var.norm, total = w$total.norm) else NULL
       plotShiftDetailPanels(eff, adjusted = res$adjusted.distances[[tn]][[cell.type]], groups = groups, dist = res$settings$dist,
                             title = sprintf("%s: %s", cell.type, tn), palette = self$sample.groups.palette, plot.theme = self$plot.theme,
-                            label.samples = label.samples)
+                            label.samples = label.samples, effects = effects)
     },
 
     #' @description Expression shift magnitudes per cell type
     #'
-    #' For every cell type, pseudobulk profiles per sample are compared through sample-sample distances
+    #' With `statistic = "gsd"` (default), every gene of a cell type is tested by a per-sample linear model of its
+    #' expression profile, standardized by a moderated standard error (sampling-noise model and residual variance), and
+    #' the gene z-scores are combined adaptively into one statistic per cell type (see [gsdShiftsPerCellType()]), tested
+    #' by relabeling the samples. The magnitude of the shift is reported separately: `estimate` is the bias-corrected mean
+    #' squared change in log10 expression over the type's genes (independent of the numbers of cells), `estimate.norm`
+    #' the same change relative to the donor-level variance; per-gene changes and z-scores are in `genes`. Whole-factor
+    #' (term) tests use the distance test below; `plotShiftDetail()` and `checkSensitivity()` need the distance test.
+    #'
+    #' With `statistic = "distance"`, pseudobulk profiles per sample are compared through sample-sample distances
     #' (gene-centred cosine by default). An individual-level model (location: the design formula; dispersion:
     #' `dispersion.formula`) is fitted to the distances and, for each test of the model, three effects are
     #' estimated and tested by permuting sample labels:
@@ -686,11 +786,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param cell.groups cell annotations (default: stored)
     #' @param sample.per.cell cell annotations (default: stored)
     #' @param n.pcs optional number of principal components to reduce the pseudobulk profiles to before the distance
-    #' @param min.cells.per.sample minimum cells per (cell type, sample) (default 10)
-    #' @param min.samp.per.level minimum samples at each compared level per cell type (default from options)
+    #' @param min.cells.per.sample minimum cells per (cell type, sample) of the test (default 5 with gsd, 10 with the distance test)
+    #' @param min.cells.magnitude with `statistic = "gsd"`: minimum cells per (cell type, sample) of the distance model that gives
+    #'   the magnitudes, the `var` / `total` tests, the noise bands and the jackknife (default 10). Profiles of fewer cells are
+    #'   dominated by sampling noise, which shrinks the distance-based shift; the gsd test models that noise gene by gene and
+    #'   keeps the thinner samples. Cell types tested by gsd with too few such samples get a p-value without a magnitude
+    #' @param min.samp.per.level minimum samples at each compared level per cell type (default 2 with gsd, from options with the distance test)
     #' @param min.gene.frac gene filter: fraction of cells expressing the gene (default 0.01)
     #' @param genes optional gene subset
     #' @param bias.correct correct the shift for within-group dispersion (default TRUE)
+    #' @param cell.number.adjust model the per-sample sampling noise in the dispersions with a 1 / (number of cells) term, so that the
+    #'   dispersion change (`var`) is compared at equal cell numbers (default TRUE; otherwise a condition with fewer cells per sample
+    #'   appears more dispersed)
     #' @param influence compute leave-one-sample-out effects and jackknife standard errors (default TRUE)
     #' @param seed integer seed (default from options; `NULL` draws from R's RNG)
     #' @param name results slot (default "expression.shifts")
@@ -716,18 +823,33 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param na.mode samples absent from a cell type: `"drop"` (default, option `na.mode`) fits the present samples; `"impute_weak"` keeps
     #'   them with a near-zero weight (same sample set in every cell type, levels stay represented)
     #' @param robust.k robust tuning constant (default: option `robust.k`, 1.345)
+    #' @param statistic `"gsd"` (default: per-gene test combined over genes, see above) or `"distance"` (the distance test)
+    #' @param type.gene.frac per cell type, the genes (of those passing `min.gene.frac`) detected in at least this fraction of the
+    #'   type's cells, for both the gsd test and the distance model (default: option `type.gene.frac`, 0.05; see [typeGeneSets()])
+    #' @param neighbourhood.gene.frac earlier name of `type.gene.frac`
+    #' @param winsor.k gsd with `robust = "winsor"`: winsorization threshold in robust sd units (default 3)
+    #' @param gsd.d0 gsd: prior degrees of freedom of the moderated per-gene variance (default 3); see [gsdShiftsPerCellType()]
     estimateExpressionShiftMagnitudes = function(test = NULL, formula = NULL, contrast = NULL, dispersion.formula = NULL,
+                                                 statistic = c("gsd", "distance"),
                                                  dist = NULL, permutation = NULL, n.permutations = NULL, block.vars = NULL,
                                                  cell.groups = self$cell.groups, sample.per.cell = self$sample.per.cell, n.pcs = NULL,
-                                                 min.cells.per.sample = 10, min.samp.per.level = NULL, min.gene.frac = 0.01, genes = NULL,
-                                                 bias.correct = TRUE, influence = TRUE, seed = NULL, name = "expression.shifts",
+                                                 min.cells.per.sample = NULL, min.cells.magnitude = 10, min.samp.per.level = NULL, min.gene.frac = 0.01, genes = NULL,
+                                                 type.gene.frac = NULL, neighbourhood.gene.frac = NULL, winsor.k = 3, gsd.d0 = 3,
+                                                 bias.correct = TRUE, cell.number.adjust = TRUE, influence = TRUE, seed = NULL, name = "expression.shifts",
                                                  verbose = NULL, n.cores = NULL, robust = NULL, na.mode = NULL, robust.k = NULL, ...) {
+      statistic <- match.arg(statistic)
+      min.cells.per.sample <- min.cells.per.sample %||% (if (statistic == "gsd") 5 else 10)
+      # the distance model (magnitudes, var / total, noise bands, jackknife) needs well-estimated profiles: with statistic = "gsd" it
+      # takes the samples with at least min.cells.magnitude cells (the gsd test models the sampling noise of thinner samples per gene)
+      min.cells.dist <- if (statistic == "gsd") max(min.cells.magnitude, min.cells.per.sample) else min.cells.per.sample
+      type.gene.frac <- type.gene.frac %||% neighbourhood.gene.frac %||% private$opt("type.gene.frac")   # one gene set per type: gsd and distances
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
       robust <- private$opt("robust", robust); na.mode <- private$opt("na.mode", na.mode); robust.k <- private$opt("robust.k", robust.k)
       legacy <- private$legacyShiftArgs(list(...), verbose)
       permutation <- legacy$permutation %||% permutation
       dist <- private$opt("dist", dist); permutation <- private$opt("permutation", permutation)
-      n.permutations <- private$opt("n.permutations", n.permutations); min.samp.per.level <- private$opt("min.samp.per.level", min.samp.per.level)
+      n.permutations <- private$opt("n.permutations", n.permutations)
+      msl.gsd <- min.samp.per.level %||% 2; min.samp.per.level <- private$opt("min.samp.per.level", min.samp.per.level)   # gsd: 2 (as calibrated), distance: option
       seed <- if (missing(seed)) private$opt("seed") else seed
       alpha <- private$opt("alpha")
       if (dist == "l1") warning("dist = 'l1' does not separate location from dispersion: shift estimates absorb dispersion changes")
@@ -739,16 +861,60 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       pb <- private$getPseudobulk(cell.groups = cell.groups, sample.per.cell = sample.per.cell, min.cells.per.sample = min.cells.per.sample,
                                   min.gene.frac = min.gene.frac, genes = genes, verbose = verbose)
-      D.list <- private$getSampleDistances(pb, dist = dist, n.pcs = n.pcs, verbose = verbose)
-
-      if (verbose) message(sprintf("Testing %d cell type(s), %d test(s), %d permutations (%s)...", length(D.list), length(model$tests),
-                                   n.permutations, permutation))
-      res <- expressionShiftsForModel(D.list, model, dist = dist, permutation = permutation, n.permutations = n.permutations,
-                                      block.vars = block.vars, bias.correct = bias.correct, influence = influence,
-                                      min.samp.per.level = min.samp.per.level, seed = seed, alpha = alpha, n.cores = n.cores,
-                                      verbose = FALSE, n.cells = pb$n.cells, robust = robust, na.mode = na.mode, robust.k = robust.k)
-      res$n.cells <- pb$n.cells; res$genes <- pb$genes
-      res$settings$n.pcs <- n.pcs; res$settings$min.cells.per.sample <- min.cells.per.sample
+      # expression shifts are estimated for contrasts (two levels, a combination of levels, or a numeric variable); whole-factor
+      # tests of the model (used by the DE, composition and screen analyses) are skipped
+      is.term <- vapply(model$tests, function(t) t$kind != "contrast", logical(1))
+      if (all(is.term)) stop("expression shifts are estimated for contrasts; whole-factor tests (",
+                             paste(vapply(model$tests, `[[`, character(1), "label"), collapse = ", "), ") are not supported: name the comparison, ",
+                             "e.g. test = \"stage: II vs I\", or a combination of levels", call. = FALSE)
+      if (any(is.term)) {
+        if (verbose) message("Skipping whole-factor test(s) ", paste(vapply(model$tests[is.term], `[[`, character(1), "label"), collapse = ", "),
+                             ": expression shifts are estimated for contrasts")
+        model$tests <- model$tests[!is.term]; is.term <- is.term[!is.term]
+      }
+      res.gsd <- NULL
+      if (statistic == "gsd") {
+        if (identical(robust, "huber")) stop("robust = 'huber' is available for statistic = 'distance'; statistic = 'gsd' takes robust = 'winsor'")
+        if (verbose && !identical(na.mode, "drop")) message("statistic = 'gsd' fits the samples present in each cell type (na.mode is not used)")
+        if (any(!is.term)) {
+          inp <- private$getGsdCellTypeInput(pb$genes)
+          mc <- model; mc$tests <- model$tests[!is.term]
+          if (verbose) message(sprintf("Testing %d cell type(s), %d test(s) with gsd (%d genes, per type those in >= %g %% of its cells), %d permutations...",
+                                       nlevels(droplevels(as.factor(cell.groups))), length(mc$tests), length(pb$genes), 100 * type.gene.frac, n.permutations))
+          res.gsd <- tryCatch(gsdShiftsPerCellType(inp$cm, sample.per.cell, cell.groups, mc, inp$lib, min.cells.per.sample = min.cells.per.sample,
+                                          min.samp.per.level = msl.gsd, neighbourhood.gene.frac = type.gene.frac,
+                                          permutation = permutation, n.permutations = n.permutations, block.vars = block.vars, seed = seed,
+                                          robust = if (identical(robust, "winsor")) "winsor" else "none", winsor.k = winsor.k, gsd.d0 = gsd.d0, influence = FALSE, n.null = 0,
+                                          n.cores = n.cores, verbose = FALSE),
+                              error = function(e) {
+                                if (!grepl("too few expressed genes", conditionMessage(e))) stop(e)
+                                warning("statistic = 'gsd' needs more expressed genes to fit its noise model (", conditionMessage(e),
+                                        "); using statistic = 'distance'", call. = FALSE)
+                                NULL
+                              })
+          if (is.null(res.gsd)) statistic <- "distance"
+        }
+      }
+      model.dist <- model   # the distance model gives the effect sizes of every test (and the significance of var, total and term tests)
+      if (min.cells.dist != min.cells.per.sample)
+        pb <- private$getPseudobulk(cell.groups = cell.groups, sample.per.cell = sample.per.cell, min.cells.per.sample = min.cells.dist,
+                                    min.gene.frac = min.gene.frac, genes = genes, verbose = verbose)
+      res <- NULL
+      if (length(model.dist$tests)) {
+        D.list <- private$getSampleDistances(pb, dist = dist, n.pcs = n.pcs, type.gene.frac = type.gene.frac, verbose = verbose)
+        if (verbose) message(sprintf("Testing %d cell type(s), %d test(s), %d permutations (%s)...", length(D.list), length(model.dist$tests),
+                                     n.permutations, permutation))
+        res <- expressionShiftsForModel(D.list, model.dist, dist = dist, permutation = permutation, n.permutations = n.permutations,
+                                        block.vars = block.vars, bias.correct = bias.correct, influence = influence,
+                                        min.samp.per.level = if (statistic == "gsd") msl.gsd else min.samp.per.level, seed = seed, alpha = alpha, n.cores = n.cores,
+                                        verbose = FALSE, n.cells = pb$n.cells, robust = robust, na.mode = na.mode, robust.k = robust.k,
+                                        cell.number.adjust = cell.number.adjust)
+      }
+      res <- mergeShiftResults(res.gsd, res, model, statistic)
+      if (is.null(res$distances)) res$distances <- private$getSampleDistances(pb, dist = dist, n.pcs = n.pcs, type.gene.frac = type.gene.frac, verbose = verbose)   # for the sample-space plots
+      res$settings$statistic <- statistic; res$settings$dist <- dist; res$settings$alpha <- alpha; res$settings$type.gene.frac <- type.gene.frac
+      res$n.cells <- pb$n.cells; res$genes.tested <- pb$genes
+      res$settings$n.pcs <- n.pcs; res$settings$min.cells.per.sample <- min.cells.per.sample; res$settings$min.cells.magnitude <- min.cells.dist
       res$settings$temporary.model <- !is.null(formula) || !is.null(test) || !is.null(contrast)
       res$sample.ids <- rownames(model$meta)
       if (verbose) {
@@ -767,54 +933,86 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       invisible(res)
     },
 
-    #' @description Plot the expression-shift effects per cell type
+    #' @description Top genes of the cell-type expression shifts (gsd runs)
     #'
-    #' Dot plot with jackknife 95% intervals, one panel per effect (shift | var | total, or location | dispersion
-    #' for term tests), cell types ordered by the first effect. Filled points are significant at `alpha` by the
-    #' chosen `significance` column; a provenance subtitle records test, adjustment and permutation scheme.
+    #' Dot plot of the genes with the largest per-gene z-scores of the shift test in the selected cell types: genes changed at
+    #' gene-level FDR `gene.fdr` as dots sized by |z| and coloured by the log2 fold change, the others as small grey dots.
     #' @param name results slot (default "expression.shifts")
-    #' @param test test label or index to show (default: all tests, one row of panels each)
-    #' @param effects which effects (default: all available)
-    #' @param normalized plot normalized effects (comparable across cell types; default TRUE) or absolute ones
-    #' @param type `"dot"` (default) or `"bar"`
-    #' @param order.by effect used to order cell types (default: the first of `effects`)
-    #' @param show.ci show jackknife intervals (default TRUE)
-    #' @param significance which p-value marks significance: `"padj"` (BH across cell types; default), `"p.fwer"`
-    #'   (familywise, max-statistic) or `"p"` (raw)
-    #' @param alpha significance level (default from options)
-    #' @param show.provenance add the provenance subtitle (default from options)
-    #' @param cell.types optional subset / order of cell types
-    #' @param ... ignored (accepted for backward compatibility: `show.pvalues`, `notch`, `show.jitter`, ...)
+    #' @param test test label or index (default: the first test)
+    #' @param cell.types cell types to show, in this order (default: the significant ones by the size of the shift, at most 6)
+    #' @param n.genes top genes per cell type (default 8)
+    #' @param gene.fdr gene-level FDR of the coloured dots (default 0.1)
+    #' @param alpha significance level for the default cell types (default from options)
     #' @return ggplot2 object
-    plotExpressionShiftMagnitudes = function(name = "expression.shifts", test = NULL, effects = NULL, normalized = TRUE,
-                                             type = c("dot", "bar"), order.by = NULL, show.ci = TRUE,
-                                             significance = c("padj", "p.fwer", "p"), alpha = NULL, show.provenance = NULL,
-                                             cell.types = NULL, ...) {
-      type <- match.arg(type); significance <- match.arg(significance)
+    plotExpressionShiftGenes = function(name = "expression.shifts", test = NULL, cell.types = NULL, n.genes = 8, gene.fdr = 0.1, alpha = NULL) {
+      alpha <- private$opt("alpha", alpha)
+      res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
+      if (!length(res$genes)) stop("no per-gene results: run estimateExpressionShiftMagnitudes() with statistic = 'gsd'")
+      tid <- if (is.null(test)) res$results$test.id[1] else matchModelTest(res$model, test)[1]
+      tl <- res$results$test[match(tid, res$results$test.id)]
+      if (is.na(tl) || is.null(res$genes[[tl]])) stop("no per-gene results for this test")
+      if (is.null(cell.types)) {
+        w <- res$wide[[tl]]; w <- w[is.finite(w$padj.shift) & w$padj.shift < alpha, , drop = FALSE]
+        if (!nrow(w)) stop("no cell type with a significant shift: pass cell.types")
+        cell.types <- utils::head(w$celltype[order(-w$shift.norm)], 6)
+      }
+      plotGsdShiftGenes(res$genes[[tl]], cell.types = cell.types, n.genes = n.genes, gene.fdr = gene.fdr, plot.theme = self$plot.theme)
+    },
+
+    #' @description Plot the expression-shift magnitudes per cell type
+    #'
+    #' For a contrast test: one row per cell type, ordered by the size of the effect. The point is the normalized effect of
+    #' the distance model (`effect = "shift"`: the squared distance between the condition means relative to the summed
+    #' within-group dispersions; `effect = "var"`: the dispersion change log2(s.alt / s.ref)), in the cell-type colour, filled
+    #' when significant. With `statistic = "gsd"` (the default of [Cacoa] `estimateExpressionShiftMagnitudes()`) the
+    #' significance of the shift is the gsd test's; the dispersion change is tested by the distance model. The grey band is the
+    #' 95 % range of the effect over the test's relabelings (the size noise alone gives); the optional bar is the jackknife 95 %
+    #' interval (how firmly the samples determine the size, not a test).
+    #' @param name results slot (default "expression.shifts")
+    #' @param test test label or index (default: the first test)
+    #' @param effect `"shift"` (default) or `"var"`
+    #' @param show.null show the relabeling band (default TRUE)
+    #' @param show.ci show the jackknife 95 % interval (default FALSE)
+    #' @param show.pvalues print the p-values: `"adjusted"` (default), `"raw"` or `"none"`
+    #' @param show.genes add a margin with the number of genes changed at gene-level FDR `gene.fdr` (gsd runs; default FALSE).
+    #'   The count depends on power (samples, cells): a cross-check, not a ranking
+    #' @param gene.fdr FDR for `show.genes` (default 0.1)
+    #' @param significance which p-value marks significance: `"padj"` (BH across cell types; default), `"p.fwer"` or `"p"`
+    #' @param alpha significance level (default from options)
+    #' @param order `"magnitude"` (default) or `"significance"`
+    #' @param show.provenance add the provenance subtitle (default from options)
+    #' @param legend.position legend position (default "bottom"; "none" hides it)
+    #' @param cell.types optional subset of cell types
+    #' @param ... ignored (accepted for backward compatibility: `effects`, `normalized`, `type`, `order.by`, ...)
+    #' @return ggplot2 object
+    plotExpressionShiftMagnitudes = function(name = "expression.shifts", test = NULL, effect = c("shift", "var"), show.null = TRUE, show.ci = FALSE,
+                                             show.pvalues = c("adjusted", "raw", "none"), show.genes = FALSE, gene.fdr = 0.1,
+                                             significance = c("padj", "p.fwer", "p"), alpha = NULL, order = c("magnitude", "significance"),
+                                             show.provenance = NULL, legend.position = "bottom", cell.types = NULL, ...) {
+      effect <- match.arg(effect); significance <- match.arg(significance); show.pvalues <- match.arg(show.pvalues); order <- match.arg(order)
       alpha <- private$opt("alpha", alpha); show.provenance <- private$opt("plot.provenance", show.provenance)
       res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
       if (is.null(res$results) || !nrow(res$results)) stop("no cell type could be tested (see cao$test.results[['", name, "']]$skipped)")
-      df <- res$results
-      if (!is.null(test)) {
-        keep <- df$test.id %in% matchModelTest(res$model, test)
-        if (!any(keep)) stop("test not found; available: ", paste(unique(df$test), collapse = ", "))
-        df <- df[keep, ]
-      }
-      if (!is.null(effects)) df <- df[df$effect %in% effects, ]
-      if (!is.null(cell.types)) df <- df[df$celltype %in% cell.types, ]
+      tid <- if (is.null(test)) res$results$test.id[1] else matchModelTest(res$model, test)[1]
+      if (is.na(tid) || !(tid %in% res$results$test.id)) stop("test not found; available: ", paste(unique(res$results$test), collapse = ", "))
+      df <- res$results[res$results$test.id == tid, , drop = FALSE]; tl <- df$test[1]
+      gsd <- identical(res$settings$statistic, "gsd") && "p.distance" %in% names(df) && any(is.finite(df$p.distance))
       subtitle <- if (show.provenance) {
-        prov <- vapply(unique(df$test.id), function(i) modelProvenance(res$model, i), character(1))
-        prov <- permutationPhrase(prov, df)
-        sc <- unique(df$scheme); fl <- unique(df$p.floor)
+        prov <- permutationPhrase(modelProvenance(res$model, tid), df)
         rob <- c(if (!identical(res$settings$robust %||% "none", "none")) sprintf("robust: %s", res$settings$robust),
                  if (identical(res$settings$na.mode, "impute_weak")) "absent samples weakly imputed")
-        paste(c(prov, sprintf("distance: %s%s; filled points: %s < %.2g%s", res$settings$dist,
-                              if (length(sc) > 1) " (mixed permutation schemes)" else "", significance, alpha,
+        paste(c(prov, sprintf("%s; distance: %s%s", if (gsd && effect == "shift") "shift tested by gsd" else "tested by the distance model", res$settings$dist,
                               if (length(rob)) paste0("; ", paste(rob, collapse = "; ")) else "")), collapse = "\n")
       } else NULL
-      plotEffectsPerCellType(df, normalized = normalized, type = type, order.by = order.by, show.ci = show.ci, significance = significance,
-                             alpha = alpha, palette = self$cell.groups.palette, plot.theme = self$plot.theme, subtitle = subtitle,
-                             cell.types = cell.types)
+      if (!any(df$effect %in% c("shift", "var"))) stop("no shift / var effects in these results (whole-factor results of an older version?): rerun estimateExpressionShiftMagnitudes()")
+      w <- res$wide[[tl]]
+      counts <- NULL
+      if (show.genes && length(res$genes[[tl]])) counts <- vapply(res$genes[[tl]], function(g) sum(stats::p.adjust(2 * stats::pnorm(-abs(g$z)), "BH") < gene.fdr), numeric(1))
+      sig.label <- sprintf("%s%s < %.2g", if (gsd && effect == "shift") "gsd " else "", significance, alpha)
+      plotShiftMagnitudes(w, effect = effect, show.null = show.null, show.ci = show.ci, show.pvalues = show.pvalues, show.genes = show.genes,
+                          gene.counts = counts, gene.fdr = gene.fdr, significance = significance, alpha = alpha, sig.label = sig.label,
+                          palette = self$cell.groups.palette, plot.theme = self$plot.theme, subtitle = subtitle, cell.types = cell.types,
+                          order = order, legend.position = legend.position)
     },
 
     #' @description Leave-one-sample-out influence on the expression-shift effects (replaces `plotExpressionShiftResiduals`)
@@ -832,6 +1030,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       infl <- res$influence[[test]]
       if (is.null(infl)) stop("no influence results for test '", test, "' (run estimateExpressionShiftMagnitudes(influence = TRUE))")
       m <- infl[[effect]]
+      if (is.null(m)) stop("no '", effect, "' influence for test '", test, "' (gsd results have the shift only)")
       if (!is.null(cell.types)) m <- m[, intersect(cell.types, colnames(m)), drop = FALSE]
       w <- res$wide[[test]]
       se <- setNames(w[[paste0("se.", effect)]], w$celltype)
@@ -2313,92 +2512,39 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(gg + gg.labs + self$plot.theme)
     },
 
-    #' @description Plot contrast tree (NEW: lmCoda score-based)
-    #' @param name character Results name slot (default='coda')
-    #' @param cells.to.remain character Specific cell types to keep (default=NULL)
-    #' @param cells.to.remove character Specific cell types to remove (default=NULL)
-    #' @param filter.empty.cell.types boolean Remove cell types without cells (default=TRUE)
-    #' @param adjust.pvalues boolean Adjust P values or not (default=TRUE)
-    #' @param reorder.tree boolean Reorder tree or not (default=TRUE)
-    #' @param ... passed to internal plotContrastTreeScore()
-    #' @return A ggplot2 object
-    #' @param score.palette colour palette for the node scores
-    #' @param score.midpoint midpoint of the score colour scale
-    #' @param score.limits limits of the score colour scale
-    plotCodaContrastTree=function(name = "coda", cells.to.remain = NULL, cells.to.remove = NULL,
-                                     filter.empty.cell.types = TRUE, adjust.pvalues = TRUE, reorder.tree = TRUE, 
-                                     score.palette = c(low = "#2166AC", mid = "grey95", high = "#B2182B"),
-                                     score.midpoint = 0, score.limits = NULL, ...) {
-      checkPackageInstalled(c("ape", "ggdendro"), cran = TRUE)
-      # fetch lmCoda results
-      x <- private$getResults(name, "estimateCellLoadings()")
-      # counts only (no d.groups)
-      d.counts <- x$cnts 
-
-      # contrast score
-      score <- getCodaContrastScore(x)
-      score <- score[rownames(d.counts)]  # align to counts
-
-      # optional tree reorder by mean loadings (if present)
-      loadings.mean <- NULL
-      if (reorder.tree) {
-      # for lmCoda, use contrast loadings (or ref_centered)
-        if (!is.null(x$contrast$loadings$obs)) {
-          loadings.mean <- x$contrast$loadings$obs
-        }
-      }
-      gg <- plotContrastTreeScore(d.counts = d.counts, score = score, plot.theme = self$plot.theme, 
-                                  adjust.pvalues = adjust.pvalues, loadings.mean = loadings.mean,
-                                  score.palette = score.palette, score.midpoint = score.midpoint, 
-                                  score.limits = score.limits, ...)
-
-      return(gg)
-    },
-
-
-    #' @description Plot contrast tree (old: two-group version)
-    #' @param cell.groups character Cell annotations with cell IDs as name (default=self$cell.groups)
-    #' @param palette plot palette (default=self$sample.groups.palette)
-    #' @param name character Results name slot (default='coda')
-    #' @param cells.to.remain character Specific cell types to keep (default=NULL)
-    #' @param cells.to.remove character Specific cell types to remove (default=NULL)
-    #' @param filter.empty.cell.types boolean Remove cell types without cells (default=TRUE)
-    #' @param adjust.pvalues boolean Adjust P values or not (default=TRUE)
-    #' @param h.method character Must be one of 'both', 'up', 'down' (default='both')
-    #' @param reorder.tree boolean Reorder tree or not (default=TRUE)
-    #' @param ... additional parameters
-    #' @return A ggplot2 object
+    #' @description Plot the contrast tree of the compositional result (see [contrastTree()] and [plotContrastTree()]): the
+    #'   sequential binary partition of the cell types that explains the compositional shift of the contrast with the fewest
+    #'   balances, each node labeled with the log2 ratio of its two sides between the contrast's endpoints, the significance
+    #'   code of its permutation p-value and the share of the shift it explains; the samples' own ratios at the significant
+    #'   nodes; the reference-centered loadings under the leaves.
+    #' @param name name of the `estimateCellLoadings()` result (default: `"coda"`)
+    #' @param alpha significance level on the adjusted node p-values (default: option `alpha`)
+    #' @param split how the tree is built: `"effect"` (default) or `"evidence"`, see [contrastTree()]
+    #' @param show.samples show the samples' balances at the significant nodes (default TRUE)
+    #' @param leaf.values tiles under the leaves: `"reference-centered"` (default), `"clr"` or `"none"`
+    #' @param palette colors of the two sides of the contrast (default: `sample.groups.palette`)
+    #' @param ... passed to [plotContrastTree()] (`show.text`, `min.share`, `font.size`, `label.angle`, `legend.position`)
+    #' @return ggplot2 object
     #' @examples
     #' \dontrun{
     #' cao$estimateCellLoadings()
-    #' cao$plotContratsTree()
+    #' cao$plotContrastTree()
     #' }
-    plotContrastTree=function(cell.groups=self$cell.groups, palette=self$sample.groups.palette, name='coda',
-                              cells.to.remain=NULL, cells.to.remove=NULL, filter.empty.cell.types=TRUE,
-                              adjust.pvalues=TRUE, h.method=c('both', 'up', 'down'), reorder.tree=TRUE, ...) {
-      h.method <- match.arg(h.method)
-      tmp <- private$extractCodaData(cells.to.remove=cells.to.remove, cells.to.remain=cells.to.remain,
-                                     cell.groups=cell.groups)
-      if (filter.empty.cell.types) {
-        cell.type.to.remain <- (colSums(tmp$d.counts[tmp$d.groups,]) > 0) &
-          (colSums(tmp$d.counts[!tmp$d.groups,]) > 0)
-        tmp$d.counts <- tmp$d.counts[,cell.type.to.remain]
-      }
+    plotContrastTree=function(name='coda', alpha=NULL, split=c("effect", "evidence"), show.samples=TRUE, leaf.values=c("reference-centered", "clr", "none"),
+                              palette=self$sample.groups.palette, ...) {
+      split <- match.arg(split); leaf.values <- match.arg(leaf.values); alpha <- private$opt("alpha", alpha)
+      res <- private$getResults(name, 'estimateCellLoadings()')
+      if (identical(res$kind, "term")) stop("the whole-factor composition test has no contrast; the contrast tree needs a contrast result")
+      tree <- if (split == "effect" && !is.null(res$tree)) res$tree else contrastTree(res, split = split, alpha = alpha)
+      plotContrastTree(res, tree = tree, alpha = alpha, show.samples = show.samples, leaf.values = leaf.values, palette = palette, plot.theme = self$plot.theme, ...)
+    },
 
-      loadings.mean <- NULL
-      if (reorder.tree) {
-        if (name %in% names(self$test.results)) {
-          loadings.mean <- rowMeans(self$test.results[[name]]$loadings)
-        } else {
-          message('To show significance, please run estimateCellLoadings()')
-        }
-      }
-
-      gg <- plotContrastTree(tmp$d.counts, tmp$d.groups, self$ref.level, self$target.level,
-                             plot.theme=self$plot.theme, adjust.pvalues=adjust.pvalues,
-                             h.method=h.method, loadings.mean=loadings.mean, palette=palette, ...)
-
-      return(gg)
+    #' @description The contrast tree (the former name of `plotContrastTree()`)
+    #' @param name name of the `estimateCellLoadings()` result (default: `"coda"`)
+    #' @param ... passed to `plotContrastTree()`
+    #' @return ggplot2 object
+    plotCodaContrastTree=function(name = "coda", ...) {
+      self$plotContrastTree(name = name, ...)
     },
 
 
@@ -2447,7 +2593,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param statistic test statistic of the per-column fitter: `"t"` (studentized contrast, default) or `"coef"` (raw contrast estimate)
     #' @param zero.pseudocount pseudocount added to zero counts before the log-ratio transform (default 0.1)
     #' @param basis.type ILR basis type (default 'default')
-    #' @param ref.p.thresh p-value threshold for picking the reference cell types (default 0.3)
+    #' @param ref.method reference cell types for the presentation of the loadings: `"block"` (default) the largest set of cell
+    #'   types whose proportions do not change relative to each other ([referenceBlock()]), or `"pvalue"` (the cell types with the
+    #'   weakest evidence of a change relative to the geometric mean; `ref.p.thresh`, `ref.min.size`, `ref.max.size`)
+    #' @param ref.block.thresh p-value below which two groups of cell types are kept apart in the block search (default 0.05)
+    #' @param ref.size.frac blocks at least this fraction of the largest block's size compete for the reference, the one closest to
+    #'   the center of the composition winning (default 0.5)
+    #' @param ref.p.thresh p-value threshold for picking the reference cell types (`ref.method = "pvalue"`; default 0.3)
     #' @param ref.min.size minimum number of reference cell types (default 1)
     #' @param ref.max.size maximum number of reference cell types (default 3)
     #' @param block.vars metadata columns defining permutation strata (default: stored)
@@ -2456,7 +2608,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                   cells.to.remove=NULL, cells.to.remain=NULL, 
                                   filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose, method="lda",
                                   formula=NULL, contrast=NULL, test=NULL, perm.method=c("freedman-lane", "block"), statistic=c("t", "coef"), zero.pseudocount=0.1,
-                                  basis.type = c("default"), ref.p.thresh = 0.3, ref.min.size = 1,ref.max.size = 3,
+                                  basis.type = c("default"), ref.method = c("block", "pvalue"), ref.block.thresh = 0.05, ref.size.frac = 0.5, ref.p.thresh = 0.3, ref.min.size = 1, ref.max.size = 3,
                                   block.vars = NULL, ...) {
       n.permutations <- private$opt("n.permutations", n.permutations)
       # Checks
@@ -2503,7 +2655,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       #res <- runCoda(tmp$d.counts, tmp$d.groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type, method=method, n.cores=n.cores, verbose=verbose)
       res <- lmCoda(cnts, sample.model, seed = private$opt("seed"), perm.method=perm.method, statistic=statistic, n.permutations=n.permutations,
                     zero.pseudocount=zero.pseudocount, basis.type = basis.type, ref.p.thresh = ref.p.thresh,
-                    ref.min.size = ref.min.size, ref.max.size = ref.max.size, ...)
+                    ref.min.size = ref.min.size, ref.max.size = ref.max.size, ref.method = ref.method, ref.block.thresh = ref.block.thresh, ref.size.frac = ref.size.frac, ...)
       res$cnts <- cnts
       res$model <- sample.model
       #res$groups <- tmp$d.groups
@@ -2537,9 +2689,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       x <- private$getResults(name, "estimateCellLoadings()")
 
       # Basic structure check
-      if (is.null(x$contrast) || is.null(x$coefficients)) {
+      if (is.null(x$contrast)) {
         stop("Result '", name, "' does not look like an lmCoda output. ",
-             "Run estimateCellLoadings(method='lm.coda', ...) first.")
+             "Run estimateCellLoadings() first.")
       }
 
       p <- plotCodaGlobal(x, style = style, fdr.threshold = fdr.threshold, drop.intercept = drop.intercept,
@@ -2557,9 +2709,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       x <- private$getResults(name, "estimateCellLoadings()")
 
-      if (is.null(x$contrast) || is.null(x$coefficients)) {
+      if (is.null(x$contrast)) {
          stop("Result '", name, "' does not look like an lmCoda output. ",
-              "Run estimateCellLoadings(method='lm.coda', ...) first.")
+              "Run estimateCellLoadings() first.")
       }
 
       plotCodaHeatmap(x, coef.names = coef.names, fdr.threshold = fdr.threshold, ...)
@@ -2575,23 +2727,25 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param labelCellTypes character Label mode for volcano: "significant","all","none"
     #' @param palette named vector of colors for cell types (default: self$cell.groups.palette)
     #' @param use.contrast.title logical Use contrast label as plot title (default=FALSE)
-    #' @param ... passed to plotCodaCellTypes()
+    #' @param significance the test behind the stars: `"clr"` (default: the primary test, relative to the geometric mean of all cell
+    #'   types, reference-free) or `"reference"` (relative to the reference cell types, conditional on that choice)
+    #' @param ... passed to plotCodaCellTypes() (`show.ci`: error bars of the predicted proportions, default TRUE)
     #' @return A ggplot2 object
     plotCodaCellTypes = function(name = "coda", coef = "contrast", style = c("bar", "violin"),
                                  value = c("predicted", "reference-centered", "volcano"), 
                                  fdr.threshold = 0.05, sortCellTypes = FALSE,
                                  labelCellTypes = c("significant", "all", "none"),
-                                 palette = self$cell.groups.palette, use.contrast.title = FALSE, ...) {
+                                 palette = self$cell.groups.palette, use.contrast.title = FALSE, significance = c("clr", "reference"), ...) {
 
-      value <- match.arg(value)
+      value <- match.arg(value); significance <- match.arg(significance)
       style <- match.arg(style)
       labelCellTypes <- match.arg(labelCellTypes)
 
       x <- private$getResults(name, "estimateCellLoadings()")
 
-      if (is.null(x$contrast) || is.null(x$coefficients) || is.null(x$psi)) {
+      if (is.null(x$contrast) || is.null(x$psi)) {
         stop("Result '", name, "' does not look like an lmCoda output. ",
-            "Run estimateCellLoadings(method='lm.coda', ...) first.")
+            "Run estimateCellLoadings() first.")
       }
 
       # Ensure palette is either NULL or named with celltypes
@@ -2603,7 +2757,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       p <- plotCodaCellTypes(x, coef = coef, value = value, style = style, fdr.threshold = fdr.threshold,
                         sortCellTypes = sortCellTypes, labelCellTypes = labelCellTypes, 
-                        celltype.palette = celltype.palette, use.contrast.title = use.contrast.title, ...)
+                        celltype.palette = celltype.palette, use.contrast.title = use.contrast.title, significance = significance, ...)
       return(p)
     },
 
@@ -2614,27 +2768,36 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param alpha significance threshold on the adjusted per-cell-type p-values (default: option `alpha`)
     #' @param palette named colours per cell type (default: `cell.groups.palette`)
     #' @param name name of the `estimateCellLoadings()` result (default: `"coda"`)
-    #' @param ordering `"pvalue"` (default) or `"loading"`
-    #' @param show.pvals add a panel of -log10 p-values (default TRUE)
-    #' @param show.null show the permutation null of each loading as a grey box (default TRUE)
-    #' @param ... passed to [plotCodaLoadings()]
-    #' @return ggplot2 object
+    #' @param ordering `"loading"` (default) or `"pvalue"`
+    #' @param show.pvals print the adjusted p-values next to the points (default TRUE)
+    #' @param show.null show the 95 % permutation range of each loading as a grey band (default TRUE)
+    #' @param significance the test behind the filled points and p-values: `"clr"` (default: the primary test, relative to the
+    #'   geometric mean of all cell types, reference-free) or `"reference"` (relative to the reference cell types, conditional on
+    #'   that data-chosen set); see [plotCodaLoadings()]
+    #' @param center `"reference"` (default): loadings centred on the reference cell types; `"none"`: as they are (zero = the
+    #'   geometric mean of all cell types); `"both"`: the two side by side (cowplot)
+    #' @param ... passed to [plotCodaLoadings()] (e.g. `legend.position`)
+    #' @return ggplot2 object (`center = "both"`: a cowplot grid)
     #' @examples
     #' \dontrun{
     #' cao$estimateCellLoadings()
     #' cao$plotCellLoadings()
+    #' cao$plotCellLoadings(center = "both")
     #' }
-    plotCellLoadings=function(alpha=NULL, palette=self$cell.groups.palette, name='coda', ordering=c('pvalue', 'loading'),
-                              show.pvals=TRUE, show.null=TRUE, ...) {
-      ordering <- match.arg(ordering); alpha <- private$opt("alpha", alpha)
+    plotCellLoadings=function(alpha=NULL, palette=self$cell.groups.palette, name='coda', ordering=c('loading', 'pvalue'),
+                              show.pvals=TRUE, show.null=TRUE, significance=c("clr", "reference"), center=c("reference", "none", "both"), ...) {
+      ordering <- match.arg(ordering); significance <- match.arg(significance); center <- match.arg(center); alpha <- private$opt("alpha", alpha)
       res <- private$getResults(name, 'estimateCellLoadings()')
       if (identical(res$kind, "term")) {
         stop("the whole-factor composition test has no per-cell-type loadings; see cao$test.results[['", name, "']]$results ",
              "(location / dispersion R2 and p-values)")
       }
       lab <- res$contrast$predicted$labels
-      plotCodaLoadings(res, ref.level = self$ref.level %||% lab$baseline %||% "reference", target.level = self$target.level %||% lab$target %||% "target",
-                       alpha = alpha, palette = palette, ordering = ordering, show.pvals = show.pvals, show.null = show.null, plot.theme = self$plot.theme, ...)
+      one <- function(ctr, title = NULL) plotCodaLoadings(res, ref.level = self$ref.level %||% lab$baseline %||% "reference", target.level = self$target.level %||% lab$target %||% "target",
+                       alpha = alpha, palette = palette, ordering = ordering, show.pvals = show.pvals, show.null = show.null, significance = significance, center = ctr, title = title, plot.theme = self$plot.theme, ...)
+      if (center != "both") return(one(center))
+      checkPackageInstalled("cowplot", cran = TRUE)
+      cowplot::plot_grid(one("none", "relative to the geometric mean"), one("reference", "relative to the reference cell types"), ncol = 2)
     },
 
     ### Cluster-free cell density
@@ -2905,7 +3068,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... additional arguments to the function
     #' @return estimated differential cell densities: `pooled` (unadjusted signed z-scores), `adj` (adjusted), `p.adj`,
     #'   `effect` (the contrast estimate per cell: the density difference, or the log2 fold change with
-    #'   `transform = "log"`), `p.perm`, `p.pooled`, `p.param`, `t`, `group.test` (when cell groups are stored)
+    #'   `transform = "log"`), `p.perm`, `p.pooled`, `p.param`, `t`, `group.test` (when cell groups are stored);
+    #'   with `scale`: `scale`, `scale.mode` and `scales` (the per-scale maps, see `scale`)
     #' @examples
     #' \dontrun{
     #' cao$estimateCellDensity()
@@ -2935,12 +3099,20 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   `"permutation"` (floored at 1 / (n.permutations + 1)) or `"pooled"` (the cell's standardized statistic against
     #'   the pooled permutation null of all cells, see [pooledPermutationP()]: no floor, calibrated with enough
     #'   permutations); `p.pooled` is returned whenever the permuted statistics are kept
-    #' @param moderate shrink the per-cell residual variances towards a common prior across cells (limma's empirical
-    #'   Bayes; a moderated t with extra degrees of freedom) before the parametric p-values (default TRUE)
-    #' @param transform `"auto"` (default): `"log"` for the count units (`smoothing = "knn"` or `"neighbourhood"`),
-    #'   `"none"` for the heat kernel and the kde; `"none"`: test the densities as they are; `"log"`: test `log2` counts
-    #'   per 10,000 cells of the sample (`log2((density * n + 0.5) / (n + 1) * 1e4)`, `n` the sample's cell number), the
-    #'   log-count model of a neighbourhood abundance test; the effect is then a log2 fold change of the density
+    #' @param moderate shrink the per-cell residual variances towards a prior across cells (a scaled-F prior with a trend on the
+    #'   cell's mean density, [fitFPrior()]; a moderated t with extra degrees of freedom), in the permutation statistic of the
+    #'   diffusion neighborhoods and before the parametric p-values of the stored units (default TRUE)
+    #' @param moderate.d0.max cap on the prior degrees of freedom of the moderation (default 4; see [fitFPrior()]): the cell's own
+    #'   variance keeps a share of at least `df / (df + moderate.d0.max)` of the moderated variance. Without the cap a homogeneous set of
+    #'   variances gives an infinite prior df, which replaces every cell's variance by the trend and costs the cells with a real
+    #'   difference (whose within-group variance is below the trend) part of their statistic
+    #' @param transform `"auto"` (default): `"log"` for the graph units (`smoothing = "knn"`, `"neighbourhood"` or
+    #'   `"heat"`), `"none"` for the kde; `"none"`: test the densities as they are; `"log"`: for the count units `log2`
+    #'   counts per 10,000 cells of the sample (`log2((density * n + 0.5) / (n + 1) * 1e4)`, `n` the sample's cell
+    #'   number), the log-count model of a neighbourhood abundance test; for the heat kernel `log2(d + kernel.alpha /
+    #'   n.cells)` of the per-sample densities `d` per cell of the sample, the cell itself counted as one cell of its
+    #'   neighborhood (a count pseudo-count would swamp a kernel density; [heatLogDensity()], [ownCellDensity()]); the
+    #'   effect is then a log2 fold change of the density
     #' @param pooled.statistic the per-cell statistic pooled over cells for the pooled p-values and FDR: `"raw"`
     #'   (default; the studentized contrast t, as benchmarked) or `"standardized"` (t minus its permutation mean over
     #'   its permutation sd, the shift map's convention)
@@ -2951,21 +3123,53 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   q among itself and its neighbours after the test ([inheritNeighbourQ()]; Milo's rule, more reach but
     #'   the realized false-call rate at a nominal threshold is about the nominal rate); `"none"`. The unadjusted
     #'   z-scores, effects and q-values of the result are those of the averaged statistic under `"averaged"`
+    #' @param scale the neighborhoods of the test. `NULL`: the units of the stored density (`estimateCellDensity()`, the
+    #'   kNN count units by default). Otherwise diffusion neighborhoods on the cell graph, whose width is the share of
+    #'   the cells a typical neighborhood covers (the kernel strength is solved per graph so that the median cell's
+    #'   effective neighborhood, [kernelEffectiveSize()], holds that share; [solveKernelBeta()]; the diffusion follows
+    #'   the graph, so a neighborhood stays mostly within its own population). `"auto"` (default): the scale scan over
+    #'   `auto.scales` chooses the scale whose own map calls the most cells at q < 0.1 (the finest of the scales calling at
+    #'   least 90 % of the cells when there are such; the scale of its strongest 1 % of the cells when none calls any), and
+    #'   the result is the single-scale map at that scale, so that its q-values and
+    #'   effects belong to one scale. One value (`scale = 0.1`) tests a single scale; several values (`scale = c(0.01,
+    #'   0.03, 0.1)`) run the scale scan itself ([scanDensityScales()]): every scale is tested under the same relabelings,
+    #'   a cell's statistic is its smallest p over the scales and its q-value the pooled permutation false discovery rate
+    #'   of that statistic (against the same quantity under every relabeling, no Bonferroni factor), so that each cell
+    #'   may be called at its own scale. Each map is the same test on `log2(d + kernel.alpha / n.cells)` of the per-sample
+    #'   kernel densities ([heatLogDensity()]; at each cell the heat arriving from every sample's cells, the cell itself
+    #'   counted as one cell of its neighborhood, so that a weakly connected cell, whose own heat stays on it, is tested
+    #'   through the neighborhood its arriving heat comes from) with the trended moderation of the statistic
+    #'   (`moderate`; needs limma).
+    #'   The scan needs `adjust.method = "perm-fdr"`. The result records `scale` (the scale(s) used), `scale.mode`
+    #'   (`"single"`, `"scan"` or `"auto"`) and `scales` (per scale: strength, median size, and per cell the pooled p,
+    #'   the effect, the single-scale q and the best scale; under `"auto"` also the scan's q and p, `scan.q`, `scan.p`)
+    #' @param auto.scales the scales `scale = "auto"` chooses from (default 1, 3 and 5 % of the cells, the expression-shift map's set;
+    #'   10 % as the coarsest scale gives this map 0.007 more ranking recall on the benchmark at a higher false share on PF; ignored otherwise)
+    #' @param effect.scale under the scan, the scale whose log2 fold change is reported as `effect`: `"finest"` (default;
+    #'   the smallest scale, the least attenuated estimate, noisy only where the scan is not significant) or `"best"`
+    #'   (each cell's scale of the smallest p)
+    #' @param kernel.alpha pseudo-count of a heat-kernel density on the log scale, as a fraction of the mean density
+    #'   (default 0.3; the diffusion neighborhoods, and `smoothing = "heat"` with `transform = "log"`)
     estimateDiffCellDensity=function(type='permutation', adjust=NULL, name='cell.density', sample.metadata=self$sample.meta, 
                                      formula=NULL, contrast=NULL, test=NULL, block.vars=NULL, perm.method="freedman-lane", statistic=c("t", "coef"),
                                      robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=FALSE,
                                      n.permutations=NULL, smooth=TRUE, adjust.method=c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
-                                     p.source=c("parametric", "permutation", "pooled"), moderate=TRUE, transform=c("auto", "none", "log"),
-                                     post=c("averaged", "none", "inherit"), pooled.statistic=c("raw", "standardized"), verbose=self$verbose, n.cores=self$n.cores, ...){
+                                     p.source=c("parametric", "permutation", "pooled"), moderate=TRUE, moderate.d0.max=4, transform=c("auto", "none", "log"),
+                                     post=c("averaged", "none", "inherit"), pooled.statistic=c("raw", "standardized"), scale="auto", auto.scales=c(0.01, 0.03, 0.05), effect.scale=c("finest", "best"), kernel.alpha=0.3,
+                                     verbose=self$verbose, n.cores=self$n.cores, ...){
       n.permutations <- private$opt("n.permutations", n.permutations)
       dens.res <- private$getResults(name, 'estimateCellDensity')
+      effect.scale <- match.arg(effect.scale); scale.given <- !missing(scale)
       statistic <- match.arg(statistic); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source); transform <- match.arg(transform); post <- match.arg(post); pooled.statistic <- match.arg(pooled.statistic)
       if (is.null(adjust)) adjust <- (type != 'subtract') # NULL can be forwarded here
-      if (transform == "auto") transform <- if (isTRUE(dens.res$smoothing %in% c("knn", "neighbourhood"))) "log" else "none"
+      if (transform == "auto") transform <- if (isTRUE(dens.res$smoothing %in% c("knn", "neighbourhood", "heat"))) "log" else "none"
       if (post != "none" && dens.res$method != "graph") { if (verbose) message("post-processing on the cell graph applies to the graph density only: post = 'none'"); post <- "none" }
       if (post != "none" && !adjust) post <- "none"
       density.mat <- dens.res$density.mat
-      if (transform == "log") {
+      if (transform == "log" && isTRUE(dens.res$smoothing == "heat")) {   # a kernel density, per cell of the sample (estimateCellDensityGraph()): relative pseudo-count (heatLogDensity())
+        density.mat[!is.finite(density.mat) | density.mat < 0] <- 0
+        density.mat <- log2(density.mat + kernel.alpha / nrow(density.mat))
+      } else if (transform == "log") {
         sizes <- dens.res$sample.sizes %||% table(self$sample.per.cell)
         sizes <- as.numeric(sizes[colnames(density.mat)])
         if (any(is.na(sizes))) stop("sample sizes are missing for some density columns")
@@ -2989,6 +3193,47 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose, what = "estimateDiffCellDensity()")
       } else dens.res$model %||% private$resolveModel(verbose = verbose, what = "estimateDiffCellDensity()")
 
+      if (!is.null(scale)) {   # diffusion neighborhoods at the given scale(s): the scale scan (scanDensityScales()); the stored units when the request does not fit the scan and scale was not given
+        why <- if (!(adjust && adjust.method == "perm-fdr")) "the diffusion neighborhoods are adjusted by the pooled permutation FDR (adjust = TRUE, adjust.method = 'perm-fdr')" else if (dens.res$method != "graph") "the diffusion neighborhoods need the graph density (estimateCellDensity(method = 'graph'))" else NULL
+        if (!is.null(why) && scale.given) stop(why, "; scale = NULL for the stored units")
+        if (!is.null(why)) { if (verbose) message(why, ": the stored units"); scale <- NULL }
+      }
+      if (!is.null(scale)) {
+        auto <- identical(scale, "auto"); if (auto) scale <- checkAutoScales(auto.scales)
+        scale <- resolveScales(scale, length(self$sample.per.cell), floor.cells = 10, verbose = verbose); K <- length(scale)
+        g.s <- extractCellGraph(self$data.object); spc.s <- self$sample.per.cell
+        g.s <- igraph::induced_subgraph(g.s, intersect(igraph::V(g.s)$name, names(spc.s)[!is.na(spc.s)]))
+        kb <- lapply(scale, function(sc) private$kernelBetaForScale(g.s, sc, n.cores))
+        mp <- if (moderate) list(moderate.perm = "trend", moderate.d0.max = moderate.d0.max) else list()
+        if (verbose) message(sprintf("diffusion neighborhoods at %s of the cells%s", paste(sprintf("%g %%", 100 * scale), collapse = ", "), if (auto) " (auto: one scale is chosen)" else if (K > 1) " (scale scan)" else ""))
+        sc <- do.call(scanDensityScales, c(list(g.s, spc.s, sample.model, scale = scale, beta = sapply(kb, `[[`, "beta"), self = lapply(kb, `[[`, "self"), off.size = lapply(kb, `[[`, "off.size"), alpha = kernel.alpha, post = if (post == "none") "none" else "averaged",
+                                                alternative = alternative, n.permutations = n.permutations, seed = private$opt("seed"), groups = self$cell.groups, n.cores = n.cores, verbose = verbose,
+                                                perm.method = perm.method, robust.method = robust.method, na.mode = na.mode), mp))
+        cells <- sc$cells; msize <- sapply(kb, `[[`, "median.size")
+        if (auto || K == 1) {   # one scale: its own map (auto: the scale calling the most cells at 0.1, the finest when a scale calls nearly all; see chooseScanScale)
+          k <- if (K == 1) 1L else chooseScanScale(sc)
+          q <- sc$Q[, k]; p <- sc$P[, k]; effect <- sc$E[, k]; scale.used <- scale[k]; gt <- sc$group.test[[k]]
+        } else { q <- sc$q; p <- sc$p; effect <- if (effect.scale == "finest") sc$E[, 1L] else sc$E[cbind(seq_along(cells), sc$best)]; scale.used <- scale; gt <- sc$group.test[[1L]] }
+        names(q) <- names(p) <- names(effect) <- cells
+        tz <- function(pv, sg) { pa <- pmin(pmax(pv, 1e-300), 1 - 1e-16)
+          z <- switch(alternative, "two-sided" = sg * stats::qnorm(pa / 2, lower.tail = FALSE), greater = pmax(stats::qnorm(pa, lower.tail = FALSE), 0), less = pmin(stats::qnorm(pa), 0))
+          z[!is.finite(pv)] <- NA_real_; stats::setNames(z, cells) }
+        sg <- sign(effect); sg[!is.finite(sg) | sg == 0] <- 1
+        res <- list(pooled = tz(p, sg), adj = tz(q, sg), p.adj = q, p.pooled = p, effect = effect, model = sample.model, perm.method = perm.method, statistic = statistic, robust = robust.method,
+                    adjust.method = "perm-fdr", p.source = "permutation", post = post, transform = "log", unit = "diffusion", scale = scale.used,
+                    scale.mode = if (auto) "auto" else if (K == 1) "single" else "scan", effect.scale = if (!auto && K > 1) effect.scale else NULL,
+                    scales = list(scale = scale, beta = sc$scales$beta, median.size = msize, best = stats::setNames(scale[sc$best], cells), p = sc$P, q = sc$Q, effect = sc$E, scan.q = sc$q, scan.p = sc$p),
+                    unit.size = stats::setNames(msize, sprintf("%g", scale)), kernel.alpha = kernel.alpha, moderate = if (length(mp)) "trend" else "none", group.test = gt, n.permutations = sc$B)
+        if (post == "inherit") {
+          ih <- inheritNeighbourQ(res$p.adj, res$effect, g.s); res$p.adj.cell <- res$p.adj; res$p.adj <- ih$q; res$effect.inherited <- ih$effect; res$adj <- tz(ih$q, sign(ih$effect))
+        }
+        res$z.pooled <- res$pooled; res$z.adj <- res$adj
+        if (verbose) { n.adj <- sum(res$p.adj < 0.1, na.rm = TRUE)   # the two-sided adjusted z of q = 0.1 is 1.64; count the q-values directly
+          message(sprintf("%d of %d cells at FDR 10 %%%s", n.adj, sum(is.finite(res$p.adj)), if (auto) sprintf(" (scale %g %% chosen)", 100 * scale.used) else "")) }
+        self$test.results[[name]]$diff[[type]] <- res
+        return(invisible(self$test.results[[name]]))
+      }
+
       # the C++ accumulator (exact p, standardized z, pooled histograms, group sums, optional neighbour averaging) replaces
       # the permutations x cells matrix for every adjustment but max-t, which smooths the permuted maps on the graph
       use.acc <- adjust.method != "max-t"
@@ -3000,7 +3245,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           diffCellDensityPermutations(sample.model=sample.model, seed = private$opt("seed"), perm.method=perm.method, statistic=statistic, robust.method = robust.method,
                                       na.mode = na.mode, alternative = alternative, n.permutations=n.permutations,
                                       return.residuals=return.residuals, return.sampled.stats=return.sampled.stats || !use.acc,
-                                      n.cores=n.cores, verbose=verbose, moderate=moderate,
+                                      n.cores=n.cores, verbose=verbose, moderate=moderate, moderate.d0.max = moderate.d0.max,
                                       pooled = use.acc, group = if (use.acc) cg.codes else NULL, average = use.acc && post == "averaged", nn.graph = nn.graph, pooled.statistic = pooled.statistic)
       if (post == "averaged" && !use.acc) { if (verbose) message("post = 'averaged' is not available with max-t: post = 'none'"); post <- "none" }
       p.pooled <- perm.res$p.pooled   # the unadjusted z-scores (`pooled`) are the signed tail z of this p
@@ -3067,8 +3312,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         res$residuals.pearson <- perm.res$residuals.pearson
       }
       if (verbose && adjust) {
-        n.adj <- sum(abs(res$adj) >= stats::qnorm(0.9), na.rm = TRUE)
-        message(sprintf("%d of %d cells keep |adjusted z| >= %.2f%s", n.adj, sum(is.finite(res$adj)), stats::qnorm(0.9),
+        n.adj <- sum(res$p.adj < 0.1, na.rm = TRUE)   # the two-sided adjusted z of q = 0.1 is 1.64; count the q-values directly
+        message(sprintf("%d of %d cells at FDR 10 %%%s", n.adj, sum(is.finite(res$p.adj)),
                         if (n.adj == 0) " (none: more permutations, or plotDiffCellDensity(adjust = FALSE) for the raw scores)" else ""))
       }
 
@@ -3088,6 +3333,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param contours character Specify cell types for contour, multiple cell types are also supported (default: NULL)
     #' @param contour.color character color for contour line (default: 'black')
     #' @param contour.conf character confidence interval of contour (default: '10%')
+    #' @param outline draw a thin outline around the regions where the significant cells are (default FALSE; see
+    #'   [significanceContours()]): the cells with adjusted p below `outline.alpha`, outlined where they make up at least
+    #'   `outline.level` of the cells around a point, in `outline.color` with line width `outline.linewidth`
+    #' @param outline.alpha,outline.level,outline.color,outline.linewidth settings of the outline
     #' @param plot.na boolean Plot NAs (default=FALSE)
     #' @param color.range symmetric colour range: a quantile of the absolute values as a string (default `"99.5%"`, so that
     #'   a few extreme cells do not wash out the map; adjusted z-scores keep at least +-1.96) or a numeric vector whose
@@ -3108,7 +3357,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     plotDiffCellDensity=function(name='cell.density', size=0.2, palette=NULL,
                                  adjust=NULL, what=c("z", "effect"), contours=NULL, contour.color='black', contour.conf='10%',
                                  plot.na=FALSE, color.range="99.5%", max.z=8, mid.color='gray95',
-                                 scale.z.palette=NULL, min.z=qnorm(0.9), ...) {
+                                 scale.z.palette=NULL, min.z=qnorm(0.9), outline=FALSE, outline.alpha=0.05, outline.level=0.5, outline.color="black", outline.linewidth=0.25, ...) {
       what <- match.arg(what)
       if (is.null(palette)) {
         palette <- grDevices::colorRampPalette(c("blue", mid.color, "red"), space = "Lab")
@@ -3174,6 +3423,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         gg <- gg + getScaledZGradient(min.z=min.z, palette=palette, color.range=color.range)
      }
 
+      if (outline) {   # the regions where the cells significant at `outline.alpha` are
+        q <- res$p.adj %||% (if (!is.null(res$adj)) 2 * stats::pnorm(-abs(res$adj)) else NULL)
+        if (is.null(q)) warning("no adjusted p-values in the results of '", name, "': no outline") else {
+          ol <- significanceContourLayer(self$embedding, stats::setNames(q < outline.alpha, names(q)), level = outline.level, color = outline.color, linewidth = outline.linewidth)
+          if (!is.null(ol)) gg <- gg + ol }
+      }
       if (!is.null(contours)) {
         gg <- gg + private$getDensityContours(groups=contours, conf=contour.conf, color=contour.color)
       }
@@ -3414,327 +3669,202 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
     
 
-    #' @description Plot inter-sample expression distance. The inputs to this function are the results from cao$estimateExpressionShiftMagnitudes()
-    #' @param space character One of 'expression.shifts', 'coda', 'pseudo.bulk' (default="expression.shifts")
-    #' @param values character One of "unadjusted" (observed raw distances), "adjusted" (core/partial fit covariate-adjusted) (default="unadjusted")
-    #' @param cell.type character Cell type reference for distancing (default=NULL)
-    #' @param dist character Must be one of "cor", "l1" (manhattan), "l2" (euclidian) (default=NULL)
-    #' @param name character Results slot name (default=NULL)
-    #' @param verbose boolean Print messages (default=self$verbose)
-    #' @param ... additional arguments
-    #' @return sample distance matrix
+    #' @description Sample x sample distance matrix of a sample space
+    #'
+    #' The spaces: `"expression"` (pseudobulk expression of one cell type, `cell.type = "X"`, or, with `cell.type = NULL`,
+    #' all cell types combined: the average of the per-type distances, each type weighted by its cells, `joint.weighting =
+    #' "cells"`, or equally, `"equal"`); `"pseudobulk"` (one pseudobulk of all cells per sample, so differences in
+    #' composition enter the distance); `"composition"` (Euclidean distance of the ILR coordinates of the cell-type
+    #' counts). Expression distances are taken from the stored results of `estimateExpressionShiftMagnitudes()` when there
+    #' are any (`name`), so that they are the distances behind the shift estimates; otherwise they are computed with the
+    #' same defaults. Nothing requires a model, except `values = "adjusted"`.
+    #' @param space `"expression"` (default), `"pseudobulk"` or `"composition"` (`"expression.shifts"` and `"coda"` are
+    #'   accepted as the earlier names)
+    #' @param values `"unadjusted"` (default) or `"adjusted"`: the model's nuisance part removed (the covariates of the
+    #'   model other than the tested variable; for stored expression-shift results, the adjusted distances of the fit)
+    #' @param cell.type cell type for `space = "expression"` (default NULL: all cell types combined)
+    #' @param joint.weighting `"cells"` (default) or `"equal"`: weights of the cell types in the combined expression distance
+    #' @param dist distance of the expression profiles (`"cor"`, `"l1"`, `"l2"`; default: the object option)
+    #' @param name results of `estimateExpressionShiftMagnitudes()` to take the expression distances from (default
+    #'   "expression.shifts" when present)
+    #' @param verbose print messages (default: the object option)
+    #' @param sample.subset optional subset of samples
+    #' @param adjust.for optional formula of covariates regressed out of the distances (G_adj = R G R)
+    #' @param ... `test` (which test's adjusted distances of stored shift results)
+    #' @return sample x sample distance matrix with attributes `dist.type`, `space` and `n.cells`
     #' @examples
     #' \dontrun{
-    #' cao$getSampleDistanceMatrix()
+    #' cao$getSampleDistanceMatrix(space = "composition")
     #' }
-    #' @param sample.subset optional subset of samples
-    #' @param adjust.for optional formula of covariates regressed out of the distances before use (G_adj = R G R)
-    getSampleDistanceMatrix=function(space=c('expression.shifts', 'coda', 'pseudo.bulk'), values = c("unadjusted", "adjusted"), 
-                                     cell.type=NULL, dist=NULL, name=NULL, verbose=self$verbose, sample.subset=NULL,
-                                     adjust.for=NULL, ...) {
-      space <- match.arg(space)
-      values <- match.arg(values)
+    getSampleDistanceMatrix=function(space=c("expression", "pseudobulk", "composition"), values=c("unadjusted", "adjusted"),
+                                     cell.type=NULL, joint.weighting=c("cells", "equal"), dist=NULL, name=NULL, verbose=NULL,
+                                     sample.subset=NULL, adjust.for=NULL, ...) {
+      space <- normalizeSampleSpace(space); values <- match.arg(values); joint.weighting <- match.arg(joint.weighting)
+      verbose <- private$opt("verbose", verbose)
       extra <- setdiff(names(list(...)), "test")
-      if ((space != 'pseudo.bulk') && length(extra)) stop("Unexpected arguments: ", paste(extra, collapse = ", "))
-
-      if (space == 'expression.shifts') {
-        if (is.null(name)) name <- 'expression.shifts'
-        res <- private$getResults(name, 'estimateExpressionShiftMagnitudes()')
-        if (is.null(res$distances)) stop("Result '", name, "' has no sample distances; re-run estimateExpressionShiftMagnitudes().")
-        mats <- if (values == "unadjusted") res$distances else {
-          tst <- list(...)$test
-          adj <- if (is.null(tst)) res$adjusted.distances[[1]] else if (is.numeric(tst)) res$adjusted.distances[[tst]] else res$adjusted.distances[[tst]]
-          if (is.null(adj)) stop("no adjusted distances for the requested test")
-          adj
-        }
-        if (!is.null(cell.type)) {
-          if (!cell.type %in% names(mats)) { warning("Distances were not estimated for cell type ", cell.type); return(NULL) }
-          p.dists <- mats[[cell.type]]
-        } else {
-          mats <- mats[vapply(mats, function(M) is.matrix(M) && nrow(M) >= 2, logical(1))]
-          if (!length(mats)) return(NULL)
-          for (ct in names(mats)) if (is.null(attr(mats[[ct]], "n.cells")))
-            attr(mats[[ct]], "n.cells") <- setNames(as.numeric(res$n.cells[ct, rownames(mats[[ct]])]), rownames(mats[[ct]]))
-          p.dists <- prepareJointExpressionDistance(mats)
-        }
-        if (any(is.na(p.dists))) { # NA imputation
-          p.dists %<>% ape::additive() %>% `dimnames<-`(dimnames(p.dists))
-        }
-        dist.type <- res$settings$dist
-      } else if (space=='coda') {
-        if (is.null(name)) name <- "coda"
-        coda.info <- private$getResults(name, "estimateCellLoadings()")
-
-        if (is.null(coda.info$ilr) || !is.matrix(coda.info$ilr))
-          stop("Missing coda.info$ilr. Run estimateCellLoadings() first.")
-
-        if (values == "unadjusted") {
-          mat <- coda.info$ilr
-
-        } else if (values == "adjusted") {
-          if (is.null(coda.info$model))
-        stop("Missing coda.info$model. Re-run estimateCellLoadings() after adding res$model <- sample.model.")
-
-          if (is.null(coda.info$fit) || is.null(coda.info$fit$coef))
-        stop("Missing coda.info$fit$coef.")
-
-          design <- coda.info$model$F                      # coefficients are in F space (level means in ILR coordinates)
-          if (is.null(design)) stop("Design matrix F missing in coda.info$model.")
-
-          # Align design rows to ilr rows by sample id
-          s <- intersect(rownames(coda.info$ilr), rownames(design))
-          if (length(s) < 2) stop("Too few overlapping samples between ilr and design.")
-          design <- design[s, , drop = FALSE]
-          coef   <- coda.info$fit$coef
-
-          # Ensure coef rownames match design columns
-          if (is.null(rownames(coef))) stop("coda.info$fit$coef must have rownames.")
-          miss <- setdiff(colnames(design), rownames(coef))
-          if (length(miss) > 0)
-          stop("coda fit is missing coefficients for design columns: ", paste(miss, collapse=", "))
-
-          coef <- coef[colnames(design), , drop = FALSE]
-          mat  <- design %*% coef
-          rownames(mat) <- s
-        }
-
-        dist %<>% parseDistance(n.dims = ncol(mat))
-
-        if (dist == "cor") {
-          p.dists <- 1 - cor(t(mat), use = "pairwise.complete.obs")
-        } else if (dist == "l2") {
-          p.dists <- as.matrix(stats::dist(mat, method = "euclidean"))
-        } else if (dist == "l1") {
-          p.dists <- as.matrix(stats::dist(mat, method = "manhattan"))
-        } else {
-          stop("Unknown distance: ", dist)
-        }
-        dist.type <- dist
+      if (length(extra)) stop("Unexpected arguments: ", paste(extra, collapse = ", "))
+      if (!is.null(cell.type) && space != "expression") stop("cell.type applies to space = 'expression' only")
+      res <- if (space == "expression") self$test.results[[name %||% "expression.shifts"]] else NULL
+      if (!is.null(name) && is.null(res) && space == "expression") stop("no results named '", name, "': run estimateExpressionShiftMagnitudes() first")
+      if (!is.null(res) && is.null(res$distances)) res <- NULL
+      p.dists <- NULL
+      if (values == "adjusted" && !is.null(res)) {   # the fit's own adjusted distances
+        tst <- list(...)$test
+        mats <- if (is.null(tst)) res$adjusted.distances[[1]] else res$adjusted.distances[[tst]]
+        if (is.null(mats)) stop("no adjusted distances for the requested test")
+        p.dists <- private$sampleSpaceFromList(mats, res, cell.type, joint.weighting)
+        if (is.null(p.dists)) return(NULL)
+        attr(p.dists, "dist.type") <- res$settings$dist
       } else {
-        stop("Not implemented space: ", space, "!")
+        p.dists <- if (!is.null(res)) private$sampleSpaceFromList(res$distances, res, cell.type, joint.weighting) else
+          private$sampleSpaceDistance(space, cell.type = cell.type, joint.weighting = joint.weighting, dist = dist, verbose = verbose)
+        if (is.null(p.dists)) return(NULL)
+        if (!is.null(res)) attr(p.dists, "dist.type") <- res$settings$dist
+        if (values == "adjusted") {
+          nuis <- private$modelNuisanceFormula()
+          if (is.null(nuis)) { if (verbose) message("the model has no covariates to adjust for: unadjusted distances"); }
+          else adjust.for <- if (is.null(adjust.for)) nuis else stats::as.formula(paste("~", paste(unique(c(all.vars(nuis), all.vars(stats::as.formula(adjust.for)))), collapse = " + ")))
+        }
       }
-      
-      if (!is.null(sample.subset)) {
-        p.dists <- p.dists[sample.subset, sample.subset, drop = FALSE]
-      }
+      dist.type <- attr(p.dists, "dist.type"); nc <- attr(p.dists, "n.cells")
+      if (!is.null(sample.subset)) p.dists <- p.dists[intersect(rownames(p.dists), sample.subset), intersect(rownames(p.dists), sample.subset), drop = FALSE]
       if (!is.null(adjust.for)) {   # regress the covariates of `adjust.for` out of the Gower matrix: G_adj = R G R
-        nc <- attr(p.dists, "n.cells")
         meta <- self$sample.meta[rownames(p.dists), , drop = FALSE]
         Z <- do.call(cbind, lapply(intersect(all.vars(stats::as.formula(adjust.for)), names(meta)), function(v) covariateColumns(meta, v)))
-        ok <- stats::complete.cases(Z)
-        G <- gowerCenter(asSquaredDistance(p.dists[ok, ok], dist.type))
-        p.dists <- adjustedDistanceMatrix(G, cbind(1, Z[ok, , drop = FALSE]), dist.type)
-        if (!is.null(nc)) attr(p.dists, "n.cells") <- nc[rownames(p.dists)]
+        if (!is.null(Z)) {
+          ok <- stats::complete.cases(Z)
+          G <- gowerCenter(asSquaredDistance(p.dists[ok, ok], dist.type))
+          p.dists <- adjustedDistanceMatrix(G, cbind(1, Z[ok, , drop = FALSE]), dist.type)
+        }
       }
-      attr(p.dists, "dist.type") <- dist.type
-      return(p.dists)
+      attr(p.dists, "dist.type") <- dist.type; attr(p.dists, "space") <- space
+      if (!is.null(nc)) attr(p.dists, "n.cells") <- nc[rownames(p.dists)]
+      p.dists
     },
 
-    #' @description Project samples to 2D space with MDS. Plots results from cao$estimateExpressionShiftMagnitudes() or cao$estimateCellLoadings()
-    #' @param space character string "expression.shifts" Results from cao$estimateExpressionShiftMagnitudes(); CDA- cell composition shifts result from cao$estimateCellLoadings(); sudo.bulk- expression distance of sudo bulk
-    #' @param method character string "MDS"
-    #' @param dist 'cor' - correlation distance, 'l1' - manhattan distance or 'l2' - euclidean (default correlation distance)
-    #' @param values character One of "unadjusted" (observed distances), "adjusted" (core/partial fit covariate-adjusted), or both (default="both")
-    #' @param color.by character Sample metadata column name for coloring points (default=NULL)
-    #' @param shape.by character Sample metadata column name for shaping points (default=NULL)
-    #' @param sample.meta data.frame containing Sample metadata (default=self$sample.meta)
-    #' @param sample.subset character vector of sample IDs to include (default=NULL, meaning all samples)
-    #' @param both.ncol numeric number of columns for both plots (default=2)
-    #' @param both.align character alignment for both plots, one of "h", "v", "hv" (default="hv")
-    #' @param name character Results slot name (default=NULL)
-    #' @param cell.type If a name of a cell type is specified, the sample distances will be assessed based on this cell type alone. Otherwise (cell.type=NULL, default), sample distances will be estimated as an average distance across all cell types (weighted by the minimum number of cells of that cell type between any two samples being compared)
-    #' @param palette a set of colors to use for conditions (default: stored $sample.groups.palette)
-    #' @param show.sample.size make point size proportional to the log10 of the number of cells per sample (default: FALSE)
-    #' @param sample.colors (default=NULL)
-    #' @param color.title (default=NULL)
-    #' @param shape.title (default=NULL)
-    #' @param title (default=NULL)
-    #' @param n.permutations numeric (default=2000)
-    #' @param show.pvalues boolean (default=FALSE)
-    #' @param ... additional parameters passed to plotSampleDistanceMatrix()
-    #' @return A ggplot2 object
+    #' @description MDS map of the samples in a sample space, colored by a metadata column
+    #'
+    #' Draws the samples in two dimensions (classical MDS of the distances of `getSampleDistanceMatrix()`), colored and
+    #' shaped by metadata columns. The subtitle reports how much of the between-sample variation each of them explains on
+    #' exactly these distances: the chance-corrected R2 and permutation p-value of the covariate screen (marginal, as in
+    #' `screenCovariates()`). Works before a model is set; `values = "adjusted"` or `"both"` need one.
+    #' @param space `"expression"` (default), `"pseudobulk"` or `"composition"` (see `getSampleDistanceMatrix()`)
+    #' @param method `"MDS"` (default), `"tSNE"`, `"UMAP"` or `"heatmap"`
+    #' @param values `"unadjusted"` (default), `"adjusted"` or `"both"` (side by side)
+    #' @param dist distance of the expression profiles (default: the object option)
+    #' @param name results of `estimateExpressionShiftMagnitudes()` to take the expression distances from
+    #' @param cell.type cell type (`space = "expression"`; default NULL: all cell types combined)
+    #' @param joint.weighting `"cells"` (default) or `"equal"` (see `getSampleDistanceMatrix()`)
+    #' @param sample.meta sample metadata (default: the object's)
+    #' @param color.by,shape.by metadata columns for colour and shape; `color.by = "test"` colours by the tested variable
+    #' @param palette colours (default: the stored palette for the tested variable)
+    #' @param show.sample.size point size proportional to log10 of the cells per sample (default FALSE)
+    #' @param sample.colors per-sample colors (overrides the `color.by` colors)
+    #' @param color.title,shape.title,title legend and plot titles
+    #' @param both.ncol,both.align layout of `values = "both"`
+    #' @param show.r2 report the chance-corrected R2 of `color.by` / `shape.by` in the subtitle (default TRUE)
+    #' @param n.permutations permutations of the R2 p-values (default: the object option)
+    #' @param sample.subset optional subset of samples
+    #' @param n.cores cores (default: the object option)
+    #' @param adjust.for optional formula of covariates regressed out of the distances
+    #' @param ... passed to the embedding plot (`font.size`, `size`, `show.labels`, ...)
+    #' @return ggplot2 object
     #' @examples
     #' \dontrun{
-    #' cao$estimateExpressionShiftMagnitudes()
-    #' cao$plotSampleDistances()
+    #' cao$plotSampleDistances(color.by = "batch")
+    #' cao$plotSampleDistances(space = "composition", color.by = "condition")
     #' }
-    #' @param n.cores number of cores (default: stored option)
-    #' @param adjust.for optional formula of covariates regressed out of the distances before use (G_adj = R G R)
-    plotSampleDistances=function(space='expression.shifts', method='MDS', values = 'both', dist=NULL, 
-                                 name=NULL, cell.type=NULL, sample.meta=NULL, color.by=NULL, shape.by=NULL,
-                                 palette=NULL, show.sample.size=FALSE, sample.colors=NULL, color.title=NULL,
-                                 shape.title=NULL, title=NULL, both.ncol = 2, both.align = "hv",
-                                 n.permutations=NULL, show.pvalues=FALSE, sample.subset=NULL, n.cores=self$n.cores, adjust.for=NULL, ...) {
-      n.permutations <- private$opt("n.permutations", n.permutations)
-      values <- match.arg(values, c("unadjusted","adjusted","both"))
-      if (!is.null(adjust.for) && values != "unadjusted") { values <- "unadjusted" }   # adjust.for replaces the model-adjusted view
-      if (identical(color.by, "test") && !is.null(self$model)) {   # the active test's groups / values
-        sg <- self$getSampleGroups()
-        if (!is.null(sg)) { sample.meta <- (sample.meta %||% self$sample.meta); sample.meta$test <- as.vector(sg[rownames(sample.meta)]); color.title <- color.title %||% self$model$tests[[1]]$variable }
+    plotSampleDistances=function(space="expression", method="MDS", values="unadjusted", dist=NULL, name=NULL, cell.type=NULL,
+                                 joint.weighting=c("cells", "equal"), sample.meta=NULL, color.by=NULL, shape.by=NULL, palette=NULL,
+                                 show.sample.size=FALSE, sample.colors=NULL, color.title=NULL, shape.title=NULL, title=NULL,
+                                 both.ncol=2, both.align="hv", show.r2=TRUE, n.permutations=NULL, sample.subset=NULL,
+                                 n.cores=NULL, adjust.for=NULL, ...) {
+      space <- normalizeSampleSpace(space); joint.weighting <- match.arg(joint.weighting)
+      values <- match.arg(values, c("unadjusted", "adjusted", "both"))
+      n.permutations <- private$opt("n.permutations", n.permutations); n.cores <- private$opt("n.cores", n.cores)
+      dots <- list(...)
+      if (!is.null(dots$show.pvalues)) { show.r2 <- isTRUE(dots$show.pvalues) || show.r2; dots$show.pvalues <- NULL }   # earlier name
+      sample.meta <- sample.meta %||% self$sample.meta
+      if (identical(color.by, "test") || identical(shape.by, "test")) {   # the active test's groups / values
+        if (is.null(self$model)) stop("color.by = 'test' needs a model (setModel())")
+        tv <- private$testVariable(); sg <- self$getSampleGroups()
+        sample.meta$test <- if (!is.null(sg)) as.vector(sg[rownames(sample.meta)]) else sample.meta[[tv]]
+        if (identical(color.by, "test")) color.title <- color.title %||% tv
+        if (identical(shape.by, "test")) shape.title <- shape.title %||% tv
       }
-      if (is.null(cell.type)) {
-        n.cells.per.samp <- table(self$sample.per.cell)
-      } else {
-        if (is.null(title)) title <- cell.type
-        n.cells.per.samp <- self$sample.per.cell %>% .[self$cell.groups[names(.)] == cell.type] %>% table()
+      for (v in c(color.by, shape.by)) if (!v %in% colnames(sample.meta)) stop("column not found in sample.meta: ", v)
+      color.title <- color.title %||% color.by; shape.title <- shape.title %||% shape.by
+      if (is.null(palette) && !is.null(color.by) && !is.null(names(self$sample.groups.palette))) {   # the condition colors of the other plots
+        is.test <- !is.null(self$model) && (identical(color.by, "test") || identical(color.by, private$testVariable()))
+        vals <- if (identical(color.by, "test")) NULL else (sample.meta %||% self$sample.meta)[[color.by]]
+        if (is.test || (!is.null(vals) && !is.numeric(vals) && length(stats::na.omit(unique(as.character(vals)))) > 0 &&
+                        all(stats::na.omit(unique(as.character(vals))) %in% names(self$sample.groups.palette))))
+          palette <- self$sample.groups.palette
       }
-
-      if (is.null(sample.meta) && (!is.null(color.by) || !is.null(shape.by))) {
-        sample.meta <- self$sample.meta
-        }
-
-      if (is.null(color.title) && !is.null(color.by)) {
-        color.title <- color.by
-        }
-      if (is.null(shape.title) && !is.null(shape.by)) shape.title <- shape.by
-      if (is.null(palette) && !is.null(color.by) && !is.null(self$model) && (identical(color.by, "test") || identical(color.by, private$testVariable())) &&
-          !is.null(names(self$sample.groups.palette))) palette <- self$sample.groups.palette
-
-      if (is.null(title)) title <- if (space == "expression.shifts") "all cell types" else space
-      if (values == "both" && !is.null(self$model) && !length(setdiff(all.vars(self$model$formula), private$testVariable()))) {
+      if (!is.null(adjust.for) && values != "unadjusted") stop("adjust.for replaces the model-adjusted view: use values = 'unadjusted' with it")
+      if (values != "unadjusted" && is.null(self$model) && is.null(self$test.results[[name %||% "expression.shifts"]]))
+        stop("values = '", values, "' needs a model (setModel()); use values = 'unadjusted'")
+      if (values == "both" && is.null(self$test.results[[name %||% "expression.shifts"]]) && is.null(private$modelNuisanceFormula())) {
         message("the model has no covariates to adjust for: showing the unadjusted distances")
         values <- "unadjusted"
       }
-
-      if (values == "both") {
-        checkPackageInstalled("cowplot", cran=TRUE, details="for values='both'")
-
-        # pre-fit; sample labels can be different pre and post-fit due to contrast specification.
-        pd.pre <- self$getSampleDistanceMatrix(space=space, cell.type=cell.type, dist=dist, name=name,
-                                               sample.subset=sample.subset, values="unadjusted")
-        if (is.null(pd.pre)) return(NULL)
-        sample.labels.pre <- NULL
-        if (!is.null(sample.meta) && !is.null(color.by)) {
-         if (!color.by %in% colnames(sample.meta)) {
-          stop("color.by column not found in sample.meta: ", color.by)
-         }
-         # align to samples present in p.dists
-         sm <- sample.meta[rownames(pd.pre), , drop=FALSE]
-         sample.labels.pre <- sm[[color.by]]
-         names(sample.labels.pre) <- rownames(sm)
-        }
-
-        shape.labels.pre <- NULL
-        if (!is.null(sample.meta) && !is.null(shape.by)) {
-         if (!shape.by %in% colnames(sample.meta)) {
-          stop("shape.by column not found in sample.meta: ", shape.by)
-          }
-          sm <- sample.meta[rownames(pd.pre), , drop=FALSE]
-          shape.labels.pre <- sm[[shape.by]]
-          names(shape.labels.pre) <- rownames(sm)
-          }
-
-        # post-fit
-        pd.post <- self$getSampleDistanceMatrix(space=space, cell.type=cell.type, dist=dist, name=name,
-                                               sample.subset=sample.subset, values="adjusted")
-        if (is.null(pd.post)) return(NULL)
-
-        sample.labels.post <- NULL
-        if (!is.null(sample.meta) && !is.null(color.by)) {
-         if (!color.by %in% colnames(sample.meta)) {
-          stop("color.by column not found in sample.meta: ", color.by)
-         }
-         # align to samples present in p.dists
-         sm <- sample.meta[rownames(pd.post), , drop=FALSE]
-         sample.labels.post <- sm[[color.by]]
-         names(sample.labels.post) <- rownames(sm)
-        }
-
-        shape.labels.post <- NULL
-        if (!is.null(sample.meta) && !is.null(shape.by)) {
-         if (!shape.by %in% colnames(sample.meta)) {
-          stop("shape.by column not found in sample.meta: ", shape.by)
-          }
-          sm <- sample.meta[rownames(pd.post), , drop=FALSE]
-          shape.labels.post <- sm[[shape.by]]
-          names(shape.labels.post) <- rownames(sm)
-          }
-        
-        gg.pre <- plotSampleDistanceMatrix(
-          p.dists=pd.pre, sample.labels=sample.labels.pre, n.cells.per.samp=n.cells.per.samp, method=method,
-          sample.colors=sample.colors, show.sample.size=show.sample.size, palette=palette, color.title=color.title,
-          shape.labels=shape.labels.pre, shape.title=shape.title, title=paste0("Unadjusted"),
-          plot.theme=self$plot.theme, ...)
-
-        gg.post <- plotSampleDistanceMatrix(
-          p.dists=pd.post, sample.labels=sample.labels.post, n.cells.per.samp=n.cells.per.samp, method=method,
-          sample.colors=sample.colors, show.sample.size=show.sample.size, palette=palette, color.title=color.title,
-          shape.labels=shape.labels.post, shape.title=shape.title, title=paste0("Model-adjusted"),
-          plot.theme=self$plot.theme, ...)
-
-        gg <- cowplot::plot_grid(gg.pre, gg.post, ncol = both.ncol, align = both.align)
-        gg <- cowplot::plot_grid(cowplot::ggdraw() + cowplot::draw_label(title, fontface="bold", x=0, hjust=0),
-                                 gg, ncol = 1,rel_heights = c(0.08, 1))
-
-        return(gg)
-      } else {
-        
-        p.dists <- self$getSampleDistanceMatrix(space=space, cell.type=cell.type, dist=dist, 
-                                                name=name, sample.subset=sample.subset, values = values, adjust.for = adjust.for)
-        if (is.null(p.dists)) return(NULL)
-        if (!is.null(adjust.for) && is.null(title)) title <- sprintf("%s | adjusted for %s", space, paste(all.vars(stats::as.formula(adjust.for)), collapse = ", "))
-
-        sample.labels <- NULL
-        if (!is.null(sample.meta) && !is.null(color.by)) {
-          if (!color.by %in% colnames(sample.meta)) {
-            stop("color.by column not found in sample.meta: ", color.by)
-           }
-          # align to samples present in p.dists
-          sm <- sample.meta[rownames(p.dists), , drop=FALSE]
-          sample.labels <- sm[[color.by]]
-          names(sample.labels) <- rownames(sm)
-        }
-
-        shape.labels <- NULL
-        if (!is.null(sample.meta) && !is.null(shape.by)) {
-          if (!shape.by %in% colnames(sample.meta)) {
-            stop("shape.by column not found in sample.meta: ", shape.by)
-            }
-            sm <- sample.meta[rownames(p.dists), , drop=FALSE]
-            shape.labels <- sm[[shape.by]]
-            names(shape.labels) <- rownames(sm)
-          }
-        if (is.null(title)) title <- paste0(space, " | ", values)
-        gg <- plotSampleDistanceMatrix(
-          p.dists=p.dists, sample.labels=sample.labels, n.cells.per.samp=n.cells.per.samp, method=method,
-          sample.colors=sample.colors, show.sample.size=show.sample.size, palette=palette, color.title=color.title,
-          shape.labels=shape.labels, shape.title=shape.title, title=title, plot.theme=self$plot.theme, ...) 
-
-        return(gg)
-      } 
+      n.cells.per.samp <- if (is.null(cell.type)) table(self$sample.per.cell) else table(self$sample.per.cell[self$cell.groups[names(self$sample.per.cell)] %in% cell.type])
+      space.title <- switch(space, expression = if (is.null(cell.type)) sprintf("expression, all cell types%s", if (joint.weighting == "equal") " (equal weights)" else "") else cell.type,
+                            pseudobulk = "pooled pseudobulk", composition = "composition")
+      onePanel <- function(vals, panel.title) {
+        D <- self$getSampleDistanceMatrix(space = space, cell.type = cell.type, joint.weighting = joint.weighting, dist = dist, name = name,
+                                          sample.subset = sample.subset, values = vals, adjust.for = adjust.for)
+        if (is.null(D)) return(NULL)
+        lab <- function(v) if (is.null(v)) NULL else setNames(sample.meta[rownames(D), v], rownames(D))
+        adj.vars <- c(if (!is.null(adjust.for)) all.vars(stats::as.formula(adjust.for)),
+                      if (vals == "adjusted") { nf <- private$modelNuisanceFormula(); if (!is.null(nf)) all.vars(nf) })
+        sub <- if (show.r2) private$sampleSpaceR2Label(D, sample.meta, unique(c(color.by, shape.by)), c(color.title, shape.title)[!duplicated(c(color.by, shape.by))],
+                                                       n.permutations = n.permutations, n.cores = n.cores, adjusted = adj.vars) else NULL
+        args <- c(list(p.dists = D, sample.labels = lab(color.by), n.cells.per.samp = n.cells.per.samp, method = method, sample.colors = sample.colors,
+                       show.sample.size = show.sample.size, palette = palette, color.title = color.title, shape.labels = lab(shape.by), shape.title = shape.title,
+                       title = panel.title, plot.theme = self$plot.theme), dots)
+        gg <- do.call(plotSampleDistanceMatrix, args)
+        if (!is.null(sub) && method != "heatmap") gg <- gg + ggplot2::labs(subtitle = sub) + ggplot2::theme(plot.subtitle = ggplot2::element_text(size = 8, colour = "grey30"))
+        gg
+      }
+      if (values != "both") {
+        ttl <- title %||% if (!is.null(adjust.for)) sprintf("%s | adjusted for %s", space.title, paste(all.vars(stats::as.formula(adjust.for)), collapse = ", ")) else
+          if (values == "adjusted") sprintf("%s | model-adjusted", space.title) else space.title
+        return(onePanel(values, ttl))
+      }
+      checkPackageInstalled("cowplot", cran = TRUE, details = "for values = 'both'")
+      g1 <- onePanel("unadjusted", "Unadjusted"); g2 <- onePanel("adjusted", "Model-adjusted")
+      if (is.null(g1) || is.null(g2)) return(NULL)
+      gg <- cowplot::plot_grid(g1, g2, ncol = both.ncol, align = both.align)
+      cowplot::plot_grid(cowplot::ggdraw() + cowplot::draw_label(title %||% space.title, fontface = "bold", x = 0, hjust = 0), gg, ncol = 1, rel_heights = c(0.08, 1))
     },
 
-    #' @description Estimate metadata separation using variance on the sample distance graph
-    #' @param sample.meta sample metadata is a list or data.frame with metadata per sample
-    #' @param space (default="expression shifts")
-    #' @param dist (default=NULL)
-    #' @param space.name (default=NULL)
-    #' @param n.permutations number permutations for the test (default=5000)
-    #' @param trim trim distance matrix above the given quantile (default=0.05)
-    #' @param k if this parameter is supplied, k-NN graph is used for variance estimation, otherwise
-    #' the function uses a fully-connected graph (default=20)
-    #' @param show.warning boolean (default=TRUE)
-    #' @param verbose boolean Print messages (default=self$verbose)
-    #' @param n.cores integer Number of cores to use for parallelization (default=self$n.cores)
-    #' @param adjust.pvalues boolean (default=TRUE)
-    #' @param pvalue.cutoff numeric (default=0.05)
-    #' @return results
-    #' @examples
-    #' \dontrun{
-    #' cao$estimateExpressionShiftMagnitudes() # or estimateCellLoadings()
-    #' cao$estimateMetadataSeparation(sample.meta = meta.data) # meta.data is a list or data.frame with metadata per sample
-    #' }
+    #' @description Deprecated: use `screenCovariates()`, whose summary row "all cell types" gives the same R2
+    #'
+    #' Chance-corrected R2 and permutation p-value of each metadata column on the combined sample distances (the marginal
+    #' covariate screen of one matrix).
+    #' @param sample.meta sample metadata (default: the object's)
+    #' @param space sample space (see `getSampleDistanceMatrix()`; default "expression")
+    #' @param dist distance (default: the object option)
+    #' @param space.name results to take the expression distances from
     #' @param sample.subset optional subset of samples
-    #' @param name results slot name
-    #' @param p.adjust.method p-value adjustment method (default='BH')
-    #' @param mode 'marginal' (default), 'partial' or 'both' (see `screenCovariates()`)
-    estimateMetadataSeparation=function(sample.meta=self$sample.meta, space='expression.shifts', dist=NULL, space.name=NULL,
-                                        sample.subset=NULL,
-                                        name='metadata.separation', n.permutations=NULL, trim=NULL, k=NULL,
+    #' @param name results slot (default "metadata.separation")
+    #' @param n.permutations permutations (default: the object option)
+    #' @param trim,k unused (the graph-based statistic was replaced by the covariate screen)
+    #' @param show.warning warn about significant covariates (default TRUE)
+    #' @param verbose,n.cores defaults from options
+    #' @param adjust.pvalues BH-adjust the p-values (default TRUE)
+    #' @param p.adjust.method adjustment method (default "BH")
+    #' @param pvalue.cutoff threshold of the warning (default 0.05)
+    #' @param mode `"marginal"` (default), `"partial"` or `"both"`
+    #' @return list: `metadata`, `pvalues`, `pseudo.r2`, `padjust`, `screen`
+    estimateMetadataSeparation=function(sample.meta=self$sample.meta, space="expression", dist=NULL, space.name=NULL,
+                                        sample.subset=NULL, name="metadata.separation", n.permutations=NULL, trim=NULL, k=NULL,
                                         show.warning=TRUE, verbose=NULL, n.cores=NULL,
                                         adjust.pvalues=TRUE, p.adjust.method="BH", pvalue.cutoff=0.05, mode=c("marginal", "partial", "both")) {
       mode <- match.arg(mode); verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
       n.permutations <- n.permutations %||% private$opt("n.permutations")
+      if (verbose) message("estimateMetadataSeparation() is deprecated: screenCovariates() reports the same R2 in its 'all cell types' row")
       if (!is.null(trim) || !is.null(k)) message("`trim` and `k` are deprecated (the graph-based pseudo-R2 was replaced by the covariate screen)")
       p.dists <- self$getSampleDistanceMatrix(space=space, cell.type=NULL, dist=dist, name=space.name, sample.subset=sample.subset)
       if (is.null(p.dists)) {
@@ -3759,16 +3889,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       return(invisible(res))
     },
 
-    #' @description Plot metadata separation
+    #' @description Deprecated: bars of `estimateMetadataSeparation()` (see `plotCovariateScreen()`)
     #' @param name character Name for storage in test.results (default="metadata.separation")
     #' @param pvalue.y numeric (default=0.93)
     #' @param ... additional parameters forwarded to \code{plotMeanMedValuesPerCellType}
-    #' @examples
-    #' \dontrun{
-    #' cao$estimateExpressionShiftMagnitudes() # or estimateCellLoadings()
-    #' cao$estimateMetadataSeparation(sample.meta = meta.data)
-    #' cao$plotMetadataSeparation()
-    #' }
+    #' @return ggplot2 object
     plotMetadataSeparation=function(name='metadata.separation', pvalue.y=0.93, ...) {
       res <- private$getResults(name, "estimateMetadataSeparation()")
       pvals <- if (is.null(res$padjust)) res$pvalues else res$padjust
@@ -3913,10 +4038,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' Uses the stored model (or a temporary one) and the same engine as `estimateExpressionShiftMagnitudes()`:
     #' one set of sample permutations shared by all cells, the max-statistic adjustment of the z-scores, and
     #' median smoothing over the graph.
-    #' @param n.top.genes gene set (default: 3000 most expressed genes)
-    #' @param gene.selection gene set (default: 3000 most expressed genes)
-    #' @param genes gene set (default: 3000 most expressed genes)
-    #' @param min.expr.frac gene set (default: 3000 most expressed genes)
+    #' @param statistic `"gsd"` (default: per-gene test combined over the unit's genes, see [clusterFreeExpressionShifts()]) or
+    #'   `"distance"` (the sample-distance pseudo-F, the previous method)
+    #' @param n.top.genes optional: restrict the gene universe to this many top genes by `gene.selection` (default NULL: no
+    #'   restriction; the distance map used the 3000 most expressed genes, with no per-neighbourhood selection, before 2026-10)
+    #' @param gene.selection ranking used with `n.top.genes` (`"expression"` or `"od"`)
+    #' @param genes explicit gene universe (default: see `min.gene.frac` and `n.top.genes`)
+    #' @param min.expr.frac minimum fraction of cells expressing a gene (default 0)
+    #' @param min.gene.frac the gene universe is every gene detected in at least this fraction of all cells (default 0.01)
+    #' @param neighbourhood.gene.frac both statistics: in each neighbourhood, the genes of the universe detected in at least this
+    #'   fraction of its cells (default 0.05; 0: every gene of the universe)
+    #' @param gsd.d0 gsd: prior degrees of freedom of the moderated per-gene variance (the noise model's variance shrunk towards the
+    #'   residual variance; default 3); see [clusterFreeExpressionShifts()]
+    #' @param centres.per.cell gsd: test the neighbourhoods of a subset of cells, about this many centres among each cell's graph
+    #'   neighbours (default 2; `Inf` tests every cell's neighbourhood), see
+    #'   [clusterFreeExpressionShifts()]
     #' @param name results slot (default "cluster.free.expr.shifts")
     #' @param test optional temporary model (see `estimateExpressionShiftMagnitudes()`)
     #' @param formula optional temporary model (see `estimateExpressionShiftMagnitudes()`)
@@ -3929,7 +4065,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param seed defaults from options (permutations capped at 499)
     #' @param verbose defaults from options (permutations capped at 499)
     #' @param n.cores defaults from options (permutations capped at 499)
-    #' @param dist `"cor"` (default), `"cosine"` or `"js"`
+    #' @param dist `"cor"` (default) or `"euclidean"` with the normalized profiles; `"cor"`, `"cosine"` or `"js"` with
+    #'   `profile = "raw"`; see [clusterFreeExpressionShifts()]
+    #' @param profile `"normalized"` (default: depth-normalized, noise-weighted neighbourhood profiles) or `"raw"` (the
+    #'   previous mean raw counts, unweighted); see [clusterFreeExpressionShifts()]
+    #' @param profile.scale transform scale of the normalized profiles (default `"median"`: the median library size)
+    #' @param weighting `"noise"` (default) or `"none"`; see [clusterFreeExpressionShifts()]
+    #' @param sample.floor between-sample variance floor in the gene weights (default TRUE)
+    #' @param noise.correction known-noise correction (default FALSE); see [clusterFreeExpressionShifts()]
     #' @param adjust see [clusterFreeExpressionShifts()]
     #' @param smooth see [clusterFreeExpressionShifts()]
     #' @param wins see [clusterFreeExpressionShifts()]
@@ -3937,41 +4080,105 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param k neighbourhood unit: NULL (default) uses kNN neighbourhoods sized by [defaultNeighbourhoodSize()]
     #'   (the larger of 100 and 10 cells per sample, capped at 1 % of the cells; the unit with the best power at
     #'   matched error in the benchmark, `misc/benchmark/README.md`); an integer sets the size
-    #'   ([knnNeighbourhoodMatrix()]); `"1-hop"` tests each cell with its graph neighbours only (the former unit)
+    #'   ([knnNeighbourhoodMatrix()]); `"1-hop"` tests each cell with its graph neighbours only (the former unit);
+    #'   with diffusion neighbourhoods (`scale` given) it is the smallest neighbourhood: a weakly connected centre, whose kernel stays on
+    #'   itself, gets its `k` cells of largest kernel weight, so that its neighbourhood can be tested
+    #' @param scale the neighbourhoods of the test. `NULL`: the kNN neighbourhoods (`k`). Otherwise diffusion
+    #'   neighbourhoods on the cell graph ([diffusionNeighbourhoodLists()]; the scale is the share of the cells a typical
+    #'   neighbourhood covers, the kernel strength solved per graph, [solveKernelBeta()]; each tested neighbourhood is
+    #'   the scale's number of cells its centre's heat reaches most, [diffusionNeighbourhoodLists()]): `"auto"` (default)
+    #'   runs the scale scan over `auto.scales`, chooses the scale whose own map calls the most cells at q < 0.1 (the finest
+    #'   of the scales calling at least 90 % of the cells when there are such; its strongest 1 % of the cells when none
+    #'   calls any) and reports that single-scale map; one value tests a single
+    #'   scale; several values (`scale = c(0.01, 0.03, 0.05)`) report the scale scan itself ([scanShiftScales()]: every
+    #'   scale under the same relabelings, a cell's statistic its smallest p over the scales, its q-value the pooled
+    #'   permutation false discovery rate of that statistic; no Bonferroni factor). `statistic = "gsd"` only. A scale below the floor of
+    #'   [defaultNeighbourhoodSize()] cells is raised to it (enough cells per sample). The result records `scale`, `scale.mode`
+    #'   (`"single"`, `"scan"`, `"auto"`) and `scales` (per scale: strength, median size, centres, and per cell the pooled
+    #'   p, the shift, the single-scale q, the best scale); as for the density map, `estimateDiffCellDensity()`
+    #' @param auto.scales the scales `scale = "auto"` chooses from (default 1, 3 and 5 % of the cells, as for the density map: at 10 % the
+    #'   scale-sized neighbourhoods of this map take in the halo around a changed population and call it; ignored otherwise)
+    #' @param effect.scale under the scan, the scale whose shift estimate is reported as `shifts`: `"finest"` (default) or
+    #'   `"best"` (each cell's scale of the smallest p)
     #' @param post post-processing on the cell graph: `"averaged"` (default; the shift statistic averaged over each
     #'   cell and its graph neighbours under every permutation, exact and calibrated; needs `adjust.method =
     #'   "perm-fdr"`), `"inherit"` (smallest q among the cell and its neighbours; more reach, realized error at the
     #'   nominal threshold above the nominal rate) or `"none"`; see [clusterFreeExpressionShifts()]
     #' @param ... deprecated arguments of the previous implementation are accepted and ignored with a message
     #' @return list (see [clusterFreeExpressionShifts()]), also stored in `cao$test.results[[name]]`
-    #' @param adjust.method multiplicity adjustment across cells: `"perm-fdr"` (default; pooled permutation FDR, see
-    #'   [permutationFDR()]), `"bh"`, `"spatial-fdr"`, `"neighbourhood"` or `"max-t"`, see [adjustCellScores()]
-    #' @param p.source per-cell p-values for the BH-type adjustments: `"permutation"` (default; calibrated, floored at
+    #' @param adjust.method multiplicity adjustment across cells: `"bh"` (default with gsd: BH on the pooled p), `"perm-fdr"`
+    #'   (default with the distance map; pooled permutation FDR, see [permutationFDR()]), `"spatial-fdr"`, `"neighbourhood"` or
+    #'   `"max-t"`, see [adjustCellScores()]
+    #' @param p.source per-cell p-values for the BH-type adjustments (default `"pooled"` with gsd, `"permutation"` with the
+    #'   distance map): `"permutation"` (calibrated, floored at
     #'   1 / (n.permutations + 1)), `"pooled"` (pooled permutation null of all cells, see [pooledPermutationP()]: no
     #'   floor, calibrated with enough permutations), `"z"` (normal tail of the permutation-standardized z: no floor,
     #'   anti-conservative) or `"parametric"` (the F of the neighbourhood shift; not calibrated)
     #' @param robust `"none"` (default, option `robust`), `"huber"` or `"winsor"`: robust per-cell shift test
-    estimateClusterFreeExpressionShifts=function(n.top.genes=3000, gene.selection="expression", name="cluster.free.expr.shifts",
+    estimateClusterFreeExpressionShifts=function(statistic=c("gsd", "distance"), n.top.genes=NULL, gene.selection="expression", name="cluster.free.expr.shifts",
                                                  test=NULL, formula=NULL, contrast=NULL, block.vars=NULL,
                                                  min.n.obs.per.samp=3, min.samp.per.level=2, permutation=NULL, n.permutations=NULL, seed=NULL,
-                                                 dist=c("cor", "cosine", "js"), adjust=TRUE, smooth=TRUE, wins=0.025, genes=NULL, min.expr.frac=0.0,
-                                                 min.edge.weight=0.0, adjust.method=c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"), p.source=c("permutation", "pooled", "z", "parametric"),
-                                                 k=NULL, post=c("averaged", "inherit", "none"), verbose=NULL, n.cores=NULL, robust=NULL, ...) {
-      dist <- match.arg(dist); robust <- private$opt("robust", robust); adjust.method <- match.arg(adjust.method); p.source <- match.arg(p.source); post <- match.arg(post)
+                                                 min.gene.frac=0.01, neighbourhood.gene.frac=0.05, centres.per.cell=2, gsd.d0=3,
+                                                 dist=c("cor", "euclidean", "cosine", "js"), profile=c("normalized", "raw"), profile.scale="median", weighting=c("noise", "none"),
+                                                 sample.floor=TRUE, noise.correction=FALSE, adjust=TRUE, smooth=TRUE, wins=0.025, genes=NULL, min.expr.frac=0.0,
+                                                 min.edge.weight=0.0, adjust.method=NULL, p.source=NULL,
+                                                 k=NULL, scale="auto", auto.scales=c(0.01, 0.03, 0.05), effect.scale=c("finest", "best"), post=c("averaged", "inherit", "none"), verbose=NULL, n.cores=NULL, robust=NULL, ...) {
+      statistic <- match.arg(statistic); gsd <- statistic == "gsd"
+      dist <- match.arg(dist); robust <- private$opt("robust", robust); post <- match.arg(post)
+      adjust.method <- match.arg(adjust.method %||% (if (gsd) "bh" else "perm-fdr"), c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"))
+      p.source <- match.arg(p.source %||% (if (gsd) "pooled" else "permutation"), c("permutation", "pooled", "z", "parametric"))
+      profile <- match.arg(profile); weighting <- match.arg(weighting)
       verbose <- private$opt("verbose", verbose); n.cores <- private$opt("n.cores", n.cores)
-      if (post == "averaged" && adjust.method != "perm-fdr") { if (verbose) message("post = 'averaged' needs adjust.method = 'perm-fdr': post = 'none'"); post <- "none" }
+      if (post == "averaged" && !(adjust.method == "perm-fdr" || (adjust.method == "bh" && p.source == "pooled"))) {
+        if (verbose) message("post = 'averaged' needs adjust.method = 'perm-fdr' or 'bh' with p.source = 'pooled': post = 'none'"); post <- "none" }
       legacy <- private$legacyShiftArgs(list(...), verbose)
       permutation <- private$opt("permutation", legacy$permutation %||% permutation)
       n.permutations <- n.permutations %||% private$opt("n.permutations")
       seed <- if (missing(seed)) private$opt("seed") else seed
       model <- private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose,
                                     what = "estimateClusterFreeExpressionShifts()")
-      if (is.null(genes)) genes <- private$getTopGenes(n.top.genes, gene.selection=gene.selection, min.expr.frac=min.expr.frac)
+      # both statistics: every gene detected in >= min.gene.frac of the cells (optionally the top n.top.genes); per neighbourhood,
+      # those detected in >= neighbourhood.gene.frac of its cells (the rule of the per-cell-type analyses)
+      if (is.null(genes)) genes <- if (is.null(n.top.genes)) private$getTopGenes(Inf, gene.selection="expression", min.expr.frac=max(min.gene.frac, min.expr.frac))
+        else private$getTopGenes(n.top.genes, gene.selection=gene.selection, min.expr.frac=max(min.gene.frac, min.expr.frac))
+      if (verbose) message(sprintf("%d genes%s", length(genes), if (neighbourhood.gene.frac > 0) sprintf(" (per neighborhood: those detected in >= %g %% of its cells)", 100 * neighbourhood.gene.frac) else ""))
       if (identical(k, "1-hop")) k <- NULL else if (is.null(k)) k <- defaultNeighbourhoodSize(length(self$sample.per.cell), nlevels(droplevels(as.factor(self$sample.per.cell))))
-      if (verbose && !is.null(k)) message(sprintf("kNN neighbourhoods of at least %d cells (%.1f per sample)", k, k / nlevels(droplevels(as.factor(self$sample.per.cell)))))
       inp <- private$getClusterFreeDEInput(genes, raw=TRUE, min.edge.weight=min.edge.weight, k=k)
+      if (!is.null(scale) && !gsd) { if (!missing(scale)) stop("the diffusion neighborhoods are tested with statistic = 'gsd'; scale = NULL for the distance statistic")
+        if (verbose) message("the distance statistic runs on the kNN neighborhoods (scale = NULL)"); scale <- NULL }
+      if (!is.null(scale)) {   # diffusion neighbourhoods at the given scale(s): the scale scan (scanShiftScales())
+        auto <- identical(scale, "auto"); if (auto) scale <- checkAutoScales(auto.scales)
+        n.s <- nlevels(droplevels(as.factor(self$sample.per.cell[rownames(inp$cm)])))
+        scale <- resolveScales(scale, nrow(inp$cm), floor.cells = defaultNeighbourhoodSize(nrow(inp$cm), n.s), verbose = verbose); K <- length(scale); effect.scale <- match.arg(effect.scale)
+        k.floor <- k %||% defaultNeighbourhoodSize(nrow(inp$cm), n.s)   # the smallest neighbourhood (a weakly connected centre's): the kNN unit size, so that it can be tested
+        cells <- rownames(inp$cm); g.s <- extractCellGraph(self$data.object); g.s <- igraph::induced_subgraph(g.s, cells); g.s <- igraph::permute(g.s, match(igraph::V(g.s)$name, cells))
+        kb <- lapply(scale, function(sc) private$kernelBetaForScale(g.s, sc, n.cores))
+        if (verbose) message(sprintf("diffusion neighborhoods at %s of the cells%s, at least %d cells each (%.1f per sample)", paste(sprintf("%g %%", 100 * scale), collapse = ", "), if (auto) " (auto: one scale is chosen)" else if (K > 1) " (scale scan)" else "", k.floor, k.floor / n.s))
+        sc <- scanShiftScales(cm = Matrix::t(inp$cm), sample.per.cell = self$sample.per.cell[cells], graph = g.s, design = model, meta = model$meta, scale = scale, beta = sapply(kb, `[[`, "beta"), min.size = k.floor,
+                              n.permutations = n.permutations, seed = seed %||% sample.int(.Machine$integer.max, 1), n.cores = n.cores, verbose = verbose,
+                              neighbourhood.gene.frac = neighbourhood.gene.frac, gsd.d0 = gsd.d0, profile = profile, lib = inp$lib, profile.scale = profile.scale, weighting = weighting,
+                              sample.floor = sample.floor, noise.correction = noise.correction, min.n.obs.per.samp = min.n.obs.per.samp, min.samp.per.level = min.samp.per.level,
+                              permutation = permutation, block.vars = block.vars %||% model$block.vars, robust = robust, robust.k = private$opt("robust.k"), groups = self$cell.groups)
+        msize <- sapply(kb, `[[`, "median.size")
+        if (auto || K == 1) { j <- if (K == 1) 1L else chooseScanScale(sc); q <- sc$Q[, j]; p <- sc$P[, j]; eff <- sc$E[, j]; st <- sc$Z[, j]; scale.used <- scale[j]; gt <- sc$group.test[[j]] }
+        else { q <- sc$q; p <- sc$p; ks <- if (effect.scale == "finest") rep(1L, length(cells)) else sc$best; eff <- sc$E[cbind(seq_along(cells), ks)]; st <- sc$Z[cbind(seq_along(cells), ks)]; scale.used <- scale; gt <- sc$group.test[[1L]] }
+        names(q) <- names(p) <- names(eff) <- names(st) <- cells
+        tz <- function(pv) { z <- stats::qnorm(pmin(pmax(pv, 1e-300), 1 - 1e-16), lower.tail = FALSE); z[!is.finite(pv)] <- NA_real_; stats::setNames(pmax(z, 0), cells) }
+        shifts <- list(stat = st, z.std = st, p.value = p, p.adj = q, p.pooled = p, z.pooled = tz(p), z.adj = tz(q), pooled = tz(p), adj = tz(q), shifts = eff, post = "averaged", statistic = "gsd", unit = "diffusion",
+                       scale = scale.used, scale.mode = if (auto) "auto" else if (K == 1) "single" else "scan", effect.scale = if (!auto && K > 1) effect.scale else NULL,
+                       scales = list(scale = scale, beta = sc$scales$beta, median.size = msize, n.centres = sc$scales$n.centres, best = stats::setNames(scale[sc$best], cells), p = sc$P, q = sc$Q, shifts = sc$E, scan.q = sc$q, scan.p = sc$p),
+                       group.test = gt, settings = sc$settings, adjust.method = "perm-fdr", p.source = "permutation", n.permutations = sc$B, model = model)
+        if (post == "inherit") { ih <- inheritNeighbourQ(shifts$p.adj, shifts$shifts, g.s); shifts$p.adj.cell <- shifts$p.adj; shifts$p.adj <- ih$q; shifts$z.adj <- tz(ih$q); shifts$adj <- shifts$z.adj }
+        if (verbose) { n.adj <- sum(shifts$z.adj >= stats::qnorm(0.9), na.rm = TRUE)
+          message(sprintf("%d of %d cells keep adjusted z >= %.2f%s", n.adj, sum(is.finite(shifts$z.adj)), stats::qnorm(0.9), if (auto) sprintf(" (scale %g %% chosen)", 100 * scale.used) else "")) }
+        self$test.results[[name]] <- shifts
+        return(invisible(shifts))
+      }
+      if (verbose && !is.null(k)) message(sprintf("kNN neighborhoods of at least %d cells (%.1f per sample)", k, k / nlevels(droplevels(as.factor(self$sample.per.cell)))))
       shifts <- clusterFreeExpressionShifts(cm = Matrix::t(inp$cm), sample.per.cell = self$sample.per.cell[rownames(inp$cm)], nns.per.cell = inp$nns.per.cell, nns.graph = inp$nns.graph, post = post,
-                                            design = model, meta = model$meta, dist = dist, min.n.obs.per.samp = min.n.obs.per.samp,
+                                            statistic = statistic, neighbourhood.gene.frac = neighbourhood.gene.frac, centres.per.cell = centres.per.cell, gsd.d0 = gsd.d0,
+                                            design = model, meta = model$meta, dist = dist, profile = profile, lib = inp$lib, profile.scale = profile.scale, weighting = weighting,
+                                            sample.floor = sample.floor, noise.correction = noise.correction, min.n.obs.per.samp = min.n.obs.per.samp,
                                             min.samp.per.level = min.samp.per.level, permutation = permutation, n.permutations = n.permutations,
                                             block.vars = block.vars %||% model$block.vars, seed = seed %||% sample.int(.Machine$integer.max, 1),
                                             adjust = adjust, smooth = smooth, wins = wins, n.cores = n.cores, verbose = verbose,
@@ -4007,8 +4214,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (name == "cell.density") {
         dens.res <- private$getResults(name, 'estimateDiffCellDensity')
         r <- if (is.null(type)) dens.res$diff[[1]] else dens.res$diff[[type]]
-        if (is.null(r) || is.null(r$p.param)) stop("run estimateDiffCellDensity(type = 'permutation') first")
-        p <- r$p.perm %||% r$p.param; eff <- r$effect; z <- r$pooled %||% r$raw; padj <- r$p.adj; gt <- r$group.test
+        if (is.null(r) || (is.null(r$p.perm) && is.null(r$p.pooled) && is.null(r$p.param))) stop("run estimateDiffCellDensity(type = 'permutation') first")
+        p <- r$p.perm %||% r$p.pooled %||% r$p.param; eff <- r$effect; z <- r$pooled %||% r$raw; padj <- r$p.adj; gt <- r$group.test   # diffusion maps store the pooled permutation p only
       } else {
         r <- private$getResults(name, 'estimateClusterFreeExpressionShifts')
         p <- r$p.value; eff <- r$shifts; z <- r$z.pooled; padj <- r$p.adj; gt <- r$group.test
@@ -4302,10 +4509,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   `"99.5%"`, so that a few extreme cells do not wash out the map; adjusted z-scores keep at least +-1.96) or a
     #'   numeric vector whose largest absolute value sets the range; values beyond it are clipped
     #' @param max.z cap of a z range taken from a quantile (default 8; a numeric `z.range` is taken as given)
+    #' @param z.floor smallest half-range of the z panels (default `qnorm(0.99)` = 2.33): the colours saturate only beyond it, so
+    #'   a map whose z-scores barely reach significance stays pale (was 1.96 for the adjusted and 0 for the unadjusted panel)
     #' @param alpha numeric (default=0.2)
     #' @param font.size size range for cell type labels
     #' @param adj.list (default=NULL)
     #' @param build.panel boolean (default=TRUE)
+    #' @param ncol columns of the panel (default: all panels in one row); each map keeps the aspect ratio of the embedding
     #' @param ... parameters forwarded to \link[sccore:embeddingPlot]{embeddingPlot}
     #' @examples
     #' \dontrun{
@@ -4318,12 +4528,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param name results slot name
     #' @param pal.seq sequential palette for the shift magnitudes
     #' @param pal.div diverging palette for the z-scores
+    #' @param outline draw a thin outline around the regions where the cells significant at `outline.alpha` (adjusted p) are,
+    #'   on every panel (default FALSE; see [significanceContours()])
+    #' @param outline.alpha,outline.level,outline.color,outline.linewidth settings of the outline
     #' @return a panel (`build.panel = TRUE`) or a list of ggplot objects: the shift, then the z-score panel(s)
     plotClusterFreeExpressionShifts = function(cell.groups=self$cell.groups, smooth=TRUE, plot.na=FALSE, adjusted="both",
                                                name="cluster.free.expr.shifts", scale.z.palette=TRUE, min.z=qnorm(0.9),
-                                               color.range=c("0", "97.5%"), z.range="99.5%", max.z=8, alpha=0.2, font.size=c(3, 5), adj.list=NULL,
+                                               color.range=c("0", "97.5%"), z.range="99.5%", max.z=8, z.floor=stats::qnorm(0.99), alpha=0.2, font.size=c(3, 5), adj.list=NULL,
                                                pal.seq=brewerPalette("YlOrRd",rev=FALSE), pal.div=brewerPalette("RdBu",rev=TRUE),
-                                               build.panel=TRUE, ...) {
+                                               build.panel=TRUE, ncol=NULL, outline=FALSE, outline.alpha=0.05, outline.level=0.5, outline.color="black", outline.linewidth=0.25, ...) {
       res <- private$getResults(name, "estimateClusterFreeExpressionShifts")
       private$checkCellEmbedding()
       z.unadj <- res$z.pooled %||% res$z.score   # `z.score` in results of earlier versions
@@ -4336,17 +4549,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       leg.titles <- ifelse(is.adj, "z (adj.)", "z (pooled)")
       titles <- ifelse(is.adj, "Adjusted z-score", "z-score (pooled null)")
 
-      shifts <- if (smooth) res$shifts.smoothed else res$shifts
+      shifts <- if (smooth) res$shifts.smoothed %||% res$shifts else res$shifts   # diffusion neighbourhoods are averages already (no smoothed copy)
       shifts %<>% na.omit()
       color.range %<>% parseLimitRange(shifts)
       shifts %<>% pmax(color.range[1]) %>% pmin(color.range[2])
       gg.shift <- self$plotEmbedding(colors=shifts, plot.na=plot.na, alpha=alpha, palette=pal.seq, legend.title="shift", ...) +
         theme(legend.background = element_blank())
+      for (aes.name in c("colour", "fill")) { sc <- gg.shift$scales$get_scales(aes.name); if (!is.null(sc) && inherits(sc, "ScaleContinuous")) sc$n.breaks <- 3 }   # narrow ranges crowd the labels
 
       gg.z <- mapply(function(z, adj, lt) {
         degenerate <- !any(abs(z) >= min.z, na.rm = TRUE)
         if (degenerate) message(sprintf("no cell reaches |z| >= %.2f (%s z-scores): the z-score panel is uniform", min.z, if (adj) "adjusted" else "unadjusted"))
-        cr <- symmetricColorRange(z, z.range, floor = if (adj) stats::qnorm(0.975) else 0, cap = max.z)
+        cr <- if (degenerate) c(-1, 1) * max(min.z, z.floor) else symmetricColorRange(z, z.range, floor = z.floor, cap = max.z)   # the range reaches at least z.floor, so that colours saturate only beyond it   # a uniform panel has no range to take
         z %<>% pmin(cr[2]) %>% pmax(cr[1])
         gg <- self$plotEmbedding(colors=z, plot.na=plot.na, alpha=alpha, palette=pal.div, legend.title=lt, ...) +
           theme(legend.background = element_blank())
@@ -4359,6 +4573,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         gg
       }, panels, is.adj, leg.titles, SIMPLIFY=FALSE)
       ggs <- c(list(gg.shift), gg.z)
+      if (outline && !is.null(res$p.adj)) {   # the regions where the cells significant at `outline.alpha` are
+        ol <- significanceContourLayer(self$embedding, stats::setNames(res$p.adj < outline.alpha, names(res$p.adj)), level = outline.level, color = outline.color, linewidth = outline.linewidth)
+        if (!is.null(ol)) ggs %<>% lapply(`+`, ol)
+      }
 
       if (!is.null(cell.groups)) {
         ggs %<>% lapply(transferLabelLayer, self$plotEmbedding(groups=cell.groups), font.size=font.size)
@@ -4367,7 +4585,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (build.panel) {
         ggs[[1]] <- ggs[[1]] + ggtitle("Expression shift")
         for (i in seq_along(gg.z)) ggs[[i + 1]] <- ggs[[i + 1]] + ggtitle(titles[i])
-        ggs %<>% cowplot::plot_grid(plotlist=., ncol=length(ggs))
+        # panels keep the aspect ratio of the embedding; legends below, so that the maps get the width
+        emb <- self$embedding; ar <- if (!is.null(emb) && ncol(emb) >= 2) diff(range(emb[, 2], na.rm = TRUE)) / diff(range(emb[, 1], na.rm = TRUE)) else NULL
+        ggs %<>% lapply(function(g) g + theme(legend.position = "bottom", legend.key.height = grid::unit(0.3, "cm"), legend.title = element_text(vjust = 0.8),
+                                             aspect.ratio = if (is.finite(ar %||% NA)) ar else NULL))
+        ggs %<>% cowplot::plot_grid(plotlist=., ncol=ncol %||% length(ggs), align = "hv")
       }
 
       return(ggs)
@@ -4595,6 +4817,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     # per-"cell type" distance matrices for a space: expression shifts (cached pseudobulk + distances) or composition
     distancesForSpace = function(space, dist, n.pcs = NULL, cell.groups = self$cell.groups, min.cells.per.sample = 10, min.gene.frac = 0.01,
                                  genes = NULL, verbose = FALSE) {
+      space <- normalizeSampleSpace(space)
+      if (space == "pseudobulk") {   # all cells of a sample pooled into one profile
+        key <- settingsKey(names(self$sample.per.cell), as.character(self$sample.per.cell), min.cells.per.sample, min.gene.frac, genes, dist, n.pcs)
+        hit <- self$cache$pooled.pseudobulk
+        if (!is.null(hit) && identical(hit$key, key)) return(hit$value)
+        if (verbose) message("Building pooled pseudobulk profiles...")
+        cms <- extractRawCountMatrices(self$data.object, transposed = TRUE)
+        cms <- cms[intersect(names(cms), rownames(self$sample.meta))]
+        cg1 <- setNames(factor(rep("pseudobulk", length(self$sample.per.cell))), names(self$sample.per.cell))
+        pb <- pseudobulkPerCellType(cms, cell.groups = cg1, sample.per.cell = self$sample.per.cell, min.cells.per.sample = min.cells.per.sample,
+                                    min.gene.frac = min.gene.frac, genes = genes)
+        D.list <- Filter(function(D) !is.null(D) && nrow(D) >= 3, sampleDistanceMatrices(pb$cm.per.type, dist = dist, n.pcs = n.pcs))
+        for (ct in names(D.list)) attr(D.list[[ct]], "n.cells") <- setNames(as.numeric(pb$n.cells[ct, rownames(D.list[[ct]])]), rownames(D.list[[ct]]))
+        self$cache$pooled.pseudobulk <- list(key = key, value = D.list)
+        return(D.list)
+      }
       if (space == "composition") {
         checkPackageInstalled("coda.base", cran = TRUE)
         cnts <- private$extractCodaData(cells.to.remove = NULL, cells.to.remain = NULL, samples.to.remove = NULL)
@@ -4606,6 +4844,21 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       pb <- private$getPseudobulk(cell.groups = cell.groups, sample.per.cell = self$sample.per.cell, min.cells.per.sample = min.cells.per.sample,
                                   min.gene.frac = min.gene.frac, genes = genes, verbose = verbose)
       private$getSampleDistances(pb, dist = dist, n.pcs = n.pcs, verbose = verbose)
+    },
+
+    # gene x cell counts of the given genes and per-cell library sizes over all genes (cell-type gsd), cached on the genes
+    getGsdCellTypeInput = function(genes) {
+      key <- settingsKey(genes)
+      hit <- self$cache$gsd.celltype.input
+      if (!is.null(hit) && identical(hit$key, key)) return(hit$value)
+      cms <- extractRawCountMatrices(self$data.object, transposed = TRUE)
+      cms <- cms[intersect(names(cms), rownames(self$sample.meta))]
+      lib <- unlist(lapply(unname(cms), Matrix::rowSums))
+      cm <- Matrix::t(do.call(rbind, lapply(unname(cms), function(x) sccore::extendMatrix(x, genes)[, genes, drop = FALSE])))
+      cm <- methods::as(cm, "CsparseMatrix")
+      val <- list(cm = cm, lib = lib[colnames(cm)])
+      self$cache$gsd.celltype.input <- list(key = key, value = val)
+      val
     },
 
     # pseudobulk per cell type, cached on the settings that produce it
@@ -4622,12 +4875,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       pb
     },
 
-    getSampleDistances = function(pb, dist, n.pcs = NULL, verbose = FALSE) {
-      key <- settingsKey(self$cache$pseudobulk$key, dist, n.pcs)
+    # per-cell-type sample distances, each on the type's genes (typeGeneSets(): detected in >= type.gene.frac of its cells)
+    getSampleDistances = function(pb, dist, n.pcs = NULL, type.gene.frac = NULL, verbose = FALSE) {
+      type.gene.frac <- private$opt("type.gene.frac", type.gene.frac) %||% 0
+      key <- settingsKey(self$cache$pseudobulk$key, dist, n.pcs, type.gene.frac)
       hit <- self$cache$sample.distances
       if (!is.null(hit) && identical(hit$key, key)) return(hit$value)
-      if (verbose) message(sprintf("Computing sample distances (%s%s)...", dist, if (!is.null(n.pcs)) sprintf(", %d PCs", n.pcs) else ""))
-      D.list <- sampleDistanceMatrices(pb$cm.per.type, dist = dist, n.pcs = n.pcs)
+      if (verbose) message(sprintf("Computing sample distances (%s%s%s)...", dist, if (!is.null(n.pcs)) sprintf(", %d PCs", n.pcs) else "",
+                                   if (type.gene.frac > 0) sprintf(", per cell type the genes detected in >= %g %% of its cells", 100 * type.gene.frac) else ""))
+      gs <- typeGeneSets(pb, type.gene.frac)
+      D.list <- sampleDistanceMatrices(lapply(sccore::sn(names(pb$cm.per.type)), function(ct) pb$cm.per.type[[ct]][, gs[[ct]], drop = FALSE]),
+                                       dist = dist, n.pcs = n.pcs)
+      for (ct in names(D.list)) if (!is.null(D.list[[ct]])) attr(D.list[[ct]], "n.genes") <- length(gs[[ct]])
       D.list <- Filter(function(D) !is.null(D) && nrow(D) >= 3, D.list)
       for (ct in names(D.list)) attr(D.list[[ct]], "n.cells") <- setNames(as.numeric(pb$n.cells[ct, rownames(D.list[[ct]])]), rownames(D.list[[ct]]))
       self$cache$sample.distances <- list(key = key, value = D.list)
@@ -4660,6 +4919,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     opt = function(name, value = NULL) {
       if (!is.null(value)) return(value)
       if (is.null(self$options)) self$options <- cacoaDefaultOptions()
+      if (!name %in% names(self$options)) return(cacoaDefaultOptions()[[name]])   # an option added after the object was created
       self$options[[name]]
     },
 
@@ -4703,6 +4963,68 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     },
 
     # the variable of the primary test (first metadata column when no model is set)
+    # one sample-space distance matrix computed from the data (no stored results needed): attributes dist.type, n.cells
+    sampleSpaceDistance = function(space, cell.type = NULL, joint.weighting = "cells", dist = NULL, verbose = FALSE) {
+      dist <- private$opt("dist", dist)
+      if (space == "composition") {
+        D <- private$distancesForSpace("composition", dist = "l2")[[1]]; attr(D, "dist.type") <- "l2"; return(D)
+      }
+      if (space == "pseudobulk") {
+        D <- private$distancesForSpace("pseudobulk", dist = dist, verbose = verbose)[[1]]
+        if (is.null(D)) stop("too few samples with at least 10 cells for the pooled pseudobulk")
+        attr(D, "dist.type") <- dist; return(D)
+      }
+      D.list <- private$distancesForSpace("expression", dist = dist, verbose = verbose)
+      D <- private$sampleSpaceFromList(D.list, NULL, cell.type, joint.weighting)
+      if (!is.null(D)) attr(D, "dist.type") <- dist
+      D
+    },
+
+    # one cell type's matrix, or the combination over cell types, from a per-type list (n.cells from `res` when missing)
+    sampleSpaceFromList = function(mats, res, cell.type, joint.weighting) {
+      if (!is.null(cell.type)) {
+        if (!cell.type %in% names(mats)) { warning("Distances were not estimated for cell type ", cell.type); return(NULL) }
+        D <- mats[[cell.type]]
+        if (is.null(attr(D, "n.cells")) && !is.null(res)) attr(D, "n.cells") <- setNames(as.numeric(res$n.cells[cell.type, rownames(D)]), rownames(D))
+        return(D)
+      }
+      mats <- mats[vapply(mats, function(M) is.matrix(M) && nrow(M) >= 2, logical(1))]
+      if (!length(mats)) return(NULL)
+      for (ct in names(mats)) if (is.null(attr(mats[[ct]], "n.cells")))
+        attr(mats[[ct]], "n.cells") <- setNames(as.numeric(res$n.cells[ct, rownames(mats[[ct]])]), rownames(mats[[ct]]))
+      D <- prepareJointExpressionDistance(mats, weighting = joint.weighting)
+      if (any(is.na(D))) D <- ape::additive(D) %>% `dimnames<-`(dimnames(D))   # pairs of samples that share no cell type
+      nc <- table(self$sample.per.cell); attr(D, "n.cells") <- setNames(as.numeric(nc[rownames(D)]), rownames(D))
+      D
+    },
+
+    # the model's covariates other than the tested variable, as a formula (NULL when there are none)
+    modelNuisanceFormula = function() {
+      if (is.null(self$model)) return(NULL)
+      vs <- setdiff(all.vars(self$model$formula), private$testVariable())
+      vs <- intersect(vs, names(self$sample.meta))
+      if (!length(vs)) return(NULL)
+      stats::as.formula(paste("~", paste(vs, collapse = " + ")))
+    },
+
+    # subtitle of a sample map: chance-corrected R2 and permutation p of each covariate on the shown distances
+    sampleSpaceR2Label = function(D, meta, covariates, titles = covariates, n.permutations = 999, n.cores = 1, adjusted = character(0)) {
+      if (!length(covariates)) return(NULL)
+      meta <- meta[rownames(D), , drop = FALSE]
+      out <- character(0)
+      for (i in seq_along(covariates)) {
+        v <- covariates[i]
+        if (v %in% adjusted) { out[i] <- sprintf("%s: removed by the adjustment", titles[i]); next }
+        sc <- tryCatch(suppressWarnings(screenCovariates(list(map = D), meta, covariates = v, mode = "marginal", dist = attr(D, "dist.type") %||% "l2",
+                                                         n.permutations = n.permutations, min.samples.per.type = 4, seed = private$opt("seed") %||% 1,
+                                                         n.cores = 1, verbose = FALSE)), error = function(e) NULL)
+        r <- if (!is.null(sc)) sc$table[sc$table$covariate == v, ] else NULL
+        out[i] <- if (is.null(r) || !nrow(r) || !is.finite(r$R2.adj[1])) sprintf("%s: not testable", titles[i]) else
+          sprintf("%s: adj. R\u00b2 %.2f, p %.2g", titles[i], r$R2.adj[1], r$p[1])
+      }
+      paste(out, collapse = "; ")
+    },
+
     testVariable = function() {
       v <- if (!is.null(self$model)) self$model$tests[[1]]$variable else NULL
       if (is.null(v) || is.na(v)) colnames(self$sample.meta)[1] else v
@@ -4957,6 +5279,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       private$knn.cache[[key]]
     },
     knn.cache = list(),
+    kernelBetaForScale = function(graph, scale, n.cores = 1) {   # kernel strength of a diffusion neighborhood at a scale (label-free, cached per graph and scale)
+      key <- sprintf("s%g_n%d_e%d", scale, igraph::vcount(graph), igraph::ecount(graph))
+      if (is.null(private$knn.cache[[key]])) { sb <- solveKernelBeta(graph, target.size = round(scale * igraph::vcount(graph)), n.vec = 16, n.cores = n.cores)
+        private$knn.cache[[key]] <- list(beta = sb$beta, median.size = stats::median(sb$size), self = sb$self, off.size = sb$off.size) }   # the probes' kernel diagonal and arriving-heat size: the cell as one cell of its neighborhood (heatLogDensity())
+      private$knn.cache[[key]]
+    },
     getClusterFreeDEInput = function(genes, raw=FALSE, min.edge.weight=0.0, k=NULL) {
       cm <- self$getJointCountMatrix(raw=raw)
       genes <- intersect(genes, colnames(cm))
@@ -4976,6 +5304,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       nns.per.cell <- adj.mat %>% {split(.@j, .@i + 1)} %>%
         .[paste(1:nrow(adj.mat))] %>% setNames(cell.names)
+      lib <- Matrix::rowSums(cm[cell.names, , drop=FALSE])   # library size over all genes
       cm %<>% .[cell.names, genes, drop=FALSE]
 
       for (id in which(sapply(nns.per.cell, is.null))) {
@@ -4990,7 +5319,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         names(nns.per.cell) <- cell.names
       }
 
-      return(list(cm=cm, adj.mat=adj.mat, is.ref=is.ref, nns.per.cell=nns.per.cell, nns.graph=nns.graph))
+      return(list(cm=cm, lib=lib, adj.mat=adj.mat, is.ref=is.ref, nns.per.cell=nns.per.cell, nns.graph=nns.graph))
     }
   )
 )

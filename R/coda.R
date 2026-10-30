@@ -44,23 +44,33 @@ NULL
 #' @param zero.pseudocount Non-negative pseudocount added to zero entries prior to forming
 #'   sample-wise frequencies.
 #' @param basis.type ILR basis type passed to \code{coda.base::ilr_basis()}.
+#' @param ref.method reference cell types for the presentation of the loadings: `"block"` (default) the largest set of
+#'   cell types whose proportions do not change relative to each other ([referenceBlock()]: pairwise permutation tests of the
+#'   loading differences, merged while p >= `ref.block.thresh`), or `"pvalue"` (the previous rule: the cell types with the
+#'   weakest evidence of a change relative to the geometric mean, `ref.p.thresh`, `ref.min.size`, `ref.max.size`)
+#' @param ref.block.thresh p-value below which two groups of cell types are kept apart in the block search (default 0.05)
+#' @param ref.size.frac blocks at least this fraction of the largest block's size compete for the reference, the one closest to the
+#'   center of the composition winning (default 0.5; [referenceBlock()])
 #' @param ref.p.thresh P-value threshold used to select a "least-affected" reference set for
-#'   centering loadings (optional, used for presentation).
-#' @param ref.min.size Minimum size of the reference set.
-#' @param ref.max.size Maximum size of the reference set.
+#'   centering loadings (`ref.method = "pvalue"`).
+#' @param ci.level level of the intervals of the predicted endpoint compositions (default 0.95; `predicted$baseline.lo` etc.)
+#' @param ref.min.size Minimum size of the reference set (`ref.method = "pvalue"`).
+#' @param ref.max.size Maximum size of the reference set (`ref.method = "pvalue"`).
 #' @param ... Additional arguments forwarded to the permutation/LM routine
 #'   (e.g. \code{n.permutations}, na.mode, robust, alternative, etc.).
 #' 
 #' @return A list containing ILR coordinates and basis, fitted model/permutation output, and
 #'   coefficient- and contrast-level results including global variance-explained statistics,
-#'   clr-space cell-type loadings, empirical p-values/FDR, and (if available) predicted endpoint
-#'   compositions for the specified contrast.
+#'   clr-space cell-type loadings, empirical p-values/FDR (relative to the geometric mean of all cell types, `pval` /
+#'   `padj`, and relative to the reference cell types, `pval.ref` / `padj.ref`), and (if available) predicted endpoint
+#'   compositions for the specified contrast; `reference` (the reference cell types, [referenceBlock()]) and `tree`
+#'   (the contrast tree, [contrastTree()]).
 #' @keywords internal
 lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), zero.pseudocount = 0.1,
-                   basis.type = c("default"), ref.p.thresh = 0.3, ref.min.size = 1, 
-                   ref.max.size = 3, ...) {
+                   basis.type = c("default"), ref.method = c("block", "pvalue"), ref.block.thresh = 0.05, ref.size.frac = 0.5, ref.p.thresh = 0.3, ref.min.size = 1,
+                   ref.max.size = 3, ci.level = 0.95, ...) {
   
-  basis.type  <- match.arg(basis.type)
+  basis.type  <- match.arg(basis.type); ref.method <- match.arg(ref.method)
   perm.method <- match.arg(perm.method)
   
   cnts <- as.matrix(cnts)
@@ -139,11 +149,12 @@ lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), zero.
   p.contrast.global <- (sum(T.contrast.perm >= T.contrast.obs) + 1) /
                        (length(T.contrast.perm) + 1)
   
-  # Reference cluster for interpretation (contrast-based)
-  ref <- pickReferenceCluster(loadings = ell.contrast.obs, pval = p.contrast.cell,
-                              p.thresh = ref.p.thresh, min.size = ref.min.size, 
-                              max.size = ref.max.size)
+  # Reference cell types for the presentation of the loadings: the largest block of cell types unchanged relative to each
+  # other (the default), or the cell types with the weakest evidence of a change relative to the geometric mean
+  ref <- if (ref.method == "block") referenceBlock(ell.contrast.obs, ell.contrast.perm, p.thresh = ref.block.thresh, size.frac = ref.size.frac)
+         else c(pickReferenceCluster(loadings = ell.contrast.obs, pval = p.contrast.cell, p.thresh = ref.p.thresh, min.size = ref.min.size, max.size = ref.max.size), list(method = "pvalue"))
   ell.contrast.ref <- ell.contrast.obs - ref$mean
+  ref.rel <- referenceRelativeP(ell.contrast.obs, ell.contrast.perm, ref$celltypes)   # each cell type against the reference, same relabelings
   
   ## --------------------------------------------------------
   ## 3b) PREDICTED BASELINE vs TARGET COMPOSITIONS (if endpoints present)
@@ -190,13 +201,17 @@ lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), zero.
       
       predicted <- list(baseline = f.den, target = f.num, delta = f.num - f.den,
                         labels = endpoint.labels)
+      # 95 % intervals of the fitted endpoint compositions, from the ILR fit (see predictedCompositionCI())
+      ci <- tryCatch(predictedCompositionCI(design, coef.mat, B.ilr, psi, list(baseline = x.den, target = x.num), level = ci.level), error = function(e) NULL)
+      if (!is.null(ci)) predicted <- c(predicted, list(baseline.lo = ci$baseline$lo, baseline.hi = ci$baseline$hi, target.lo = ci$target$lo, target.hi = ci$target$hi,
+                                                       ci.level = ci.level, ci.method = "ILR fit, multivariate t"))
     }
   }
   
   ## --------------------------------------------------------
   ## 5) Final result structure
   ## --------------------------------------------------------
-  list(ilr = B.ilr, psi = psi, freqs = freqs,
+  out <- list(ilr = B.ilr, psi = psi, freqs = freqs,
        fit = fit, perm.method = perm.method, # Original LM/permutation output
        contrast = list(beta_ilr = beta.contrast.obs, # ILR effect vector
                        global = list(stat = T.contrast.obs, # variance explained by contrast
@@ -205,11 +220,16 @@ lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), zero.
                        loadings = list(obs = ell.contrast.obs, # cell-type loadings (ref-free)
                                        ref_centered = ell.contrast.ref,
                                        perm = ell.contrast.perm), # D x n_perm null loadings
-                       per_cell = list(pval = p.contrast.cell, padj = padj.contrast.cell),
+                       per_cell = list(pval = p.contrast.cell, padj = padj.contrast.cell, pval.ref = ref.rel$pval, padj.ref = ref.rel$padj),   # relative to the geometric mean; relative to the reference cell types
                        predicted = predicted,# baseline / target / delta compositions (if available)
                        label = if (!is.null(model$contrast_label)) model$contrast_label else NULL),
        coef = coef.mat,              # F-space coefficients (level means in ILR space)
-       reference = ref)
+       reference = ref, model = model,
+       settings = list(zero.pseudocount = zero.pseudocount, basis.type = basis.type, perm.method = perm.method, ref.method = ref.method,
+                       ref.block.thresh = ref.block.thresh, ref.size.frac = ref.size.frac, ref.p.thresh = ref.p.thresh, ref.min.size = ref.min.size,
+                       ref.max.size = ref.max.size, n.permutations = n.perm))
+  out$tree <- tryCatch(contrastTree(out), error = function(e) NULL)   # the contrast tree ([contrastTree()]) from the same loadings and null
+  out
 }
 
 ## ILR transform helper
@@ -278,6 +298,29 @@ ilrInverseFromBasis <- function(z, psi) {
   logf <- z %*% t(psi)         # n_samples × D
   f    <- exp(logf)
   f / rowSums(f)
+}
+
+# Intervals of the fitted compositions at the contrast endpoints. The endpoint's ILR mean x_e B has covariance v_e Sigma, with
+# v_e = x_e (F'F)^- x_e' and Sigma the residual covariance of the ILR fit (K x K, residual df = n - rank F); draws from the
+# multivariate t around the fitted mean are mapped to proportions, and the per-cell-type quantiles are the interval.
+# `endpoints`: named list of design rows (length ncol(design)); returns, per endpoint, list(lo, hi) named by cell type.
+predictedCompositionCI <- function(design, coef, Y, psi, endpoints, level = 0.95, n.draws = 4000, seed = 1) {
+  qd <- qr(design); r <- qd$rank; n <- nrow(design); df <- n - r
+  if (df < 2) return(NULL)
+  R <- Y - design %*% coef; Sigma <- crossprod(R) / df; K <- ncol(Y)
+  piv <- qd$pivot[seq_len(r)]; XtX.inv <- matrix(0, ncol(design), ncol(design))
+  XtX.inv[piv, piv] <- chol2inv(qr.R(qd)[seq_len(r), seq_len(r), drop = FALSE])
+  L <- tryCatch(t(chol(Sigma)), error = function(e) { e <- eigen(Sigma, symmetric = TRUE); e$vectors %*% diag(sqrt(pmax(e$values, 0)), K) })
+  if (exists(".Random.seed", envir = .GlobalEnv)) { old <- get(".Random.seed", envir = .GlobalEnv); on.exit(assign(".Random.seed", old, envir = .GlobalEnv)) }
+  set.seed(seed)
+  lapply(endpoints, function(x) {
+    x <- as.numeric(x); v <- as.numeric(t(x) %*% XtX.inv %*% x); z0 <- as.numeric(x %*% coef)
+    U <- (matrix(stats::rnorm(n.draws * K), n.draws, K) %*% t(L)) * sqrt(v)       # N(0, v Sigma)
+    W <- sqrt(stats::rchisq(n.draws, df) / df)
+    P <- ilrInverseFromBasis(sweep(U / W, 2, z0, "+"), psi)                        # multivariate t around the fitted endpoint, as proportions
+    q <- apply(P, 2, stats::quantile, probs = c((1 - level) / 2, 1 - (1 - level) / 2), names = FALSE)
+    list(lo = stats::setNames(q[1, ], rownames(psi)), hi = stats::setNames(q[2, ], rownames(psi)))
+  })
 }
 
 #' Get loadings by different methods (old two-group comparison)
@@ -492,54 +535,85 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
 
 #' Plot compositional loadings of a contrast
 #'
-#' One point per cell type: the loading of the contrast on that cell type, centred on the reference cell types
-#' chosen by `lmCoda()`. Filled points are significant after Benjamini-Hochberg adjustment. The grey box behind
-#' each point is the permutation null of the loading (centred the same way).
+#' One row per cell type, in the style of [plotShiftMagnitudes()]: the point is the loading of the contrast on the cell type (log2;
+#' the change of the cell type's log proportion relative to the geometric mean of all cell types), centered on the reference cell
+#' types chosen by `lmCoda()` ([referenceBlock()], marked "(ref)") or not (`center`), in the cell-type color, filled when the cell
+#' type is significant by the primary test (relative to the geometric mean; `significance`). The grey band is the 95 % range of
+#' the tested quantity over the permutations on the same axis: what the loading is without a composition change.
 #'
 #' @param res result of `lmCoda()` (as stored by `cao$estimateCellLoadings()`)
 #' @param ref.level,target.level labels for the axis annotation
 #' @param alpha significance threshold on the adjusted per-cell-type p-values (default 0.05)
 #' @param palette named colours per cell type (optional)
-#' @param ordering `"pvalue"` (default) or `"loading"`
-#' @param show.pvals add a panel of -log10 p-values (default TRUE)
-#' @param show.null show the permutation null as grey boxes (default TRUE)
+#' @param ordering `"loading"` (default: by the loading) or `"pvalue"` (significant cell types first, by p-value)
+#' @param show.pvals print the adjusted p-values next to the points (default TRUE)
+#' @param show.null show the permutation band (default TRUE)
 #' @param plot.theme ggplot2 theme
-#' @return ggplot object (a cowplot grid when `show.pvals`)
+#' @param legend.position legend position (default "bottom"; "none" hides it)
+#' @param significance the test behind the filled points, the p-values and the band: `"clr"` (default: the primary per-cell-type
+#'   test, each cell type relative to the geometric mean of all cell types, which does not depend on the reference) or
+#'   `"reference"` (relative to the reference cell types; conditional on that data-chosen set)
+#' @param center `"reference"` (default): the loadings centred on the reference cell types (zero = no change relative to them; the
+#'   geometric mean of all cell types is marked by a dashed line), or `"none"`: the loadings as they are (zero = the geometric
+#'   mean; the reference block's mean is marked). The band is the null of the test behind the points placed on the same axis
+#' @param title plot title (optional)
+#' @return ggplot object
 #' @export
 plotCodaLoadings <- function(res, ref.level = "reference", target.level = "target", alpha = 0.05, palette = NULL,
-                             ordering = c("pvalue", "loading"), show.pvals = TRUE, show.null = TRUE, plot.theme = ggplot2::theme_bw()) {
-  ordering <- match.arg(ordering)
+                             ordering = c("loading", "pvalue"), show.pvals = TRUE, show.null = TRUE, plot.theme = ggplot2::theme_bw(),
+                             legend.position = "bottom", significance = c("clr", "reference"), center = c("reference", "none"), title = NULL) {
+  ordering <- match.arg(ordering); significance <- match.arg(significance); center <- match.arg(center)
   if (is.null(res$contrast)) stop("not a contrast result of lmCoda()")
-  obs <- res$contrast$loadings$ref_centered
-  pval <- res$contrast$per_cell$pval[names(obs)]; padj <- res$contrast$per_cell$padj[names(obs)]
-  ord <- if (ordering == "pvalue") order(-pval, abs(obs)) else order(abs(obs))
-  cts <- names(obs)[ord]
-  df <- data.frame(celltype = factor(cts, levels = cts), loading = unname(obs[cts]), pval = unname(pval[cts]), padj = unname(padj[cts]),
-                   significant = unname(padj[cts] <= alpha), reference = cts %in% res$reference$celltypes, stringsAsFactors = FALSE)
-  gg <- ggplot2::ggplot(df, ggplot2::aes(y = .data$celltype, x = .data$loading))
+  l <- res$contrast$loadings$obs; cts <- names(l); ref <- res$reference$celltypes; ref <- ref[ref %in% cts]
+  off <- if (length(ref)) mean(l[ref]) else 0                      # the reference block's mean loading (natural log)
+  use.ref <- significance == "reference"
+  if (use.ref && is.null(res$contrast$per_cell$padj.ref)) stop("no reference-relative p-values in the result")
+  pc <- res$contrast$per_cell; pval <- (if (use.ref) pc$pval.ref else pc$pval)[cts]; padj <- (if (use.ref) pc$padj.ref else pc$padj)[cts]
+  shift <- if (center == "reference") -off else 0                 # displayed value = (loading + shift) / log(2)
+  d <- data.frame(celltype = cts, value = unname(l + shift) / log(2), pval = unname(pval), padj = unname(padj), nlo = NA_real_, nhi = NA_real_,
+                  sig = is.finite(padj) & unname(padj) <= alpha, reference = cts %in% ref, stringsAsFactors = FALSE)
   perm <- res$contrast$loadings$perm
-  if (show.null && !is.null(perm) && length(res$reference$idx)) {
-    perm.c <- perm - rep(colMeans(perm[res$reference$idx, , drop = FALSE]), each = nrow(perm))
-    pd <- data.frame(celltype = factor(rep(rownames(perm.c), ncol(perm.c)), levels = cts), value = as.vector(perm.c))
-    gg <- gg + ggplot2::geom_boxplot(data = pd, ggplot2::aes(y = .data$celltype, x = .data$value), colour = "grey70", fill = "grey92",
-                                     outlier.shape = NA, width = 0.6)
+  if (show.null && !is.null(perm)) {
+    # the null of the test behind the points (the loading, or its difference from the reference block), placed on the axis of the plot:
+    # with `significance = "clr"` the band is centred where a cell type that followed the geometric mean would sit
+    pr <- perm[cts, , drop = FALSE]; if (use.ref) pr <- sweep(pr, 2, colMeans(perm[ref, , drop = FALSE])) + off   # back on the loading axis
+    q <- apply(pr, 1, stats::quantile, c(0.025, 0.975), na.rm = TRUE); d$nlo <- (q[1, ] + shift) / log(2); d$nhi <- (q[2, ] + shift) / log(2)
   }
-  gg <- gg + ggplot2::geom_vline(xintercept = 0, colour = "grey37") +
-    ggplot2::geom_point(ggplot2::aes(colour = .data$celltype, shape = .data$significant), size = 3) +
-    ggplot2::scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1), guide = "none") +
-    ggplot2::labs(x = sprintf("loading   (<- %s   |   %s ->)", ref.level, target.level), y = NULL,
-                  caption = if (any(df$reference)) sprintf("reference cell types: %s", paste(cts[df$reference], collapse = ", ")) else NULL) +
-    plot.theme + ggplot2::theme(legend.position = "none") + ggplot2::scale_y_discrete(position = "right")
-  if (!is.null(palette)) gg <- gg + ggplot2::scale_colour_manual(values = palette)
-  n.sig <- sum(df$significant, na.rm = TRUE)
-  if (ordering == "pvalue" && n.sig > 0) gg <- gg + ggplot2::geom_hline(yintercept = nrow(df) - n.sig + 0.5, colour = "red")
-  if (!show.pvals) return(gg)
-  df$nlp <- -log10(df$pval)
-  gp <- ggplot2::ggplot(df, ggplot2::aes(y = .data$celltype, x = .data$nlp, fill = .data$celltype)) + ggplot2::geom_col() +
-    ggplot2::geom_vline(xintercept = -log10(alpha)) + ggplot2::labs(x = "-log10(p)", y = NULL) + plot.theme +
-    ggplot2::theme(legend.position = "none", axis.text.y = ggplot2::element_blank(), axis.ticks.y = ggplot2::element_blank())
-  if (!is.null(palette)) gp <- gp + ggplot2::scale_fill_manual(values = palette)
-  cowplot::plot_grid(gp, gg, ncol = 2, rel_widths = c(1, 2.5), align = "h")
+  ord <- if (ordering == "loading") order(d$value) else order(d$sig, -d$padj, abs(d$value))
+  d$label <- ifelse(d$reference, paste0(d$celltype, " (ref)"), d$celltype)
+  d$label <- factor(d$label, levels = d$label[ord])
+  sig.lab <- sprintf("padj < %.2g", alpha)
+  d$sig.f <- factor(ifelse(d$sig, sig.lab, "not significant"), levels = c(sig.lab, "not significant"))
+  pal <- if (is.null(palette)) stats::setNames(rep("grey25", nrow(d)), d$celltype) else palette[d$celltype]
+  pal[is.na(pal)] <- "grey40"; names(pal) <- d$celltype
+  # the other frame's zero: the geometric mean of all cell types on the reference-centred axis, the reference block on the clr axis
+  other <- if (center == "reference") -off / log(2) else off / log(2); other.lab <- if (center == "reference") "geometric mean" else "reference"
+  gg <- ggplot2::ggplot(d, ggplot2::aes(y = .data$label)) + ggplot2::geom_vline(xintercept = 0, colour = "grey70")
+  if (length(ref) && abs(other) > 1e-8) gg <- gg + ggplot2::geom_vline(xintercept = other, colour = "grey55", linetype = 2)
+  if (show.null && any(is.finite(d$nlo)))
+    gg <- gg + ggplot2::geom_linerange(ggplot2::aes(xmin = .data$nlo, xmax = .data$nhi, alpha = "null: 95 % of permutations"), linewidth = 4.5, colour = "grey88", na.rm = TRUE) +
+      ggplot2::scale_alpha_manual(values = 1, name = NULL, guide = ggplot2::guide_legend(override.aes = list(linewidth = 4.5, colour = "grey88"), order = 2))
+  gg <- gg + ggplot2::geom_point(ggplot2::aes(x = .data$value, colour = .data$celltype, fill = .data$celltype, shape = .data$sig.f), size = 2.8, stroke = 0.9,
+                                 show.legend = c(shape = TRUE, alpha = FALSE, colour = FALSE, fill = FALSE)) +
+    ggplot2::geom_point(data = d[!d$sig, , drop = FALSE], ggplot2::aes(x = .data$value, colour = .data$celltype), shape = 21, fill = "white", size = 2.8, stroke = 0.9,
+                        show.legend = FALSE) +
+    ggplot2::scale_shape_manual(values = stats::setNames(c(21, 21), c(sig.lab, "not significant")), drop = FALSE, name = NULL,
+                                guide = ggplot2::guide_legend(override.aes = list(colour = "grey25", fill = c("grey25", "white")), order = 1)) +
+    ggplot2::scale_colour_manual(values = pal, guide = "none") + ggplot2::scale_fill_manual(values = pal, guide = "none")
+  # the marker's label goes after the layers that set the discrete y scale (an annotation with a numeric y placed first would make the scale continuous)
+  if (length(ref) && abs(other) > 1e-8) gg <- gg + ggplot2::annotate("text", x = other, y = 0.45, label = other.lab, size = 2.4, colour = "grey40", hjust = if (other < 0) 1.05 else -0.05)
+  xr <- range(c(0, other, d$value, if (show.null) c(d$nlo, d$nhi)), na.rm = TRUE)
+  if (show.pvals) {
+    xt <- xr[2] + 0.07 * diff(xr)   # clear of the largest point
+    gg <- gg + ggplot2::geom_text(ggplot2::aes(x = xt, label = ifelse(is.finite(.data$padj), format(signifBelow(.data$padj, alpha), drop0trailing = TRUE), "")),
+                                  hjust = 0, size = 2.6, colour = "grey35") +
+      ggplot2::annotate("text", x = xt, y = nrow(d) + 0.7, label = "padj", hjust = 0, size = 2.6, colour = "grey35", fontface = "italic")
+    xr[2] <- xr[2] + 0.18 * diff(xr)
+  }
+  xlab <- sprintf("loading (log2)   (<- %s   |   %s ->)", ref.level, target.level)   # the frame is named by the dashed marker and, with center = "both", the panel title
+  gg + ggplot2::coord_cartesian(xlim = xr, ylim = c(0.3, nrow(d) + if (show.pvals) 0.7 else 0), clip = "off") +
+    plot.theme + ggplot2::labs(x = xlab, y = NULL, title = title) +
+    ggplot2::theme(legend.position = legend.position, panel.grid.minor = ggplot2::element_blank(), panel.grid.major.y = ggplot2::element_blank())
 }
 
 #' old two-group comparison: reference set selection
@@ -739,107 +813,6 @@ checkDataTree <- function(d.counts, tree){
   checkTree(tree)
   checkData(d.counts)
   checkDataAndCells(d.counts, tree$tip.label)
-}
-
-#' Compute per-sample contrast score from lmCoda result
-#' @keywords internal
-getCodaContrastScore <- function(x) {
-  if (is.null(x$ilr) || is.null(x$contrast$beta_ilr))
-    stop("lmCoda result missing x$ilr or x$contrast$beta_ilr.")
-  sc <- drop(x$ilr %*% x$contrast$beta_ilr)
-  names(sc) <- rownames(x$ilr)
-  sc
-}
-
-#' Construct a supervised SBP tree using a continuous contrast score (top-down)
-#' This replaces legacy constructTree() but uses a continuous score.
-#' @keywords internal
-constructTreeScore <- function(cnts, score, partition.thresh = 0, zero.pseudocount = 0.1,
-                               basis.type = c("default")) {
-  basis.type <- match.arg(basis.type)
-  cnts <- as.matrix(cnts)
-  checkData(cnts)
-
-  score <- score[rownames(cnts)]
-  if (any(is.na(score))) stop("score has NA for some samples after alignment.")
-
-  n.cells <- ncol(cnts)
-  sbp <- matrix(0, nrow = n.cells, ncol = n.cells - 1,
-                dimnames = list(colnames(cnts), NULL))
-
-  unsolved <- list(colnames(cnts))
-  for (k in 1:(n.cells - 1)) {
-    cur <- unsolved[[k]]
-
-    if (length(cur) == 2) {
-      sbp[cur[1], k] <- 1
-      sbp[cur[2], k] <- -1
-      next
-    }
-
-    d.tmp <- cnts[, cur, drop = FALSE]
-    ld <- getLoadingsScore(d.tmp, score, zero.pseudocount = zero.pseudocount,
-                           basis.type = basis.type)
-
-    plus  <- names(ld)[ld >  partition.thresh]
-    minus <- names(ld)[ld <  partition.thresh]
-
-    # fallback if threshold produces empty side
-    if (length(plus) == 0 || length(minus) == 0) {
-      ord <- order(ld)
-      mid <- floor(length(ord) / 2)
-      minus <- names(ld)[ord[1:mid]]
-      plus  <- names(ld)[ord[(mid+1):length(ord)]]
-    }
-
-    sbp[minus, k] <- -1
-    sbp[plus,  k] <-  1
-
-    if (length(minus) > 1) unsolved[[length(unsolved) + 1]] <- minus
-    if (length(plus)  > 1) unsolved[[length(unsolved) + 1]] <- plus
-  }
-
-  tree <- sbp2tree(sbp)
-  tree <- ape::compute.brlen(tree, method = "Grafen")
-  h <- stats::as.hclust(tree)
-  list(tree = ape::as.phylo(h), sbp = sbp, dendro = as.dendrogram(h))
-}
-
-# local helper: compute score-supervised loadings for this subset
-#' @keywords internal
-getLoadingsScore <- function(cnts.sub, score, zero.pseudocount = 0.1,
-                             basis.type = c("default")) {
-  basis.type <- match.arg(basis.type)
-
-  cnts.sub <- as.matrix(cnts.sub)
-
-  score.sub <- score[rownames(cnts.sub)]
-  if (any(is.na(score.sub))) stop("score has NA for some samples in this subset.")
-
-  cnts.sub[cnts.sub == 0] <- zero.pseudocount
-  freqs <- sweep(cnts.sub, 1, rowSums(cnts.sub), "/")
-
-  psi <- coda.base::ilr_basis(ncol(freqs), type = basis.type)
-  rownames(psi) <- colnames(freqs)
-
-  b <- log(freqs) %*% psi
-  b <- scale(b)
-
-  df <- data.frame(b, score = as.numeric(score.sub))
-  fit <- lm(score ~ ., data = df)
-
-  w <- coef(fit)[-1]
-  w[is.na(w)] <- 0
-  w <- as.numeric(w)
-  if (sum(w^2) == 0) w[1] <- 1
-  w <- w / sqrt(sum(w^2))
-
-  shat <- drop(b %*% w)
-  if (cor(shat, score.sub, use = "pairwise.complete.obs") < 0) w <- -w
-
-  load <- drop(psi %*% w)
-  names(load) <- colnames(cnts.sub)
-  load
 }
 
 #' Construct the canonical tree (old two-group comparison)

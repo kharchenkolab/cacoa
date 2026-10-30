@@ -15,7 +15,8 @@ pairwiseEffectsFromDesign(
   min.samp.per.level = 3,
   robust = "none",
   na.mode = "drop",
-  robust.k = 1.345
+  robust.k = 1.345,
+  cell.number.adjust = TRUE
 )
 }
 \arguments{
@@ -36,7 +37,10 @@ variables)}
 
 \item{min.samp.per.level}{minimum number of samples at each contrasted level (for factor contrasts)}
 
-\item{robust, na.mode, robust.k}{robust fit (\code{"none"}, \code{"huber"}, \code{"winsor"}), treatment of samples absent from this cell type
+\item{robust, na.mode, robust.k}{robust fit (\code{"none"}, \code{"huber"}, \code{"winsor"}), treatment of samples absent from this cell type}
+
+\item{cell.number.adjust}{per-sample 1 / n.cells term in the dispersion design, \code{var} at equal cell numbers (default TRUE; needs the
+\code{n.cells} attribute of the distance matrices)
 (\code{"drop"} fits the present samples; \code{"impute_weak"} keeps them with a near-zero weight) and robust tuning constant}
 }
 \value{

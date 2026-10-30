@@ -24,7 +24,10 @@ checkSensitivity(
   robust = "none",
   na.mode = "drop",
   robust.k = 1.345,
-  current.rows = NULL
+  current.rows = NULL,
+  significance = NULL,
+  significance.label = "distance test",
+  jackknife = FALSE
 )
 }
 \arguments{
@@ -54,11 +57,20 @@ an outlier among the leave-one-out changes (> 3 MAD), marks the sample as drivin
 robust tuning constant, passed to \code{\link[=expressionShiftsForModel]{expressionShiftsForModel()}} (default: the settings of the result being checked)}
 
 \item{current.rows}{optional long results table of the stored model (\code{res$results}), used for the "current" model instead of a refit}
+
+\item{significance}{optional function of a fitted model (\code{cacoaModel}, one test) returning a data.frame with \code{celltype},
+\code{p} and \code{padj} of the shift: the test that decides significance when it is not the distance model's own (e.g. gsd, see
+\code{Cacoa$checkSensitivity()}); the distance model's p-values are then kept as \code{p.distance} / \code{padj.distance}.
+Rows of \code{current.rows} are taken as they are.}
+
+\item{significance.label}{name of that test, for the printout and the plot (default "distance test")}
 }
 \value{
 object of class \code{cacoaSensitivity}: \code{table} (model x cell type x effect: estimate, ci, p, padj),
-\code{summary} (per cell type: same sign in all models, n significant of m, max relative change, most
-influential sample, verdict), \code{formulas}, \code{settings}
+\code{summary} (per cell type: same sign in all models, n significant of m, max relative change of the normalized shift, most
+influential sample, \code{verdict.magnitude} (the size of the shift: near zero (the current shift lies within the relabeling
+noise band of the main result, \code{influence$wide}), stable, changes by x\%, sign depends on the model, driven by one sample), \code{verdict.significance} (significant in all / k of m / no models) and the combined \code{verdict}),
+\code{formulas}, \code{settings}
 }
 \description{
 Sensitivity of expression-shift effects to the covariate set and to single samples

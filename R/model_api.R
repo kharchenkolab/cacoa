@@ -30,7 +30,8 @@ cacoaDefaultOptions <- function() {
     numeric.step = 1,              # step for numeric tests (per unit); per-SD is reported as well
     robust = "none",               # robust fit of the distance model: none / huber / winsor (samples with outlying residual distances)
     na.mode = "drop",              # samples absent from a cell type: drop (fit on the present ones) / impute_weak (kept with a near-zero weight)
-    robust.k = 1.345               # robust tuning constant (robust standard deviations of the residual sizes)
+    robust.k = 1.345,              # robust tuning constant (robust standard deviations of the residual sizes)
+    type.gene.frac = 0.05          # per cell type: the genes detected in >= this fraction of its cells (gsd test and sample distances)
   )
 }
 
@@ -41,6 +42,8 @@ checkOptionValues <- function(opts) {
   chk(is.numeric(opts$alpha) && opts$alpha > 0 && opts$alpha < 1, "alpha must be in (0, 1)")
   chk(opts$p.adjust.method %in% stats::p.adjust.methods, "unknown p.adjust.method")
   chk(is.numeric(opts$n.cores) && opts$n.cores >= 1, "n.cores must be >= 1")
+  if (!is.null(opts$type.gene.frac)) chk(is.numeric(opts$type.gene.frac) && length(opts$type.gene.frac) == 1 && opts$type.gene.frac >= 0 && opts$type.gene.frac < 1,
+                                         "type.gene.frac must be in [0, 1)")
   chk(is.logical(opts$verbose), "verbose must be logical")
   chk(is.logical(opts$plot.provenance), "plot.provenance must be logical")
   chk(is.numeric(opts$min.samp.per.level) && opts$min.samp.per.level >= 2, "min.samp.per.level must be >= 2")

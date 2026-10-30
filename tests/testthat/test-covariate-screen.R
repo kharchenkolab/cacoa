@@ -77,7 +77,7 @@ test_that("screen and partition through the Cacoa object; metadata separation is
   expect_setequal(sc$covariates, c("group", "batch", "age"))
   expect_equal(sc$settings$test.variable, "group")
   expect_identical(sc, cao$test.results$covariate.screen)
-  g <- sc$table[sc$table$covariate == "group" & sc$table$mode == "partial", ]
+  g <- sc$table[sc$table$covariate == "group" & sc$table$mode == "partial" & !sc$table$summary, ]
   expect_true(all(g$padj < 0.1))
   expect_s3_class(cao$plotCovariateScreen(), "ggplot")
   expect_s3_class(cao$plotCovariateSummary(), "ggplot")

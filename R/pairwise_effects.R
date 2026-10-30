@@ -113,7 +113,7 @@ estimatePairwiseEffects <- function(D2, X, contrast, Z = NULL, z.end = NULL, bia
     wc <- weightedContrastStats(G, X, Z, cvec, z.end, w = w %||% rep(1, n), bias.correct = bias.correct, robust = robust, k = robust.k)
     names(wc$gamma) <- colnames(Z); names(wc$s) <- names(wc$v) <- names(wc$h) <- names(wc$w) <- names(wc$score) <- rownames(X); dimnames(wc$M) <- list(colnames(X), colnames(X))
     return(list(shift = wc$shift, var = wc$var, total = wc$total, ratio = 1 + wc$shift / (wc$s.alt + wc$s.ref), s.alt = wc$s.alt, s.ref = wc$s.ref,
-                shift.raw = wc$shift.raw, shift.norm = wc$shift / (wc$s.alt + wc$s.ref), var.norm = log2(wc$s.alt / wc$s.ref), total.norm = wc$total / (2 * wc$s.ref),
+                shift.raw = wc$shift.raw, shift.norm = wc$shift / (wc$s.alt + wc$s.ref), var.norm = logRatio2(wc$s.alt, wc$s.ref), total.norm = wc$total / (2 * wc$s.ref),
                 M = wc$M, gamma = wc$gamma, s = wc$s, v = wc$v, h = wc$h, n = n, rank = wc$rank, w = wc$w, score = wc$score, F.shift = wc$F, weighted = TRUE))
   }
 
@@ -139,7 +139,7 @@ estimatePairwiseEffects <- function(D2, X, contrast, Z = NULL, z.end = NULL, bia
   list(shift = shift, var = var, total = total,
        ratio = 1 + shift / (s.alt + s.ref),
        s.alt = s.alt, s.ref = s.ref, shift.raw = shift.raw,
-       shift.norm = shift / (s.alt + s.ref), var.norm = log2(s.alt / s.ref), total.norm = total / (2 * s.ref),
+       shift.norm = shift / (s.alt + s.ref), var.norm = logRatio2(s.alt, s.ref), total.norm = total / (2 * s.ref),
        M = M, gamma = gamma, s = s, v = v, h = h, n = n, rank = hi$rank, disp.identifiable = disp.identifiable)
 }
 
@@ -321,6 +321,21 @@ sampleDistanceMatrices <- function(cm.per.type, dist = c("cor", "l2", "l1"), n.p
 # ---- design-level wrapper -------------------------------------------------------------------------
 
 # Default dispersion formula (D1): main effects of the contrast variables; `~ 1` for coefficient contrasts.
+# columns of the dispersion design (after dropping all-zero ones, `keep`) whose terms do not involve the tested variable(s): sample
+# properties (nuisance covariates) that are not relabeled with the tested variable; 1-based indices into Z[, keep]
+dispersionFixedColumns <- function(Zfull, keep, spec) {
+  if (is.null(spec) || inherits(spec, "try-error")) return(integer(0))
+  tv <- switch(spec$type, simple = parseTermVars(spec$term), marginal = spec$term, character(0))
+  asg <- attr(Zfull, "assign"); tl <- attr(attr(Zfull, "terms"), "term.labels")
+  if (!length(tv) || is.null(asg) || is.null(tl)) return(integer(0))
+  asg <- asg[keep]
+  dep <- vapply(asg, function(a) a > 0 && any(all.vars(str2lang(tl[a])) %in% tv), logical(1))
+  which(!dep & asg > 0)
+}
+
+# log2(a / b) of two dispersions; NA unless both are positive (a fitted dispersion can be negative when the design is near-collinear)
+logRatio2 <- function(a, b) if (is.finite(a) && is.finite(b) && a > 0 && b > 0) log2(a / b) else NA_real_
+
 defaultDispersionFormula <- function(spec) {
   if (is.null(spec) || inherits(spec, "try-error")) return(~ 1)
   vars <- switch(spec$type,
@@ -352,11 +367,15 @@ defaultDispersionFormula <- function(spec) {
 #'   `influence`
 #' @export
 #' @param robust,na.mode,robust.k robust fit (`"none"`, `"huber"`, `"winsor"`), treatment of samples absent from this cell type
+#' @param cell.number.adjust per-sample 1 / n.cells term in the dispersion design, `var` at equal cell numbers (default TRUE; needs the
+#'   `n.cells` attribute of the distance matrices)
 #'   (`"drop"` fits the present samples; `"impute_weak"` keeps them with a near-zero weight) and robust tuning constant
 pairwiseEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL, dist = c("cor", "l2", "l1"),
-                                      bias.correct = TRUE, influence = FALSE, min.samp.per.level = 3, robust = "none", na.mode = "drop", robust.k = 1.345) {
+                                      bias.correct = TRUE, influence = FALSE, min.samp.per.level = 3, robust = "none", na.mode = "drop", robust.k = 1.345,
+                                      cell.number.adjust = TRUE) {
   dist <- match.arg(dist)
   skip <- function(reason) list(ok = FALSE, reason = reason)
+  n.cells <- attr(D, "n.cells")
   samples <- intersect(rownames(design$F), rownames(D))
   if (length(samples) < 3) return(skip("fewer than 3 samples with this cell type"))
   present <- samples; w <- NULL
@@ -404,8 +423,32 @@ pairwiseEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL
     z.end <- list(num = rep(NA_real_, ncol(Z)), den = rep(NA_real_, ncol(Z)))   # var/total undefined
   }
 
-  eff <- estimatePairwiseEffects(NULL, X, cvec, Z, z.end, bias.correct = bias.correct, G = G, w = w, robust = robust, robust.k = robust.k)
-  eff$ok <- TRUE; eff$reason <- NULL
+  # dispersion-design columns that are properties of the sample, not of the tested variable: they stay with the sample under relabeling
+  z.fixed <- dispersionFixedColumns(Zfull, zkeep, spec)
+  # sampling noise of the profiles: a per-sample 1 / n.cells term, the dispersion change taken at equal cell numbers (otherwise a
+  # condition with fewer cells per sample looks more dispersed)
+  inv.n <- NULL
+  if (cell.number.adjust && !is.null(n.cells) && all(samples %in% names(n.cells)) && all(is.finite(n.cells[samples]) & n.cells[samples] > 0) &&
+      all(is.finite(unlist(z.end)))) {
+    v <- 1 / as.numeric(n.cells[samples])
+    if (stats::sd(v) > 1e-12 * mean(v) && nrow(Z) - ncol(Z) - 1 >= 2) inv.n <- v
+  }
+  fitEff <- function(Z, z.end) estimatePairwiseEffects(NULL, X, cvec, Z, z.end, bias.correct = bias.correct, G = G, w = w, robust = robust, robust.k = robust.k)
+  eff <- NULL
+  if (!is.null(inv.n)) {
+    Za <- cbind(Z, .inv.n.cells = inv.n); m <- mean(inv.n); za <- list(num = c(z.end$num, m), den = c(z.end$den, m))
+    e1 <- tryCatch(fitEff(Za, za), error = function(e) NULL)
+    if (!is.null(e1) && !identical(e1$disp.identifiable, FALSE)) { eff <- e1; Z <- Za; z.end <- za; z.fixed <- c(z.fixed, ncol(Za)) }
+  }
+  if (is.null(eff)) { eff <- fitEff(Z, z.end); inv.n <- NULL }
+  eff$ok <- TRUE; eff$reason <- NULL; eff$z.fixed <- z.fixed; eff$cell.number.adjust <- !is.null(inv.n)
+  # association of the cell numbers with the contrast: |cor| of log(cells) with the per-sample contrast weights. Above about 0.5
+  # the permutation test of the dispersion change is anticonservative even with the cell-number term (null checks: ~18 %)
+  eff$cell.assoc <- NA_real_
+  if (!is.null(n.cells) && all(samples %in% names(n.cells)) && all(is.finite(n.cells[samples]) & n.cells[samples] > 0)) {
+    a <- tryCatch(drop(t(hatInfo(X)$A) %*% cvec), error = function(e) NULL); ln <- log(as.numeric(n.cells[samples]))
+    if (!is.null(a) && stats::sd(a) > 0 && stats::sd(ln) > 0) eff$cell.assoc <- abs(stats::cor(a, ln))
+  }
   eff$weighted <- isTRUE(eff$weighted); eff$base.w <- w %||% rep(1, length(samples)); eff$robust <- robust; eff$robust.k <- robust.k; eff$na.mode <- na.mode; eff$present <- present
   eff$G <- G; eff$X <- X; eff$Z <- Z; eff$contrast <- cvec; eff$z.end <- z.end; eff$samples <- samples
   eff$n.ref <- n.ref; eff$n.alt <- n.alt
@@ -428,6 +471,7 @@ pairwiseEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL
     Xrows <- t(sapply(levs, function(l) one(design$F, utils::modifyList(at0, setNames(list(l), spec$term)))[colnames(F)][keep]))
     Zrows <- t(sapply(levs, function(l) one(Zfull, utils::modifyList(at0, setNames(list(l), spec$term)))[zkeep]))
     if (length(levs) == 1) { Xrows <- matrix(Xrows, 1); Zrows <- matrix(Zrows, 1) }
+    if (!is.null(inv.n)) Zrows <- cbind(Zrows, mean(inv.n))   # cells at the average cell number
     rownames(Xrows) <- rownames(Zrows) <- levs
     eff$cell.table <- impliedCellTable(eff$M, eff$gamma, Xrows, Zrows)
   }

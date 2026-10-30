@@ -11,7 +11,7 @@ getPerCellTypeGeneFilter(counts, cell.groups, threshold = 0.05)
 
 \item{cell.groups}{factor containing cell groups with cell names as names}
 
-\item{threshold}{minimum fraction of expressing cells per cell type (default=0.05)}
+\item{threshold}{minimum fraction of cells per cell type in which the gene is detected (count > 0; default=0.05)}
 }
 \description{
 filter genes by expression per celltype not globally

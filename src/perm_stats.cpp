@@ -1,5 +1,6 @@
 // [[Rcpp::depends(RcppArmadillo)]]
 #include <RcppArmadillo.h>
+#include "gower_stats.h"
 
 // Per-permutation statistics of the pairwise-effects engine (Track D): the pivotal F of a single contrast
 // under a relabeling p of the samples, against a fixed Gower matrix G.
@@ -8,6 +9,14 @@
 //
 // where a = X (X'X)^- c are the regression weights of the contrast and H the hat matrix of X (both row-permuted
 // together with the design). The R reference implementation is permutedStats() in R/pairwise_inference.R.
+
+// the dispersion design under a relabeling: rows permuted with the labels, except the columns in `fixed` (0-based), which are
+// properties of the sample (nuisance covariates, the per-sample sampling-noise term) and stay with it
+static inline arma::mat permute_z(const arma::mat& Z, const arma::uvec& p, const arma::uvec& fixed) {
+  arma::mat Zp = Z.rows(p);
+  if (fixed.n_elem) Zp.cols(fixed) = Z.cols(fixed);
+  return Zp;
+}
 
 static inline arma::uvec perm_index(const arma::imat& P, arma::uword b) {
   arma::uvec p(P.n_rows);
@@ -68,7 +77,7 @@ static inline arma::rowvec contrast_stats_one(const arma::mat& Gs, const arma::m
                                               const arma::vec& znum, const arma::vec& zden, bool bias_correct, bool need_var) {
   const arma::uword n = Gs.n_rows;
   const double df_res = static_cast<double>(n) - q;
-  arma::rowvec out(4); out.fill(arma::datum::nan);
+  arma::rowvec out(5); out.fill(arma::datum::nan);
   const double ss = arma::dot(ap, Gs * ap) / cXc;
   const double rss = arma::trace(Gs) - arma::accu(Hp % Gs);
   out(0) = ss / (rss / df_res);
@@ -87,19 +96,21 @@ static inline arma::rowvec contrast_stats_one(const arma::mat& Gs, const arma::m
   const double shift = arma::as_scalar(cvec.t() * M * cvec);
   const double var = 2.0 * (arma::dot(znum, gamma) - arma::dot(zden, gamma));
   out(1) = shift; out(2) = var; out(3) = shift + var / 2.0;
+  out(4) = cacoa_gower::disp_t(W, r, gamma, znum - zden, arma::ones<arma::vec>(n));
   return out;
 }
 
 // [[Rcpp::export]]
 arma::mat permuted_contrast_stats(const arma::mat& G, const arma::mat& X, const arma::mat& Z, const arma::mat& A, const arma::mat& H,
                                   const arma::vec& a, const arma::vec& cvec, double cXc, int q, const arma::vec& znum, const arma::vec& zden,
-                                  const arma::imat& P, bool bias_correct = true, bool need_var = true) {
+                                  const arma::imat& P, const arma::uvec& z_fixed, bool bias_correct = true, bool need_var = true) {
   const arma::uword n = G.n_rows, B = P.n_cols;
   if (X.n_rows != n || Z.n_rows != n || A.n_cols != n || H.n_rows != n || a.n_elem != n || P.n_rows != n) Rcpp::stop("dimension mismatch in permuted_contrast_stats");
-  arma::mat out(B, 4);
+  if (z_fixed.n_elem && z_fixed.max() >= Z.n_cols) Rcpp::stop("z_fixed out of range in permuted_contrast_stats");
+  arma::mat out(B, 5);
   for (arma::uword b = 0; b < B; ++b) {
     arma::uvec p = perm_index(P, b);
-    out.row(b) = contrast_stats_one(G, X.rows(p), A.cols(p), Z.rows(p), H.submat(p, p), a(p), cvec, cXc, q, znum, zden, bias_correct, need_var);
+    out.row(b) = contrast_stats_one(G, X.rows(p), A.cols(p), permute_z(Z, p, z_fixed), H.submat(p, p), a(p), cvec, cXc, q, znum, zden, bias_correct, need_var);
   }
   return out;
 }
@@ -111,7 +122,7 @@ arma::mat permuted_contrast_stats_fl(const arma::mat& K1, const arma::mat& K2, c
                                      const arma::imat& P, bool bias_correct = true, bool need_var = true) {
   const arma::uword n = K1.n_rows, B = P.n_cols;
   if (X.n_rows != n || Z.n_rows != n || A.n_cols != n || H.n_rows != n || a.n_elem != n || P.n_rows != n) Rcpp::stop("dimension mismatch in permuted_contrast_stats_fl");
-  arma::mat out(B, 4);
+  arma::mat out(B, 5);
   for (arma::uword b = 0; b < B; ++b) {
     arma::uvec p = perm_index(P, b);
     arma::mat Gs = K1 + K2.cols(p) + K3.rows(p) + K4.submat(p, p);
@@ -198,10 +209,11 @@ using namespace cacoa_gower;
 // [[Rcpp::export]]
 arma::mat permuted_contrast_stats_w(const arma::mat& G, const arma::mat& X, const arma::mat& Z, const arma::vec& w, const arma::vec& cvec,
                                     const arma::vec& znum, const arma::vec& zden, const arma::imat& P, bool freedman_lane, const arma::vec& w_fl,
-                                    bool bias_correct = true, bool need_var = true, int robust = 0, double k = 1.345, int maxit = 5) {
+                                    const arma::uvec& z_fixed, bool bias_correct = true, bool need_var = true, int robust = 0, double k = 1.345, int maxit = 5) {
   const arma::uword n = G.n_rows, B = P.n_cols;
   if (X.n_rows != n || Z.n_rows != n || w.n_elem != n || P.n_rows != n) Rcpp::stop("dimension mismatch in permuted_contrast_stats_w");
-  arma::mat out(B, 4);
+  if (z_fixed.n_elem && z_fixed.max() >= Z.n_cols) Rcpp::stop("z_fixed out of range in permuted_contrast_stats_w");
+  arma::mat out(B, 5);
   if (freedman_lane) {
     arma::mat Q, Rq; arma::qr(Q, Rq, cvec); arma::mat Xr = X * Q.cols(1, Q.n_cols - 1);
     WHat hr = what_of(Xr, w_fl); arma::mat Rr = -hr.H; Rr.diag() += 1.0;
@@ -214,7 +226,7 @@ arma::mat permuted_contrast_stats_w(const arma::mat& G, const arma::mat& X, cons
   } else {
     for (arma::uword b = 0; b < B; ++b) {
       arma::uvec p = perm_index(P, b);
-      out.row(b) = contrast_stats_w(G, X.rows(p), Z.rows(p), w, cvec, znum, zden, bias_correct, need_var, robust, k, maxit);
+      out.row(b) = contrast_stats_w(G, X.rows(p), permute_z(Z, p, z_fixed), w, cvec, znum, zden, bias_correct, need_var, robust, k, maxit);
     }
   }
   return out;

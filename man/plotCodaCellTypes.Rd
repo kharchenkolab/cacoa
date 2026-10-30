@@ -13,7 +13,9 @@ plotCodaCellTypes(
   sortCellTypes = FALSE,
   labelCellTypes = c("significant", "all", "none"),
   celltype.palette = NULL,
-  use.contrast.title = FALSE
+  use.contrast.title = FALSE,
+  significance = c("clr", "reference"),
+  show.ci = TRUE
 )
 }
 \arguments{
@@ -35,6 +37,13 @@ plotCodaCellTypes(
 \item{celltype.palette}{Optional named vector of colors for cell types}
 
 \item{use.contrast.title}{Whether to use the contrast label as the plot title (if available)}
+
+\item{significance}{p-values behind the stars: \code{"clr"} (default: the primary test, each cell type relative to the geometric mean of
+all cell types, which does not depend on the reference), or \code{"reference"} (relative to the reference cell types; the
+reference is chosen from the data, so this test is conditional on it)}
+
+\item{show.ci}{\code{value = "predicted"}: error bars with the intervals of the fitted proportions (default TRUE; \code{lmCoda(ci.level)},
+from the ILR fit: the endpoint's fitted ILR coordinates with their covariance, multivariate t draws mapped to proportions)}
 }
 \value{
 ggplot2 object

@@ -7,8 +7,10 @@
 #' Pseudobulk expression per cell type and sample
 #'
 #' Sums counts per (cell type, sample), drops (cell type, sample) cells with fewer than
-#' `min.cells.per.sample` cells, keeps genes expressed (count > 1) in at least `min.gene.frac` of the cells
-#' of at least 10% of the samples, and transforms to `log10(1e3 * count / total + 1)`.
+#' `min.cells.per.sample` cells, keeps genes detected (count > 0) in at least `min.gene.frac` of the cells
+#' of at least 10% of the samples, and transforms to `log10(scale * count / N + 1)`, with `N` the summed library
+#' sizes of the (cell type, sample) cells over all genes and `scale` the median library size of the cells (the same
+#' profiles as the cluster-free shift map, so that the pseudocount is about one count in a typical cell).
 #'
 #' @param cms list (per sample) of cell x gene count matrices
 #' @param cell.groups named factor of cell type per cell
@@ -16,18 +18,27 @@
 #' @param min.cells.per.sample minimum cells for a (cell type, sample) entry (default 10)
 #' @param min.gene.frac gene filter (see above)
 #' @param genes optional explicit gene set (skips the gene filter)
+#' @param normalization `"library"` (default): normalize by the full library sizes, as above; `"selected"`: the previous
+#'   normalization, by the total over the selected genes with `scale = 1e3`
+#' @param scale transform scale: `"median"` (default with `"library"`: the median per-cell library size) or a number
 #' @return list: `cm.per.type` (per cell type: sample x gene matrix, absent samples as `NA` rows),
-#'   `n.cells` (cell type x sample table of cell counts), `genes`
+#'   `n.cells` (cell type x sample table of cell counts), `genes`, `det.frac` (cell type x gene: fraction of the type's
+#'   cells, over all samples, in which the gene is detected; the basis of the per-type gene sets, see [typeGeneSets()]),
+#'   `scale`, `normalization`
 #' @export
-pseudobulkPerCellType <- function(cms, cell.groups, sample.per.cell, min.cells.per.sample = 10, min.gene.frac = 0.01, genes = NULL) {
+pseudobulkPerCellType <- function(cms, cell.groups, sample.per.cell, min.cells.per.sample = 10, min.gene.frac = 0.01, genes = NULL,
+                                  normalization = c("library", "selected"), scale = if (match.arg(normalization) == "library") "median" else 1e3) {
   stopifnot(is.list(cms), length(cms) > 0)
+  normalization <- match.arg(normalization)
   cell.groups <- droplevels(as.factor(cell.groups))
   all.samples <- names(cms)
   cms <- lapply(cms, function(cm) cm[intersect(rownames(cm), names(cell.groups)), , drop = FALSE])
+  if (identical(scale, "median")) scale <- stats::median(unlist(lapply(cms, function(cm) if (nrow(cm)) Matrix::rowSums(cm) else numeric(0))))
+  scale <- as.numeric(scale); if (length(scale) != 1 || !is.finite(scale) || scale <= 0) stop("scale must be 'median' or a positive number")
   if (is.null(genes)) {
     genes <- lapply(cms, function(cm) {
       if (!nrow(cm)) return(character(0))
-      cm@x <- 1 * (cm@x > 1)
+      cm@x <- as.numeric(cm@x > 0)
       names(which(Matrix::colMeans(cm) > min.gene.frac))
     }) %>% unlist() %>% table() %>% {. / length(cms) > 0.1} %>% which() %>% names()
   }
@@ -35,18 +46,39 @@ pseudobulkPerCellType <- function(cms, cell.groups, sample.per.cell, min.cells.p
   collapsed <- lapply(cms, function(cm) {
     if (!nrow(cm)) return(NULL)
     x <- sccore::collapseCellsByType(cm, groups = cell.groups, min.cell.count = min.cells.per.sample)
+    lib <- Matrix::rowSums(x)   # summed library sizes of the (cell type, sample) cells, over all genes
     x <- sccore::extendMatrix(x, genes)[, genes, drop = FALSE]
-    as.matrix(x)
+    b <- sccore::extendMatrix(cm, genes)[, genes, drop = FALSE]; b@x <- as.numeric(b@x > 0)   # detection counts per type, all cells
+    d <- sccore::collapseCellsByType(b, groups = cell.groups, min.cell.count = 1)
+    list(x = as.matrix(x), lib = lib, det = as.matrix(d))
   })
   n.cells <- table(cell.groups, factor(as.character(sample.per.cell[names(cell.groups)]), levels = all.samples))
   types <- levels(cell.groups)
   cm.per.type <- lapply(sccore::sn(types), function(ct) {
-    mat <- matrix(NA_real_, length(all.samples), length(genes), dimnames = list(all.samples, genes))
-    for (s in all.samples) { x <- collapsed[[s]]; if (!is.null(x) && ct %in% rownames(x)) mat[s, ] <- x[ct, ] }
-    tot <- pmax(1, rowSums(mat, na.rm = TRUE)); tot[rowSums(!is.na(mat)) == 0] <- NA
-    log10(mat / tot * 1e3 + 1)
+    mat <- matrix(NA_real_, length(all.samples), length(genes), dimnames = list(all.samples, genes)); N <- setNames(rep(NA_real_, length(all.samples)), all.samples)
+    for (s in all.samples) { x <- collapsed[[s]]; if (!is.null(x) && ct %in% rownames(x$x)) { mat[s, ] <- x$x[ct, ]; N[s] <- x$lib[[ct]] } }
+    tot <- if (normalization == "library") N else rowSums(mat, na.rm = TRUE)
+    tot <- pmax(1, tot); tot[rowSums(!is.na(mat)) == 0] <- NA
+    log10(mat / tot * scale + 1)
   })
-  list(cm.per.type = cm.per.type, n.cells = n.cells, genes = genes)
+  det <- matrix(0, length(types), length(genes), dimnames = list(types, genes))
+  for (x in collapsed) if (!is.null(x)) { k <- intersect(rownames(x$det), types); det[k, ] <- det[k, ] + x$det[k, , drop = FALSE] }
+  det.frac <- det / pmax(1, as.numeric(rowSums(n.cells)[types]))
+  list(cm.per.type = cm.per.type, n.cells = n.cells, genes = genes, det.frac = det.frac, scale = scale, normalization = normalization)
+}
+
+#' Per-cell-type gene sets
+#'
+#' The genes of each cell type: those of the common list detected in at least `type.gene.frac` of the type's cells (pooled
+#' over all samples). The same rule selects the genes of the cell-type gsd test, of the cell-type sample distances (shift
+#' magnitudes, covariate screen, variance partition, sample maps) and, per neighbourhood, of the cluster-free maps.
+#' @param pb result of [pseudobulkPerCellType()]
+#' @param type.gene.frac detection threshold (default 0.05; 0: every gene of the common list)
+#' @return named list (per cell type) of gene names
+#' @export
+typeGeneSets <- function(pb, type.gene.frac = 0.05) {
+  if (is.null(pb$det.frac) || !(type.gene.frac > 0)) return(lapply(sccore::sn(names(pb$cm.per.type)), function(ct) pb$genes))
+  lapply(sccore::sn(names(pb$cm.per.type)), function(ct) colnames(pb$det.frac)[pb$det.frac[ct, ] >= type.gene.frac])
 }
 
 # ---- term tests (K-level factors) ------------------------------------------------------------------
@@ -322,10 +354,12 @@ effectRowsTerm <- function(res, test.label, test.id) {
 #'   `distances`, `model`, `notes`, `settings`
 #' @export
 #' @param robust,na.mode,robust.k robust fit (`"none"`, `"huber"`, `"winsor"`), treatment of samples absent from a cell type
+#' @param cell.number.adjust per-sample 1 / n.cells term in the dispersion design, `var` at equal cell numbers (default TRUE; needs the
+#'   `n.cells` attribute of the distance matrices)
 #'   (`"drop"`, `"impute_weak"`) and robust tuning constant; recorded in `settings`
 expressionShiftsForModel <- function(D.list, model, dist = "cor", permutation = "auto", n.permutations = 999, block.vars = model$block.vars,
                                      bias.correct = TRUE, influence = TRUE, min.samp.per.level = 3, seed = NULL, alpha = 0.05,
-                                     n.cores = 1, verbose = FALSE, n.cells = NULL, robust = "none", na.mode = "drop", robust.k = 1.345) {
+                                     n.cores = 1, verbose = FALSE, n.cells = NULL, robust = "none", na.mode = "drop", robust.k = 1.345, cell.number.adjust = TRUE) {
   meta <- model$meta
   if (is.null(seed)) seed <- sample.int(.Machine$integer.max, 1L)
   per.test <- lapply(model$tests, function(t) {
@@ -333,7 +367,7 @@ expressionShiftsForModel <- function(D.list, model, dist = "cor", permutation = 
       r <- testPairwiseEffects(D.list, t$design, meta, dispersion.formula = model$dispersion.formula, dist = dist, permutation = permutation,
                                n.permutations = n.permutations, block.vars = block.vars, bias.correct = bias.correct, influence = influence,
                                min.samp.per.level = min.samp.per.level, seed = seed, alpha = alpha, n.cores = n.cores, verbose = verbose,
-                               robust = robust, na.mode = na.mode, robust.k = robust.k)
+                               robust = robust, na.mode = na.mode, robust.k = robust.k, cell.number.adjust = cell.number.adjust)
       r$rows <- effectRowsContrast(r, t$label, t$id)
     } else {
       r <- testTermEffects(D.list, t$design, meta, dispersion.formula = model$dispersion.formula, dist = dist, permutation = permutation,
@@ -375,7 +409,7 @@ expressionShiftsForModel <- function(D.list, model, dist = "cor", permutation = 
        distances = D.list, model = model, notes = unique(unlist(lapply(per.test, `[[`, "notes"))),
        settings = list(dist = dist, permutation = permutation, n.permutations = n.permutations, seed = seed, block.vars = block.vars,
                        bias.correct = bias.correct, influence = influence, min.samp.per.level = min.samp.per.level, alpha = alpha,
-                       robust = robust, na.mode = na.mode, robust.k = robust.k))
+                       robust = robust, na.mode = na.mode, robust.k = robust.k, cell.number.adjust = cell.number.adjust))
 }
 
 # short settings key for caches
@@ -384,6 +418,10 @@ settingsKey <- function(...) {
   if (requireNamespace("rlang", quietly = TRUE) && exists("hash", asNamespace("rlang"))) rlang::hash(x) else paste(deparse(x), collapse = "")
 }
 
+# p-values rounded to 2 significant digits for display, with one more digit where rounding would carry a value below
+# `alpha` up to it (0.0497 is shown as 0.0497, not 0.05)
+signifBelow <- function(p, alpha = 0.05, digits = 2) ifelse(is.finite(p) & p < alpha & signif(p, digits) >= alpha, signif(p, digits + 1), signif(p, digits))
+
 #' @exportS3Method base::print
 print.cacoaExpressionShifts <- function(x, digits = 2, ...) {
   s <- x$settings; alpha <- s$alpha %||% 0.05
@@ -391,22 +429,29 @@ print.cacoaExpressionShifts <- function(x, digits = 2, ...) {
   for (t in unique(x$results$test.id)) {
     d <- x$results[x$results$test.id == t, ]
     effs <- intersect(effectOrder, unique(d$effect))
-    prov <- permutationPhrase(modelProvenance(x$model, t, extra = sprintf("distance %s", s$dist)), d)
+    prov <- permutationPhrase(modelProvenance(x$model, t, extra = if (identical(s$statistic, "gsd") && !any(d$effect %in% c("location", "dispersion"))) "statistic gsd" else sprintf("distance %s", s$dist)), d)
     cat(sprintf("Expression shifts: %s\n", prov))
     cts <- unique(d$celltype)
     tab <- data.frame(celltype = cts, n = d$n[match(cts, d$celltype)], stringsAsFactors = FALSE)
+    r0 <- d[d$effect %in% c("shift", "location"), ]
+    if ("n.gsd" %in% names(d) && any(is.finite(r0$n.gsd))) {   # gsd run: samples of the test, and of the magnitudes (more cells per sample)
+      tab$n.mag <- tab$n; tab$n <- r0$n.gsd[match(cts, r0$celltype)] }
     for (e in effs) {
       r <- d[d$effect == e, ]; i <- match(cts, r$celltype)
-      tab[[e]] <- round(r$estimate.norm[i], digits); tab[[paste0("padj.", e)]] <- signif(r$padj[i], 2)
+      tab[[e]] <- round(r$estimate.norm[i], digits); tab[[paste0("padj.", e)]] <- signifBelow(r$padj[i], alpha)
     }
-    tab <- tab[order(-tab[[effs[1]]]), ]; rownames(tab) <- NULL
+    r1 <- d[d$effect == effs[1], ]; pa <- r1$padj[match(cts, r1$celltype)]   # counted unrounded
+    tab <- tab[order(-tab[[effs[1]]], na.last = TRUE), ]; rownames(tab) <- NULL
     print(tab, row.names = FALSE)
     g <- x$global[x$global$test.id == t, ]
-    pa <- tab[[paste0("padj.", effs[1])]]
     cat(sprintf("  %d of %d cell types with a significant %s (BH %.0f%%); global p: %s\n", sum(!is.na(pa) & pa < alpha), nrow(tab), effs[1],
                 100 * alpha, paste(sprintf("%s %.3g", g$effect, g$p), collapse = ", ")))
   }
-  if (!is.null(x$skipped) && nrow(x$skipped)) cat(sprintf("  not tested: %s\n", paste(unique(x$skipped$celltype), collapse = ", ")))
+  nm <- unique(x$results$celltype[x$results$effect %in% c("shift", "location") & !is.finite(x$results$estimate.norm) & is.finite(x$results$p)])
+  if (length(nm)) cat(sprintf("  tested without a magnitude (fewer than %s samples per level with >= %s cells): %s\n", s$gsd$min.samp.per.level %||% 2,
+                              s$min.cells.magnitude %||% 10, paste(nm, collapse = ", ")))
+  nt <- if (!is.null(x$skipped) && nrow(x$skipped)) setdiff(unique(x$skipped$celltype), x$results$celltype) else character(0)
+  if (length(nt)) cat(sprintf("  not tested: %s\n", paste(nt, collapse = ", ")))
   cat("  (normalized effects; full tables in $results and $wide)\n")
   invisible(x)
 }

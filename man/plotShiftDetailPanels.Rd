@@ -12,7 +12,8 @@ plotShiftDetailPanels(
   title = NULL,
   palette = NULL,
   plot.theme = ggplot2::theme_bw(),
-  label.samples = FALSE
+  label.samples = FALSE,
+  effects = NULL
 )
 }
 \arguments{
@@ -31,6 +32,9 @@ plotShiftDetailPanels(
 \item{plot.theme}{ggplot2 theme}
 
 \item{label.samples}{label the samples in the distance panel (default FALSE)}
+
+\item{effects}{optional named numeric (\code{shift}, \code{var}, \code{total}): the normalized effects of the results table, shown in the
+pair-distance panel (default: the fit's own, unnormalized estimates)}
 }
 \value{
 cowplot grid

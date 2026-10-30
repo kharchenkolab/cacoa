@@ -10,13 +10,23 @@ clusterFreeExpressionShifts(
   nns.per.cell,
   design,
   meta,
-  dist = c("cor", "cosine", "js"),
+  statistic = c("gsd", "distance"),
+  dist = c("cor", "euclidean", "cosine", "js"),
+  profile = c("normalized", "raw"),
+  lib = NULL,
+  profile.scale = "median",
+  weighting = c("noise", "none"),
+  sample.floor = TRUE,
+  noise.correction = FALSE,
+  noise.curves = NULL,
+  n.fit.units = 200,
   min.n.obs.per.samp = 3,
   min.samp.per.level = 2,
   permutation = "auto",
   n.permutations = 199,
   block.vars = NULL,
   seed = 1,
+  max.enumerate = 0,
   adjust = TRUE,
   smooth = TRUE,
   wins = 0.025,
@@ -25,15 +35,22 @@ clusterFreeExpressionShifts(
   verbose = FALSE,
   robust = c("none", "huber", "winsor"),
   robust.k = 1.345,
-  adjust.method = c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
-  p.source = c("permutation", "pooled", "z", "parametric"),
+  adjust.method = NULL,
+  p.source = NULL,
   z.grid = seq(-6, 25, by = 0.02),
   groups = NULL,
   return.perm = FALSE,
-  post = c("none", "averaged", "inherit"),
+  post = NULL,
   nns.graph = NULL,
   vectorize = TRUE,
-  pooled.statistic = c("standardized", "raw")
+  pooled.statistic = c("standardized", "raw"),
+  neighbourhood.gene.frac = 0.05,
+  centres.per.cell = 2,
+  centres = NULL,
+  gsd.variance = c("moderated", "model"),
+  gsd.gamma = 0,
+  gsd.d0 = 3,
+  winsor.k = 3
 )
 }
 \arguments{
@@ -47,7 +64,45 @@ clusterFreeExpressionShifts(
 
 \item{meta}{sample metadata}
 
-\item{dist}{\code{"cor"} (1 - Pearson correlation between the two samples' mean profiles; default), \code{"cosine"} or \code{"js"}}
+\item{statistic}{test of each neighbourhood: \code{"gsd"} (default) tests every gene of the neighbourhood and combines them: per gene the contrast
+estimate over its variance (the noise model's prediction moderated towards the residual variance of each relabeled fit),
+combined over genes as the maximum over gamma = 1, 2, 4, 8 and the max of the standardized log sum of |z|^gamma
+(adaptive: many small or few large changes); \code{"distance"}: the sample distance matrix of the neighbourhood's profiles tested
+with a pseudo-F (\code{dist}, the previous method). gsd needs \code{profile = "normalized"} and \code{weighting = "noise"}, and handles any
+single-df contrast (two groups, a numeric variable, covariates; block relabeling or Freedman-Lane)}
+
+\item{dist}{distance between two samples' neighbourhood profiles (\code{statistic = "distance"}). With \code{profile = "normalized"}: \code{"cor"} (default;
+1 - the correlation of the gene-centred, noise-weighted profiles: genes are centred across the unit's samples and
+scaled by sqrt of their weight) or \code{"euclidean"} (the weighted squared Euclidean distance). With \code{profile = "raw"}:
+\code{"cor"} (1 - Pearson correlation of the two samples' profiles over genes, without centring genes across samples),
+\code{"cosine"} or \code{"js"}}
+
+\item{profile}{\code{"normalized"} (default): per neighbourhood and sample, the summed counts over the summed library sizes of the
+sample's cells (\code{lib}), transformed as log10(scale p + 1), with noise weights (\code{weighting}); \code{"raw"}: the mean raw
+count per cell, log10(1e3 x + 1) (\code{log.vectors}), unweighted (the previous default)}
+
+\item{lib}{library size per cell over all genes (named by cell or aligned to \code{colnames(cm)}); needed for
+\code{profile = "normalized"} (default: the column sums of \code{cm}, i.e. over the profile genes only)}
+
+\item{profile.scale}{transform scale of the normalized profiles: \code{"median"} (default; the median library size, so that the
+pseudocount is about one count per typical cell) or a number}
+
+\item{weighting}{\code{"noise"} (default): gene weights 1 / (predicted sampling variance + between-sample floor) from a
+label-free noise model (Poisson variance of the transform plus within-unit heterogeneity, see
+\code{\link[=fitShiftNoiseCurves]{fitShiftNoiseCurves()}}); \code{"none"}: unweighted}
+
+\item{sample.floor}{include the between-sample variance floor tau2(mu) in the gene weights (default TRUE)}
+
+\item{noise.correction}{subtract each sample's predicted noise: for \code{"cor"} the squared norms of the weighted
+profiles are disattenuated (|z|^2 - c, floored at 5 \% of |z|^2), for \code{"euclidean"} the distance is reduced by
+c_a + c_b. Default FALSE: in thin units (few cells per sample) the predicted noise approaches the profile norm and the
+corrected correlations clamp at +-1 (the test then degenerates); on the benchmark the correction added about 0.01 recall
+for \code{"cor"}, while for \code{"euclidean"} it is sensitive to a misfitted noise model}
+
+\item{noise.curves}{fitted noise curves (\code{\link[=fitShiftNoiseCurves]{fitShiftNoiseCurves()}} output with the same \code{scale}); default: fitted on
+\code{n.fit.units} random units of the data}
+
+\item{n.fit.units}{units used to fit the noise curves (default 200)}
 
 \item{min.n.obs.per.samp}{minimum cells of a sample inside the neighbourhood (default 3)}
 
@@ -55,26 +110,34 @@ clusterFreeExpressionShifts(
 
 \item{permutation, n.permutations, block.vars, seed}{permutation settings (see \code{\link[=permutationPlan]{permutationPlan()}}); \code{block.vars} defaults to the model's}
 
+\item{max.enumerate}{enumerate all relabelings when there are at most this many (and at most \code{n.permutations}); the permutation p is
+then exact (the identity included, no +1). Default 0: always random draws (the cluster-free maps)}
+
 \item{adjust}{max-statistic adjustment of the z-scores across cells (default TRUE)}
 
 \item{smooth}{median-filter the shifts and adjusted z-scores over the graph (default TRUE)}
 
 \item{wins}{winsorizing fraction for the adjustment (default 0.025)}
 
-\item{log.vectors}{log10(1e3 x + 1) transform of the mean profiles (default TRUE)}
+\item{log.vectors}{log10(1e3 x + 1) transform of the mean profiles with \code{profile = "raw"} (default TRUE)}
 
 \item{n.cores}{threads for the per-cell loop (C++)}
 
 \item{verbose}{progress}
 
-\item{robust}{\code{"none"}, \code{"huber"} or \code{"winsor"}: down-weight samples with outlying residual distances (re-estimated under every relabeling)}
+\item{robust}{\code{"none"}, \code{"huber"} or \code{"winsor"}. With \code{statistic = "distance"}: down-weight samples with outlying residual
+distances (re-estimated under every relabeling). With \code{statistic = "gsd"}: \code{"winsor"} winsorizes each gene's sample values
+in the neighbourhood before the test (label-free: at the median +- \code{winsor.k} robust sd, the sd being the larger of the sample's
+predicted noise and the MAD-based spread), \code{"huber"} is not available}
 
-\item{robust.k}{robust tuning constant}
+\item{robust.k}{robust tuning constant (\code{statistic = "distance"})}
 
-\item{adjust.method}{\code{"perm-fdr"} (default: pooled permutation FDR over cells, see \code{\link[=permutationFDR]{permutationFDR()}}; no per-cell
-floor), \code{"bh"}, \code{"spatial-fdr"}, \code{"neighbourhood"} or \code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
+\item{adjust.method}{\code{"bh"} (the default with gsd: BH on \code{p.source}, by default the pooled p), \code{"perm-fdr"} (the default
+with the distance map: pooled permutation FDR over cells, see \code{\link[=permutationFDR]{permutationFDR()}}; no per-cell floor), \code{"spatial-fdr"},
+\code{"neighbourhood"} or \code{"max-t"}, see \code{\link[=adjustCellScores]{adjustCellScores()}}}
 
-\item{p.source}{per-cell p-values for the BH-type adjustments: \code{"permutation"} (default; calibrated but floored at
+\item{p.source}{per-cell p-values for the BH-type adjustments (default \code{"pooled"} with gsd, \code{"permutation"} with the
+distance map): \code{"permutation"} (calibrated but floored at
 1 / (n.permutations + 1), so with many cells and sparse signal BH may call nothing), \code{"pooled"} (the cell's
 standardized z against the pooled null of all cells' permuted z-scores, see \code{\link[=pooledPermutationP]{pooledPermutationP()}}: no floor,
 calibrated with enough permutations; about 2,000 keep the far tail within a factor of 2, 10,000 make it exact),
@@ -92,9 +155,9 @@ distribution of the group means is stored as \code{attr(group.test, "perm.means"
 \item{return.perm}{return the permutations x cells matrix of the permuted statistics as \code{stats.perm} (default
 FALSE; \code{n.permutations} x cells doubles, NaN where a cell is not tested under a relabeling)}
 
-\item{post}{post-processing on the cell graph: \code{"none"} (default), \code{"averaged"} (the shift statistic averaged over
+\item{post}{post-processing on the cell graph (default \code{"averaged"} with gsd, \code{"none"} with the distance map): \code{"none"}, \code{"averaged"} (the shift statistic averaged over
 each cell and its graph neighbours, under every permutation alike, before the pooled FDR: an exact test of the
-one-hop-larger unit with calibrated q-values, \code{\link[=averageOverNeighbours]{averageOverNeighbours()}}; needs \code{adjust.method = "perm-fdr"} and
+one-hop-larger unit with calibrated q-values, \code{\link[=averageOverNeighbours]{averageOverNeighbours()}}; needs \code{adjust.method = "perm-fdr"} (or \code{"bh"} with the pooled p) and
 keeps the permutation matrix in memory) or \code{"inherit"} (every cell takes the smallest q among itself and its
 graph neighbours after the test, \code{\link[=inheritNeighbourQ]{inheritNeighbourQ()}})}
 
@@ -104,13 +167,37 @@ itself included; default: \code{nns.per.cell}, which is the 1-hop graph unless a
 \item{vectorize}{permutation loop of the complete-sample cells as matrix products (default TRUE; FALSE for the reference loop)}
 
 \item{pooled.statistic}{statistic pooled over cells for the pooled p-values and FDR: \code{"standardized"} (default) or \code{"raw"} (the shift F itself)}
+
+\item{neighbourhood.gene.frac}{both statistics: in each cell's neighbourhood, use the genes of \code{cm} detected in at least this
+fraction of the neighbourhood's cells (pooled over samples, label-free; default 0.05), so that genes specific to a population
+are analyzed where they are expressed (the rule of the per-cell-type analyses); 0 uses every gene of \code{cm} present in the
+neighbourhood}
+
+\item{centres.per.cell}{gsd with \code{post = "averaged"}: test the neighbourhoods of only a subset of cells (the centres), chosen
+so that each cell has about \code{centres.per.cell} centres among its graph neighbours (an integer; default 2, about 12-14 \% of
+the cells). Each tested neighbourhood's statistic, observed and permuted alike, is passed to all cells of the
+neighbourhood, and a cell's statistic is the mean over the tested neighbourhoods that contain it (typically 20-30), so
+every cell is still tested exactly. Larger values test more neighbourhoods (slower, marginally smoother); \code{Inf} or \code{NULL}
+tests every cell's neighbourhood (the full map, for example for very small populations)}
+
+\item{centres}{tested centres given explicitly (1-based indices of \code{nns.per.cell}; gsd with \code{post = "averaged"}): only their
+neighbourhoods are tested and each one's statistic is scattered to its cells, as with \code{centres.per.cell}, whose greedy
+cover they replace (default NULL); the neighbourhoods of the other cells may be empty (\code{\link[=diffusionNeighbourhoodLists]{diffusionNeighbourhoodLists()}})}
+
+\item{gsd.variance}{gsd per-gene variance: \code{"moderated"} (default) or \code{"model"} (the noise model only)}
+
+\item{gsd.gamma}{gsd combination over genes: 0 (default, adaptive) or one of 1, 2, 4, 8, 99 (max) alone}
+
+\item{gsd.d0}{prior degrees of freedom of the model variance in the moderated variance (default 3)}
+
+\item{winsor.k}{winsorization threshold of \code{robust = "winsor"} with gsd, in robust sd units (default 3)}
 }
 \value{
-list: \code{stat} (shift F per cell), \code{p.value} (exact permutation p), \code{p.pooled} (pooled-null p, no floor), \code{p.param},
+list: \code{stat} (the neighbourhood statistic per cell: the shift F, or the gsd combination), \code{p.value} (exact permutation p), \code{p.pooled} (pooled-null p, no floor), \code{p.param} (NA for gsd),
 \code{z.pooled} (the tail z of \code{p.pooled}, \code{qnorm(1 - p)}), \code{z.std} (the permutation-standardized
 statistic: observed minus permutation mean over permutation sd; the input of the max-t adjustment and of the
-pooled null), \code{z.adj}, \code{shifts} (bias-corrected shift
-estimate), \code{shifts.smoothed}, \code{n.samples}, \code{settings}
+pooled null), \code{z.adj}, \code{shifts} (distance map: the bias-corrected shift estimate; gsd: the mean squared per-gene z of
+the neighbourhood, about 1 without a change), \code{shifts.smoothed}, \code{n.samples}, \code{settings}
 }
 \description{
 Cluster-free expression shifts for one contrast

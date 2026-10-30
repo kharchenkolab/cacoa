@@ -86,7 +86,10 @@ inducePermutationSimple <- function(P, idx) {
 #' grid, and a per-covariate global p-value (max-statistic across cell types). Also an association of the
 #' covariate with per-sample dispersion.
 #'
-#' @param D.list named list of sample x sample distance matrices (one per cell type)
+#' @param D.list named list of sample x sample distance matrices (one per cell type). A matrix may carry its own distance
+#'   type in `attr(D, "dist.type")` (overrides `dist`), and `attr(D, "summary") = TRUE` marks a summary row (all cell
+#'   types combined, composition, pooled pseudobulk): such rows are screened like the others but are adjusted among
+#'   themselves and do not enter the global p-values, the counts of significant cell types or the suggested model.
 #' @param meta sample metadata (rows named by sample)
 #' @param covariates covariates to screen (default: usable columns of `meta`, see [describeMetadata()]);
 #'   transform strings such as `"log(pmi)"` are allowed
@@ -131,7 +134,9 @@ screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "
   if (!length(D.list)) stop("no cell type has at least ", min.samples.per.type, " samples")
   if (any(vapply(D.list, function(D) is.null(rownames(D)) || !all(rownames(D) %in% all.samples), logical(1))))
     stop("every distance matrix must be named by samples present in `meta`")
-  G.list <- lapply(D.list, function(D) gowerCenter(asSquaredDistance(D, dist)))
+  G.list <- lapply(D.list, function(D) gowerCenter(asSquaredDistance(D, attr(D, "dist.type") %||% dist)))
+  summary.rows <- names(D.list)[vapply(D.list, function(D) isTRUE(attr(D, "summary")), logical(1))]
+  if (length(summary.rows) == length(D.list)) summary.rows <- character(0)   # nothing but summaries: screen them as the grid
   adjust.cols <- if (length(adj.vars)) do.call(cbind, lapply(adj.vars, function(v) covariateColumns(meta, v))) else NULL
   nperm <- if (p.values == "permutation") n.permutations else 0
   P <- if (nperm > 0) withSeed(seed, replicate(nperm, sample.int(length(all.samples)))) else NULL
@@ -169,12 +174,14 @@ screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "
   tab$p <- if (p.values == "permutation") tab$p.perm else tab$p.analytic
   tab$p.disp <- if (p.values == "permutation") tab$p.disp.perm else tab$p.disp.analytic
   tab$p.source <- p.values
+  tab$summary <- tab$celltype %in% summary.rows
   tab$padj <- NA_real_; tab$padj.disp <- NA_real_
-  for (m in modes) { i <- tab$mode == m; tab$padj[i] <- stats::p.adjust(tab$p[i], "BH"); tab$padj.disp[i] <- stats::p.adjust(tab$p.disp[i], "BH") }
+  for (m in modes) for (sr in c(FALSE, TRUE)) {   # BH over the cell-type grid; summary rows among themselves
+    i <- tab$mode == m & tab$summary == sr; tab$padj[i] <- stats::p.adjust(tab$p[i], "BH"); tab$padj.disp[i] <- stats::p.adjust(tab$p.disp[i], "BH") }
   # global per covariate x mode: max-T over cell types from the shared permutations
   global <- list()
   for (m in modes) for (v in covariates) {
-    rows <- tab[tab$mode == m & tab$covariate == v, ]
+    rows <- tab[tab$mode == m & tab$covariate == v & !tab$summary, ]
     gp <- NA_real_
     if (nperm > 0) {
       obs <- rows$F; perm <- lapply(rows$celltype, function(ct) runs[[ct]][[m]]$perm[[v]]$F)
@@ -198,7 +205,7 @@ screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "
   # suggestion: covariates associated in >= min(3, n.types/4) cell types in the partial (or only) mode
   sm <- if ("partial" %in% modes) "partial" else modes[1]
   g <- global[global$mode == sm, ]
-  thr <- max(1, min(3, floor(length(cts) / 4)))
+  thr <- max(1, min(3, floor(length(setdiff(cts, summary.rows)) / 4)))
   sel <- g$covariate[g$n.sig >= thr]
   if (!is.null(test.variable)) sel <- setdiff(sel, test.variable)
   over <- if (!is.null(global$assoc.test)) g$covariate[is.finite(g$assoc.test) & g$assoc.test > 0.5] else character(0)
@@ -208,7 +215,7 @@ screenCovariates <- function(D.list, meta, covariates = NULL, mode = c("both", "
                         settings = list(dist = dist, p.values = p.values, robust = robust, robust.k = robust.k, n.permutations = nperm, adjust.for = adjust.for, alpha = alpha,
                                         min.samples.per.type = min.samples.per.type,
                                         test.variable = test.variable, threshold.types = thr, seed = seed),
-                        notes = notes, celltypes = cts, skipped = skipped.types, over.adjustment = over),
+                        notes = notes, celltypes = setdiff(cts, summary.rows), summaries = summary.rows, skipped = skipped.types, over.adjustment = over),
                    class = c("cacoaCovariateScreen", "list"))
   if (verbose) print(res)
   res
@@ -222,7 +229,7 @@ print.cacoaCovariateScreen <- function(x, ...) {
               x$settings$p.values, if (x$settings$p.values == "analytic") " (approximate)" else sprintf(" (%d permutations)", x$settings$n.permutations)))
   if (length(x$skipped)) cat(sprintf("  not screened (fewer than %d samples): %s\n", x$settings$min.samples.per.type %||% 6, paste(x$skipped, collapse = ", ")))
   if ("partial" %in% x$modes && "fallback" %in% names(x$table)) {
-    nf <- length(unique(x$table$celltype[x$table$mode == "partial" & x$table$fallback]))
+    nf <- length(intersect(unique(x$table$celltype[x$table$mode == "partial" & x$table$fallback]), x$celltypes))
     if (nf) cat(sprintf("  partial mode fell back to marginal in %d of %d cell types (too few residual degrees of freedom for the full covariate set)\n", nf, length(x$celltypes)))
   }
 
@@ -239,9 +246,24 @@ print.cacoaCovariateScreen <- function(x, ...) {
   if (nrow(dsp)) cat(sprintf("Associated with sample dispersion: %s\n", paste(sprintf("%s (%d types)", dsp$covariate, dsp$n.sig.disp), collapse = ", ")))
   if (length(x$over.adjustment)) cat(sprintf("Strongly tied to '%s' (possible over-adjustment): %s\n", x$settings$test.variable,
                                              paste(sprintf("%s (%.2f)", x$over.adjustment, g$assoc.test[match(x$over.adjustment, g$covariate)]), collapse = ", ")))
+  if (length(x$summaries) && !is.null(x$table$summary)) for (sr in x$summaries) {
+    r <- x$table[x$table$celltype == sr & x$table$mode == sm & !is.na(x$table$padj) & x$table$padj < a, ]
+    r <- r[order(-r$R2.adj), ]
+    fb <- sm == "partial" && isTRUE(any(x$table$fallback[x$table$celltype == sr & x$table$mode == "partial"]))   # the partial row is marginal
+    cat(sprintf("%s (%s, FDR %.0f%%): %s\n", sr, if (fb) "marginal, partial fell back" else sm, 100 * a,
+                if (nrow(r)) paste(sprintf("%s (adj. R2 %.2f)", r$covariate, r$R2.adj), collapse = ", ") else "no covariate"))
+  }
   if (!is.null(x$suggestion)) cat(sprintf("Suggested model: %s   (not applied; see cao$setModel())\n", paste(deparse(x$suggestion), collapse = "")))
   for (nt in x$notes) cat("Note: ", nt, "\n", sep = "")
   invisible(x)
+}
+
+# heatmap subtitle line: where the partial mode fell back to marginal (cell types and summary columns counted separately)
+fallbackNote <- function(tb, is.sum, ord.ct, ord.sum) {
+  if (!"fallback" %in% names(tb)) return("")
+  n.ct <- length(unique(tb$celltype[tb$fallback & !is.sum])); n.sum <- length(unique(tb$celltype[tb$fallback & is.sum]))
+  parts <- c(if (n.ct) sprintf("%d of %d cell types", n.ct, length(ord.ct)), if (n.sum) sprintf("%d of %d summary columns", n.sum, length(ord.sum)))
+  if (length(parts)) sprintf("\npartial mode fell back to marginal in %s", paste(parts, collapse = " and ")) else ""
 }
 
 #' Variance partition of a small set of covariates
@@ -326,9 +348,11 @@ plotCovariateScreen <- function(x, effect = c("location", "dispersion"), mode = 
     k <- paste(tb$celltype, tb$covariate)
     tb$ring <- tb$mode == "partial" & !tb$sig & (sig.m[k] %in% TRUE)
   }
-  ord.ct <- unique(tb$celltype); ord.cv <- unique(tb$covariate)
+  is.sum <- if (is.null(tb$summary)) rep(FALSE, nrow(tb)) else tb$summary
+  ord.sum <- intersect(x$summaries %||% character(0), unique(tb$celltype[is.sum]))   # summary rows first, then the cell types
+  ord.ct <- unique(tb$celltype[!is.sum]); ord.cv <- unique(tb$covariate)
   if (cluster && length(ord.ct) > 2 && length(ord.cv) > 1) {
-    m <- reshape2::acast(tb[tb$mode == modes[1], ], covariate ~ celltype, value.var = "fill", fun.aggregate = mean)
+    m <- reshape2::acast(tb[tb$mode == modes[1] & !is.sum, ], covariate ~ celltype, value.var = "fill", fun.aggregate = mean)
     m[!is.finite(m)] <- 0
     if (nrow(m) > 2) ord.cv <- rownames(m)[stats::hclust(stats::dist(m))$order]
     if (ncol(m) > 2) ord.ct <- colnames(m)[stats::hclust(stats::dist(t(m)))$order]
@@ -340,20 +364,21 @@ plotCovariateScreen <- function(x, effect = c("location", "dispersion"), mode = 
   tb$label <- ""
   cols <- c("celltype", "covariate", "mode", "fill", "neg", "sig", "ring", "label")
   df <- rbind(tb[, cols], gl[, cols])
-  df$celltype <- factor(df$celltype, levels = c(ord.ct, "global")); df$covariate <- factor(df$covariate, levels = ord.cv)
+  df$celltype <- factor(df$celltype, levels = c(ord.sum, ord.ct, "global")); df$covariate <- factor(df$covariate, levels = ord.cv)
   df$mode <- factor(df$mode, levels = modes)
   gg <- ggplot2::ggplot(df, ggplot2::aes(x = .data$celltype, y = .data$covariate)) +
     ggplot2::geom_tile(ggplot2::aes(fill = .data$fill), colour = "white") +
     ggplot2::geom_tile(data = df[df$neg, ], fill = "grey85", colour = "white") +
     ggplot2::geom_point(data = df[df$sig & df$celltype != "global", ], size = 1.8, colour = "black") +
     ggplot2::geom_point(data = df[df$ring, ], size = 2.6, shape = 1, colour = "black", stroke = 0.9) +
-    ggplot2::geom_text(ggplot2::aes(label = .data$label), size = 2.6) +
-    ggplot2::geom_point(data = df[df$sig & df$celltype == "global", ], ggplot2::aes(y = .data$covariate), x = length(ord.ct) + 1.4, size = 1.8, colour = "black") +
+    ggplot2::geom_text(ggplot2::aes(label = .data$label), size = 2.5, nudge_x = -0.12) +   # the global p-values, left of their dots
+    ggplot2::geom_point(data = df[df$sig & df$celltype == "global", ], ggplot2::aes(y = .data$covariate), x = length(ord.sum) + length(ord.ct) + 1.4, size = 1.4, colour = "black") +
     ggplot2::scale_fill_gradient(low = "white", high = "#2c7fb8", na.value = "grey95", name = if (value == "neglog10p") "-log10 p" else if (effect == "dispersion") "adj. R2 (disp.)" else value) +
     plot.theme + ggplot2::labs(x = NULL, y = NULL, title = sprintf("Covariate screen: %s (%s)", effect, paste(modes, collapse = " / ")),
-                               subtitle = sprintf("dot: FDR < %.2g; ring: marginal only; grey: negative adj. R2; 'global' column: max-statistic p across cell types%s", alpha,
-                                                  if ("fallback" %in% names(tb) && any(tb$fallback)) sprintf("\npartial mode fell back to marginal in %d cell types", length(unique(tb$celltype[tb$fallback]))) else "")) +
+                               subtitle = sprintf("dot: FDR < %.2g; ring: marginal only; grey: negative adj. R2; blank: not tested; 'global' column: max-statistic p across cell types%s", alpha,
+                                                  fallbackNote(tb, is.sum, ord.ct, ord.sum))) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1), plot.subtitle = ggplot2::element_text(size = 8, colour = "grey30"))
+  if (length(ord.sum)) gg <- gg + ggplot2::geom_vline(xintercept = length(ord.sum) + 0.5, colour = "grey40", linewidth = 0.5)
   if (length(modes) > 1) gg <- gg + ggplot2::facet_wrap(~ mode, nrow = 1)
   gg
 }
@@ -370,6 +395,7 @@ plotCovariateScreen <- function(x, effect = c("location", "dispersion"), mode = 
 plotCovariateSummary <- function(x, mode = NULL, plot.theme = ggplot2::theme_bw()) {
   if (is.null(mode)) mode <- if ("partial" %in% x$modes) "partial" else x$modes[1]
   tb <- x$table[x$table$mode == mode, ]
+  if (!is.null(tb$summary)) tb <- tb[!tb$summary, ]   # cell types only (summary rows are in the heatmap)
   # location: median chance-corrected R2 across cell types; dispersion: only the count of significant cell types
   # (with a handful of samples per arm the dispersion F is too unstable for an R2-type summary)
   agg <- do.call(rbind, lapply(split(tb, tb$covariate), function(d) data.frame(
@@ -386,7 +412,9 @@ plotCovariateSummary <- function(x, mode = NULL, plot.theme = ggplot2::theme_bw(
     ggplot2::coord_flip(clip = "off") + ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0.6))) + plot.theme +
     ggplot2::labs(x = NULL, y = "median chance-corrected R2 across cell types (location)",
                   title = sprintf("Covariate summary (%s)", mode),
-                  subtitle = sprintf("labels: cell types with location FDR < %.2g; red: cell types with a dispersion association at FDR < %.2g", x$settings$alpha, x$settings$alpha)) +
+                  subtitle = sprintf("labels: cell types with location FDR < %.2g\nred: cell types with a dispersion association at FDR < %.2g%s", x$settings$alpha, x$settings$alpha,
+                                     if (mode == "partial" && "fallback" %in% names(tb) && any(tb$fallback)) sprintf("\npartial mode fell back to marginal in %d of %d cell types",
+                                                                                                                 length(unique(tb$celltype[tb$fallback])), length(unique(tb$celltype))) else "")) +
     ggplot2::theme(plot.subtitle = ggplot2::element_text(size = 8, colour = "grey30"))
 }
 

@@ -33,6 +33,9 @@ struct Accum {
   arma::mat perm;                                     // B x m (keep_perm)
   bool average; const std::vector<std::vector<int>>* nn; std::vector<float> avg; std::vector<double> avg_obs; std::vector<char> seen;
   std::mutex lock; std::vector<std::mutex> stripes;
+  // thinned units (by_count): only index units are tested; each cell's average is over the index units scattered into it
+  // (divisor = their number, cnt), not over its own neighbour list, and a cell needs no result of its own
+  bool by_count = false; std::vector<int> cnt;
 
   Accum(arma::uword m_, arma::uword B_, const arma::vec& z_grid, bool use_abs_, int alt_code_, const arma::ivec& group_, int n_groups,
         bool keep_perm, bool average_, const std::vector<std::vector<int>>* nn_graph, bool standardize_ = true)
@@ -90,6 +93,7 @@ struct Accum {
       float* row = &avg[(size_t)j * B];
       for (arma::uword b = 0; b < B; ++b) { const double v = fp[b]; if (std::isfinite(v)) row[b] += (float)v; }
       avg_obs[j] += obs;
+      if (by_count) ++cnt[j];
     }
   }
 
@@ -98,10 +102,10 @@ struct Accum {
     if (!average) return;
     cacoa::parallelFor(0, (int)m, [&](int k) {
       const std::vector<int>& ids = (*nn)[k];
-      if (ids.empty()) return;
+      if (!by_count && ids.empty()) return;
       bool self_tested = seen[k] != 0;
-      if (!self_tested) return;                                      // a cell not tested on its own stays NA (its own vector is absent)
-      const double inv = 1.0 / (double)ids.size();
+      if (by_count ? cnt[k] == 0 : !self_tested) return;             // a cell not tested on its own stays NA (its own vector is absent)
+      const double inv = 1.0 / (double)(by_count ? (size_t)cnt[k] : ids.size());
       arma::vec fp(B); const float* row = &avg[(size_t)k * B];
       for (arma::uword b = 0; b < B; ++b) fp[b] = (double)row[b] * inv;
       cell((arma::uword)k, avg_obs[k] * inv, fp);

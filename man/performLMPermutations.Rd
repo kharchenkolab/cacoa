@@ -30,7 +30,10 @@ performLMPermutations(
   average = FALSE,
   nn.graph = NULL,
   closed.form = TRUE,
-  pooled.standardize = FALSE
+  pooled.standardize = FALSE,
+  moderate.perm = c("none", "fixed", "squeeze", "trend"),
+  moderate.d0 = 3,
+  moderate.d0.max = Inf
 )
 }
 \arguments{
@@ -64,6 +67,15 @@ performLMPermutations(
 \item{P, perm.cells}{permutations and cells from \code{\link[=modelPermutations]{modelPermutations()}}; drawn from the design when \code{NULL}}
 
 \item{block.vars}{additional strata for the permutation plan}
+
+\item{moderate.perm}{moderated statistic inside the permutation test: \code{"none"} (default), \code{"fixed"} (residual variances
+shrunk towards the median label-free variance with \code{moderate.d0} prior degrees of freedom), \code{"squeeze"} (prior fitted by
+limma's \code{fitFDist} on the label-free variances) or \code{"trend"} (the same, prior variance a trend on the response mean);
+label-free = after removing only the nuisance design, so the test stays exact (closed-form path only)}
+
+\item{moderate.d0}{prior degrees of freedom of \code{"fixed"} (default 3)}
+
+\item{moderate.d0.max}{cap on the estimated prior degrees of freedom of \code{"squeeze"} and \code{"trend"} (default \code{Inf}; see \code{\link[=fitFPrior]{fitFPrior()}})}
 }
 \value{
 list: \code{coef} (\verb{p x m}), \code{effect} and \code{se} (contrast estimate and standard error), \code{df}, \code{stat.obs} (the

@@ -161,7 +161,8 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
                              std::string statistic = "t",
                              bool pooled = false, Rcpp::NumericVector z_grid = Rcpp::NumericVector::create(), bool use_abs = true,
                              Rcpp::IntegerVector group = Rcpp::IntegerVector::create(), bool average = false,
-                             Rcpp::Nullable<Rcpp::List> nn_graph = R_NilValue, bool closed_form = true, bool pooled_standardize = false) {
+                             Rcpp::Nullable<Rcpp::List> nn_graph = R_NilValue, bool closed_form = true, bool pooled_standardize = false,
+                             Rcpp::NumericVector prior_var = Rcpp::NumericVector::create(), double prior_df = 0) {
 
   Config cfg;
   cfg.robust = robust; cfg.na_mode = na_mode; cfg.huber_k = huber_k; cfg.huber_maxit = huber_maxit; cfg.huber_tol = huber_tol;
@@ -320,6 +321,11 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
   // so all cells and all permutations are a few matrix products, done in blocks of columns.
   const bool fast = closed_form && n_randomizations > 0 && grp_cnt == 1 && designs[0].valid_design && designs[0].can_permute && is_drop && !is_huber && !is_winsor && !cfg.ret_fits
                     && raw_groups[0].obs.n_elem == n;
+  // moderated statistic (label-free prior per column: variance prior_var[j] with prior_df degrees of freedom): the residual
+  // variance of the observed and of every permuted fit is shrunk the same way, (rss + d0 s0^2) / (df + d0), so the test stays exact
+  const bool moderated = prior_df > 0;
+  if (moderated && (int)prior_var.size() != (int)m) Rcpp::stop("prior_var must have one value per column of Y");
+  if (moderated && !fast) Rcpp::stop("the moderated permutation statistic needs the closed-form path (complete responses, no robust fit)");
   if (fast) {
     const DesignGroup& grp0 = designs[0];
     arma::mat Yw = has_Z ? project_out_Q(grp0.Qz, Y) : Y;
@@ -341,8 +347,9 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
       arma::mat Proj(B_, mb, arma::fill::zeros);
       for (int b = 0; b < B_; ++b) Proj.row(b) = arma::sum(R2.rows(b * pq, (b + 1) * pq - 1), 0);
       for (arma::uword t = 0; t < mb; ++t) {
-        const arma::uword j = c0 + t; Df[j] = grp0.df;
-        const double se = std::sqrt(cXc * rss[t] / grp0.df);
+        const arma::uword j = c0 + t; Df[j] = grp0.df + (moderated ? prior_df : 0.0);
+        const double pv0 = moderated ? prior_df * prior_var[j] : 0.0, dfm = grp0.df + (moderated ? prior_df : 0.0);
+        const double se = std::sqrt(cXc * (rss[t] + pv0) / dfm);
         const double stat_obs = use_t ? studentize(eff[t], se, ysc[t]) : eff[t];
         Coef.col(j) = grp0.B * Yb.col(t); Effect[j] = eff[t]; Se[j] = se; Stat[j] = stat_obs;
         if (cfg.ret_res) Resid.col(j) = Yb.col(t) - grp0.X_sub * Coef.col(j);
@@ -350,7 +357,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
         arma::vec sp(B_), ep(B_); int ge = 0, le = 0, ge_abs = 0; double esum = 0; int ecnt = 0;
         for (int b = 0; b < B_; ++b) {
           const double e = Num(b, t); ep[b] = e;
-          const double rb = yy[t] - Proj(b, t); const double seb = std::sqrt(cXc * rb / grp0.df);
+          const double rb = yy[t] - Proj(b, t); const double seb = std::sqrt(cXc * (rb + pv0) / dfm);
           const double v = use_t ? studentize(e, seb, ysc[t]) : e; sp[b] = v;
           if (std::isfinite(e)) { esum += e; ++ecnt; }
           if (std::isfinite(v)) { if (std::abs(v) >= std::abs(stat_obs) - 1e-12) ge_abs++; if (v >= stat_obs - 1e-12) ge++; if (v <= stat_obs + 1e-12) le++; }   // ties count (exact test)

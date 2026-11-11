@@ -796,9 +796,10 @@ estimateDEForTypeDESeq <- function(cm, sample.meta, model, test.type = "wald",
   coldata <- sample.meta[samp, , drop = FALSE]
   dds <- DESeq2::DESeqDataSetFromMatrix(countData = cm, colData = coldata, design = ~ 1)
 
-  # Fit size factors + dispersions 
+  # Fit size factors + dispersions. The dispersions are estimated around the fit of the model matrix: with the dummy design ~ 1 the
+  # differences explained by the model are counted as dispersion and the test loses most of its genes
   dds <- DESeq2::estimateSizeFactors(dds, quiet = TRUE)
-  dds <- DESeq2::estimateDispersions(dds, quiet = TRUE)
+  dds <- DESeq2::estimateDispersions(dds, modelMatrix = X, quiet = TRUE)
 
   if (tolower(test.type) %in% c("wald", "")) {
     # Wald fit using custom model matrix

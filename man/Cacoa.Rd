@@ -544,6 +544,8 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 
 \item{\code{full.meta}}{Full sample metadata (default=NULL)}
 
+\item{\code{excluded.samples}}{samples left out of all analyses by \code{excludeSamples()} (default=NULL: none)}
+
 \item{\code{cell.groups}}{Named factor with cell names with cluster per cell (default=NULL)}
 
 \item{\code{embedding}}{2D embedding to visualize the cells in (default=NULL)}
@@ -591,6 +593,7 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item \href{#method-Cacoa-checkDesign}{\code{Cacoa$checkDesign()}}
 \item \href{#method-Cacoa-plotDesign}{\code{Cacoa$plotDesign()}}
 \item \href{#method-Cacoa-describeMetadata}{\code{Cacoa$describeMetadata()}}
+\item \href{#method-Cacoa-excludeSamples}{\code{Cacoa$excludeSamples()}}
 \item \href{#method-Cacoa-getSampleGroups}{\code{Cacoa$getSampleGroups()}}
 \item \href{#method-Cacoa-checkSensitivity}{\code{Cacoa$checkSensitivity()}}
 \item \href{#method-Cacoa-plotSensitivity}{\code{Cacoa$plotSensitivity()}}
@@ -604,6 +607,7 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item \href{#method-Cacoa-plotExpressionShiftGenes}{\code{Cacoa$plotExpressionShiftGenes()}}
 \item \href{#method-Cacoa-plotExpressionShiftMagnitudes}{\code{Cacoa$plotExpressionShiftMagnitudes()}}
 \item \href{#method-Cacoa-plotSampleInfluence}{\code{Cacoa$plotSampleInfluence()}}
+\item \href{#method-Cacoa-plotFitDiagnostics}{\code{Cacoa$plotFitDiagnostics()}}
 \item \href{#method-Cacoa-plotExpressionShiftResiduals}{\code{Cacoa$plotExpressionShiftResiduals()}}
 \item \href{#method-Cacoa-estimatePerCellTypeDE}{\code{Cacoa$estimatePerCellTypeDE()}}
 \item \href{#method-Cacoa-estimateDEPerCellType}{\code{Cacoa$estimateDEPerCellType()}}
@@ -637,6 +641,7 @@ cao$getGOEnvironment(org.db = org.Hs.eg.db::org.Hs.eg.db)
 \item \href{#method-Cacoa-plotCodaHeatmap}{\code{Cacoa$plotCodaHeatmap()}}
 \item \href{#method-Cacoa-plotCodaCellTypes}{\code{Cacoa$plotCodaCellTypes()}}
 \item \href{#method-Cacoa-plotCellLoadings}{\code{Cacoa$plotCellLoadings()}}
+\item \href{#method-Cacoa-plotCodaSamples}{\code{Cacoa$plotCodaSamples()}}
 \item \href{#method-Cacoa-checkNeighbourhoods}{\code{Cacoa$checkNeighbourhoods()}}
 \item \href{#method-Cacoa-estimateCellDensity}{\code{Cacoa$estimateCellDensity()}}
 \item \href{#method-Cacoa-plotCellDensity}{\code{Cacoa$plotCellDensity()}}
@@ -1000,6 +1005,33 @@ Describe the sample metadata columns (type, levels, missing values, role as a co
 
 \subsection{Returns}{
 data.frame, see \code{\link[=describeMetadata]{describeMetadata()}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-excludeSamples"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-excludeSamples}{}}}
+\subsection{Method \code{excludeSamples()}}{
+Leave samples out of every analysis run afterwards (expression shifts, composition, differential expression,
+the cluster-free maps): their cells are treated as unassigned and their rows are removed from the working sample
+metadata; the model is rebuilt on the remaining samples. Nothing is excluded automatically: the sensitivity and fit
+diagnostics name samples, the decision is the user's. Called without samples, it restores the full set. Stored results
+are not recomputed.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$excludeSamples(samples = NULL, verbose = NULL)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{samples}}{character vector of sample ids to exclude (the complete list: a second call replaces the first); \code{NULL}
+or empty restores all samples}
+
+\item{\code{verbose}}{print what was done}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+the object, invisibly; \code{cao$excluded.samples} holds the excluded ids
 }
 }
 \if{html}{\out{<hr>}}
@@ -1712,6 +1744,46 @@ Leave-one-sample-out influence on the expression-shift effects (replaces \code{p
 }
 \subsection{Returns}{
 ggplot2 heatmap: samples x cell types, the change in the effect when the sample is left out
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-plotFitDiagnostics"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-plotFitDiagnostics}{}}}
+\subsection{Method \code{plotFitDiagnostics()}}{
+Fit diagnostics in one layout for every analysis: two heatmaps of samples by cell types. Left, how far each
+sample lies from the model's fit (composition: the studentized residual of the cell type's log ratio; expression shifts:
+the distance of the sample's profile from its fitted position relative to a typical sample, log2; cell density: the mean
+standardized residual of the cell type's cells). Right, how much the cell type's effect changes when the sample is left
+out, in standard errors of the effect. Marked tiles are beyond \code{resid.thresh} and \code{influence.se}.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotFitDiagnostics(
+  analysis = c("composition", "expression.shifts", "cell.density"),
+  name = NULL,
+  what = c("both", "residual", "influence"),
+  cell.types = NULL,
+  resid.thresh = NULL,
+  influence.se = 1
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{analysis}}{\code{"composition"}, \code{"expression.shifts"} or \code{"cell.density"}}
+
+\item{\code{name}}{result name (default: the analysis' default slot)}
+
+\item{\code{what}}{\code{"both"} (default), \code{"residual"} or \code{"influence"}}
+
+\item{\code{cell.types}}{optional subset of cell types}
+
+\item{\code{resid.thresh, influence.se}}{marking thresholds (defaults: residual 3, or a sample twice as far from the fit as typical for
+the expression shifts; 1 standard error)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+ggplot2 object (a two-panel grid for \code{what = "both"})
 }
 }
 \if{html}{\out{<hr>}}
@@ -3233,9 +3305,10 @@ Estimate cell loadings
   formula = NULL,
   contrast = NULL,
   test = NULL,
-  perm.method = c("freedman-lane", "block"),
+  perm.method = "auto",
+  random.baseline = FALSE,
   statistic = c("t", "coef"),
-  zero.pseudocount = 0.1,
+  zero.pseudocount = 0.5,
   basis.type = c("default"),
   ref.method = c("block", "pvalue"),
   ref.block.thresh = 0.05,
@@ -3275,11 +3348,19 @@ Estimate cell loadings
 
 \item{\code{test}}{optional test for a temporary model (see \code{Cacoa$new()})}
 
-\item{\code{perm.method}}{permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'}
+\item{\code{perm.method}}{relabeling scheme: \code{"auto"} (default: the scheme of the model's test, as for the other analyses: the tested
+variable is exchanged within the levels of discrete covariates and grouping terms; residuals are exchanged, within the levels of
+the discrete covariates, when the model has a continuous covariate), \code{"block"} or \code{"freedman-lane"}}
+
+\item{\code{random.baseline}}{fit a grouping term \code{(1 | g)} of the model as a random baseline per level of \code{g} (default \code{FALSE}: the
+grouping term only restricts the relabeling to within the levels of \code{g}, as in every other analysis). With \code{TRUE} the levels
+that contain one value of the tested variable contribute to the estimate, and a design in which every level contains one
+value can be tested; see \code{\link[=lmCoda]{lmCoda()}}}
 
 \item{\code{statistic}}{test statistic of the per-column fitter: \code{"t"} (studentized contrast, default) or \code{"coef"} (raw contrast estimate)}
 
-\item{\code{zero.pseudocount}}{pseudocount added to zero counts before the log-ratio transform (default 0.1)}
+\item{\code{zero.pseudocount}}{pseudocount added to the counts before the log-ratio transform (default 0.5 cells in a sample of median
+size, scaled with the sample's cell number; see \code{\link[=lmCoda]{lmCoda()}})}
 
 \item{\code{basis.type}}{ILR basis type (default 'default')}
 
@@ -3499,6 +3580,44 @@ cao$plotCellLoadings(center = "both")
 
 }
 
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Cacoa-plotCodaSamples"></a>}}
+\if{latex}{\out{\hypertarget{method-Cacoa-plotCodaSamples}{}}}
+\subsection{Method \code{plotCodaSamples()}}{
+The samples behind the composition result: per cell type the samples' proportions by level of the tested variable,
+the fitted proportions with their intervals, and the samples that carry the result named (see \code{\link[=plotCodaSamples]{plotCodaSamples()}})
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Cacoa$plotCodaSamples(
+  name = "coda",
+  cell.types = NULL,
+  n.top = 12,
+  pair.by = NULL,
+  palette = self$sample.groups.palette,
+  ...
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{result name (default 'coda')}
+
+\item{\code{cell.types}}{cell types to show (default: the \code{n.top} with the smallest p-values)}
+
+\item{\code{n.top}}{number of cell types shown by default}
+
+\item{\code{pair.by}}{optional column of the sample metadata joining samples of the same unit (e.g. patient)}
+
+\item{\code{palette}}{colours of the levels of the tested variable}
+
+\item{\code{...}}{passed to \code{\link[=plotCodaSamples]{plotCodaSamples()}} (\code{influence.se}, \code{resid.thresh}, \code{label.samples}, \code{ncol})}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A ggplot2 object
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Cacoa-checkNeighbourhoods"></a>}}
@@ -3763,7 +3882,7 @@ Estimate differential cell density
   contrast = NULL,
   test = NULL,
   block.vars = NULL,
-  perm.method = "freedman-lane",
+  perm.method = "auto",
   statistic = c("t", "coef"),
   robust.method = "none",
   na.mode = "drop",
@@ -3808,7 +3927,12 @@ Estimate differential cell density
 
 \item{\code{block.vars}}{metadata columns defining permutation strata (default: stored)}
 
-\item{\code{perm.method}}{permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'}
+\item{\code{perm.method}}{relabeling scheme: \code{"auto"} (default: the scheme of the model's test, i.e. sample labels relabeled within the
+levels of the discrete covariates and grouping variables (\code{"block"}) when every adjusting covariate is discrete, residual
+permutation (\code{"freedman-lane"}) when a continuous covariate is present), \code{"block"} or \code{"freedman-lane"}. With a covariate of many
+levels (patients) residual permutation across all samples is not valid for the density map: in data without a label effect it
+called cells in 67-78 \% of the data sets, relabeling within the levels in 0-5 \% (residuals are now exchanged within the levels
+of the discrete covariates, see \code{\link[=permutationPlan]{permutationPlan()}})}
 
 \item{\code{statistic}}{test statistic of the fitter: \code{"t"} (studentized contrast, default) or \code{"coef"} (raw contrast estimate)}
 
@@ -4402,7 +4526,7 @@ Estimate differential expression Z-scores between two conditions per individual 
   formula = NULL,
   test = NULL,
   contrast = NULL,
-  perm.method = "freedman-lane",
+  perm.method = "auto",
   statistic = c("t", "coef"),
   robust.method = "none",
   na.mode = "drop",
@@ -4445,7 +4569,8 @@ Estimate differential expression Z-scores between two conditions per individual 
 
 \item{\code{contrast}}{optional contrast for a temporary model (expert synonym of \code{test})}
 
-\item{\code{perm.method}}{permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'}
+\item{\code{perm.method}}{relabeling scheme: \code{"auto"} (default: the scheme of the model's test, as for the other analyses), \code{"block"} or
+\code{"freedman-lane"}}
 
 \item{\code{statistic}}{test statistic of the fitter: \code{"t"} (studentized contrast, default) or \code{"coef"} (raw contrast estimate)}
 

@@ -251,7 +251,15 @@ test_that("formula hygiene: dropped constant terms are notes, random effects and
   expect_true(any(grepl("site dropped", m$issues$message[m$issues$severity == "note"])))
   expect_equal(deparse(m$tests[[1]]$design$formula_used), "~group + batch")
   expect_output(print(m), "note: term site dropped")
-  expect_error(buildCacoaModel(meta, ~ group + (1 | batch), test = "group"), "random-effect terms")
+  # a grouping term is taken out of the formula and defines the relabeling strata; only random intercepts are understood
+  mg <- buildCacoaModel(meta, ~ group + (1 | batch), test = "group")
+  expect_equal(mg$random.vars, "batch"); expect_true("batch" %in% mg$block.vars); expect_equal(deparse(mg$formula), "~group")
+  expect_true(mg$random.info$structure %in% c("within", "partly"))
+  expect_error(buildCacoaModel(meta, ~ group + (group | batch), test = "group"), "only a random intercept")
+  meta$donor <- paste0(meta$group, rep(1:2, length.out = nrow(meta)))        # the tested variable is constant within donor
+  md <- buildCacoaModel(meta, ~ group + (1 | donor), test = "group")
+  expect_equal(md$random.info$structure, "between"); expect_false("donor" %in% md$block.vars)
+  expect_match(cacoa:::groupingBetweenMessage(md, "x"), "whole levels")
   expect_error(buildCacoaModel(meta, ~ group + batch, test = list(type = "lincomb", term = "group", cells = c(A = 1))), "no longer supported")
 })
 
@@ -307,4 +315,30 @@ test_that("per-column fitter: a rank-deficient subset design is fitted when the 
     expect_true(is.na(r$pval[["noB"]]) && is.na(r$stat.obs[["noB"]]), info = sch)
     expect_true(is.finite(r$pval[["full"]]), info = sch)
   }
+})
+
+test_that("one relabeling rule: scheme from the formula, report of what can be exchanged, grouping terms for model-based tests", {
+  meta <- gridMeta(levels = 2, n.per.level = 6, age = TRUE); sch <- function(f) buildCacoaModel(meta, f, test = "group")$tests[[1]]$permutation
+  expect_equal(sch(~ group + batch)$scheme, "block")                    # discrete covariate: tested variable exchanged within its levels
+  expect_equal(sch(~ group + (1 | batch))$scheme, "block")              # grouping term: the same relabeling, nothing fitted
+  expect_equal(sch(~ group + age)$scheme, "freedman-lane")              # continuous covariate, no grouping term: residuals exchanged
+  expect_equal(sch(~ group + age + batch)$scheme, "freedman-lane")
+  pg <- sch(~ group + age + (1 | batch)); expect_equal(pg$scheme, "block")   # continuous covariate and grouping term: design rows within groups
+  expect_true(any(grepl("rows of the design are exchanged within the groups", pg$notes)))
+  expect_true(any(grepl("not valid when a covariate is related", buildCacoaModel(meta, ~ group + age + (1 | batch), test = "group", permutation = "freedman-lane")$tests[[1]]$permutation$notes)))
+  expect_error(buildCacoaModel(meta, ~ group + batch + (1 | batch), test = "group"), "both as a covariate and as a grouping term")
+  # what can be exchanged: all 12 samples within the two batches (3 + 3 in each: 20 * 20 relabelings)
+  p <- sch(~ group + (1 | batch)); expect_equal(p$n.exchange, 12); expect_equal(p$n.samples, 12); expect_equal(p$n.distinct, 400); expect_equal(p$p.floor, 1 / 400)
+  expect_output(print(buildCacoaModel(meta, ~ group + (1 | batch), test = "group")), "12 of 12 samples can change their value; smallest p-value 0.0025")
+  # a level with one value of the tested variable keeps it: 3 batches, the third holds G1 only
+  meta$b3 <- c("x", "y")[rep(1:2, length.out = 12)]; meta$b3[meta$group == "G1"][1:4] <- "z"
+  mp <- buildCacoaModel(meta, ~ group + (1 | b3), test = "group"); expect_equal(mp$random.info$structure, "partly"); expect_equal(mp$tests[[1]]$permutation$n.exchange, 8)
+  expect_true(any(grepl("1 of 3 levels hold one value of 'group'.*8 of 12 samples can change", mp$issues$message[mp$issues$severity == "note"])))
+  # one value in every level: a warning in the issues (repeated by setModel()), and no analysis runs
+  meta$donor <- paste0(meta$group, rep(1:2, length.out = 12)); md <- buildCacoaModel(meta, ~ group + (1 | donor), test = "group")
+  expect_true(any(grepl("takes one value within every level of 'donor'", md$issues$message[md$issues$severity == "warning"])))
+  # model-based tests: the grouping term as a fixed term; covariates constant within its levels are absorbed
+  meta$site <- ifelse(meta$batch == "b1", "north", "south"); mf <- buildCacoaModel(meta, ~ group + site + age + (1 | batch), test = "group")
+  gf <- cacoa:::groupingAsFixedFormula(mf); expect_equal(deparse(gf$formula), "~group + age + batch"); expect_equal(gf$dropped, "site"); expect_equal(gf$groups, "batch")
+  expect_null(cacoa:::groupingAsFixedFormula(buildCacoaModel(meta, ~ group + batch, test = "group")))
 })

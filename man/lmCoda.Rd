@@ -10,7 +10,9 @@ lmCoda(
   cnts,
   model,
   perm.method = c("block", "freedman-lane"),
-  zero.pseudocount = 0.1,
+  random.baseline = FALSE,
+  zero.pseudocount = 0.5,
+  scale.pseudocount = TRUE,
   basis.type = c("default"),
   ref.method = c("block", "pvalue"),
   ref.block.thresh = 0.05,
@@ -32,8 +34,19 @@ coefficient ordering.}
 \item{perm.method}{Permutation scheme used for inference. \code{"block"} permutes in the
 full design space; \code{"freedman-lane"} uses the core design space.}
 
-\item{zero.pseudocount}{Non-negative pseudocount added to zero entries prior to forming
-sample-wise frequencies.}
+\item{random.baseline}{fit the grouping term \code{(1 | g)} of the model as a random baseline per level of \code{g} (generalized least
+squares with a variance ratio estimated per cell type; the residuals, freed of the correlation within levels, are exchanged
+among all samples). Default \code{FALSE}: the grouping term only restricts the relabeling to within the levels of \code{g}, as in every
+other analysis.}
+
+\item{zero.pseudocount}{Non-negative pseudocount added to every count prior to forming sample-wise frequencies (default 0.5:
+the logarithm of a small count plus one half is nearly unbiased for the logarithm of its expectation; in simulations from
+the example cohorts the loadings of rare cell types were least biased at 0.25-0.5 and overstated by 0.2-0.4 log2 at 0.1).
+The result records how much each loading moves when the pseudocount is halved or doubled (\code{contrast$loadings$pseudocount.shift},
+in standard errors; see \code{\link[=codaLoadingsTable]{codaLoadingsTable()}})}
+
+\item{scale.pseudocount}{scale the pseudocount with the sample's cell number relative to the median sample (default TRUE: the
+same proportion is added in every sample)}
 
 \item{basis.type}{ILR basis type passed to \code{coda.base::ilr_basis()}.}
 
@@ -68,8 +81,9 @@ compositions for the specified contrast; \code{reference} (the reference cell ty
 (the contrast tree, \code{\link[=contrastTree]{contrastTree()}}).
 }
 \description{
-Given counts per sample and cell type, a small pseudocount is added to zeros and
-sample-wise frequencies are formed. An ILR basis matrix \eqn{\Psi \in \mathbb{R}^{D \times (D-1)}}
+Given counts per sample and cell type, a pseudocount is added to every count (default 0.5 cells in a sample of median size,
+scaled with the sample's cell number so that it is the same proportion in every sample; half a count is the classical choice
+that makes the logarithm of a small count nearly unbiased) and sample-wise frequencies are formed. An ILR basis matrix \eqn{\Psi \in \mathbb{R}^{D \times (D-1)}}
 with orthonormal columns is used to compute ILR coordinates
 \deqn{Z = \log(X)\Psi,}
 where \eqn{X} stacks compositions row-wise. A multivariate linear model is then fit in

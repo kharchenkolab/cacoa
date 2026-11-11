@@ -34,8 +34,10 @@ refContrastT <- function(X, y, cvec, q = seq_len(nrow(X)), w = NULL, df = nrow(X
   M <- crossprod(Xq, w * Xq); b <- solve(M, crossprod(Xq, w * y)); r <- y - Xq %*% b
   sum(cvec * b) / sqrt(sum(w * r^2) / df * drop(t(cvec) %*% solve(M, cvec)))
 }
-# Freedman-Lane reference on the observed rows of y: residualize X and y on Z, then fit on the permuted residualized design
+# Freedman-Lane reference on the observed rows of y: residualize X and y on Z, then fit the full model (the residualized design and the
+# nuisance design, both relabeled) to the residuals; the t statistic does not depend on the scale of the exchanged residuals
 refFLT <- function(X, Z, y, cvec, q = seq_len(nrow(X))) {
-  Xr <- qr.resid(qr(Z), X); yr <- qr.resid(qr(Z), y)
-  refContrastT(Xr, yr, cvec, q, df = nrow(X) - ncol(X) - qr(Z)$rank)
+  Xr <- qr.resid(qr(Z), X); yr <- qr.resid(qr(Z), y); Xq <- Xr[q, , drop = FALSE]; Zq <- Z[q, , drop = FALSE]
+  M <- crossprod(Xq); b <- solve(M, crossprod(Xq, yr)); r <- qr.resid(qr(cbind(Xq, Zq)), yr); df <- nrow(X) - ncol(X) - qr(Z)$rank
+  sum(cvec * b) / sqrt(sum(r^2) / df * drop(t(cvec) %*% solve(M, cvec)))
 }

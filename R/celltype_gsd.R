@@ -37,6 +37,17 @@ gsdMagnitudes <- function(f, vbar, tau2, breadth = TRUE) {
   c(total = sum(num), std = sum(num) / max(sum(s2 - vbar), 0.1 * sum(s2)), n.eff = ne)
 }
 
+# first-order variance of the total shift (sum over genes of the squared change) from the residuals of the fit: the genes x samples
+# residual matrix enters only through its samples x samples products (squaredDistanceLinearVar())
+gsdLinearVar <- function(x, F, cF, beta) {
+  keep <- colSums(abs(F)) > 1e-12; F <- F[, keep, drop = FALSE]; cF <- cF[keep]; q <- qr(F)
+  if (q$rank < ncol(F)) { kp <- sort(q$pivot[seq_len(q$rank)]); F <- F[, kp, drop = FALSE]; cF <- cF[kp]; q <- qr(F) }
+  nu <- nrow(F) - q$rank; if (nu < 3) return(NA_real_)
+  XtXi <- chol2inv(qr.R(q))[order(q$pivot), order(q$pivot), drop = FALSE]; a <- as.numeric(F %*% XtXi %*% cF)
+  E <- t(qr.resid(q, t(x)))                     # genes x samples
+  squaredDistanceLinearVar(crossprod(E), drop(crossprod(E, beta)), a, rowSums(qr.Q(q)^2), nu)
+}
+
 # label-free winsorization of a gene's sample values (as in the kernel): median +- k max(sqrt(v + tau2), MAD sd)
 gsdWinsorize <- function(x, v, tau2, k) {
   med <- apply(x, 1, stats::median); mad <- 1.4826 * apply(abs(x - med), 1, stats::median)
@@ -76,6 +87,9 @@ gsdWinsorize <- function(x, v, tau2, k) {
 #' @param n.null relabelings at which the magnitudes are also computed, for the null band of the plots (default 99; 0 skips)
 #' @param n.cores threads
 #' @param verbose progress
+#' @param return.profiles also return, per test, the profiles the test was computed from (`profiles`: per cell type the genes x samples
+#'   matrix `x` of normalized expression, its sampling variance `v`, the gene-wise extra variance `tau2`, the samples and genes; the
+#'   design `F` and the contrast), for evaluations of the statistic outside the compiled kernel (default FALSE)
 #' @return list: `results` (long table as for the distance test, `effect = "shift"`, plus `n.genes`, `n.eff`, `se.jk.norm`),
 #'   `global` (per test: max-statistic p across cell types), `genes` (per test, per cell type: data.frame of `gene`,
 #'   `beta` (change in log10 expression), `se`, `z`, ordered by |z|), `influence` (per test: list with the samples x cell
@@ -84,8 +98,8 @@ gsdWinsorize <- function(x, v, tau2, k) {
 #' @export
 gsdShiftsPerCellType <- function(cm, sample.per.cell, cell.groups, model, lib, min.cells.per.sample = 5, min.samp.per.level = 2,
                                  neighbourhood.gene.frac = 0.05, permutation = "auto", n.permutations = 999, block.vars = model$block.vars,
-                                 seed = NULL, robust = c("none", "winsor"), winsor.k = 3, gsd.d0 = 3, influence = TRUE, n.null = 99, n.cores = 1, verbose = FALSE) {
-  robust <- match.arg(robust)
+                                 seed = NULL, robust = c("none", "winsor"), winsor.k = 3, gsd.d0 = 3, influence = TRUE, n.null = 99, n.cores = 1, verbose = FALSE, return.profiles = FALSE) {
+  robust <- match.arg(robust); prof.out <- list()
   if (is.null(seed)) seed <- sample.int(.Machine$integer.max, 1L)
   meta <- model$meta
   samples <- intersect(rownames(meta), levels(droplevels(as.factor(sample.per.cell))))
@@ -124,6 +138,8 @@ gsdShiftsPerCellType <- function(cm, sample.per.cell, cell.groups, model, lib, m
     opts <- list(scale = scale, dist = 2L, noise = TRUE, tau = TRUE, correct = FALSE, unit_detection = neighbourhood.gene.frac,
                  mu_grid = curves$mu.grid, phi = curves$phi, tau2 = curves$tau2, lam_grid = m1$lam.grid, s_grid = m1$s.grid, V1 = m1$V1)
     prof <- cf_unit_profiles(cm, as.integer(spc), lapply(units, as.integer), lib, n.s, as.integer(min.cells.per.sample), pairs, opts)
+    if (return.profiles) prof.out[[t$label]] <- list(profiles = setNames(lapply(seq_along(types), function(k) list(x = prof[[k]]$x, v = prof[[k]]$v, tau2 = as.numeric(prof[[k]]$tau2),
+                                                     samples = samples[prof[[k]]$present + 1L], genes = rownames(cm)[prof[[k]]$genes + 1L])), types), F = t$design$F[samples, , drop = FALSE], contrast = t$design$contrast.F, samples = samples)
     Fd <- t$design$F[samples, , drop = FALSE]; cF <- t$design$contrast.F[colnames(Fd)]
     # magnitudes: the test's design plus the permutation strata (block.vars) not in it, as nuisance factors; otherwise differences
     # between strata inflate the residual variance and the bias correction overcorrects
@@ -167,6 +183,10 @@ gsdShiftsPerCellType <- function(cm, sample.per.cell, cell.groups, model, lib, m
         ok <- stats::complete.cases(jk); nj <- sum(ok)
         if (nj >= 3) {
           mag[k, 4:5] <- sqrt((nj - 1) / nj * colSums(sweep(jk[ok, , drop = FALSE], 2, colMeans(jk[ok, , drop = FALSE]))^2))
+          # the jackknife counts the second-order part of the variance of a squared distance twice: count it once (correctedJackknifeSE())
+          v1 <- gsdLinearVar(x, Fk, cFm, fm$beta)
+          den <- max(sum(fm$rss / fm$df - vbar), 0.1 * sum(fm$rss / fm$df))
+          mag[k, 4] <- correctedJackknifeSE(mag[k, 4], v1); mag[k, 5] <- correctedJackknifeSE(mag[k, 5], v1 / den^2)
           infl.tot[samples[pres], k] <- jk[, 1]; infl[samples[pres], k] <- jk[, 2]
         }
       }
@@ -191,7 +211,7 @@ gsdShiftsPerCellType <- function(cm, sample.per.cell, cell.groups, model, lib, m
   }
   results <- do.call(rbind, unname(out)); if (is.null(results)) results <- data.frame()
   global <- do.call(rbind, unname(global)); rownames(skipped) <- NULL
-  list(results = results, global = global, genes = genes.out, influence = infl.out, null.magnitudes = null.out, skipped = skipped, noise.curves = curves, model = model,
+  list(results = results, global = global, genes = genes.out, influence = infl.out, null.magnitudes = null.out, skipped = skipped, noise.curves = curves, model = model, profiles = if (return.profiles) prof.out else NULL,
        settings = list(statistic = "gsd", permutation = permutation, n.permutations = B, seed = seed, block.vars = block.vars,
                        min.cells.per.sample = min.cells.per.sample, min.samp.per.level = min.samp.per.level,
                        neighbourhood.gene.frac = neighbourhood.gene.frac, robust = robust, winsor.k = winsor.k, gsd.d0 = gsd.d0, influence = influence, scale = scale))

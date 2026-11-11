@@ -85,7 +85,12 @@ test_that("perm_matrix: robust paths and the nuisance (Freedman-Lane) path consu
   gw <- cacoa:::fit_and_randomize(X = dX$X, Y = Y, contrast = dX$contrast.X, Z = dX$Z, perm_groups = mpf$cells, return_sampled_stats = TRUE, perm_matrix = mpf$P, na_mode = "impute_weak", statistic = "coef")
   j <- 2; miss <- is.na(Y[, j]); w <- ifelse(miss, 1e-4, 1)
   yc <- Y[, j]; yc[miss] <- mean(yc[!miss]); Xr <- qr.resid(qr(dX$Z), dX$X); yr <- qr.resid(qr(dX$Z), yc); yr[miss] <- mean(yr[!miss])
-  for (b in c(3, 15)) expect_equal(gw$sampled_stats[b, j], refContrastStat(Xr, yr, dX$contrast.X, mpf$P[, b], w = w), tolerance = 1e-8)
+  # the exchanged residuals are residualized on the relabeled nuisance design again and brought to the scale of the errors (kappa)
+  Qz <- qr.Q(qr(dX$Z)); Xs <- Xr * sqrt(w); al <- drop(Xs %*% solve(crossprod(Xs), dX$contrast.X)); aa <- sum(al^2)
+  kap <- aa / (aa - mean(apply(mpf$P, 2, function(p) sum(crossprod(Qz, al[p])^2)))); expect_gt(kap, 1)
+  yr0 <- qr.resid(qr(dX$Z), yc)
+  for (b in c(3, 15)) { Zq <- Qz[mpf$P[, b], , drop = FALSE]; y2 <- drop(yr0 - Zq %*% crossprod(Zq, yr0)); y2[miss] <- mean(y2[!miss]); y2 <- y2 * sqrt(kap)
+    expect_equal(gw$sampled_stats[b, j], refContrastStat(Xr, y2, dX$contrast.X, mpf$P[, b], w = w), tolerance = 1e-8) }
   # robust fits with Z run on every NA mode and keep the structure
   for (rb in c("huber", "winsor")) for (na in c("drop", "impute_weak")) {
     r1 <- cacoa:::fit_and_randomize(X = dX$X, Y = Y, contrast = dX$contrast.X, Z = dX$Z, perm_groups = mpf$cells, return_sampled_stats = TRUE, perm_matrix = mpf$P, robust = rb, na_mode = na)

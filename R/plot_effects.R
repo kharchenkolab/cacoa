@@ -65,6 +65,58 @@ plotEffectsPerCellType <- function(df, normalized = TRUE, type = c("dot", "bar")
   gg
 }
 
+# row order of the diagnostic heatmaps: by group, within a group the most deviating sample on top (ggplot draws the first level at the bottom)
+sampleHeatmapOrder <- function(m, groups = NULL) {
+  o <- rownames(m)[order(rowMeans(abs(m), na.rm = TRUE), decreasing = FALSE)]
+  if (!is.null(groups)) { g <- as.character(groups[o]); o <- o[order(g, na.last = TRUE)] }
+  o
+}
+
+#' Heatmap of a per-sample diagnostic (samples x cell types)
+#'
+#' The common layout of the fit diagnostics of every analysis: samples in rows (grouped by the tested variable, the most
+#' deviating first within a group), cell types in columns, a diverging colour scale centred on "as the model expects", and a
+#' dot on the tiles beyond `mark` (the samples and cell types worth a look).
+#'
+#' @param m samples x cell types matrix
+#' @param groups optional named vector of sample groups (annotation strip)
+#' @param title,legend plot title and legend title
+#' @param mark tiles with an absolute value beyond this are marked with a dot (NULL: none)
+#' @param subtitle optional subtitle (how to read the values)
+#' @param plot.theme ggplot2 theme
+#' @param palette colours for the groups
+#' @param sample.order optional order of the samples (bottom to top), to align several heatmaps
+#' @return ggplot2 object
+#' @export
+plotSampleHeatmap <- function(m, groups = NULL, title = NULL, legend = "value", mark = NULL, subtitle = NULL, plot.theme = ggplot2::theme_bw(), palette = NULL, sample.order = NULL) {
+  df <- data.frame(sample = rep(rownames(m), ncol(m)), celltype = rep(colnames(m), each = nrow(m)), value = as.vector(m), stringsAsFactors = FALSE)
+  has.na <- anyNA(df$value)
+  ord.s <- sampleHeatmapOrder(m, groups)
+  if (!is.null(sample.order)) ord.s <- c(intersect(sample.order, rownames(m)), setdiff(ord.s, sample.order))
+  df$sample <- factor(df$sample, levels = ord.s)
+  strip <- " "
+  df$celltype <- factor(df$celltype, levels = c(if (!is.null(groups)) strip, colnames(m)))
+  lim <- max(abs(df$value), mark %||% 0, na.rm = TRUE)
+  sub <- paste(c(subtitle, if (!is.null(mark)) sprintf("dots: beyond %g", mark), if (has.na) "grey: sample not in the cell type's estimate"), collapse = "; ")
+  gg <- ggplot2::ggplot(df, ggplot2::aes(x = .data$celltype, y = .data$sample, fill = .data$value)) + ggplot2::geom_tile() +
+    ggplot2::scale_fill_gradient2(low = "#2166ac", mid = "white", high = "#b2182b", limits = c(-lim, lim), na.value = "grey80", name = legend) +
+    ggplot2::scale_x_discrete(drop = FALSE) + plot.theme + ggplot2::labs(x = NULL, y = NULL, title = title, subtitle = if (nzchar(sub)) sub else NULL) +
+    ggplot2::guides(fill = ggplot2::guide_colourbar(title.position = "top", order = 1)) +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1), panel.grid = ggplot2::element_blank(), legend.position = "bottom",
+                   legend.title = ggplot2::element_text(size = 8), legend.text = ggplot2::element_text(size = 7), legend.key.width = ggplot2::unit(1.6, "lines"), legend.key.height = ggplot2::unit(0.6, "lines"),
+                   plot.subtitle = ggplot2::element_text(size = 8, colour = "grey30"), plot.title = ggplot2::element_text(size = 11))
+  if (!is.null(mark)) { mk <- df[is.finite(df$value) & abs(df$value) > mark, , drop = FALSE]
+    if (nrow(mk)) gg <- gg + ggplot2::geom_point(data = mk, ggplot2::aes(x = .data$celltype, y = .data$sample), inherit.aes = FALSE, shape = 16, size = 1.1, colour = "black") }
+  if (!is.null(groups)) {
+    gdf <- data.frame(sample = factor(ord.s, levels = ord.s), group = as.character(groups[ord.s]), x = strip, stringsAsFactors = FALSE)
+    gdf <- gdf[!is.na(gdf$group), ]
+    gg <- gg + ggplot2::geom_point(data = gdf, ggplot2::aes(x = .data$x, y = .data$sample, colour = .data$group), inherit.aes = FALSE, shape = 15, size = 3) +
+      ggplot2::labs(colour = NULL) + ggplot2::guides(colour = ggplot2::guide_legend(order = 2))
+    if (!is.null(palette) && all(unique(gdf$group) %in% names(palette))) gg <- gg + ggplot2::scale_colour_manual(values = palette)
+  }
+  gg
+}
+
 #' Heatmap of leave-one-sample-out influence
 #'
 #' @param m samples x cell types matrix: change in the effect when the sample is left out

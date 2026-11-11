@@ -609,7 +609,10 @@ __attribute__((target_clones("avx2", "default"), optimize("O3", "no-math-errno")
 //   moderated variance (d0 mv + cXc_b RSS) / (d0 + df_b), df_b = m - rank;  z^2 = beta^2 / variance.
 // Block scheme: alpha_b = X_b (X_b'X_b)^- c on the relabeled design X_b (rows of the samples the global relabeling maps to),
 // cXc_b = c'(X_b'X_b)^- c. Freedman-Lane: x* = H0 x + P_b (I - H0) x, so alpha_b = P_b' alpha, Q_b = P_b' Q0 (Q0: the reduced
-// design's basis besides 1). For two groups (intercept + dummy) this is the subset-table kernel's statistic: alpha = 1_B / n_B - 1_A / n_A,
+// design's basis besides 1). The residuals of the reduced model are smaller than the errors, so beta_gb and RSS_gb shrink together,
+// but the model variance does not: for the relabeled data sets it is divided by kappa = |alpha|^2 / mean_b(|alpha|^2 - |Q0' alpha_b|^2),
+// the variance of the observed over the mean variance of the relabeled contrast estimate (1 when the exchange stays within the levels
+// of the reduced design's terms, about m / (m - r0) for a free exchange). For two groups (intercept + dummy) this is the subset-table kernel's statistic: alpha = 1_B / n_B - 1_A / n_A,
 // cXc = 1 / n_A + 1 / n_B. The per-relabeling vectors depend only on the set of present samples; they are cached per set.
 struct LmPlan {
   bool ok = false, fl = false; arma::uword m = 0, nc = 0, K = 0;
@@ -637,7 +640,7 @@ static bool has_ones(const arma::mat& Qx) { const arma::vec one(Qx.n_rows, arma:
 static std::shared_ptr<const LmPlan> build_lm_plan(const arma::uvec& s, const KernelInputs& in) {
   auto pl = std::make_shared<LmPlan>(); const arma::uword m = s.n_elem, B = in.P.n_cols, nc = B + 1; pl->m = m; pl->nc = nc; pl->fl = in.freedman_lane;
   pl->adm.assign(nc, 0); pl->iaa.assign(nc, 0.0); pl->cxc.assign(nc, 0.0); pl->df.assign(nc, 1.0);
-  std::vector<arma::vec> A(nc); std::vector<arma::mat> Qr(nc);
+  std::vector<arma::vec> A(nc); std::vector<arma::mat> Qr(nc); double mv_scale = 1.0;   // Freedman-Lane: 1 / kappa for the relabeled data sets
   auto design = [&](const arma::uvec& ps, arma::mat& Xp, arma::vec& cp) -> bool {
     if (in.use_levels) { int n_den = 0, n_num = 0; for (arma::uword j = 0; j < m; ++j) { if (in.level_code[ps[j]] == 1) ++n_den; else if (in.level_code[ps[j]] == 2) ++n_num; }
       if (n_den < in.min_samp_per_level || n_num < in.min_samp_per_level) return false; }
@@ -659,6 +662,8 @@ static std::shared_ptr<const LmPlan> build_lm_plan(const arma::uvec& s, const Ke
       arma::vec ab(m); arma::mat Qb(m, Qn.n_cols); for (arma::uword j = 0; j < m; ++j) { ab[q[j]] = a0[j]; Qb.row(q[j]) = Qn.row(j); }
       A[b] = ab; Qr[b] = Qb; pl->adm[b] = 1; pl->iaa[b] = 1.0 / arma::dot(a0, a0); pl->cxc[b] = cXc0; pl->df[b] = (double)m - (double)h.rank;
     }
+    if (nc > 1) { const double aa = arma::dot(a0, a0); double gs = 0.0; for (arma::uword b = 1; b < nc; ++b) gs += arma::accu(arma::square(pl->Q0.t() * A[b]));
+      const double den = aa - gs / (double)(nc - 1); if (aa > 0.0 && den > 1e-8 * aa) mv_scale = den / aa; }
   } else {
     for (arma::uword b = 0; b < nc; ++b) {
       arma::uvec ps(m); for (arma::uword j = 0; j < m; ++j) ps[j] = b == 0 ? s[j] : (arma::uword)(in.P(s[j], b - 1) - 1);
@@ -682,7 +687,8 @@ static std::shared_ptr<const LmPlan> build_lm_plan(const arma::uvec& s, const Ke
   arma::uword K = 0; for (arma::uword b = 0; b < nc; ++b) if (pl->adm[b]) K = std::max<arma::uword>(K, Qr[b].n_cols); pl->K = K;
   pl->al.assign(m * nc, 0.0); pl->al2.assign(m * nc, 0.0); pl->q.assign(K * m * nc, 0.0);
   for (arma::uword b = 0; b < nc; ++b) { if (!pl->adm[b]) continue;
-    for (arma::uword j = 0; j < m; ++j) { pl->al[j * nc + b] = A[b][j]; pl->al2[j * nc + b] = A[b][j] * A[b][j]; }
+    const double sc = b > 0 ? mv_scale : 1.0;
+    for (arma::uword j = 0; j < m; ++j) { pl->al[j * nc + b] = A[b][j]; pl->al2[j * nc + b] = sc * A[b][j] * A[b][j]; }
     for (arma::uword k = 0; k < Qr[b].n_cols; ++k) for (arma::uword j = 0; j < m; ++j) pl->q[(k * m + j) * nc + b] = Qr[b](j, k); }
   pl->ok = true; return pl;
 }

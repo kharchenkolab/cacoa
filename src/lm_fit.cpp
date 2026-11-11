@@ -46,6 +46,7 @@ struct DesignGroup {
   int df = 0;                          // residual degrees of freedom: n_obs - rank(X) - rank(Z)
   int rank = 0;                        // rank of the design over the units (may be below p when a level is absent)
   std::vector<arma::uvec> perm_blocks; // permutation cells in unit index space
+  double kappa = 1.0;                  // Freedman-Lane: variance of the observed over the mean variance of the relabeled contrast estimate
   arma::uvec perm_units_global;        // global row ids of the units (for perm_matrix induction)
 };
 
@@ -132,7 +133,13 @@ static inline arma::vec winsor_fit(const arma::mat& X, const arma::vec& y, const
  * @param Y          responses (n x m), NA allowed
  * @param contrast   contrast over the columns of X; effect = contrast' beta
  * @param Z          optional nuisance design (n x q, complete). When given, X and Y are residualized on Z per NA
- *                   pattern before fitting and permuting (Freedman-Lane / FWL); rank(Z) is removed from the df.
+ *                   pattern before fitting and permuting (Freedman-Lane / FWL); rank(Z) is removed from the df. The relabeled
+ *                   data set is the reduced fit plus the exchanged residuals, and the full model (Z included) is fitted to it:
+ *                   the exchanged residuals are residualized on Z again for the residual sum of squares. The residuals of the
+ *                   reduced model are smaller than the errors; they are multiplied by sqrt(kappa), kappa = |alpha|^2 /
+ *                   mean_b(|alpha|^2 - |Qz' alpha_b|^2) (alpha: the contrast's weights over the samples, alpha_b: relabeled), so
+ *                   that the relabeled estimate has the variance of the observed one (kappa = 1 when the exchange stays within
+ *                   the levels of the nuisance terms, about n / (n - q) for a free exchange).
  * @param perm_groups permutation cells (list of 1-based row index vectors) the relabelings were drawn in
  * @param perm_matrix n x B matrix of 1-based relabelings in design convention (permuted design = X[p, ]); required
  *                   whenever permutations are requested; induced onto the observed rows of each NA pattern
@@ -290,6 +297,12 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
     }
     g.df = (int)raw.obs.n_elem - g.rank - (int)qz;
     if (g.df < 1) { g.valid_design = false; return; }
+    if (has_Z && has_P && n_randomizations > 0) {   // scale of the exchanged residuals (see Z above)
+      const arma::vec al = g.B.t() * contrast; const double aa = arma::dot(al, al); double gs = 0.0;
+      for (arma::uword b = 0; b < Pm.n_cols; ++b) { const arma::uvec q = induced_perm(Pm.col(b), g.perm_units_global, g.perm_blocks); gs += arma::accu(arma::square(g.Qz.t() * al.elem(q))); }
+      const double den = aa - gs / (double)Pm.n_cols;
+      if (aa > 0.0 && den > 1e-8 * aa) g.kappa = aa / den;
+    }
   }, n_cores, false);
 
   // 4. Fits and permutations (flattened parallelism over columns)
@@ -331,11 +344,13 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
     arma::mat Yw = has_Z ? project_out_Q(grp0.Qz, Y) : Y;
     const arma::vec alpha = grp0.B.t() * contrast; const double cXc = arma::as_scalar(contrast.t() * grp0.invXtX * contrast);
     arma::mat Q; if (!qr_basis(grp0.X_sub, Q)) Rcpp::stop("closed form: design factorization failed");
-    const arma::uword pq = Q.n_cols; const int B_ = n_randomizations;
+    const arma::uword pq0 = Q.n_cols, qz0 = has_Z ? grp0.Qz.n_cols : 0, pq = pq0 + qz0; const int B_ = n_randomizations;   // Freedman-Lane: the relabeled fit includes Z again
+    const double kap = grp0.kappa, skap = std::sqrt(kap);
     arma::mat AlphaP(n, B_); arma::mat Qstack(B_ * pq, n);
-    for (int b = 0; b < B_; ++b) { arma::uvec q = induced_perm(Pm.col(b), grp0.perm_units_global, grp0.perm_blocks); AlphaP.col(b) = alpha.elem(q); Qstack.rows(b * pq, (b + 1) * pq - 1) = Q.rows(q).t(); }
+    for (int b = 0; b < B_; ++b) { arma::uvec q = induced_perm(Pm.col(b), grp0.perm_units_global, grp0.perm_blocks); AlphaP.col(b) = alpha.elem(q); Qstack.rows(b * pq, b * pq + pq0 - 1) = Q.rows(q).t();
+      if (qz0) Qstack.rows(b * pq + pq0, (b + 1) * pq - 1) = grp0.Qz.rows(q).t(); }
     const arma::mat AlphaPt = AlphaP.t();
-    const arma::uword blk = 2048; const int n_blk = (int)((m + blk - 1) / blk);
+    const arma::uword blk = std::max<arma::uword>(32, std::min<arma::uword>(2048, (arma::uword)(4.0e6 / ((double)B_ * (double)pq)))); const int n_blk = (int)((m + blk - 1) / blk);
     cacoa::parallelFor(0, n_blk, [&](int ib) {
       const arma::uword c0 = (arma::uword)ib * blk, c1 = std::min(m, c0 + blk) - 1, mb = c1 - c0 + 1;
       const arma::mat Yb = Yw.cols(c0, c1);
@@ -356,8 +371,8 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
         if (!std::isfinite(stat_obs)) continue;
         arma::vec sp(B_), ep(B_); int ge = 0, le = 0, ge_abs = 0; double esum = 0; int ecnt = 0;
         for (int b = 0; b < B_; ++b) {
-          const double e = Num(b, t); ep[b] = e;
-          const double rb = yy[t] - Proj(b, t); const double seb = std::sqrt(cXc * (rb + pv0) / dfm);
+          const double e = skap * Num(b, t); ep[b] = e;
+          const double rb = kap * std::max(yy[t] - Proj(b, t), 0.0); const double seb = std::sqrt(cXc * (rb + pv0) / dfm);
           const double v = use_t ? studentize(e, seb, ysc[t]) : e; sp[b] = v;
           if (std::isfinite(e)) { esum += e; ++ecnt; }
           if (std::isfinite(v)) { if (std::abs(v) >= std::abs(stat_obs) - 1e-12) ge_abs++; if (v >= stat_obs - 1e-12) ge++; if (v <= stat_obs + 1e-12) le++; }   // ties count (exact test)
@@ -381,14 +396,14 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
     arma::vec y_raw = Y.col(j);
     const arma::uvec miss = arma::find_nonfinite(y_raw);
     auto fill_value = [&](const arma::vec& v) { return (cfg.center_mean && grp.obs_indices.n_elem) ? arma::mean(v.elem(grp.obs_indices)) : 0.0; };
-    arma::vec y_work, y_clean;
+    arma::vec y_work, y_clean, y_res0;   // y_res0: impute_weak with Z, the residualized response before the missing rows are re-filled
     if (is_drop) {
       y_work = y_raw.elem(grp.obs_indices);
       if (has_Z) y_work = project_out_Q(grp.Qz, y_work);
     } else {
       y_clean = y_raw; y_clean.elem(miss).fill(fill_value(y_raw));
       if (has_Z) {                                   // project the filled vector, then re-fill the missing rows from the residualized observed ones
-        y_clean = project_out_Q(grp.Qz, y_clean);
+        y_clean = project_out_Q(grp.Qz, y_clean); y_res0 = y_clean;
         arma::vec tmp = y_clean; tmp.elem(miss).fill(datum::nan);
         y_clean.elem(miss).fill(fill_value(tmp));
       }
@@ -428,6 +443,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
     arma::mat fits_perm; if (cfg.ret_fits) fits_perm.set_size(cfg.n_randomizations, p);
     arma::vec alpha; if (!is_huber && !is_winsor && !cfg.ret_fits && !use_t) alpha = grp.B.t() * contrast;   // raw-coefficient fast path
     const arma::vec sw = is_drop ? arma::vec() : arma::vec(arma::sqrt(grp.weights));
+    const double skap = std::sqrt(grp.kappa);
 
     int ge=0, le=0, ge_abs=0;
     for (int r=0; r<cfg.n_randomizations; ++r) {
@@ -435,6 +451,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
       double eff_p = 0.0, s_p = 0.0; arma::vec b_p;
       if (is_drop) {
         arma::vec y_perm = y_work.elem(inverse_perm(q));                                  // response aligned with X_sub[q, ]
+        if (has_Z) { y_perm -= grp.Qz * (grp.Qz.t() * y_perm); y_perm *= skap; }          // Freedman-Lane: Z is fitted again; residual scale (see Z above)
         if (is_huber) {
           arma::vec wf; b_p = huber_irls(grp.X_sub, y_perm, no_w, arma::vec(grp.B * y_perm), cfg, wf);
           eff_p = arma::dot(b_p, contrast);
@@ -452,11 +469,16 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
       } else {
         // impute_weak: the weights stay with the response rows; the (residualized) design rows are permuted instead
         arma::mat Xq = grp.X_full.rows(q);
-        arma::mat Xqw = Xq.each_col() % sw; arma::vec yw = y_clean % sw;
+        arma::vec yc = y_clean;
+        if (has_Z) {   // Freedman-Lane: Z (relabeled with the design) is fitted again, the missing rows are re-filled as in the observed fit; residual scale
+          const arma::mat Zq = grp.Qz.rows(q); yc = y_res0 - Zq * (Zq.t() * y_res0);
+          arma::vec tmp = yc; tmp.elem(miss).fill(datum::nan); yc.elem(miss).fill(fill_value(tmp)); yc *= skap;
+        }
+        arma::mat Xqw = Xq.each_col() % sw; arma::vec yw = yc % sw;
         if (is_huber) {
-          arma::vec wf; b_p = huber_irls(Xq, y_clean, grp.weights, ols_free(Xqw, yw), cfg, wf);
+          arma::vec wf; b_p = huber_irls(Xq, yc, grp.weights, ols_free(Xqw, yw), cfg, wf);
           eff_p = arma::dot(b_p, contrast);
-          s_p = use_t ? studentize(eff_p, contrast_se(Xq, y_clean, b_p, wf, contrast, grp.df), ysc) : eff_p;
+          s_p = use_t ? studentize(eff_p, contrast_se(Xq, yc, b_p, wf, contrast, grp.df), ysc) : eff_p;
         } else if (is_winsor) {
           arma::vec ys; b_p = winsor_fit(Xqw, yw, ols_free(Xqw, yw), cfg.huber_k, nullptr, ys);
           eff_p = arma::dot(b_p, contrast);

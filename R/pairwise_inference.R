@@ -4,8 +4,8 @@
 ##  - "block": the existing block randomization, extended so that only the samples of the compared conditions
 ##    swap labels, within strata formed by the other discrete covariates (+ block.vars). Exact when every
 ##    adjusting covariate is discrete.
-##  - "freedman-lane": fit the model without the tested term, permute residuals (within block.vars strata),
-##    add the fitted part back; done on the Gower matrix (G* = K1 + K2[,p] + K3[p,] + K4[p,p]). Fallback for
+##  - "freedman-lane": fit the model without the tested term, permute residuals (within the levels of the discrete
+##    covariates and block.vars), add the fitted part back; done on the Gower matrix (G* = K1 + K2[,p] + K3[p,] + K4[p,p]). Fallback for
 ##    continuous covariates; conservative when the effective dimension is large relative to n.
 ## One set of global permutations is shared by all cell types (induced on each cell type's sample subset),
 ## which allows max-statistic combination across cell types.
@@ -97,9 +97,21 @@ logDistinctPermutations <- function(labels, in.set, strata) {
 #' @param design output of `buildDesignMatrices()`
 #' @param meta sample metadata (rows named by sample)
 #' @param samples samples taking part (default: all rows of the design)
-#' @param scheme `"auto"` (block when every adjusting covariate is discrete, else Freedman-Lane), `"block"` or
-#'   `"freedman-lane"`
+#' @param scheme `"auto"`, `"block"` (the tested variable, i.e. the rows of the design, is exchanged within the strata) or
+#'   `"freedman-lane"` (residuals of the model without the tested variable are exchanged). `"auto"`: block, except for a model
+#'   with a continuous covariate and no grouping variable (`block.vars`, which include the grouping terms `(1 | g)` of the model),
+#'   where residuals are exchanged. Residuals are exchanged within the levels of the model's discrete covariates (and `block.vars`),
+#'   as the tested variable is under `"block"`: for a fitted factor with a level per pair of samples, the exchange among all samples
+#'   is valid but found an added effect in 16 % of the tests where the exchange within the levels found it in 31 % (gsd) and
+#'   15 % against 59 % (distance model). With a grouping variable the rows are exchanged within its levels also when a
+#'   continuous covariate is present: the groups are not fitted, so the covariate's coefficient in the model without the tested
+#'   variable is fitted partly to the group baselines, and residuals exchanged within groups are not comparable with the observed
+#'   ones (9-11 % false positives at a nominal 5 % in calibration; 4-7 % with the exchange of rows)
 #' @param block.vars additional metadata columns defining strata
+#' @param residuals.within `TRUE` (default): under `"freedman-lane"` the residuals are exchanged within the levels of the discrete
+#'   covariates of the model and of `block.vars`. `FALSE`: within the levels of `block.vars` only, i.e. among all samples when there
+#'   are none (the behavior before 2026-11; of use when the levels are so small that too few relabelings exist). The default can be
+#'   set for a session with `options(cacoa.residuals.within = FALSE)`
 #' @param n.permutations requested number of permutations; when fewer distinct relabelings exist they are
 #'   enumerated exhaustively
 #' @param max.enumerate largest number of relabelings that is enumerated
@@ -108,29 +120,41 @@ logDistinctPermutations <- function(labels, in.set, strata) {
 #' @export
 permutationPlan <- function(design, meta, samples = rownames(design$F),
                             scheme = c("auto", "block", "freedman-lane"),
-                            block.vars = NULL, n.permutations = 999, max.enumerate = 20000) {
+                            block.vars = NULL, n.permutations = 999, max.enumerate = 20000,
+                            residuals.within = getOption("cacoa.residuals.within", TRUE)) {
   scheme <- match.arg(scheme)
   info <- contrastSampleInfo(design, meta, samples)
   dv <- designVariables(design, meta[samples, , drop = FALSE])
   nuisance.numeric <- setdiff(dv$numeric, info$tested.vars)
   notes <- character(0)
   if (scheme == "auto") {
-    scheme <- if (length(nuisance.numeric)) "freedman-lane" else "block"
+    scheme <- if (length(nuisance.numeric) && !length(block.vars)) "freedman-lane" else "block"
     if (scheme == "freedman-lane")
       notes <- c(notes, sprintf("continuous covariate(s) %s: using Freedman-Lane residual permutation (approximate)",
                                 paste(nuisance.numeric, collapse = ", ")))
+    else if (length(nuisance.numeric))
+      notes <- c(notes, sprintf("continuous covariate(s) %s with grouping variable(s) %s: the rows of the design are exchanged within the groups (the covariate moves with the tested variable; approximate)",
+                                paste(nuisance.numeric, collapse = ", "), paste(block.vars, collapse = ", ")))
   } else if (scheme == "block" && length(nuisance.numeric)) {
     notes <- c(notes, sprintf("block permutation with continuous covariate(s) %s is not exact",
                               paste(nuisance.numeric, collapse = ", ")))
+  } else if (scheme == "freedman-lane" && length(nuisance.numeric) && length(block.vars)) {
+    notes <- c(notes, sprintf("exchange of residuals within the levels of %s with continuous covariate(s) %s is not valid when a covariate is related to the tested variable (the default exchanges the rows of the design within the groups)",
+                              paste(block.vars, collapse = ", "), paste(nuisance.numeric, collapse = ", ")))
   }
   if (scheme == "block") {
     strata <- permutationStrata(design, meta, samples, info, block.vars)
     in.set <- info$in.set; labels <- info$labels
   } else {
-    # residual permutation: every sample takes part, strata from block.vars only
-    strata <- if (length(block.vars)) permutationStrata(design, meta, samples, list(diff.vars = dv$all), block.vars)
+    # residual permutation: every sample takes part, within the levels of the discrete covariates (not of the tested variable)
+    # and of block.vars
+    strata <- if (isTRUE(residuals.within)) permutationStrata(design, meta, samples, list(diff.vars = info$tested.vars), block.vars)
+              else if (length(block.vars)) permutationStrata(design, meta, samples, list(diff.vars = dv$all), block.vars)
               else factor(rep("all", length(samples)))
     in.set <- rep(TRUE, length(samples)); labels <- as.character(seq_along(samples))
+    nuisance.discrete <- setdiff(dv$discrete, info$tested.vars)
+    if (isTRUE(residuals.within) && length(nuisance.discrete))
+      notes <- c(notes, sprintf("residuals are exchanged within the levels of %s", paste(nuisance.discrete, collapse = ", ")))
   }
   log.nd <- logDistinctPermutations(labels, in.set, strata)
   n.distinct <- if (log.nd < log(.Machine$double.xmax)) exp(log.nd) else Inf
@@ -185,6 +209,9 @@ modelPermutations <- function(model, scheme = "auto", n.permutations = 999, bloc
   plan <- permutationPlan(model, model$meta, samples, scheme = scheme, block.vars = block.vars %||% model$block.vars, n.permutations = n.permutations)
   P <- if (is.null(seed)) drawPermutations(plan) else withSeed(seed, drawPermutations(plan))
   storage.mode(P) <- "integer"
+  # all distinct relabelings enumerated (the observed labeling among them): p-values are then counted over the set itself, without
+  # adding the observed data set once more (see relabelingPValue())
+  attr(P, "exhaustive") <- isTRUE(plan$exhaustive)
   cells <- split(which(plan$in.set), droplevels(plan$strata[plan$in.set]))
   cells <- unname(cells[lengths(cells) >= 2])
   list(plan = plan, P = P, cells = cells, samples = samples)
@@ -274,10 +301,21 @@ dispersionT <- function(W, r, gamma, d, w = rep(1, length(r))) {
   sum(d * gamma) / sqrt(v)
 }
 
-# Freedman-Lane parts for the reduced design Xr: G* = K1 + K2[, p] + K3[p, ] + K4[p, p]
-flGowerParts <- function(G, Xr) {
+# Freedman-Lane parts for the reduced design Xr: G* = K1 + K2[, p] + K3[p, ] + K4[p, p], the Gower matrix of the reduced fit plus the
+# exchanged residuals. The residuals of the reduced model are smaller than the errors; with `kappa` (flKappa()) they are multiplied by
+# sqrt(kappa), so that the statistics that are not ratios (the shift, the total, the null bands) are on the scale of the observed data.
+flGowerParts <- function(G, Xr, kappa = 1) {
   n <- nrow(G); Hr <- if (ncol(Xr)) hatInfo(Xr)$H else matrix(0, n, n); Rr <- diag(n) - Hr
-  list(K1 = Hr %*% G %*% Hr, K2 = Hr %*% G %*% Rr, K3 = Rr %*% G %*% Hr, K4 = Rr %*% G %*% Rr)
+  list(K1 = Hr %*% G %*% Hr, K2 = sqrt(kappa) * (Hr %*% G %*% Rr), K3 = sqrt(kappa) * (Rr %*% G %*% Hr), K4 = kappa * (Rr %*% G %*% Rr))
+}
+# variance of the observed over the mean variance of the relabeled contrast estimate under the exchange of residuals of the reduced design
+# Xr: |a|^2 / mean_b(|a|^2 - |Qr' a_b|^2), a = the contrast's weights over the samples, a_b = the weights moved with the residuals
+# (sample i receives the residual of sample P[i, b]). 1 when the exchange stays within the levels of the reduced design's terms.
+flKappa <- function(a, Xr, P) {
+  if (!ncol(Xr) || !length(P) || !ncol(P)) return(1)
+  q <- qr(Xr); if (q$rank < 1) return(1); Q <- qr.Q(q)[, seq_len(q$rank), drop = FALSE]; aa <- sum(a^2); n <- length(a)
+  g <- mean(apply(P, 2, function(p) { ab <- numeric(n); ab[p] <- a; sum(crossprod(Q, ab)^2) }))
+  if (aa > 0 && aa - g > 1e-8 * aa) aa / (aa - g) else 1
 }
 flGowerPermute <- function(parts, p) parts$K1 + parts$K2[, p] + parts$K3[p, ] + parts$K4[p, p]
 
@@ -306,7 +344,7 @@ permutationStatsForCellType <- function(eff, plan, P, bias.correct = TRUE) {
   if (plan$scheme == "block") {                 # C++ kernel; R reference: permutedStats()
     perm[, ] <- permuted_contrast_stats(G, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, znum, zden, P, zfix, bias.correct, need.var)
   } else {                                      # freedman-lane: Gower re-indexing of the reduced-model parts
-    parts <- flGowerParts(G, X %*% contrastNullBasis(cvec))
+    Xr <- X %*% contrastNullBasis(cvec); parts <- flGowerParts(G, Xr, flKappa(pre$a, Xr, P))
     perm[, ] <- permuted_contrast_stats_fl(parts$K1, parts$K2, parts$K3, parts$K4, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, znum, zden, P, bias.correct, need.var)
   }
   list(obs = obs, perm = perm)
@@ -320,6 +358,11 @@ relabelingBands <- function(perm, S, var.ok = TRUE, probs = c(0.025, 0.975)) {
   v <- perm[, "var"]; ok <- is.finite(v) & abs(v) / 2 < S
   list(shift = q(perm[, "shift"] / S), var = if (var.ok) q(log2((S + v[ok] / 2) / (S - v[ok] / 2))) else c(NA_real_, NA_real_))
 }
+
+# p-value from the number k of relabeled statistics at least as large as the observed one, out of B relabelings: (k + 1) / (B + 1)
+# for random draws (the observed data set counts as one more); k / B when all distinct relabelings were enumerated, because the
+# observed labeling is one of them (k >= 1 then; forced in case rounding lost the tie)
+relabelingPValue <- function(k, B, exhaustive = FALSE) if (exhaustive) pmin(1, pmax(k, 1) / B) else (k + 1) / (B + 1)
 
 permutationPValue <- function(obs, perm, alternative = c("greater", "two.sided"), exhaustive = FALSE) {
   alternative <- match.arg(alternative)

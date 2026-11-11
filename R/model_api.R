@@ -336,6 +336,11 @@ buildCacoaModel <- function(meta, formula = NULL, test = NULL, contrast = NULL, 
                             numeric.ref = "auto", numeric.step = 1, permutation = "auto", n.permutations = 999,
                             verbosity = "none") {
   stopifnot(is.data.frame(meta))
+  # grouping terms `(1 | g)`: taken out of the formula; they define how the samples are relabeled (and, where an analysis supports it,
+  # a random intercept in the fit)
+  formula.full <- NULL; random.vars <- NULL
+  if (!is.null(formula)) { sp <- splitGroupingTerms(formula); if (length(sp$groups)) { formula.full <- sp$full; formula <- sp$formula; random.vars <- sp$groups } }
+  miss.g <- setdiff(random.vars, names(meta)); if (length(miss.g)) stop("grouping variable(s) not found in sample metadata: ", paste(miss.g, collapse = ", "))
   tests <- resolveTests(test, contrast, meta, formula, numeric.step)
   test.vars <- unique(stats::na.omit(vapply(tests, function(t) t$variable %||% NA_character_, character(1))))
   if (is.null(formula)) {
@@ -346,9 +351,19 @@ buildCacoaModel <- function(meta, formula = NULL, test = NULL, contrast = NULL, 
     formula <- stats::as.formula(checkFormula(formula)); formula.default <- FALSE
   }
   if (!length(tests)) stop("no test given: use `test` (a variable name) or `contrast`")
+  random.info <- NULL
+  if (length(random.vars)) {
+    random.info <- groupingStructure(meta, random.vars, test.vars)
+    # labels are relabeled within the levels of a grouping variable when the tested variable varies within them; when it takes one
+    # value per level (several samples per donor) no within-level relabeling exists: only analyses that fit the random intercept
+    # can test it (see groupingBetweenMessage())
+    block.vars <- unique(c(block.vars, random.info$group[random.info$structure != "between"]))
+  }
   fvars <- all.vars(formula)
   miss <- setdiff(fvars, names(meta))
   if (length(miss)) stop("variable(s) not found in sample metadata: ", paste(miss, collapse = ", "))
+  dup <- intersect(random.vars, fvars)
+  if (length(dup)) stop(sprintf("'%s' is in the model both as a covariate and as a grouping term '(1 | %s)': use one of the two (a covariate is fitted, a grouping term only restricts the relabeling to within its levels)", dup[1], dup[1]), call. = FALSE)
   desc <- describeMetadata(meta)
   idlike <- intersect(fvars, desc$column[desc$role == "id-like"])
   if (length(idlike)) stop(sprintf("column '%s' has a unique value per sample and cannot be a covariate", idlike[1]))
@@ -375,14 +390,22 @@ buildCacoaModel <- function(meta, formula = NULL, test = NULL, contrast = NULL, 
     t$design <- d
     plan <- tryCatch(permutationPlan(d, meta.used, scheme = permutation, block.vars = block.vars, n.permutations = n.permutations, max.enumerate = 0),
                      error = function(e) NULL)
-    t$permutation <- if (!is.null(plan)) list(scheme = plan$scheme, n.distinct = plan$n.distinct, p.floor = plan$p.floor,
-                                              n.strata = nlevels(plan$strata), notes = plan$notes) else NULL
+    t$permutation <- if (!is.null(plan)) {
+      # samples that can change their value under relabeling: those in a cell (stratum x permuted set) with more than one distinct label
+      cells <- split(which(plan$in.set), droplevels(plan$strata[plan$in.set]))
+      n.ex <- sum(vapply(cells, function(ix) if (length(unique(plan$labels[ix])) > 1) length(ix) else 0L, integer(1)))
+      nd <- plan$n.distinct
+      list(scheme = plan$scheme, n.distinct = nd, p.floor = if (is.finite(nd) && nd <= n.permutations) 1 / nd else 1 / (n.permutations + 1),
+           n.strata = nlevels(plan$strata), n.exchange = n.ex, n.samples = length(plan$in.set), notes = plan$notes)
+    } else NULL
     tests[[i]] <- t
   }
   issues <- designIssues(tests, meta.used, formula, dropped)
+  issues <- rbind(issues, groupingIssues(random.info, tests))
   m <- list(formula = formula, formula.default = formula.default, dispersion.formula = dispersion.formula, tests = tests,
             block.vars = block.vars, numeric.ref = numeric.ref, numeric.step = numeric.step, permutation = permutation,
-            samples = list(used = rownames(meta.used), dropped = dropped), issues = issues, meta = meta.used)
+            samples = list(used = rownames(meta.used), dropped = dropped), issues = issues, meta = meta.used,
+            formula.full = formula.full, random.vars = random.vars, random.info = random.info)
   # primary design at top level (backward compatibility with buildDesignMatrices() consumers)
   prim <- tests[[1]]$design
   for (nm in names(prim)) m[[nm]] <- prim[[nm]]
@@ -483,13 +506,16 @@ print.cacoaModel <- function(x, ...) {
 #' @exportS3Method base::format
 format.cacoaModel <- function(x, ...) {
   fm <- function(f) paste(deparse(f), collapse = "")
-  lines <- sprintf("Model: %s%s      dispersion: %s", fm(x$formula), if (isTRUE(x$formula.default)) " (default)" else "", fm(x$dispersion.formula))
+  lines <- sprintf("Model: %s%s      dispersion: %s", fm(x$formula.full %||% x$formula), if (isTRUE(x$formula.default)) " (default)" else "", fm(x$dispersion.formula))
+  if (length(x$random.vars)) lines <- c(lines, sprintf("       grouping term%s %s: not fitted; the tested variable is exchanged within %s levels", if (length(x$random.vars) > 1) "s" else "",
+                                                       paste(sprintf("(1 | %s)", x$random.vars), collapse = ", "), if (length(x$random.vars) > 1) "their" else "its"))
   for (t in x$tests) {
     adj <- setdiff(all.vars(x$formula), t$variable)
     pl <- t$permutation
-    perm.txt <- if (is.null(pl)) "" else sprintf("permutations: %s%s%s", pl$scheme,
+    perm.txt <- if (is.null(pl)) "" else sprintf("permutations: %s%s%s%s", pl$scheme,
                                                    if (pl$scheme == "block" && pl$n.strata > 1) sprintf(" within %d strata", pl$n.strata) else "",
-                                                   if (is.finite(pl$n.distinct)) sprintf(" (%s distinct)", if (pl$n.distinct < 1e7) format(round(pl$n.distinct), big.mark = ",") else "> 10 million") else "")
+                                                   if (is.finite(pl$n.distinct)) sprintf(" (%s distinct)", if (pl$n.distinct < 1e7) format(round(pl$n.distinct), big.mark = ",") else "> 10 million") else "",
+                                                   if (!is.null(pl$n.exchange)) sprintf("; %d of %d samples can change their value; smallest p-value %.2g", pl$n.exchange, pl$n.samples, pl$p.floor) else "")
     guessed <- !is.null(t$reference.reason) && !is.na(t$reference.reason) && t$kind == "contrast" && is.null(t$step) && t$reference.reason != "user"
     ref.txt <- if (!is.null(t$reference.reason) && !is.na(t$reference.reason) && t$kind == "contrast" && is.null(t$step))
       sprintf("  (reference '%s': %s%s)", t$levels[["ref"]], referenceReason(t$reference.reason),
@@ -558,4 +584,76 @@ regressionWeights <- function(design) {
   w <- drop(X %*% MASS::ginv(crossprod(X)) %*% cvec)
   names(w) <- rownames(X)
   w
+}
+
+# ---- grouping terms of a formula ---------------------------------------------------------------------
+
+# Split `(1 | g)` terms off a formula: list(formula = the formula without them, groups = the grouping variables, full = the formula
+# as given). Only random intercepts are understood; other bar terms are an error.
+splitGroupingTerms <- function(formula) {
+  f <- if (inherits(formula, "formula")) formula else stats::as.formula(formula)
+  str <- paste(deparse(f), collapse = "")
+  if (!grepl("|", str, fixed = TRUE)) return(list(formula = formula, groups = character(0), full = f))
+  tt <- stats::terms(f); labs <- attr(tt, "term.labels"); bar <- grepl("|", labs, fixed = TRUE)
+  groups <- vapply(labs[bar], function(l) {
+    e <- str2lang(l)
+    if (!is.call(e) || !identical(e[[1]], as.name("|")) || !identical(e[[2]], 1) || !is.name(e[[3]]))
+      stop(sprintf("grouping term '(%s)' is not understood: only a random intercept per level of one variable, '(1 | variable)', is supported", l), call. = FALSE)
+    as.character(e[[3]]) }, character(1))
+  rest <- labs[!bar]
+  rhs <- paste(c(if (attr(tt, "intercept") == 0) "0", if (length(rest)) rest else if (attr(tt, "intercept") == 1) "1"), collapse = " + ")
+  list(formula = stats::as.formula(paste("~", rhs), env = environment(f)), groups = unname(unique(groups)), full = f)
+}
+
+# How each tested variable is distributed over the levels of each grouping variable: "within" (it varies within every level that has
+# more than one sample), "partly" (within some levels; other levels hold one value only) or "between" (one value per level).
+groupingStructure <- function(meta, groups, tested) {
+  out <- expand.grid(group = groups, tested = if (length(tested)) tested else NA_character_, stringsAsFactors = FALSE)
+  out$structure <- NA_character_; out$n.levels <- NA_integer_; out$n.levels.varying <- NA_integer_; out$n.single <- NA_integer_
+  for (i in seq_len(nrow(out))) {
+    g <- as.character(meta[[out$group[i]]]); ok <- !is.na(g); out$n.levels[i] <- length(unique(g[ok])); out$n.single[i] <- sum(table(g[ok]) == 1)
+    if (is.na(out$tested[i]) || !out$tested[i] %in% names(meta)) { out$structure[i] <- "within"; next }
+    x <- meta[[out$tested[i]]]; nv <- tapply(seq_along(g)[ok], g[ok], function(ix) length(unique(stats::na.omit(x[ix])))); multi <- table(g[ok])[names(nv)] > 1
+    out$n.levels.varying[i] <- sum(nv > 1)
+    out$structure[i] <- if (!any(nv > 1)) "between" else if (all(nv[multi] > 1)) "within" else "partly"
+  }
+  out
+}
+
+# issues of the grouping terms: a tested variable with one value in every level of the grouping variable cannot be tested by any analysis
+# (warning, repeated by setModel()); levels that hold one value keep it in every relabeling (note)
+groupingIssues <- function(random.info, tests) {
+  empty <- data.frame(severity = character(0), message = character(0), suggestion = character(0), stringsAsFactors = FALSE)
+  if (is.null(random.info) || !nrow(random.info)) return(empty)
+  pl <- tests[[1]]$permutation; out <- list()
+  for (i in seq_len(nrow(random.info))) { ri <- random.info[i, ]; if (is.na(ri$tested)) next
+    if (ri$structure == "between") out[[length(out) + 1L]] <- data.frame(severity = "warning", stringsAsFactors = FALSE,
+      message = sprintf("the tested variable '%s' takes one value within every level of '%s': there is nothing to exchange within the levels of '%s', and no analysis can test this model", ri$tested, ri$group, ri$group),
+      suggestion = sprintf("combine the samples of each level of '%s' into one sample; the composition can also be tested with estimateCellLoadings(random.baseline = TRUE)", ri$group))
+    else if (ri$structure == "partly") out[[length(out) + 1L]] <- data.frame(severity = "note", stringsAsFactors = FALSE,
+      message = sprintf("'%s': %d of %d levels hold one value of '%s'; their samples keep it in every relabeling%s", ri$group, ri$n.levels - ri$n.levels.varying, ri$n.levels, ri$tested,
+                        if (!is.null(pl$n.exchange)) sprintf(" (%d of %d samples can change their value)", pl$n.exchange, pl$n.samples) else ""), suggestion = "") }
+  if (length(out)) do.call(rbind, out) else empty
+}
+
+# Formula for analyses that cannot use a grouping term (differential expression with model-based p-values): the grouping variables become
+# fixed terms with one parameter per level; covariates that are constant within the levels of a grouping variable are absorbed by it
+# and dropped. NULL when the model has no grouping term.
+groupingAsFixedFormula <- function(model) {
+  g <- model$random.vars; if (!length(g)) return(NULL)
+  meta <- model$meta; tested <- unique(stats::na.omit(vapply(model$tests, function(t) t$variable %||% NA_character_, character(1))))
+  labs <- attr(stats::terms(model$formula), "term.labels")
+  constWithin <- function(v, gg) all(tapply(seq_len(nrow(meta)), as.character(meta[[gg]]), function(ix) length(unique(stats::na.omit(meta[[v]][ix]))) <= 1))
+  covs <- setdiff(all.vars(model$formula), tested)
+  absorbed <- covs[vapply(covs, function(v) any(vapply(g, function(gg) constWithin(v, gg), logical(1))), logical(1))]
+  keep <- labs[!vapply(labs, function(l) any(all.vars(str2lang(l)) %in% absorbed), logical(1))]
+  list(formula = stats::as.formula(paste("~", paste(c(keep, g), collapse = " + ")), env = environment(model$formula)), groups = g, dropped = absorbed)
+}
+
+# message for analyses that cannot test a variable that is constant within the levels of a grouping term (NULL when the model has none)
+groupingBetweenMessage <- function(model, what = "this analysis") {
+  ri <- model$random.info; if (is.null(ri)) return(NULL)
+  btw <- ri[ri$structure == "between", , drop = FALSE]; if (!nrow(btw)) return(NULL)
+  sprintf("the tested variable '%s' takes one value within every level of '%s' (several samples per %s): the samples of a level are not independent observations, and %s has no valid test for this design (relabeling would have to move whole levels of '%s' together, which is not implemented). Combine the samples of each level into one sample; the composition can also be tested with a random baseline per level, estimateCellLoadings(random.baseline = TRUE).",
+          btw$tested[1], btw$group[1], btw$group[1], what, btw$group[1])
 }

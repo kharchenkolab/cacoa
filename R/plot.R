@@ -1112,7 +1112,7 @@ plotCodaGlobal <- function(x, style = c("bar", "violin"), fdr.threshold = 0.05, 
       scale_fill_manual(values = c(`TRUE` = "black", `FALSE` = "grey80"), name = paste0("FDR < ", fdr.threshold),
                         labels = c(`TRUE` = "yes", `FALSE` = "no")) +
       scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
-      labs(x = "Term (contrast / coefficient)", y = "Variance explained in ILR space", title = plot.title) +
+      labs(x = "Term (contrast / coefficient)", y = x$contrast$global$statistic %||% "Variance explained in ILR space", title = plot.title) +
       theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
     
     return(p)
@@ -1162,7 +1162,7 @@ plotCodaGlobal <- function(x, style = c("bar", "violin"), fdr.threshold = 0.05, 
               vjust = -0.0, size = 6, color = "black") +
     scale_color_manual(values = c(`TRUE` = "red", `FALSE` = "black"), name = paste0("FDR < ", fdr.threshold),
                        labels = c(`TRUE` = "yes", `FALSE` = "no")) +
-    labs(x = "Term (contrast or coefficient)", y = "Variance explained in ILR space", title = plot.title) +
+    labs(x = "Term (contrast or coefficient)", y = x$contrast$global$statistic %||% "Variance explained in ILR space", title = plot.title) +
     theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
   
   return(p)

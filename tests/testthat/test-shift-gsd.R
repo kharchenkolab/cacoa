@@ -16,8 +16,8 @@ refGsd <- function(r, X, cvec, P, fl, strata, mode = "moderated", gamma = 0, d0 
   if (winsor.k > 0) Y <- t(sapply(seq_len(nrow(Y)), function(g) { x <- Y[g, ]; md <- median(x); s2 <- (1.4826 * median(abs(x - md)))^2; sd <- sqrt(pmax(V[g, ], s2))
     pmin(pmax(x, md - winsor.k * sd), md + winsor.k * sd) }))
   Y <- Y - rowMeans(Y)
-  stat1 <- function(Xp, Yp, cp, Vp = V) {
-    XtXi <- MASS::ginv(crossprod(Xp)); a <- Xp %*% XtXi %*% cp; beta <- as.numeric(Yp %*% a); mv <- as.numeric(Vp %*% a^2)
+  stat1 <- function(Xp, Yp, cp, Vp = V, mv.scale = 1) {
+    XtXi <- MASS::ginv(crossprod(Xp)); a <- Xp %*% XtXi %*% cp; beta <- as.numeric(Yp %*% a); mv <- mv.scale * as.numeric(Vp %*% a^2)
     H <- Xp %*% XtXi %*% t(Xp); rss <- rowSums((Yp - Yp %*% H)^2); cxc <- as.numeric(t(cp) %*% XtXi %*% cp); df <- m - qr(Xp)$rank
     va <- if (mode == "moderated") (d0 * mv + cxc * rss) / (d0 + df) else mv; z2 <- beta^2 / va; c(sum(sqrt(z2)), sum(z2), sum(z2^2), sum(z2^4), max(z2)) }
   Xs <- X[pres, , drop = FALSE]
@@ -26,7 +26,12 @@ refGsd <- function(r, X, cvec, P, fl, strata, mode = "moderated", gamma = 0, d0 
     Qc <- qr.Q(qr(cvec), complete = TRUE); Xr <- Xs %*% Qc[, -1, drop = FALSE]; H0 <- Xr %*% MASS::ginv(crossprod(Xr)) %*% t(Xr); E <- Y - Y %*% H0; F0 <- Y %*% H0
     blocks <- split(seq_len(m), strata[pres])
     induced <- function(p) { q <- seq_len(m); for (b in blocks) { if (length(b) < 2) next; blk <- sort(b); q[blk[order(p[pres[blk]], method = "radix")]] <- blk }; q }
-    Tm <- cbind(stat1(Xs, Y, cvec), sapply(seq_len(ncol(P)), function(b) { q <- induced(P[, b]); stat1(Xs, F0 + E[, q, drop = FALSE], cvec, V[, q, drop = FALSE]) }))
+    # the residuals of the model without the tested contrast are smaller than the errors: the model variance of the relabeled data sets
+    # is multiplied by 1 / kappa = (|a|^2 - mean_b |Q0' a_b|^2) / |a|^2 (a_b: the contrast's weights moved with the residuals)
+    a0 <- as.numeric(Xs %*% MASS::ginv(crossprod(Xs)) %*% cvec); aa <- sum(a0^2); sv <- svd(Xr); Q0 <- sv$u[, sv$d > 1e-7 * max(sv$d), drop = FALSE]
+    qs <- lapply(seq_len(ncol(P)), function(b) induced(P[, b])); gs <- mean(vapply(qs, function(q) { ab <- numeric(m); ab[q] <- a0; sum(crossprod(Q0, ab)^2) }, numeric(1)))
+    mvs <- if (aa > 0 && aa - gs > 1e-8 * aa) (aa - gs) / aa else 1
+    Tm <- cbind(stat1(Xs, Y, cvec), sapply(seq_len(ncol(P)), function(b) { q <- qs[[b]]; stat1(Xs, F0 + E[, q, drop = FALSE], cvec, V[, q, drop = FALSE], mvs) }))
   }
   adm <- rep(TRUE, ncol(Tm))
   if (!is.null(lev)) { idx <- cbind(pres, P[pres, , drop = FALSE]); adm <- apply(idx, 2, function(ii) sum(lev[ii] == 1) >= minl && sum(lev[ii] == 2) >= minl); Tm[, !adm] <- NA }

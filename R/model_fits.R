@@ -180,6 +180,9 @@ performLMPermutations <- function(x, y,
 
   coef <- fit$coef
   stat <- as.vector(fit$stat); p <- as.vector(fit$p_value)
+  # the compiled fitter returns (k + 1) / (B + 1); with all distinct relabelings enumerated the observed labeling is one of them
+  exhaustive <- !is.null(P) && isTRUE(attr(P, "exhaustive")) && n.permutations > 0
+  if (exhaustive) p <- relabelingPValue(round(p * (n.permutations + 1) - 1), n.permutations, TRUE)
   effect <- as.vector(fit$effect); se <- as.vector(fit$se); df <- as.vector(fit$df)
   # z-like score from the permutation p-value, signed by the effect
   p.cl <- pmin(pmax(p, 1e-16), 1 - 1e-16)
@@ -222,7 +225,7 @@ performLMPermutations <- function(x, y,
   }
 
   list(
-    P = P, perm.cells = perm.cells, statistic = statistic, perm.method = perm.method,
+    P = P, perm.cells = perm.cells, exhaustive = exhaustive, statistic = statistic, perm.method = perm.method,
     coef = coef, effect = effect, se = se, df = df,
     stat.obs = stat, stats.perm = stats.perm, effects.perm = effects.perm,
     sampled.fits = fit$sampled_fits, pooled = fit$pooled, effect.perm.mean = setNames(as.numeric(fit$effect_perm_mean), y.names), closed.form = isTRUE(fit$closed_form),

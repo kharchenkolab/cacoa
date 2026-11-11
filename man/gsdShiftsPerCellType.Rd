@@ -23,7 +23,8 @@ gsdShiftsPerCellType(
   influence = TRUE,
   n.null = 99,
   n.cores = 1,
-  verbose = FALSE
+  verbose = FALSE,
+  return.profiles = FALSE
 )
 }
 \arguments{
@@ -58,6 +59,10 @@ gsdShiftsPerCellType(
 \item{n.cores}{threads}
 
 \item{verbose}{progress}
+
+\item{return.profiles}{also return, per test, the profiles the test was computed from (\code{profiles}: per cell type the genes x samples
+matrix \code{x} of normalized expression, its sampling variance \code{v}, the gene-wise extra variance \code{tau2}, the samples and genes; the
+design \code{F} and the contrast), for evaluations of the statistic outside the compiled kernel (default FALSE)}
 }
 \value{
 list: \code{results} (long table as for the distance test, \code{effect = "shift"}, plus \code{n.genes}, \code{n.eff}, \code{se.jk.norm}),

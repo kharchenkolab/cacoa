@@ -17,7 +17,10 @@ plotCodaLoadings(
   legend.position = "bottom",
   significance = c("clr", "reference"),
   center = c("reference", "none"),
-  title = NULL
+  title = NULL,
+  interval = TRUE,
+  interval.level = 0.95,
+  min.effect = NULL
 )
 }
 \arguments{
@@ -48,6 +51,16 @@ geometric mean of all cell types is marked by a dashed line), or \code{"none"}: 
 mean; the reference block's mean is marked). The band is the null of the test behind the points placed on the same axis}
 
 \item{title}{plot title (optional)}
+
+\item{interval}{draw the 95 \% confidence interval of each loading (default TRUE): the model-based interval of the least-squares fit
+on the log ratios (t quantile with the residual degrees of freedom; \code{interval.level}). With \code{center = "reference"} it is the
+interval of the loading relative to the reference cell types, given that set. It is not the test: the filled points and the
+p-values come from the permutations}
+
+\item{interval.level}{level of the interval (default 0.95)}
+
+\item{min.effect}{optional fold change (e.g. 1.5) marked by dotted lines at +- log2(\code{min.effect}): a cell type whose interval lies
+beyond a line changes by at least that factor relative to the zero of the axis (see \code{\link[=codaLoadingsTable]{codaLoadingsTable()}})}
 }
 \value{
 ggplot object

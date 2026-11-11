@@ -465,3 +465,29 @@ permutationPhrase <- function(prov, d) {
   fl.txt <- if (diff(fl) > 1e-12) sprintf("%.2g-%.2g", fl[1], fl[2]) else sprintf("%.2g", fl[1])
   sub("([a-z-]+) permutations", sprintf("%s %s\\1 permutations (smallest p %s)", if (exact && length(unique(d$n.perm)) > 1) paste0("up to ", np) else np, if (exact) "exact " else "", fl.txt), prov)
 }
+
+#' Distance of each sample from its fitted position, per cell type
+#'
+#' The residual of the distance model: for every cell type, how far each sample's expression profile lies from the position the
+#' model fits for it (the squared residual distance, corrected for the sample's leverage), relative to the typical (median)
+#' sample of that cell type, as a log2 ratio: 0 = a typical sample, 1 = twice as far from the fit as typical.
+#'
+#' @param D.list named list of sample x sample distance matrices (one per cell type)
+#' @param model a `cacoaModel`; the design of its first (or `test`-th) test is used
+#' @param dist distance type of the matrices
+#' @param test index of the test
+#' @return samples x cell types matrix (NA: sample not in the cell type)
+#' @export
+shiftSampleResiduals <- function(D.list, model, dist = "cor", test = 1) {
+  Fm <- model$tests[[test]]$design$F %||% model$F; samples <- rownames(Fm)
+  out <- matrix(NA_real_, length(samples), length(D.list), dimnames = list(samples, names(D.list)))
+  for (ct in names(D.list)) {
+    D <- D.list[[ct]]; sm <- intersect(samples, rownames(D)); if (length(sm) < 4) next
+    X <- Fm[sm, , drop = FALSE]; X <- X[, colSums(abs(X)) > 1e-12, drop = FALSE]
+    hi <- tryCatch(hatInfo(X), error = function(e) NULL); if (is.null(hi) || length(sm) - hi$rank < 2) next
+    G <- gowerCenter(asSquaredDistance(D[sm, sm], dist)); R <- diag(length(sm)) - hi$H
+    r <- rowSums((R %*% G) * R); ok <- hi$h < 1 - 1e-8; v <- rep(NA_real_, length(sm)); v[ok] <- pmax(r[ok], 0) / (1 - hi$h[ok])
+    md <- stats::median(v, na.rm = TRUE); if (is.finite(md) && md > 0) out[sm, ct] <- 0.5 * log2(pmax(v, md * 1e-3) / md)   # ratio of distances (square roots)
+  }
+  out
+}

@@ -61,6 +61,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @field full.meta Full sample metadata (default=NULL)
     full.meta = NULL,
 
+    #' @field excluded.samples samples left out of all analyses by `excludeSamples()` (default=NULL: none)
+    excluded.samples = NULL,
+
     #' @field cell.groups Named factor with cell names with cluster per cell (default=NULL)
     cell.groups = NULL,
 
@@ -390,6 +393,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$model <- m
       self$block.vars <- block.vars; self$numeric.ref <- numeric.ref
       private$syncLegacyFields()
+      # a tested variable with one value in every level of a grouping term: no analysis can run (reported here, where the formula is given)
+      btw <- m$issues[m$issues$severity == "warning" & grepl("takes one value within every level", m$issues$message, fixed = TRUE), , drop = FALSE]
+      if (nrow(btw)) warning(paste0(btw$message[1], ". ", sub("^c", "C", btw$suggestion[1]), "."), call. = FALSE)
       if (verbose) print(m)
       invisible(m)
     },
@@ -446,6 +452,34 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @description Describe the sample metadata columns (type, levels, missing values, role as a covariate)
     #' @return data.frame, see [describeMetadata()]
     describeMetadata = function() describeMetadata(self$sample.meta),
+
+    #' @description Leave samples out of every analysis run afterwards (expression shifts, composition, differential expression,
+    #'   the cluster-free maps): their cells are treated as unassigned and their rows are removed from the working sample
+    #'   metadata; the model is rebuilt on the remaining samples. Nothing is excluded automatically: the sensitivity and fit
+    #'   diagnostics name samples, the decision is the user's. Called without samples, it restores the full set. Stored results
+    #'   are not recomputed.
+    #' @param samples character vector of sample ids to exclude (the complete list: a second call replaces the first); `NULL`
+    #'   or empty restores all samples
+    #' @param verbose print what was done
+    #' @return the object, invisibly; `cao$excluded.samples` holds the excluded ids
+    excludeSamples = function(samples = NULL, verbose = NULL) {
+      verbose <- private$opt("verbose", verbose)
+      if (is.null(private$all.samples)) private$all.samples <- list(sample.per.cell = self$sample.per.cell, sample.meta = self$sample.meta)
+      full <- private$all.samples; samples <- unique(as.character(samples))
+      unknown <- setdiff(samples, rownames(full$sample.meta))
+      if (length(unknown)) stop("not in the sample metadata: ", paste(unknown, collapse = ", "))
+      spc <- full$sample.per.cell; nm <- names(spc); spc <- as.character(spc); spc[spc %in% samples] <- NA
+      keep.lv <- setdiff(if (is.factor(full$sample.per.cell)) levels(full$sample.per.cell) else unique(stats::na.omit(as.character(full$sample.per.cell))), samples)
+      self$sample.per.cell <- setNames(factor(spc, levels = keep.lv), nm)
+      self$sample.meta <- full$sample.meta[!rownames(full$sample.meta) %in% samples, , drop = FALSE]
+      self$sample.ids <- rownames(self$sample.meta)
+      self$excluded.samples <- if (length(samples)) samples else NULL
+      if (!is.null(self$model)) { m <- self$model
+        self$setModel(formula = if (isTRUE(m$formula.default)) NULL else (m$formula.full %||% m$formula), test = m$test.spec$test, contrast = m$test.spec$contrast, dispersion.formula = m$dispersion.formula, verbose = FALSE) }
+      if (verbose) message(if (length(samples)) sprintf("Excluded from all analyses run from now on: %s (%d samples remain).", paste(samples, collapse = ", "), nrow(self$sample.meta)) else "All samples are included again.",
+                           " Stored results were computed with the previous sample set: rerun the estimates you need.")
+      invisible(self)
+    },
 
     #' @description Sample groups of a test: a factor (reference, target) for two-level contrasts, the variable
     #'   itself for numeric tests or term tests
@@ -516,7 +550,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         out <- checkCompositionSensitivity(res$cnts, res$model, self$sample.meta, formulas = formulas, screen = screen, current = res,
                                            n.permutations = n.permutations, seed = seed %||% sample.int(.Machine$integer.max, 1), alpha = private$opt("alpha"),
                                            top.k = top.k, jackknife = jackknife, perm.method = res$perm.method %||% "block",
-                                           zero.pseudocount = st$zero.pseudocount %||% 0.1, basis.type = st$basis.type %||% "default",
+                                           zero.pseudocount = st$zero.pseudocount %||% 0.1, scale.pseudocount = st$scale.pseudocount %||% FALSE, basis.type = st$basis.type %||% "default",
                                            ref.method = st$ref.method %||% "block", ref.block.thresh = st$ref.block.thresh %||% 0.05, ref.size.frac = st$ref.size.frac %||% 0.5)
         self$test.results[[name]] <- out
         if (verbose) print(out)
@@ -1039,6 +1073,56 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                            palette = self$sample.groups.palette)
     },
 
+    #' @description Fit diagnostics in one layout for every analysis: two heatmaps of samples by cell types. Left, how far each
+    #'   sample lies from the model's fit (composition: the studentized residual of the cell type's log ratio; expression shifts:
+    #'   the distance of the sample's profile from its fitted position relative to a typical sample, log2; cell density: the mean
+    #'   standardized residual of the cell type's cells). Right, how much the cell type's effect changes when the sample is left
+    #'   out, in standard errors of the effect. Marked tiles are beyond `resid.thresh` and `influence.se`.
+    #' @param analysis `"composition"`, `"expression.shifts"` or `"cell.density"`
+    #' @param name result name (default: the analysis' default slot)
+    #' @param what `"both"` (default), `"residual"` or `"influence"`
+    #' @param cell.types optional subset of cell types
+    #' @param resid.thresh,influence.se marking thresholds (defaults: residual 3, or a sample twice as far from the fit as typical for
+    #'   the expression shifts; 1 standard error)
+    #' @return ggplot2 object (a two-panel grid for `what = "both"`)
+    plotFitDiagnostics = function(analysis = c("composition", "expression.shifts", "cell.density"), name = NULL, what = c("both", "residual", "influence"),
+                                  cell.types = NULL, resid.thresh = NULL, influence.se = 1) {
+      analysis <- match.arg(analysis); what <- match.arg(what)
+      name <- name %||% c(composition = "coda", expression.shifts = "expression.shifts", cell.density = "cell.density")[[analysis]]
+      sub <- function(m) if (is.null(cell.types) || is.null(m)) m else m[, intersect(cell.types, colnames(m)), drop = FALSE]
+      rm <- im <- NULL; r.title <- r.leg <- r.sub <- NULL
+      if (analysis == "composition") {
+        res <- private$getResults(name, "estimateCellLoadings()"); if (identical(res$kind, "term")) stop("the whole-factor composition test has no per-cell-type fit")
+        d <- codaSampleDiagnostics(res); sm <- rownames(res$cnts); cts <- unique(d$celltype)
+        mk <- function(col) matrix(d[[col]], length(sm), length(cts), dimnames = list(sm, cts))
+        rm <- mk("residual"); im <- mk("influence"); groups <- self$getSampleGroups(model = res$model)
+        r.title <- "Composition: residual of the log ratio"; r.leg <- "studentized residual"; resid.thresh <- resid.thresh %||% 3; i.title <- "Composition: influence on the loading"
+      } else if (analysis == "expression.shifts") {
+        res <- private$getResults(name, "estimateExpressionShiftMagnitudes()"); test <- which(vapply(res$model$tests, function(t) t$kind == "contrast", logical(1)))[1]
+        rm <- shiftSampleResiduals(res$distances, res$model, dist = res$settings$dist %||% "cor", test = test)
+        infl <- res$influence[[test]]; w <- res$wide[[test]]
+        if (!is.null(infl$shift)) { se <- setNames(w$se.shift %||% w$se.jk %||% rep(NA_real_, nrow(w)), w$celltype)
+          if (all(!is.finite(se))) { rr <- res$results[res$results$effect == "shift" & res$results$test.id == res$model$tests[[test]]$id, ]; se <- setNames(rr$se.jk, rr$celltype) }
+          im <- sweep(infl$shift, 2, se[colnames(infl$shift)], "/") }
+        rm <- rm[, colSums(is.finite(rm)) > 0, drop = FALSE]; groups <- self$getSampleGroups(test, model = res$model)
+        r.title <- "Expression: distance from the fitted position"; r.leg <- "log2 distance relative to a typical sample"; resid.thresh <- resid.thresh %||% 1; i.title <- "Expression: influence on the shift"
+      } else {
+        res <- private$getResults(name, "estimateDiffCellDensity()"); dr <- NULL
+        for (tp in names(res$diff)) if (!is.null(res$diff[[tp]]$residuals)) { dr <- res$diff[[tp]]$residuals.pearson %||% res$diff[[tp]]$residuals; break }
+        if (is.null(dr)) stop("the density residuals are not stored; run estimateDiffCellDensity(..., return.residuals = TRUE)")
+        cg <- self$cell.groups[colnames(dr)]; rm <- t(apply(dr, 1, function(v) tapply(v, cg, mean, na.rm = TRUE))); groups <- self$getSampleGroups()
+        r.title <- "Cell density: mean residual of the cell type's cells"; r.leg <- "mean standardized residual"; resid.thresh <- resid.thresh %||% 1; i.title <- NULL
+      }
+      rm <- sub(rm); im <- sub(im)
+      if (!is.null(rm) && !is.null(im)) { cc <- intersect(colnames(rm), colnames(im)); ss <- intersect(rownames(rm), rownames(im)); rm <- rm[ss, cc, drop = FALSE]; im <- im[ss, cc, drop = FALSE] }   # the same samples and cell types, in the same order
+      so <- sampleHeatmapOrder(rm %||% im, groups)
+      g.r <- if (what != "influence" && !is.null(rm)) plotSampleHeatmap(rm, groups = groups, title = r.title, legend = r.leg, mark = resid.thresh, plot.theme = self$plot.theme, palette = self$sample.groups.palette, sample.order = so)
+      g.i <- if (what != "residual" && !is.null(im)) plotSampleHeatmap(im, groups = groups, title = i.title, legend = "change without the sample (standard errors)", mark = influence.se, plot.theme = self$plot.theme, palette = self$sample.groups.palette, sample.order = so)
+      if (is.null(g.r) || is.null(g.i)) return(g.r %||% g.i)
+      checkPackageInstalled("cowplot", cran = TRUE)
+      cowplot::plot_grid(g.r, g.i + ggplot2::theme(axis.text.y = ggplot2::element_blank(), axis.ticks.y = ggplot2::element_blank()), ncol = 2, rel_widths = c(1.12, 1), align = "h", axis = "tb")   # the same rows in both panels: sample names once
+    },
+
     #' @description Deprecated: use `plotSampleInfluence()`
     #' @param ... passed to `plotSampleInfluence()`
     plotExpressionShiftResiduals = function(...) {
@@ -1093,6 +1177,14 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, genes.to.omit = NULL, ...) {
       set.seed(seed.resampling)
       sample.model <- private$resolveModel(formula = formula, test = test.spec, contrast = contrast, verbose = verbose, what = "estimateDEPerCellType()")
+      if (length(sample.model$random.vars)) {   # tests with model-based p-values cannot use a grouping term: it is fitted as a fixed term
+        gf <- groupingAsFixedFormula(sample.model)
+        warning(sprintf("estimateDEPerCellType(): '%s' takes its p-values from the model and cannot use a grouping term; %s %s fitted as %s with one parameter per level (model %s).%s",
+                        test, paste(sprintf("'(1 | %s)'", gf$groups), collapse = ", "), if (length(gf$groups) > 1) "are" else "is", if (length(gf$groups) > 1) "fixed terms" else "a fixed term", paste(deparse(gf$formula), collapse = ""),
+                        if (length(gf$dropped)) sprintf(" Covariates that are constant within its levels are absorbed by it and were dropped: %s.", paste(gf$dropped, collapse = ", ")) else ""), call. = FALSE)
+        sample.model <- tryCatch(private$buildModel(formula = gf$formula, test = sample.model$test.spec$test, contrast = sample.model$test.spec$contrast),
+                                 error = function(e) stop("the model with the grouping term as a fixed term cannot be fitted: ", conditionMessage(e), call. = FALSE))
+      }
       if (identical(sample.model$contrast_spec$type, "term")) {   # whole-factor test: F-type tests only
         if (tolower(test) %in% c("deseq2", "deseq2.wald")) { test <- "DESeq2.LRT"; if (verbose) message("Whole-factor test: using DESeq2 LRT (full vs reduced model)") }
         if (grepl("^wilcoxon|^t-test", tolower(test))) stop("Wilcoxon / t-test need a two-group contrast")
@@ -2589,9 +2681,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param formula optional location formula for a temporary model (see `estimateExpressionShiftMagnitudes()`)
     #' @param contrast optional contrast for a temporary model (expert synonym of `test`)
     #' @param test optional test for a temporary model (see `Cacoa$new()`)
-    #' @param perm.method permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'
+    #' @param perm.method relabeling scheme: `"auto"` (default: the scheme of the model's test, as for the other analyses: the tested
+    #'   variable is exchanged within the levels of discrete covariates and grouping terms; residuals are exchanged, within the levels of
+    #'   the discrete covariates, when the model has a continuous covariate), `"block"` or `"freedman-lane"`
+    #' @param random.baseline fit a grouping term `(1 | g)` of the model as a random baseline per level of `g` (default `FALSE`: the
+    #'   grouping term only restricts the relabeling to within the levels of `g`, as in every other analysis). With `TRUE` the levels
+    #'   that contain one value of the tested variable contribute to the estimate, and a design in which every level contains one
+    #'   value can be tested; see [lmCoda()]
     #' @param statistic test statistic of the per-column fitter: `"t"` (studentized contrast, default) or `"coef"` (raw contrast estimate)
-    #' @param zero.pseudocount pseudocount added to zero counts before the log-ratio transform (default 0.1)
+    #' @param zero.pseudocount pseudocount added to the counts before the log-ratio transform (default 0.5 cells in a sample of median
+    #'   size, scaled with the sample's cell number; see [lmCoda()])
     #' @param basis.type ILR basis type (default 'default')
     #' @param ref.method reference cell types for the presentation of the loadings: `"block"` (default) the largest set of cell
     #'   types whose proportions do not change relative to each other ([referenceBlock()]), or `"pvalue"` (the cell types with the
@@ -2607,7 +2706,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     estimateCellLoadings=function(n.permutations=NULL, name='coda', n.seed=239,
                                   cells.to.remove=NULL, cells.to.remain=NULL, 
                                   filter.empty.cell.types=TRUE, n.cores=self$n.cores, verbose=self$verbose, method="lda",
-                                  formula=NULL, contrast=NULL, test=NULL, perm.method=c("freedman-lane", "block"), statistic=c("t", "coef"), zero.pseudocount=0.1,
+                                  formula=NULL, contrast=NULL, test=NULL, perm.method="auto", random.baseline=FALSE, statistic=c("t", "coef"), zero.pseudocount=0.5,
                                   basis.type = c("default"), ref.method = c("block", "pvalue"), ref.block.thresh = 0.05, ref.size.frac = 0.5, ref.p.thresh = 0.3, ref.min.size = 1, ref.max.size = 3,
                                   block.vars = NULL, ...) {
       n.permutations <- private$opt("n.permutations", n.permutations)
@@ -2618,7 +2717,6 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       #if (method == "cda") checkPackageInstalled("candisc", cran=TRUE)
       #if (method == "lda") checkPackageInstalled("quadprog", cran=TRUE)
 
-      perm.method <- match.arg(perm.method)
       statistic   <- match.arg(statistic)
       basis.type  <- match.arg(basis.type)
 
@@ -2636,6 +2734,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # Build model
       sample.model <- private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose,
                                            what = "estimateCellLoadings()")
+      # relabeling scheme of the model's test, as for the other analyses
+      if (identical(perm.method, "auto")) perm.method <- sample.model$tests[[sample.model$primary %||% 1L]]$permutation$scheme %||% "block"
+      perm.method <- match.arg(perm.method, c("freedman-lane", "block"))
+      if (!isTRUE(random.baseline) && !is.null(msg <- groupingBetweenMessage(sample.model, "estimateCellLoadings()"))) stop(msg, call. = FALSE)
       if (identical(sample.model$contrast_spec$type, "term")) {
         # whole-factor test on the ILR coordinates (Euclidean): location / dispersion through the distance engine
         if (verbose) message("Whole-factor test on composition: location and dispersion of the ILR coordinates")
@@ -2653,7 +2755,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (verbose) message("Running lmCoda with design='", deparse(sample.model$formula_used), "' and ", perm.method, " permutations")
 
       #res <- runCoda(tmp$d.counts, tmp$d.groups, n.boot=n.boot, n.seed=n.seed, ref.cell.type=ref.cell.type, method=method, n.cores=n.cores, verbose=verbose)
-      res <- lmCoda(cnts, sample.model, seed = private$opt("seed"), perm.method=perm.method, statistic=statistic, n.permutations=n.permutations,
+      res <- lmCoda(cnts, sample.model, seed = private$opt("seed"), perm.method=perm.method, random.baseline=random.baseline, statistic=statistic, n.permutations=n.permutations,
                     zero.pseudocount=zero.pseudocount, basis.type = basis.type, ref.p.thresh = ref.p.thresh,
                     ref.min.size = ref.min.size, ref.max.size = ref.max.size, ref.method = ref.method, ref.block.thresh = ref.block.thresh, ref.size.frac = ref.size.frac, ...)
       res$cnts <- cnts
@@ -2800,6 +2902,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       cowplot::plot_grid(one("none", "relative to the geometric mean"), one("reference", "relative to the reference cell types"), ncol = 2)
     },
 
+    #' @description The samples behind the composition result: per cell type the samples' proportions by level of the tested variable,
+    #'   the fitted proportions with their intervals, and the samples that carry the result named (see [plotCodaSamples()])
+    #' @param name result name (default 'coda')
+    #' @param cell.types cell types to show (default: the `n.top` with the smallest p-values)
+    #' @param n.top number of cell types shown by default
+    #' @param pair.by optional column of the sample metadata joining samples of the same unit (e.g. patient)
+    #' @param palette colours of the levels of the tested variable
+    #' @param ... passed to [plotCodaSamples()] (`influence.se`, `resid.thresh`, `label.samples`, `ncol`)
+    #' @return A ggplot2 object
+    plotCodaSamples = function(name = "coda", cell.types = NULL, n.top = 12, pair.by = NULL, palette = self$sample.groups.palette, ...) {
+      res <- private$getResults(name, "estimateCellLoadings()")
+      if (identical(res$kind, "term")) stop("the whole-factor composition test has no per-cell-type fit to show")
+      if (!is.null(pair.by) && !pair.by %in% names(res$model$meta) && pair.by %in% names(self$sample.meta)) res$model$meta[[pair.by]] <- self$sample.meta[rownames(res$model$meta), pair.by]
+      plotCodaSamples(res, cell.types = cell.types, n.top = n.top, pair.by = pair.by, palette = palette, plot.theme = self$plot.theme, ...)
+    },
+
     ### Cluster-free cell density
 
     #' @description Diagnostics of the kNN neighbourhood units used by the cluster-free maps: cells per sample per
@@ -2855,6 +2973,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    block.vars=NULL, bandwidth=0.05, smoothing=c("knn", "heat", "neighbourhood"), k=NULL, target.size=NULL, n.hops=1, ...){
       smoothing <- match.arg(smoothing)
       sample.per.cell <- self$sample.per.cell
+      if (anyNA(sample.per.cell)) { sample.per.cell <- sample.per.cell[!is.na(sample.per.cell)]; if (is.factor(sample.per.cell)) sample.per.cell <- droplevels(sample.per.cell) }   # cells of excluded samples
 
       sample.model <- private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose,
                                            what = "estimateCellDensity()")
@@ -2877,7 +2996,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           sample.per.cell=sample.per.cell, sample.weights=sample.weights, bins=bins, bandwidth=bandwidth, ...
         )
       } else if (method == 'graph') {
-        res <-  extractCellGraph(self$data.object) %>%
+        res <-  private$cellGraph() %>%
           estimateCellDensityGraph(sample.per.cell=sample.per.cell, sample.weights=sample.weights,
                                    n.cores=n.cores, beta=beta, verbose=verbose, smoothing=smoothing, k=k, target.size=target.size, n.hops=n.hops,
                                    neighbourhoods=if (smoothing == "knn") private$knnUnits(k %||% defaultNeighbourhoodSize(length(sample.per.cell), length(unique(sample.per.cell))), n.cores) else NULL, ...)
@@ -3077,7 +3196,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' }
     #' @param test optional test for a temporary model (see `Cacoa$new()`)
     #' @param block.vars metadata columns defining permutation strata (default: stored)
-    #' @param perm.method permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'
+    #' @param perm.method relabeling scheme: `"auto"` (default: the scheme of the model's test, i.e. sample labels relabeled within the
+    #'   levels of the discrete covariates and grouping variables (`"block"`) when every adjusting covariate is discrete, residual
+    #'   permutation (`"freedman-lane"`) when a continuous covariate is present), `"block"` or `"freedman-lane"`. With a covariate of many
+    #'   levels (patients) residual permutation across all samples is not valid for the density map: in data without a label effect it
+    #'   called cells in 67-78 % of the data sets, relabeling within the levels in 0-5 % (residuals are now exchanged within the levels
+    #'   of the discrete covariates, see [permutationPlan()])
     #' @param statistic test statistic of the fitter: `"t"` (studentized contrast, default) or `"coef"` (raw contrast estimate)
     #' @param robust.method robust fitting: 'none', 'huber' or 'winsor'
     #' @param na.mode handling of missing responses: 'drop' or 'impute_weak'
@@ -3151,7 +3275,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param kernel.alpha pseudo-count of a heat-kernel density on the log scale, as a fraction of the mean density
     #'   (default 0.3; the diffusion neighborhoods, and `smoothing = "heat"` with `transform = "log"`)
     estimateDiffCellDensity=function(type='permutation', adjust=NULL, name='cell.density', sample.metadata=self$sample.meta, 
-                                     formula=NULL, contrast=NULL, test=NULL, block.vars=NULL, perm.method="freedman-lane", statistic=c("t", "coef"),
+                                     formula=NULL, contrast=NULL, test=NULL, block.vars=NULL, perm.method="auto", statistic=c("t", "coef"),
                                      robust.method="none", na.mode="drop", alternative="two-sided", return.residuals=FALSE, return.sampled.stats=FALSE,
                                      n.permutations=NULL, smooth=TRUE, adjust.method=c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"),
                                      p.source=c("parametric", "permutation", "pooled"), moderate=TRUE, moderate.d0.max=4, transform=c("auto", "none", "log"),
@@ -3185,13 +3309,23 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         density.mat <- density.mat[dens.res$density.emb$counts > 0,]
         graph <- rownames(density.mat) %>% as.integer() %>% graphFromGrid(n.bins=dens.res$bins)
       } else if (adjust && smooth) {
-        graph <- extractCellGraph(self$data.object)
+        graph <- private$cellGraph()
         l.max <- NULL
       }
 
       sample.model <- if (!is.null(formula) || !is.null(contrast) || !is.null(test)) {
         private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose, what = "estimateDiffCellDensity()")
+      } else if (!is.null(self$model)) {   # the current model, as in every other analysis (the density estimate keeps the model it was made under)
+        cur <- private$resolveModel(verbose = verbose, what = "estimateDiffCellDensity()"); old <- dens.res$model
+        sig <- function(m) paste(paste(deparse(m$formula.full %||% m$formula), collapse = ""), paste(vapply(m$tests, `[[`, character(1), "label"), collapse = ";"), paste(m$block.vars, collapse = ","))
+        if (verbose && !is.null(old) && !identical(sig(cur), sig(old)))
+          message("The model has changed since estimateCellDensity() (", paste(deparse(old$formula.full %||% old$formula), collapse = ""), "): the test uses the current model, ",
+                  paste(deparse(cur$formula.full %||% cur$formula), collapse = ""), ". Re-run estimateCellDensity() to refresh the condition summaries of the density estimate.")
+        cur
       } else dens.res$model %||% private$resolveModel(verbose = verbose, what = "estimateDiffCellDensity()")
+      # relabeling scheme of the model's test: within the levels of discrete covariates / grouping variables when all adjusting covariates are discrete
+      if (identical(perm.method, "auto")) perm.method <- sample.model$tests[[sample.model$primary %||% 1L]]$permutation$scheme %||% "freedman-lane"
+      perm.method <- match.arg(perm.method, c("freedman-lane", "block"))
 
       if (!is.null(scale)) {   # diffusion neighborhoods at the given scale(s): the scale scan (scanDensityScales()); the stored units when the request does not fit the scan and scale was not given
         why <- if (!(adjust && adjust.method == "perm-fdr")) "the diffusion neighborhoods are adjusted by the pooled permutation FDR (adjust = TRUE, adjust.method = 'perm-fdr')" else if (dens.res$method != "graph") "the diffusion neighborhoods need the graph density (estimateCellDensity(method = 'graph'))" else NULL
@@ -3240,7 +3374,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       cells.d <- rownames(density.mat); grp.levels <- NULL; cg.codes <- NULL
       if (!is.null(self$cell.groups) && dens.res$method == "graph") { gf <- as.factor(self$cell.groups[cells.d]); grp.levels <- levels(gf); cg.codes <- as.integer(gf) - 1L; cg.codes[is.na(cg.codes)] <- -1L
         if (!any(cg.codes >= 0)) { grp.levels <- NULL; cg.codes <- NULL } }
-      nn.graph <- if (post != "none" && dens.res$method == "graph") graphNeighbourLists0(extractCellGraph(self$data.object), cells.d) else NULL
+      nn.graph <- if (post != "none" && dens.res$method == "graph") graphNeighbourLists0(private$cellGraph(), cells.d) else NULL
       perm.res <- density.mat %>%
           diffCellDensityPermutations(sample.model=sample.model, seed = private$opt("seed"), perm.method=perm.method, statistic=statistic, robust.method = robust.method,
                                       na.mode = na.mode, alternative = alternative, n.permutations=n.permutations,
@@ -3282,7 +3416,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         nn <- NULL
         if (adjust.method != "bh") {
           cells <- names(z.in)
-          g <- if (dens.res$method == 'graph') extractCellGraph(self$data.object) else graph
+          g <- if (dens.res$method == 'graph') private$cellGraph() else graph
           nn <- graphNeighbourList(g, cells)
           if (length(nn) != length(cells)) stop("the graph does not cover all tested cells")
         }
@@ -3293,7 +3427,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
 
       if (post == "inherit" && !is.null(res$p.adj)) {
-        ih <- inheritNeighbourQ(res$p.adj, res$effect, extractCellGraph(self$data.object))
+        ih <- inheritNeighbourQ(res$p.adj, res$effect, private$cellGraph())
         res$p.adj.cell <- res$p.adj; res$p.adj <- ih$q; res$effect.inherited <- ih$effect
         pa <- pmin(pmax(ih$q, 1e-300), 1 - 1e-16)
         res$adj <- if (alternative == "two-sided") sign(ih$effect) * stats::qnorm(pa / 2, lower.tail = FALSE) else pmax(stats::qnorm(pa, lower.tail = FALSE), 0)
@@ -3938,7 +4072,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param formula optional location formula for a temporary model (see `estimateExpressionShiftMagnitudes()`)
     #' @param test optional test for a temporary model (see `Cacoa$new()`); the test must be a contrast (two groups or a numeric step)
     #' @param contrast optional contrast for a temporary model (expert synonym of `test`)
-    #' @param perm.method permutation scheme of the linear-model fitter: 'freedman-lane' or 'block'
+    #' @param perm.method relabeling scheme: `"auto"` (default: the scheme of the model's test, as for the other analyses), `"block"` or
+    #'   `"freedman-lane"`
     #' @param statistic test statistic of the fitter: `"t"` (studentized contrast, default) or `"coef"` (raw contrast estimate)
     #' @param robust.method robust fitting: 'none', 'huber' or 'winsor'
     #' @param na.mode handling of missing responses: 'drop' or 'impute_weak'
@@ -3948,7 +4083,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param ... further arguments passed to the underlying function
     estimateClusterFreeDE=function(n.top.genes=Inf, genes=NULL, max.z=20, min.expr.frac=0.01, min.n.samp.per.cond=2,
                                    sample.per.cell=self$sample.per.cell, formula=NULL, test=NULL, contrast=NULL,
-                                   perm.method = "freedman-lane", statistic = c("t", "coef"), robust.method = "none", na.mode = "drop", alternative = "two-sided",
+                                   perm.method = "auto", statistic = c("t", "coef"), robust.method = "none", na.mode = "drop", alternative = "two-sided",
                                    min.n.obs.per.samp=2, adjust.pvalues=FALSE, keep.means=FALSE, robust=FALSE,
                                    smooth=TRUE, wins=0.01, n.permutations=NULL, lfc.pseudocount=1e-5, block.vars=NULL,
                                    min.edge.weight=0.6, verbose=self$verbose, n.cores=self$n.cores, 
@@ -3960,6 +4095,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       sample.model <- private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose, what = "estimateClusterFreeDE()")
       if (identical(sample.model$contrast_spec$type, "term")) stop("cluster-free DE needs a contrast test (two groups or a numeric step), not a whole-factor test")
+      if (identical(perm.method, "auto")) perm.method <- sample.model$tests[[sample.model$primary %||% 1L]]$permutation$scheme %||% "block"
+      perm.method <- match.arg(perm.method, c("freedman-lane", "block"))
 
       if (verbose)
         message("Estimating cluster-free Z-scores for ", length(genes), " most expressed genes")
@@ -4837,7 +4974,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         checkPackageInstalled("coda.base", cran = TRUE)
         cnts <- private$extractCodaData(cells.to.remove = NULL, cells.to.remain = NULL, samples.to.remove = NULL)
         cnts <- cnts[, colSums(cnts, na.rm = TRUE) > 0, drop = FALSE]
-        ilr <- computeILRMatrix(cnts, zero.pseudocount = 0.1)$ilr
+        ilr <- computeILRMatrix(cnts)$ilr
         D <- as.matrix(stats::dist(ilr)); attr(D, "n.cells") <- setNames(rowSums(cnts)[rownames(D)], rownames(D))
         return(list(composition = D))
       }
@@ -4929,6 +5066,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                             permutation = NULL, verbose = TRUE, what = "this call") {
       if (is.null(formula) && is.null(test) && is.null(contrast) && is.null(dispersion.formula) && is.null(block.vars)) {
         if (is.null(self$model)) stop("no model is set: call cao$setModel(test = \"<variable>\") or pass `test` / `formula` to ", what)
+        if (!grepl("^estimateCellLoadings", what) && !is.null(msg <- groupingBetweenMessage(self$model, what))) stop(msg, call. = FALSE)
         return(self$model)
       }
       m <- self$model
@@ -4939,7 +5077,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (is.null(formula) && !is.null(m)) {
         tv <- unique(stats::na.omit(vapply(resolveTests(test, contrast, self$sample.meta, m$formula, private$opt("numeric.step")),
                                            function(t) t$variable %||% NA_character_, character(1))))
-        if (all(tv %in% all.vars(m$formula))) formula <- m$formula
+        if (all(tv %in% all.vars(m$formula))) formula <- m$formula.full %||% m$formula
       }
       tmp <- private$buildModel(formula = formula, test = test, contrast = contrast,
                                 dispersion.formula = dispersion.formula %||% (if (!is.null(m) && is.null(test) && is.null(contrast)) m$dispersion.formula else NULL),
@@ -4947,6 +5085,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (verbose) message("Using a temporary model for ", what, ": ", paste(deparse(tmp$formula), collapse = ""), ", test ",
                            paste(vapply(tmp$tests, `[[`, character(1), "label"), collapse = "; "),
                            ". The stored model is unchanged (cao$setModel() changes it).")
+      if (!grepl("^estimateCellLoadings", what) && !is.null(msg <- groupingBetweenMessage(tmp, what))) stop(msg, call. = FALSE)
       tmp
     },
 
@@ -5273,12 +5412,18 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     ## min.edge.weight numeric (default=0.6)
     ## list with fields 'cm', 'adj.mat', 'is.ref', 'nns.per.cell'
     ## kNN neighbourhood lists of the cell graph for a size k, computed once per object and size (both cluster-free maps use them)
+    cellGraph = function() {   # the cell graph of the analyses: without the cells of excluded samples (excludeSamples())
+      g <- extractCellGraph(self$data.object); spc <- self$sample.per.cell
+      if (!anyNA(spc)) return(g)
+      igraph::induced_subgraph(g, intersect(igraph::V(g)$name, names(spc)[!is.na(spc)]))
+    },
     knnUnits = function(k, n.cores = 1) {
-      g <- extractCellGraph(self$data.object); cells <- igraph::V(g)$name; key <- sprintf("k%d_n%d", as.integer(k), length(cells))
+      g <- private$cellGraph(); cells <- igraph::V(g)$name; key <- sprintf("k%d_n%d", as.integer(k), length(cells))
       if (is.null(private$knn.cache[[key]])) private$knn.cache[[key]] <- knnNeighbourhoodLists(g, k, cells = cells, n.cores = n.cores)
       private$knn.cache[[key]]
     },
     knn.cache = list(),
+    all.samples = NULL,   # the full sample assignment and metadata, kept by excludeSamples()
     kernelBetaForScale = function(graph, scale, n.cores = 1) {   # kernel strength of a diffusion neighborhood at a scale (label-free, cached per graph and scale)
       key <- sprintf("s%g_n%d_e%d", scale, igraph::vcount(graph), igraph::ecount(graph))
       if (is.null(private$knn.cache[[key]])) { sb <- solveKernelBeta(graph, target.size = round(scale * igraph::vcount(graph)), n.vec = 16, n.cores = n.cores)
@@ -5290,7 +5435,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       genes <- intersect(genes, colnames(cm))
       is.ref <- if (!is.null(self$sample.groups)) (as.character(self$sample.groups[levels(self$sample.per.cell)]) == self$ref.level) else rep(NA, nlevels(self$sample.per.cell))
 
-      adj.mat <- extractCellGraph(self$data.object) %>% igraph::as_adj()
+      adj.mat <- private$cellGraph() %>% igraph::as_adj()
       diag(adj.mat) <- 1
       cell.names <- intersect(rownames(cm), rownames(adj.mat))
 

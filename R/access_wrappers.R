@@ -70,6 +70,21 @@ extractCellGraph.Seurat <- function(object) {
 
 
 
+# One layer of the assay of a Seurat object. SeuratObject >= 5 names the argument `layer`; earlier versions name it `slot`, ignore
+# `layer` with a warning and return the normalized data, so the argument is chosen by the installed version. For the counts, values
+# that are not whole numbers are reported: the tests that read counts (expression shifts, differential expression) model count noise.
+seuratAssayData <- function(object, layer, assay=object@misc$assay.name, check.counts=(layer == 'counts')) {
+  dat <- if (utils::packageVersion("SeuratObject") >= "5.0.0") Seurat::GetAssayData(object, layer=layer, assay=assay)
+         else Seurat::GetAssayData(object, slot=layer, assay=assay)
+  if (check.counts && any(dim(dat) == 0)) stop("The '", layer, "' layer of assay '", assay, "' is empty; cacoa needs the raw counts")
+  if (check.counts && methods::is(dat, "dgCMatrix") && length(dat@x)) {
+    x <- dat@x[seq_len(min(length(dat@x), 1e5))]
+    if (any(abs(x - round(x)) > 1e-6)) warning("The '", layer, "' layer of assay '", assay, "' holds values that are not whole numbers; ",
+                                               "expression shifts and differential expression expect raw counts", call.=FALSE)
+  }
+  dat
+}
+
 #' Extract the cell groups from the object
 #'
 #' @param object object from which to extract the cell groups
@@ -85,8 +100,9 @@ extractRawCountMatrices.Conos <- function(object, transposed=TRUE) {
 
 #' @rdname extractRawCountMatrices
 extractRawCountMatrices.Seurat <- function(object, transposed=TRUE) {
+  cnt <- seuratAssayData(object, 'counts')
   cms <- object$sample.per.cell %>% {split(names(.), .)} %>%
-    lapply(function(cids) object[[object@misc$assay.name]]$counts[, colnames(object) %in% cids])
+    lapply(function(cids) cnt[, colnames(cnt) %in% cids, drop=FALSE])
   if (transposed) {
     cms %<>% lapply(Matrix::t)
   }
@@ -126,8 +142,7 @@ extractJointCountMatrix.Conos <- function(object, raw=TRUE) {
 #' @rdname extractJointCountMatrix
 extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sparse=TRUE) {
   if (raw) {
-    dat <- object %>% 
-      Seurat::GetAssayData(layer='counts', assay=.@misc$assay.name) %>%
+    dat <- seuratAssayData(object, 'counts') %>%
       as("CsparseMatrix")
     if (transposed){
       dat %<>% Matrix::t()
@@ -138,7 +153,7 @@ extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sp
   layer <- object@misc$data.layer
   dat <- NULL
   if (is.null(layer) || layer == 'scale.data') {
-    dat <- Seurat::GetAssayData(object, layer='scale.data', assay=object@misc$assay.name)
+    dat <- seuratAssayData(object, 'scale.data', check.counts=FALSE)
     dims <- dim(dat)
     dat.na <- all(dims == 1) && all(is.na(x = dat))
     if (any(dims == 0) || dat.na) {
@@ -147,7 +162,7 @@ extractJointCountMatrix.Seurat <- function(object, raw=TRUE, transposed=TRUE, sp
   }
 
   if (layer == 'data') {
-    dat <- Seurat::GetAssayData(object, layer='data', assay=object@misc$assay.name)
+    dat <- seuratAssayData(object, 'data', check.counts=FALSE)
   }
 
   if (is.null(dat) || any(dim(dat) == 0)) {

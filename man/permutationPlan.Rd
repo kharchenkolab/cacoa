@@ -11,7 +11,8 @@ permutationPlan(
   scheme = c("auto", "block", "freedman-lane"),
   block.vars = NULL,
   n.permutations = 999,
-  max.enumerate = 20000
+  max.enumerate = 20000,
+  residuals.within = getOption("cacoa.residuals.within", TRUE)
 )
 }
 \arguments{
@@ -21,8 +22,16 @@ permutationPlan(
 
 \item{samples}{samples taking part (default: all rows of the design)}
 
-\item{scheme}{\code{"auto"} (block when every adjusting covariate is discrete, else Freedman-Lane), \code{"block"} or
-\code{"freedman-lane"}}
+\item{scheme}{\code{"auto"}, \code{"block"} (the tested variable, i.e. the rows of the design, is exchanged within the strata) or
+\code{"freedman-lane"} (residuals of the model without the tested variable are exchanged). \code{"auto"}: block, except for a model
+with a continuous covariate and no grouping variable (\code{block.vars}, which include the grouping terms \code{(1 | g)} of the model),
+where residuals are exchanged. Residuals are exchanged within the levels of the model's discrete covariates (and \code{block.vars}),
+as the tested variable is under \code{"block"}: for a fitted factor with a level per pair of samples, the exchange among all samples
+is valid but found an added effect in 16 \% of the tests where the exchange within the levels found it in 31 \% (gsd) and
+15 \% against 59 \% (distance model). With a grouping variable the rows are exchanged within its levels also when a
+continuous covariate is present: the groups are not fitted, so the covariate's coefficient in the model without the tested
+variable is fitted partly to the group baselines, and residuals exchanged within groups are not comparable with the observed
+ones (9-11 \% false positives at a nominal 5 \% in calibration; 4-7 \% with the exchange of rows)}
 
 \item{block.vars}{additional metadata columns defining strata}
 
@@ -30,6 +39,11 @@ permutationPlan(
 enumerated exhaustively}
 
 \item{max.enumerate}{largest number of relabelings that is enumerated}
+
+\item{residuals.within}{\code{TRUE} (default): under \code{"freedman-lane"} the residuals are exchanged within the levels of the discrete
+covariates of the model and of \code{block.vars}. \code{FALSE}: within the levels of \code{block.vars} only, i.e. among all samples when there
+are none (the behavior before 2026-11; of use when the levels are so small that too few relabelings exist). The default can be
+set for a session with \code{options(cacoa.residuals.within = FALSE)}}
 }
 \value{
 list with \code{scheme}, \code{in.set} (logical over \code{samples}), \code{strata} (factor), \code{labels}, \code{info},

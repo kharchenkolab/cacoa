@@ -148,6 +148,9 @@ gsdShiftsPerCellType <- function(cm, sample.per.cell, cell.groups, model, lib, m
     if (length(bv)) {
       mm <- stats::model.matrix(~ ., as.data.frame(lapply(meta[samples, bv, drop = FALSE], function(z) factor(as.character(z))), row.names = samples))[, -1, drop = FALSE]
       colnames(mm) <- paste0(".block.", colnames(mm)); Fm <- cbind(Fd, mm); cFm <- c(cF, setNames(rep(0, ncol(mm)), colnames(mm)))
+      # a tested variable with one value in every level of the grouping variable (whole levels are exchanged) cannot be separated from
+      # the level baselines: the magnitudes are then those of the test's design
+      if (!isEstimable(Fm, cFm)) { Fm <- Fd; cFm <- cF }
     }
     mag <- matrix(NA_real_, length(types), 5, dimnames = list(types, c("total", "std", "n.eff", "se.total", "se.std"))); ng <- setNames(rep(0L, length(types)), types)
     nsamp <- setNames(as.integer(r$n.samples), types)

@@ -2,6 +2,7 @@
 #define STATS_COMMONS_H
 
 #include <RcppArmadillo.h>
+#include <map>
 #include "parallel.h"
 #include <vector>
 #include <string>
@@ -54,8 +55,15 @@ static inline std::vector<arma::uvec> subset_blocks(const std::vector<arma::uvec
  * cells. Within each block the members (sorted ascending) are reassigned by the ranks of their images under p;
  * units outside every block keep their place. Returns q over the units (design convention: X_units[q, ]).
  * When no unit is missing and the blocks are the cells p was drawn in, q equals p.
+ *
+ * Whole levels of a grouping variable (R: wholeUnitCells()): `unit_of` gives, per global row, the index of its level when the
+ * level is exchanged as a whole (0 otherwise) and `slot_of` the cell by which the rows of two levels are matched. In a block of
+ * such rows the levels present are grouped by the make-up (slots) of their present rows; within a group the levels are reassigned
+ * by the rank of the levels they are mapped to under p, the j-th present row of a level taking the j-th present row of the
+ * other, so that a level never receives rows of two levels.
  */
-static inline arma::uvec induced_perm(const arma::uvec& p, const arma::uvec& units, const std::vector<arma::uvec>& blocks) {
+static inline arma::uvec induced_perm(const arma::uvec& p, const arma::uvec& units, const std::vector<arma::uvec>& blocks,
+                                      const std::vector<int>* unit_of = nullptr, const std::vector<int>* slot_of = nullptr) {
   const arma::uword m = units.n_elem;
   arma::uvec q = arma::regspace<arma::uvec>(0, (m == 0) ? 0 : m - 1);
   if (m == 0) return arma::uvec();
@@ -63,6 +71,28 @@ static inline arma::uvec induced_perm(const arma::uvec& p, const arma::uvec& uni
   for (const auto& b : blocks) {
     if (b.n_elem < 2) continue;
     blk.assign(b.begin(), b.end()); std::sort(blk.begin(), blk.end());
+    if (unit_of && !unit_of->empty() && (*unit_of)[units[blk[0]]] > 0) {
+      auto slot = [&](arma::uword k) { return (slot_of && !slot_of->empty()) ? (*slot_of)[units[k]] : 0; };
+      std::map<int, std::vector<arma::uword>> by;                                  // level -> its present rows (positions in `units`)
+      for (arma::uword k : blk) by[(*unit_of)[units[k]]].push_back(k);
+      std::map<std::vector<int>, std::vector<int>> groups;                         // make-up -> levels, ascending
+      for (auto& kv : by) {
+        std::stable_sort(kv.second.begin(), kv.second.end(), [&](arma::uword a, arma::uword c) { const int sa = slot(a), sc = slot(c); return sa != sc ? sa < sc : units[a] < units[c]; });
+        std::vector<int> sig; sig.reserve(kv.second.size()); for (arma::uword k : kv.second) sig.push_back(slot(k));
+        groups[sig].push_back(kv.first);
+      }
+      for (auto& g : groups) {
+        const std::vector<int>& ids = g.second; if (ids.size() < 2) continue;
+        std::vector<int> img(ids.size()); for (std::size_t i = 0; i < ids.size(); ++i) img[i] = (*unit_of)[p[units[by[ids[i]][0]]]];
+        std::vector<std::size_t> o(ids.size()); for (std::size_t i = 0; i < o.size(); ++i) o[i] = i;
+        std::stable_sort(o.begin(), o.end(), [&](std::size_t a, std::size_t c) { return img[a] < img[c]; });
+        for (std::size_t i = 0; i < o.size(); ++i) {                               // the level with rank i takes the i-th level of the group
+          const std::vector<arma::uword>& from = by[ids[o[i]]]; const std::vector<arma::uword>& to = by[ids[i]];
+          for (std::size_t j = 0; j < from.size(); ++j) q[from[j]] = to[j];
+        }
+      }
+      continue;
+    }
     ord.resize(blk.size()); for (arma::uword i = 0; i < ord.size(); ++i) ord[i] = i;
     std::stable_sort(ord.begin(), ord.end(), [&](arma::uword a, arma::uword c) { return p[units[blk[a]]] < p[units[blk[c]]]; });
     // ord[i] = member with rank i; member k takes the member with rank(k) = position of k in ord

@@ -23,7 +23,8 @@ modelPermutations(
 \item{samples}{sample set (default: rows of the design)}
 }
 \value{
-list: \code{plan}, \code{P} (n x B integer matrix), \code{cells} (list of integer vectors, row indices), \code{samples}
+list: \code{plan}, \code{P} (n x B integer matrix), \code{cells} (list of integer vectors, row indices), \code{unit} and \code{slot} (whole levels of
+a grouping variable, see \code{\link[=permutationPlan]{permutationPlan()}}), \code{samples}
 }
 \description{
 One set of permutations for every analysis on the same model: the plan of \code{\link[=permutationPlan]{permutationPlan()}} for the model's

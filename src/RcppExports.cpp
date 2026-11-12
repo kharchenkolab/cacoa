@@ -281,8 +281,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // fit_and_randomize
-Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma::vec& contrast, Rcpp::Nullable<Rcpp::NumericMatrix> Z, Rcpp::Nullable<Rcpp::List> perm_groups, int n_randomizations, std::string alternative, bool return_residuals, bool return_sampled_fits, bool return_sampled_stats, std::string robust, double huber_k, int huber_maxit, double huber_tol, std::string na_mode, double na_weight, std::string na_center, double illcond_rcond, double pinv_tol, int n_cores, Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix, std::string statistic, bool pooled, Rcpp::NumericVector z_grid, bool use_abs, Rcpp::IntegerVector group, bool average, Rcpp::Nullable<Rcpp::List> nn_graph, bool closed_form, bool pooled_standardize, Rcpp::NumericVector prior_var, double prior_df);
-RcppExport SEXP _cacoa_fit_and_randomize(SEXP XSEXP, SEXP YSEXP, SEXP contrastSEXP, SEXP ZSEXP, SEXP perm_groupsSEXP, SEXP n_randomizationsSEXP, SEXP alternativeSEXP, SEXP return_residualsSEXP, SEXP return_sampled_fitsSEXP, SEXP return_sampled_statsSEXP, SEXP robustSEXP, SEXP huber_kSEXP, SEXP huber_maxitSEXP, SEXP huber_tolSEXP, SEXP na_modeSEXP, SEXP na_weightSEXP, SEXP na_centerSEXP, SEXP illcond_rcondSEXP, SEXP pinv_tolSEXP, SEXP n_coresSEXP, SEXP perm_matrixSEXP, SEXP statisticSEXP, SEXP pooledSEXP, SEXP z_gridSEXP, SEXP use_absSEXP, SEXP groupSEXP, SEXP averageSEXP, SEXP nn_graphSEXP, SEXP closed_formSEXP, SEXP pooled_standardizeSEXP, SEXP prior_varSEXP, SEXP prior_dfSEXP) {
+Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma::vec& contrast, Rcpp::Nullable<Rcpp::NumericMatrix> Z, Rcpp::Nullable<Rcpp::List> perm_groups, int n_randomizations, std::string alternative, bool return_residuals, bool return_sampled_fits, bool return_sampled_stats, std::string robust, double huber_k, int huber_maxit, double huber_tol, std::string na_mode, double na_weight, std::string na_center, double illcond_rcond, double pinv_tol, int n_cores, Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix, std::string statistic, bool pooled, Rcpp::NumericVector z_grid, bool use_abs, Rcpp::IntegerVector group, bool average, Rcpp::Nullable<Rcpp::List> nn_graph, bool closed_form, bool pooled_standardize, Rcpp::NumericVector prior_var, double prior_df, Rcpp::IntegerVector perm_units, Rcpp::IntegerVector perm_slots);
+RcppExport SEXP _cacoa_fit_and_randomize(SEXP XSEXP, SEXP YSEXP, SEXP contrastSEXP, SEXP ZSEXP, SEXP perm_groupsSEXP, SEXP n_randomizationsSEXP, SEXP alternativeSEXP, SEXP return_residualsSEXP, SEXP return_sampled_fitsSEXP, SEXP return_sampled_statsSEXP, SEXP robustSEXP, SEXP huber_kSEXP, SEXP huber_maxitSEXP, SEXP huber_tolSEXP, SEXP na_modeSEXP, SEXP na_weightSEXP, SEXP na_centerSEXP, SEXP illcond_rcondSEXP, SEXP pinv_tolSEXP, SEXP n_coresSEXP, SEXP perm_matrixSEXP, SEXP statisticSEXP, SEXP pooledSEXP, SEXP z_gridSEXP, SEXP use_absSEXP, SEXP groupSEXP, SEXP averageSEXP, SEXP nn_graphSEXP, SEXP closed_formSEXP, SEXP pooled_standardizeSEXP, SEXP prior_varSEXP, SEXP prior_dfSEXP, SEXP perm_unitsSEXP, SEXP perm_slotsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -318,7 +318,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type pooled_standardize(pooled_standardizeSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type prior_var(prior_varSEXP);
     Rcpp::traits::input_parameter< double >::type prior_df(prior_dfSEXP);
-    rcpp_result_gen = Rcpp::wrap(fit_and_randomize(X, Y, contrast, Z, perm_groups, n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, perm_matrix, statistic, pooled, z_grid, use_abs, group, average, nn_graph, closed_form, pooled_standardize, prior_var, prior_df));
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type perm_units(perm_unitsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::IntegerVector >::type perm_slots(perm_slotsSEXP);
+    rcpp_result_gen = Rcpp::wrap(fit_and_randomize(X, Y, contrast, Z, perm_groups, n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, perm_matrix, statistic, pooled, z_grid, use_abs, group, average, nn_graph, closed_form, pooled_standardize, prior_var, prior_df, perm_units, perm_slots));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -577,7 +579,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_estimateExpressionShiftsPairsLM", (DL_FUNC) &_cacoa_estimateExpressionShiftsPairsLM, 9},
     {"_cacoa_applyMedianFilterES", (DL_FUNC) &_cacoa_applyMedianFilterES, 4},
     {"_cacoa_adjustedZScoresMaxStat", (DL_FUNC) &_cacoa_adjustedZScoresMaxStat, 8},
-    {"_cacoa_fit_and_randomize", (DL_FUNC) &_cacoa_fit_and_randomize, 32},
+    {"_cacoa_fit_and_randomize", (DL_FUNC) &_cacoa_fit_and_randomize, 34},
     {"_cacoa_knn_neighbourhoods", (DL_FUNC) &_cacoa_knn_neighbourhoods, 3},
     {"_cacoa_neighbourhood_counts", (DL_FUNC) &_cacoa_neighbourhood_counts, 4},
     {"_cacoa_permuted_contrast_F", (DL_FUNC) &_cacoa_permuted_contrast_F, 6},

@@ -44,8 +44,8 @@ NULL
 #'   full design space; \code{"freedman-lane"} uses the core design space.
 #' @param random.baseline fit the grouping term `(1 | g)` of the model as a random baseline per level of `g` (generalized least
 #'   squares with a variance ratio estimated per cell type; the residuals, freed of the correlation within levels, are exchanged
-#'   among all samples). Default `FALSE`: the grouping term only restricts the relabeling to within the levels of `g`, as in every
-#'   other analysis.
+#'   among all samples). Default `FALSE`: the grouping term only sets the relabeling, as in every other analysis (exchange within
+#'   the levels of `g`; levels that hold one value of the tested variable are exchanged as wholes, see [permutationPlan()]).
 #' @param zero.pseudocount Non-negative pseudocount added to every count prior to forming sample-wise frequencies (default 0.5:
 #'   the logarithm of a small count plus one half is nearly unbiased for the logarithm of its expectation; in simulations from
 #'   the example cohorts the loadings of rare cell types were least biased at 0.25-0.5 and overstated by 0.2-0.4 log2 at 0.1).

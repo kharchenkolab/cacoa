@@ -36,8 +36,8 @@ full design space; \code{"freedman-lane"} uses the core design space.}
 
 \item{random.baseline}{fit the grouping term \code{(1 | g)} of the model as a random baseline per level of \code{g} (generalized least
 squares with a variance ratio estimated per cell type; the residuals, freed of the correlation within levels, are exchanged
-among all samples). Default \code{FALSE}: the grouping term only restricts the relabeling to within the levels of \code{g}, as in every
-other analysis.}
+among all samples). Default \code{FALSE}: the grouping term only sets the relabeling, as in every other analysis (exchange within
+the levels of \code{g}; levels that hold one value of the tested variable are exchanged as wholes, see \code{\link[=permutationPlan]{permutationPlan()}}).}
 
 \item{zero.pseudocount}{Non-negative pseudocount added to every count prior to forming sample-wise frequencies (default 0.5:
 the logarithm of a small count plus one half is nearly unbiased for the logarithm of its expectation; in simulations from

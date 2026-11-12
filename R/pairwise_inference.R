@@ -9,6 +9,8 @@
 ##    continuous covariates; conservative when the effective dimension is large relative to n.
 ## One set of global permutations is shared by all cell types (induced on each cell type's sample subset),
 ## which allows max-statistic combination across cell types.
+## Levels of a grouping variable that hold one value of the tested variable (a condition per donor, several samples per donor)
+## are exchanged as wholes under "block": see wholeUnitCells().
 
 # ---- which samples may swap labels, within which strata -------------------------------------------
 
@@ -79,15 +81,47 @@ permutationStrata <- function(design, meta, samples, info, block.vars = NULL) {
 }
 
 # log of the number of distinct relabelings: product over strata of multinomial coefficients of the label counts
-logDistinctPermutations <- function(labels, in.set, strata) {
+logDistinctPermutations <- function(labels, in.set, strata, unit = NULL, ukey = NULL) {
   tot <- 0
   for (s in levels(strata)) {
     idx <- which(in.set & strata == s)
     if (length(idx) < 2) next
-    cnt <- table(labels[idx])
-    tot <- tot + lgamma(length(idx) + 1) - sum(lgamma(cnt + 1))
+    # whole levels of the grouping variable: the arrangements of the levels' values over the levels
+    cnt <- if (!is.null(unit) && unit[idx[1]] > 0) table(ukey[idx][!duplicated(unit[idx])]) else table(labels[idx])
+    tot <- tot + lgamma(sum(cnt) + 1) - sum(lgamma(cnt + 1))
   }
   tot
+}
+
+# Levels of the grouping variable that hold one value of the tested variable (a condition per donor, several samples per donor) cannot
+# change it by an exchange within the level. They are exchanged as wholes: among the levels with the same make-up (the same number of
+# samples in every cell of the model's other discrete covariates) the j-th sample of a level takes the design row of the j-th sample of
+# another level, so that a relabeling stays a permutation of the samples and the label, with every covariate, moves with the level.
+# Levels with a make-up of their own stay as they are. Only for a single grouping variable. Returns NULL when there is nothing of the
+# kind, otherwise `strata` (the samples of the levels exchanged with each other form one cell), `unit` (per sample: the index of its
+# level when it is exchanged as a whole, 0 otherwise), `slot` (per sample: its cell of the other discrete covariates, by which the
+# samples of two levels are matched) and `ukey` (the value of the tested variable).
+wholeUnitCells <- function(design, meta, samples, info, block.vars, strata) {
+  if (length(block.vars) != 1 || !block.vars %in% names(meta)) return(NULL)
+  m <- meta[samples, , drop = FALSE]; n <- nrow(m); g <- as.character(m[[block.vars]])
+  tv <- intersect(info$tested.vars, names(m))
+  key <- if (length(tv)) do.call(paste, c(lapply(m[tv], as.character), sep = "\r")) else as.character(info$labels)
+  slot <- as.integer(permutationStrata(design, meta, samples, info, NULL))
+  ins <- info$in.set & !is.na(g); if (!any(ins)) return(NULL)
+  lev <- split(which(ins), g[ins])
+  single <- vapply(lev, function(ix) length(unique(key[ix])) == 1, logical(1))
+  if (!any(single)) return(NULL)
+  ord <- lapply(lev[single], function(ix) ix[order(slot[ix], ix)])
+  sig <- vapply(ord, function(ix) paste(slot[ix], collapse = ","), character(1)); lkey <- vapply(ord, function(ix) key[ix[1]], character(1))
+  unit <- integer(n); st <- as.character(strata); codes <- sort(unique(g)); k <- 0L; n.lev <- 0L
+  for (sg in unique(sig)) {
+    d <- names(ord)[sig == sg]
+    if (length(d) < 2 || length(unique(lkey[d])) < 2) next          # nothing to exchange with, or the same value everywhere
+    k <- k + 1L; n.lev <- n.lev + length(d)
+    for (dd in d) { unit[ord[[dd]]] <- match(dd, codes); st[ord[[dd]]] <- paste0("whole levels ", k) }
+  }
+  if (!k) return(NULL)
+  list(strata = factor(st), unit = unit, slot = slot, ukey = key, n.levels = n.lev, n.single = sum(single), n.classes = k)
 }
 
 #' Permutation plan for a sample-level test
@@ -112,16 +146,21 @@ logDistinctPermutations <- function(labels, in.set, strata) {
 #'   covariates of the model and of `block.vars`. `FALSE`: within the levels of `block.vars` only, i.e. among all samples when there
 #'   are none (the behavior before 2026-11; of use when the levels are so small that too few relabelings exist). The default can be
 #'   set for a session with `options(cacoa.residuals.within = FALSE)`
+#' @param whole.levels `TRUE` (default): under `"block"` with one grouping variable, its levels that hold one value of the tested
+#'   variable (a condition per donor, several samples per donor) are exchanged as wholes among the levels with the same make-up
+#'   (the same number of samples in every cell of the other discrete covariates): the label, with every covariate, moves with the
+#'   level. The test then rests on the levels as the independent units. `FALSE`: such levels keep their value in every relabeling
 #' @param n.permutations requested number of permutations; when fewer distinct relabelings exist they are
 #'   enumerated exhaustively
 #' @param max.enumerate largest number of relabelings that is enumerated
-#' @return list with `scheme`, `in.set` (logical over `samples`), `strata` (factor), `labels`, `info`,
+#' @return list with `scheme`, `in.set` (logical over `samples`), `strata` (factor), `labels`, `unit` and `slot` (whole levels: per
+#'   sample the index of its level, 0 when it is exchanged on its own, and the cell by which samples of two levels are matched), `info`,
 #'   `n.distinct` (may be `Inf`-like large; see `log.n.distinct`), `exhaustive`, `p.floor`, `notes`
 #' @export
 permutationPlan <- function(design, meta, samples = rownames(design$F),
                             scheme = c("auto", "block", "freedman-lane"),
                             block.vars = NULL, n.permutations = 999, max.enumerate = 20000,
-                            residuals.within = getOption("cacoa.residuals.within", TRUE)) {
+                            residuals.within = getOption("cacoa.residuals.within", TRUE), whole.levels = TRUE) {
   scheme <- match.arg(scheme)
   info <- contrastSampleInfo(design, meta, samples)
   dv <- designVariables(design, meta[samples, , drop = FALSE])
@@ -142,9 +181,16 @@ permutationPlan <- function(design, meta, samples = rownames(design$F),
     notes <- c(notes, sprintf("exchange of residuals within the levels of %s with continuous covariate(s) %s is not valid when a covariate is related to the tested variable (the default exchanges the rows of the design within the groups)",
                               paste(block.vars, collapse = ", "), paste(nuisance.numeric, collapse = ", ")))
   }
+  unit <- integer(length(samples)); slot <- unit; ukey <- NULL
   if (scheme == "block") {
     strata <- permutationStrata(design, meta, samples, info, block.vars)
     in.set <- info$in.set; labels <- info$labels
+    wu <- if (isTRUE(whole.levels)) wholeUnitCells(design, meta, samples, info, block.vars, strata) else NULL
+    if (!is.null(wu)) {
+      strata <- wu$strata; unit <- wu$unit; slot <- wu$slot; ukey <- wu$ukey
+      notes <- c(notes, sprintf("%d of the %d levels of '%s' that hold one value of the tested variable are exchanged as wholes, among levels with the same make-up%s",
+                                wu$n.levels, wu$n.single, block.vars, if (wu$n.levels < wu$n.single) "; the others keep their value" else ""))
+    }
   } else {
     # residual permutation: every sample takes part, within the levels of the discrete covariates (not of the tested variable)
     # and of block.vars
@@ -156,13 +202,13 @@ permutationPlan <- function(design, meta, samples = rownames(design$F),
     if (isTRUE(residuals.within) && length(nuisance.discrete))
       notes <- c(notes, sprintf("residuals are exchanged within the levels of %s", paste(nuisance.discrete, collapse = ", ")))
   }
-  log.nd <- logDistinctPermutations(labels, in.set, strata)
+  log.nd <- logDistinctPermutations(labels, in.set, strata, unit, ukey)
   n.distinct <- if (log.nd < log(.Machine$double.xmax)) exp(log.nd) else Inf
   exhaustive <- is.finite(n.distinct) && n.distinct <= n.permutations && n.distinct <= max.enumerate
   p.floor <- if (exhaustive) 1 / n.distinct else 1 / (n.permutations + 1)
   if (is.finite(n.distinct) && n.distinct < 200)
     notes <- c(notes, sprintf("only %d distinct permutations: the smallest attainable p-value is %.3g", round(n.distinct), p.floor))
-  list(scheme = scheme, in.set = in.set, strata = strata, labels = labels, info = info, samples = samples,
+  list(scheme = scheme, in.set = in.set, strata = strata, labels = labels, unit = unit, slot = slot, ukey = ukey, info = info, samples = samples,
        n.distinct = n.distinct, log.n.distinct = log.nd, exhaustive = exhaustive, p.floor = p.floor,
        n.permutations = if (exhaustive) round(n.distinct) else n.permutations, notes = notes)
 }
@@ -202,7 +248,8 @@ distinctLabelPermutations <- function(labels) {
 #' @param scheme,n.permutations,block.vars see [permutationPlan()]; `block.vars` defaults to the model's
 #' @param seed seed for the draws (`NULL`: current RNG state)
 #' @param samples sample set (default: rows of the design)
-#' @return list: `plan`, `P` (n x B integer matrix), `cells` (list of integer vectors, row indices), `samples`
+#' @return list: `plan`, `P` (n x B integer matrix), `cells` (list of integer vectors, row indices), `unit` and `slot` (whole levels of
+#'   a grouping variable, see [permutationPlan()]), `samples`
 #' @export
 modelPermutations <- function(model, scheme = "auto", n.permutations = 999, block.vars = NULL, seed = NULL, samples = rownames(model$F)) {
   if (is.null(model$meta)) stop("the model carries no sample metadata; cannot build a permutation plan")
@@ -214,7 +261,7 @@ modelPermutations <- function(model, scheme = "auto", n.permutations = 999, bloc
   attr(P, "exhaustive") <- isTRUE(plan$exhaustive)
   cells <- split(which(plan$in.set), droplevels(plan$strata[plan$in.set]))
   cells <- unname(cells[lengths(cells) >= 2])
-  list(plan = plan, P = P, cells = cells, samples = samples)
+  list(plan = plan, P = P, cells = cells, unit = plan$unit, slot = plan$slot, samples = samples)
 }
 
 #' Draw permutations according to a plan
@@ -227,23 +274,63 @@ modelPermutations <- function(model, scheme = "auto", n.permutations = 999, bloc
 drawPermutations <- function(plan, B = plan$n.permutations) {
   n <- length(plan$in.set); cells <- split(which(plan$in.set), droplevels(plan$strata[plan$in.set]))
   cells <- cells[lengths(cells) >= 2]
+  # cells of whole levels: the members of every level in matching order (by slot, then by position); a permutation of the levels moves
+  # the j-th sample of a level onto the j-th sample of its image
+  unit <- plan$unit %||% integer(n); whole <- vapply(cells, function(idx) unit[idx[1]] > 0, logical(1))
+  members <- lapply(seq_along(cells), function(k) if (whole[k]) wholeUnitMembers(cells[[k]], unit, plan$slot) else NULL)
+  moveUnits <- function(mem, perm) { src <- unlist(mem, use.names = FALSE); img <- unlist(mem[perm], use.names = FALSE); list(src = src, img = img) }
   if (plan$exhaustive) {
-    per.cell <- lapply(cells, function(idx) distinctLabelPermutations(plan$labels[idx]))
+    per.cell <- lapply(seq_along(cells), function(k) if (whole[k]) distinctLabelPermutations(plan$ukey[vapply(members[[k]], `[`, 1L, 1L)])
+                                                      else distinctLabelPermutations(plan$labels[cells[[k]]]))
     grid <- expand.grid(lapply(per.cell, seq_along))
     P <- matrix(rep(seq_len(n), nrow(grid)), n, nrow(grid))
-    for (b in seq_len(nrow(grid))) for (k in seq_along(cells)) P[cells[[k]], b] <- cells[[k]][per.cell[[k]][[grid[b, k]]]]
+    for (b in seq_len(nrow(grid))) for (k in seq_along(cells)) {
+      if (whole[k]) { mv <- moveUnits(members[[k]], per.cell[[k]][[grid[b, k]]]); P[mv$src, b] <- mv$img }
+      else P[cells[[k]], b] <- cells[[k]][per.cell[[k]][[grid[b, k]]]]
+    }
     return(P)
   }
   P <- matrix(rep(seq_len(n), B), n, B)
-  for (b in seq_len(B)) for (idx in cells) P[idx, b] <- idx[sample.int(length(idx))]
+  for (b in seq_len(B)) for (k in seq_along(cells)) {
+    if (whole[k]) { mv <- moveUnits(members[[k]], sample.int(length(members[[k]]))); P[mv$src, b] <- mv$img }
+    else { idx <- cells[[k]]; P[idx, b] <- idx[sample.int(length(idx))] }
+  }
   P
+}
+
+# the samples `idx` of a cell of whole levels, split by level (in the order of the level index) and ordered within the level by slot
+# and position
+wholeUnitMembers <- function(idx, unit, slot) {
+  mem <- split(idx, unit[idx]); mem <- mem[order(as.integer(names(mem)))]
+  lapply(mem, function(ix) ix[order(slot[ix], ix)])
 }
 
 # Induce the permutation `p` of the full sample set onto the subset `sub` (positions in the full set) under the
 # subset's plan: within each (stratum x permuted-set) cell of the subset, members are reassigned by the rank of
 # their images under `p`. Uniform on the subset's relabelings when `p` is uniform, and coupled across subsets.
-inducePermutation <- function(p, sub, sub.plan) {
+#
+# Whole levels (`plan` = the plan of the full sample set, whose `unit` marks them; see wholeUnitCells()): the levels present in the subset
+# are grouped by the make-up of their present samples, and within a group they are reassigned by the rank of the levels they are mapped to
+# under `p`, the j-th present sample of a level taking the j-th present sample of the other. A level never receives values from two levels.
+inducePermutation <- function(p, sub, sub.plan, plan = NULL) {
   m <- length(sub); q <- seq_len(m)
+  if (!is.null(plan)) {                  # the cells of the full plan among the present samples (those of the subset's plan, but for whole levels)
+    ins <- plan$in.set[sub]; cells <- split(which(ins), droplevels(plan$strata[sub][ins])); unit <- plan$unit %||% integer(length(plan$in.set)); slot <- plan$slot
+    for (idx in cells) {
+      if (length(idx) < 2) next
+      if (unit[sub[idx[1]]] == 0) { q[idx] <- idx[rank(p[sub[idx]], ties.method = "first")]; next }
+      mem <- split(idx, unit[sub[idx]]); mem <- mem[order(as.integer(names(mem)))]
+      mem <- lapply(mem, function(ix) ix[order(slot[sub[ix]], sub[ix])])
+      sig <- vapply(mem, function(ix) paste(slot[sub[ix]], collapse = ","), character(1))
+      for (sg in unique(sig)) {
+        k <- which(sig == sg); if (length(k) < 2) next
+        img <- vapply(mem[k], function(ix) unit[p[sub[ix[1]]]], integer(1))          # the level each level is mapped to
+        q[unlist(mem[k], use.names = FALSE)] <- unlist(mem[k][rank(img, ties.method = "first")], use.names = FALSE)
+      }
+    }
+    return(q)
+  }
+  if (any((sub.plan$unit %||% 0L) > 0)) stop("inducePermutation(): the plan of the full sample set is needed for whole levels")
   cells <- split(which(sub.plan$in.set), droplevels(sub.plan$strata[sub.plan$in.set]))
   for (idx in cells) {
     if (length(idx) < 2) next
@@ -433,7 +520,7 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
     plan <- permutationPlan(design, meta, eff$samples, scheme = gplan$scheme, block.vars = block.vars,
                             n.permutations = n.permutations)
     sub <- match(eff$samples, all.samples)
-    P.ind <- apply(P.global, 2, inducePermutation, sub = sub, sub.plan = plan)
+    P.ind <- apply(P.global, 2, inducePermutation, sub = sub, sub.plan = plan, plan = gplan)
     if (!is.matrix(P.ind)) P.ind <- matrix(P.ind, ncol = ncol(P.global))          # a single permutation        # coupled permutations
     st.c <- permutationStatsForCellType(eff, plan, P.ind, bias.correct)
     # p-values: exhaustive enumeration when small, otherwise the coupled draws

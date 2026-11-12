@@ -22,6 +22,8 @@ performLMPermutations(
   seed = NULL,
   P = NULL,
   perm.cells = NULL,
+  perm.units = NULL,
+  perm.slots = NULL,
   block.vars = NULL,
   pooled = FALSE,
   z.grid = NULL,
@@ -65,6 +67,9 @@ performLMPermutations(
 \item{seed}{seed of the permutation draw (default: taken from R's RNG, so \code{set.seed()} applies)}
 
 \item{P, perm.cells}{permutations and cells from \code{\link[=modelPermutations]{modelPermutations()}}; drawn from the design when \code{NULL}}
+
+\item{perm.units, perm.slots}{whole levels of a grouping variable (\code{unit}, \code{slot} of \code{\link[=modelPermutations]{modelPermutations()}}); needed with \code{P} when the
+plan exchanges whole levels and responses are missing for some samples}
 
 \item{block.vars}{additional strata for the permutation plan}
 

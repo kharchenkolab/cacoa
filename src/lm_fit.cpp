@@ -141,6 +141,8 @@ static inline arma::vec winsor_fit(const arma::mat& X, const arma::vec& y, const
  *                   that the relabeled estimate has the variance of the observed one (kappa = 1 when the exchange stays within
  *                   the levels of the nuisance terms, about n / (n - q) for a free exchange).
  * @param perm_groups permutation cells (list of 1-based row index vectors) the relabelings were drawn in
+ * @param perm_units, perm_slots whole levels of a grouping variable: per row the index of its level when the level is exchanged as
+ *                   a whole (0 otherwise) and the cell by which rows of two levels are matched (R: permutationPlan()$unit, $slot)
  * @param perm_matrix n x B matrix of 1-based relabelings in design convention (permuted design = X[p, ]); required
  *                   whenever permutations are requested; induced onto the observed rows of each NA pattern
  * @param statistic  "t" (default) or "coef"
@@ -169,7 +171,14 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
                              bool pooled = false, Rcpp::NumericVector z_grid = Rcpp::NumericVector::create(), bool use_abs = true,
                              Rcpp::IntegerVector group = Rcpp::IntegerVector::create(), bool average = false,
                              Rcpp::Nullable<Rcpp::List> nn_graph = R_NilValue, bool closed_form = true, bool pooled_standardize = false,
-                             Rcpp::NumericVector prior_var = Rcpp::NumericVector::create(), double prior_df = 0) {
+                             Rcpp::NumericVector prior_var = Rcpp::NumericVector::create(), double prior_df = 0,
+                             Rcpp::IntegerVector perm_units = Rcpp::IntegerVector::create(), Rcpp::IntegerVector perm_slots = Rcpp::IntegerVector::create()) {
+
+  // whole levels of a grouping variable (see induced_perm()): per row the index of its level (0: none) and its matching slot
+  const std::vector<int> unit_g(perm_units.begin(), perm_units.end()), slot_g(perm_slots.begin(), perm_slots.end());
+  if (!unit_g.empty() && unit_g.size() != (std::size_t)X.n_rows) Rcpp::stop("perm_units must have one entry per row of X");
+  if (!slot_g.empty() && slot_g.size() != (std::size_t)X.n_rows) Rcpp::stop("perm_slots must have one entry per row of X");
+  const std::vector<int>* pu = unit_g.empty() ? nullptr : &unit_g; const std::vector<int>* ps = slot_g.empty() ? nullptr : &slot_g;
 
   Config cfg;
   cfg.robust = robust; cfg.na_mode = na_mode; cfg.huber_k = huber_k; cfg.huber_maxit = huber_maxit; cfg.huber_tol = huber_tol;
@@ -299,7 +308,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
     if (g.df < 1) { g.valid_design = false; return; }
     if (has_Z && has_P && n_randomizations > 0) {   // scale of the exchanged residuals (see Z above)
       const arma::vec al = g.B.t() * contrast; const double aa = arma::dot(al, al); double gs = 0.0;
-      for (arma::uword b = 0; b < Pm.n_cols; ++b) { const arma::uvec q = induced_perm(Pm.col(b), g.perm_units_global, g.perm_blocks); gs += arma::accu(arma::square(g.Qz.t() * al.elem(q))); }
+      for (arma::uword b = 0; b < Pm.n_cols; ++b) { const arma::uvec q = induced_perm(Pm.col(b), g.perm_units_global, g.perm_blocks, pu, ps); gs += arma::accu(arma::square(g.Qz.t() * al.elem(q))); }
       const double den = aa - gs / (double)Pm.n_cols;
       if (aa > 0.0 && den > 1e-8 * aa) g.kappa = aa / den;
     }
@@ -347,7 +356,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
     const arma::uword pq0 = Q.n_cols, qz0 = has_Z ? grp0.Qz.n_cols : 0, pq = pq0 + qz0; const int B_ = n_randomizations;   // Freedman-Lane: the relabeled fit includes Z again
     const double kap = grp0.kappa, skap = std::sqrt(kap);
     arma::mat AlphaP(n, B_); arma::mat Qstack(B_ * pq, n);
-    for (int b = 0; b < B_; ++b) { arma::uvec q = induced_perm(Pm.col(b), grp0.perm_units_global, grp0.perm_blocks); AlphaP.col(b) = alpha.elem(q); Qstack.rows(b * pq, b * pq + pq0 - 1) = Q.rows(q).t();
+    for (int b = 0; b < B_; ++b) { arma::uvec q = induced_perm(Pm.col(b), grp0.perm_units_global, grp0.perm_blocks, pu, ps); AlphaP.col(b) = alpha.elem(q); Qstack.rows(b * pq, b * pq + pq0 - 1) = Q.rows(q).t();
       if (qz0) Qstack.rows(b * pq + pq0, (b + 1) * pq - 1) = grp0.Qz.rows(q).t(); }
     const arma::mat AlphaPt = AlphaP.t();
     const arma::uword blk = std::max<arma::uword>(32, std::min<arma::uword>(2048, (arma::uword)(4.0e6 / ((double)B_ * (double)pq)))); const int n_blk = (int)((m + blk - 1) / blk);
@@ -447,7 +456,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
 
     int ge=0, le=0, ge_abs=0;
     for (int r=0; r<cfg.n_randomizations; ++r) {
-      arma::uvec q = induced_perm(Pm.col(r), grp.perm_units_global, grp.perm_blocks);   // design convention over this pattern's units
+      arma::uvec q = induced_perm(Pm.col(r), grp.perm_units_global, grp.perm_blocks, pu, ps);   // design convention over this pattern's units
       double eff_p = 0.0, s_p = 0.0; arma::vec b_p;
       if (is_drop) {
         arma::vec y_perm = y_work.elem(inverse_perm(q));                                  // response aligned with X_sub[q, ]

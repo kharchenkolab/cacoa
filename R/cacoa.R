@@ -393,7 +393,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$model <- m
       self$block.vars <- block.vars; self$numeric.ref <- numeric.ref
       private$syncLegacyFields()
-      # a tested variable with one value in every level of a grouping term: no analysis can run (reported here, where the formula is given)
+      # a tested variable with one value in every level of a grouping term and no levels that can be exchanged as wholes: no analysis can
+      # run (reported here, where the formula is given)
       btw <- m$issues[m$issues$severity == "warning" & grepl("takes one value within every level", m$issues$message, fixed = TRUE), , drop = FALSE]
       if (nrow(btw)) warning(paste0(btw$message[1], ". ", sub("^c", "C", btw$suggestion[1]), "."), call. = FALSE)
       if (verbose) print(m)
@@ -1177,6 +1178,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, genes.to.omit = NULL, ...) {
       set.seed(seed.resampling)
       sample.model <- private$resolveModel(formula = formula, test = test.spec, contrast = contrast, verbose = verbose, what = "estimateDEPerCellType()")
+      if (!is.null(msg <- groupingBetweenMessage(sample.model, "estimateDEPerCellType()", model.based = TRUE))) stop(msg, call. = FALSE)
       if (length(sample.model$random.vars)) {   # tests with model-based p-values cannot use a grouping term: it is fitted as a fixed term
         gf <- groupingAsFixedFormula(sample.model)
         warning(sprintf("estimateDEPerCellType(): '%s' takes its p-values from the model and cannot use a grouping term; %s %s fitted as %s with one parameter per level (model %s).%s",
@@ -2685,9 +2687,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   variable is exchanged within the levels of discrete covariates and grouping terms; residuals are exchanged, within the levels of
     #'   the discrete covariates, when the model has a continuous covariate), `"block"` or `"freedman-lane"`
     #' @param random.baseline fit a grouping term `(1 | g)` of the model as a random baseline per level of `g` (default `FALSE`: the
-    #'   grouping term only restricts the relabeling to within the levels of `g`, as in every other analysis). With `TRUE` the levels
-    #'   that contain one value of the tested variable contribute to the estimate, and a design in which every level contains one
-    #'   value can be tested; see [lmCoda()]
+    #'   grouping term only sets the relabeling, as in every other analysis: the tested variable is exchanged within the levels of
+    #'   `g`, and levels that hold one value of it are exchanged as wholes among levels with the same make-up). With `TRUE` every
+    #'   level that holds one value of the tested variable contributes to the estimate, whatever its make-up; see [lmCoda()]
     #' @param statistic test statistic of the per-column fitter: `"t"` (studentized contrast, default) or `"coef"` (raw contrast estimate)
     #' @param zero.pseudocount pseudocount added to the counts before the log-ratio transform (default 0.5 cells in a sample of median
     #'   size, scaled with the sample's cell number; see [lmCoda()])

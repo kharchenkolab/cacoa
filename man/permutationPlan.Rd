@@ -12,7 +12,8 @@ permutationPlan(
   block.vars = NULL,
   n.permutations = 999,
   max.enumerate = 20000,
-  residuals.within = getOption("cacoa.residuals.within", TRUE)
+  residuals.within = getOption("cacoa.residuals.within", TRUE),
+  whole.levels = TRUE
 )
 }
 \arguments{
@@ -44,9 +45,15 @@ enumerated exhaustively}
 covariates of the model and of \code{block.vars}. \code{FALSE}: within the levels of \code{block.vars} only, i.e. among all samples when there
 are none (the behavior before 2026-11; of use when the levels are so small that too few relabelings exist). The default can be
 set for a session with \code{options(cacoa.residuals.within = FALSE)}}
+
+\item{whole.levels}{\code{TRUE} (default): under \code{"block"} with one grouping variable, its levels that hold one value of the tested
+variable (a condition per donor, several samples per donor) are exchanged as wholes among the levels with the same make-up
+(the same number of samples in every cell of the other discrete covariates): the label, with every covariate, moves with the
+level. The test then rests on the levels as the independent units. \code{FALSE}: such levels keep their value in every relabeling}
 }
 \value{
-list with \code{scheme}, \code{in.set} (logical over \code{samples}), \code{strata} (factor), \code{labels}, \code{info},
+list with \code{scheme}, \code{in.set} (logical over \code{samples}), \code{strata} (factor), \code{labels}, \code{unit} and \code{slot} (whole levels: per
+sample the index of its level, 0 when it is exchanged on its own, and the cell by which samples of two levels are matched), \code{info},
 \code{n.distinct} (may be \code{Inf}-like large; see \code{log.n.distinct}), \code{exhaustive}, \code{p.floor}, \code{notes}
 }
 \description{

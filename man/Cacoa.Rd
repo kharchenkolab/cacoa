@@ -3353,9 +3353,9 @@ variable is exchanged within the levels of discrete covariates and grouping term
 the discrete covariates, when the model has a continuous covariate), \code{"block"} or \code{"freedman-lane"}}
 
 \item{\code{random.baseline}}{fit a grouping term \code{(1 | g)} of the model as a random baseline per level of \code{g} (default \code{FALSE}: the
-grouping term only restricts the relabeling to within the levels of \code{g}, as in every other analysis). With \code{TRUE} the levels
-that contain one value of the tested variable contribute to the estimate, and a design in which every level contains one
-value can be tested; see \code{\link[=lmCoda]{lmCoda()}}}
+grouping term only sets the relabeling, as in every other analysis: the tested variable is exchanged within the levels of
+\code{g}, and levels that hold one value of it are exchanged as wholes among levels with the same make-up). With \code{TRUE} every
+level that holds one value of the tested variable contributes to the estimate, whatever its make-up; see \code{\link[=lmCoda]{lmCoda()}}}
 
 \item{\code{statistic}}{test statistic of the per-column fitter: \code{"t"} (studentized contrast, default) or \code{"coef"} (raw contrast estimate)}
 

@@ -234,7 +234,7 @@ testTermEffects <- function(D.list, design, meta, dispersion.formula = NULL, dis
     eff <- fits[[ct]]
     plan <- permutationPlan(design, meta, eff$samples, scheme = gplan$scheme, block.vars = block.vars, n.permutations = n.permutations)
     sub <- match(eff$samples, all.samples)
-    P.ind <- apply(P.global, 2, inducePermutation, sub = sub, sub.plan = plan)
+    P.ind <- apply(P.global, 2, inducePermutation, sub = sub, sub.plan = plan, plan = gplan)
     if (!is.matrix(P.ind)) P.ind <- matrix(P.ind, ncol = ncol(P.global))          # a single permutation
     st.c <- termPermutationStats(eff, plan, P.ind)
     st.p <- if (plan$exhaustive) termPermutationStats(eff, plan, drawPermutations(plan)) else st.c

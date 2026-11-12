@@ -97,6 +97,8 @@ moderationPrior <- function(Y, Z, mode = "none", d0 = 3, d0.max = Inf) {
 #' @param n.cores threads (results do not depend on it)
 #' @param seed seed of the permutation draw (default: taken from R's RNG, so `set.seed()` applies)
 #' @param P,perm.cells permutations and cells from [modelPermutations()]; drawn from the design when `NULL`
+#' @param perm.units,perm.slots whole levels of a grouping variable (`unit`, `slot` of [modelPermutations()]); needed with `P` when the
+#'   plan exchanges whole levels and responses are missing for some samples
 #' @param block.vars additional strata for the permutation plan
 #' @param moderate.perm moderated statistic inside the permutation test: `"none"` (default), `"fixed"` (residual variances
 #'   shrunk towards the median label-free variance with `moderate.d0` prior degrees of freedom), `"squeeze"` (prior fitted by
@@ -121,7 +123,7 @@ performLMPermutations <- function(x, y,
                   return.sampled.stats = TRUE,
                   return.sampled.fits = FALSE,
                   n.permutations = 1000,
-                  n.cores=1, seed = NULL, P = NULL, perm.cells = NULL, block.vars = NULL,
+                  n.cores=1, seed = NULL, P = NULL, perm.cells = NULL, perm.units = NULL, perm.slots = NULL, block.vars = NULL,
                   pooled = FALSE, z.grid = NULL, use.abs = TRUE, group = NULL, average = FALSE, nn.graph = NULL, closed.form = TRUE, pooled.standardize = FALSE,
                   moderate.perm = c("none", "fixed", "squeeze", "trend"), moderate.d0 = 3, moderate.d0.max = Inf) {
 
@@ -144,7 +146,7 @@ performLMPermutations <- function(x, y,
   if (is.null(P) && n.permutations > 0) {
     if (is.null(x$meta) || is.null(x$F)) stop("the design carries no sample metadata: pass P (see modelPermutations()) or build it with buildDesignMatrices() / buildCacoaModel()")
     mp <- modelPermutations(x, scheme = perm.method, n.permutations = n.permutations, block.vars = block.vars, seed = seed)
-    P <- mp$P; perm.cells <- mp$cells
+    P <- mp$P; perm.cells <- mp$cells; perm.units <- mp$unit; perm.slots <- mp$slot
   }
   if (!is.null(P)) {
     storage.mode(P) <- "integer"
@@ -168,6 +170,7 @@ performLMPermutations <- function(x, y,
   fit <- fit_and_randomize(
     X = D, Y = Y, contrast = cvec, Z = Z,
     perm_groups = perm.cells, perm_matrix = P, n_randomizations = n.permutations,
+    perm_units = as.integer(perm.units %||% integer(0)), perm_slots = as.integer(perm.slots %||% integer(0)),
     alternative = alternative, statistic = statistic,
     return_residuals = return.residuals, return_sampled_fits = return.sampled.fits, return_sampled_stats = return.sampled.stats,
     robust = robust.method, huber_k = 1.345, huber_maxit = 8, huber_tol = 1e-6,

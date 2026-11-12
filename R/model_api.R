@@ -354,10 +354,10 @@ buildCacoaModel <- function(meta, formula = NULL, test = NULL, contrast = NULL, 
   random.info <- NULL
   if (length(random.vars)) {
     random.info <- groupingStructure(meta, random.vars, test.vars)
-    # labels are relabeled within the levels of a grouping variable when the tested variable varies within them; when it takes one
-    # value per level (several samples per donor) no within-level relabeling exists: only analyses that fit the random intercept
-    # can test it (see groupingBetweenMessage())
-    block.vars <- unique(c(block.vars, random.info$group[random.info$structure != "between"]))
+    # labels are relabeled within the levels of a grouping variable where the tested variable varies within them; levels that hold one
+    # value of it (several samples per donor) are exchanged as wholes among the levels with the same make-up (permutationPlan(),
+    # wholeUnitCells()); when nothing can be exchanged the analyses stop (see groupingBetweenMessage())
+    block.vars <- unique(c(block.vars, random.info$group))
   }
   fvars <- all.vars(formula)
   miss <- setdiff(fvars, names(meta))
@@ -396,7 +396,7 @@ buildCacoaModel <- function(meta, formula = NULL, test = NULL, contrast = NULL, 
       n.ex <- sum(vapply(cells, function(ix) if (length(unique(plan$labels[ix])) > 1) length(ix) else 0L, integer(1)))
       nd <- plan$n.distinct
       list(scheme = plan$scheme, n.distinct = nd, p.floor = if (is.finite(nd) && nd <= n.permutations) 1 / nd else 1 / (n.permutations + 1),
-           n.strata = nlevels(plan$strata), n.exchange = n.ex, n.samples = length(plan$in.set), notes = plan$notes)
+           n.strata = nlevels(plan$strata), n.exchange = n.ex, n.samples = length(plan$in.set), n.whole = length(unique(plan$unit[plan$unit > 0])), notes = plan$notes)
     } else NULL
     tests[[i]] <- t
   }
@@ -507,8 +507,9 @@ print.cacoaModel <- function(x, ...) {
 format.cacoaModel <- function(x, ...) {
   fm <- function(f) paste(deparse(f), collapse = "")
   lines <- sprintf("Model: %s%s      dispersion: %s", fm(x$formula.full %||% x$formula), if (isTRUE(x$formula.default)) " (default)" else "", fm(x$dispersion.formula))
-  if (length(x$random.vars)) lines <- c(lines, sprintf("       grouping term%s %s: not fitted; the tested variable is exchanged within %s levels", if (length(x$random.vars) > 1) "s" else "",
-                                                       paste(sprintf("(1 | %s)", x$random.vars), collapse = ", "), if (length(x$random.vars) > 1) "their" else "its"))
+  if (length(x$random.vars)) lines <- c(lines, sprintf("       grouping term%s %s: not fitted; the tested variable is exchanged within %s levels%s", if (length(x$random.vars) > 1) "s" else "",
+                                                       paste(sprintf("(1 | %s)", x$random.vars), collapse = ", "), if (length(x$random.vars) > 1) "their" else "its",
+                                                       if (any((vapply(x$tests, function(t) t$permutation$n.whole %||% 0L, numeric(1))) > 0)) "; levels that hold one value of it are exchanged as wholes" else ""))
   for (t in x$tests) {
     adj <- setdiff(all.vars(x$formula), t$variable)
     pl <- t$permutation
@@ -627,11 +628,16 @@ groupingIssues <- function(random.info, tests) {
   if (is.null(random.info) || !nrow(random.info)) return(empty)
   pl <- tests[[1]]$permutation; out <- list()
   for (i in seq_len(nrow(random.info))) { ri <- random.info[i, ]; if (is.na(ri$tested)) next
-    if (ri$structure == "between") out[[length(out) + 1L]] <- data.frame(severity = "warning", stringsAsFactors = FALSE,
-      message = sprintf("the tested variable '%s' takes one value within every level of '%s': there is nothing to exchange within the levels of '%s', and no analysis can test this model", ri$tested, ri$group, ri$group),
+    nw <- pl$n.whole %||% 0L; can <- is.null(pl$n.distinct) || !is.finite(pl$n.distinct) || pl$n.distinct > 1
+    if (ri$structure == "between" && !can) out[[length(out) + 1L]] <- data.frame(severity = "warning", stringsAsFactors = FALSE,
+      message = sprintf("the tested variable '%s' takes one value within every level of '%s', and no two levels with the same make-up (number of samples, values of the discrete covariates) hold different values: nothing can be exchanged, and no analysis can test this model", ri$tested, ri$group),
       suggestion = sprintf("combine the samples of each level of '%s' into one sample; the composition can also be tested with estimateCellLoadings(random.baseline = TRUE)", ri$group))
+    else if (ri$structure == "between") out[[length(out) + 1L]] <- data.frame(severity = "note", stringsAsFactors = FALSE,
+      message = sprintf("the tested variable '%s' takes one value within every level of '%s': the levels are the independent units, and whole levels are exchanged among levels with the same make-up (%d of %d levels%s)", ri$tested, ri$group, nw, ri$n.levels,
+                        if (nw < ri$n.levels) "; the others keep their value" else ""), suggestion = "")
     else if (ri$structure == "partly") out[[length(out) + 1L]] <- data.frame(severity = "note", stringsAsFactors = FALSE,
-      message = sprintf("'%s': %d of %d levels hold one value of '%s'; their samples keep it in every relabeling%s", ri$group, ri$n.levels - ri$n.levels.varying, ri$n.levels, ri$tested,
+      message = sprintf("'%s': %d of %d levels hold one value of '%s'; %s%s", ri$group, ri$n.levels - ri$n.levels.varying, ri$n.levels, ri$tested,
+                        if (nw > 0) sprintf("%d of them are exchanged as wholes among levels with the same make-up, the others keep their value", nw) else "their samples keep it in every relabeling",
                         if (!is.null(pl$n.exchange)) sprintf(" (%d of %d samples can change their value)", pl$n.exchange, pl$n.samples) else ""), suggestion = "") }
   if (length(out)) do.call(rbind, out) else empty
 }
@@ -650,10 +656,16 @@ groupingAsFixedFormula <- function(model) {
   list(formula = stats::as.formula(paste("~", paste(c(keep, g), collapse = " + ")), env = environment(model$formula)), groups = g, dropped = absorbed)
 }
 
-# message for analyses that cannot test a variable that is constant within the levels of a grouping term (NULL when the model has none)
-groupingBetweenMessage <- function(model, what = "this analysis") {
+# message for analyses that cannot test a variable that is constant within the levels of a grouping term: NULL when the model has no
+# such term or when whole levels can be exchanged (permutationPlan(), wholeUnitCells()); `model.based = TRUE` for tests that take their
+# p-values from the model (differential expression), which cannot use the grouping at all in this design
+groupingBetweenMessage <- function(model, what = "this analysis", model.based = FALSE) {
   ri <- model$random.info; if (is.null(ri)) return(NULL)
   btw <- ri[ri$structure == "between", , drop = FALSE]; if (!nrow(btw)) return(NULL)
-  sprintf("the tested variable '%s' takes one value within every level of '%s' (several samples per %s): the samples of a level are not independent observations, and %s has no valid test for this design (relabeling would have to move whole levels of '%s' together, which is not implemented). Combine the samples of each level into one sample; the composition can also be tested with a random baseline per level, estimateCellLoadings(random.baseline = TRUE).",
-          btw$tested[1], btw$group[1], btw$group[1], what, btw$group[1])
+  if (model.based) return(sprintf("the tested variable '%s' takes one value within every level of '%s' (several samples per %s): the samples of a level are not independent observations, and %s, which takes its p-values from the model, cannot account for that (with '%s' as a fixed term the tested variable cannot be estimated). Combine the samples of each level into one sample.",
+                                  btw$tested[1], btw$group[1], btw$group[1], what, btw$group[1]))
+  nd <- model$tests[[model$primary %||% 1L]]$permutation$n.distinct
+  if (!is.null(nd) && (!is.finite(nd) || nd > 1)) return(NULL)
+  sprintf("the tested variable '%s' takes one value within every level of '%s' (several samples per %s): the samples of a level are not independent observations, so whole levels of '%s' have to be exchanged, and no two levels with the same make-up (number of samples, values of the discrete covariates) hold different values. %s has no valid test for this design. Combine the samples of each level into one sample; the composition can also be tested with a random baseline per level, estimateCellLoadings(random.baseline = TRUE).",
+          btw$tested[1], btw$group[1], btw$group[1], btw$group[1], sub("^(.)", "\\U\\1", what, perl = TRUE))
 }

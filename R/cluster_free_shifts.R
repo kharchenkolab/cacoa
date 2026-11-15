@@ -22,6 +22,10 @@ pairVectorToMatrix <- function(y, pairs, samples) {
   D[ok, ok, drop = FALSE]
 }
 
+# gsd under residual exchange: the scale of the relabeled statistics (residualScale()) as the kernel's code: 0 average, 1 relabeling,
+# 2 observed (as "relabeling", scaled to the observed arrangement; gsd only), 3 independent
+gsdResidualScale <- function(crosses.levels = FALSE) as.integer(match(residualScale(crosses.levels), c("average", "relabeling", "observed", "independent")) - 1L)
+
 #' Cluster-free expression shifts for one contrast
 #'
 #' @param cm genes x cells sparse count matrix
@@ -123,7 +127,14 @@ pairVectorToMatrix <- function(y, pairs, samples) {
 #'   every cell is still tested exactly. Larger values test more neighbourhoods (slower, marginally smoother); `Inf` or `NULL`
 #'   tests every cell's neighbourhood (the full map, for example for very small populations)
 #' @param gsd.variance gsd per-gene variance: `"moderated"` (default) or `"model"` (the noise model only)
-#' @param gsd.gamma gsd combination over genes: 0 (default, adaptive) or one of 1, 2, 4, 8, 99 (max) alone
+#' @param gsd.gamma gsd combination over genes: 0 (default, adaptive) or one of 1, 2, 4, 8, 99 (max) alone. Under residual exchange (a continuous covariate
+#'   without a grouping term) the variance of the contrast and the expected residual sum of squares differ between relabelings; gsd takes
+#'   both from its noise model for every relabeling and gene and removes the dependence between the relabeled contrast and the residuals of
+#'   the relabeled fit, so that the relabeled statistics are on the scale of the observed one (`options(cacoa.residual.scale = )`:
+#'   `"independent"`, the default; `"relabeling"` without the last step, more sensitive but above the nominal level in some designs;
+#'   `"average"` the former single average factor). The standardizations over relabelings inside the statistic (of the combinations over
+#'   genes, and of a neighborhood's statistic) include the observed data set, so that it is treated exactly as the relabeled ones
+#'   (`options(cacoa.gsd.symmetric = FALSE)`: over the relabeled data sets only, the behavior before this option existed)
 #' @param gsd.d0 prior degrees of freedom of the model variance in the moderated variance (default 3)
 #' @param winsor.k winsorization threshold of `robust = "winsor"` with gsd, in robust sd units (default 3)
 #' @return list: `stat` (the neighbourhood statistic per cell: the shift F, or the gsd combination), `p.value` (exact permutation p), `p.pooled` (pooled-null p, no floor), `p.param` (NA for gsd),
@@ -235,7 +246,7 @@ clusterFreeExpressionShifts <- function(cm, sample.per.cell, nns.per.cell, desig
     if (verbose) message(sprintf("Testing the neighborhoods of %d of %d cells (centres.per.cell = %d)", length(index.units), m, as.integer(centres.per.cell)))
   }
   gsd.opts <- if (gsd) list(mode = if (gsd.variance == "moderated") 2L else 1L, gamma = as.numeric(gsd.gamma), d0 = as.numeric(gsd.d0),
-                            winsor_k = if (robust == "winsor") as.numeric(winsor.k) else 0) else NULL
+                            winsor_k = if (robust == "winsor") as.numeric(winsor.k) else 0, fl_norm = gsdResidualScale(gplan$crosses.levels), symmetric = as.integer(isTRUE(getOption("cacoa.gsd.symmetric", TRUE)))) else NULL
   kr <- cluster_free_shift_stream(cm, as.integer(spc), nn.test, FALSE, as.integer(min.n.obs.per.samp), if (profile == "raw") dist else "cor", log.vectors,
                                   pairs - 1L, n, des$F, cF, as.integer(level.code), as.integer(min.samp.per.level), as.integer(gplan$strata), as.integer(gplan$in.set),
                                   P.global, gplan$scheme == "freedman-lane", TRUE, as.integer(n.cores), if (gsd) 0L else c(none = 0L, huber = 1L, winsor = 2L)[[robust]], robust.k,
@@ -354,7 +365,7 @@ scanShiftScales <- function(cm, sample.per.cell, graph, design, meta, scale, bet
   if (!is.numeric(scale) || !length(scale) || any(!is.finite(scale) | scale <= 0 | scale >= 1)) stop("scale must be shares of the cells in (0, 1)")
   N <- length(cells); K <- length(scale); if (is.null(beta)) beta <- rep(NA_real_, K) else if (length(beta) != K) stop("beta must have one strength per scale")
   if (is.null(min.size)) min.size <- defaultNeighbourhoodSize(N, nlevels(droplevels(as.factor(sample.per.cell))))   # the floor of a neighbourhood: the kNN unit size
-  P <- matrix(NA_real_, N, K, dimnames = list(cells, NULL)); E <- P; Q <- P; Z <- P; m.perm <- NULL; B <- NULL; gt <- vector("list", K); settings <- NULL
+  P <- matrix(NA_real_, N, K, dimnames = list(cells, NULL)); E <- P; Q <- P; Z <- P; m.perm <- NULL; B <- NULL; gt <- vector("list", K); settings <- NULL; n.all <- NULL
   info <- data.frame(scale = scale, beta = beta, size = NA_real_, n.centres = NA_integer_); nn1 <- graphNeighbourLists0(graph, cells); t0 <- Sys.time(); nbs <- vector("list", K)
   if (!is.null(neighbourhoods) && length(neighbourhoods) != K) stop("neighbourhoods must have one entry per scale")
   for (j in seq_len(K)) {
@@ -368,11 +379,14 @@ scanShiftScales <- function(cm, sample.per.cell, graph, design, meta, scale, bet
     sp <- s$stats.perm[, cells, drop = FALSE]; B <- nrow(sp); st <- as.numeric(s$stat[cells])
     mu <- colMeans(sp); sdv <- sqrt(pmax(colMeans(sp^2) - mu^2, 0) * B / (B - 1)); sdv[!is.finite(sdv) | sdv <= 0] <- NA_real_   # the kernel's per-cell standardization
     z.obs <- (st - mu) / sdv; sp <- sweep(sweep(sp, 2, mu), 2, sdv, "/")
+    # calls of the observed and of every relabeled data set, all standardized alike, for the test of the chosen scale
+    if (is.null(n.all)) n.all <- matrix(0L, B + 1L, K); n.all[, j] <- scanCallCounts(z.obs, sp, standardize = TRUE)
     ps <- pooledScanStep(z.obs, sp, identity); rm(sp)
     P[, j] <- ps$p; Q[, j] <- ps$q; E[, j] <- as.numeric(s$shifts[cells]); Z[, j] <- z.obs; m.perm <- if (is.null(m.perm)) ps$pp else pmin(m.perm, ps$pp); rm(ps)
     gt[j] <- list(s$group.test); if (j == 1L) settings <- s$settings; rm(s); invisible(gc())
   }
   m.obs <- apply(P, 1, min); best <- max.col(-P, ties.method = "first"); sc <- pooledMinPFDR(m.obs, m.perm, B); rm(m.perm)
-  list(q = stats::setNames(sc$q, cells), p = stats::setNames(sc$p, cells), best = stats::setNames(best, cells), P = P, E = E, Q = Q, Z = Z, scales = info, neighbourhoods = nbs, group.test = gt, settings = settings,
+  auto <- autoScaleTest(n.all[1, ], n.all[-1, , drop = FALSE], sum(rowSums(is.finite(Q)) > 0))   # the test of the automatically chosen scale
+  list(auto = auto, q = stats::setNames(sc$q, cells), p = stats::setNames(sc$p, cells), best = stats::setNames(best, cells), P = P, E = E, Q = Q, Z = Z, scales = info, neighbourhoods = nbs, group.test = gt, settings = settings,
        cells = cells, B = B, time = as.numeric(difftime(Sys.time(), t0, units = "secs")))
 }

@@ -36,7 +36,9 @@ testPairwiseEffects(
 
 \item{dispersion.formula, dist, bias.correct, influence, min.samp.per.level}{passed to \code{\link[=pairwiseEffectsFromDesign]{pairwiseEffectsFromDesign()}}}
 
-\item{permutation}{\code{"auto"}, \code{"block"} or \code{"freedman-lane"} (see \code{\link[=permutationPlan]{permutationPlan()}})}
+\item{permutation}{\code{"auto"}, \code{"block"} or \code{"freedman-lane"} (see \code{\link[=permutationPlan]{permutationPlan()}}). Under \code{"freedman-lane"} (exchange of residuals) the shift F of
+every relabeled data set is put on the scale of the observed one (\code{options(cacoa.residual.scale = "average")} restores the single
+average factor)}
 
 \item{n.permutations}{number of permutations}
 

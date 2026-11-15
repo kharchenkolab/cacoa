@@ -181,7 +181,7 @@ permutationPlan <- function(design, meta, samples = rownames(design$F),
     notes <- c(notes, sprintf("exchange of residuals within the levels of %s with continuous covariate(s) %s is not valid when a covariate is related to the tested variable (the default exchanges the rows of the design within the groups)",
                               paste(block.vars, collapse = ", "), paste(nuisance.numeric, collapse = ", ")))
   }
-  unit <- integer(length(samples)); slot <- unit; ukey <- NULL
+  unit <- integer(length(samples)); slot <- unit; ukey <- NULL; crosses.levels <- FALSE
   if (scheme == "block") {
     strata <- permutationStrata(design, meta, samples, info, block.vars)
     in.set <- info$in.set; labels <- info$labels
@@ -201,6 +201,9 @@ permutationPlan <- function(design, meta, samples = rownames(design$F),
     nuisance.discrete <- setdiff(dv$discrete, info$tested.vars)
     if (isTRUE(residuals.within) && length(nuisance.discrete))
       notes <- c(notes, sprintf("residuals are exchanged within the levels of %s", paste(nuisance.discrete, collapse = ", ")))
+    # residuals that leave the levels of a fitted factor (residuals.within = FALSE with discrete covariates): the relabeled data sets then
+    # differ from the observed one in more than scale (see residualScale())
+    crosses.levels <- !isTRUE(residuals.within) && length(nuisance.discrete) > 0
   }
   log.nd <- logDistinctPermutations(labels, in.set, strata, unit, ukey)
   n.distinct <- if (log.nd < log(.Machine$double.xmax)) exp(log.nd) else Inf
@@ -209,7 +212,7 @@ permutationPlan <- function(design, meta, samples = rownames(design$F),
   if (is.finite(n.distinct) && n.distinct < 200)
     notes <- c(notes, sprintf("only %d distinct permutations: the smallest attainable p-value is %.3g", round(n.distinct), p.floor))
   list(scheme = scheme, in.set = in.set, strata = strata, labels = labels, unit = unit, slot = slot, ukey = ukey, info = info, samples = samples,
-       n.distinct = n.distinct, log.n.distinct = log.nd, exhaustive = exhaustive, p.floor = p.floor,
+       crosses.levels = crosses.levels, n.distinct = n.distinct, log.n.distinct = log.nd, exhaustive = exhaustive, p.floor = p.floor,
        n.permutations = if (exhaustive) round(n.distinct) else n.permutations, notes = notes)
 }
 
@@ -406,6 +409,64 @@ flKappa <- function(a, Xr, P) {
 }
 flGowerPermute <- function(parts, p) parts$K1 + parts$K2[, p] + parts$K3[p, ] + parts$K4[p, p]
 
+# Exchange of residuals: how the statistics of the relabeled data sets are put on the scale of the observed one (expression shifts: gsd and
+# the distance model's F). The exchanged residuals are projections of the data, R0 x, so the variance of the relabeled contrast estimate and
+# the expected residual sum of squares of the relabeled fit differ between relabelings, by factors common to all genes.
+#   "average":     one factor for all relabelings (the behavior before this option existed);
+#   "relabeling":  both quantities for every relabeling;
+#   "independent" (default): the same, and the residuals of the relabeled fit are made independent of the relabeled contrast estimate
+#                  (the two are correlated, which makes the relabeled statistics smaller and lighter-tailed than the observed ones);
+#   "observed":    gsd only: as "relabeling", scaled to the observed arrangement (the distance model takes "relabeling").
+# options(cacoa.residual.scale = ...) sets it for a session. When the residuals leave the levels of a fitted factor (the former exchange
+# among all samples, options(cacoa.residuals.within = FALSE)) the default is "average": the exact scales are not valid there (gsd: 9-18 % of
+# tests at p <= 0.05 without an effect, paired data).
+residualScale <- function(crosses.levels = FALSE) {
+  v <- getOption("cacoa.residual.scale", if (isTRUE(crosses.levels)) "average" else "independent")
+  if (length(v) != 1 || !(v %in% c("average", "relabeling", "observed", "independent"))) stop("option cacoa.residual.scale must be 'independent', 'relabeling', 'observed' or 'average'")
+  v
+}
+
+# Shift F of the distance model for every relabeling under the exchange of residuals, on the scale of the observed F. With K4 = R0 G R0 (the
+# Gower matrix of the residuals of the reduced design Xr), a_b the contrast's weights moved with the residuals (sample i receives the
+# residual of sample P[i, b]) and H_b the hat matrix of the relabeled arrangement:
+#   ss_b = a_b' K4 a_b / cXc, expected in proportion to c_b = |R0 a_b|^2 / |a|^2;  rss_b = tr((I - H_b) K4), expected in proportion to
+#   df_b = tr((I - H_b) R0)  (n - rank(X) for the observed arrangement);
+#   "relabeling":  F_b = (ss_b / c_b) / (rss_b / df_b)  (the kernel's F_b, ss_b / (rss_b / df), times df_b / (df c_b));
+#   "independent": the residuals of the relabeled fit without their part along the relabeled contrast estimate, k_b = (I - H_b) R0 a_b:
+#                  rss_b - 2 k_b' K4 a_b / |R0 a_b|^2 + a_b' K4 a_b |k_b|^2 / |R0 a_b|^4 on df_b - |k_b|^2 / |R0 a_b|^2 degrees of freedom.
+# Nothing changes when the exchange maps the reduced space onto itself (c_b = 1, df_b = df, k_b = 0).
+flShiftF <- function(G, X, cvec, Xr, P, scale = c("independent", "relabeling")) {
+  scale <- match.arg(scale); n <- nrow(X); hi <- hatInfo(X); H <- hi$H; a <- drop(t(hi$A) %*% cvec); aa <- sum(a^2); cXc <- drop(crossprod(cvec, hi$XtXi %*% cvec))
+  Hr <- if (ncol(Xr)) hatInfo(Xr)$H else matrix(0, n, n); R0 <- diag(n) - Hr; K4 <- R0 %*% G %*% R0; trK <- sum(diag(K4)); tr0 <- sum(diag(R0))
+  apply(P, 2, function(p) {
+    ab <- numeric(n); ab[p] <- a; at <- drop(R0 %*% ab); att <- sum(at^2); if (!(att > 1e-12 * aa)) return(0)   # the contrast lies in the reduced space: no estimate
+    K4a <- drop(K4 %*% ab); ss <- sum(ab * K4a); rss <- trK - sum(H * K4[p, p]); df <- tr0 - sum(H * R0[p, p])
+    if (scale == "independent") { hb <- numeric(n); hb[p] <- drop(H %*% at[p]); k <- at - hb; kk <- sum(k^2); rss <- rss - 2 * sum(k * K4a) / att + ss * kk / att^2; df <- df - kk / att }
+    if (!(rss > 0) || !(df > 1e-8)) return(NA_real_)
+    (ss / cXc / (att / aa)) / (rss / df)
+  })
+}
+
+# Can the relabeling plan test a change of dispersion? The dispersion contrast is estimated from the samples' residual distances; it
+# is tested by moving the tested variable between samples within the exchange cells. A cell contributes only if the tested variable
+# varies in it and its samples' residual distances are not forced equal: two samples that form a level of a fitted factor have mirror-image
+# residuals (R[i, ] = -R[j, ]) for any data and covariates, hence equal distances, so a pair holding both values of the tested variable says
+# nothing about their dispersions (paired designs with the pair fitted). Cells of whole levels (levels exchanged as wholes) contribute.
+# When no cell contributes, the dispersion contrast rests on samples whose value never changes, and its permutation p-value is arbitrary.
+# X, cvec: the location design of the cell type's samples and the contrast; plan: permutationPlan() of these samples
+dispersionRandomizable <- function(X, cvec, plan) {
+  hi <- hatInfo(X); n <- nrow(X); a <- drop(t(hi$A) %*% cvec); R <- diag(n) - hi$H; tol <- 1e-8 * max(1, max(abs(a)))
+  unit <- plan$unit %||% integer(n)
+  cells <- split(which(plan$in.set), droplevels(as.factor(plan$strata)[plan$in.set]))
+  for (idx in cells) {
+    if (length(idx) < 2) next
+    if (any(unit[idx] > 0)) return(TRUE)                                    # whole levels are exchanged
+    if (diff(range(a[idx])) <= tol) next                                     # the tested variable does not vary within the cell
+    if (length(idx) >= 3 || max(abs(R[idx[1], ] + R[idx[2], ])) > 1e-8) return(TRUE)
+  }
+  FALSE
+}
+
 # ---- one cell type --------------------------------------------------------------------------------
 
 # Permutation statistics for one cell type. `P` is the matrix of permutations of this cell type's samples
@@ -433,6 +494,8 @@ permutationStatsForCellType <- function(eff, plan, P, bias.correct = TRUE) {
   } else {                                      # freedman-lane: Gower re-indexing of the reduced-model parts
     Xr <- X %*% contrastNullBasis(cvec); parts <- flGowerParts(G, Xr, flKappa(pre$a, Xr, P))
     perm[, ] <- permuted_contrast_stats_fl(parts$K1, parts$K2, parts$K3, parts$K4, X, Z, pre$A, pre$H, pre$a, cvec, pre$cXc, pre$q, znum, zden, P, bias.correct, need.var)
+    # the shift F on the scale of the observed one for every relabeling (the kernel's F is right on average only; see flShiftF())
+    sc <- residualScale(plan$crosses.levels); if (sc != "average") perm[, "F"] <- flShiftF(G, X, cvec, Xr, P, if (sc == "independent") "independent" else "relabeling")
   }
   list(obs = obs, perm = perm)
 }
@@ -472,7 +535,9 @@ permutationPValue <- function(obs, perm, alternative = c("greater", "two.sided")
 #' @param design sample-level design from `buildDesignMatrices()`
 #' @param meta sample metadata (rows named by sample)
 #' @param dispersion.formula,dist,bias.correct,influence,min.samp.per.level passed to [pairwiseEffectsFromDesign()]
-#' @param permutation `"auto"`, `"block"` or `"freedman-lane"` (see [permutationPlan()])
+#' @param permutation `"auto"`, `"block"` or `"freedman-lane"` (see [permutationPlan()]). Under `"freedman-lane"` (exchange of residuals) the shift F of
+#'   every relabeled data set is put on the scale of the observed one (`options(cacoa.residual.scale = "average")` restores the single
+#'   average factor)
 #' @param n.permutations number of permutations
 #' @param block.vars metadata columns defining additional permutation strata
 #' @param seed integer seed (default: drawn from R's RNG, so `set.seed()` applies)
@@ -534,7 +599,9 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
       assoc <- abs(apply(Pp, 2, function(q) suppressWarnings(stats::cor(a[q], a)))); assoc[!is.finite(assoc)] <- 1
       band <- assoc <= stats::median(assoc)
     }
-    list(plan = plan, obs = st.c$obs, perm.coupled = st.c$perm, perm = st.p$perm, band = band)
+    disp.rand <- dispersionRandomizable(eff$X, eff$contrast, plan)
+    if (!disp.rand) plan$notes <- c(plan$notes, "the change of dispersion is not tested: every exchange cell in which the tested variable varies is a pair of samples forming a level of a fitted factor, whose residual distances are equal (fit the pairing variable as a grouping term to test it)")
+    list(plan = plan, obs = st.c$obs, perm.coupled = st.c$perm, perm = st.p$perm, band = band, disp.rand = disp.rand)
   }
   cts <- names(fits)[ok]
   runs <- if (n.cores > 1 && length(cts) > 1) sccore::plapply(cts, runOne, n.cores = n.cores, progress = verbose, fail.on.error = TRUE)
@@ -544,7 +611,7 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
   # per-cell-type p-values
   rows <- lapply(cts, function(ct) {
     r <- runs[[ct]]; e <- fits[[ct]]; ex <- r$plan$exhaustive
-    di <- is.null(e$disp.identifiable) || isTRUE(e$disp.identifiable)   # arm dispersions identifiable under the location model
+    di <- (is.null(e$disp.identifiable) || isTRUE(e$disp.identifiable)) && !isFALSE(r$disp.rand)   # arm dispersions identifiable under the location model, and testable by the plan
     nb <- relabelingBands(r$perm[r$band, , drop = FALSE], e$s.ref + e$s.alt, di)
     data.frame(celltype = ct, shift = e$shift, var = if (di) e$var else NA_real_, total = if (di) e$total else NA_real_, ratio = e$ratio,
                shift.norm = e$shift.norm, var.norm = if (di) e$var.norm else NA_real_, total.norm = if (di) e$total.norm else NA_real_,

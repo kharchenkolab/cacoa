@@ -262,7 +262,7 @@ scanDensityScales <- function(graph, sample.per.cell, sample.model, scale, beta 
   cells <- igraph::V(graph)$name; N <- length(cells); K <- length(scale); spc <- droplevels(as.factor(sample.per.cell[cells])); names(spc) <- cells
   if (is.null(beta)) beta <- rep(NA_real_, K) else if (length(beta) != K) stop("beta must have one strength per scale")
   tail.stat <- switch(alternative, "two-sided" = abs, greater = identity, less = function(x) -x)
-  P <- matrix(NA_real_, N, K, dimnames = list(cells, NULL)); E <- P; Q <- P; m.perm <- NULL; gt <- vector("list", K); B <- NULL
+  P <- matrix(NA_real_, N, K, dimnames = list(cells, NULL)); E <- P; Q <- P; m.perm <- NULL; gt <- vector("list", K); B <- NULL; n.all <- NULL
   info <- data.frame(scale = scale, beta = beta, size = NA_real_); t0 <- Sys.time()
   for (j in seq_len(K)) {
     if (!is.finite(info$beta[j])) { sb <- solveKernelBeta(graph, target.size = round(scale[j] * N), n.vec = 16, n.cores = n.cores); info$beta[j] <- sb$beta; info$size[j] <- stats::median(sb$size); sj <- sb$self; oj <- sb$off.size }
@@ -275,12 +275,14 @@ scanDensityScales <- function(graph, sample.per.cell, sample.model, scale, beta 
     st <- stats::setNames(as.numeric(d$stat.obs), cells); ef <- stats::setNames(as.numeric(d$effect), cells); rm(d)
     if (post == "averaged") { av <- averageOverNeighbours(st, sp, graph, effect = ef); st <- av$stat; sp <- av$stats.perm; ef <- av$effect; rm(av) }
     if (!is.null(groups)) gt[j] <- list(tryCatch(groupPermutationTest(st, sp, groups, alternative = if (alternative == "two-sided") "two.sided" else "greater"), error = function(e) NULL))
+    if (is.null(n.all)) n.all <- matrix(0L, nrow(sp) + 1L, K); n.all[, j] <- scanCallCounts(st, sp, tail = tail.stat)   # calls of every data set, for the test of the chosen scale
     ps <- pooledScanStep(st, sp, tail.stat); rm(sp)
     P[, j] <- ps$p; Q[, j] <- ps$q; E[, j] <- ef; m.perm <- if (is.null(m.perm)) ps$pp else pmin(m.perm, ps$pp); rm(ps); invisible(gc())
   }
   m.obs <- apply(P, 1, min); best <- max.col(-P, ties.method = "first")
   sc <- pooledMinPFDR(m.obs, m.perm, B); rm(m.perm)
-  list(q = stats::setNames(sc$q, cells), p = stats::setNames(sc$p, cells), best = stats::setNames(best, cells), P = P, E = E, Q = Q, scales = info, group.test = gt, cells = cells, B = B,
+  auto <- autoScaleTest(n.all[1, ], n.all[-1, , drop = FALSE], sum(rowSums(is.finite(Q)) > 0))   # the test of the automatically chosen scale
+  list(q = stats::setNames(sc$q, cells), p = stats::setNames(sc$p, cells), best = stats::setNames(best, cells), P = P, E = E, Q = Q, scales = info, group.test = gt, cells = cells, B = B, auto = auto,
        time = as.numeric(difftime(Sys.time(), t0, units = "secs")))
 }
 
@@ -300,6 +302,47 @@ chooseScanScale <- function(sc, alpha = 0.1, saturated = 0.9, top = 0.01) {
   Q <- as.matrix(sc$Q); K <- ncol(Q); n <- colSums(Q < alpha, na.rm = TRUE); tested <- sum(rowSums(is.finite(Q)) > 0)
   if (!any(n > 0)) { called <- rank(sc$p, ties.method = "first") <= ceiling(top * length(sc$p)); return(as.integer(names(which.max(table(factor(sc$best[called], levels = seq_len(K))))))) }
   sat <- which(n >= saturated * tested); if (length(sat)) sat[1] else as.integer(which.max(n))
+}
+
+#' Number of cells called at one scale by the observed and by every relabeled data set, all treated alike
+#'
+#' For the test of the automatically chosen scale ([autoScaleTest()]) the observed data set must be handled exactly as the relabeled
+#' ones. Each of the B + 1 data sets (observed, relabeled) is put through the scale's permutation FDR against the other B, and the
+#' cells below `alpha` are counted. With `standardize`, the statistic of every cell is first standardized by its mean and standard
+#' deviation over all B + 1 data sets (the map itself standardizes the observed statistic by the relabeled ones only, and each
+#' relabeled one by a mean and standard deviation that include it, which makes the relabeled data sets slightly less extreme).
+#' @param s.obs observed per-cell statistics (large values are extreme, after `tail`)
+#' @param sp relabeled statistics (relabelings x cells)
+#' @param alpha level of the calls (default 0.1)
+#' @param tail function mapping the statistic to its extreme tail
+#' @param standardize standardize every cell over the B + 1 data sets (default FALSE)
+#' @return integer vector of length B + 1: the observed data set first
+#' @keywords internal
+scanCallCounts <- function(s.obs, sp, alpha = 0.1, tail = identity, standardize = FALSE) {
+  B <- nrow(sp); S <- rbind(tail(s.obs), tail(sp)); bad <- !is.finite(S[1, ])
+  if (standardize) { mu <- colMeans(S); sdv <- sqrt(pmax(colMeans(S^2) - mu^2, 0) * (B + 1) / B); bad <- bad | !is.finite(sdv) | sdv <= 0; S <- sweep(sweep(S, 2, mu), 2, sdv, "/") }
+  S[, bad] <- -Inf; S[!is.finite(S)] <- -Inf; ps <- sort(as.vector(S), method = "radix"); Nn <- length(ps)
+  vapply(seq_len(B + 1), function(r) { m <- sort(S[r, ], decreasing = TRUE, method = "radix"); m <- m[is.finite(m)]; if (!length(m)) return(0L)
+    R <- length(m) - findInterval(m, rev(m), left.open = TRUE)                       # own values at or above each value
+    fdr <- (Nn - findInterval(m, ps, left.open = TRUE) - R) / B / R; k <- which(fdr < alpha); if (length(k)) as.integer(R[k[length(k)]]) else 0L }, integer(1))
+}
+
+#' Test of the automatically chosen scale of a scan
+#'
+#' `scale = "auto"` reports the scale that calls the most cells ([chooseScanScale()]), so it reports calls whenever any scale has them,
+#' and each scale's own false-discovery rate does not cover that choice. Here the choice itself is tested: the number of cells called at
+#' the chosen scale is compared with the same number for every relabeled data set (each put through all scales and the same rule).
+#' @param n.obs number of cells called at each scale by the observed data
+#' @param n.perm relabelings x scales matrix of the numbers called by the relabeled data sets (both from [scanCallCounts()])
+#' @param tested number of tested cells
+#' @param saturated share of the tested cells from which a scale counts as calling everything (as in [chooseScanScale()])
+#' @return list: `p` (share of the relabeled data sets, the observed one included, whose chosen scale calls at least as many cells; 1 when
+#'   the observed data call none), `n` (cells called at the chosen scale), `n.null` (the same per relabeling)
+#' @keywords internal
+autoScaleTest <- function(n.obs, n.perm, tested, saturated = 0.9) {
+  pick <- function(n) { sat <- which(n >= saturated * tested); if (length(sat)) n[sat[1]] else max(n) }
+  n <- pick(n.obs); nb <- apply(n.perm, 1, pick)
+  list(p = if (n > 0) (1 + sum(nb >= n)) / (length(nb) + 1) else 1, n = n, n.null = nb)
 }
 
 #' Pooled permutation p-values of one scale

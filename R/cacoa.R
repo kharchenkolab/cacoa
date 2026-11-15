@@ -3349,6 +3349,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (auto || K == 1) {   # one scale: its own map (auto: the scale calling the most cells at 0.1, the finest when a scale calls nearly all; see chooseScanScale)
           k <- if (K == 1) 1L else chooseScanScale(sc)
           q <- sc$Q[, k]; p <- sc$P[, k]; effect <- sc$E[, k]; scale.used <- scale[k]; gt <- sc$group.test[[k]]
+          if (K > 1 && isTRUE(getOption("cacoa.auto.scale.test", TRUE))) q <- pmax(q, sc$auto$p)   # the choice of the scale tested by relabeling (autoScaleTest())
         } else { q <- sc$q; p <- sc$p; effect <- if (effect.scale == "finest") sc$E[, 1L] else sc$E[cbind(seq_along(cells), sc$best)]; scale.used <- scale; gt <- sc$group.test[[1L]] }
         names(q) <- names(p) <- names(effect) <- cells
         tz <- function(pv, sg) { pa <- pmin(pmax(pv, 1e-300), 1 - 1e-16)
@@ -3358,7 +3359,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         res <- list(pooled = tz(p, sg), adj = tz(q, sg), p.adj = q, p.pooled = p, effect = effect, model = sample.model, perm.method = perm.method, statistic = statistic, robust = robust.method,
                     adjust.method = "perm-fdr", p.source = "permutation", post = post, transform = "log", unit = "diffusion", scale = scale.used,
                     scale.mode = if (auto) "auto" else if (K == 1) "single" else "scan", effect.scale = if (!auto && K > 1) effect.scale else NULL,
-                    scales = list(scale = scale, beta = sc$scales$beta, median.size = msize, best = stats::setNames(scale[sc$best], cells), p = sc$P, q = sc$Q, effect = sc$E, scan.q = sc$q, scan.p = sc$p),
+                    scales = list(scale = scale, beta = sc$scales$beta, median.size = msize, best = stats::setNames(scale[sc$best], cells), p = sc$P, q = sc$Q, effect = sc$E, scan.q = sc$q, scan.p = sc$p, auto = if (K > 1) sc$auto else NULL),
                     unit.size = stats::setNames(msize, sprintf("%g", scale)), kernel.alpha = kernel.alpha, moderate = if (length(mp)) "trend" else "none", group.test = gt, n.permutations = sc$B)
         if (post == "inherit") {
           ih <- inheritNeighbourQ(res$p.adj, res$effect, g.s); res$p.adj.cell <- res$p.adj; res$p.adj <- ih$q; res$effect.inherited <- ih$effect; res$adj <- tz(ih$q, sign(ih$effect))
@@ -4299,13 +4300,15 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                               sample.floor = sample.floor, noise.correction = noise.correction, min.n.obs.per.samp = min.n.obs.per.samp, min.samp.per.level = min.samp.per.level,
                               permutation = permutation, block.vars = block.vars %||% model$block.vars, robust = robust, robust.k = private$opt("robust.k"), groups = self$cell.groups)
         msize <- sapply(kb, `[[`, "median.size")
-        if (auto || K == 1) { j <- if (K == 1) 1L else chooseScanScale(sc); q <- sc$Q[, j]; p <- sc$P[, j]; eff <- sc$E[, j]; st <- sc$Z[, j]; scale.used <- scale[j]; gt <- sc$group.test[[j]] }
+        if (auto || K == 1) { j <- if (K == 1) 1L else chooseScanScale(sc); q <- sc$Q[, j]; p <- sc$P[, j]; eff <- sc$E[, j]; st <- sc$Z[, j]; scale.used <- scale[j]; gt <- sc$group.test[[j]]
+          # a scale chosen among several: its calls are kept only as far as the choice itself stands up to relabeling (autoScaleTest())
+          if (K > 1 && isTRUE(getOption("cacoa.auto.scale.test", TRUE))) q <- pmax(q, sc$auto$p) }
         else { q <- sc$q; p <- sc$p; ks <- if (effect.scale == "finest") rep(1L, length(cells)) else sc$best; eff <- sc$E[cbind(seq_along(cells), ks)]; st <- sc$Z[cbind(seq_along(cells), ks)]; scale.used <- scale; gt <- sc$group.test[[1L]] }
         names(q) <- names(p) <- names(eff) <- names(st) <- cells
         tz <- function(pv) { z <- stats::qnorm(pmin(pmax(pv, 1e-300), 1 - 1e-16), lower.tail = FALSE); z[!is.finite(pv)] <- NA_real_; stats::setNames(pmax(z, 0), cells) }
         shifts <- list(stat = st, z.std = st, p.value = p, p.adj = q, p.pooled = p, z.pooled = tz(p), z.adj = tz(q), pooled = tz(p), adj = tz(q), shifts = eff, post = "averaged", statistic = "gsd", unit = "diffusion",
                        scale = scale.used, scale.mode = if (auto) "auto" else if (K == 1) "single" else "scan", effect.scale = if (!auto && K > 1) effect.scale else NULL,
-                       scales = list(scale = scale, beta = sc$scales$beta, median.size = msize, n.centres = sc$scales$n.centres, best = stats::setNames(scale[sc$best], cells), p = sc$P, q = sc$Q, shifts = sc$E, scan.q = sc$q, scan.p = sc$p),
+                       scales = list(scale = scale, beta = sc$scales$beta, median.size = msize, n.centres = sc$scales$n.centres, best = stats::setNames(scale[sc$best], cells), p = sc$P, q = sc$Q, shifts = sc$E, scan.q = sc$q, scan.p = sc$p, auto = if (K > 1) sc$auto else NULL),
                        group.test = gt, settings = sc$settings, adjust.method = "perm-fdr", p.source = "permutation", n.permutations = sc$B, model = model)
         if (post == "inherit") { ih <- inheritNeighbourQ(shifts$p.adj, shifts$shifts, g.s); shifts$p.adj.cell <- shifts$p.adj; shifts$p.adj <- ih$q; shifts$z.adj <- tz(ih$q); shifts$adj <- shifts$z.adj }
         if (verbose) { n.adj <- sum(shifts$z.adj >= stats::qnorm(0.9), na.rm = TRUE)

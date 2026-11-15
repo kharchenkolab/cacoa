@@ -350,3 +350,17 @@ test_that("one relabeling rule: scheme from the formula, report of what can be e
   gf <- cacoa:::groupingAsFixedFormula(mf); expect_equal(deparse(gf$formula), "~group + age + batch"); expect_equal(gf$dropped, "site"); expect_equal(gf$groups, "batch")
   expect_null(cacoa:::groupingAsFixedFormula(buildCacoaModel(meta, ~ group + batch, test = "group")))
 })
+
+test_that("collinearity warning: the tested variable's independent variation is measured around its mean", {
+  set.seed(2); m <- data.frame(row.names = paste0("s", 1:20), age = round(rnorm(20, 50, 12)), diagnosis = factor(rep(c("C", "D"), 10)), sex = rep(c("f", "f", "m", "m"), 5))
+  iss <- function(f) { x <- buildCacoaModel(m, f, test = "age"); paste(x$issues$message, collapse = " | ") }
+  expect_false(grepl("collinear", iss(~ age)))                                     # nothing to be collinear with
+  expect_false(grepl("collinear", iss(~ age + diagnosis + sex)))                   # age drawn independently of them
+  m$age2 <- m$age; m$age2[m$diagnosis == "D"] <- m$age2[m$diagnosis == "D"] + 150   # age almost determined by the diagnosis (independent share about 15 %)
+  x <- buildCacoaModel(m, ~ age2 + diagnosis, test = "age2"); expect_match(paste(x$issues$message, collapse = " "), "collinear")
+  m$age3 <- m$age; m$age3[m$diagnosis == "D"] <- m$age3[m$diagnosis == "D"] + 60    # partly determined: a note with the share of variance
+  x <- buildCacoaModel(m, ~ age3 + diagnosis, test = "age3"); r2 <- summary(lm(age3 ~ diagnosis, m))$r.squared; expect_gt(1 - r2, 0.09); expect_lt(1 - r2, 0.25)
+  expect_true(any(x$issues$severity == "note" & grepl(sprintf("%.0f%% of its variance", 100 * (1 - r2)), x$issues$message)))
+  # an unbalanced two-level tested variable is not collinear with the intercept
+  m$g <- factor(c(rep("a", 17), rep("b", 3))); x <- buildCacoaModel(m, ~ g + sex, test = "g"); expect_false(grepl("collinear", paste(x$issues$message, collapse = " ")))
+})

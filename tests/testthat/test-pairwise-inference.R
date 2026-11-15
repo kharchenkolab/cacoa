@@ -199,3 +199,56 @@ test_that("calibration: block scheme is exact under the null and detects dispers
   })
   expect_gt(mean(ps < 0.05), 0.7)
 })
+
+test_that("distance model under the exchange of residuals: the shift F of every relabeling on the scale of the observed one", {
+  set.seed(21); n <- 16
+  meta <- data.frame(row.names = paste0("s", seq_len(n)), cond = factor(rep(c("a", "b"), n / 2)), batch = rep(c("b1", "b2", "b3", "b4"), each = 4), x = round(rnorm(n), 2), stringsAsFactors = FALSE)
+  Y <- matrix(rnorm(n * 40), n) + outer(meta$x, rnorm(40)) + outer(as.integer(factor(meta$batch)), rnorm(40)); G <- tcrossprod(scale(Y, scale = FALSE))
+  ref <- function(d, P, scale) {   # explicit hat matrices of every relabeled arrangement
+    X <- d$F; cvec <- d$contrast.F[colnames(X)]; hi <- cacoa:::hatInfo(X); H <- hi$H; a <- drop(t(hi$A) %*% cvec); cXc <- drop(crossprod(cvec, hi$XtXi %*% cvec))
+    Xr <- X %*% cacoa:::contrastNullBasis(cvec); R0 <- diag(n) - cacoa:::hatInfo(Xr)$H; K4 <- R0 %*% G %*% R0
+    apply(P, 2, function(p) { ab <- numeric(n); ab[p] <- a; Hb <- matrix(0, n, n); Hb[p, p] <- H; Rb <- diag(n) - Hb; at <- drop(R0 %*% ab); cb <- sum(at^2) / sum(a^2)
+      E <- Rb %*% R0; ss <- drop(t(ab) %*% K4 %*% ab) / cXc; rss <- sum(diag(Rb %*% K4 %*% Rb)); df <- sum(diag(E %*% t(E)))
+      if (scale == "kernel") return(ss / (rss / (n - hi$rank)))
+      if (scale == "independent") { k <- drop(Rb %*% at); L <- Rb - outer(k, ab) / sum(at^2); rss <- sum(diag(L %*% K4 %*% t(L))); df <- sum(diag(L %*% R0 %*% t(L))) }
+      (ss / cb) / (rss / df) }) }
+  kernelF <- function(d, P) { X <- d$F; cvec <- d$contrast.F[colnames(X)]; Xr <- X %*% cacoa:::contrastNullBasis(cvec); parts <- cacoa:::flGowerParts(G, Xr)
+    apply(P, 2, function(p) { Gs <- cacoa:::flGowerPermute(parts, p); hi <- cacoa:::hatInfo(X); a <- drop(t(hi$A) %*% cvec); (drop(t(a) %*% Gs %*% a) / drop(crossprod(cvec, hi$XtXi %*% cvec))) / ((sum(diag(Gs)) - sum(hi$H * Gs)) / (n - hi$rank)) }) }
+  d <- buildCacoaModel(meta, ~ cond + x + batch, test = "cond")$tests[[1]]$design; mp <- modelPermutations(d, n.permutations = 60, seed = 2); expect_equal(mp$plan$scheme, "freedman-lane")
+  X <- d$F; cvec <- d$contrast.F[colnames(X)]; Xr <- X %*% cacoa:::contrastNullBasis(cvec)
+  expect_equal(ref(d, mp$P, "kernel"), kernelF(d, mp$P), tolerance = 1e-10)                       # the reference reproduces the unscaled F
+  for (sc in c("relabeling", "independent")) expect_equal(cacoa:::flShiftF(G, X, cvec, Xr, mp$P, sc), ref(d, mp$P, sc), tolerance = 1e-9)
+  expect_gt(max(abs(cacoa:::flShiftF(G, X, cvec, Xr, mp$P, "relabeling") / kernelF(d, mp$P) - 1)), 1e-3)
+  # the identity is the observed F; a fitted factor alone (exchange within its levels) is unchanged
+  id <- matrix(seq_len(n), ncol = 1); for (sc in c("relabeling", "independent")) expect_equal(cacoa:::flShiftF(G, X, cvec, Xr, id, sc), kernelF(d, id), tolerance = 1e-10)
+  d0 <- buildCacoaModel(meta, ~ cond + batch, test = "cond")$tests[[1]]$design; m0 <- modelPermutations(d0, n.permutations = 40, seed = 2, scheme = "freedman-lane")
+  X0 <- d0$F; c0 <- d0$contrast.F[colnames(X0)]; Xr0 <- X0 %*% cacoa:::contrastNullBasis(c0)
+  for (sc in c("relabeling", "independent")) expect_equal(cacoa:::flShiftF(G, X0, c0, Xr0, m0$P, sc), kernelF(d0, m0$P), tolerance = 1e-9)
+  # the option reaches the test of a cell type: "average" leaves the kernel's F
+  eff <- list(G = G, X = X, Z = cbind(1, as.numeric(meta$cond == "b")), contrast = cvec, z.end = list(num = c(1, 1), den = c(1, 0)))
+  st <- cacoa:::permutationStatsForCellType(eff, mp$plan, mp$P); expect_equal(unname(st$perm[, "F"]), cacoa:::flShiftF(G, X, cvec, Xr, mp$P, "independent"), tolerance = 1e-9)
+  op <- options(cacoa.residual.scale = "average"); on.exit(options(op))
+  expect_equal(unname(cacoa:::permutationStatsForCellType(eff, mp$plan, mp$P)$perm[, "F"]), kernelF(d, mp$P), tolerance = 1e-8)
+})
+
+test_that("dispersion change: not tested when every exchange cell holding both labels is a fitted pair (mirror-image residuals)", {
+  set.seed(8); nd <- 10
+  # partly paired: donors 1-5 hold one sample of each label, donors 6-10 two samples of one label; x a continuous covariate
+  meta <- data.frame(row.names = paste0("s", 1:(2 * nd)), donor = rep(paste0("d", 1:nd), each = 2), lab = factor(c(rep(c("A", "B"), 5), rep(c("A", "A", "B", "B"), length.out = 10))), x = round(rnorm(2 * nd), 2), stringsAsFactors = FALSE)
+  Y <- matrix(rnorm(2 * nd * 30), 2 * nd) + matrix(rnorm(nd * 30, 0, 2), nd)[rep(1:nd, each = 2), ]; D <- as.matrix(dist(Y)); dimnames(D) <- list(rownames(meta), rownames(meta))
+  run <- function(f) { m <- buildCacoaModel(meta, f, test = "lab"); testPairwiseEffects(list(ct = D), m$tests[[1]]$design, meta, dist = "l2", n.permutations = 99, seed = 1, block.vars = m$block.vars)$results }
+  # the donor fitted: mirrored pairs only -> no dispersion test, flagged, shift still tested
+  for (f in list(~ lab + donor, ~ lab + x + donor)) { r <- run(f); expect_true(is.na(r$p.var)); expect_true(is.na(r$var)); expect_true(is.na(r$total)); expect_match(r$flags, "dispersion-not-identifiable"); expect_true(is.finite(r$p.shift)) }
+  # the residual projection gives mirror images for a fitted pair, with or without the covariate
+  X <- buildCacoaModel(meta, ~ lab + x + donor, test = "lab")$tests[[1]]$design$F; R <- diag(nrow(X)) - cacoa:::hatInfo(X)$H
+  expect_lt(max(abs(R[1, ] + R[2, ])), 1e-10)
+  # the donor as a grouping term: residual distances are not mirrored, the dispersion change is tested
+  for (f in list(~ lab + (1 | donor), ~ lab + x + (1 | donor))) expect_true(is.finite(run(f)$p.var))
+  # a donor with three samples (two of one label, one of the other) carries information: tested
+  meta3 <- rbind(meta, data.frame(row.names = "s21", donor = "d1", lab = factor("A", levels = c("A", "B")), x = 0.3))
+  Y3 <- rbind(Y, Y[1, ] + rnorm(30, 0, 0.5)); D3 <- as.matrix(dist(Y3)); dimnames(D3) <- list(rownames(meta3), rownames(meta3))
+  m3 <- buildCacoaModel(meta3, ~ lab + donor, test = "lab"); r3 <- testPairwiseEffects(list(ct = D3), m3$tests[[1]]$design, meta3, dist = "l2", n.permutations = 99, seed = 1)$results
+  expect_true(is.finite(r3$p.var))
+  # unpaired samples: unaffected
+  m0 <- buildCacoaModel(meta, ~ lab + x, test = "lab"); expect_true(is.finite(testPairwiseEffects(list(ct = D), m0$tests[[1]]$design, meta, dist = "l2", n.permutations = 99, seed = 1)$results$p.var))
+})

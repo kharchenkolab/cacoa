@@ -110,7 +110,11 @@ test_that("class level: scale = a vector runs the scan, one value a single scale
   expect_error(cao$estimateDiffCellDensity(type = "permutation", n.permutations = 9, scale = "auto", auto.scales = 0.1, verbose = FALSE), "at least two")
   expect_error(cao$estimateDiffCellDensity(type = "permutation", n.permutations = 9, scale = "auto", auto.scales = c(0.1, 2), verbose = FALSE), "auto.scales must")
   expect_equal(a$scale.mode, "auto"); expect_true(a$scale %in% a$scales$scale); j <- match(a$scale, a$scales$scale)   # (on 240 cells the default scales are raised to the floor)
-  expect_equal(unname(a$p.adj[cl]), unname(a$scales$q[cl, j])); expect_equal(unname(a$effect[cl]), unname(a$scales$effect[cl, j]))
+  # the chosen scale's adjusted p, not below the p-value of the choice itself (autoScaleTest())
+  expect_equal(unname(a$p.adj[cl]), pmax(unname(a$scales$q[cl, j]), a$scales$auto$p)); expect_equal(unname(a$effect[cl]), unname(a$scales$effect[cl, j]))
+  expect_true(a$scales$auto$p > 0 && a$scales$auto$p <= 1); expect_length(a$scales$auto$n.null, 29)
+  op <- options(cacoa.auto.scale.test = FALSE); a0 <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 29, scale = "auto", verbose = FALSE)$diff$permutation; options(op)
+  expect_equal(unname(a0$p.adj[cl]), unname(a0$scales$q[cl, match(a0$scale, a0$scales$scale)]))
   expect_true(all(a$scales$scale * 240 >= 10 - 1e-9)); expect_message(cao$estimateDiffCellDensity(type = "permutation", n.permutations = 9, scale = 0.01, verbose = TRUE), "below the floor")
   expect_error(cao$estimateDiffCellDensity(type = "permutation", n.permutations = 29, scale = c(0.1, 0.3), adjust.method = "bh", verbose = FALSE), "perm-fdr")
   expect_error(cao$estimateDiffCellDensity(type = "permutation", n.permutations = 29, scale = 2, verbose = FALSE), "shares of the cells")
@@ -131,4 +135,25 @@ test_that("planted density simulation: the scan finds the changed types at the f
   expect_lt(max(fr[c("AST-PP", "Microglia", "Neu-NRGN")]), 0.1)
   a <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 199, scale = "auto", verbose = FALSE)$diff$permutation
   expect_equal(a$scale.mode, "auto"); expect_true(a$scale %in% c(0.01, 0.03, 0.1))
+})
+
+test_that("test of the automatically chosen scale: calls of the observed and the relabeled data sets, all treated alike, and the map-level p-value", {
+  set.seed(4); B <- 40; N <- 300
+  sp <- matrix(rnorm(B * N), B, N); sp[, 1:60] <- sp[, 1:60] + rnorm(B, 0, 1.5)        # a group of cells that move together under relabeling
+  st <- rnorm(N); S <- rbind(st, sp)
+  # every data set (the observed one first) against the other B: the direct computation with pooledMinPFDR()
+  ref <- function(S, alpha = 0.1) vapply(seq_len(nrow(S)), function(r) sum(cacoa:::pooledMinPFDR(-S[r, ], -S[-r, , drop = FALSE], nrow(S) - 1)$q < alpha), numeric(1))
+  n <- cacoa:::scanCallCounts(st, sp); expect_length(n, B + 1); expect_equal(n, as.integer(ref(S))); expect_gt(sum(n > 0), 0)
+  expect_equal(cacoa:::scanCallCounts(st, sp, alpha = 0.3), as.integer(ref(S, 0.3)))
+  expect_equal(cacoa:::scanCallCounts(st, sp, tail = abs), as.integer(ref(abs(S))))
+  # standardized over all B + 1 data sets: the same whichever data set is put first, and unchanged by the map's own standardization of the cells
+  Z <- scale(S); expect_equal(cacoa:::scanCallCounts(st, sp, standardize = TRUE), as.integer(ref(Z)))
+  expect_equal(cacoa:::scanCallCounts(S[3, ], S[-3, ], standardize = TRUE), as.integer(ref(Z))[c(3, 1, 2, 4:(B + 1))])
+  mu <- colMeans(sp); sdv <- apply(sp, 2, sd); expect_equal(cacoa:::scanCallCounts((st - mu) / sdv, sweep(sweep(sp, 2, mu), 2, sdv, "/"), standardize = TRUE), as.integer(ref(Z)))
+  st.na <- st; st.na[5] <- NA; expect_equal(cacoa:::scanCallCounts(st.na, sp, standardize = TRUE), as.integer(ref(scale(S[, -5]))))   # an untested cell is never called
+  # the rule of chooseScanScale() on counts: the largest number, or the finest scale that calls nearly everything
+  n.perm <- cbind(c(0, 5, 0, 280, 0), c(0, 0, 12, 290, 0), c(3, 0, 0, 100, 0))
+  a <- cacoa:::autoScaleTest(c(0, 10, 4), n.perm, tested = 300); expect_equal(a$n.null, c(3, 5, 12, 280, 0)); expect_equal(a$n, 10); expect_equal(a$p, (1 + 2) / 6)
+  expect_equal(cacoa:::autoScaleTest(c(0, 0, 0), n.perm, tested = 300)$p, 1)
+  expect_equal(cacoa:::autoScaleTest(c(295, 299, 0), n.perm, tested = 300)$n, 295)
 })

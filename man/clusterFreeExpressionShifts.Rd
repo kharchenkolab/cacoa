@@ -186,7 +186,14 @@ cover they replace (default NULL); the neighbourhoods of the other cells may be 
 
 \item{gsd.variance}{gsd per-gene variance: \code{"moderated"} (default) or \code{"model"} (the noise model only)}
 
-\item{gsd.gamma}{gsd combination over genes: 0 (default, adaptive) or one of 1, 2, 4, 8, 99 (max) alone}
+\item{gsd.gamma}{gsd combination over genes: 0 (default, adaptive) or one of 1, 2, 4, 8, 99 (max) alone. Under residual exchange (a continuous covariate
+without a grouping term) the variance of the contrast and the expected residual sum of squares differ between relabelings; gsd takes
+both from its noise model for every relabeling and gene and removes the dependence between the relabeled contrast and the residuals of
+the relabeled fit, so that the relabeled statistics are on the scale of the observed one (\code{options(cacoa.residual.scale = )}:
+\code{"independent"}, the default; \code{"relabeling"} without the last step, more sensitive but above the nominal level in some designs;
+\code{"average"} the former single average factor). The standardizations over relabelings inside the statistic (of the combinations over
+genes, and of a neighborhood's statistic) include the observed data set, so that it is treated exactly as the relabeled ones
+(\code{options(cacoa.gsd.symmetric = FALSE)}: over the relabeled data sets only, the behavior before this option existed)}
 
 \item{gsd.d0}{prior degrees of freedom of the model variance in the moderated variance (default 3)}
 

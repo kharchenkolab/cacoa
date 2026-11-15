@@ -469,6 +469,12 @@ struct GsdOpts {
   double d0 = 10;        // prior degrees of freedom of the model variance in the moderated variance
   double winsor_k = 0;   // > 0: winsorize each gene's values at med +- k robust sd (label-free)
   int force_lm = 0;      // 1: the general kernel also for two-group designs (tests)
+  int sym = 1;           // 1 (default): the standardizations over relabelings (adaptive combination, unit z) include the observed data set, so that
+                         // it is treated exactly as the relabeled ones; 0: over the relabeled data sets only. Standardizing the observed value by the
+                         // others but each relabeled value by a set that includes itself makes the observed one slightly more extreme: immaterial for a
+                         // rank p-value, but it raised the far-tail calls of the maps by a third (paired data, 400 null data sets)
+  int fl_norm = 3;       // Freedman-Lane, scale of the relabeled statistics: 0 one average factor, 1 per relabeling, 2 per relabeling, to the observed arrangement,
+                         // 3 (default) as 1 with the residuals of the relabeled fit made independent of the relabeled contrast estimate
 };
 inline GsdOpts parse_gsd(const Rcpp::List& opt) {
   GsdOpts o;
@@ -477,6 +483,9 @@ inline GsdOpts parse_gsd(const Rcpp::List& opt) {
   if (opt.containsElementNamed("d0")) o.d0 = Rcpp::as<double>(opt["d0"]);
   if (opt.containsElementNamed("winsor_k")) o.winsor_k = Rcpp::as<double>(opt["winsor_k"]);
   if (opt.containsElementNamed("force_lm")) o.force_lm = Rcpp::as<int>(opt["force_lm"]);
+  if (opt.containsElementNamed("fl_norm")) o.fl_norm = Rcpp::as<int>(opt["fl_norm"]);
+  if (opt.containsElementNamed("symmetric")) o.sym = Rcpp::as<int>(opt["symmetric"]) != 0;
+  if (o.fl_norm < 0 || o.fl_norm > 3) Rcpp::stop("gsd fl_norm must be 0, 1, 2 or 3");
   if (o.mode != 1 && o.mode != 2) Rcpp::stop("gsd mode must be 1 (model variance) or 2 (moderated)");
   if (!(o.d0 >= 0)) Rcpp::stop("gsd d0 must be non-negative");
   if (!(o.gamma == 0 || o.gamma == 1 || o.gamma == 2 || o.gamma == 4 || o.gamma == 8 || o.gamma >= 99)) Rcpp::stop("gsd gamma must be 0 (adaptive), 1, 2, 4, 8 or >= 99 (max)");
@@ -511,7 +520,7 @@ static void winsorize_rows(arma::mat& X, const arma::mat& V, double k) {
 }
 // the per-relabeling sums -> T (single gamma, or adaptive: max over gamma of the standardized log T) -> per-cell p / z
 static CellResult gstat_finish(const std::vector<double>& t1, const std::vector<double>& t2, const std::vector<double>& t4, const std::vector<double>& t8,
-                               const std::vector<double>& tm, const std::vector<char>& adm, arma::uword nc, arma::uword B, arma::uword G, arma::uword m, bool single, int gsel) {
+                               const std::vector<double>& tm, const std::vector<char>& adm, arma::uword nc, arma::uword B, arma::uword G, arma::uword m, bool single, int gsel, bool sym = false) {
   CellResult out; const int ng = single ? 1 : 5;
   arma::mat T(ng, nc); T.fill(arma::datum::nan); const double mz2_obs = t2[0] / (double)G;
   for (arma::uword b = 0; b < nc; ++b) { if (!adm[b]) continue; const double tv[5] = {t1[b], t2[b], t4[b], t8[b], tm[b]};
@@ -520,7 +529,7 @@ static CellResult gstat_finish(const std::vector<double>& t1, const std::vector<
   if (single) F = T.row(0).t();
   else {   // adaptive: per gamma log T standardized by its mean and sd over the admissible permutations; F = max over gamma (continuous,
            // so the pooled null has no floor; a rank-based min p would put about 5 / (B + 1) of every cell's permutations at the ceiling)
-    std::vector<arma::uword> ip; for (arma::uword b = 1; b < nc; ++b) if (adm[b]) ip.push_back(b);
+    std::vector<arma::uword> ip; for (arma::uword b = sym ? 0 : 1; b < nc; ++b) if (adm[b]) ip.push_back(b);   // sym: the observed data set (b = 0) included
     if (ip.size() < 2) return out;
     arma::vec mx(nc); mx.fill(-arma::datum::inf);
     for (int k = 0; k < 5; ++k) {
@@ -538,7 +547,8 @@ static CellResult gstat_finish(const std::vector<double>& t1, const std::vector<
   out.ok = true; out.F = Fo; out.n = (int)m; out.n_perm = (int)B_adm; out.shift = mz2_obs;
   arma::uword ge = 0; for (arma::uword i = 0; i < B_adm; ++i) if (Fp[ad[i]] >= Fo - 1e-12) ++ge;
   out.p = (ge + 1.0) / (B_adm + 1.0);
-  const arma::vec Fa = Fp(ad); const double mu = arma::mean(Fa), sdv = arma::stddev(Fa);
+  arma::vec Fa = Fp(ad); if (sym) { Fa.resize(B_adm + 1); Fa[B_adm] = Fo; }
+  const double mu = arma::mean(Fa), sdv = arma::stddev(Fa);
   if (std::isfinite(sdv) && sdv > 0) { out.z = (Fo - mu) / sdv; out.zp = (Fp - mu) / sdv; }
   out.Fp = std::move(Fp);
   return out;
@@ -599,7 +609,7 @@ __attribute__((target_clones("avx2", "default"), optimize("O3", "no-math-errno")
       for (arma::uword b = 0; b < nc; ++b) { double s2 = rx2 - xl[b] * xl[b] * r[b]; s2 = s2 > 0.0 ? s2 : 0.0; va[b] = wm * va[b] + ws * r[b] * s2; } }
     gstat_sums(xl.data(), r.data(), va.data(), t1.data(), t2.data(), t4.data(), t8.data(), tm.data(), nc);
   }
-  return gstat_finish(t1, t2, t4, t8, tm, adm, nc, B, G, m, single, gsel);
+  return gstat_finish(t1, t2, t4, t8, tm, adm, nc, B, G, m, single, gsel, o.sym != 0);
 }
 // the per-gene statistic for a general single-df contrast c of any design X (continuous variables, covariates,
 // level-vs-level contrasts), under the block relabeling or the Freedman-Lane scheme. Per relabeling b and gene g, with y the
@@ -609,16 +619,34 @@ __attribute__((target_clones("avx2", "default"), optimize("O3", "no-math-errno")
 //   moderated variance (d0 mv + cXc_b RSS) / (d0 + df_b), df_b = m - rank;  z^2 = beta^2 / variance.
 // Block scheme: alpha_b = X_b (X_b'X_b)^- c on the relabeled design X_b (rows of the samples the global relabeling maps to),
 // cXc_b = c'(X_b'X_b)^- c. Freedman-Lane: x* = H0 x + P_b (I - H0) x, so alpha_b = P_b' alpha, Q_b = P_b' Q0 (Q0: the reduced
-// design's basis besides 1). The residuals of the reduced model are smaller than the errors, so beta_gb and RSS_gb shrink together,
-// but the model variance does not: for the relabeled data sets it is divided by kappa = |alpha|^2 / mean_b(|alpha|^2 - |Q0' alpha_b|^2),
-// the variance of the observed over the mean variance of the relabeled contrast estimate (1 when the exchange stays within the levels
-// of the reduced design's terms, about m / (m - r0) for a free exchange). For two groups (intercept + dummy) this is the subset-table kernel's statistic: alpha = 1_B / n_B - 1_A / n_A,
+// design's basis besides 1). The exchanged residuals R0 x (R0 = I - H0) are not errors: the relabeled contrast estimate is beta_gb = (R0 alpha_b)' x,
+// and both its variance and the expectation of RSS_gb depend on the relabeling, by factors common to all genes. Left uncorrected, these
+// factors dominate the spread of a statistic summed over thousands of genes and widen its reference distribution several-fold. They are
+// taken from the noise model (V_gj = v_gj + tau2_g), per relabeling and gene (fl_norm = 1):
+//   model variance mv_gb = sum_j (R0 alpha_b)_j^2 V_gj;
+//   the residual part cXc RSS_gb is multiplied by rho_gb = (sum_j u_bj V_gj / sum_j w_bj V_gj) (mv_gb / sum_j alpha_bj^2 V_gj), with
+//   w_b = diag(R0 (I - H_b) R0) (the expectation of RSS_gb is sum_j w_bj V_gj) and u_b = diag(I - H_b), H_b the fitted space of the relabeled
+//   arrangement: the ratio of the residual part to the variance of the contrast is then the one this arrangement has when nothing is lost
+//   to the projection, as under an exchange of design rows. rho = 1 and mv is unchanged for the observed arrangement and whenever the
+//   exchange maps the reduced space onto itself (a fitted factor alone, exchange within its levels: the test is that of exchanging labels).
+// fl_norm = 3 (the default): as 1, and the residual vector e_b = (I - H_b) R0 x of the relabeled fit is made independent of beta_gb. The two are correlated
+// (covariance k_b = (I - H_b) R0 alpha_b per unit variance, zero for the observed arrangement), so that RSS_gb grows with beta_gb^2 and the relabeled
+// z are smaller and lighter-tailed than the observed ones; e_b - k_b beta_gb / |R0 alpha_b|^2 is used in its place:
+//   RSS_gb - 2 beta_gb (k_b' y) / |R0 alpha_b|^2 + beta_gb^2 |k_b|^2 / |R0 alpha_b|^4, with w_b adjusted alike.
+// Without a tested effect (ALZ pairs, MS batches, unpaired samples; one to three covariates) fl_norm = 3 gave 1.3-4.7 % of cell types at p <= 0.05,
+// fl_norm = 1 3.2-8.0 % (above 5 % where more of the residual space is lost: covariate related to the tested variable, several covariates, small
+// batches), fl_norm = 0 1.0-4.7 %; a 26 % reduction in a tenth of the genes was detected in 50, 66 and 31 % of cell types (paired data).
+// fl_norm = 2 scales to the observed arrangement instead (rho_gb = (sum_j w_0j V_gj / sum_j w_bj V_gj) (mv_gb / mv_g0)); fl_norm = 0 is the
+// former correction by one average factor: the model variance of the relabeled data sets divided by kappa = |alpha|^2 / mean_b(|alpha|^2 - |Q0' alpha_b|^2),
+// the variance of the observed over the mean variance of the relabeled contrast estimate. For two groups (intercept + dummy) this is the subset-table kernel's statistic: alpha = 1_B / n_B - 1_A / n_A,
 // cXc = 1 / n_A + 1 / n_B. The per-relabeling vectors depend only on the set of present samples; they are cached per set.
 struct LmPlan {
   bool ok = false, fl = false; arma::uword m = 0, nc = 0, K = 0;
   std::vector<char> adm;
   std::vector<double> al, al2, q;      // al / al2: [j * nc + b]; q: [(k * m + j) * nc + b]
   std::vector<double> iaa, cxc, df;    // 1 / |alpha_b|^2, cXc_b, residual df (inadmissible: 0, 0, 1)
+  int fl_norm = 0; std::vector<double> au2, wr, ur;   // Freedman-Lane with a scale per relabeling: alpha_b^2, w_b, u_b as [j * nc + b] (al2 then holds (R0 alpha_b)^2)
+  std::vector<double> kq, c1, c2;                     // fl_norm = 3: k_b as [j * nc + b], 1 / |R0 alpha_b|^2 and |k_b|^2 / |R0 alpha_b|^4 per relabeling
   arma::mat Q0;                         // Freedman-Lane: orthonormal basis of the reduced design (m x r0, 1 included), for y = (I - Q0 Q0') x
 };
 struct LmPlanCache { std::mutex mu; std::unordered_map<uint64_t, std::shared_ptr<const LmPlan>> map; };
@@ -637,8 +665,9 @@ static arma::mat rest_basis(const arma::mat& Qx, const arma::vec* a) {
   return orth_basis(R, 1e-7);
 }
 static bool has_ones(const arma::mat& Qx) { const arma::vec one(Qx.n_rows, arma::fill::ones); return arma::norm(one - Qx * (Qx.t() * one)) <= 1e-8 * std::sqrt((double)Qx.n_rows); }
-static std::shared_ptr<const LmPlan> build_lm_plan(const arma::uvec& s, const KernelInputs& in) {
+static std::shared_ptr<const LmPlan> build_lm_plan(const arma::uvec& s, const KernelInputs& in, int fl_norm) {
   auto pl = std::make_shared<LmPlan>(); const arma::uword m = s.n_elem, B = in.P.n_cols, nc = B + 1; pl->m = m; pl->nc = nc; pl->fl = in.freedman_lane;
+  pl->fl_norm = in.freedman_lane ? fl_norm : 0; std::vector<arma::vec> AT, W, U, KV; std::vector<double> C1, C2;
   pl->adm.assign(nc, 0); pl->iaa.assign(nc, 0.0); pl->cxc.assign(nc, 0.0); pl->df.assign(nc, 1.0);
   std::vector<arma::vec> A(nc); std::vector<arma::mat> Qr(nc); double mv_scale = 1.0;   // Freedman-Lane: 1 / kappa for the relabeled data sets
   auto design = [&](const arma::uvec& ps, arma::mat& Xp, arma::vec& cp) -> bool {
@@ -661,8 +690,22 @@ static std::shared_ptr<const LmPlan> build_lm_plan(const arma::uvec& s, const Ke
       arma::uvec q = b == 0 ? arma::regspace<arma::uvec>(0, m - 1) : induced_perm(arma::conv_to<arma::uvec>::from(in.P.col(b - 1) - 1), s, blocks);
       arma::vec ab(m); arma::mat Qb(m, Qn.n_cols); for (arma::uword j = 0; j < m; ++j) { ab[q[j]] = a0[j]; Qb.row(q[j]) = Qn.row(j); }
       A[b] = ab; Qr[b] = Qb; pl->adm[b] = 1; pl->iaa[b] = 1.0 / arma::dot(a0, a0); pl->cxc[b] = cXc0; pl->df[b] = (double)m - (double)h.rank;
+      if (pl->fl_norm > 0) {   // the projected contrast vector, and the diagonals that give the expected RSS of this arrangement with (w) and without (u) the projection
+        const double aa = arma::dot(a0, a0); const arma::vec at = ab - pl->Q0 * (pl->Q0.t() * ab); const arma::mat RQ = Qb - pl->Q0 * (pl->Q0.t() * Qb);
+        arma::vec w = 1.0 - arma::sum(arma::square(pl->Q0), 1) - arma::square(at) / aa, u = arma::vec(m, arma::fill::value(1.0 - 1.0 / (double)m)) - arma::square(ab) / aa;
+        if (Qb.n_cols) { w -= arma::sum(arma::square(RQ), 1); u -= arma::sum(arma::square(Qb), 1); }
+        if (pl->fl_norm == 3) {   // k_b = (I - H_b) R0 alpha_b, H_b spanned by 1, alpha_b and Q_b (orthogonal); the residual vector without its part along beta
+          const double att = arma::dot(at, at); arma::vec k(m, arma::fill::zeros); double c1 = 0.0, c2 = 0.0;
+          if (att > 1e-12 * aa) { k = at - arma::mean(at) - ab * (arma::dot(ab, at) / aa); if (Qb.n_cols) k -= Qb * (Qb.t() * at);
+            const double kk = arma::dot(k, k); const arma::vec R0k = k - pl->Q0 * (pl->Q0.t() * k); c1 = 1.0 / att; c2 = kk / (att * att);
+            w += -2.0 * (at % R0k) * c1 + arma::square(at) * c2; }
+          KV.push_back(k); C1.push_back(c1); C2.push_back(c2);
+        }
+        w.transform([](double v) { return v > 0.0 ? v : 0.0; }); u.transform([](double v) { return v > 0.0 ? v : 0.0; });
+        AT.push_back(at); W.push_back(w); U.push_back(u);
+      }
     }
-    if (nc > 1) { const double aa = arma::dot(a0, a0); double gs = 0.0; for (arma::uword b = 1; b < nc; ++b) gs += arma::accu(arma::square(pl->Q0.t() * A[b]));
+    if (nc > 1 && pl->fl_norm == 0) { const double aa = arma::dot(a0, a0); double gs = 0.0; for (arma::uword b = 1; b < nc; ++b) gs += arma::accu(arma::square(pl->Q0.t() * A[b]));
       const double den = aa - gs / (double)(nc - 1); if (aa > 0.0 && den > 1e-8 * aa) mv_scale = den / aa; }
   } else {
     for (arma::uword b = 0; b < nc; ++b) {
@@ -686,9 +729,13 @@ static std::shared_ptr<const LmPlan> build_lm_plan(const arma::uvec& s, const Ke
   if (!pl->adm[0]) return pl;
   arma::uword K = 0; for (arma::uword b = 0; b < nc; ++b) if (pl->adm[b]) K = std::max<arma::uword>(K, Qr[b].n_cols); pl->K = K;
   pl->al.assign(m * nc, 0.0); pl->al2.assign(m * nc, 0.0); pl->q.assign(K * m * nc, 0.0);
+  if (pl->fl_norm > 0) { pl->au2.assign(m * nc, 0.0); pl->wr.assign(m * nc, 0.0); pl->ur.assign(m * nc, 0.0); }
+  if (pl->fl_norm == 3) { pl->kq.assign(m * nc, 0.0); pl->c1.assign(nc, 0.0); pl->c2.assign(nc, 0.0);
+    for (arma::uword b = 0; b < nc; ++b) { pl->c1[b] = C1[b]; pl->c2[b] = C2[b]; for (arma::uword j = 0; j < m; ++j) pl->kq[j * nc + b] = KV[b][j]; } }
   for (arma::uword b = 0; b < nc; ++b) { if (!pl->adm[b]) continue;
     const double sc = b > 0 ? mv_scale : 1.0;
     for (arma::uword j = 0; j < m; ++j) { pl->al[j * nc + b] = A[b][j]; pl->al2[j * nc + b] = sc * A[b][j] * A[b][j]; }
+    if (pl->fl_norm > 0) for (arma::uword j = 0; j < m; ++j) { pl->al2[j * nc + b] = AT[b][j] * AT[b][j]; pl->au2[j * nc + b] = A[b][j] * A[b][j]; pl->wr[j * nc + b] = W[b][j]; pl->ur[j * nc + b] = U[b][j]; }
     for (arma::uword k = 0; k < Qr[b].n_cols; ++k) for (arma::uword j = 0; j < m; ++j) pl->q[(k * m + j) * nc + b] = Qr[b](j, k); }
   pl->ok = true; return pl;
 }
@@ -702,12 +749,33 @@ static void lm_gene_sums(const double* __restrict y, const double* __restrict v,
   for (arma::uword k = 0; k < K; ++k) { double* e = ek + k * nc; for (arma::uword b = 0; b < nc; ++b) e[b] = 0.0;
     for (arma::uword j = 0; j < m; ++j) { const double yj = y[j]; const double* qq = q + (k * m + j) * nc; for (arma::uword b = 0; b < nc; ++b) e[b] += yj * qq[b]; } }
 }
+// Freedman-Lane, per gene: the factor rho_b of the residual part for every relabeling (see above); rho_b < 0 marks a relabeling whose fit leaves
+// no residual (the model variance alone is then used). mode 1: to the arrangement's own ratio; mode 2: to the observed arrangement.
+__attribute__((target_clones("avx2", "default"), optimize("O3", "no-math-errno")))
+static void lm_gene_rho(const double* __restrict v, const double* __restrict mv, const double* __restrict au2, const double* __restrict wr, const double* __restrict ur,
+                        arma::uword m, arma::uword nc, int mode, double* __restrict e, double* __restrict eu, double* __restrict mu, double* __restrict rho) {
+  for (arma::uword b = 0; b < nc; ++b) { e[b] = 0.0; eu[b] = 0.0; mu[b] = 0.0; }
+  for (arma::uword j = 0; j < m; ++j) { const double vj = v[j]; const double* w = wr + j * nc; const double* u = ur + j * nc; const double* a2 = au2 + j * nc;
+    for (arma::uword b = 0; b < nc; ++b) { e[b] += vj * w[b]; eu[b] += vj * u[b]; mu[b] += vj * a2[b]; } }
+  if (mode == 2) { const double e0 = e[0], m0 = mv[0]; for (arma::uword b = 0; b < nc; ++b) rho[b] = (e[b] > 1e-10 * e0 && m0 > 0.0) ? (e0 / e[b]) * (mv[b] / m0) : -1.0; }
+  else for (arma::uword b = 0; b < nc; ++b) rho[b] = (e[b] > 1e-10 * eu[b] && mu[b] > 0.0) ? (eu[b] / e[b]) * (mv[b] / mu[b]) : -1.0;
+}
+__attribute__((target_clones("avx2", "default"), optimize("O3", "no-math-errno")))
+// fl_norm = 3, per gene: k_b' y for every relabeling
+__attribute__((target_clones("avx2", "default"), optimize("O3", "no-math-errno")))
+static void lm_gene_ky(const double* __restrict y, const double* __restrict kq, arma::uword m, arma::uword nc, double* __restrict ky) {
+  for (arma::uword b = 0; b < nc; ++b) ky[b] = 0.0;
+  for (arma::uword j = 0; j < m; ++j) { const double yj = y[j]; const double* k = kq + j * nc; for (arma::uword b = 0; b < nc; ++b) ky[b] += yj * k[b]; }
+}
 __attribute__((target_clones("avx2", "default"), optimize("O3", "no-math-errno")))
 static void lm_gene_var(const double* __restrict beta, const double* __restrict mv, const double* __restrict ek, const double* __restrict iaa, const double* __restrict cxc,
-                        const double* __restrict df, arma::uword nc, arma::uword K, double sy2, bool mod, double d0, double* __restrict va) {
+                        const double* __restrict df, arma::uword nc, arma::uword K, double sy2, bool mod, double d0, double* __restrict va, const double* __restrict rho = nullptr,
+                        const double* __restrict ky = nullptr, const double* __restrict c1 = nullptr, const double* __restrict c2 = nullptr) {
   if (!mod) { for (arma::uword b = 0; b < nc; ++b) va[b] = mv[b]; return; }
   for (arma::uword b = 0; b < nc; ++b) va[b] = sy2 - beta[b] * beta[b] * iaa[b];
   for (arma::uword k = 0; k < K; ++k) { const double* e = ek + k * nc; for (arma::uword b = 0; b < nc; ++b) va[b] -= e[b] * e[b]; }
+  if (ky) for (arma::uword b = 0; b < nc; ++b) { const double r0 = va[b] > 0.0 ? va[b] : 0.0; va[b] = r0 - 2.0 * beta[b] * ky[b] * c1[b] + beta[b] * beta[b] * c2[b]; }
+  if (rho) { for (arma::uword b = 0; b < nc; ++b) { const double rss = va[b] > 0.0 ? va[b] : 0.0; va[b] = (d0 * mv[b] + (rho[b] >= 0.0 ? cxc[b] * rss * rho[b] : df[b] * mv[b])) / (d0 + df[b]); } return; }
   for (arma::uword b = 0; b < nc; ++b) { const double rss = va[b] > 0.0 ? va[b] : 0.0; va[b] = (d0 * mv[b] + cxc[b] * rss) / (d0 + df[b]); }
 }
 static CellResult test_genes_lm(const cacoa_prof::Unit& u, const KernelInputs& in, const GsdOpts& o, LmPlanCache* cache) {
@@ -715,9 +783,9 @@ static CellResult test_genes_lm(const cacoa_prof::Unit& u, const KernelInputs& i
   if (m < 3 || G < 1) return out;
   std::shared_ptr<const LmPlan> pl;
   const bool cacheable = cache && in.n <= 64;
-  uint64_t key = 0; if (cacheable) for (arma::uword j = 0; j < m; ++j) key |= (uint64_t)1 << s[j];
+  uint64_t key = 0; if (cacheable) for (arma::uword j = 0; j < m; ++j) key |= (uint64_t)1 << s[j];   // (one fl_norm per call of the kernel)
   if (cacheable) { std::lock_guard<std::mutex> lk(cache->mu); auto it = cache->map.find(key); if (it != cache->map.end()) pl = it->second; }
-  if (!pl) { pl = build_lm_plan(s, in); if (cacheable) { std::lock_guard<std::mutex> lk(cache->mu); if (cache->map.size() < 4096) cache->map.emplace(key, pl); } }
+  if (!pl) { pl = build_lm_plan(s, in, o.fl_norm); if (cacheable) { std::lock_guard<std::mutex> lk(cache->mu); if (cache->map.size() < 4096) cache->map.emplace(key, pl); } }
   if (!pl->ok) return out;
   const arma::uword nc = pl->nc, K = pl->K;
   arma::mat X = u.x.cols(s), V = u.v.cols(s); V.each_col() += u.t2;
@@ -729,13 +797,17 @@ static CellResult test_genes_lm(const cacoa_prof::Unit& u, const KernelInputs& i
   const int gsel = !single ? -1 : (o.gamma >= 99 ? 4 : (o.gamma == 1 ? 0 : o.gamma == 2 ? 1 : o.gamma == 4 ? 2 : o.gamma == 8 ? 3 : -2));
   if (gsel == -2) return out;   // (validated in parse_gsd: no R error from a worker thread)
   std::vector<double> t1(nc, 0.0), t2(nc, 0.0), t4(nc, 0.0), t8(nc, 0.0), tm(nc, 0.0), beta(nc), mv(nc), ek(K * nc), va(nc), one(nc, 1.0);
+  const bool scale_b = pl->fl_norm > 0 && mod, orth = scale_b && pl->fl_norm == 3; std::vector<double> e1, e2, e3, rho, ky; if (scale_b) { e1.resize(nc); e2.resize(nc); e3.resize(nc); rho.resize(nc); } if (orth) ky.resize(nc);
   for (arma::uword g = 0; g < G; ++g) {
     const double* y = Xt.colptr(g); double sy2 = 0; for (arma::uword j = 0; j < m; ++j) sy2 += y[j] * y[j];
     lm_gene_sums(y, Vt.colptr(g), pl->al.data(), pl->al2.data(), pl->q.data(), m, nc, K, beta.data(), mv.data(), ek.data());
-    lm_gene_var(beta.data(), mv.data(), ek.data(), pl->iaa.data(), pl->cxc.data(), pl->df.data(), nc, K, sy2, mod, o.d0, va.data());
+    if (scale_b) lm_gene_rho(Vt.colptr(g), mv.data(), pl->au2.data(), pl->wr.data(), pl->ur.data(), m, nc, pl->fl_norm, e1.data(), e2.data(), e3.data(), rho.data());
+    if (orth) lm_gene_ky(y, pl->kq.data(), m, nc, ky.data());
+    lm_gene_var(beta.data(), mv.data(), ek.data(), pl->iaa.data(), pl->cxc.data(), pl->df.data(), nc, K, sy2, mod, o.d0, va.data(), scale_b ? rho.data() : nullptr,
+                orth ? ky.data() : nullptr, orth ? pl->c1.data() : nullptr, orth ? pl->c2.data() : nullptr);
     gstat_sums(beta.data(), one.data(), va.data(), t1.data(), t2.data(), t4.data(), t8.data(), tm.data(), nc);
   }
-  return gstat_finish(t1, t2, t4, t8, tm, pl->adm, nc, B, G, m, single, gsel);
+  return gstat_finish(t1, t2, t4, t8, tm, pl->adm, nc, B, G, m, single, gsel, o.sym != 0);
 }
 
 } // namespace cacoa_gsd

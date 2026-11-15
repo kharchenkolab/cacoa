@@ -11,7 +11,7 @@ gsdToy <- function(seed = 42, shift = 1) {
   list(cao = cao, cm = cm, lib = lib, units = units, cv = cv)
 }
 # reference statistic of one unit from its profile r (cf_unit_profiles): rows of P are the samples' relabelings (1-based)
-refGsd <- function(r, X, cvec, P, fl, strata, mode = "moderated", gamma = 0, d0 = 3, winsor.k = 0, lev = NULL, minl = 2) {
+refGsd <- function(r, X, cvec, P, fl, strata, mode = "moderated", gamma = 0, d0 = 3, winsor.k = 0, lev = NULL, minl = 2, fl.scale = "independent", sym = TRUE) {
   pres <- r$present + 1L; m <- length(pres); Y <- r$x[, pres, drop = FALSE]; V <- r$v[, pres, drop = FALSE] + as.numeric(r$tau2)
   if (winsor.k > 0) Y <- t(sapply(seq_len(nrow(Y)), function(g) { x <- Y[g, ]; md <- median(x); s2 <- (1.4826 * median(abs(x - md)))^2; sd <- sqrt(pmax(V[g, ], s2))
     pmin(pmax(x, md - winsor.k * sd), md + winsor.k * sd) }))
@@ -31,18 +31,31 @@ refGsd <- function(r, X, cvec, P, fl, strata, mode = "moderated", gamma = 0, d0 
     a0 <- as.numeric(Xs %*% MASS::ginv(crossprod(Xs)) %*% cvec); aa <- sum(a0^2); sv <- svd(Xr); Q0 <- sv$u[, sv$d > 1e-7 * max(sv$d), drop = FALSE]
     qs <- lapply(seq_len(ncol(P)), function(b) induced(P[, b])); gs <- mean(vapply(qs, function(q) { ab <- numeric(m); ab[q] <- a0; sum(crossprod(Q0, ab)^2) }, numeric(1)))
     mvs <- if (aa > 0 && aa - gs > 1e-8 * aa) (aa - gs) / aa else 1
-    Tm <- cbind(stat1(Xs, Y, cvec), sapply(seq_len(ncol(P)), function(b) { q <- qs[[b]]; stat1(Xs, F0 + E[, q, drop = FALSE], cvec, V[, q, drop = FALSE], mvs) }))
+    # scale per relabeling (default): the exchanged residuals are R0 x, so the relabeled contrast estimate is (R0 a_b)' x; its variance and the
+    # expectation of the residual sum of squares of the refit come from the noise model V, with the hat matrix H_b of the relabeled arrangement:
+    #   mv = sum_j (R0 a_b)_j^2 V_j;  E RSS = sum_j w_j V_j, w = diag(R0 (I - H_b) R0);  without the projection: u = diag(I - H_b), sum_j a_bj^2 V_j
+    # "relabeling": residual part times (V u / V w) (mv / V a_b^2); "observed": times (V w_0 / V w) (mv / mv_0), w_0 = diag(I - H)
+    # "independent" (default): as "relabeling", with the residual vector e = (I - H_b) R0 x of the relabeled fit replaced by its part that is
+    # independent of the relabeled contrast estimate beta, e - k beta / |R0 a_b|^2, k = (I - H_b) R0 a_b (= L R0 x, L = (I - H_b) - k a_b' / |R0 a_b|^2)
+    XtXi <- MASS::ginv(crossprod(Xs)); H <- Xs %*% XtXi %*% t(Xs); R0 <- diag(m) - H0; cxc <- as.numeric(t(cvec) %*% XtXi %*% cvec); df <- m - qr(Xs)$rank; w0 <- diag(diag(m) - H); mv0 <- as.numeric(V %*% a0^2)
+    statFL <- function(q) { ab <- numeric(m); ab[q] <- a0; Hb <- matrix(0, m, m); Hb[q, q] <- H; at <- as.numeric(R0 %*% ab); mv <- as.numeric(V %*% at^2)
+      w <- pmax(diag(R0 %*% (diag(m) - Hb) %*% R0), 0); u <- pmax(diag(diag(m) - Hb), 0); Yp <- F0 + E[, q, drop = FALSE]; beta <- as.numeric(Yp %*% a0); rss <- rowSums((Yp - Yp %*% H)^2)
+      if (fl.scale == "independent" && sum(at^2) > 1e-12 * aa) { att <- sum(at^2); k <- as.numeric((diag(m) - Hb) %*% at); Eb <- E - E %*% Hb; rss <- rowSums((Eb - outer(beta, k) / att)^2)
+        L <- (diag(m) - Hb) - outer(k, ab) / att; w <- pmax(diag(R0 %*% t(L) %*% L %*% R0), 0) }
+      rho <- if (fl.scale %in% c("relabeling", "independent")) as.numeric(V %*% u) / as.numeric(V %*% w) * mv / as.numeric(V %*% ab^2) else as.numeric(V %*% w0) / as.numeric(V %*% w) * mv / mv0
+      va <- if (mode == "moderated") (d0 * mv + cxc * rss * rho) / (d0 + df) else mv; z2 <- beta^2 / va; c(sum(sqrt(z2)), sum(z2), sum(z2^2), sum(z2^4), max(z2)) }
+    Tm <- cbind(stat1(Xs, Y, cvec), sapply(seq_len(ncol(P)), function(b) { q <- qs[[b]]; if (fl.scale == "average") stat1(Xs, F0 + E[, q, drop = FALSE], cvec, V[, q, drop = FALSE], mvs) else statFL(q) }))
   }
   adm <- rep(TRUE, ncol(Tm))
   if (!is.null(lev)) { idx <- cbind(pres, P[pres, , drop = FALSE]); adm <- apply(idx, 2, function(ii) sum(lev[ii] == 1) >= minl && sum(lev[ii] == 2) >= minl); Tm[, !adm] <- NA }
   if (!adm[1]) return(rep(NA_real_, ncol(Tm)))
   if (gamma > 0) return(Tm[match(gamma, c(1, 2, 4, 8, 99)), ])
-  f <- rep(-Inf, ncol(Tm)); okp <- c(FALSE, adm[-1])
+  f <- rep(-Inf, ncol(Tm)); okp <- c(sym, adm[-1])   # sym: the observed data set is included in the standardization, as the relabeled ones
   for (k in 1:5) { lt <- log(pmax(Tm[k, ], 1e-300)); mu <- mean(lt[okp]); s <- sd(lt[okp]); if (s > 0) f <- pmax(f, (lt - mu) / s) }
   f[!adm] <- NA; f
 }
 checkAgainstReference <- function(ty, model, scheme = "auto", n.units = 12, B = 29, ...) {
-  a <- list(...); cao <- ty$cao
+  a <- list(...); cao <- ty$cao; fl.scale <- a$fl.scale %||% "independent"; sym <- a$sym %||% TRUE; op <- options(cacoa.residual.scale = fl.scale, cacoa.gsd.symmetric = sym); on.exit(options(op))
   run <- function() clusterFreeExpressionShifts(ty$cm, cao$sample.per.cell, ty$units[seq_len(n.units)], model, model$meta, lib = ty$lib, noise.curves = ty$cv,
                                                 n.permutations = B, seed = 7, permutation = scheme, adjust = FALSE, smooth = FALSE, post = "none", return.perm = TRUE,
                                                 gsd.variance = a$variance %||% "moderated", gsd.gamma = a$gamma %||% 0, robust = if ((a$winsor.k %||% 0) > 0) "winsor" else "none", winsor.k = a$winsor.k %||% 3)
@@ -59,10 +72,10 @@ checkAgainstReference <- function(ty, model, scheme = "auto", n.units = 12, B = 
   spc <- factor(as.character(cao$sample.per.cell[colnames(ty$cm)]), levels = samples)
   prof <- cf_unit_profiles(ty$cm, as.integer(spc), lapply(ty$units[seq_len(n.units)], as.integer), as.numeric(ty$lib), n, 3L, pairs, opts)
   err <- sapply(seq_len(n.units), function(i) {
-    f <- refGsd(prof[[i]], des$F, cF, P, fl, as.integer(gplan$strata), mode = a$variance %||% "moderated", gamma = a$gamma %||% 0, winsor.k = a$winsor.k %||% 0, lev = lev)
+    f <- refGsd(prof[[i]], des$F, cF, P, fl, as.integer(gplan$strata), mode = a$variance %||% "moderated", gamma = a$gamma %||% 0, winsor.k = a$winsor.k %||% 0, lev = lev, fl.scale = fl.scale, sym = sym)
     if (!is.finite(f[1])) return(c(if (is.finite(k$stat[i])) Inf else 0, 0))
     c(abs(f[1] - k$stat[i]) / max(1, abs(f[1])), max(abs(f[-1] - k$stats.perm[, i]) / pmax(1, abs(f[-1])), na.rm = TRUE)) })
-  list(err = max(err), tested = sum(is.finite(k$stat)), scheme = gplan$scheme)
+  list(err = max(err), tested = sum(is.finite(k$stat)), scheme = gplan$scheme, stat = k$stat, perm = k$stats.perm)
 }
 
 test_that("gsd, two groups: observed and permuted unit statistics equal the R reference", {
@@ -72,6 +85,12 @@ test_that("gsd, two groups: observed and permuted unit statistics equal the R re
     expect_lt(r$err, 1e-10); expect_gt(r$tested, 5)
   }
   expect_lt(checkAgainstReference(ty, ty$cao$model, winsor.k = 1.5)$err, 1e-10)
+  # the standardization over the relabeled data sets only (the former behavior)
+  for (gamma in c(0, 99)) expect_lt(checkAgainstReference(ty, ty$cao$model, gamma = gamma, sym = FALSE)$err, 1e-10)
+  s1 <- checkAgainstReference(ty, ty$cao$model, B = 49); s0 <- checkAgainstReference(ty, ty$cao$model, B = 49, sym = FALSE)
+  expect_gt(max(abs(s1$stat - s0$stat), na.rm = TRUE), 1e-6)
+  # the rank of the observed value among the relabeled ones moves little (each gene combination's standardization is monotone; only the maximum over them can reorder)
+  rk <- function(x) colSums(sweep(x$perm, 2, x$stat, ">="), na.rm = TRUE); expect_lt(max(abs(rk(s1) - rk(s0))), 5)
 })
 
 test_that("gsd, general designs: continuous variable, covariates, Freedman-Lane", {
@@ -83,6 +102,39 @@ test_that("gsd, general designs: continuous variable, covariates, Freedman-Lane"
   r3 <- checkAgainstReference(ty, m.adj, scheme = "freedman-lane"); expect_equal(r3$scheme, "freedman-lane"); expect_lt(r3$err, 1e-10)
   expect_lt(checkAgainstReference(ty, m.cont, gamma = 99, variance = "model")$err, 1e-10)
   expect_lt(checkAgainstReference(ty, m.adj, scheme = "freedman-lane", winsor.k = 2)$err, 1e-10)
+})
+
+test_that("gsd under residual exchange: the scale of the relabeled statistics (independent residual part, per relabeling, to the observed arrangement, one average factor)", {
+  ty <- gsdToy(); meta <- ty$cao$sample.meta
+  m.adj <- buildCacoaModel(meta, formula = ~ group + age, test = "age"); m.fac <- buildCacoaModel(meta, formula = ~ group + age + batch, test = "group")
+  for (sc in c("independent", "relabeling", "observed", "average")) for (m in list(m.adj, m.fac)) {
+    expect_lt(checkAgainstReference(ty, m, scheme = "freedman-lane", fl.scale = sc)$err, 1e-10)
+    expect_lt(checkAgainstReference(ty, m, scheme = "freedman-lane", fl.scale = sc, gamma = 2, variance = if (sc == "observed") "moderated" else "model")$err, 1e-10)
+  }
+  # the observed statistic does not depend on the scale; the relabeled ones do when a continuous covariate is fitted
+  r <- lapply(c(independent = "independent", relabeling = "relabeling", observed = "observed", average = "average"), function(sc) checkAgainstReference(ty, m.fac, scheme = "freedman-lane", fl.scale = sc, gamma = 2, B = 99))
+  expect_equal(r$relabeling$stat, r$average$stat, tolerance = 1e-12); expect_equal(r$observed$stat, r$average$stat, tolerance = 1e-12); expect_equal(r$independent$stat, r$average$stat, tolerance = 1e-12)
+  expect_gt(max(abs(r$relabeling$perm / r$average$perm - 1), na.rm = TRUE), 1e-3); expect_gt(max(abs(r$independent$perm / r$relabeling$perm - 1), na.rm = TRUE), 1e-3)
+  # without the dependence the residual sum of squares no longer grows with the squared contrast: the relabeled statistics are larger
+  expect_gt(median(r$independent$perm / r$relabeling$perm, na.rm = TRUE), 1)
+  # the statistics of the relabeled data sets scatter less around their mean than with the average factor
+  cv <- function(x) median(apply(x$perm, 2, function(v) stats::sd(v) / mean(v)), na.rm = TRUE)
+  expect_lt(cv(r$relabeling), cv(r$average)); expect_lt(cv(r$observed), cv(r$average))
+  # a fitted factor alone, residuals exchanged within its levels: nothing is lost to the projection, the per-relabeling scale changes nothing
+  # (the test is the exchange of labels within the levels)
+  m.f0 <- buildCacoaModel(meta, formula = ~ group + batch, test = "group")
+  f0 <- lapply(c(independent = "independent", relabeling = "relabeling", average = "average"), function(sc) checkAgainstReference(ty, m.f0, scheme = "freedman-lane", fl.scale = sc, gamma = 2, B = 49))
+  expect_equal(f0$relabeling$perm, f0$average$perm, tolerance = 1e-10); expect_equal(f0$independent$perm, f0$average$perm, tolerance = 1e-10)
+  # residuals that leave the levels of a fitted factor (the former exchange among all samples): the average factor unless the scale is set
+  expect_equal(gsdResidualScale(), 3L); expect_equal(gsdResidualScale(crosses.levels = TRUE), 0L)
+  des <- m.f0; smp <- rownames(meta)
+  expect_false(permutationPlan(des, meta, smp, scheme = "freedman-lane")$crosses.levels)
+  expect_true(permutationPlan(des, meta, smp, scheme = "freedman-lane", residuals.within = FALSE)$crosses.levels)
+  expect_true(permutationPlan(m.adj, meta, smp, scheme = "freedman-lane", residuals.within = FALSE)$crosses.levels)    # group is fitted, age tested
+  expect_false(permutationPlan(buildCacoaModel(meta, formula = ~ group + age, test = "group"), meta, smp, scheme = "freedman-lane", residuals.within = FALSE)$crosses.levels)   # no fitted factor
+  op <- options(cacoa.residual.scale = "other"); on.exit(options(op))
+  expect_error(gsdResidualScale(TRUE), "cacoa.residual.scale")
+  expect_error(clusterFreeExpressionShifts(ty$cm, ty$cao$sample.per.cell, ty$units[1:3], m.adj, meta, lib = ty$lib, noise.curves = ty$cv, n.permutations = 9), "cacoa.residual.scale")
 })
 
 test_that("tested centres: each cell's statistic is the mean over the tested neighbourhoods containing it", {

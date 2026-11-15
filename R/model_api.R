@@ -464,13 +464,18 @@ designIssues <- function(tests, meta, formula, dropped = character(0)) {
     d <- t$design
     if (!is.null(d$Z) && ncol(d$Z) && !is.null(d$X)) {
       Xr <- qr.resid(qr(d$Z), as.matrix(d$X))
-      rel <- sqrt(colSums(Xr^2)) / (sqrt(colSums(as.matrix(d$X)^2)) + 1e-15)
+      # the share of the tested variable's variation that the other columns leave: measured around its mean when the model has an intercept
+      # (the uncentered size made a variable far from zero, such as an age, look collinear with the intercept alone)
+      X0 <- as.matrix(d$X); one <- rep(1, nrow(X0)); if (sum(qr.resid(qr(d$Z), one)^2) < 1e-10 * length(one)) X0 <- sweep(X0, 2, colMeans(X0))
+      rel <- sqrt(colSums(Xr^2)) / (sqrt(colSums(X0^2)) + 1e-15)
       if (any(rel < 1e-8)) {
         culprit <- aliasingCulprit(t, meta, formula)
         add("error", sprintf("'%s' is fully determined by %s: its effect cannot be separated from the adjustment", t$variable %||% t$label, culprit),
             "remove the aliased covariate or test it instead")
-      } else if (any(rel < 0.3)) add("warning", sprintf("'%s' is strongly collinear with the other covariates (only %.0f%% of its variation is independent)",
-                                                        t$variable %||% t$label, 100 * min(rel)), "check cao$checkDesign() for the association")
+      } else if (any(rel < 0.3)) add("warning", sprintf("'%s' is strongly collinear with the other covariates (only %.0f%% of its variance is independent of them)",
+                                                        t$variable %||% t$label, 100 * min(rel)^2), "check cao$checkDesign() for the association")
+      else if (any(rel < 0.5)) add("note", sprintf("'%s' is partly determined by the other covariates: %.0f%% of its variance is independent of them, and its effect is estimated from that part",
+                                                  t$variable %||% t$label, 100 * min(rel)^2), "check cao$checkDesign() for the association")
     }
     if (t$kind == "contrast" && !is.null(t$variable) && !is.na(t$variable) && !is.numeric(meta[[t$variable]])) {
       tb <- table(as.character(meta[[t$variable]]))[c(t$levels[["ref"]], t$levels[["alt"]])]

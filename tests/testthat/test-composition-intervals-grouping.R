@@ -126,3 +126,28 @@ test_that("distance model under the exchange of residuals: the Gower parts are t
   Pw <- vapply(1:20, function(b) { q <- seq_len(n); for (g in split(seq_len(n), s$meta$patient)) if (runif(1) < 0.5) q[g] <- rev(g); q }, integer(n))
   expect_equal(cacoa:::flKappa(a, Xr, Pw), 1)                                           # exchange within the fitted patients
 })
+
+test_that("samples dropped for a missing covariate, a continuous tested variable, and an exclusion that removes a level of the tested variable", {
+  cao <- makeToyCacoa(n.per.group = c(A = 6, B = 6), cells.per.sample = 40, n.cell.types = 4, seed = 7)
+  meta <- cao$sample.meta; meta$sex <- rep(c("f", "m"), length.out = nrow(meta)); meta$sex[c(2, 9)] <- NA; cao$sample.meta <- meta
+  # composition with samples dropped by the model: the counts follow the model's samples
+  cao$setModel(~ group + sex, test = "group", verbose = FALSE); expect_equal(length(cao$model$samples$dropped), 2)
+  r <- cao$estimateCellLoadings(verbose = FALSE); expect_equal(nrow(r$cnts), nrow(meta) - 2); expect_setequal(rownames(r$cnts), rownames(cao$model$meta))
+  # cell-type expression shifts and DE with the dropped samples
+  sh <- cao$estimateExpressionShiftMagnitudes(verbose = FALSE, influence = FALSE, n.permutations = 19); expect_true(all(sh$results$n <= nrow(meta) - 2, na.rm = TRUE))
+  # a continuous tested variable: the per-sample plot draws the samples against it
+  cao$setModel(~ age + group, test = "age", verbose = FALSE); r2 <- cao$estimateCellLoadings(name = "coda.age", verbose = FALSE)
+  expect_s3_class(cao$plotCodaSamples(name = "coda.age", n.top = 3), "ggplot")
+  # excluding every sample of one level: the stored model no longer applies and is removed with a message, not an error
+  cao$setModel(~ group, test = "group", verbose = FALSE)
+  expect_message(cao$excludeSamples(rownames(meta)[meta$group == "B"]), "does not apply")
+  expect_null(cao$model); expect_equal(nrow(cao$sample.meta), sum(meta$group == "A"))
+  cao$excludeSamples(NULL, verbose = FALSE); expect_equal(nrow(cao$sample.meta), nrow(meta))
+  # a column added while samples are excluded is kept by the next exclusion (values of the excluded samples unknown: NA)
+  cao$excludeSamples(rownames(meta)[1], verbose = FALSE)
+  m2 <- cao$sample.meta; m2$extra <- seq_len(nrow(m2)); m2$group <- factor(as.character(m2$group)); cao$sample.meta <- m2
+  cao$excludeSamples(rownames(meta)[2], verbose = FALSE)
+  expect_true("extra" %in% names(cao$sample.meta)); expect_equal(cao$sample.meta[rownames(meta)[1], "extra"], NA_integer_)
+  expect_equal(cao$sample.meta[rownames(meta)[3], "extra"], m2[rownames(meta)[3], "extra"])
+  cao$excludeSamples(NULL, verbose = FALSE); expect_equal(nrow(cao$sample.meta), nrow(meta)); expect_true(is.na(cao$sample.meta[rownames(meta)[1], "extra"]))
+})

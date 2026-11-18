@@ -152,3 +152,20 @@ test_that("sensitivity of a gsd result: distance-model magnitudes, significance 
   cur2 <- s2$table[s2$table$effect == "shift" & s2$table$model == "current", ]
   expect_equal(cur2$p, sh$p.distance[match(cur2$celltype, sh$celltype)])
 })
+
+test_that("cell-type gsd, all relabelings enumerated: the smallest attainable p is that of the relabelings used, also with missing samples", {
+  # 5 patients with a sample of each condition, 3 with one sample (partly paired); one cell type is missing from two samples
+  cao <- makeToyCacoa(n.per.group = c(A = 8, B = 8), cells.per.sample = 60, n.genes = 200, shift = 0.6, seed = 9)
+  meta <- cao$sample.meta; s <- rownames(meta); meta$patient <- NA
+  a <- s[meta$group == "A"]; b <- s[meta$group == "B"]; meta[a, "patient"] <- paste0("p", 1:8); meta[b[1:5], "patient"] <- paste0("p", 1:5); meta[b[6:8], "patient"] <- paste0("q", 1:3)
+  cao$sample.meta <- meta; cm <- Matrix::t(cao$data.object); lib <- Matrix::colSums(cm) * 2
+  spc <- cao$sample.per.cell; drop <- names(spc)[as.character(spc) %in% c(a[1], b[2]) & cao$cell.groups[names(spc)] == "ct2"]
+  keep <- setdiff(colnames(cm), drop); m <- buildCacoaModel(meta, ~ group + (1 | patient), test = "group")
+  r <- suppressWarnings(gsdShiftsPerCellType(cm[, keep], spc[keep], cao$cell.groups[keep], m, lib[keep], n.permutations = 2000, seed = 1, influence = FALSE, n.null = 0))
+  expect_true(all(r$results$p >= r$results$p.floor - 1e-12))
+  expect_true(all(r$results$n.perm.distinct >= 1))
+  # 2^5 pair flips x 20 arrangements of the 6 single samples = 640 relabelings; the remaining sample of a broken pair still takes the label
+  # of its absent partner under a flip, so the cell type missing two samples has 640 distinct arrangements too (its own plan has 560)
+  expect_equal(r$results$p.floor, rep(1 / 640, 2))
+  expect_equal(r$results$n.perm.distinct, rep(640, 2))
+})

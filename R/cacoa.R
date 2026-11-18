@@ -466,6 +466,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     excludeSamples = function(samples = NULL, verbose = NULL) {
       verbose <- private$opt("verbose", verbose)
       if (is.null(private$all.samples)) private$all.samples <- list(sample.per.cell = self$sample.per.cell, sample.meta = self$sample.meta)
+      else private$all.samples$sample.meta <- mergeSampleMeta(private$all.samples$sample.meta, self$sample.meta)   # columns added or changed meanwhile
       full <- private$all.samples; samples <- unique(as.character(samples))
       unknown <- setdiff(samples, rownames(full$sample.meta))
       if (length(unknown)) stop("not in the sample metadata: ", paste(unknown, collapse = ", "))
@@ -475,8 +476,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$sample.meta <- full$sample.meta[!rownames(full$sample.meta) %in% samples, , drop = FALSE]
       self$sample.ids <- rownames(self$sample.meta)
       self$excluded.samples <- if (length(samples)) samples else NULL
-      if (!is.null(self$model)) { m <- self$model
-        self$setModel(formula = if (isTRUE(m$formula.default)) NULL else (m$formula.full %||% m$formula), test = m$test.spec$test, contrast = m$test.spec$contrast, dispersion.formula = m$dispersion.formula, verbose = FALSE) }
+      if (!is.null(self$model)) { m <- self$model   # the stored model on the new sample set; when it no longer applies (e.g. a level of the tested variable is gone), it is removed
+        ok <- tryCatch({ self$setModel(formula = if (isTRUE(m$formula.default)) NULL else (m$formula.full %||% m$formula), test = m$test.spec$test, contrast = m$test.spec$contrast, dispersion.formula = m$dispersion.formula, verbose = FALSE); TRUE },
+                       error = function(e) { message("The model (", deparse(m$formula.full %||% m$formula), ", test '", paste(m$test.spec$test, collapse = ", "), "') does not apply to the remaining samples (", conditionMessage(e), "); it is removed: set a new one with setModel()."); FALSE })
+        if (!ok) self$model <- NULL }
       if (verbose) message(if (length(samples)) sprintf("Excluded from all analyses run from now on: %s (%d samples remain).", paste(samples, collapse = ", "), nrow(self$sample.meta)) else "All samples are included again.",
                            " Stored results were computed with the previous sample set: rerun the estimates you need.")
       invisible(self)
@@ -578,7 +581,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         sig.fun <- function(m) {
           g <- gsdShiftsPerCellType(inp$cm, self$sample.per.cell, cg, m, inp$lib, min.cells.per.sample = res$settings$min.cells.per.sample %||% 5,
                                     min.samp.per.level = gs$min.samp.per.level, neighbourhood.gene.frac = gs$neighbourhood.gene.frac,
-                                    permutation = gs$permutation, n.permutations = n.gsd, block.vars = gs$block.vars, seed = gs$seed,
+                                    permutation = gs$permutation, n.permutations = n.gsd, block.vars = m$block.vars, seed = gs$seed,
                                     robust = gs$robust %||% "none", winsor.k = gs$winsor.k %||% 3, gsd.d0 = gs$gsd.d0 %||% 3, influence = FALSE, n.null = 0,
                                     n.cores = n.cores, verbose = FALSE)
           g$results[, c("celltype", "p", "padj")]
@@ -2736,6 +2739,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # Build model
       sample.model <- private$resolveModel(formula = formula, test = test, contrast = contrast, block.vars = block.vars, verbose = verbose,
                                            what = "estimateCellLoadings()")
+      # the samples of the model (those dropped for missing covariate values have no row in the design)
+      used <- rownames(sample.model$meta); miss <- setdiff(used, rownames(cnts))
+      if (length(miss)) stop("estimateCellLoadings(): no cells for the model's sample(s) ", paste(miss, collapse = ", "), call. = FALSE)
+      cnts <- cnts[used, , drop = FALSE]; if (filter.empty.cell.types) cnts <- cnts[, colSums(cnts, na.rm = TRUE) > 0, drop = FALSE]
       # relabeling scheme of the model's test, as for the other analyses
       if (identical(perm.method, "auto")) perm.method <- sample.model$tests[[sample.model$primary %||% 1L]]$permutation$scheme %||% "block"
       perm.method <- match.arg(perm.method, c("freedman-lane", "block"))
@@ -3007,7 +3014,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       if (estimate.variation) {
         # groups defined by sign of weights
-        w <- sample.weights[colnames(res$density.mat)]
+        w <- sample.weights[intersect(colnames(res$density.mat), names(sample.weights))]   # the model's samples (those dropped for missing covariates have no weight)
         sg.ids <- list( num = names(w)[w >  0], den = names(w)[w <  0])
 
         res$density.mad <- res %$% lapply(sg.ids, function(ids) apply(density.mat[,ids,drop=FALSE], 1, mad)) %>%

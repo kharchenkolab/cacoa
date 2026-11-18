@@ -280,7 +280,9 @@ testTermEffects <- function(D.list, design, meta, dispersion.formula = NULL, dis
     }, character(1))
     results <- results[order(results$R2.adj, decreasing = TRUE), ]; rownames(results) <- NULL
   }
-  notes <- unique(unlist(c(gplan$notes, lapply(names(runs), function(ct) if (length(runs[[ct]]$plan$notes)) sprintf("%s: %s", ct, runs[[ct]]$plan$notes)))))
+  # notes of the cell types' own plans, one line per kind of note with the cell types that share it
+  ct.notes <- unlist(lapply(names(runs), function(ct) setNames(runs[[ct]]$plan$notes, rep(ct, length(runs[[ct]]$plan$notes)))))
+  notes <- unique(c(gplan$notes, groupNotes(ct.notes)))
   list(results = results, global = global, fits = fits, skipped = skipped, plan = gplan, notes = notes,
        perm.stats = if (return.perm.stats) lapply(runs, `[[`, "perm") else NULL,
        call.info = list(dist = dist, permutation = permutation, n.permutations = n.permutations, seed = seed,
@@ -436,12 +438,14 @@ print.cacoaExpressionShifts <- function(x, digits = 2, ...) {
     r0 <- d[d$effect %in% c("shift", "location"), ]
     if ("n.gsd" %in% names(d) && any(is.finite(r0$n.gsd))) {   # gsd run: samples of the test, and of the magnitudes (more cells per sample)
       tab$n.mag <- tab$n; tab$n <- r0$n.gsd[match(cts, r0$celltype)] }
+    # small effects (a numeric tested variable per unit, e.g. per year) keep significant digits instead of rounding to 0
+    rnd <- function(v) { m <- suppressWarnings(max(abs(v), na.rm = TRUE)); if (is.finite(m) && m > 0 && m < 0.1) signif(v, digits) else round(v, digits) }
     for (e in effs) {
       r <- d[d$effect == e, ]; i <- match(cts, r$celltype)
-      tab[[e]] <- round(r$estimate.norm[i], digits); tab[[paste0("padj.", e)]] <- signifBelow(r$padj[i], alpha)
+      tab[[e]] <- rnd(r$estimate.norm[i]); tab[[paste0("padj.", e)]] <- signifBelow(r$padj[i], alpha)
     }
     r1 <- d[d$effect == effs[1], ]; pa <- r1$padj[match(cts, r1$celltype)]   # counted unrounded
-    tab <- tab[order(-tab[[effs[1]]], na.last = TRUE), ]; rownames(tab) <- NULL
+    o <- order(-r1$estimate.norm[match(cts, r1$celltype)], na.last = TRUE); tab <- tab[o, ]; pa <- pa[o]; rownames(tab) <- NULL
     print(tab, row.names = FALSE)
     g <- x$global[x$global$test.id == t, ]
     cat(sprintf("  %d of %d cell types with a significant %s (BH %.0f%%); global p: %s\n", sum(!is.na(pa) & pa < alpha), nrow(tab), effs[1],
@@ -490,4 +494,20 @@ shiftSampleResiduals <- function(D.list, model, dist = "cor", test = 1) {
     md <- stats::median(v, na.rm = TRUE); if (is.finite(md) && md > 0) out[sm, ct] <- 0.5 * log2(pmax(v, md * 1e-3) / md)   # ratio of distances (square roots)
   }
   out
+}
+
+# Notes named by cell type, one line per kind of note: notes that differ only in their numbers are merged, the numbers given as ranges
+# ("B, NK (2 cell types): 7-30 of the 7-32 levels ...")
+groupNotes <- function(x) {
+  if (!length(x)) return(character(0))
+  tmpl <- gsub("[0-9]+(\\.[0-9]+)?", "%s", unname(x))
+  vapply(split(seq_along(x), factor(tmpl, levels = unique(tmpl))), function(ix) {
+    cts <- unique(names(x)[ix]); txt <- unname(x[ix])
+    if (length(ix) == 1) return(sprintf("%s: %s", cts, txt))
+    nums <- regmatches(txt, gregexpr("[0-9]+(\\.[0-9]+)?", txt))
+    k <- length(nums[[1]])
+    rng <- vapply(seq_len(k), function(j) { v <- as.numeric(vapply(nums, `[`, character(1), j)); if (min(v) == max(v)) format(min(v)) else sprintf("%s-%s", format(min(v)), format(max(v))) }, character(1))
+    body <- if (k) do.call(sprintf, c(list(gsub("%(?!s)", "%%", tmpl[ix[1]], perl = TRUE)), as.list(rng))) else txt[1]
+    sprintf("%s (%d cell types): %s", paste(cts, collapse = ", "), length(cts), body)
+  }, character(1), USE.NAMES = FALSE)
 }

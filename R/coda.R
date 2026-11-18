@@ -797,7 +797,7 @@ codaSampleDiagnostics <- function(res) {
 #' @export
 plotCodaSamples <- function(res, cell.types = NULL, n.top = 12, pair.by = NULL, influence.se = 1, resid.thresh = 3, palette = NULL, label.samples = TRUE,
                             ncol = NULL, plot.theme = ggplot2::theme_bw()) {
-  d <- codaSampleDiagnostics(res); meta <- res$model$meta; tv <- res$model$tested.variable
+  d <- codaSampleDiagnostics(res); meta <- res$model$meta; tv <- res$model$tested.variable %||% res$model$tests[[res$model$primary %||% 1L]]$variable   # (a numeric tested variable is recorded with its test only)
   if (is.null(tv) || !tv %in% names(meta)) stop("the tested variable is not a column of the model's sample metadata")
   pc <- res$contrast$per_cell; pval <- pc$pval; padj <- pc$padj
   if (is.null(cell.types)) cell.types <- names(sort(pval))[seq_len(min(n.top, length(pval)))]

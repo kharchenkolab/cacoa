@@ -157,3 +157,13 @@ test_that("test of the automatically chosen scale: calls of the observed and the
   expect_equal(cacoa:::autoScaleTest(c(0, 0, 0), n.perm, tested = 300)$p, 1)
   expect_equal(cacoa:::autoScaleTest(c(295, 299, 0), n.perm, tested = 300)$n, 295)
 })
+
+test_that("density map with samples dropped by the model for a missing covariate", {
+  cao <- makeToyCacoa(n.per.group = c(A = 5, B = 5), cells.per.sample = 30, n.genes = 40, seed = 3)
+  cg <- cao$cell.groups; cells <- names(cg); cao$data.object <- structure(list(graph = toyGraphB(cells, cg, per.cell = 6)), class = "Conos")
+  meta <- cao$sample.meta; meta$sex <- rep(c("f", "m"), length.out = nrow(meta)); meta$sex[c(1, 7)] <- NA; cao$sample.meta <- meta
+  cao$setModel(~ group + sex, test = "group", verbose = FALSE); expect_length(cao$model$samples$dropped, 2)
+  cao$estimateCellDensity(method = "graph", verbose = FALSE)
+  d <- cao$estimateDiffCellDensity(type = "permutation", n.permutations = 19, scale = NULL, verbose = FALSE)$diff$permutation
+  expect_true(any(is.finite(d$p.adj)))
+})

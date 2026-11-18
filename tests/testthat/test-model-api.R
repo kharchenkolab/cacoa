@@ -158,3 +158,11 @@ test_that("Cacoa constructor: optional model, setModel after exploration, legacy
   expect_equal(cao.old$ref.level, "ctrl")
   expect_true("condition" %in% names(cao.old$sample.meta))
 })
+
+test_that("factor levels without samples among the used ones do not enter the design", {
+  meta <- data.frame(g = factor(rep(c("a", "b"), each = 6)), e = factor(rep(c("x", "y"), 6), levels = c("w", "x", "y")), age = seq(20, 75, length.out = 12),
+                     row.names = paste0("s", 1:12))
+  m <- buildCacoaModel(meta, ~ g + age + e, test = "g")
+  expect_equal(qr(m$F)$rank, ncol(m$F))
+  expect_false(any(grepl("rank-deficient", m$issues$message)))
+})

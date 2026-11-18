@@ -164,10 +164,27 @@ gsdShiftsPerCellType <- function(cm, sample.per.cell, cell.groups, model, lib, m
     }
     null.mag <- list(total = matrix(NA_real_, ncol(P0) %||% 0, length(types), dimnames = list(NULL, types))); null.mag$std <- null.mag$total
     # distinct relabelings of each type's own samples (the floor of its p-value)
+    # when every relabeling was enumerated, the p-value of a cell type is a count among the global relabelings: under label relabeling a present
+    # sample takes the design row of the sample the global relabeling maps it to, which may be absent from the cell type (the kernel's rule,
+    # cluster_free_shift_kernel.cpp); under residual relabeling the relabeling is induced onto the present samples. The floor is the share of
+    # the relabelings that reproduce the observed arrangement, and n.perm.distinct the number of distinct arrangements among them (the cell
+    # type's own plan counts differently when samples are missing, e.g. a pair with one sample left)
+    if (ex) { des.g <- t$design; des.g$F <- Fd
+      gpl <- permutationPlan(des.g, meta[samples, , drop = FALSE], samples, scheme = permutation, block.vars = block.vars, n.permutations = B, max.enumerate = B)
+      Pg <- withSeed(seed, drawPermutations(gpl, B)) }
+    floors <- rep(NA_real_, length(types))
     n.dist <- vapply(seq_along(types), function(k) { pres <- prof[[k]]$present + 1L; if (!tested[k] || length(pres) < 2) return(NA_real_)
       dk <- t$design; dk$F <- Fd[pres, , drop = FALSE]
-      tryCatch(permutationPlan(dk, meta[samples[pres], , drop = FALSE], samples[pres], scheme = permutation, block.vars = block.vars, n.permutations = B, max.enumerate = 0)$n.distinct,
-               error = function(e) NA_real_) }, numeric(1))
+      sub.plan <- tryCatch(permutationPlan(dk, meta[samples[pres], , drop = FALSE], samples[pres], scheme = permutation, block.vars = block.vars, n.permutations = B, max.enumerate = 0), error = function(e) NULL)
+      if (is.null(sub.plan)) return(NA_real_)
+      if (!ex) return(sub.plan$n.distinct)
+      rows <- apply(Fd, 1, paste, collapse = "\r")
+      fl <- identical(gpl$scheme, "freedman-lane")   # residuals are moved: every distinct induced permutation counts
+      keys <- if (fl) apply(Pg, 2, function(p) paste(inducePermutation(p, sub = pres, sub.plan = sub.plan, plan = gpl), collapse = ","))
+              else apply(Pg, 2, function(p) paste(rows[p[pres]], collapse = "\n"))
+      obs <- if (fl) paste(seq_along(pres), collapse = ",") else paste(rows[pres], collapse = "\n")
+      floors[k] <<- sum(keys == obs) / length(keys)
+      length(unique(keys)) }, numeric(1))
     for (k in seq_along(types)) {
       pr <- prof[[k]]; pres <- pr$present + 1L
       if (!tested[k] || length(pres) < 3) next
@@ -203,7 +220,7 @@ gsdShiftsPerCellType <- function(cm, sample.per.cell, cell.groups, model, lib, m
                        se.jk = mag[, "se.total"], ci.low = mag[, "total"] - z * mag[, "se.total"], ci.high = mag[, "total"] + z * mag[, "se.total"],
                        statistic = stat, p = p, padj = padj, p.fwer = p.fwer, n = nsamp, n.ref = NA_integer_, n.alt = NA_integer_,
                        scheme = r$settings$permutation, n.perm = as.integer(r$settings$n.permutations), n.perm.distinct = round(pmin(n.dist, if (ex) Inf else B)),
-                       p.floor = ifelse(is.finite(n.dist) & n.dist <= B, 1 / n.dist, 1 / (B + 1)), flags = "", n.genes = ng, n.eff = mag[, "n.eff"], se.jk.norm = mag[, "se.std"], stringsAsFactors = FALSE)
+                       p.floor = ifelse(is.finite(floors), floors, ifelse(is.finite(n.dist) & n.dist <= B, 1 / n.dist, 1 / (B + 1))), flags = "", n.genes = ng, n.eff = mag[, "n.eff"], se.jk.norm = mag[, "se.std"], stringsAsFactors = FALSE)
     rows$flags <- ifelse(rows$p.floor > 0.05 / 10, "few-permutations", "")
     rows <- rows[tested, , drop = FALSE]; rownames(rows) <- NULL
     if (any(!tested)) skipped <- rbind(skipped, data.frame(test = t$label, celltype = types[!tested], reason = "too few samples with enough cells"))

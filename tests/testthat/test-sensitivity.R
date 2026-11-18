@@ -51,3 +51,19 @@ test_that("expression-shift sensitivity: jackknife intervals and leave-one-out r
   expect_true(all(is.finite(d0$loo.min[d0$model == "current"])))                                   # the stored influence of the current model
   expect_equal(d0$estimate[d0$model == "current"], d$estimate[d$model == "current"])
 })
+
+test_that("sensitivity models keep the grouping terms of the model, and drop each one on its own", {
+  cao <- makeToyCacoa(n.per.group = c(A = 8, B = 8), cells.per.sample = 40, n.genes = 60, n.cell.types = 3, shift = 1, seed = 4)
+  meta <- cao$sample.meta; meta$site <- rep(c("s1", "s2", "s3", "s4"), 4); meta$age <- seq(20, 80, length.out = 16); cao$sample.meta <- meta
+  cao$setModel(~ group + age + (1 | site), test = "group", verbose = FALSE)
+  f <- cacoa:::sensitivityFormulas(cao$model, NULL, cao$sample.meta)
+  expect_equal(names(f), c("unadjusted", "current", "minus (1 | site)"))   # "minus age" is the unadjusted model here
+  expect_equal(deparse(f[["unadjusted"]]), "~group + (1 | site)")
+  expect_equal(deparse(f[["minus (1 | site)"]]), "~group + age")
+  expect_equal(cacoa:::formulaKey(f[["current"]]), "age+group+|site")
+  # the models are built with the relabeling within sites, except the one without the grouping term
+  suppressMessages(cao$estimateCellLoadings(n.permutations = 29, verbose = FALSE))
+  s <- suppressMessages(cao$checkSensitivity(analysis = "composition", n.permutations = 29, jackknife = FALSE, verbose = FALSE))
+  expect_true(all(c("current", "minus (1 | site)") %in% levels(s$table$model)))
+  expect_equal(s$dropped, character(0))
+})

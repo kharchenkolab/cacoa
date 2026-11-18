@@ -2,31 +2,37 @@
 ## influence, summarized as a plain verdict per cell type.
 
 # Candidate model formulas for a test: unadjusted, current, minus each adjusting covariate, plus each of the
-# top-k screened covariates not in the model, all screened (if the df budget allows).
+# top-k screened covariates not in the model, all screened (if the df budget allows). The grouping terms `(1 | g)` of the model are kept
+# in every formula (they set how the samples are relabeled); each one is also dropped on its own ("minus (1 | g)").
+# key of a formula for spotting duplicates: its variables, the grouping variables marked as such
+formulaKey <- function(f) { sp <- splitGroupingTerms(f); paste(c(sort(all.vars(sp$formula)), sort(paste0("|", sp$groups))), collapse = "+") }
+
 sensitivityFormulas <- function(model, screen = NULL, meta, top.k = 3, min.resid.df = 5) {
   t <- model$tests[[1]]; tv <- t$variable
-  adj <- setdiff(all.vars(model$formula), tv)
+  adj <- setdiff(all.vars(model$formula), tv); grp <- model$random.vars %||% character(0)
   n <- length(model$samples$used)
+  fml <- function(vars, g = grp) stats::as.formula(paste("~", paste(c(vars, if (length(g)) sprintf("(1 | %s)", g)), collapse = " + ")))
   out <- list()
-  out[["unadjusted"]] <- stats::as.formula(paste("~", tv))
-  out[["current"]] <- model$formula
-  for (v in adj) out[[paste("minus", v)]] <- stats::as.formula(paste("~", paste(c(tv, setdiff(adj, v)), collapse = " + ")))
+  out[["unadjusted"]] <- fml(tv)
+  out[["current"]] <- model$formula.full %||% model$formula
+  for (v in adj) out[[paste("minus", v)]] <- fml(c(tv, setdiff(adj, v)))
+  for (g in grp) out[[sprintf("minus (1 | %s)", g)]] <- fml(c(tv, adj), setdiff(grp, g))
   if (!is.null(screen)) {
     sm <- if ("partial" %in% screen$modes) "partial" else screen$modes[1]
     g <- screen$global[screen$global$mode == sm, ]
-    g <- g[!g$covariate %in% c(tv, adj) & is.finite(g$p.global), ]
+    g <- g[!g$covariate %in% c(tv, adj, grp) & is.finite(g$p.global), ]
     g <- g[order(-g$n.sig, g$p.global), ]
     cand <- g$covariate[g$n.sig > 0]
     assoc <- vapply(cand, function(v) { a <- tryCatch(covariateAssociation(meta[[tv]], meta[[all.vars(str2lang(v))[1]]]), error = function(e) NA_real_); if (is.na(a)) 0 else a }, numeric(1))
     cand <- utils::head(cand[assoc < 0.95], top.k)       # a covariate aliased with the test variable cannot be adjusted for
-    for (v in cand) out[[paste("plus", v)]] <- stats::as.formula(paste("~", paste(c(tv, adj, v), collapse = " + ")))
+    for (v in cand) out[[paste("plus", v)]] <- fml(c(tv, adj, v))
     if (length(cand) > 1) {
-      f.all <- stats::as.formula(paste("~", paste(c(tv, adj, cand), collapse = " + ")))
-      q <- tryCatch(qr(buildFullDesign(f.all, meta))$rank, error = function(e) Inf)
+      f.all <- fml(c(tv, adj, cand))
+      q <- tryCatch(qr(buildFullDesign(stats::as.formula(paste("~", paste(c(tv, adj, cand), collapse = " + "))), meta))$rank, error = function(e) Inf)
       if (n - q >= min.resid.df) out[["all screened"]] <- f.all
     }
   }
-  keys <- vapply(out, function(f) paste(sort(all.vars(f)), collapse = "+"), character(1))
+  keys <- vapply(out, formulaKey, character(1))
   out <- out[setdiff(names(out), names(out)[names(out) != "current" & keys == keys[["current"]]])]   # "current" wins over duplicates
   keys <- keys[names(out)]
   out[!duplicated(keys)]
@@ -68,18 +74,18 @@ checkSensitivity <- function(D.list, model, meta, formulas = NULL, screen = NULL
   if (t$kind != "contrast") stop("sensitivity analysis is defined for contrast tests (two groups or a numeric step)")
   if (is.null(formulas)) formulas <- sensitivityFormulas(model, screen, meta, top.k = top.k)
   if (!"current" %in% names(formulas)) {            # the stored model is "current" whatever the caller named it
-    key <- function(f) paste(sort(all.vars(f)), collapse = "+")
-    same <- which(vapply(formulas, key, character(1)) == key(model$formula))
-    if (length(same)) names(formulas)[same[1]] <- "current" else formulas <- c(list(current = model$formula), formulas)
+    cur <- model$formula.full %||% model$formula
+    same <- which(vapply(formulas, formulaKey, character(1)) == formulaKey(cur))
+    if (length(same)) names(formulas)[same[1]] <- "current" else formulas <- c(list(current = cur), formulas)
   }
   spec <- model$test.spec %||% list(test = NULL, contrast = t$contrast)
   runs <- lapply(names(formulas), function(nm) {
     m <- tryCatch(buildCacoaModel(meta, formula = formulas[[nm]], test = spec$test, contrast = spec$contrast, dispersion.formula = model$dispersion.formula,
-                                  block.vars = model$block.vars, numeric.ref = model$numeric.ref, numeric.step = model$numeric.step,
+                                  block.vars = setdiff(model$block.vars, model$random.vars), numeric.ref = model$numeric.ref, numeric.step = model$numeric.step,
                                   permutation = permutation, n.permutations = n.permutations), error = function(e) NULL)
     if (is.null(m) || any(m$issues$severity == "error")) return(NULL)
     m$tests <- m$tests[1]
-    r <- expressionShiftsForModel(D.list, m, dist = dist, permutation = permutation, n.permutations = n.permutations, block.vars = model$block.vars,
+    r <- expressionShiftsForModel(D.list, m, dist = dist, permutation = permutation, n.permutations = n.permutations, block.vars = m$block.vars,
                                   influence = jackknife || (nm == "current" && is.null(influence)), min.samp.per.level = min.samp.per.level, seed = seed, alpha = alpha,
                                   n.cores = n.cores, robust = robust, na.mode = na.mode, robust.k = robust.k)
     if (!nrow(r$results)) return(NULL)
@@ -223,15 +229,15 @@ checkCompositionSensitivity <- function(cnts, model, meta, formulas = NULL, scre
   if (t$kind != "contrast") stop("sensitivity analysis is defined for contrast tests (two groups or a numeric step)")
   if (is.null(formulas)) formulas <- sensitivityFormulas(model, screen, meta, top.k = top.k)
   if (!"current" %in% names(formulas)) {
-    key <- function(f) paste(sort(all.vars(f)), collapse = "+")
-    same <- which(vapply(formulas, key, character(1)) == key(model$formula))
-    if (length(same)) names(formulas)[same[1]] <- "current" else formulas <- c(list(current = model$formula), formulas)
+    cur <- model$formula.full %||% model$formula
+    same <- which(vapply(formulas, formulaKey, character(1)) == formulaKey(cur))
+    if (length(same)) names(formulas)[same[1]] <- "current" else formulas <- c(list(current = cur), formulas)
   }
   spec <- model$test.spec %||% list(test = NULL, contrast = t$contrast)
   cnts <- as.matrix(cnts); dots <- list(...)
   runs <- lapply(names(formulas), function(nm) {
     m <- tryCatch(buildCacoaModel(meta, formula = formulas[[nm]], test = spec$test, contrast = spec$contrast, dispersion.formula = model$dispersion.formula,
-                                  block.vars = model$block.vars, numeric.ref = model$numeric.ref, numeric.step = model$numeric.step,
+                                  block.vars = setdiff(model$block.vars, model$random.vars), numeric.ref = model$numeric.ref, numeric.step = model$numeric.step,
                                   permutation = model$permutation %||% "auto", n.permutations = n.permutations), error = function(e) NULL)
     if (is.null(m) || any(m$issues$severity == "error")) return(NULL)
     m$tests <- m$tests[1]

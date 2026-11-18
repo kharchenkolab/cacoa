@@ -372,7 +372,7 @@ buildCacoaModel <- function(meta, formula = NULL, test = NULL, contrast = NULL, 
   used.vars <- intersect(used.vars, names(meta))
   complete <- stats::complete.cases(meta[, used.vars, drop = FALSE])
   dropped <- rownames(meta)[!complete]
-  meta.used <- meta[complete, , drop = FALSE]
+  meta.used <- droplevels(meta[complete, , drop = FALSE])   # levels without samples (e.g. after excludeSamples()) would give empty design columns
   if (is.null(dispersion.formula)) {
     dvars <- intersect(test.vars, names(meta))
     dispersion.formula <- if (length(dvars)) stats::as.formula(paste("~", paste(dvars, collapse = " + "))) else ~ 1
@@ -673,4 +673,21 @@ groupingBetweenMessage <- function(model, what = "this analysis", model.based = 
   if (!is.null(nd) && (!is.finite(nd) || nd > 1)) return(NULL)
   sprintf("the tested variable '%s' takes one value within every level of '%s' (several samples per %s): the samples of a level are not independent observations, so whole levels of '%s' have to be exchanged, and no two levels with the same make-up (number of samples, values of the discrete covariates) hold different values. %s has no valid test for this design. Combine the samples of each level into one sample; the composition can also be tested with a random baseline per level, estimateCellLoadings(random.baseline = TRUE).",
           btw$tested[1], btw$group[1], btw$group[1], btw$group[1], sub("^(.)", "\\U\\1", what, perl = TRUE))
+}
+
+# The full sample metadata kept by excludeSamples(), updated with the columns of the current (reduced) metadata: a column added or
+# changed while samples were excluded takes the current values for the samples in it (NA for the others when the column is new);
+# a column removed from the current metadata is removed.
+mergeSampleMeta <- function(full, cur) {
+  idx <- match(rownames(cur), rownames(full)); ok <- !is.na(idx)
+  for (col in names(cur)) {
+    y <- cur[[col]][ok]
+    if (!col %in% names(full)) { x <- y[match(rownames(full), rownames(cur)[ok])]; full[[col]] <- x; next }
+    x <- full[[col]]
+    if (is.factor(x) || is.factor(y)) {
+      lv <- unique(c(levels(factor(x)), levels(factor(y)))); x <- factor(as.character(x), levels = lv); x[idx[ok]] <- as.character(y)
+    } else { if (!(is.numeric(x) && is.numeric(y)) && !identical(class(x), class(y))) x <- methods::as(x, class(y)[1]); x[idx[ok]] <- y }
+    full[[col]] <- x
+  }
+  full[, names(cur), drop = FALSE]
 }

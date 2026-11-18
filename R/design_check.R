@@ -68,6 +68,31 @@ gvifPerTerm <- function(formula, meta) {
   out
 }
 
+# ---- overlap of a continuous covariate between the levels of the tested variable ----------------------
+
+# Samples of one level of the tested variable whose covariate value lies outside the range of the other levels. Adjusting for the
+# covariate then compares them with the other levels through a fitted (linear) trend beyond the values observed there.
+# x: continuous covariate; g: levels of the tested variable (two or more). Returns a list(severity, message, suggestion) or NULL.
+# Reported when at least 10 % (and 2) of one level's samples lie outside; a warning from 25 %.
+rangeOverlapIssue <- function(x, g, v, tv, note.share = 0.1, warn.share = 0.25) {
+  ok <- !is.na(x) & !is.na(g); x <- x[ok]; g <- as.character(g[ok]); lv <- unique(g)
+  if (length(lv) < 2 || length(unique(x)) < 3) return(NULL)
+  worst <- NULL
+  for (k in lv) {
+    xi <- x[g == k]; xo <- x[g != k]; if (length(xi) < 2 || length(xo) < 2) next
+    lo <- sum(xi < min(xo)); hi <- sum(xi > max(xo)); out <- lo + hi
+    if (out >= 2 && out / length(xi) >= note.share && (is.null(worst) || out / length(xi) > worst$share))
+      worst <- list(share = out / length(xi), level = k, out = out, n = length(xi), lo = lo, hi = hi, range = range(xo))
+  }
+  if (is.null(worst)) return(NULL)
+  side <- if (worst$lo && worst$hi) "outside" else if (worst$lo) "below" else "above"
+  others <- if (length(lv) == 2) sprintf("'%s'", setdiff(lv, worst$level)) else "the other levels"
+  list(severity = if (worst$share >= warn.share) "warning" else "note",
+       message = sprintf("%d of %d '%s' samples have '%s' %s the range of %s (%s-%s): adjusted for '%s', the %s effect there rests on a fitted trend of '%s' beyond the values observed in %s",
+                         worst$out, worst$n, worst$level, v, side, others, format(signif(worst$range[1], 3)), format(signif(worst$range[2], 3)), v, tv, v, others),
+       suggestion = sprintf("compare with the samples in the common range of '%s' (cao$excludeSamples())", v))
+}
+
 # ---- the check -----------------------------------------------------------------------------------
 
 #' Check a study design from the sample metadata alone
@@ -131,6 +156,7 @@ checkDesign <- function(meta, model = NULL, test.variable = NULL, covariates = N
         }
       } else if (isDiscreteVar(tv)) {
         balance[[v]] <- do.call(rbind, lapply(split(x, tv), function(z) data.frame(n = sum(!is.na(z)), mean = mean(z, na.rm = TRUE), sd = stats::sd(z, na.rm = TRUE))))
+        ro <- rangeOverlapIssue(x, tv, v, test.variable); if (!is.null(ro)) add(ro$severity, ro$message, ro$suggestion)
       }
       a <- A[test.variable, v]
       if (is.finite(a) && a > overadjust.flag)

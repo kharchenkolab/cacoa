@@ -477,6 +477,9 @@ designIssues <- function(tests, meta, formula, dropped = character(0)) {
       else if (any(rel < 0.5)) add("note", sprintf("'%s' is partly determined by the other covariates: %.0f%% of its variance is independent of them, and its effect is estimated from that part",
                                                   t$variable %||% t$label, 100 * min(rel)^2), "check cao$checkDesign() for the association")
     }
+    if (!is.null(t$variable) && !is.na(t$variable) && t$variable %in% names(meta) && !is.numeric(meta[[t$variable]]))   # continuous covariates outside the range of a level
+      for (v in setdiff(all.vars(formula), t$variable)) if (v %in% names(meta) && is.numeric(meta[[v]]) && !isDiscreteVar(meta[[v]])) {
+        ro <- rangeOverlapIssue(meta[[v]], meta[[t$variable]], v, t$variable); if (!is.null(ro)) add(ro$severity, sprintf("test '%s': %s", t$label, ro$message), ro$suggestion) }
     if (t$kind == "contrast" && !is.null(t$variable) && !is.na(t$variable) && !is.numeric(meta[[t$variable]])) {
       tb <- table(as.character(meta[[t$variable]]))[c(t$levels[["ref"]], t$levels[["alt"]])]
       tb <- tb[!is.na(tb)]

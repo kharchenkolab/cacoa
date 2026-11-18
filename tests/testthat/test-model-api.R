@@ -166,3 +166,19 @@ test_that("factor levels without samples among the used ones do not enter the de
   expect_equal(qr(m$F)$rank, ncol(m$F))
   expect_false(any(grepl("rank-deficient", m$issues$message)))
 })
+
+test_that("a continuous covariate outside the range of the other level is reported by the design check and the model report", {
+  set.seed(1); n <- 20
+  meta <- data.frame(g = factor(rep(c("ctrl", "case"), each = n), levels = c("ctrl", "case")), age = c(seq(17, 71, length.out = n), seq(43, 74, length.out = n)),
+                     row.names = paste0("s", 1:(2 * n)))
+  chk <- checkDesign(meta, test.variable = "g")
+  hit <- chk$issues[grepl("range of 'case'", chk$issues$message), ]
+  expect_equal(nrow(hit), 1); expect_equal(as.character(hit$severity), "warning")
+  expect_match(hit$message, "^\\d+ of 20 'ctrl' samples have 'age' below the range of 'case' \\(43-74\\)")
+  m <- buildCacoaModel(meta, ~ g + age, test = "g")
+  expect_true(any(grepl("below the range of 'case'", m$issues$message)))
+  # overlapping ranges: nothing reported; the covariate not in the model: nothing in the model report
+  meta2 <- meta; meta2$age <- rep(seq(20, 70, length.out = n), 2)
+  expect_false(any(grepl("range of", checkDesign(meta2, test.variable = "g")$issues$message)))
+  expect_false(any(grepl("range of", buildCacoaModel(meta, ~ g, test = "g")$issues$message)))
+})

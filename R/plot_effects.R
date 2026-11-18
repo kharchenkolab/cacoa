@@ -52,7 +52,7 @@ plotEffectsPerCellType <- function(df, normalized = TRUE, type = c("dot", "bar")
   } else {
     if (show.ci) gg <- gg + ggplot2::geom_errorbar(ggplot2::aes(xmin = .data$lo, xmax = .data$hi, colour = .data$celltype), width = 0.3, na.rm = TRUE)
     gg <- gg + ggplot2::geom_point(ggplot2::aes(colour = .data$celltype, fill = .data$celltype, shape = .data$significant), size = 2.6, stroke = 0.8) +
-      ggplot2::scale_shape_manual(values = c(`FALSE` = 21, `TRUE` = 19), guide = "none", labels = c("not significant", "significant"))
+      ggplot2::scale_shape_manual(values = c(`FALSE` = 21, `TRUE` = 19), guide = "none", labels = c(`FALSE` = "not significant", `TRUE` = "significant"))
     gg <- gg + ggplot2::geom_point(data = df[!df$significant, ], ggplot2::aes(colour = .data$celltype), shape = 21, fill = "white", size = 2.6, stroke = 0.8)
   }
   if (!is.null(palette)) {

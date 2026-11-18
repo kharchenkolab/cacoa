@@ -145,6 +145,9 @@ test_that("sensitivity of a gsd result: distance-model magnitudes, significance 
   gg <- cao$plotSensitivity()
   expect_match(gg$labels$subtitle, "position: distance-model magnitude"); expect_match(gg$labels$subtitle, "filled: gsd adjusted p")
   expect_true(all(grepl("\n(significant in|not significant)", levels(gg$data$panel))))   # celltype, magnitude, significance: one line each
+  # the legend names both keys by their meaning, also when only one of them occurs
+  expect_equal(levels(gg$data$sig), c("FALSE", "TRUE"))
+  sc <- gg$scales$get_scales("shape"); expect_equal(unname(sc$labels[sc$breaks]), c("not significant", "significant"))
   # the distance model's own test on request (no gsd refits)
   s2 <- suppressWarnings(cao$checkSensitivity(covariate.sets = list(`plus nuisance` = ~ group + nuisance), n.permutations = 49,
                                               significance = "distance", verbose = FALSE, name = "s2"))
@@ -168,4 +171,13 @@ test_that("cell-type gsd, all relabelings enumerated: the smallest attainable p 
   # of its absent partner under a flip, so the cell type missing two samples has 640 distinct arrangements too (its own plan has 560)
   expect_equal(r$results$p.floor, rep(1 / 640, 2))
   expect_equal(r$results$n.perm.distinct, rep(640, 2))
+})
+
+test_that("the detail plot of a shift with a continuous tested variable draws the dispersion against it", {
+  cao <- makeToyCacoa(n.per.group = c(A = 6, B = 6), cells.per.sample = 40, n.genes = 80, shift = 0.4, seed = 5)
+  cao$setModel(~ age, test = "age", numeric.step = 10, verbose = FALSE)
+  suppressMessages(cao$estimateExpressionShiftMagnitudes(n.permutations = 19, verbose = FALSE))
+  pp <- cacoa:::plotShiftDetailPanels(cao$test.results$expression.shifts$fits[[1]][["ct1"]], groups = cao$getSampleGroups(), group.title = "age")
+  expect_s3_class(pp, "ggplot")
+  expect_s3_class(cao$plotShiftDetail("ct1"), "ggplot")
 })

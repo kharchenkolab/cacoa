@@ -25,17 +25,18 @@ pairDistanceTable <- function(D2, groups) {
 #' @return cowplot grid
 #' @export
 plotShiftDetailPanels <- function(eff, adjusted = NULL, groups = NULL, dist = "cor", title = NULL, palette = NULL, plot.theme = ggplot2::theme_bw(),
-                                  label.samples = FALSE, effects = NULL) {
+                                  label.samples = FALSE, effects = NULL, group.title = NULL) {
   if (is.null(adjusted)) adjusted <- adjustedDistanceMatrix(eff$G, nuisanceColumns(eff, NULL), dist)
   D2 <- if (dist == "l2") adjusted^2 else adjusted
   samples <- rownames(D2)
   grp <- if (!is.null(groups)) groups[samples] else NULL
   is.two <- !is.null(grp) && is.factor(grp) && nlevels(grp) == 2
+  is.num <- !is.null(grp) && is.numeric(grp)   # a continuous tested variable (e.g. age): colours and the dispersion panel along it
   # (a) MDS of adjusted distances
   mds <- stats::cmdscale(sqrt(pmax(D2, 0)), k = 2)
   df <- data.frame(x = mds[, 1], y = mds[, 2], sample = samples, group = if (is.null(grp)) "all" else grp, stringsAsFactors = FALSE)
   gg.a <- ggplot2::ggplot(df, ggplot2::aes(x = .data$x, y = .data$y, colour = .data$group)) + ggplot2::geom_point(size = 3) +
-    plot.theme + ggplot2::labs(x = "MDS 1", y = "MDS 2", title = "adjusted sample distances", colour = NULL) +
+    plot.theme + ggplot2::labs(x = "MDS 1", y = "MDS 2", title = "adjusted sample distances", colour = if (is.num) group.title else NULL) +
     ggplot2::theme(legend.position = "bottom")
   if (label.samples) gg.a <- gg.a + ggrepel::geom_text_repel(ggplot2::aes(label = .data$sample), size = 2.5, show.legend = FALSE, max.overlaps = Inf)
   if (!is.null(palette) && is.two && all(levels(grp) %in% names(palette))) gg.a <- gg.a + ggplot2::scale_colour_manual(values = palette)
@@ -57,11 +58,14 @@ plotShiftDetailPanels <- function(eff, adjusted = NULL, groups = NULL, dist = "c
   }
   # (c) per-sample dispersion by group
   if (!is.null(eff$v)) {
-    dv <- data.frame(sample = names(eff$v), v = eff$v, group = if (is.null(grp)) "all" else factor(as.character(grp[names(eff$v)]), levels = levels(grp)), stringsAsFactors = FALSE)
+    dv <- data.frame(sample = names(eff$v), v = eff$v, group = if (is.null(grp)) "all" else if (is.num) as.numeric(grp[names(eff$v)]) else factor(as.character(grp[names(eff$v)]), levels = levels(grp)), stringsAsFactors = FALSE)
     dv <- dv[is.finite(dv$v), ]
     med <- stats::median(dv$v); madv <- stats::mad(dv$v)
     dv$label <- ifelse(abs(dv$v - med) > 3 * madv & madv > 0, dv$sample, "")
-    gg.c <- ggplot2::ggplot(dv, ggplot2::aes(x = .data$group, y = .data$v, colour = .data$group)) + ggplot2::geom_boxplot(outlier.shape = NA, colour = "grey50") +
+    gg.c <- if (is.num) ggplot2::ggplot(dv[is.finite(dv$group), ], ggplot2::aes(x = .data$group, y = .data$v)) + ggplot2::geom_point(size = 2, colour = "grey30") +
+      ggplot2::geom_smooth(method = "lm", formula = y ~ x, se = TRUE, colour = "#d73027", linewidth = 0.8) +
+      ggrepel::geom_text_repel(ggplot2::aes(label = .data$label), size = 2.5, show.legend = FALSE) +
+      plot.theme + ggplot2::labs(x = group.title, y = "per-sample dispersion", title = "dispersion (leverage-corrected)") else ggplot2::ggplot(dv, ggplot2::aes(x = .data$group, y = .data$v, colour = .data$group)) + ggplot2::geom_boxplot(outlier.shape = NA, colour = "grey50") +
       ggplot2::geom_jitter(width = 0.15, size = 2) + ggrepel::geom_text_repel(ggplot2::aes(label = .data$label), size = 2.5, show.legend = FALSE) +
       plot.theme + ggplot2::guides(colour = "none") + ggplot2::labs(x = NULL, y = "per-sample dispersion", title = "dispersion (leverage-corrected)")
     if (!is.null(palette) && is.two && all(levels(grp) %in% names(palette))) gg.c <- gg.c + ggplot2::scale_colour_manual(values = palette)

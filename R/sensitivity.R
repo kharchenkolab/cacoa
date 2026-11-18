@@ -355,7 +355,7 @@ plotSensitivity <- function(x, effect = NULL, cell.types = NULL, normalized = TR
   has.loo <- all(c("loo.min", "loo.max") %in% names(d)) && any(is.finite(d$loo.min))
   if (has.loo) { d$loo.lo <- d$loo.min * abs(sc); d$loo.hi <- d$loo.max * abs(sc) }   # the leave-one-out range, on the plotted scale
   if (interval == "none") { d$lo <- d$hi <- NA_real_; has.loo <- FALSE }
-  d$sig <- !is.na(d$padj) & d$padj < x$settings$alpha
+  d$sig <- factor(!is.na(d$padj) & d$padj < x$settings$alpha, levels = c(FALSE, TRUE))   # both levels, so that the legend shows both keys
   d$current <- d$model == "current"
   d$model <- factor(d$model, levels = rev(levels(x$table$model)))
   ord <- x$summary$celltype[order(x$summary$verdict != "robust", -abs(x$summary$estimate.current))]
@@ -377,7 +377,7 @@ plotSensitivity <- function(x, effect = NULL, cell.types = NULL, normalized = TR
     { if (has.loo) ggplot2::geom_linerange(ggplot2::aes(xmin = .data$loo.lo, xmax = .data$loo.hi), colour = "grey78", linewidth = 2.4, na.rm = TRUE) } +   # the leave-one-out range, a light band inside the jackknife interval
     ggplot2::geom_errorbar(ggplot2::aes(xmin = .data$lo, xmax = .data$hi), width = 0.25, colour = "grey40", na.rm = TRUE) +
     ggplot2::geom_point(ggplot2::aes(shape = .data$sig, colour = .data$current), size = 2.6, fill = "white", stroke = 0.9) +
-    ggplot2::scale_shape_manual(values = c(`FALSE` = 21, `TRUE` = 19), labels = c("not significant", "significant"), name = NULL) +
+    ggplot2::scale_shape_manual(values = c(`FALSE` = 21, `TRUE` = 19), breaks = c("FALSE", "TRUE"), labels = c(`FALSE` = "not significant", `TRUE` = "significant"), drop = FALSE, name = NULL) +   # both keys, by name (positional labels mislabeled a single level)
     ggplot2::scale_colour_manual(values = c(`FALSE` = "grey20", `TRUE` = "#d73027"), labels = c(`FALSE` = "alternative model", `TRUE` = "current model"), name = NULL) +
     ggplot2::guides(colour = ggplot2::guide_legend(override.aes = list(shape = 19)), shape = ggplot2::guide_legend(order = 1)) +
     ggplot2::facet_wrap(~ panel, scales = "free_x") + ggplot2::scale_x_continuous(n.breaks = 3) + plot.theme +

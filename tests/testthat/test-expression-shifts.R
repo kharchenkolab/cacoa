@@ -95,6 +95,11 @@ test_that("sample distance accessor and plots work on the new results", {
   expect_equal(dim(Da), c(10, 10)); expect_true(all(Da >= -1e-10))
   expect_s3_class(cao$plotSampleDistances(space = "expression.shifts", values = "unadjusted", color.by = "group"), "ggplot")
   expect_true(inherits(cao$plotSampleDistances(space = "expression.shifts", values = "both", color.by = "group"), "ggplot"))
+  # samples left out with excludeSamples() are not drawn
+  cao$excludeSamples(rownames(cao$sample.meta)[1:2], verbose = FALSE)
+  gx <- cao$plotSampleDistances(space = "expression.shifts", values = "unadjusted", color.by = "group")
+  expect_equal(nrow(gx$data), 8); expect_false(anyNA(gx$data[[intersect(c("label", "group", "Group"), names(gx$data))[1] %||% 1]]))
+  cao$excludeSamples(NULL, verbose = FALSE)
   sep <- cao$estimateMetadataSeparation(cao$sample.meta[, c("group", "batch")], n.permutations = 99, show.warning = FALSE, verbose = FALSE)
   expect_setequal(names(sep$pvalues), c("group", "batch"))
 })

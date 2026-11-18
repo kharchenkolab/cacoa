@@ -784,7 +784,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         c(shift = w$shift.norm, var = w$var.norm, total = w$total.norm) else NULL
       plotShiftDetailPanels(eff, adjusted = res$adjusted.distances[[tn]][[cell.type]], groups = groups, dist = res$settings$dist,
                             title = sprintf("%s: %s", cell.type, tn), palette = self$sample.groups.palette, plot.theme = self$plot.theme,
-                            label.samples = label.samples, effects = effects)
+                            label.samples = label.samples, effects = effects,
+                            group.title = Filter(function(t) identical(t$label, tn), res$model$tests)[1][[1]]$variable %||% tn)
     },
 
     #' @description Expression shift magnitudes per cell type
@@ -3959,6 +3960,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         D <- self$getSampleDistanceMatrix(space = space, cell.type = cell.type, joint.weighting = joint.weighting, dist = dist, name = name,
                                           sample.subset = sample.subset, values = vals, adjust.for = adjust.for)
         if (is.null(D)) return(NULL)
+        # samples without metadata (left out with excludeSamples(), or not in a given sample.meta) are not shown
+        keep <- intersect(rownames(D), rownames(sample.meta)); if (length(keep) < 3) return(NULL)
+        if (length(keep) < nrow(D)) D <- D[keep, keep, drop = FALSE]
         lab <- function(v) if (is.null(v)) NULL else setNames(sample.meta[rownames(D), v], rownames(D))
         adj.vars <- c(if (!is.null(adjust.for)) all.vars(stats::as.formula(adjust.for)),
                       if (vals == "adjusted") { nf <- private$modelNuisanceFormula(); if (!is.null(nf)) all.vars(nf) })

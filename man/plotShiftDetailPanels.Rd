@@ -13,7 +13,8 @@ plotShiftDetailPanels(
   palette = NULL,
   plot.theme = ggplot2::theme_bw(),
   label.samples = FALSE,
-  effects = NULL
+  effects = NULL,
+  group.title = NULL
 )
 }
 \arguments{

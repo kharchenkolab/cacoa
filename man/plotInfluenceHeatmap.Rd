@@ -10,7 +10,9 @@ plotInfluenceHeatmap(
   groups = NULL,
   effect = "shift",
   plot.theme = ggplot2::theme_bw(),
-  palette = NULL
+  palette = NULL,
+  group.title = "group",
+  max.sample.labels = 60
 )
 }
 \arguments{

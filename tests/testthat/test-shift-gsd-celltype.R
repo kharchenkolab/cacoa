@@ -180,4 +180,22 @@ test_that("the detail plot of a shift with a continuous tested variable draws th
   pp <- cacoa:::plotShiftDetailPanels(cao$test.results$expression.shifts$fits[[1]][["ct1"]], groups = cao$getSampleGroups(), group.title = "age")
   expect_s3_class(pp, "ggplot")
   expect_s3_class(cao$plotShiftDetail("ct1"), "ggplot")
+  # the influence heatmap colours the samples by the variable on a continuous scale and drops the names of many samples
+  gi <- cao$plotSampleInfluence()
+  expect_true(any(vapply(gi$scales$scales, function(sc) inherits(sc, "ScaleContinuous") && "colour" %in% sc$aesthetics, logical(1))))
+  m <- matrix(rnorm(40), 20, 2, dimnames = list(paste0("s", 1:20), c("a", "b")))
+  expect_s3_class(cacoa:::plotInfluenceHeatmap(m, max.sample.labels = 5)$theme$axis.text.y, "element_blank")
+})
+
+test_that("diagnostic heatmaps and volcano plots follow a continuous tested variable", {
+  set.seed(2); m <- matrix(rnorm(80 * 3), 80, 3, dimnames = list(paste0("s", 1:80), c("a", "b", "c"))); age <- setNames(runif(80, 20, 90), rownames(m))
+  gg <- cacoa:::plotSampleHeatmap(m, groups = age, group.title = "age")
+  expect_true(any(vapply(gg$scales$scales, function(sc) inherits(sc, "ScaleContinuous") && "colour" %in% sc$aesthetics, logical(1))))
+  expect_s3_class(gg$theme$axis.text.y, "element_blank")                                      # 80 samples: no names
+  expect_equal(cacoa:::sampleHeatmapOrder(m, age), names(sort(age)))                           # ordered by the variable
+  de <- data.frame(Gene = paste0("g", 1:200), log2FoldChange = rnorm(200, 0, 0.02), padj = runif(200), CellFrac = runif(200))
+  de$padj[1:5] <- 1e-4
+  gv <- cacoa:::plotVolcano(de)
+  expect_false(any(vapply(gv$layers, function(l) inherits(l$geom, "GeomVline") && isTRUE(all(abs(l$data$xintercept %||% 0) >= 1)), logical(1))))
+  expect_lt(max(abs(ggplot2::ggplot_build(gv)$layout$panel_params[[1]]$x.range)), 1)
 })

@@ -809,7 +809,8 @@ plotCodaSamples <- function(res, cell.types = NULL, n.top = 12, pair.by = NULL, 
   d$observed <- factor(ifelse(d$count > 0, "observed", "no cells (pseudocount)"), levels = c("observed", "no cells (pseudocount)"))
   d$flag <- abs(d$influence) > influence.se | abs(d$residual) > resid.thresh
   pr0 <- res$contrast$predicted; fc <- if (!is.null(pr0)) pr0$target[cell.types] / pr0$baseline[cell.types] else rep(NA_real_, length(cell.types))
-  fc.lab <- ifelse(!is.finite(fc), "", ifelse(fc >= 1, sprintf("%s-fold higher, ", format(signif(fc, 2), drop0trailing = TRUE)), sprintf("%s-fold lower, ", format(signif(1 / fc, 2), drop0trailing = TRUE))))
+  fmt.fc <- function(x) vapply(x, function(v) if (!is.finite(v)) "" else if (v < 1.095) sprintf("%.2f", v) else format(signif(v, 2), drop0trailing = TRUE), character(1))   # small changes (per unit of a continuous variable) keep two decimals: not "1-fold"
+  fc.lab <- ifelse(!is.finite(fc), "", ifelse(fc >= 1, sprintf("%s-fold higher, ", fmt.fc(fc)), sprintf("%s-fold lower, ", fmt.fc(1 / fc))))
   strip <- setNames(sprintf("%s\n%spadj %s", cell.types, fc.lab, format(signif(padj[cell.types], 2), drop0trailing = TRUE)), cell.types)
   d$panel <- factor(strip[d$celltype], levels = strip[cell.types[order(pval[cell.types])]])
   gg <- ggplot2::ggplot(d, ggplot2::aes(x = .data$x, y = .data$value))

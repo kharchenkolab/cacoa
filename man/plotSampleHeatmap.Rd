@@ -13,7 +13,9 @@ plotSampleHeatmap(
   subtitle = NULL,
   plot.theme = ggplot2::theme_bw(),
   palette = NULL,
-  sample.order = NULL
+  sample.order = NULL,
+  group.title = NULL,
+  max.sample.labels = 60
 )
 }
 \arguments{

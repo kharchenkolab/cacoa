@@ -2,6 +2,11 @@
 
 ## Intervals, small counts, sample diagnostics and grouping terms (2026-11)
 
+- `checkSensitivity(analysis = "composition")`: an alternative model that uses samples the current model drops (e.g. the model without a covariate that has missing values) was not fitted ("no cell type could be tested"), because only the current model's counts were stored. `estimateCellLoadings()` now also keeps every sample's counts (`cnts.all`), and the alternative models use them.
+- The step of a continuous tested variable (`numeric.step`, e.g. per decade) was lost when `estimateDEPerCellType()` refitted the model with the grouping term as a fixed term, and when `excludeSamples()` re-applied the stored model: the DE fold changes were per unit (per year) while every other result was per step. Both now keep the model's step and reference.
+- Plots of samples with a continuous tested variable (e.g. age): `plotSampleInfluence()` and `plotFitDiagnostics()` drew one legend entry per value (about 70 ages); the samples are now ordered by the variable and colored on a continuous scale titled by it. With more than 60 samples their names are not printed (they overlapped).
+- `plotVolcano()`: fold changes far below the fold-change cutoff (a continuous tested variable, per unit or per numeric step) were drawn on a fixed axis of about ±1.5 with cutoff lines there, so all genes sat on one vertical line; the axis now follows the data, no fold-change lines are drawn, and the most significant genes are labeled.
+- `plotCodaSamples()`: small fold changes (per unit of a continuous variable) were printed as "1-fold"; they keep two decimals (e.g. 1.04-fold).
 - `plotSensitivity()`: when every model was significant (or none), the legend showed one key with the wrong label ("not significant" for filled points); both keys are now always shown, labeled by meaning.
 - `plotSampleDistances()`: samples left out with `excludeSamples()` were still drawn (as points with missing metadata, and the association in the subtitle was "not testable"); only the samples of the current metadata are drawn.
 - `plotShiftDetail()` with a continuous tested variable (e.g. age): the dispersion panel put all samples in one box labeled "NA"; it now plots each sample's dispersion against the variable with a linear trend, and the sample map's color bar is titled by the variable.

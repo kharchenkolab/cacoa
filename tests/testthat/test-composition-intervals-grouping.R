@@ -137,7 +137,9 @@ test_that("samples dropped for a missing covariate, a continuous tested variable
   sh <- cao$estimateExpressionShiftMagnitudes(verbose = FALSE, influence = FALSE, n.permutations = 19); expect_true(all(sh$results$n <= nrow(meta) - 2, na.rm = TRUE))
   # a continuous tested variable: the per-sample plot draws the samples against it
   cao$setModel(~ age + group, test = "age", verbose = FALSE); r2 <- cao$estimateCellLoadings(name = "coda.age", verbose = FALSE)
-  expect_s3_class(cao$plotCodaSamples(name = "coda.age", n.top = 3), "ggplot")
+  ga <- cao$plotCodaSamples(name = "coda.age", n.top = 3); expect_s3_class(ga, "ggplot")
+  txt <- unlist(lapply(ga$data, function(col) if (is.character(col) || is.factor(col)) unique(as.character(col))))
+  expect_false(any(grepl("(^|[^.0-9])1-fold", txt)))      # a change per unit near 1 keeps two decimals (1.04-fold), not "1-fold"
   # excluding every sample of one level: the stored model no longer applies and is removed with a message, not an error
   cao$setModel(~ group, test = "group", verbose = FALSE)
   expect_message(cao$excludeSamples(rownames(meta)[meta$group == "B"]), "does not apply")
@@ -150,4 +152,28 @@ test_that("samples dropped for a missing covariate, a continuous tested variable
   expect_true("extra" %in% names(cao$sample.meta)); expect_equal(cao$sample.meta[rownames(meta)[1], "extra"], NA_integer_)
   expect_equal(cao$sample.meta[rownames(meta)[3], "extra"], m2[rownames(meta)[3], "extra"])
   cao$excludeSamples(NULL, verbose = FALSE); expect_equal(nrow(cao$sample.meta), nrow(meta)); expect_true(is.na(cao$sample.meta[rownames(meta)[1], "extra"]))
+})
+
+test_that("the step of a continuous tested variable is kept when DE fits the grouping term as a fixed term and after excludeSamples()", {
+  skip_if_not_installed("DESeq2")
+  cao <- makeToyCacoa(n.per.group = c(A = 6, B = 6), cells.per.sample = 40, n.genes = 60, n.cell.types = 2, seed = 8)
+  lfc <- function(step) {
+    cao$setModel(~ age + (1 | batch), test = "age", numeric.step = step, verbose = FALSE)
+    de <- suppressWarnings(suppressMessages(cao$estimateDEPerCellType(verbose = FALSE, name = paste0("de", step))))
+    r <- cacoa:::getResDf(de[[1]]); setNames(r$log2FoldChange, r$Gene)
+  }
+  l1 <- lfc(1); l10 <- lfc(10); g <- intersect(names(l1), names(l10)); g <- g[abs(l1[g]) > 1e-6]
+  expect_equal(unname(median(l10[g] / l1[g])), 10, tolerance = 1e-3)
+  cao$excludeSamples(rownames(cao$sample.meta)[1], verbose = FALSE)
+  expect_equal(cao$model$numeric.step, 10)
+})
+
+test_that("composition sensitivity fits alternative models on samples the current model drops", {
+  cao <- makeToyCacoa(n.per.group = c(A = 6, B = 6), cells.per.sample = 40, n.cell.types = 4, shift = 1, seed = 7)
+  meta <- cao$sample.meta; meta$sex <- rep(c("f", "m"), length.out = nrow(meta)); meta$sex[c(2, 9)] <- NA; cao$sample.meta <- meta
+  cao$setModel(~ group + sex, test = "group", verbose = FALSE)
+  suppressMessages(cao$estimateCellLoadings(n.permutations = 29, verbose = FALSE))
+  s <- suppressMessages(cao$checkSensitivity(analysis = "composition", covariate.sets = list(unadjusted = ~ group), n.permutations = 29, jackknife = FALSE, verbose = FALSE))
+  expect_equal(s$dropped, character(0))
+  expect_equal(unique(s$table$n[s$table$model == "unadjusted"]), nrow(meta))      # all 12 samples, not the 10 of the current model
 })

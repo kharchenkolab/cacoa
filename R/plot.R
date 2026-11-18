@@ -556,6 +556,11 @@ plotOntologyFamily <- function(fam, data, plot.type="complete", show.ids=FALSE, 
 plotVolcano <- function(de.df, p.name='padj', color.var = 'CellFrac', legend.pos="none", palette=brewerPalette("RdYlBu"), lf.cutoff=1.5, p.cutoff=0.05,
                         cell.frac.cutoff=0.2, size=c(0.1, 1.0), lab.size=2, draw.connectors=TRUE, sel.labels=NULL, plot.theme=theme_get(), ...) {
 
+  # fold changes far below the cutoff (a continuous tested variable: the change per unit, or per numeric step): the x axis follows the data,
+  # no fold-change lines are drawn, and the labels are the most significant genes
+  lfc <- de.df$log2FoldChange[is.finite(de.df$log2FoldChange)]; small <- length(lfc) > 0 && max(abs(lfc)) < lf.cutoff / 3
+  if (small) { lf.cutoff <- 0; xl <- c(-1, 1) * max(abs(lfc)) * 1.1
+    if (is.null(sel.labels)) { o <- order(de.df[[p.name]]); o <- o[de.df[[p.name]][o] <= p.cutoff]; sel.labels <- utils::head(de.df$Gene[o], 15) } }
   if (!requireNamespace("EnhancedVolcano", quietly = TRUE))
     return(plotVolcanoSimple(de.df, p.name = p.name, color.var = color.var, palette = palette, lf.cutoff = lf.cutoff, p.cutoff = p.cutoff,
                              cell.frac.cutoff = cell.frac.cutoff, size = size, lab.size = lab.size, sel.labels = sel.labels, plot.theme = plot.theme,
@@ -572,6 +577,7 @@ plotVolcano <- function(de.df, p.name='padj', color.var = 'CellFrac', legend.pos
     pCutoff=p.cutoff, FCcutoff=lf.cutoff, title=NULL, subtitle=NULL, caption=NULL,
     selectLab=sel.labels, drawConnectors=draw.connectors, labSize=lab.size, ...
   )
+  if (small) { gg$layers <- gg$layers[!vapply(gg$layers, function(l) inherits(l$geom, "GeomVline"), logical(1))]; gg <- gg + ggplot2::coord_cartesian(xlim = xl) }
 
   point.id <- sapply(gg$layers, function(l) "GeomPoint" %in% class(l$geom)) %>%
     which() %>% .[1]

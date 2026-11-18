@@ -477,7 +477,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       self$sample.ids <- rownames(self$sample.meta)
       self$excluded.samples <- if (length(samples)) samples else NULL
       if (!is.null(self$model)) { m <- self$model   # the stored model on the new sample set; when it no longer applies (e.g. a level of the tested variable is gone), it is removed
-        ok <- tryCatch({ self$setModel(formula = if (isTRUE(m$formula.default)) NULL else (m$formula.full %||% m$formula), test = m$test.spec$test, contrast = m$test.spec$contrast, dispersion.formula = m$dispersion.formula, verbose = FALSE); TRUE },
+        ok <- tryCatch({ self$setModel(formula = if (isTRUE(m$formula.default)) NULL else (m$formula.full %||% m$formula), test = m$test.spec$test, contrast = m$test.spec$contrast, dispersion.formula = m$dispersion.formula, numeric.ref = m$numeric.ref, numeric.step = m$numeric.step, verbose = FALSE); TRUE },
                        error = function(e) { message("The model (", deparse(m$formula.full %||% m$formula), ", test '", paste(m$test.spec$test, collapse = ", "), "') does not apply to the remaining samples (", conditionMessage(e), "); it is removed: set a new one with setModel()."); FALSE })
         if (!ok) self$model <- NULL }
       if (verbose) message(if (length(samples)) sprintf("Excluded from all analyses run from now on: %s (%d samples remain).", paste(samples, collapse = ", "), nrow(self$sample.meta)) else "All samples are included again.",
@@ -551,7 +551,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (identical(res$kind, "term") || is.null(res$contrast)) stop("the compositional sensitivity is defined for contrast tests")
         st <- res$settings %||% list()
         if (verbose) message(sprintf("checkSensitivity(): composition loadings refitted under alternative covariate sets%s", if (jackknife) " and with each sample left out" else ""))
-        out <- checkCompositionSensitivity(res$cnts, res$model, self$sample.meta, formulas = formulas, screen = screen, current = res,
+        out <- checkCompositionSensitivity(res$cnts.all %||% res$cnts, res$model, self$sample.meta, formulas = formulas, screen = screen, current = res,
                                            n.permutations = n.permutations, seed = seed %||% sample.int(.Machine$integer.max, 1), alpha = private$opt("alpha"),
                                            top.k = top.k, jackknife = jackknife, perm.method = res$perm.method %||% "block",
                                            zero.pseudocount = st$zero.pseudocount %||% 0.1, scale.pseudocount = st$scale.pseudocount %||% FALSE, basis.type = st$basis.type %||% "default",
@@ -1075,7 +1075,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       se <- setNames(w[[paste0("se.", effect)]], w$celltype)
       groups <- self$getSampleGroups(test, model = res$model)
       plotInfluenceHeatmap(m, se = if (normalized) se[colnames(m)] else NULL, groups = groups, effect = effect, plot.theme = self$plot.theme,
-                           palette = self$sample.groups.palette)
+                           palette = self$sample.groups.palette, group.title = Filter(function(t) identical(t$label, test), res$model$tests)[1][[1]]$variable %||% "group")
     },
 
     #' @description Fit diagnostics in one layout for every analysis: two heatmaps of samples by cell types. Left, how far each
@@ -1121,8 +1121,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       rm <- sub(rm); im <- sub(im)
       if (!is.null(rm) && !is.null(im)) { cc <- intersect(colnames(rm), colnames(im)); ss <- intersect(rownames(rm), rownames(im)); rm <- rm[ss, cc, drop = FALSE]; im <- im[ss, cc, drop = FALSE] }   # the same samples and cell types, in the same order
       so <- sampleHeatmapOrder(rm %||% im, groups)
-      g.r <- if (what != "influence" && !is.null(rm)) plotSampleHeatmap(rm, groups = groups, title = r.title, legend = r.leg, mark = resid.thresh, plot.theme = self$plot.theme, palette = self$sample.groups.palette, sample.order = so)
-      g.i <- if (what != "residual" && !is.null(im)) plotSampleHeatmap(im, groups = groups, title = i.title, legend = "change without the sample (standard errors)", mark = influence.se, plot.theme = self$plot.theme, palette = self$sample.groups.palette, sample.order = so)
+      g.title <- if (is.numeric(groups)) (res$model$tests[[1]]$variable %||% "group") else NULL
+      g.r <- if (what != "influence" && !is.null(rm)) plotSampleHeatmap(rm, groups = groups, group.title = g.title, title = r.title, legend = r.leg, mark = resid.thresh, plot.theme = self$plot.theme, palette = self$sample.groups.palette, sample.order = so)
+      g.i <- if (what != "residual" && !is.null(im)) plotSampleHeatmap(im, groups = groups, group.title = g.title, title = i.title, legend = "change without the sample (standard errors)", mark = influence.se, plot.theme = self$plot.theme, palette = self$sample.groups.palette, sample.order = so)
       if (is.null(g.r) || is.null(g.i)) return(g.r %||% g.i)
       checkPackageInstalled("cowplot", cran = TRUE)
       cowplot::plot_grid(g.r, g.i + ggplot2::theme(axis.text.y = ggplot2::element_blank(), axis.ticks.y = ggplot2::element_blank()), ncol = 2, rel_widths = c(1.12, 1), align = "h", axis = "tb")   # the same rows in both panels: sample names once
@@ -1188,7 +1189,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         warning(sprintf("estimateDEPerCellType(): '%s' takes its p-values from the model and cannot use a grouping term; %s %s fitted as %s with one parameter per level (model %s).%s",
                         test, paste(sprintf("'(1 | %s)'", gf$groups), collapse = ", "), if (length(gf$groups) > 1) "are" else "is", if (length(gf$groups) > 1) "fixed terms" else "a fixed term", paste(deparse(gf$formula), collapse = ""),
                         if (length(gf$dropped)) sprintf(" Covariates that are constant within its levels are absorbed by it and were dropped: %s.", paste(gf$dropped, collapse = ", ")) else ""), call. = FALSE)
-        sample.model <- tryCatch(private$buildModel(formula = gf$formula, test = sample.model$test.spec$test, contrast = sample.model$test.spec$contrast),
+        sample.model <- tryCatch(private$buildModel(formula = gf$formula, test = sample.model$test.spec$test, contrast = sample.model$test.spec$contrast,
+                                                     numeric.ref = sample.model$numeric.ref, numeric.step = sample.model$numeric.step),   # the same step (e.g. per decade)
                                  error = function(e) stop("the model with the grouping term as a fixed term cannot be fitted: ", conditionMessage(e), call. = FALSE))
       }
       if (identical(sample.model$contrast_spec$type, "term")) {   # whole-factor test: F-type tests only
@@ -2743,6 +2745,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # the samples of the model (those dropped for missing covariate values have no row in the design)
       used <- rownames(sample.model$meta); miss <- setdiff(used, rownames(cnts))
       if (length(miss)) stop("estimateCellLoadings(): no cells for the model's sample(s) ", paste(miss, collapse = ", "), call. = FALSE)
+      cnts.all <- cnts   # every sample's counts: alternative models (checkSensitivity()) may use samples this model drops
       cnts <- cnts[used, , drop = FALSE]; if (filter.empty.cell.types) cnts <- cnts[, colSums(cnts, na.rm = TRUE) > 0, drop = FALSE]
       # relabeling scheme of the model's test, as for the other analyses
       if (identical(perm.method, "auto")) perm.method <- sample.model$tests[[sample.model$primary %||% 1L]]$permutation$scheme %||% "block"
@@ -2768,7 +2771,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       res <- lmCoda(cnts, sample.model, seed = private$opt("seed"), perm.method=perm.method, random.baseline=random.baseline, statistic=statistic, n.permutations=n.permutations,
                     zero.pseudocount=zero.pseudocount, basis.type = basis.type, ref.p.thresh = ref.p.thresh,
                     ref.min.size = ref.min.size, ref.max.size = ref.max.size, ref.method = ref.method, ref.block.thresh = ref.block.thresh, ref.size.frac = ref.size.frac, ...)
-      res$cnts <- cnts
+      res$cnts <- cnts; res$cnts.all <- cnts.all[, colnames(cnts), drop = FALSE]
       res$model <- sample.model
       #res$groups <- tmp$d.groups
 

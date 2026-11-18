@@ -68,7 +68,7 @@ plotEffectsPerCellType <- function(df, normalized = TRUE, type = c("dot", "bar")
 # row order of the diagnostic heatmaps: by group, within a group the most deviating sample on top (ggplot draws the first level at the bottom)
 sampleHeatmapOrder <- function(m, groups = NULL) {
   o <- rownames(m)[order(rowMeans(abs(m), na.rm = TRUE), decreasing = FALSE)]
-  if (!is.null(groups)) { g <- as.character(groups[o]); o <- o[order(g, na.last = TRUE)] }
+  if (!is.null(groups)) o <- if (is.numeric(groups)) o[order(groups[o], na.last = TRUE)] else o[order(as.character(groups[o]), na.last = TRUE)]
   o
 }
 
@@ -88,7 +88,8 @@ sampleHeatmapOrder <- function(m, groups = NULL) {
 #' @param sample.order optional order of the samples (bottom to top), to align several heatmaps
 #' @return ggplot2 object
 #' @export
-plotSampleHeatmap <- function(m, groups = NULL, title = NULL, legend = "value", mark = NULL, subtitle = NULL, plot.theme = ggplot2::theme_bw(), palette = NULL, sample.order = NULL) {
+plotSampleHeatmap <- function(m, groups = NULL, title = NULL, legend = "value", mark = NULL, subtitle = NULL, plot.theme = ggplot2::theme_bw(), palette = NULL, sample.order = NULL,
+                              group.title = NULL, max.sample.labels = 60) {
   df <- data.frame(sample = rep(rownames(m), ncol(m)), celltype = rep(colnames(m), each = nrow(m)), value = as.vector(m), stringsAsFactors = FALSE)
   has.na <- anyNA(df$value)
   ord.s <- sampleHeatmapOrder(m, groups)
@@ -107,12 +108,19 @@ plotSampleHeatmap <- function(m, groups = NULL, title = NULL, legend = "value", 
                    plot.subtitle = ggplot2::element_text(size = 8, colour = "grey30"), plot.title = ggplot2::element_text(size = 11))
   if (!is.null(mark)) { mk <- df[is.finite(df$value) & abs(df$value) > mark, , drop = FALSE]
     if (nrow(mk)) gg <- gg + ggplot2::geom_point(data = mk, ggplot2::aes(x = .data$celltype, y = .data$sample), inherit.aes = FALSE, shape = 16, size = 1.1, colour = "black") }
+  if (length(ord.s) > max.sample.labels) gg <- gg + ggplot2::theme(axis.text.y = ggplot2::element_blank(), axis.ticks.y = ggplot2::element_blank()) +
+    ggplot2::labs(y = sprintf("%d samples", length(ord.s)))
   if (!is.null(groups)) {
-    gdf <- data.frame(sample = factor(ord.s, levels = ord.s), group = as.character(groups[ord.s]), x = strip, stringsAsFactors = FALSE)
+    num <- is.numeric(groups)   # a continuous tested variable: a colour scale, samples ordered by it (sampleHeatmapOrder())
+    gdf <- data.frame(sample = factor(ord.s, levels = ord.s), group = if (num) as.numeric(groups[ord.s]) else as.character(groups[ord.s]), x = strip, stringsAsFactors = FALSE)
     gdf <- gdf[!is.na(gdf$group), ]
     gg <- gg + ggplot2::geom_point(data = gdf, ggplot2::aes(x = .data$x, y = .data$sample, colour = .data$group), inherit.aes = FALSE, shape = 15, size = 3) +
-      ggplot2::labs(colour = NULL) + ggplot2::guides(colour = ggplot2::guide_legend(order = 2))
-    if (!is.null(palette) && all(unique(gdf$group) %in% names(palette))) gg <- gg + ggplot2::scale_colour_manual(values = palette)
+      ggplot2::labs(colour = group.title)
+    if (num) gg <- gg + ggplot2::scale_colour_viridis_c() + ggplot2::guides(colour = ggplot2::guide_colourbar(order = 2, title.position = "top"))
+    else {
+      gg <- gg + ggplot2::guides(colour = ggplot2::guide_legend(order = 2))
+      if (!is.null(palette) && all(unique(gdf$group) %in% names(palette))) gg <- gg + ggplot2::scale_colour_manual(values = palette)
+    }
   }
   gg
 }
@@ -127,12 +135,14 @@ plotSampleHeatmap <- function(m, groups = NULL, title = NULL, legend = "value", 
 #' @param palette colours for the groups
 #' @return ggplot2 object
 #' @export
-plotInfluenceHeatmap <- function(m, se = NULL, groups = NULL, effect = "shift", plot.theme = ggplot2::theme_bw(), palette = NULL) {
+plotInfluenceHeatmap <- function(m, se = NULL, groups = NULL, effect = "shift", plot.theme = ggplot2::theme_bw(), palette = NULL, group.title = "group",
+                                 max.sample.labels = 60) {
   if (!is.null(se)) { se[!is.finite(se) | se == 0] <- NA; m <- sweep(m, 2, se, "/") }
   df <- data.frame(sample = rep(rownames(m), ncol(m)), celltype = rep(colnames(m), each = nrow(m)), value = as.vector(m), stringsAsFactors = FALSE)
   has.na <- anyNA(df$value)   # samples not in a cell type's estimate: grey tiles (white would read as "no change")
   ord.s <- rownames(m)[order(rowMeans(abs(m), na.rm = TRUE), decreasing = TRUE)]
-  if (!is.null(groups)) { g <- as.character(groups[ord.s]); ord.s <- ord.s[order(g, na.last = TRUE)] }
+  num <- !is.null(groups) && is.numeric(groups)   # a continuous tested variable: samples ordered by it, a colour scale instead of one colour per value
+  if (!is.null(groups)) { ord.s <- if (num) ord.s[order(groups[ord.s], na.last = TRUE)] else ord.s[order(as.character(groups[ord.s]), na.last = TRUE)] }
   df$sample <- factor(df$sample, levels = ord.s)
   strip <- " "                                       # the group annotation gets its own column
   df$celltype <- factor(df$celltype, levels = c(if (!is.null(groups)) strip, colnames(m)))
@@ -145,12 +155,15 @@ plotInfluenceHeatmap <- function(m, se = NULL, groups = NULL, effect = "shift", 
                                subtitle = if (has.na) "grey: sample not in the cell type's estimate" else NULL) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1), panel.grid = ggplot2::element_blank(),
                    plot.subtitle = ggplot2::element_text(size = 8, colour = "grey30"))
+  if (length(ord.s) > max.sample.labels) gg <- gg + ggplot2::theme(axis.text.y = ggplot2::element_blank(), axis.ticks.y = ggplot2::element_blank()) +
+    ggplot2::labs(y = sprintf("%d samples%s", length(ord.s), if (num) sprintf(", ordered by %s", group.title) else ""))
   if (!is.null(groups)) {
-    gdf <- data.frame(sample = factor(ord.s, levels = ord.s), group = as.character(groups[ord.s]), x = strip, stringsAsFactors = FALSE)
+    gdf <- data.frame(sample = factor(ord.s, levels = ord.s), group = if (num) as.numeric(groups[ord.s]) else as.character(groups[ord.s]), x = strip, stringsAsFactors = FALSE)
     gdf <- gdf[!is.na(gdf$group), ]
     gg <- gg + ggplot2::geom_point(data = gdf, ggplot2::aes(x = .data$x, y = .data$sample, colour = .data$group), inherit.aes = FALSE, shape = 15, size = 3) +
-      ggplot2::labs(colour = "group")
-    if (!is.null(palette) && all(unique(gdf$group) %in% names(palette))) gg <- gg + ggplot2::scale_colour_manual(values = palette)
+      ggplot2::labs(colour = group.title)
+    if (num) gg <- gg + ggplot2::scale_colour_viridis_c()
+    else if (!is.null(palette) && all(unique(gdf$group) %in% names(palette))) gg <- gg + ggplot2::scale_colour_manual(values = palette)
   }
   gg
 }

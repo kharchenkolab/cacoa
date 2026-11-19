@@ -202,7 +202,8 @@ checkDesign <- function(meta, model = NULL, test.variable = NULL, covariates = N
                  p.floor = t$permutation$p.floor, stringsAsFactors = FALSE)))
     for (t in model$tests) if (!is.null(t$permutation)) {
       if (is.finite(t$permutation$n.distinct) && t$permutation$n.distinct < 200)
-        add("warning", sprintf("test '%s': only %d distinct permutations (smallest p-value %.3g)", t$label, round(t$permutation$n.distinct), t$permutation$p.floor), "fewer strata, or more samples")
+        add("warning", sprintf("test '%s': only %d distinct permutations (smallest p-value %.3g%s)", t$label, round(t$permutation$n.distinct), t$permutation$p.floor,
+                               if (isTRUE(t$permutation$label.swap)) "; each relabeling and the one that exchanges the two labels give the same statistic" else ""), "fewer strata, or more samples")
       if (t$permutation$scheme == "freedman-lane") add("note", sprintf("test '%s': continuous covariate(s) -> Freedman-Lane residual permutation (approximate; conservative for shift)", t$label),
                                                       "exact block permutations need discrete covariates only")
     }

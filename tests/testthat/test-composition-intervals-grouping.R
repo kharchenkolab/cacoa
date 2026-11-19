@@ -190,3 +190,35 @@ test_that("composition loadings are drawn with jackknife intervals by default, a
   gm <- cacoa:::plotCodaLoadings(res, center = "none", interval = "model"); expect_false(identical(gm$data$hi, gg$data$hi))
   expect_true(all(is.na(cacoa:::plotCodaLoadings(res, center = "none", interval = FALSE)$data$lo)))
 })
+
+test_that("limma-voom fits a grouping term as a random intercept (duplicateCorrelation); other DE tests as a fixed term", {
+  skip_if_not_installed("limma"); skip_if_not_installed("edgeR")
+  # direct: correlated pairs give a positive within-level correlation; levels of one sample fall back to the ordinary fit
+  set.seed(3); n <- 12; pat <- rep(paste0("p", 1:6), 2); grp <- factor(rep(c("A", "B"), each = 6))
+  base <- matrix(rgamma(300 * 6, 2, 0.02), 300)                                     # patient-specific expression of each gene
+  fc <- outer(c(rep(2, 50), rep(1, 250)), ifelse(grp == "B", 1, 0)); fc[fc == 0] <- 1  # the first 50 genes twice as high in B
+  cm <- matrix(rpois(300 * n, base[, as.integer(factor(pat))] * fc), 300, dimnames = list(paste0("g", 1:300), paste0("s", 1:n)))
+  meta <- data.frame(group = grp, patient = pat, row.names = colnames(cm))
+  des <- cacoa:::buildDesignMatrices(meta, contrast = c("group", "B", "A"), formula = ~ group)
+  r.blk <- cacoa:::estimateDEForTypeLimma(cm, des, block = pat)
+  r.ord <- cacoa:::estimateDEForTypeLimma(cm, des)
+  expect_gt(attr(r.blk, "block.correlation"), 0.2); expect_true(is.na(attr(r.ord, "block.correlation")))
+  up <- paste0("g", 1:50)
+  expect_gt(sum(r.blk[up, "padj"] < 0.05), sum(r.ord[up, "padj"] < 0.05))          # the pairing removes the patient differences
+  r.single <- cacoa:::estimateDEForTypeLimma(cm, des, block = paste0("u", 1:n))   # no level with two samples
+  expect_true(is.na(attr(r.single, "block.correlation"))); expect_equal(r.single[rownames(r.ord), "pvalue"], r.ord$pvalue)
+
+  # through the Cacoa object: paired design, and a condition per donor (several samples per donor)
+  cao <- makeToyCacoa(n.per.group = c(A = 6, B = 6), cells.per.sample = 40, n.genes = 60, n.cell.types = 2, shift = 1, seed = 8)
+  m <- cao$sample.meta; m$patient <- paste0("p", rep(1:6, 2)); cao$sample.meta <- m
+  cao$setModel(~ group + (1 | patient), test = "group", verbose = FALSE)
+  expect_message(de <- cao$estimateDEPerCellType(test = "limma-voom", min.cell.count = 1, verbose = TRUE), "random intercept per level of 'patient'")
+  expect_length(attr(de, "block.correlation"), length(de)); expect_true(all(is.finite(attr(de, "block.correlation"))))
+  skip_if_not_installed("DESeq2")
+  expect_warning(cao$estimateDEPerCellType(test = "DESeq2.Wald", min.cell.count = 1, verbose = FALSE, name = "de2"), "limma-voom' fits it as a random intercept")
+  m$donor <- ifelse(m$group == "A", paste0("a", rep(1:3, length.out = 6)), paste0("b", rep(1:3, length.out = 6))); cao$sample.meta <- m
+  cao$setModel(~ group + (1 | donor), test = "group", verbose = FALSE)
+  expect_error(cao$estimateDEPerCellType(test = "DESeq2.Wald", min.cell.count = 1, verbose = FALSE, name = "de3"), "takes one value within every level")
+  de4 <- cao$estimateDEPerCellType(test = "limma-voom", min.cell.count = 1, verbose = FALSE, name = "de4")
+  expect_true(all(is.finite(attr(de4, "block.correlation"))))
+})

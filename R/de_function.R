@@ -462,7 +462,10 @@ estimateDEPerCellTypeInner_model <- function(raw.mats, cell.groups = NULL, sampl
           estimateDEForTypeEdgeR(cm, model.ct)
 
         } else if (test == "limma-voom") {
-          estimateDEForTypeLimma(cm, model.ct)
+          # a grouping term (1 | g) of the model: a random intercept per level of g (limma::duplicateCorrelation)
+          g <- model.ct$random.vars
+          blk <- if (length(g) == 1 && g %in% colnames(sample.meta.ct)) as.character(sample.meta.ct[colnames(cm), g]) else NULL
+          estimateDEForTypeLimma(cm, model.ct, block = blk)
 
         } else {
           stop("Unknown test: ", test)
@@ -473,6 +476,7 @@ estimateDEPerCellTypeInner_model <- function(raw.mats, cell.groups = NULL, sampl
         NULL
       })
 
+      block.cor <- attr(res, "block.correlation")
       res <- coerceDEResultToDF(res)
       if (is.null(res) || nrow(res) == 0L) return(NULL)
 
@@ -506,6 +510,7 @@ estimateDEPerCellTypeInner_model <- function(raw.mats, cell.groups = NULL, sampl
 
       attr(res, "core.samples.used") <-
         attr(sample.meta.ct, "fix.samples.core")
+      if (!is.null(block.cor)) attr(res, "block.correlation") <- block.cor
 
       if (return.matrix) {
         return(list(res = res, cm = cm, meta = sample.meta.ct))
@@ -909,9 +914,15 @@ estimateDEForTypeEdgeR <- function(cm, model) {
 #'
 #' @param cm count matrix (genes x samples)
 #' @param model list returned by buildDesignMatrices (must contain F and contrast.F)
+#' @param block level of the grouping variable per sample (columns of `cm`), from a grouping term `(1 | g)` of the model, or NULL.
+#'   The samples of a level are then correlated: a random intercept per level, with one within-level correlation shared by all
+#'   genes (`limma::duplicateCorrelation()`, estimated on the voom weights and re-estimated once after voom with the block), and the
+#'   genes are fitted by generalized least squares (`limma::lmFit(block, correlation)`). When no level holds two samples, or the
+#'   correlation cannot be estimated, the fit is the ordinary one. The estimated correlation is returned as the attribute
+#'   `block.correlation` (NA when not used)
 #'
 #' @keywords internal
-estimateDEForTypeLimma <- function(cm, model) {
+estimateDEForTypeLimma <- function(cm, model, block = NULL) {
     # Extract design and contrast
     if (is.null(model$F) || is.null(model$contrast.F)) {
         stop("model must contain components 'F' (design) and 'contrast.F' (contrast vector).")
@@ -941,19 +952,28 @@ estimateDEForTypeLimma <- function(cm, model) {
     checkPackageInstalled("limma", bioc = TRUE); checkPackageInstalled("edgeR", bioc = TRUE)
     dge <- edgeR::DGEList(counts = cm)
     dge <- edgeR::calcNormFactors(dge)
+    if (!is.null(block) && (anyNA(block) || length(block) != ncol(cm) || !any(table(block) > 1))) block <- NULL
+    rho <- NA_real_
     v   <- limma::voom(dge, design = design, plot = FALSE)
-    
-    fit <- limma::lmFit(v, design = design)
+    if (!is.null(block)) {
+      rho <- tryCatch(limma::duplicateCorrelation(v, design, block = block)$consensus.correlation, error = function(e) NA_real_)
+      if (is.finite(rho)) {
+        v <- limma::voom(dge, design = design, plot = FALSE, block = block, correlation = rho)
+        rho <- tryCatch(limma::duplicateCorrelation(v, design, block = block)$consensus.correlation, error = function(e) NA_real_)
+      }
+    }
+    fit <- if (is.finite(rho)) limma::lmFit(v, design = design, block = block, correlation = rho) else limma::lmFit(v, design = design)
+    out <- function(df) { attr(df, "block.correlation") <- rho; df }
     Cm <- termContrastForDesign(model, design)
     if (!is.null(Cm)) {   # whole-factor test: moderated F over the level-difference contrasts
       fit2 <- limma::eBayes(limma::contrasts.fit(fit, Cm))
       if (ncol(Cm) == 1) {
         tt <- limma::topTable(fit2, coef = 1, sort.by = "P", n = Inf)
-        return(data.frame(log2FoldChange = tt$logFC, AveExpr = tt$AveExpr, stat = tt$t, pvalue = tt$P.Value, padj = tt$adj.P.Val, row.names = rownames(tt)))
+        return(out(data.frame(log2FoldChange = tt$logFC, AveExpr = tt$AveExpr, stat = tt$t, pvalue = tt$P.Value, padj = tt$adj.P.Val, row.names = rownames(tt))))
       }
       tt <- limma::topTable(fit2, coef = seq_len(ncol(Cm)), sort.by = "F", n = Inf)
       lfc <- apply(as.matrix(fit2$coefficients[rownames(tt), , drop = FALSE]), 1, function(x) x[which.max(abs(x))])   # largest level difference
-      return(data.frame(log2FoldChange = lfc, AveExpr = tt$AveExpr, stat = tt$F, pvalue = tt$P.Value, padj = tt$adj.P.Val, row.names = rownames(tt)))
+      return(out(data.frame(log2FoldChange = lfc, AveExpr = tt$AveExpr, stat = tt$F, pvalue = tt$P.Value, padj = tt$adj.P.Val, row.names = rownames(tt))))
     }
   
     # Build 1-column contrast matrix from model$contrast.F
@@ -968,7 +988,7 @@ estimateDEForTypeLimma <- function(cm, model) {
                            n       = Inf) %>%
         setNames(c("log2FoldChange", "AveExpr", "stat", "pvalue", "padj", "B"))
     
-    return(res)
+    return(out(res))
 }
 
 #' helper: get the DE table (data.frame) from either a df or a list(res=...)

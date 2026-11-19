@@ -330,8 +330,9 @@ test_that("one relabeling rule: scheme from the formula, report of what can be e
   expect_true(any(grepl("not valid when a covariate is related", buildCacoaModel(meta, ~ group + age + (1 | batch), test = "group", permutation = "freedman-lane")$tests[[1]]$permutation$notes)))
   expect_error(buildCacoaModel(meta, ~ group + batch + (1 | batch), test = "group"), "both as a covariate and as a grouping term")
   # what can be exchanged: all 12 samples within the two batches (3 + 3 in each: 20 * 20 relabelings)
-  p <- sch(~ group + (1 | batch)); expect_equal(p$n.exchange, 12); expect_equal(p$n.samples, 12); expect_equal(p$n.distinct, 400); expect_equal(p$p.floor, 1 / 400)
-  expect_output(print(buildCacoaModel(meta, ~ group + (1 | batch), test = "group")), "12 of 12 samples can change their value; smallest p-value 0.0025")
+  p <- sch(~ group + (1 | batch)); expect_equal(p$n.exchange, 12); expect_equal(p$n.samples, 12); expect_equal(p$n.distinct, 400)
+  expect_equal(p$p.floor, 2 / 400)   # 3 + 3 in each batch: the exchange of the two groups is one of the relabelings
+  expect_output(print(buildCacoaModel(meta, ~ group + (1 | batch), test = "group")), "12 of 12 samples can change their value; smallest p-value 0.005")
   # a level with one value of the tested variable keeps it: 3 batches, the third holds G1 only
   meta$b3 <- c("x", "y")[rep(1:2, length.out = 12)]; meta$b3[meta$group == "G1"][1:4] <- "z"
   mp <- buildCacoaModel(meta, ~ group + (1 | b3), test = "group"); expect_equal(mp$random.info$structure, "partly"); expect_equal(mp$tests[[1]]$permutation$n.exchange, 8)

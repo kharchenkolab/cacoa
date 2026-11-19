@@ -4,12 +4,19 @@
 \alias{estimateDEForTypeLimma}
 \title{Estimate DE using limma-voom (design + contrast from buildDesignMatrices)}
 \usage{
-estimateDEForTypeLimma(cm, model)
+estimateDEForTypeLimma(cm, model, block = NULL)
 }
 \arguments{
 \item{cm}{count matrix (genes x samples)}
 
 \item{model}{list returned by buildDesignMatrices (must contain F and contrast.F)}
+
+\item{block}{level of the grouping variable per sample (columns of \code{cm}), from a grouping term \code{(1 | g)} of the model, or NULL.
+The samples of a level are then correlated: a random intercept per level, with one within-level correlation shared by all
+genes (\code{limma::duplicateCorrelation()}, estimated on the voom weights and re-estimated once after voom with the block), and the
+genes are fitted by generalized least squares (\code{limma::lmFit(block, correlation)}). When no level holds two samples, or the
+correlation cannot be estimated, the fit is the ordinary one. The estimated correlation is returned as the attribute
+\code{block.correlation} (NA when not used)}
 }
 \description{
 Estimate DE using limma-voom (design + contrast from buildDesignMatrices)

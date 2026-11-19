@@ -86,9 +86,9 @@ test_that("cell-type gsd: relabelings are enumerated when there are fewer than n
   r <- suppressWarnings(gsdShiftsPerCellType(cm, cao$sample.per.cell, cao$cell.groups, cao$model, lib, n.permutations = 999, seed = 1, influence = FALSE, n.null = 0))
   res <- r$results
   expect_true(all(res$n.perm.distinct == choose(8, 4)))       # 70 relabelings of 4 + 4 samples
-  expect_equal(res$p.floor, rep(1 / 70, nrow(res)))
-  # exact p = (relabelings at least as extreme, the identity and its mirror included) / 70: a multiple of 1/70
-  expect_equal(res$p * 70, round(res$p * 70), tolerance = 1e-8); expect_true(all(res$p >= 1 / 70))
+  expect_equal(res$p.floor, rep(2 / 70, nrow(res)))             # 4 + 4: the exchange of A and B is a relabeling, with the same gsd
+  # exact p = (relabelings at least as extreme, the identity and its mirror included) / 70: an even multiple of 1/70
+  expect_equal(res$p * 70, round(res$p * 70), tolerance = 1e-8); expect_true(all(round(res$p * 70) %% 2 == 0)); expect_true(all(res$p >= 2 / 70))
   expect_true(all(res$flags == "few-permutations"))
 })
 
@@ -169,7 +169,7 @@ test_that("cell-type gsd, all relabelings enumerated: the smallest attainable p 
   expect_true(all(r$results$n.perm.distinct >= 1))
   # 2^5 pair flips x 20 arrangements of the 6 single samples = 640 relabelings; the remaining sample of a broken pair still takes the label
   # of its absent partner under a flip, so the cell type missing two samples has 640 distinct arrangements too (its own plan has 560)
-  expect_equal(r$results$p.floor, rep(1 / 640, 2))
+  expect_equal(r$results$p.floor, rep(2 / 640, 2))   # pairs flipped all at once with the three A and three B singles exchanged: a relabeling
   expect_equal(r$results$n.perm.distinct, rep(640, 2))
 })
 

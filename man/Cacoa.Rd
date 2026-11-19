@@ -1895,7 +1895,11 @@ Estimate differential gene expression per cell type between conditions
 
 \item{\code{name}}{character string Slot in which to save the results (default='de')}
 
-\item{\code{test}}{character string Which DESeq2 test to use. The available options are "LRT", "Wald". (default="DESeq2.Wald")}
+\item{\code{test}}{character string: "DESeq2.Wald" (default), "DESeq2.LRT", "edgeR", "limma-voom", "Wilcoxon.\emph{", "t-test.}". A grouping
+term \code{(1 | g)} of the model is fitted by "limma-voom" as a random intercept per level of \code{g} (one within-level correlation
+shared by all genes, \code{limma::duplicateCorrelation()}; generalized least squares), which also allows a tested variable that takes
+one value per level (e.g. a condition per donor). The other tests fit it as a fixed term, with a warning. The estimated
+correlation per cell type is stored in the attribute \code{block.correlation} of the result}
 
 \item{\code{resampling.method}}{character which resampling method should be used "loo" for leave-one-out or "bootstrap", (default=NULL, i.e. no resampling)}
 

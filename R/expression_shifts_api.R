@@ -323,7 +323,7 @@ effectRowsContrast <- function(res, test.label, test.id) {
                ci.low = w[[eff]] - z * se, ci.high = w[[eff]] + z * se,
                statistic = stat, p = w[[paste0("p.", eff)]], padj = w[[paste0("padj.", eff)]], p.fwer = w[[paste0("p.fwer.", eff)]],
                n = w$n, n.ref = w$n.ref, n.alt = w$n.alt, scheme = w$scheme, n.perm = w$n.perm, n.perm.distinct = w$n.perm.distinct,
-               p.floor = w$p.floor, flags = w$flags, stringsAsFactors = FALSE)
+               p.floor = if (eff == "total" && !is.null(w$p.floor.total)) w$p.floor.total else w$p.floor, flags = w$flags, stringsAsFactors = FALSE)
   }
   do.call(rbind, lapply(c("shift", "var", "total"), one))
 }

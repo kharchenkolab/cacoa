@@ -395,7 +395,7 @@ buildCacoaModel <- function(meta, formula = NULL, test = NULL, contrast = NULL, 
       cells <- split(which(plan$in.set), droplevels(plan$strata[plan$in.set]))
       n.ex <- sum(vapply(cells, function(ix) if (length(unique(plan$labels[ix])) > 1) length(ix) else 0L, integer(1)))
       nd <- plan$n.distinct
-      list(scheme = plan$scheme, n.distinct = nd, p.floor = if (is.finite(nd) && nd <= n.permutations) 1 / nd else 1 / (n.permutations + 1),
+      list(scheme = plan$scheme, n.distinct = nd, p.floor = if (is.finite(nd) && nd <= n.permutations) (1 + isTRUE(plan$label.swap)) / nd else 1 / (n.permutations + 1), label.swap = isTRUE(plan$label.swap),
            n.strata = nlevels(plan$strata), n.exchange = n.ex, n.samples = length(plan$in.set), n.whole = length(unique(plan$unit[plan$unit > 0])), notes = plan$notes)
     } else NULL
     tests[[i]] <- t
@@ -489,8 +489,8 @@ designIssues <- function(tests, meta, formula, dropped = character(0)) {
     for (nt in d$notes %||% character(0)) add("note", sprintf("test '%s': %s", t$label, nt))
     if (!is.null(t$permutation)) {
       if (is.finite(t$permutation$n.distinct) && t$permutation$n.distinct < 200)
-        add("warning", sprintf("test '%s': only %d distinct permutations; the smallest attainable p-value is %.3g", t$label,
-                               round(t$permutation$n.distinct), t$permutation$p.floor), "fewer strata (block.vars), or more samples")
+        add("warning", sprintf("test '%s': only %d distinct permutations; the smallest attainable p-value is %.3g%s", t$label,
+                               round(t$permutation$n.distinct), t$permutation$p.floor, if (isTRUE(t$permutation$label.swap)) " (each relabeling and the one that exchanges the two labels give the same statistic)" else ""), "fewer strata (block.vars), or more samples")
       for (nt in t$permutation$notes) if (!grepl("distinct permutations", nt)) add("note", sprintf("test '%s': %s", t$label, nt))
     }
   }

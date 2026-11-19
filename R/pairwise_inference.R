@@ -93,6 +93,21 @@ logDistinctPermutations <- function(labels, in.set, strata, unit = NULL, ukey = 
   tot
 }
 
+# Is the complete exchange of the two compared labels itself one of the plan's relabelings? It is when exactly two labels take
+# part and every stratum holds as many samples (whole levels: as many levels) of the one as of the other. Statistics that do
+# not change when the two labels are exchanged (F, distance shift, gsd, two-sided loadings and dispersion t) then take each
+# value at least twice among the relabelings, and their smallest attainable p-value is 2 / n.distinct under enumeration.
+labelSwapInPlan <- function(labels, in.set, strata, unit = NULL, ukey = NULL) {
+  lab <- unique(labels[in.set])
+  if (length(lab) != 2) return(FALSE)
+  for (s in levels(droplevels(strata[in.set]))) {
+    idx <- which(in.set & strata == s)
+    v <- if (!is.null(unit) && unit[idx[1]] > 0) ukey[idx][!duplicated(unit[idx])] else labels[idx]
+    if (sum(v == lab[1]) != sum(v == lab[2])) return(FALSE)
+  }
+  TRUE
+}
+
 # Levels of the grouping variable that hold one value of the tested variable (a condition per donor, several samples per donor) cannot
 # change it by an exchange within the level. They are exchanged as wholes: among the levels with the same make-up (the same number of
 # samples in every cell of the model's other discrete covariates) the j-th sample of a level takes the design row of the j-th sample of
@@ -155,7 +170,10 @@ wholeUnitCells <- function(design, meta, samples, info, block.vars, strata) {
 #' @param max.enumerate largest number of relabelings that is enumerated
 #' @return list with `scheme`, `in.set` (logical over `samples`), `strata` (factor), `labels`, `unit` and `slot` (whole levels: per
 #'   sample the index of its level, 0 when it is exchanged on its own, and the cell by which samples of two levels are matched), `info`,
-#'   `n.distinct` (may be `Inf`-like large; see `log.n.distinct`), `exhaustive`, `p.floor`, `notes`
+#'   `n.distinct` (may be `Inf`-like large; see `log.n.distinct`), `exhaustive`, `p.floor`, `label.swap`, `notes`. `label.swap`: the
+#'   complete exchange of the two compared labels is one of the relabelings (as many samples of each in every stratum). A statistic
+#'   that does not change under that exchange (all two-sided ones here) then takes each value twice, and `p.floor` (under
+#'   enumeration) is 2 / `n.distinct`; for one that changes (the `total` of the expression shifts) it stays 1 / `n.distinct`
 #' @export
 permutationPlan <- function(design, meta, samples = rownames(design$F),
                             scheme = c("auto", "block", "freedman-lane"),
@@ -208,11 +226,14 @@ permutationPlan <- function(design, meta, samples = rownames(design$F),
   log.nd <- logDistinctPermutations(labels, in.set, strata, unit, ukey)
   n.distinct <- if (log.nd < log(.Machine$double.xmax)) exp(log.nd) else Inf
   exhaustive <- is.finite(n.distinct) && n.distinct <= n.permutations && n.distinct <= max.enumerate
-  p.floor <- if (exhaustive) 1 / n.distinct else 1 / (n.permutations + 1)
+  # with a continuous covariate the relabeling moves its values along with the label, so the exchange is not one of labels only
+  label.swap <- scheme == "block" && !length(nuisance.numeric) && labelSwapInPlan(labels, in.set, strata, unit, ukey)
+  p.floor <- if (exhaustive) (1 + label.swap) / n.distinct else 1 / (n.permutations + 1)
   if (is.finite(n.distinct) && n.distinct < 200)
-    notes <- c(notes, sprintf("only %d distinct permutations: the smallest attainable p-value is %.3g", round(n.distinct), p.floor))
+    notes <- c(notes, sprintf("only %d distinct permutations: the smallest attainable p-value is %.3g%s", round(n.distinct),
+                              (1 + label.swap) / n.distinct, if (label.swap) " (the relabelings come in pairs that exchange the two labels, which give the same two-sided statistic)" else ""))
   list(scheme = scheme, in.set = in.set, strata = strata, labels = labels, unit = unit, slot = slot, ukey = ukey, info = info, samples = samples,
-       crosses.levels = crosses.levels, n.distinct = n.distinct, log.n.distinct = log.nd, exhaustive = exhaustive, p.floor = p.floor,
+       crosses.levels = crosses.levels, n.distinct = n.distinct, log.n.distinct = log.nd, exhaustive = exhaustive, p.floor = p.floor, label.swap = label.swap,
        n.permutations = if (exhaustive) round(n.distinct) else n.permutations, notes = notes)
 }
 
@@ -624,7 +645,7 @@ testPairwiseEffects <- function(D.list, design, meta, dispersion.formula = NULL,
                se.var = if (!is.null(e$influence)) unname(e$influence$se["var"]) else NA_real_,
                se.total = if (!is.null(e$influence)) unname(e$influence$se["total"]) else NA_real_,
                scheme = r$plan$scheme, n.perm = nrow(r$perm), n.perm.distinct = r$plan$n.distinct,
-               exhaustive = ex, p.floor = r$plan$p.floor,
+               exhaustive = ex, p.floor = r$plan$p.floor, p.floor.total = if (ex) 1 / r$plan$n.distinct else r$plan$p.floor,   # total = shift + var / 2 changes when the labels are exchanged
                null.shift.lo = nb$shift[1], null.shift.hi = nb$shift[2], null.var.lo = nb$var[1], null.var.hi = nb$var[2],
                cell.assoc = e$cell.assoc %||% NA_real_, stringsAsFactors = FALSE, row.names = NULL)
   })

@@ -37,7 +37,47 @@ test_that("block plan permutes only the compared conditions within strata, count
   keys <- apply(P2, 2, function(p) paste(meta$group[p], collapse = ""))
   expect_equal(length(unique(keys)), nd)
   expect_true(paste(meta$group, collapse = "") %in% keys)
-  expect_equal(plan2$p.floor, 1 / nd)
+  # 3 A and 3 B samples in each batch: the complete exchange of A and B is one of the relabelings, so a statistic that does not
+  # change under it takes each value twice and the smallest attainable p is 2 / nd
+  expect_true(plan2$label.swap)
+  expect_equal(plan2$p.floor, 2 / nd)
+})
+
+test_that("the exchange of the two compared labels: a relabeling only when every stratum holds as many of each", {
+  one <- function(n.a, n.b, batch = NULL, formula = ~ group) {
+    meta <- data.frame(group = factor(rep(c("A", "B"), c(n.a, n.b))), row.names = sprintf("s%02d", seq_len(n.a + n.b)))
+    if (!is.null(batch)) meta$batch <- factor(batch)
+    meta$age <- seq_len(nrow(meta))
+    des <- cacoa:::buildDesignMatrices(meta, contrast = c("group", "B", "A"), formula = formula)
+    permutationPlan(des, meta, scheme = "block", n.permutations = 9999, block.vars = if (!is.null(batch) && identical(formula, ~ group)) "batch")
+  }
+  p <- one(3, 3); expect_true(p$label.swap); expect_equal(p$n.distinct, 20); expect_equal(p$p.floor, 2 / 20)
+  p <- one(3, 4); expect_false(p$label.swap); expect_equal(p$n.distinct, 35); expect_equal(p$p.floor, 1 / 35)
+  p <- one(2, 3); expect_false(p$label.swap); expect_equal(p$p.floor, 1 / 10)
+  # strata: 2 + 2 and 1 + 1 balanced; 2 + 2 and 1 + 2 not
+  p <- one(3, 3, batch = c("x", "x", "y", "x", "x", "y")); expect_true(p$label.swap); expect_equal(p$p.floor, 2 / (6 * 2))
+  p <- one(3, 4, batch = c("x", "x", "y", "x", "x", "y", "y")); expect_false(p$label.swap); expect_equal(p$p.floor, 1 / (6 * 3))
+  # a continuous covariate moves with the label (design rows exchanged within groups): no pure exchange of labels
+  p <- one(3, 3, batch = c("x", "x", "y", "x", "x", "y"), formula = ~ group + age)
+  expect_false(isTRUE(p$label.swap))
+  # model report: the floor and the reason
+  meta <- data.frame(group = factor(rep(c("A", "B"), c(3, 3))), row.names = sprintf("s%d", 1:6))
+  m <- buildCacoaModel(meta, ~ group, test = "group")
+  expect_equal(m$tests[[1]]$permutation$p.floor, 0.1); expect_true(m$tests[[1]]$permutation$label.swap)
+  expect_output(print(m), "smallest attainable p-value is 0.1 \\(each relabeling and the one that exchanges the two labels")
+})
+
+test_that("enumerated relabelings, balanced design: two-sided statistics come in pairs, total does not", {
+  sim <- simulateIndividualModel(c(A = 4, B = 4), p = 30, group.effect = 2 * sqrt(30), seed = 5)
+  des <- cacoa:::buildDesignMatrices(sim$meta, contrast = c("group", "B", "A"), formula = ~ group)
+  sims <- lapply(1:6, function(s) sqrt(simulateIndividualModel(c(A = 4, B = 4), p = 30, group.effect = 0, seed = s)$D2))
+  D <- c(list(strong = sqrt(sim$D2)), setNames(lapply(sims, function(d) { dimnames(d) <- dimnames(sim$D2); d }), paste0("null", 1:6)))
+  r <- testPairwiseEffects(D, des, sim$meta, dist = "l2", n.permutations = 999, seed = 1)$results
+  expect_true(all(r$exhaustive)); expect_equal(r$n.perm.distinct, rep(70, nrow(r)))
+  expect_equal(r$p.floor, rep(2 / 70, nrow(r))); expect_equal(r$p.floor.total, rep(1 / 70, nrow(r)))
+  even <- function(p) { k <- round(p[is.finite(p)] * 70); all(k %% 2 == 0) }
+  expect_true(even(r$p.shift)); expect_true(even(r$p.var))
+  expect_equal(r$p.shift[r$celltype == "strong"], 2 / 70)          # the smallest attainable value is reached
 })
 
 test_that("plan handles interaction cells, marginal and numeric contrasts, and continuous nuisance", {

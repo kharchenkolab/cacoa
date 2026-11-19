@@ -1177,7 +1177,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param formula formula|character Design formula specifying covariates to model (default=NULL)
     #' @param contrast character length-3 Contrast triplet c(var, ref, target) indicating the grouping variable and the two levels to compare (default=NULL)
     #' @param name character string Slot in which to save the results (default='de')
-    #' @param test character string Which DESeq2 test to use. The available options are "LRT", "Wald". (default="DESeq2.Wald")
+    #' @param test character string: "DESeq2.Wald" (default), "DESeq2.LRT", "edgeR", "limma-voom", "Wilcoxon.*", "t-test.*". A grouping
+    #'   term `(1 | g)` of the model is fitted by "limma-voom" as a random intercept per level of `g` (one within-level correlation
+    #'   shared by all genes, `limma::duplicateCorrelation()`; generalized least squares), which also allows a tested variable that takes
+    #'   one value per level (e.g. a condition per donor). The other tests fit it as a fixed term, with a warning. The estimated
+    #'   correlation per cell type is stored in the attribute `block.correlation` of the result
     #' @param resampling.method character which resampling method should be used "loo" for leave-one-out or "bootstrap", (default=NULL, i.e. no resampling)
     #' @param n.resamplings numeric Number of resamplings to perform (default=30)
     #' @param seed.resampling numeric Seed to use for resamplings, input to set.seed() (default=239)
@@ -1206,12 +1210,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                    n.cells.subsample=NULL, verbose=self$verbose, fix.n.samples=NULL, genes.to.omit = NULL, ...) {
       set.seed(seed.resampling)
       sample.model <- private$resolveModel(formula = formula, test = test.spec, contrast = contrast, verbose = verbose, what = "estimateDEPerCellType()")
-      if (!is.null(msg <- groupingBetweenMessage(sample.model, "estimateDEPerCellType()", model.based = TRUE))) stop(msg, call. = FALSE)
-      if (length(sample.model$random.vars)) {   # tests with model-based p-values cannot use a grouping term: it is fitted as a fixed term
+      # limma-voom fits a single grouping term (1 | g) as a random intercept per level of g (limma::duplicateCorrelation); the other
+      # tests take their p-values from a fixed-effect model, in which the grouping term becomes a fixed term
+      random.intercept <- length(sample.model$random.vars) == 1 && tolower(test) == "limma-voom"
+      if (!random.intercept && !is.null(msg <- groupingBetweenMessage(sample.model, "estimateDEPerCellType()", model.based = TRUE))) stop(msg, call. = FALSE)
+      if (random.intercept && verbose)
+        message(sprintf("limma-voom: '(1 | %s)' is fitted as a random intercept per level of '%s' (one within-level correlation shared by all genes, limma::duplicateCorrelation; generalized least squares)",
+                        sample.model$random.vars, sample.model$random.vars))
+      if (length(sample.model$random.vars) && !random.intercept) {   # fitted as a fixed term
         gf <- groupingAsFixedFormula(sample.model)
-        warning(sprintf("estimateDEPerCellType(): '%s' takes its p-values from the model and cannot use a grouping term; %s %s fitted as %s with one parameter per level (model %s).%s",
+        warning(sprintf("estimateDEPerCellType(): '%s' takes its p-values from a fixed-effect model and cannot use a grouping term; %s %s fitted as %s with one parameter per level (model %s).%s%s",
                         test, paste(sprintf("'(1 | %s)'", gf$groups), collapse = ", "), if (length(gf$groups) > 1) "are" else "is", if (length(gf$groups) > 1) "fixed terms" else "a fixed term", paste(deparse(gf$formula), collapse = ""),
-                        if (length(gf$dropped)) sprintf(" Covariates that are constant within its levels are absorbed by it and were dropped: %s.", paste(gf$dropped, collapse = ", ")) else ""), call. = FALSE)
+                        if (length(gf$dropped)) sprintf(" Covariates that are constant within its levels are absorbed by it and were dropped: %s.", paste(gf$dropped, collapse = ", ")) else "",
+                        if (length(gf$groups) == 1) " test = 'limma-voom' fits it as a random intercept instead." else ""), call. = FALSE)
         sample.model <- tryCatch(private$buildModel(formula = gf$formula, test = sample.model$test.spec$test, contrast = sample.model$test.spec$contrast,
                                                      numeric.ref = sample.model$numeric.ref, numeric.step = sample.model$numeric.step),   # the same step (e.g. per decade)
                                  error = function(e) stop("the model with the grouping term as a fixed term cannot be fitted: ", conditionMessage(e), call. = FALSE))
@@ -1298,9 +1309,17 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
       # if resampling: calculate median and variance on ranks after resampling
       de.res <- if(length(de.res) > 1) summarizeDEResamplingResults(de.res) else de.res[[1]]
+      rho <- if (random.intercept) tryCatch(vapply(de.res, function(x) { r <- if (is.data.frame(x)) x else x$res; attr(r, "block.correlation") %||% NA_real_ }, numeric(1)), error = function(e) NULL) else NULL
       de.res %<>% appendStatisticsToDE(expr.fracs[, names(de.res)])
       attr(de.res, "model") <- sample.model          # provenance (an attribute, so the per-cell-type list keeps its shape)
       attr(de.res, "test") <- test
+      if (random.intercept && !is.null(rho)) {   # the within-level correlation of each cell type
+        attr(de.res, "block.correlation") <- rho
+        if (verbose && any(is.finite(rho)))
+          message(sprintf("within-level correlation of '%s': %.2f to %.2f over %d cell types (median %.2f)%s", sample.model$random.vars,
+                          min(rho, na.rm = TRUE), max(rho, na.rm = TRUE), sum(is.finite(rho)), stats::median(rho, na.rm = TRUE),
+                          if (any(!is.finite(rho))) sprintf("; %d fitted without it (no level with two samples)", sum(!is.finite(rho))) else ""))
+      }
       
       self$test.results[[name]] <- de.res
 

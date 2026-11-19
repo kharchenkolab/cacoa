@@ -54,7 +54,10 @@ level. The test then rests on the levels as the independent units. \code{FALSE}:
 \value{
 list with \code{scheme}, \code{in.set} (logical over \code{samples}), \code{strata} (factor), \code{labels}, \code{unit} and \code{slot} (whole levels: per
 sample the index of its level, 0 when it is exchanged on its own, and the cell by which samples of two levels are matched), \code{info},
-\code{n.distinct} (may be \code{Inf}-like large; see \code{log.n.distinct}), \code{exhaustive}, \code{p.floor}, \code{notes}
+\code{n.distinct} (may be \code{Inf}-like large; see \code{log.n.distinct}), \code{exhaustive}, \code{p.floor}, \code{label.swap}, \code{notes}. \code{label.swap}: the
+complete exchange of the two compared labels is one of the relabelings (as many samples of each in every stratum). A statistic
+that does not change under that exchange (all two-sided ones here) then takes each value twice, and \code{p.floor} (under
+enumeration) is 2 / \code{n.distinct}; for one that changes (the \code{total} of the expression shifts) it stays 1 / \code{n.distinct}
 }
 \description{
 Decides which samples may swap labels, within which strata, and which scheme to use.

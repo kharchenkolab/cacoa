@@ -902,6 +902,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                   min.gene.frac = min.gene.frac, genes = genes, verbose = verbose)
       # expression shifts are estimated for contrasts (two levels, a combination of levels, or a numeric variable); whole-factor
       # tests of the model (used by the DE, composition and screen analyses) are skipped
+      # a contrast of coefficient weights (e.g. an interaction coefficient) does not compare two settings of the design: the shift engines
+      # would fit it but cannot relabel it (its design column stays fixed under every relabeling), so every p-value would be 1
+      is.coef <- vapply(model$tests, function(t) identical(t$design$contrast_spec$type, "coef"), logical(1))
+      if (any(is.coef)) stop("expression shifts compare two settings of the design (two levels, a level at a fixed setting of another factor, ",
+                             "or a numeric step); a contrast of coefficient weights (", paste(vapply(model$tests[is.coef], `[[`, character(1), "label"), collapse = ", "),
+                             ", e.g. an interaction) is not supported: test the comparison within each level instead (contrast = list(type = \"simple\", ..., at = ...))", call. = FALSE)
       is.term <- vapply(model$tests, function(t) t$kind != "contrast", logical(1))
       if (all(is.term)) stop("expression shifts are estimated for contrasts; whole-factor tests (",
                              paste(vapply(model$tests, `[[`, character(1), "label"), collapse = ", "), ") are not supported: name the comparison, ",
@@ -1011,7 +1017,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param test test label or index (default: the first test)
     #' @param effect `"shift"` (default) or `"var"`
     #' @param show.null show the relabeling band (default TRUE)
-    #' @param show.ci show the jackknife 95 % interval (default FALSE)
+    #' @param show.ci show the jackknife 95 % interval (default TRUE)
     #' @param show.pvalues print the p-values: `"adjusted"` (default), `"raw"` or `"none"`
     #' @param show.genes add a margin with the number of genes changed at gene-level FDR `gene.fdr` (gsd runs; default FALSE).
     #'   The count depends on power (samples, cells): a cross-check, not a ranking
@@ -1024,7 +1030,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param cell.types optional subset of cell types
     #' @param ... ignored (accepted for backward compatibility: `effects`, `normalized`, `type`, `order.by`, ...)
     #' @return ggplot2 object
-    plotExpressionShiftMagnitudes = function(name = "expression.shifts", test = NULL, effect = c("shift", "var"), show.null = TRUE, show.ci = FALSE,
+    plotExpressionShiftMagnitudes = function(name = "expression.shifts", test = NULL, effect = c("shift", "var"), show.null = TRUE, show.ci = TRUE,
                                              show.pvalues = c("adjusted", "raw", "none"), show.genes = FALSE, gene.fdr = 0.1,
                                              significance = c("padj", "p.fwer", "p"), alpha = NULL, order = c("magnitude", "significance"),
                                              show.provenance = NULL, legend.position = "bottom", cell.types = NULL, ...) {
@@ -1060,8 +1066,12 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param test test label or index (default: the first contrast test)
     #' @param cell.types optional subset of cell types
     #' @param normalized express the change relative to the effect's jackknife SE (default TRUE)
+    #' @param color.by optional column of the sample metadata that colours the samples (default: the tested variable)
+    #' @param layout `"auto"` (default: a heatmap up to 120 samples, dots per cell type above), `"heatmap"` or `"dots"`
     #' @return ggplot2 heatmap: samples x cell types, the change in the effect when the sample is left out
-    plotSampleInfluence = function(name = "expression.shifts", effect = c("shift", "var", "total"), test = NULL, cell.types = NULL, normalized = TRUE) {
+    plotSampleInfluence = function(name = "expression.shifts", effect = c("shift", "var", "total"), test = NULL, cell.types = NULL, normalized = TRUE,
+                                   color.by = NULL, layout = c("auto", "heatmap", "dots")) {
+      layout <- match.arg(layout)
       effect <- match.arg(effect)
       res <- private$getResults(name, "estimateExpressionShiftMagnitudes()")
       if (is.null(test)) test <- which(vapply(res$model$tests, function(t) t$kind == "contrast", logical(1)))[1]
@@ -1073,9 +1083,13 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       if (!is.null(cell.types)) m <- m[, intersect(cell.types, colnames(m)), drop = FALSE]
       w <- res$wide[[test]]
       se <- setNames(w[[paste0("se.", effect)]], w$celltype)
-      groups <- self$getSampleGroups(test, model = res$model)
+      groups <- self$getSampleGroups(test, model = res$model); g.title <- Filter(function(t) identical(t$label, test), res$model$tests)[1][[1]]$variable %||% "group"
+      if (!is.null(color.by)) {   # colour by another variable of the sample metadata
+        if (!color.by %in% names(self$sample.meta)) stop("color.by is not a column of the sample metadata")
+        groups <- stats::setNames(self$sample.meta[[color.by]], rownames(self$sample.meta)); if (is.factor(groups)) groups <- droplevels(groups); g.title <- color.by
+      }
       plotInfluenceHeatmap(m, se = if (normalized) se[colnames(m)] else NULL, groups = groups, effect = effect, plot.theme = self$plot.theme,
-                           palette = self$sample.groups.palette, group.title = Filter(function(t) identical(t$label, test), res$model$tests)[1][[1]]$variable %||% "group")
+                           palette = if (is.null(color.by)) self$sample.groups.palette else NULL, group.title = g.title, layout = layout)
     },
 
     #' @description Fit diagnostics in one layout for every analysis: two heatmaps of samples by cell types. Left, how far each
@@ -1086,13 +1100,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param analysis `"composition"`, `"expression.shifts"` or `"cell.density"`
     #' @param name result name (default: the analysis' default slot)
     #' @param what `"both"` (default), `"residual"` or `"influence"`
+    #' @param color.by optional column of the sample metadata that colours the samples (default: the tested variable); a variable that is
+    #'   not in the model shows whether it is related to the residuals or to the influence of single samples
+    #' @param layout `"auto"` (default: a heatmap up to 120 samples, dots per cell type above), `"heatmap"` or `"dots"`
     #' @param cell.types optional subset of cell types
     #' @param resid.thresh,influence.se marking thresholds (defaults: residual 3, or a sample twice as far from the fit as typical for
     #'   the expression shifts; 1 standard error)
     #' @return ggplot2 object (a two-panel grid for `what = "both"`)
     plotFitDiagnostics = function(analysis = c("composition", "expression.shifts", "cell.density"), name = NULL, what = c("both", "residual", "influence"),
-                                  cell.types = NULL, resid.thresh = NULL, influence.se = 1) {
-      analysis <- match.arg(analysis); what <- match.arg(what)
+                                  cell.types = NULL, resid.thresh = NULL, influence.se = 1, color.by = NULL, layout = c("auto", "heatmap", "dots")) {
+      analysis <- match.arg(analysis); what <- match.arg(what); layout <- match.arg(layout)
       name <- name %||% c(composition = "coda", expression.shifts = "expression.shifts", cell.density = "cell.density")[[analysis]]
       sub <- function(m) if (is.null(cell.types) || is.null(m)) m else m[, intersect(cell.types, colnames(m)), drop = FALSE]
       rm <- im <- NULL; r.title <- r.leg <- r.sub <- NULL
@@ -1120,13 +1137,19 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       rm <- sub(rm); im <- sub(im)
       if (!is.null(rm) && !is.null(im)) { cc <- intersect(colnames(rm), colnames(im)); ss <- intersect(rownames(rm), rownames(im)); rm <- rm[ss, cc, drop = FALSE]; im <- im[ss, cc, drop = FALSE] }   # the same samples and cell types, in the same order
+      if (!is.null(color.by)) {   # colour the samples by another variable (one not in the model: is it related to the residuals or the influence?)
+        if (!color.by %in% names(self$sample.meta)) stop("color.by is not a column of the sample metadata")
+        groups <- stats::setNames(self$sample.meta[[color.by]], rownames(self$sample.meta)); if (is.factor(groups)) groups <- droplevels(groups)
+      }
       so <- sampleHeatmapOrder(rm %||% im, groups)
-      g.title <- if (is.numeric(groups)) (res$model$tests[[1]]$variable %||% "group") else NULL
-      g.r <- if (what != "influence" && !is.null(rm)) plotSampleHeatmap(rm, groups = groups, group.title = g.title, title = r.title, legend = r.leg, mark = resid.thresh, plot.theme = self$plot.theme, palette = self$sample.groups.palette, sample.order = so)
-      g.i <- if (what != "residual" && !is.null(im)) plotSampleHeatmap(im, groups = groups, group.title = g.title, title = i.title, legend = "change without the sample (standard errors)", mark = influence.se, plot.theme = self$plot.theme, palette = self$sample.groups.palette, sample.order = so)
+      g.title <- color.by %||% if (is.numeric(groups)) (res$model$tests[[1]]$variable %||% "group") else NULL
+      pal <- if (is.null(color.by)) self$sample.groups.palette else NULL
+      g.r <- if (what != "influence" && !is.null(rm)) plotSampleHeatmap(rm, groups = groups, group.title = g.title, layout = layout, title = r.title, legend = r.leg, mark = resid.thresh, plot.theme = self$plot.theme, palette = pal, sample.order = so)
+      g.i <- if (what != "residual" && !is.null(im)) plotSampleHeatmap(im, groups = groups, group.title = g.title, layout = layout, title = i.title, legend = "change without the sample (standard errors)", mark = influence.se, plot.theme = self$plot.theme, palette = pal, sample.order = so)
       if (is.null(g.r) || is.null(g.i)) return(g.r %||% g.i)
       checkPackageInstalled("cowplot", cran = TRUE)
-      cowplot::plot_grid(g.r, g.i + ggplot2::theme(axis.text.y = ggplot2::element_blank(), axis.ticks.y = ggplot2::element_blank()), ncol = 2, rel_widths = c(1.12, 1), align = "h", axis = "tb")   # the same rows in both panels: sample names once
+      dots <- identical(layout, "dots") || (identical(layout, "auto") && nrow(rm %||% im) > 120)
+      cowplot::plot_grid(g.r, if (dots) g.i else g.i + ggplot2::theme(axis.text.y = ggplot2::element_blank(), axis.ticks.y = ggplot2::element_blank()), ncol = 2, rel_widths = c(1.12, 1), align = "h", axis = "tb")   # the same rows in both panels: sample names once
     },
 
     #' @description Deprecated: use `plotSampleInfluence()`
@@ -2750,6 +2773,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       # relabeling scheme of the model's test, as for the other analyses
       if (identical(perm.method, "auto")) perm.method <- sample.model$tests[[sample.model$primary %||% 1L]]$permutation$scheme %||% "block"
       perm.method <- match.arg(perm.method, c("freedman-lane", "block"))
+      if (length(sample.model$tests) > 1)   # the composition is one fit per test: the first test of the model is used
+        message(sprintf("estimateCellLoadings(): the model has %d tests; the composition is estimated for the first ('%s'). Name another with test = (and a result name).",
+                        length(sample.model$tests), sample.model$tests[[1]]$label))
       if (!isTRUE(random.baseline) && !is.null(msg <- groupingBetweenMessage(sample.model, "estimateCellLoadings()"))) stop(msg, call. = FALSE)
       if (identical(sample.model$contrast_spec$type, "term")) {
         # whole-factor test on the ILR coordinates (Euclidean): location / dispersion through the distance engine
@@ -2889,6 +2915,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' @param significance the test behind the filled points and p-values: `"clr"` (default: the primary test, relative to the
     #'   geometric mean of all cell types, reference-free) or `"reference"` (relative to the reference cell types, conditional on
     #'   that data-chosen set); see [plotCodaLoadings()]
+    #' @param title plot title (one panel; with `center = "both"` each panel is titled by its centering)
     #' @param center `"reference"` (default): loadings centred on the reference cell types; `"none"`: as they are (zero = the
     #'   geometric mean of all cell types); `"both"`: the two side by side (cowplot)
     #' @param ... passed to [plotCodaLoadings()] (e.g. `legend.position`)
@@ -2900,7 +2927,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$plotCellLoadings(center = "both")
     #' }
     plotCellLoadings=function(alpha=NULL, palette=self$cell.groups.palette, name='coda', ordering=c('loading', 'pvalue'),
-                              show.pvals=TRUE, show.null=TRUE, significance=c("clr", "reference"), center=c("reference", "none", "both"), ...) {
+                              show.pvals=TRUE, show.null=TRUE, significance=c("clr", "reference"), center=c("reference", "none", "both"), title=NULL, ...) {
       ordering <- match.arg(ordering); significance <- match.arg(significance); center <- match.arg(center); alpha <- private$opt("alpha", alpha)
       res <- private$getResults(name, 'estimateCellLoadings()')
       if (identical(res$kind, "term")) {
@@ -2910,7 +2937,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       lab <- res$contrast$predicted$labels
       one <- function(ctr, title = NULL) plotCodaLoadings(res, ref.level = self$ref.level %||% lab$baseline %||% "reference", target.level = self$target.level %||% lab$target %||% "target",
                        alpha = alpha, palette = palette, ordering = ordering, show.pvals = show.pvals, show.null = show.null, significance = significance, center = ctr, title = title, plot.theme = self$plot.theme, ...)
-      if (center != "both") return(one(center))
+      if (center != "both") return(one(center, title))
       checkPackageInstalled("cowplot", cran = TRUE)
       cowplot::plot_grid(one("none", "relative to the geometric mean"), one("reference", "relative to the reference cell types"), ncol = 2)
     },
@@ -3828,7 +3855,9 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' same defaults. Nothing requires a model, except `values = "adjusted"`.
     #' @param space `"expression"` (default), `"pseudobulk"` or `"composition"` (`"expression.shifts"` and `"coda"` are
     #'   accepted as the earlier names)
-    #' @param values `"unadjusted"` (default) or `"adjusted"`: the model's nuisance part removed (the covariates of the
+    #' @param values `"unadjusted"` (default), `"adjusted"` (the model's nuisance part removed) or `"residual"` (the whole fixed part of the
+    #'   model removed, tested variable included: the residual structure, e.g. to see whether a factor not in the model separates the samples).
+    #'   For `"adjusted"`: the model's nuisance part removed (the covariates of the
     #'   model other than the tested variable; for stored expression-shift results, the adjusted distances of the fit)
     #' @param cell.type cell type for `space = "expression"` (default NULL: all cell types combined)
     #' @param joint.weighting `"cells"` (default) or `"equal"`: weights of the cell types in the combined expression distance
@@ -3844,7 +3873,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' \dontrun{
     #' cao$getSampleDistanceMatrix(space = "composition")
     #' }
-    getSampleDistanceMatrix=function(space=c("expression", "pseudobulk", "composition"), values=c("unadjusted", "adjusted"),
+    getSampleDistanceMatrix=function(space=c("expression", "pseudobulk", "composition"), values=c("unadjusted", "adjusted", "residual"),
                                      cell.type=NULL, joint.weighting=c("cells", "equal"), dist=NULL, name=NULL, verbose=NULL,
                                      sample.subset=NULL, adjust.for=NULL, ...) {
       space <- normalizeSampleSpace(space); values <- match.arg(values); joint.weighting <- match.arg(joint.weighting)
@@ -3868,6 +3897,11 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
           private$sampleSpaceDistance(space, cell.type = cell.type, joint.weighting = joint.weighting, dist = dist, verbose = verbose)
         if (is.null(p.dists)) return(NULL)
         if (!is.null(res)) attr(p.dists, "dist.type") <- res$settings$dist
+        if (values == "residual") {   # the whole fitted part of the model removed (tested variable and covariates): what other factors shape the residuals
+          if (is.null(self$model)) stop("values = 'residual' needs a model (setModel())")
+          fv <- intersect(all.vars(self$model$formula), names(self$sample.meta))
+          adjust.for <- stats::as.formula(paste("~", paste(unique(c(fv, if (!is.null(adjust.for)) all.vars(stats::as.formula(adjust.for)))), collapse = " + ")))
+        }
         if (values == "adjusted") {
           nuis <- private$modelNuisanceFormula()
           if (is.null(nuis)) { if (verbose) message("the model has no covariates to adjust for: unadjusted distances"); }
@@ -3898,7 +3932,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' `screenCovariates()`). Works before a model is set; `values = "adjusted"` or `"both"` need one.
     #' @param space `"expression"` (default), `"pseudobulk"` or `"composition"` (see `getSampleDistanceMatrix()`)
     #' @param method `"MDS"` (default), `"tSNE"`, `"UMAP"` or `"heatmap"`
-    #' @param values `"unadjusted"` (default), `"adjusted"` or `"both"` (side by side)
+    #' @param values `"unadjusted"` (default), `"adjusted"` (covariates removed), `"residual"` (the whole fixed part of the model removed, tested variable included) or `"both"` (unadjusted and adjusted side by side)
     #' @param dist distance of the expression profiles (default: the object option)
     #' @param name results of `estimateExpressionShiftMagnitudes()` to take the expression distances from
     #' @param cell.type cell type (`space = "expression"`; default NULL: all cell types combined)
@@ -3928,7 +3962,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                  both.ncol=2, both.align="hv", show.r2=TRUE, n.permutations=NULL, sample.subset=NULL,
                                  n.cores=NULL, adjust.for=NULL, ...) {
       space <- normalizeSampleSpace(space); joint.weighting <- match.arg(joint.weighting)
-      values <- match.arg(values, c("unadjusted", "adjusted", "both"))
+      values <- match.arg(values, c("unadjusted", "adjusted", "residual", "both"))
       n.permutations <- private$opt("n.permutations", n.permutations); n.cores <- private$opt("n.cores", n.cores)
       dots <- list(...)
       if (!is.null(dots$show.pvalues)) { show.r2 <- isTRUE(dots$show.pvalues) || show.r2; dots$show.pvalues <- NULL }   # earlier name
@@ -3968,7 +4002,8 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         if (length(keep) < nrow(D)) D <- D[keep, keep, drop = FALSE]
         lab <- function(v) if (is.null(v)) NULL else setNames(sample.meta[rownames(D), v], rownames(D))
         adj.vars <- c(if (!is.null(adjust.for)) all.vars(stats::as.formula(adjust.for)),
-                      if (vals == "adjusted") { nf <- private$modelNuisanceFormula(); if (!is.null(nf)) all.vars(nf) })
+                      if (vals == "adjusted") { nf <- private$modelNuisanceFormula(); if (!is.null(nf)) all.vars(nf) },
+                      if (vals == "residual" && !is.null(self$model)) intersect(all.vars(self$model$formula), names(sample.meta)))
         sub <- if (show.r2) private$sampleSpaceR2Label(D, sample.meta, unique(c(color.by, shape.by)), c(color.title, shape.title)[!duplicated(c(color.by, shape.by))],
                                                        n.permutations = n.permutations, n.cores = n.cores, adjusted = adj.vars) else NULL
         args <- c(list(p.dists = D, sample.labels = lab(color.by), n.cells.per.samp = n.cells.per.samp, method = method, sample.colors = sample.colors,
@@ -3980,7 +4015,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       }
       if (values != "both") {
         ttl <- title %||% if (!is.null(adjust.for)) sprintf("%s | adjusted for %s", space.title, paste(all.vars(stats::as.formula(adjust.for)), collapse = ", ")) else
-          if (values == "adjusted") sprintf("%s | model-adjusted", space.title) else space.title
+          if (values == "adjusted") sprintf("%s | model-adjusted", space.title) else if (values == "residual") sprintf("%s | residual after the model", space.title) else space.title
         return(onePanel(values, ttl))
       }
       checkPackageInstalled("cowplot", cran = TRUE, details = "for values = 'both'")

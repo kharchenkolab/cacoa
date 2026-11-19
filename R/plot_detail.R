@@ -35,11 +35,12 @@ plotShiftDetailPanels <- function(eff, adjusted = NULL, groups = NULL, dist = "c
   # (a) MDS of adjusted distances
   mds <- stats::cmdscale(sqrt(pmax(D2, 0)), k = 2)
   df <- data.frame(x = mds[, 1], y = mds[, 2], sample = samples, group = if (is.null(grp)) "all" else grp, stringsAsFactors = FALSE)
-  gg.a <- ggplot2::ggplot(df, ggplot2::aes(x = .data$x, y = .data$y, colour = .data$group)) + ggplot2::geom_point(size = 3) +
+  gg.a <- ggplot2::ggplot(df, ggplot2::aes(x = .data$x, y = .data$y, colour = .data$group)) + ggplot2::geom_point(size = if (nrow(df) <= 40) 3 else max(1.2, 3 * sqrt(40 / nrow(df))), alpha = if (nrow(df) > 100) 0.75 else 1) +
     plot.theme + ggplot2::labs(x = "MDS 1", y = "MDS 2", title = "adjusted sample distances", colour = if (is.num) group.title else NULL) +
     ggplot2::theme(legend.position = "bottom")
   if (label.samples) gg.a <- gg.a + ggrepel::geom_text_repel(ggplot2::aes(label = .data$sample), size = 2.5, show.legend = FALSE, max.overlaps = Inf)
   if (!is.null(palette) && is.two && all(levels(grp) %in% names(palette))) gg.a <- gg.a + ggplot2::scale_colour_manual(values = palette)
+  if (is.num) gg.a <- gg.a + ggplot2::scale_colour_gradientn(colours = rev(RColorBrewer::brewer.pal(11, "Spectral")))   # as the sample maps
   panels <- list(gg.a)
   # (b) pair distances within / between, annotated with the three effects
   if (is.two) {
@@ -51,7 +52,8 @@ plotShiftDetailPanels <- function(eff, adjusted = NULL, groups = NULL, dist = "c
     if (!is.null(palette) && all(levels(grp) %in% names(palette))) kind.cols[1:2] <- unname(palette[levels(grp)])
     gg.b <- ggplot2::ggplot(pt, ggplot2::aes(x = .data$kind, y = .data$d2, fill = .data$kind)) + ggplot2::geom_boxplot(outlier.shape = NA, alpha = 0.6) +
       ggplot2::scale_fill_manual(values = kind.cols) +
-      ggplot2::geom_jitter(width = 0.15, size = 1, alpha = 0.5) + plot.theme + ggplot2::guides(fill = "none") +
+      ggplot2::geom_jitter(data = if (nrow(pt) > 3000) pt[sort(withSeed(1, sample.int(nrow(pt), 3000))), , drop = FALSE] else pt,   # many samples: the boxes use every pair, the points a sample of 3000
+                           width = 0.15, size = if (nrow(pt) > 3000) 0.4 else 1, alpha = if (nrow(pt) > 3000) 0.3 else 0.5) + plot.theme + ggplot2::guides(fill = "none") +
       ggplot2::labs(x = NULL, y = "adjusted squared distance", title = "pair distances", subtitle = ann) +
       ggplot2::theme(plot.subtitle = ggplot2::element_text(size = 8))
     panels <- c(panels, list(gg.b))

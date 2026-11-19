@@ -185,6 +185,9 @@ gsdShiftsPerCellType <- function(cm, sample.per.cell, cell.groups, model, lib, m
       obs <- if (fl) paste(seq_along(pres), collapse = ",") else paste(rows[pres], collapse = "\n")
       floors[k] <<- sum(keys == obs) / length(keys)
       length(unique(keys)) }, numeric(1))
+    # a cell type whose samples allow a single arrangement under the relabeling cannot be tested (p = 1 by construction): not tested
+    one <- tested & is.finite(n.dist) & n.dist <= 1
+    if (any(one)) { tested[one] <- FALSE; padj[] <- NA_real_; padj[tested] <- stats::p.adjust(p[tested], "BH") }
     for (k in seq_along(types)) {
       pr <- prof[[k]]; pres <- pr$present + 1L
       if (!tested[k] || length(pres) < 3) next
@@ -223,11 +226,12 @@ gsdShiftsPerCellType <- function(cm, sample.per.cell, cell.groups, model, lib, m
                        p.floor = ifelse(is.finite(floors), floors, ifelse(is.finite(n.dist) & n.dist <= B, 1 / n.dist, 1 / (B + 1))), flags = "", n.genes = ng, n.eff = mag[, "n.eff"], se.jk.norm = mag[, "se.std"], stringsAsFactors = FALSE)
     rows$flags <- ifelse(rows$p.floor > 0.05 / 10, "few-permutations", "")
     rows <- rows[tested, , drop = FALSE]; rownames(rows) <- NULL
-    if (any(!tested)) skipped <- rbind(skipped, data.frame(test = t$label, celltype = types[!tested], reason = "too few samples with enough cells"))
+    if (any(!tested)) skipped <- rbind(skipped, data.frame(test = t$label, celltype = types[!tested],
+                                                          reason = ifelse(one[!tested], "a single arrangement of its samples under the relabeling", "too few samples with enough cells")))
     out[[t$label]] <- rows; genes.out[[t$label]] <- gt
     infl.out[[t$label]] <- list(shift = sweep(infl[, tested, drop = FALSE], 2, mag[tested, "std"]), shift.total = sweep(infl.tot[, tested, drop = FALSE], 2, mag[tested, "total"]))
     null.out[[t$label]] <- lapply(null.mag, function(m) m[, tested, drop = FALSE])
-    global[[t$label]] <- data.frame(test = t$label, test.id = t$id, effect = "shift", p = if (any(tested)) min(p.fwer[tested]) else NA_real_)
+    global[[t$label]] <- data.frame(test = t$label, test.id = t$id, effect = "shift", p = if (any(tested) && any(is.finite(p.fwer[tested]))) min(p.fwer[tested], na.rm = TRUE) else NA_real_)
   }
   results <- do.call(rbind, unname(out)); if (is.null(results)) results <- data.frame()
   global <- do.call(rbind, unname(global)); rownames(skipped) <- NULL

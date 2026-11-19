@@ -727,7 +727,7 @@ getScaledZGradient <- function(min.z, palette, color.range) {
 #' @keywords internal
 plotSampleDistanceMatrix <- function(p.dists, sample.labels=NULL, n.cells.per.samp, method='MDS', sample.colors=NULL,
                                      show.sample.size=TRUE, palette=NULL, font.size=NULL, show.ticks=FALSE, title=NULL,
-                                     shape.labels=NULL, shape.title=NULL, show.labels=FALSE, size=5, color.title=NULL, 
+                                     shape.labels=NULL, shape.title=NULL, show.labels=FALSE, size=NULL, color.title=NULL, 
                                      cont.palette = rev(RColorBrewer::brewer.pal(11, "Spectral")),
                                      perplexity=4, max.iter=1e3, plot.theme=theme_get(), n.neighbors=15, ...) {
       if (method == 'tSNE') {
@@ -843,17 +843,21 @@ plotSampleDistanceMatrix <- function(p.dists, sample.labels=NULL, n.cells.per.sa
         if (n.sh <= 9) gg <- gg + scale_shape_manual(values = c(16, 17, 15, 18, 8, 4, 3, 1, 2)[seq_len(n.sh)], na.value = 1)
       }
 
+      # point size: 5 up to 40 samples, smaller (and translucent) for larger cohorts so that points do not hide each other
+      n.pts <- nrow(df)
+      if (is.null(size)) size <- if (n.pts <= 40) 5 else max(1.5, 5 * sqrt(40 / n.pts))
+      pt.alpha <- if (n.pts > 100) 0.75 else 1
       if (show.sample.size) {
         if (length(size) == 1) {
           size <- c(size * 0.5, size * 1.5)
         }
-        gg <- gg + geom_point(aes(size=n.cells)) +
+        gg <- gg + geom_point(aes(size=n.cells), alpha=pt.alpha) +
           scale_size_continuous(trans="log10", range=size, name="Num. cells")
         # readable legend keys (the point size of the keys would otherwise follow the smallest cell count)
         if (!is.null(sample.labels) && is.null(sample.colors) && !is.cont) gg <- gg + guides(color = guide_legend(override.aes = list(size = 4.5)))
         if (!is.null(shape.labels)) gg <- gg + guides(shape = guide_legend(override.aes = list(size = 4.5)))
       } else {
-        gg <- gg + geom_point(size=size)
+        gg <- gg + geom_point(size=size, alpha=pt.alpha)
       }
 
       gg %<>% sccore::styleEmbeddingPlot(title=title, show.ticks=show.ticks, show.labels=show.labels, ...)

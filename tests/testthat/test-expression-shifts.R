@@ -103,3 +103,14 @@ test_that("sample distance accessor and plots work on the new results", {
   sep <- cao$estimateMetadataSeparation(cao$sample.meta[, c("group", "batch")], n.permutations = 99, show.warning = FALSE, verbose = FALSE)
   expect_setequal(names(sep$pvalues), c("group", "batch"))
 })
+
+test_that("residual sample distances remove the whole fixed part of the model", {
+  cao <- makeToyCacoa(n.per.group = c(A = 6, B = 6), cells.per.sample = 40, n.genes = 80, shift = 1, seed = 6)
+  cao$setModel(~ group, test = "group", verbose = FALSE)
+  suppressMessages(cao$estimateExpressionShiftMagnitudes(n.permutations = 19, verbose = FALSE))
+  du <- cao$getSampleDistanceMatrix(space = "expression.shifts", values = "unadjusted")
+  dr <- cao$getSampleDistanceMatrix(space = "expression.shifts", values = "residual")
+  r2 <- function(D) { g <- cao$sample.meta[rownames(D), "group"]; G <- cacoa:::gowerCenter(as.matrix(D)^2); H <- model.matrix(~ g); P <- H %*% solve(crossprod(H), t(H)); sum(diag(P %*% G)) / sum(diag(G)) }
+  expect_gt(r2(du), 0.2); expect_lt(r2(dr), 1e-6)                  # the group explains nothing of the residual distances
+  expect_s3_class(cao$plotSampleDistances(space = "expression.shifts", values = "residual", color.by = "batch"), "ggplot")
+})

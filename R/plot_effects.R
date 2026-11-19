@@ -50,7 +50,7 @@ plotEffectsPerCellType <- function(df, normalized = TRUE, type = c("dot", "bar")
       ggplot2::scale_alpha_manual(values = c(`FALSE` = 0.35, `TRUE` = 1), guide = "none")
     if (show.ci) gg <- gg + ggplot2::geom_errorbar(ggplot2::aes(xmin = .data$lo, xmax = .data$hi), width = 0.3, colour = "grey30", na.rm = TRUE)
   } else {
-    if (show.ci) gg <- gg + ggplot2::geom_errorbar(ggplot2::aes(xmin = .data$lo, xmax = .data$hi, colour = .data$celltype), width = 0.3, na.rm = TRUE)
+    if (show.ci) gg <- gg + ggplot2::geom_errorbar(ggplot2::aes(xmin = .data$lo, xmax = .data$hi), width = 0.3, colour = "grey30", na.rm = TRUE)   # one interval style in every effect plot
     gg <- gg + ggplot2::geom_point(ggplot2::aes(colour = .data$celltype, fill = .data$celltype, shape = .data$significant), size = 2.6, stroke = 0.8) +
       ggplot2::scale_shape_manual(values = c(`FALSE` = 21, `TRUE` = 19), guide = "none", labels = c(`FALSE` = "not significant", `TRUE` = "significant"))
     gg <- gg + ggplot2::geom_point(data = df[!df$significant, ], ggplot2::aes(colour = .data$celltype), shape = 21, fill = "white", size = 2.6, stroke = 0.8)
@@ -89,7 +89,9 @@ sampleHeatmapOrder <- function(m, groups = NULL) {
 #' @return ggplot2 object
 #' @export
 plotSampleHeatmap <- function(m, groups = NULL, title = NULL, legend = "value", mark = NULL, subtitle = NULL, plot.theme = ggplot2::theme_bw(), palette = NULL, sample.order = NULL,
-                              group.title = NULL, max.sample.labels = 60) {
+                              group.title = NULL, max.sample.labels = 60, layout = c("auto", "heatmap", "dots"), max.heatmap.samples = 120) {
+  layout <- match.arg(layout); if (layout == "auto") layout <- if (nrow(m) > max.heatmap.samples) "dots" else "heatmap"
+  if (layout == "dots") return(plotSampleDots(m, groups = groups, group.title = group.title, mark = mark, title = title, legend = legend, palette = palette, plot.theme = plot.theme))
   df <- data.frame(sample = rep(rownames(m), ncol(m)), celltype = rep(colnames(m), each = nrow(m)), value = as.vector(m), stringsAsFactors = FALSE)
   has.na <- anyNA(df$value)
   ord.s <- sampleHeatmapOrder(m, groups)
@@ -116,7 +118,7 @@ plotSampleHeatmap <- function(m, groups = NULL, title = NULL, legend = "value", 
     gdf <- gdf[!is.na(gdf$group), ]
     gg <- gg + ggplot2::geom_point(data = gdf, ggplot2::aes(x = .data$x, y = .data$sample, colour = .data$group), inherit.aes = FALSE, shape = 15, size = 3) +
       ggplot2::labs(colour = group.title)
-    if (num) gg <- gg + ggplot2::scale_colour_viridis_c() + ggplot2::guides(colour = ggplot2::guide_colourbar(order = 2, title.position = "top"))
+    if (num) gg <- gg + ggplot2::scale_colour_gradientn(colours = rev(RColorBrewer::brewer.pal(11, "Spectral"))) + ggplot2::guides(colour = ggplot2::guide_colourbar(order = 2, title.position = "top"))
     else {
       gg <- gg + ggplot2::guides(colour = ggplot2::guide_legend(order = 2))
       if (!is.null(palette) && all(unique(gdf$group) %in% names(palette))) gg <- gg + ggplot2::scale_colour_manual(values = palette)
@@ -136,8 +138,11 @@ plotSampleHeatmap <- function(m, groups = NULL, title = NULL, legend = "value", 
 #' @return ggplot2 object
 #' @export
 plotInfluenceHeatmap <- function(m, se = NULL, groups = NULL, effect = "shift", plot.theme = ggplot2::theme_bw(), palette = NULL, group.title = "group",
-                                 max.sample.labels = 60) {
+                                 max.sample.labels = 60, layout = c("auto", "heatmap", "dots"), max.heatmap.samples = 120) {
   if (!is.null(se)) { se[!is.finite(se) | se == 0] <- NA; m <- sweep(m, 2, se, "/") }
+  layout <- match.arg(layout); if (layout == "auto") layout <- if (nrow(m) > max.heatmap.samples) "dots" else "heatmap"
+  if (layout == "dots") return(plotSampleDots(m, groups = groups, group.title = group.title, mark = if (!is.null(se)) 1 else NULL, title = sprintf("Influence of single samples on %s", effect),
+                                              legend = if (is.null(se)) sprintf("change in %s", effect) else sprintf("change in %s (SE units)", effect), palette = palette, plot.theme = plot.theme))
   df <- data.frame(sample = rep(rownames(m), ncol(m)), celltype = rep(colnames(m), each = nrow(m)), value = as.vector(m), stringsAsFactors = FALSE)
   has.na <- anyNA(df$value)   # samples not in a cell type's estimate: grey tiles (white would read as "no change")
   ord.s <- rownames(m)[order(rowMeans(abs(m), na.rm = TRUE), decreasing = TRUE)]
@@ -162,7 +167,7 @@ plotInfluenceHeatmap <- function(m, se = NULL, groups = NULL, effect = "shift", 
     gdf <- gdf[!is.na(gdf$group), ]
     gg <- gg + ggplot2::geom_point(data = gdf, ggplot2::aes(x = .data$x, y = .data$sample, colour = .data$group), inherit.aes = FALSE, shape = 15, size = 3) +
       ggplot2::labs(colour = group.title)
-    if (num) gg <- gg + ggplot2::scale_colour_viridis_c()
+    if (num) gg <- gg + ggplot2::scale_colour_gradientn(colours = rev(RColorBrewer::brewer.pal(11, "Spectral")))
     else if (!is.null(palette) && all(unique(gdf$group) %in% names(palette))) gg <- gg + ggplot2::scale_colour_manual(values = palette)
   }
   gg
@@ -362,4 +367,48 @@ plotShiftMagnitudes <- function(w, effect = c("shift", "var"), show.null = TRUE,
   top <- cowplot::plot_grid(gg + ggplot2::theme(legend.position = "none"), gm, nrow = 1, rel_widths = c(1, 0.16), align = "h", axis = "tb")
   if (identical(legend.position, "none")) return(top)
   cowplot::plot_grid(top, cowplot::get_legend(gg), ncol = 1, rel_heights = c(1, 0.07))
+}
+
+#' Per-sample values by cell type as dots (the layout of the sample heatmaps for many samples)
+#'
+#' One column of jittered points per cell type, coloured by a sample variable (a factor, or a continuous scale for a number), with
+#' lines at the marking threshold and the most extreme samples beyond it named. Readable with hundreds of samples, where a heatmap
+#' turns into stripes; colouring by a variable that is not in the model shows whether it is related to the residuals or the influence.
+#' @param m samples x cell types matrix
+#' @param groups named vector over samples (factor, character or numeric) used for the colours, or NULL
+#' @param group.title legend title of the colours
+#' @param mark threshold drawn as lines and used to name samples (NULL: none)
+#' @param title,legend plot title and the label of the value axis
+#' @param palette named colours of the levels (optional)
+#' @param n.label name at most this many samples per cell type beyond `mark` (default 3)
+#' @param plot.theme ggplot2 theme
+#' @return ggplot2 object
+#' @keywords internal
+plotSampleDots <- function(m, groups = NULL, group.title = NULL, mark = NULL, title = NULL, legend = "value", palette = NULL, n.label = 3,
+                           plot.theme = ggplot2::theme_bw()) {
+  df <- data.frame(sample = rep(rownames(m), ncol(m)), celltype = factor(rep(colnames(m), each = nrow(m)), levels = colnames(m)), value = as.vector(m),
+                   stringsAsFactors = FALSE)
+  df <- df[is.finite(df$value), , drop = FALSE]
+  num <- !is.null(groups) && is.numeric(groups)
+  df$group <- if (is.null(groups)) "all" else if (num) as.numeric(groups[df$sample]) else as.character(groups[df$sample])
+  set.seed(1); df$x <- as.numeric(df$celltype) + stats::runif(nrow(df), -0.3, 0.3)
+  gg <- ggplot2::ggplot(df, ggplot2::aes(x = .data$x, y = .data$value)) + ggplot2::geom_hline(yintercept = 0, colour = "grey60")
+  near <- !is.null(mark) && any(abs(df$value) > 0.6 * mark)   # threshold lines only where they do not squeeze the data
+  if (near) gg <- gg + ggplot2::geom_hline(yintercept = c(-mark, mark), colour = "grey45", linetype = 3)
+  gg <- gg + ggplot2::geom_point(ggplot2::aes(colour = .data$group), size = 0.9, alpha = 0.7) +
+    ggplot2::scale_x_continuous(breaks = seq_len(ncol(m)), labels = colnames(m), expand = ggplot2::expansion(add = 0.5)) +
+    plot.theme + ggplot2::labs(x = NULL, y = legend, title = title, colour = group.title,
+                               subtitle = if (is.null(mark)) NULL else if (near) sprintf("dotted: %g; named: the most extreme samples beyond it", mark) else sprintf("no sample beyond %g", mark)) +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1), panel.grid.minor = ggplot2::element_blank(), panel.grid.major.x = ggplot2::element_blank(),
+                   legend.position = "bottom", plot.subtitle = ggplot2::element_text(size = 8, colour = "grey30"), plot.title = ggplot2::element_text(size = 11))
+  if (num) gg <- gg + ggplot2::scale_colour_gradientn(colours = rev(RColorBrewer::brewer.pal(11, "Spectral")))
+  else if (!is.null(palette) && all(unique(df$group) %in% names(palette))) gg <- gg + ggplot2::scale_colour_manual(values = palette)
+  else if (is.null(groups)) gg <- gg + ggplot2::scale_colour_manual(values = c(all = "grey25"), guide = "none")
+  if (!is.null(mark)) {
+    ex <- df[abs(df$value) > mark, , drop = FALSE]
+    if (nrow(ex)) { ex <- do.call(rbind, lapply(split(ex, ex$celltype, drop = TRUE), function(z) utils::head(z[order(-abs(z$value)), , drop = FALSE], n.label)))
+      checkPackageInstalled("ggrepel", cran = TRUE)
+      gg <- gg + ggrepel::geom_text_repel(data = ex, ggplot2::aes(label = .data$sample), size = 2.2, colour = "grey20", min.segment.length = 0, segment.size = 0.2, max.overlaps = Inf, seed = 1) }
+  }
+  gg
 }

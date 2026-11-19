@@ -496,7 +496,8 @@ pairwiseEffectsFromDesign <- function(D, design, meta, dispersion.formula = NULL
     one <- function(Fm, at) .oneRowFromFormula(attr(Fm, "terms"), attr(Fm, "xlevels"), attr(Fm, "contrasts"),
                                                colnames(Fm), meta[samples, , drop = FALSE], at, design$numeric_ref_used)
     Xrows <- t(sapply(levs, function(l) one(design$F, utils::modifyList(at0, setNames(list(l), spec$term)))[colnames(F)][keep]))
-    Zrows <- t(sapply(levs, function(l) one(Zfull, utils::modifyList(at0, setNames(list(l), spec$term)))[zkeep]))
+    zvars <- all.vars(stats::delete.response(attr(Zfull, "terms")))   # settings of factors the dispersion design does not contain do not affect its rows
+    Zrows <- t(sapply(levs, function(l) { at <- utils::modifyList(at0, setNames(list(l), spec$term)); one(Zfull, at[intersect(names(at), zvars)]) })[zkeep, , drop = FALSE])
     if (length(levs) == 1) { Xrows <- matrix(Xrows, 1); Zrows <- matrix(Zrows, 1) }
     if (!is.null(inv.n)) Zrows <- cbind(Zrows, mean(inv.n))   # cells at the average cell number
     rownames(Xrows) <- rownames(Zrows) <- levs

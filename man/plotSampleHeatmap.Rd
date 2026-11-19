@@ -15,7 +15,9 @@ plotSampleHeatmap(
   palette = NULL,
   sample.order = NULL,
   group.title = NULL,
-  max.sample.labels = 60
+  max.sample.labels = 60,
+  layout = c("auto", "heatmap", "dots"),
+  max.heatmap.samples = 120
 )
 }
 \arguments{

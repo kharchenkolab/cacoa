@@ -182,3 +182,12 @@ test_that("a continuous covariate outside the range of the other level is report
   expect_false(any(grepl("range of", checkDesign(meta2, test.variable = "g")$issues$message)))
   expect_false(any(grepl("range of", buildCacoaModel(meta, ~ g, test = "g")$issues$message)))
 })
+
+test_that("expression shifts refuse a contrast of coefficient weights instead of returning p = 1", {
+  cao <- makeToyCacoa(n.per.group = c(A = 6, B = 6), cells.per.sample = 40, n.genes = 80, shift = 0.6, seed = 2)
+  m <- cao$sample.meta; m$anc <- factor(rep(c("p", "q"), 6)); cao$sample.meta <- m
+  cao$setModel(~ group * anc, contrast = c(`groupB:ancq` = 1), verbose = FALSE)
+  expect_error(cao$estimateExpressionShiftMagnitudes(n.permutations = 19, verbose = FALSE), "coefficient weights")
+  cao$setModel(~ group * anc, contrast = list(type = "simple", term = "group", num = "B", den = "A", at = list(anc = "p")), verbose = FALSE)
+  expect_s3_class(suppressWarnings(suppressMessages(cao$estimateExpressionShiftMagnitudes(n.permutations = 19, verbose = FALSE))), "cacoaExpressionShifts")
+})

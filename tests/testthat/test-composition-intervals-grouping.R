@@ -177,3 +177,16 @@ test_that("composition sensitivity fits alternative models on samples the curren
   expect_equal(s$dropped, character(0))
   expect_equal(unique(s$table$n[s$table$model == "unadjusted"]), nrow(meta))      # all 12 samples, not the 10 of the current model
 })
+
+test_that("composition loadings are drawn with jackknife intervals by default, as the other effect plots", {
+  cao <- makeToyCacoa(n.per.group = c(A = 6, B = 6), cells.per.sample = 40, n.cell.types = 4, shift = 1, seed = 7)
+  res <- suppressMessages(cao$estimateCellLoadings(n.permutations = 29, verbose = FALSE))
+  loo <- cacoa:::codaLooLoadings(res); expect_equal(dim(loo), c(12, 4))
+  nj <- nrow(loo); sej <- sqrt((nj - 1) / nj * colSums(sweep(loo, 2, colMeans(loo))^2)) / log(2)
+  gg <- cacoa:::plotCodaLoadings(res, center = "none")
+  d <- gg$data[match(names(sej), gg$data$celltype), ]
+  expect_equal(unname((d$hi - d$lo) / 2), unname(qnorm(0.975) * sej), tolerance = 1e-8)
+  expect_true(any(vapply(gg$layers, function(l) inherits(l$geom, "GeomErrorbar"), logical(1))))
+  gm <- cacoa:::plotCodaLoadings(res, center = "none", interval = "model"); expect_false(identical(gm$data$hi, gg$data$hi))
+  expect_true(all(is.na(cacoa:::plotCodaLoadings(res, center = "none", interval = FALSE)$data$lo)))
+})

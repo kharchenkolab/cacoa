@@ -639,10 +639,11 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
 #'   geometric mean of all cell types is marked by a dashed line), or `"none"`: the loadings as they are (zero = the geometric
 #'   mean; the reference block's mean is marked). The band is the null of the test behind the points placed on the same axis
 #' @param title plot title (optional)
-#' @param interval draw the 95 % confidence interval of each loading (default TRUE): the model-based interval of the least-squares fit
-#'   on the log ratios (t quantile with the residual degrees of freedom; `interval.level`). With `center = "reference"` it is the
-#'   interval of the loading relative to the reference cell types, given that set. It is not the test: the filled points and the
-#'   p-values come from the permutations
+#' @param interval the interval drawn around each loading: `"jackknife"` (default: from the loadings refitted with each sample left out,
+#'   as for the expression shifts and the sensitivity plots; a fit with a random baseline falls back to the model interval), `"model"`
+#'   (the model-based interval of the least-squares fit on the log ratios, t quantile with the residual degrees of freedom) or
+#'   `"none"` (`TRUE` / `FALSE` are read as `"jackknife"` / `"none"`). With `center = "reference"` it is the interval of the loading
+#'   relative to the reference cell types. It is not the test: the filled points and the p-values come from the permutations
 #' @param interval.level level of the interval (default 0.95)
 #' @param min.effect optional fold change (e.g. 1.5) marked by dotted lines at +- log2(`min.effect`): a cell type whose interval lies
 #'   beyond a line changes by at least that factor relative to the zero of the axis (see [codaLoadingsTable()])
@@ -651,8 +652,10 @@ runCoda <- function(cnts, groups, n.seed=239, n.boot=1000, ref.cell.type=NULL, n
 plotCodaLoadings <- function(res, ref.level = "reference", target.level = "target", alpha = 0.05, palette = NULL,
                              ordering = c("loading", "pvalue"), show.pvals = TRUE, show.null = TRUE, plot.theme = ggplot2::theme_bw(),
                              legend.position = "bottom", significance = c("clr", "reference"), center = c("reference", "none"), title = NULL,
-                             interval = TRUE, interval.level = 0.95, min.effect = NULL) {
+                             interval = c("jackknife", "model", "none"), interval.level = 0.95, min.effect = NULL) {
   ordering <- match.arg(ordering); significance <- match.arg(significance); center <- match.arg(center)
+  if (isTRUE(interval)) interval <- "jackknife" else if (isFALSE(interval)) interval <- "none"
+  interval <- match.arg(interval, c("jackknife", "model", "none"))
   if (is.null(res$contrast)) stop("not a contrast result of lmCoda()")
   l <- res$contrast$loadings$obs; cts <- names(l); ref <- res$reference$celltypes; ref <- ref[ref %in% cts]
   off <- if (length(ref)) mean(l[ref]) else 0                      # the reference block's mean loading (natural log)
@@ -663,10 +666,19 @@ plotCodaLoadings <- function(res, ref.level = "reference", target.level = "targe
   d <- data.frame(celltype = cts, value = unname(l + shift) / log(2), pval = unname(pval), padj = unname(padj), nlo = NA_real_, nhi = NA_real_,
                   sig = is.finite(padj) & unname(padj) <= alpha, reference = cts %in% ref, stringsAsFactors = FALSE)
   d$lo <- d$hi <- NA_real_
-  se <- if (center == "reference") res$contrast$loadings$se.ref else res$contrast$loadings$se
-  if (interval && !is.null(se) && is.finite(res$contrast$loadings$df %||% NA)) {
-    tq <- stats::qt(1 - (1 - interval.level) / 2, res$contrast$loadings$df); d$lo <- d$value - tq * unname(se[cts]) / log(2); d$hi <- d$value + tq * unname(se[cts]) / log(2)
+  loo <- if (interval == "jackknife") codaLooLoadings(res) else NULL   # (NULL for a random-baseline fit: the model interval is drawn)
+  if (interval == "jackknife" && is.null(loo)) interval <- "model"
+  if (interval == "jackknife") {
+    lo2 <- loo[, cts, drop = FALSE]; if (center == "reference" && length(ref)) lo2 <- sweep(lo2, 1, rowMeans(loo[, ref, drop = FALSE]))
+    nj <- nrow(lo2); sej <- sqrt((nj - 1) / nj * colSums(sweep(lo2, 2, colMeans(lo2))^2)) / log(2); zq <- stats::qnorm(1 - (1 - interval.level) / 2)
+    d$lo <- d$value - zq * unname(sej); d$hi <- d$value + zq * unname(sej)
+  } else if (interval == "model") {
+    se <- if (center == "reference") res$contrast$loadings$se.ref else res$contrast$loadings$se
+    if (!is.null(se) && is.finite(res$contrast$loadings$df %||% NA)) {
+      tq <- stats::qt(1 - (1 - interval.level) / 2, res$contrast$loadings$df); d$lo <- d$value - tq * unname(se[cts]) / log(2); d$hi <- d$value + tq * unname(se[cts]) / log(2)
+    }
   }
+  int.lab <- sprintf("%s %g %% interval", if (interval == "jackknife") "jackknife" else "model", 100 * interval.level)
   perm <- res$contrast$loadings$perm
   if (show.null && !is.null(perm)) {
     # the null of the test behind the points (the loading, or its difference from the reference block), placed on the axis of the plot:
@@ -691,7 +703,7 @@ plotCodaLoadings <- function(res, ref.level = "reference", target.level = "targe
   if (!is.null(min.effect) && is.finite(min.effect) && min.effect > 1)
     gg <- gg + ggplot2::geom_vline(xintercept = c(-1, 1) * log2(min.effect), colour = "grey45", linetype = 3)
   if (any(is.finite(d$lo)))
-    gg <- gg + ggplot2::geom_linerange(ggplot2::aes(xmin = .data$lo, xmax = .data$hi, colour = .data$celltype, linewidth = sprintf("%g %% confidence interval", 100 * interval.level)), na.rm = TRUE, show.legend = c(linewidth = TRUE, colour = FALSE)) +
+    gg <- gg + ggplot2::geom_errorbar(ggplot2::aes(xmin = .data$lo, xmax = .data$hi, linewidth = int.lab), width = 0.3, colour = "grey30", na.rm = TRUE, show.legend = c(linewidth = TRUE, colour = FALSE)) +
       ggplot2::scale_linewidth_manual(values = 0.5, name = NULL, guide = ggplot2::guide_legend(override.aes = list(colour = "grey25"), order = 3))
   gg <- gg + ggplot2::geom_point(ggplot2::aes(x = .data$value, colour = .data$celltype, fill = .data$celltype, shape = .data$sig.f), size = 2.8, stroke = 0.9,
                                  show.legend = c(shape = TRUE, alpha = FALSE, colour = FALSE, fill = FALSE)) +
@@ -1521,4 +1533,22 @@ removeGroupEffect <- function(d.used, d.groups, thresh.pc.var = 0.95){
               remain = d.used.remain,
               scores = d.scores,
               res = cda))
+}
+
+#' Leave-one-sample-out composition loadings of a contrast result (natural log)
+#'
+#' The loadings refitted on the ILR coordinates with each sample left out, for the same contrast (no permutations): the basis of the
+#' jackknife intervals of [plotCodaLoadings()] and of the composition sensitivity. `NULL` for a fit with a random baseline (a generalized
+#' least-squares fit, which these ordinary least-squares refits would not reproduce) or without the stored ILR coordinates.
+#' @param res result of `lmCoda()` / `cao$estimateCellLoadings()`
+#' @return samples x cell types matrix, or `NULL`
+#' @keywords internal
+codaLooLoadings <- function(res) {
+  if (!is.null(res$random) || is.null(res$ilr) || is.null(res$psi) || is.null(res$model$F)) return(NULL)
+  used <- intersect(rownames(res$model$F), rownames(res$ilr)); if (length(used) < 4) return(NULL)
+  Fm <- res$model$F[used, , drop = FALSE]; cF <- res$model$contrast.F[colnames(Fm)]; if (anyNA(cF)) return(NULL)
+  ilr <- res$ilr[used, , drop = FALSE]; cts <- names(res$contrast$loadings$obs)
+  loo <- t(vapply(seq_along(used), function(i) { co <- qr.coef(qr(Fm[-i, , drop = FALSE]), ilr[-i, , drop = FALSE]); co[is.na(co)] <- 0
+    as.numeric(res$psi %*% as.numeric(cF %*% co)) }, numeric(length(cts))))
+  dimnames(loo) <- list(used, cts); loo
 }

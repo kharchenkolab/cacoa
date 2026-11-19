@@ -12,7 +12,9 @@ plotInfluenceHeatmap(
   plot.theme = ggplot2::theme_bw(),
   palette = NULL,
   group.title = "group",
-  max.sample.labels = 60
+  max.sample.labels = 60,
+  layout = c("auto", "heatmap", "dots"),
+  max.heatmap.samples = 120
 )
 }
 \arguments{

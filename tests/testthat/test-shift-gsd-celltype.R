@@ -199,3 +199,15 @@ test_that("diagnostic heatmaps and volcano plots follow a continuous tested vari
   expect_false(any(vapply(gv$layers, function(l) inherits(l$geom, "GeomVline") && isTRUE(all(abs(l$data$xintercept %||% 0) >= 1)), logical(1))))
   expect_lt(max(abs(ggplot2::ggplot_build(gv)$layout$panel_params[[1]]$x.range)), 1)
 })
+
+test_that("diagnostic plots of many samples are drawn as dots per cell type and can be coloured by any sample variable", {
+  set.seed(4); m <- matrix(rnorm(200 * 3), 200, 3, dimnames = list(paste0("s", 1:200), c("a", "b", "c"))); g <- setNames(rep(c("x", "y"), 100), rownames(m))
+  gd <- cacoa:::plotSampleHeatmap(m, groups = g, mark = 2); expect_true(any(vapply(gd$layers, function(l) inherits(l$geom, "GeomPoint"), logical(1))))
+  expect_false(any(vapply(gd$layers, function(l) inherits(l$geom, "GeomTile"), logical(1))))
+  expect_true(any(vapply(cacoa:::plotSampleHeatmap(m[1:50, ], groups = g)$layers, function(l) inherits(l$geom, "GeomTile"), logical(1))))
+  cao <- makeToyCacoa(n.per.group = c(A = 6, B = 6), cells.per.sample = 40, n.genes = 80, shift = 0.6, seed = 5)
+  suppressMessages(cao$estimateExpressionShiftMagnitudes(n.permutations = 19, verbose = FALSE))
+  gi <- cao$plotSampleInfluence(color.by = "batch"); expect_equal(gi$labels$colour, "batch")
+  expect_s3_class(cao$plotFitDiagnostics("expression.shifts", color.by = "batch", layout = "dots"), "ggplot")
+  expect_error(cao$plotSampleInfluence(color.by = "nope"), "not a column")
+})

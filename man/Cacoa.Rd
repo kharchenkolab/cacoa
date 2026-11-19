@@ -1658,7 +1658,7 @@ interval (how firmly the samples determine the size, not a test).
   test = NULL,
   effect = c("shift", "var"),
   show.null = TRUE,
-  show.ci = FALSE,
+  show.ci = TRUE,
   show.pvalues = c("adjusted", "raw", "none"),
   show.genes = FALSE,
   gene.fdr = 0.1,
@@ -1683,7 +1683,7 @@ interval (how firmly the samples determine the size, not a test).
 
 \item{\code{show.null}}{show the relabeling band (default TRUE)}
 
-\item{\code{show.ci}}{show the jackknife 95 \% interval (default FALSE)}
+\item{\code{show.ci}}{show the jackknife 95 \% interval (default TRUE)}
 
 \item{\code{show.pvalues}}{print the p-values: \code{"adjusted"} (default), \code{"raw"} or \code{"none"}}
 
@@ -1723,7 +1723,9 @@ Leave-one-sample-out influence on the expression-shift effects (replaces \code{p
   effect = c("shift", "var", "total"),
   test = NULL,
   cell.types = NULL,
-  normalized = TRUE
+  normalized = TRUE,
+  color.by = NULL,
+  layout = c("auto", "heatmap", "dots")
 )}\if{html}{\out{</div>}}
 }
 
@@ -1739,6 +1741,10 @@ Leave-one-sample-out influence on the expression-shift effects (replaces \code{p
 \item{\code{cell.types}}{optional subset of cell types}
 
 \item{\code{normalized}}{express the change relative to the effect's jackknife SE (default TRUE)}
+
+\item{\code{color.by}}{optional column of the sample metadata that colours the samples (default: the tested variable)}
+
+\item{\code{layout}}{\code{"auto"} (default: a heatmap up to 120 samples, dots per cell type above), \code{"heatmap"} or \code{"dots"}}
 }
 \if{html}{\out{</div>}}
 }
@@ -1762,7 +1768,9 @@ out, in standard errors of the effect. Marked tiles are beyond \code{resid.thres
   what = c("both", "residual", "influence"),
   cell.types = NULL,
   resid.thresh = NULL,
-  influence.se = 1
+  influence.se = 1,
+  color.by = NULL,
+  layout = c("auto", "heatmap", "dots")
 )}\if{html}{\out{</div>}}
 }
 
@@ -1779,6 +1787,11 @@ out, in standard errors of the effect. Marked tiles are beyond \code{resid.thres
 
 \item{\code{resid.thresh, influence.se}}{marking thresholds (defaults: residual 3, or a sample twice as far from the fit as typical for
 the expression shifts; 1 standard error)}
+
+\item{\code{color.by}}{optional column of the sample metadata that colours the samples (default: the tested variable); a variable that is
+not in the model shows whether it is related to the residuals or to the influence of single samples}
+
+\item{\code{layout}}{\code{"auto"} (default: a heatmap up to 120 samples, dots per cell type above), \code{"heatmap"} or \code{"dots"}}
 }
 \if{html}{\out{</div>}}
 }
@@ -3535,6 +3548,7 @@ Plot the compositional loadings of the contrast per cell type (see \code{\link[=
   show.null = TRUE,
   significance = c("clr", "reference"),
   center = c("reference", "none", "both"),
+  title = NULL,
   ...
 )}\if{html}{\out{</div>}}
 }
@@ -3560,6 +3574,8 @@ that data-chosen set); see \code{\link[=plotCodaLoadings]{plotCodaLoadings()}}}
 
 \item{\code{center}}{\code{"reference"} (default): loadings centred on the reference cell types; \code{"none"}: as they are (zero = the
 geometric mean of all cell types); \code{"both"}: the two side by side (cowplot)}
+
+\item{\code{title}}{plot title (one panel; with \code{center = "both"} each panel is titled by its centering)}
 
 \item{\code{...}}{passed to \code{\link[=plotCodaLoadings]{plotCodaLoadings()}} (e.g. \code{legend.position})}
 }
@@ -4263,7 +4279,7 @@ same defaults. Nothing requires a model, except \code{values = "adjusted"}.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$getSampleDistanceMatrix(
   space = c("expression", "pseudobulk", "composition"),
-  values = c("unadjusted", "adjusted"),
+  values = c("unadjusted", "adjusted", "residual"),
   cell.type = NULL,
   joint.weighting = c("cells", "equal"),
   dist = NULL,
@@ -4281,7 +4297,9 @@ same defaults. Nothing requires a model, except \code{values = "adjusted"}.
 \item{\code{space}}{\code{"expression"} (default), \code{"pseudobulk"} or \code{"composition"} (\code{"expression.shifts"} and \code{"coda"} are
 accepted as the earlier names)}
 
-\item{\code{values}}{\code{"unadjusted"} (default) or \code{"adjusted"}: the model's nuisance part removed (the covariates of the
+\item{\code{values}}{\code{"unadjusted"} (default), \code{"adjusted"} (the model's nuisance part removed) or \code{"residual"} (the whole fixed part of the
+model removed, tested variable included: the residual structure, e.g. to see whether a factor not in the model separates the samples).
+For \code{"adjusted"}: the model's nuisance part removed (the covariates of the
 model other than the tested variable; for stored expression-shift results, the adjusted distances of the fit)}
 
 \item{\code{cell.type}}{cell type for \code{space = "expression"} (default NULL: all cell types combined)}
@@ -4363,7 +4381,7 @@ exactly these distances: the chance-corrected R2 and permutation p-value of the 
 
 \item{\code{method}}{\code{"MDS"} (default), \code{"tSNE"}, \code{"UMAP"} or \code{"heatmap"}}
 
-\item{\code{values}}{\code{"unadjusted"} (default), \code{"adjusted"} or \code{"both"} (side by side)}
+\item{\code{values}}{\code{"unadjusted"} (default), \code{"adjusted"} (covariates removed), \code{"residual"} (the whole fixed part of the model removed, tested variable included) or \code{"both"} (unadjusted and adjusted side by side)}
 
 \item{\code{dist}}{distance of the expression profiles (default: the object option)}
 

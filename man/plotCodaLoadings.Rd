@@ -18,7 +18,7 @@ plotCodaLoadings(
   significance = c("clr", "reference"),
   center = c("reference", "none"),
   title = NULL,
-  interval = TRUE,
+  interval = c("jackknife", "model", "none"),
   interval.level = 0.95,
   min.effect = NULL
 )
@@ -52,10 +52,11 @@ mean; the reference block's mean is marked). The band is the null of the test be
 
 \item{title}{plot title (optional)}
 
-\item{interval}{draw the 95 \% confidence interval of each loading (default TRUE): the model-based interval of the least-squares fit
-on the log ratios (t quantile with the residual degrees of freedom; \code{interval.level}). With \code{center = "reference"} it is the
-interval of the loading relative to the reference cell types, given that set. It is not the test: the filled points and the
-p-values come from the permutations}
+\item{interval}{the interval drawn around each loading: \code{"jackknife"} (default: from the loadings refitted with each sample left out,
+as for the expression shifts and the sensitivity plots; a fit with a random baseline falls back to the model interval), \code{"model"}
+(the model-based interval of the least-squares fit on the log ratios, t quantile with the residual degrees of freedom) or
+\code{"none"} (\code{TRUE} / \code{FALSE} are read as \code{"jackknife"} / \code{"none"}). With \code{center = "reference"} it is the interval of the loading
+relative to the reference cell types. It is not the test: the filled points and the p-values come from the permutations}
 
 \item{interval.level}{level of the interval (default 0.95)}
 

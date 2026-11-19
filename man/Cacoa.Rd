@@ -3341,7 +3341,11 @@ Estimate cell loadings
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{n.permutations}}{number of permutations}
+\item{\code{n.permutations}}{number of relabelings (default: 9,999, or the object option \code{n.permutations} if that is larger). The
+composition test needs more relabelings than the other tests: each cell type is tested separately and the p-values are
+corrected over the cell types, and with 999 relabelings and 30 cell types a single call already needs the smallest
+attainable p-value. In a benchmark on real cohorts with planted changes, 9,999 relabelings raised the recall of the
+per-type test to that of the parametric tests at an unchanged false-call rate; a fit takes well under a second}
 
 \item{\code{name}}{character Results name slot (default='coda')}
 

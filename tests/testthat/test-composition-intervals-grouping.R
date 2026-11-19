@@ -222,3 +222,11 @@ test_that("limma-voom fits a grouping term as a random intercept (duplicateCorre
   de4 <- cao$estimateDEPerCellType(test = "limma-voom", min.cell.count = 1, verbose = FALSE, name = "de4")
   expect_true(all(is.finite(attr(de4, "block.correlation"))))
 })
+
+test_that("the composition test uses 9,999 relabelings by default (more than the other tests), an explicit number as given", {
+  cao <- makeToyCacoa(n.per.group = c(A = 8, B = 8), cells.per.sample = 40, n.cell.types = 4, shift = 1, seed = 7)
+  res <- suppressMessages(cao$estimateCellLoadings(verbose = FALSE))
+  expect_length(res$contrast$global$stat_perm, 9999)                      # C(16, 8) = 12,870 arrangements, so they are drawn
+  res2 <- suppressMessages(cao$estimateCellLoadings(n.permutations = 99, verbose = FALSE, name = "coda99"))
+  expect_length(res2$contrast$global$stat_perm, 99)
+})

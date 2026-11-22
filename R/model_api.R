@@ -235,6 +235,9 @@ resolveTests <- function(test = NULL, contrast = NULL, meta, formula = NULL, num
     r <- chooseReferenceLevel(x)
     if (length(levs) == 2 && !term) {
       alt <- setdiff(levs, r$level)
+      if (r$reason == "most-frequent")   # in a subset the most frequent level can change, and with it the sign of every effect
+        message(sprintf("'%s': reference level '%s' chosen as the most frequent level (contrast %s vs %s); set the factor's level order or give test = \"%s: %s vs %s\" to fix the direction",
+                        v, r$level, alt, r$level, v, alt, r$level))
       return(list(kind = "contrast", variable = v, contrast = c(v, alt, r$level), levels = c(ref = r$level, alt = alt),
                   label = sprintf("%s: %s vs %s", v, alt, r$level), reference.reason = r$reason))
     }

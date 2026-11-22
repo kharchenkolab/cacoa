@@ -380,12 +380,12 @@ scanShiftScales <- function(cm, sample.per.cell, graph, design, meta, scale, bet
     mu <- colMeans(sp); sdv <- sqrt(pmax(colMeans(sp^2) - mu^2, 0) * B / (B - 1)); sdv[!is.finite(sdv) | sdv <= 0] <- NA_real_   # the kernel's per-cell standardization
     z.obs <- (st - mu) / sdv; sp <- sweep(sweep(sp, 2, mu), 2, sdv, "/")
     # calls of the observed and of every relabeled data set, all standardized alike, for the test of the chosen scale
-    if (is.null(n.all)) n.all <- matrix(0L, B + 1L, K); n.all[, j] <- scanCallCounts(z.obs, sp, standardize = TRUE)
-    ps <- pooledScanStep(z.obs, sp, identity); rm(sp)
+    if (is.null(n.all)) n.all <- matrix(0L, B + 1L, K); n.all[, j] <- scanCallCounts(z.obs, sp, standardize = TRUE, n.cores = n.cores)
+    ps <- pooledScanStep(z.obs, sp, identity, n.cores = n.cores); rm(sp)
     P[, j] <- ps$p; Q[, j] <- ps$q; E[, j] <- as.numeric(s$shifts[cells]); Z[, j] <- z.obs; m.perm <- if (is.null(m.perm)) ps$pp else pmin(m.perm, ps$pp); rm(ps)
     gt[j] <- list(s$group.test); if (j == 1L) settings <- s$settings; rm(s); invisible(gc())
   }
-  m.obs <- apply(P, 1, min); best <- max.col(-P, ties.method = "first"); sc <- pooledMinPFDR(m.obs, m.perm, B); rm(m.perm)
+  m.obs <- apply(P, 1, min); best <- max.col(-P, ties.method = "first"); sc <- pooledMinPFDR(m.obs, m.perm, B, n.cores = n.cores); rm(m.perm)
   auto <- autoScaleTest(n.all[1, ], n.all[-1, , drop = FALSE], sum(rowSums(is.finite(Q)) > 0))   # the test of the automatically chosen scale
   list(auto = auto, q = stats::setNames(sc$q, cells), p = stats::setNames(sc$p, cells), best = stats::setNames(best, cells), P = P, E = E, Q = Q, Z = Z, scales = info, neighbourhoods = nbs, group.test = gt, settings = settings,
        cells = cells, B = B, time = as.numeric(difftime(Sys.time(), t0, units = "secs")))

@@ -4,7 +4,7 @@
 \alias{pooledScanStep}
 \title{Pooled permutation p-values of one scale}
 \usage{
-pooledScanStep(s.obs, sp, tail = abs)
+pooledScanStep(s.obs, sp, tail = abs, n.cores = 1)
 }
 \arguments{
 \item{s.obs}{observed per-cell statistics}
@@ -12,6 +12,8 @@ pooledScanStep(s.obs, sp, tail = abs)
 \item{sp}{permuted statistics (relabelings x cells)}
 
 \item{tail}{function mapping the statistic to its extreme tail (\code{abs} for two-sided, \code{identity} for greater)}
+
+\item{n.cores}{threads of the compiled path (option \code{cacoa.cpp.pooled}, default TRUE; the R path gives the same result)}
 }
 \value{
 list with \code{p} (per cell), \code{pp} (relabelings x cells) and \code{q}

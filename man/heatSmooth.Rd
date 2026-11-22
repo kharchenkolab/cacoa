@@ -12,7 +12,8 @@ heatSmooth(
   l.max = NULL,
   m = 50,
   n.cores = 1,
-  step.max = 120
+  step.max = 120,
+  symmetric = NULL
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ heatSmooth(
 \item{n.cores}{cores (blocks of columns are smoothed in parallel)}
 
 \item{step.max}{largest strength applied in one step (default 120)}
+
+\item{symmetric}{whether the Laplacian is symmetric (default: from the graph, or checked)}
 }
 \value{
 smoothed matrix (rows in the order of the Laplacian)

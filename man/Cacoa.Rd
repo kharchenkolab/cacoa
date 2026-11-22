@@ -1996,7 +1996,7 @@ Estimate DE stability per gene
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateDEStabilityPerGene(
   de.name = "de",
   top.n.genes = 500,
-  p.adj.cutoff = NULL,
+  p.adj.cutoff = 0.05,
   visualize = FALSE
 )}\if{html}{\out{</div>}}
 }
@@ -2006,9 +2006,11 @@ Estimate DE stability per gene
 \describe{
 \item{\code{de.name}}{character string DE results slot name (default='de')}
 
-\item{\code{top.n.genes}}{numeric Number of top DE genes to return (default=500)}
+\item{\code{top.n.genes}}{numeric Number of top DE genes counted as "kept" in a resample when \code{p.adj.cutoff} is NULL (default=500)}
 
-\item{\code{p.adj.cutoff}}{numeric The adjusted p-value cutoff to apply for returned DE values (default=NULL)}
+\item{\code{p.adj.cutoff}}{numeric A gene counts as kept in a resample when its rank there is within the number of genes called at this
+adjusted p-value in the full data (default 0.05). With \code{NULL}, the fixed \code{top.n.genes} is used, which says nothing when fewer genes
+than that are called: every called gene is then within the top and has stability 1}
 
 \item{\code{visualize}}{boolean Whether to visualize results (default=FALSE)}
 }
@@ -3686,7 +3688,7 @@ Estimate cell density in giving embedding
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Cacoa$estimateCellDensity(
   bins = 400,
-  method = "kde",
+  method = "graph",
   name = "cell.density",
   beta = 30,
   estimate.variation = TRUE,
@@ -3711,7 +3713,7 @@ Estimate cell density in giving embedding
 \describe{
 \item{\code{bins}}{numeric Number of bins for density estimation (default=400)}
 
-\item{\code{method}}{character string Density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')}
+\item{\code{method}}{character string Density estimation method, graph: graph smooth based density estimation (default; the route all tests and benchmarks use). kde: embedding grid based density estimation, for display only: a 2D embedding distorts local density by construction (default: 'graph')}
 
 \item{\code{name}}{results slot name}
 

@@ -4,7 +4,14 @@
 \alias{scanCallCounts}
 \title{Number of cells called at one scale by the observed and by every relabeled data set, all treated alike}
 \usage{
-scanCallCounts(s.obs, sp, alpha = 0.1, tail = identity, standardize = FALSE)
+scanCallCounts(
+  s.obs,
+  sp,
+  alpha = 0.1,
+  tail = identity,
+  standardize = FALSE,
+  n.cores = 1
+)
 }
 \arguments{
 \item{s.obs}{observed per-cell statistics (large values are extreme, after \code{tail})}
@@ -16,6 +23,8 @@ scanCallCounts(s.obs, sp, alpha = 0.1, tail = identity, standardize = FALSE)
 \item{tail}{function mapping the statistic to its extreme tail}
 
 \item{standardize}{standardize every cell over the B + 1 data sets (default FALSE)}
+
+\item{n.cores}{threads of the compiled path (option \code{cacoa.cpp.pooled}, default TRUE; the R path gives the same result)}
 }
 \value{
 integer vector of length B + 1: the observed data set first

@@ -246,15 +246,16 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
         }
         data.object$sample.per.cell <- sample.per.cell
         
-        if (is.null(graph.name)){
-          warning("No graph.name provided. The algorithm will use the first available graph.")
-        }
-
         data.object@misc$graph.name <- graph.name
-        is.connected <- extractCellGraph(data.object) %>% igraph::is_connected()
-        if (!is.connected) {
-          warning("The provided graph is not connected. Cluster-free methods will not work. Using NN graph instead of SNN may help.")
-          data.object@misc$graph.name <- NULL
+        if (is.null(graph.name) && length(data.object@graphs) == 0) {
+          message("The Seurat object has no cell graph: the cluster-free maps need one; composition, expression shifts and DE work without it.")
+        } else {
+          if (is.null(graph.name)) warning("No graph.name provided. The algorithm will use the first available graph.")
+          is.connected <- extractCellGraph(data.object) %>% igraph::is_connected()
+          if (!is.connected) {
+            warning("The provided graph is not connected. Cluster-free methods will not work. Using NN graph instead of SNN may help.")
+            data.object@misc$graph.name <- NULL
+          }
         }
 
         data.object@misc$assay.name <- assay.name
@@ -1359,8 +1360,10 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Estimate DE stability per gene
     #' @param de.name character string DE results slot name (default='de')
-    #' @param top.n.genes numeric Number of top DE genes to return (default=500)
-    #' @param p.adj.cutoff numeric The adjusted p-value cutoff to apply for returned DE values (default=NULL)
+    #' @param top.n.genes numeric Number of top DE genes counted as "kept" in a resample when `p.adj.cutoff` is NULL (default=500)
+    #' @param p.adj.cutoff numeric A gene counts as kept in a resample when its rank there is within the number of genes called at this
+    #'   adjusted p-value in the full data (default 0.05). With `NULL`, the fixed `top.n.genes` is used, which says nothing when fewer genes
+    #'   than that are called: every called gene is then within the top and has stability 1
     #' @param visualize boolean Whether to visualize results (default=FALSE)
     #' @return A ggplot2 object
     #' @examples
@@ -1368,7 +1371,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #' cao$estimateDEPerCellType()
     #' cao$estimateDEStabilityPerGene()
     #' }
-    estimateDEStabilityPerGene = function(de.name = "de", top.n.genes = 500, p.adj.cutoff = NULL, visualize = FALSE) {
+    estimateDEStabilityPerGene = function(de.name = "de", top.n.genes = 500, p.adj.cutoff = 0.05, visualize = FALSE) {
       de.res <- self$test.results[[de.name]]
 
       for (cell.type in names(de.res)) {
@@ -3002,7 +3005,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
 
     #' @description Estimate cell density in giving embedding
     #' @param bins numeric Number of bins for density estimation (default=400)
-    #' @param method character string Density estimation method, graph: graph smooth based density estimation. kde: embedding grid based density  estimation. (default: 'kde')
+    #' @param method character string Density estimation method, graph: graph smooth based density estimation (default; the route all tests and benchmarks use). kde: embedding grid based density estimation, for display only: a 2D embedding distorts local density by construction (default: 'graph')
     #' @param beta numeric Smoothing strength parameter of the \link[sccore:heatFilter]{heatFilter} for graph based cell density (default=30)
     #' @param estimate.variation boolean Estimate variation (default=TRUE)
     #' @param contrast Linear contrast specification (required).
@@ -3031,7 +3034,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
     #'   ([solveKernelBeta()]); the same `beta` is 20x wider on one graph than another, so a width in cells is the
     #'   comparable setting. The effective size per cell is stored as `unit.size`
     #' @param n.hops neighbourhood radius for `smoothing = "neighbourhood"` (default 1)
-    estimateCellDensity = function(bins=400, method='kde', name='cell.density', beta=30, estimate.variation=TRUE, contrast=NULL,
+    estimateCellDensity = function(bins=400, method='graph', name='cell.density', beta=30, estimate.variation=TRUE, contrast=NULL,
                                    formula=NULL, test=NULL, verbose=self$verbose, n.cores=self$n.cores, sample.metadata=self$sample.meta,
                                    block.vars=NULL, bandwidth=0.05, smoothing=c("knn", "heat", "neighbourhood"), k=NULL, target.size=NULL, n.hops=1, ...){
       smoothing <- match.arg(smoothing)
@@ -3344,6 +3347,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                      p.source=c("parametric", "permutation", "pooled"), moderate=TRUE, moderate.d0.max=4, transform=c("auto", "none", "log"),
                                      post=c("averaged", "none", "inherit"), pooled.statistic=c("raw", "standardized"), scale="auto", auto.scales=c(0.01, 0.03, 0.05), effect.scale=c("finest", "best"), kernel.alpha=0.3,
                                      verbose=self$verbose, n.cores=self$n.cores, ...){
+      clearLaplacianCache()   # the graph's Laplacian is computed once per call and reused within it (cachedLaplacian())
       n.permutations <- private$opt("n.permutations", n.permutations)
       dens.res <- private$getResults(name, 'estimateCellDensity')
       effect.scale <- match.arg(effect.scale); scale.given <- !missing(scale)
@@ -4335,6 +4339,7 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
                                                  sample.floor=TRUE, noise.correction=FALSE, adjust=TRUE, smooth=TRUE, wins=0.025, genes=NULL, min.expr.frac=0.0,
                                                  min.edge.weight=0.0, adjust.method=NULL, p.source=NULL,
                                                  k=NULL, scale="auto", auto.scales=c(0.01, 0.03, 0.05), effect.scale=c("finest", "best"), post=c("averaged", "inherit", "none"), verbose=NULL, n.cores=NULL, robust=NULL, ...) {
+      clearLaplacianCache()   # the graph's Laplacian is computed once per call and reused within it (cachedLaplacian())
       statistic <- match.arg(statistic); gsd <- statistic == "gsd"
       dist <- match.arg(dist); robust <- private$opt("robust", robust); post <- match.arg(post)
       adjust.method <- match.arg(adjust.method %||% (if (gsd) "bh" else "perm-fdr"), c("perm-fdr", "bh", "spatial-fdr", "neighbourhood", "max-t"))
@@ -5065,11 +5070,22 @@ Cacoa <- R6::R6Class("Cacoa", lock_objects=FALSE,
       key <- settingsKey(genes)
       hit <- self$cache$gsd.celltype.input
       if (!is.null(hit) && identical(hit$key, key)) return(hit$value)
+      if (inherits(self$data.object, "Seurat")) {   # joint genes x cells counts: one subset instead of a split and a join per sample
+        cnt <- seuratAssayData(self$data.object, "counts")
+        spc <- self$data.object$sample.per.cell; spc <- spc[colnames(cnt)]
+        keep <- !is.na(spc) & as.character(spc) %in% rownames(self$sample.meta)
+        f <- factor(as.character(spc[keep]), levels = intersect(levels(as.factor(spc)), rownames(self$sample.meta)))
+        cells <- colnames(cnt)[keep][order(as.integer(f), seq_len(sum(keep)))]
+        lib <- setNames(Matrix::colSums(cnt[, cells, drop = FALSE]), cells)
+        cm <- sccore::extendMatrix(Matrix::t(cnt[intersect(genes, rownames(cnt)), cells, drop = FALSE]), genes)[, genes, drop = FALSE]
+        cm <- methods::as(Matrix::t(cm), "CsparseMatrix")
+      } else {
       cms <- extractRawCountMatrices(self$data.object, transposed = TRUE)
       cms <- cms[intersect(names(cms), rownames(self$sample.meta))]
       lib <- unlist(lapply(unname(cms), Matrix::rowSums))
       cm <- Matrix::t(do.call(rbind, lapply(unname(cms), function(x) sccore::extendMatrix(x, genes)[, genes, drop = FALSE])))
       cm <- methods::as(cm, "CsparseMatrix")
+      }
       val <- list(cm = cm, lib = lib[colnames(cm)])
       self$cache$gsd.celltype.input <- list(key = key, value = val)
       val

@@ -91,15 +91,24 @@ graphNeighbourLists0 <- function(graph, cells) {
 #' @param m Chebyshev order (default 50)
 #' @param n.cores cores (blocks of columns are smoothed in parallel)
 #' @param step.max largest strength applied in one step (default 120)
+#' @param symmetric whether the Laplacian is symmetric (default: from the graph, or checked)
 #' @return smoothed matrix (rows in the order of the Laplacian)
 #' @keywords internal
-heatSmooth <- function(signal, beta, graph = NULL, lap = NULL, l.max = NULL, m = 50, n.cores = 1, step.max = 120) {
-  if (is.null(lap)) lap <- igraph::laplacian_matrix(graph, sparse = TRUE)
+heatSmooth <- function(signal, beta, graph = NULL, lap = NULL, l.max = NULL, m = 50, n.cores = 1, step.max = 120, symmetric = NULL) {
+  if (is.null(lap)) { gl <- cachedLaplacian(graph); lap <- gl$lap; if (is.null(l.max)) l.max <- gl$l.max; if (is.null(symmetric)) symmetric <- gl$symmetric }
   if (is.null(l.max)) { checkPackageInstalled("irlba", cran = TRUE); l.max <- irlba::partial_eigen(lap, n = 1)$values }
   vec <- is.null(dim(signal)); X <- if (vec) matrix(signal, ncol = 1, dimnames = list(names(signal), NULL)) else as.matrix(signal)
   if (!is.null(colnames(lap)) && !is.null(rownames(X))) X <- X[colnames(lap), , drop = FALSE] else if (nrow(X) != ncol(lap)) stop("signal must have one value per graph vertex")
   n.steps <- max(1L, as.integer(ceiling(beta / step.max))); b1 <- beta / n.steps
   co <- chebyshevCoefficients(function(x) exp(-b1 * x / l.max), l.max, m)
+  # compiled path: the recurrence in C++ on threads (rows of the symmetric Laplacian split over n.cores), no forked copies
+  if (isTRUE(getOption("cacoa.cpp.smooth", TRUE)) && (if (!is.null(symmetric)) symmetric else if (!is.null(graph)) !igraph::is_directed(graph) else Matrix::isSymmetric(lap))) {
+    lapc <- methods::as(methods::as(methods::as(lap, "CsparseMatrix"), "generalMatrix"), "dMatrix")
+    storage.mode(X) <- "double"
+    Y <- chebyshev_smooth_cpp(lapc, X, l.max, as.numeric(co), n.steps, as.integer(max(1L, n.cores)))
+    dimnames(Y) <- dimnames(X)
+    return(if (vec) stats::setNames(Y[, 1], rownames(Y)) else Y)
+  }
   smooth1 <- function(Xb) { for (s in seq_len(n.steps)) Xb <- chebyshevSmooth(Xb, lap, l.max, co); Xb }
   nb <- min(as.integer(n.cores), ncol(X))   # the columns are independent: blocks of them are smoothed in parallel (forked)
   X <- if (nb > 1) { res <- parallel::mclapply(parallel::splitIndices(ncol(X), nb), function(b) smooth1(X[, b, drop = FALSE]), mc.cores = nb)
@@ -107,6 +116,30 @@ heatSmooth <- function(signal, beta, graph = NULL, lap = NULL, l.max = NULL, m =
     do.call(cbind, res) } else smooth1(X)
   if (vec) stats::setNames(X[, 1], rownames(X)) else X
 }
+
+#' Laplacian of a cell graph and its largest eigenvalue, kept for the last graph seen
+#'
+#' The kernel-strength search ([solveKernelBeta()]) and the smoothing of densities and neighborhoods all start from the same graph;
+#' the Laplacian and its largest eigenvalue are computed once and kept for the last graph (identified by its numbers of
+#' vertices and edges, the sum of its edge weights and its first and last vertex names).
+#' @param graph igraph cell graph
+#' @return list with `lap` (sparse Laplacian) and `l.max`
+#' @keywords internal
+cachedLaplacian <- function(graph) {
+  nv <- igraph::vcount(graph); id <- if (exists("graph_id", envir = asNamespace("igraph"))) igraph::graph_id(graph) else ""
+  key <- paste(id, nv, igraph::ecount(graph), if (nv) paste(igraph::V(graph)$name[c(1, nv)], collapse = "|") else "")   # reading the weights costs ~1 s on a large graph
+  if (!nzchar(id) || !identical(.laplacianCache$key, key)) {
+    lap <- igraph::laplacian_matrix(graph, sparse = TRUE); checkPackageInstalled("irlba", cran = TRUE)
+    .laplacianCache$lap <- lap; .laplacianCache$l.max <- irlba::partial_eigen(lap, n = 1)$values; .laplacianCache$symmetric <- !igraph::is_directed(graph); .laplacianCache$key <- key
+  }
+  list(lap = .laplacianCache$lap, l.max = .laplacianCache$l.max, symmetric = .laplacianCache$symmetric)
+}
+
+#' Empty the Laplacian cache ([cachedLaplacian()]); called at the start of every map, so that a graph whose edge weights were
+#' changed in place (igraph keeps its id) is never served a stale Laplacian across calls
+#' @keywords internal
+clearLaplacianCache <- function() { rm(list = ls(.laplacianCache), envir = .laplacianCache); invisible(NULL) }
+.laplacianCache <- new.env(parent = emptyenv())
 
 #' Chebyshev coefficients of a spectral filter on [0, l.max] (as sccore::smoothSignalOnGraph computes them)
 #' @param filt filter of the eigenvalue
@@ -287,7 +320,7 @@ diffusionNeighbourhoodLists <- function(graph, scale, cover = 2L, seed = 1, beta
   cells <- igraph::V(graph)$name; N <- length(cells); target <- round(scale * N)
   if (is.null(beta)) { sb <- solveKernelBeta(graph, target.size = target, n.vec = 16, m = m, n.cores = n.cores); beta <- sb$beta; reach <- sb$size }
   else reach <- kernelEffectiveSize(graph, beta, n.vec = 16, m = m, n.cores = n.cores)$size
-  lap <- igraph::laplacian_matrix(graph, sparse = TRUE); checkPackageInstalled("irlba", cran = TRUE); l.max <- irlba::partial_eigen(lap, n = 1)$values
+  gl <- cachedLaplacian(graph); lap <- gl$lap; l.max <- gl$l.max; sym <- gl$symmetric
   wide <- reach >= min.reach * target   # may become a centre
   cov <- integer(N); units <- list(); centres <- integer(0); sizes <- numeric(0); thr <- numeric(N); todo <- withSeed(seed, sample.int(N))
   best.w <- matrix(0, N, 2); best.c <- matrix(0L, N, 2); n.smooth <- 0L   # the two centres reaching each cell most, and their weights there
@@ -295,7 +328,7 @@ diffusionNeighbourhoodLists <- function(graph, scale, cover = 2L, seed = 1, beta
     cand <- todo[seq_len(min(pool, length(todo)))]; todo <- todo[-seq_len(length(cand))]
     cand <- cand[cov[cand] < 1L & wide[cand]]; if (!length(cand)) next
     I <- matrix(0, N, length(cand)); I[cbind(cand, seq_along(cand))] <- 1; rownames(I) <- cells
-    K <- as.matrix(heatSmooth(I, beta, lap = lap, l.max = l.max, m = m, n.cores = n.cores)); K[K < 0] <- 0; n.smooth <- n.smooth + 1L
+    K <- as.matrix(heatSmooth(I, beta, lap = lap, l.max = l.max, m = m, n.cores = n.cores, symmetric = sym)); K[K < 0] <- 0; n.smooth <- n.smooth + 1L
     for (j in seq_along(cand)) { c0 <- cand[j]; if (cov[c0] >= 1L) next   # covered by a centre earlier in the pool
       w0 <- K[, j]; w0[c0] <- 0; s0 <- sum(w0); ne <- if (s0 > 0) round(s0^2 / sum(w0^2)) else 0
       if (ne == 0) next

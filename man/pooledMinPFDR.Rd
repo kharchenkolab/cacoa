@@ -4,7 +4,7 @@
 \alias{pooledMinPFDR}
 \title{Pooled permutation FDR of a per-cell statistic against its values under relabeling}
 \usage{
-pooledMinPFDR(m.obs, m.perm, B)
+pooledMinPFDR(m.obs, m.perm, B, n.cores = 1)
 }
 \arguments{
 \item{m.obs}{observed per-cell values}
@@ -12,6 +12,8 @@ pooledMinPFDR(m.obs, m.perm, B)
 \item{m.perm}{permuted values (relabelings x cells, or any vector)}
 
 \item{B}{number of relabelings}
+
+\item{n.cores}{threads of the compiled path (option \code{cacoa.cpp.pooled}, default TRUE; the R path gives the same result)}
 }
 \value{
 list with \code{q} and \code{p} (the pooled permutation p of the value)

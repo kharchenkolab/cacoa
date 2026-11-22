@@ -962,17 +962,24 @@ estimateDEForTypeLimma <- function(cm, model, block = NULL) {
         rho <- tryCatch(limma::duplicateCorrelation(v, design, block = block)$consensus.correlation, error = function(e) NA_real_)
       }
     }
-    fit <- if (is.finite(rho)) limma::lmFit(v, design = design, block = block, correlation = rho) else limma::lmFit(v, design = design)
     out <- function(df) { attr(df, "block.correlation") <- rho; df }
+    # The contrasts are fitted directly: the design is reparameterized so that its first k coefficients are the k contrasts
+    # (limmaContrastDesign). limma::contrasts.fit would give approximate standard errors here, because the voom precision weights
+    # meet a non-orthogonal design as soon as the model has covariates (limma's documentation of contrasts.fit); on null data
+    # with a 4-level covariate the approximation called false genes in 13-17 % of the cell-type analyses
+    # (benchmarks/revision/limma_voom). The column space, hence the voom weights, the block correlation and the residuals, is
+    # unchanged.
+    lmFitC <- function(C) { Xc <- limmaContrastDesign(design, C)
+      if (is.finite(rho)) limma::lmFit(v, design = Xc, block = block, correlation = rho) else limma::lmFit(v, design = Xc) }
     Cm <- termContrastForDesign(model, design)
     if (!is.null(Cm)) {   # whole-factor test: moderated F over the level-difference contrasts
-      fit2 <- limma::eBayes(limma::contrasts.fit(fit, Cm))
+      fit2 <- limma::eBayes(lmFitC(Cm))
       if (ncol(Cm) == 1) {
         tt <- limma::topTable(fit2, coef = 1, sort.by = "P", n = Inf)
         return(out(data.frame(log2FoldChange = tt$logFC, AveExpr = tt$AveExpr, stat = tt$t, pvalue = tt$P.Value, padj = tt$adj.P.Val, row.names = rownames(tt))))
       }
       tt <- limma::topTable(fit2, coef = seq_len(ncol(Cm)), sort.by = "F", n = Inf)
-      lfc <- apply(as.matrix(fit2$coefficients[rownames(tt), , drop = FALSE]), 1, function(x) x[which.max(abs(x))])   # largest level difference
+      lfc <- apply(as.matrix(fit2$coefficients[rownames(tt), seq_len(ncol(Cm)), drop = FALSE]), 1, function(x) x[which.max(abs(x))])   # largest level difference
       return(out(data.frame(log2FoldChange = lfc, AveExpr = tt$AveExpr, stat = tt$F, pvalue = tt$P.Value, padj = tt$adj.P.Val, row.names = rownames(tt))))
     }
   
@@ -980,8 +987,7 @@ estimateDEForTypeLimma <- function(cm, model, block = NULL) {
     Cmat <- matrix(contrast,
                    ncol = 1,
                    dimnames = list(colnames(design), "contrast1"))
-    fit2 <- limma::contrasts.fit(fit, Cmat) %>%
-        limma::eBayes()
+    fit2 <- limma::eBayes(lmFitC(Cmat))
     res <- limma::topTable(fit2,
                            coef    = "contrast1",
                            sort.by = "P",
@@ -989,6 +995,26 @@ estimateDEForTypeLimma <- function(cm, model, block = NULL) {
         setNames(c("log2FoldChange", "AveExpr", "stat", "pvalue", "padj", "B"))
     
     return(out(res))
+}
+
+#' Design reparameterized so that given contrasts are its first coefficients
+#'
+#' For a design `X` (samples x p, full column rank) and contrasts `C` (p x k, linearly independent columns), returns `X T^-1`, where
+#' `T` (p x p) stacks `t(C)` on an orthonormal basis of the complement of the column space of `C`. Its coefficients are `T b`: the
+#' first k are the contrasts `C' b`, estimated with exact standard errors under any sample weights. The column space is that of `X`,
+#' so fitted values and residuals are unchanged.
+#' @param X design matrix
+#' @param C contrast matrix (p x k) or vector (length p); column names (if any) name the first k coefficients
+#' @return the reparameterized design (samples x p)
+#' @keywords internal
+limmaContrastDesign <- function(X, C) {
+  C <- as.matrix(C); k <- ncol(C); p <- ncol(X)
+  if (nrow(C) != p) stop("contrast length does not match the design")
+  q <- qr(C); if (q$rank < k) stop("contrasts are linearly dependent")
+  Tm <- if (k < p) rbind(t(C), t(qr.Q(q, complete = TRUE)[, (k + 1):p, drop = FALSE])) else t(C)
+  Xc <- X %*% solve(Tm)
+  colnames(Xc) <- c(if (!is.null(colnames(C))) colnames(C) else paste0("contrast", seq_len(k)), if (k < p) paste0("nuisance", seq_len(p - k)))
+  rownames(Xc) <- rownames(X); Xc
 }
 
 #' helper: get the DE table (data.frame) from either a df or a list(res=...)

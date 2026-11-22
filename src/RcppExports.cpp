@@ -280,6 +280,22 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// chebyshev_smooth_cpp
+Eigen::MatrixXd chebyshev_smooth_cpp(const Eigen::MappedSparseMatrix<double>& lap, const Eigen::Map<Eigen::MatrixXd>& X, double l_max, const Eigen::Map<Eigen::VectorXd>& coeffs, int n_steps, int n_cores);
+RcppExport SEXP _cacoa_chebyshev_smooth_cpp(SEXP lapSEXP, SEXP XSEXP, SEXP l_maxSEXP, SEXP coeffsSEXP, SEXP n_stepsSEXP, SEXP n_coresSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double>& >::type lap(lapSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd>& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< double >::type l_max(l_maxSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd>& >::type coeffs(coeffsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_steps(n_stepsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
+    rcpp_result_gen = Rcpp::wrap(chebyshev_smooth_cpp(lap, X, l_max, coeffs, n_steps, n_cores));
+    return rcpp_result_gen;
+END_RCPP
+}
 // fit_and_randomize
 Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma::vec& contrast, Rcpp::Nullable<Rcpp::NumericMatrix> Z, Rcpp::Nullable<Rcpp::List> perm_groups, int n_randomizations, std::string alternative, bool return_residuals, bool return_sampled_fits, bool return_sampled_stats, std::string robust, double huber_k, int huber_maxit, double huber_tol, std::string na_mode, double na_weight, std::string na_center, double illcond_rcond, double pinv_tol, int n_cores, Rcpp::Nullable<Rcpp::IntegerMatrix> perm_matrix, std::string statistic, bool pooled, Rcpp::NumericVector z_grid, bool use_abs, Rcpp::IntegerVector group, bool average, Rcpp::Nullable<Rcpp::List> nn_graph, bool closed_form, bool pooled_standardize, Rcpp::NumericVector prior_var, double prior_df, Rcpp::IntegerVector perm_units, Rcpp::IntegerVector perm_slots);
 RcppExport SEXP _cacoa_fit_and_randomize(SEXP XSEXP, SEXP YSEXP, SEXP contrastSEXP, SEXP ZSEXP, SEXP perm_groupsSEXP, SEXP n_randomizationsSEXP, SEXP alternativeSEXP, SEXP return_residualsSEXP, SEXP return_sampled_fitsSEXP, SEXP return_sampled_statsSEXP, SEXP robustSEXP, SEXP huber_kSEXP, SEXP huber_maxitSEXP, SEXP huber_tolSEXP, SEXP na_modeSEXP, SEXP na_weightSEXP, SEXP na_centerSEXP, SEXP illcond_rcondSEXP, SEXP pinv_tolSEXP, SEXP n_coresSEXP, SEXP perm_matrixSEXP, SEXP statisticSEXP, SEXP pooledSEXP, SEXP z_gridSEXP, SEXP use_absSEXP, SEXP groupSEXP, SEXP averageSEXP, SEXP nn_graphSEXP, SEXP closed_formSEXP, SEXP pooled_standardizeSEXP, SEXP prior_varSEXP, SEXP prior_dfSEXP, SEXP perm_unitsSEXP, SEXP perm_slotsSEXP) {
@@ -553,6 +569,75 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// scan_call_counts_cpp
+Rcpp::IntegerVector scan_call_counts_cpp(const Rcpp::NumericMatrix& S, double alpha, int n_cores);
+RcppExport SEXP _cacoa_scan_call_counts_cpp(SEXP SSEXP, SEXP alphaSEXP, SEXP n_coresSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::NumericMatrix& >::type S(SSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
+    rcpp_result_gen = Rcpp::wrap(scan_call_counts_cpp(S, alpha, n_cores));
+    return rcpp_result_gen;
+END_RCPP
+}
+// pooled_scan_step_cpp
+Rcpp::List pooled_scan_step_cpp(const Rcpp::NumericVector& s_obs, const Rcpp::NumericMatrix& sp, int tail, int n_cores);
+RcppExport SEXP _cacoa_pooled_scan_step_cpp(SEXP s_obsSEXP, SEXP spSEXP, SEXP tailSEXP, SEXP n_coresSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type s_obs(s_obsSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericMatrix& >::type sp(spSEXP);
+    Rcpp::traits::input_parameter< int >::type tail(tailSEXP);
+    Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
+    rcpp_result_gen = Rcpp::wrap(pooled_scan_step_cpp(s_obs, sp, tail, n_cores));
+    return rcpp_result_gen;
+END_RCPP
+}
+// scan_call_counts_raw_cpp
+Rcpp::IntegerVector scan_call_counts_raw_cpp(const Rcpp::NumericVector& s_obs, const Rcpp::NumericMatrix& sp, int tail, double alpha, int n_cores);
+RcppExport SEXP _cacoa_scan_call_counts_raw_cpp(SEXP s_obsSEXP, SEXP spSEXP, SEXP tailSEXP, SEXP alphaSEXP, SEXP n_coresSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type s_obs(s_obsSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericMatrix& >::type sp(spSEXP);
+    Rcpp::traits::input_parameter< int >::type tail(tailSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
+    rcpp_result_gen = Rcpp::wrap(scan_call_counts_raw_cpp(s_obs, sp, tail, alpha, n_cores));
+    return rcpp_result_gen;
+END_RCPP
+}
+// pooled_min_counts_cpp
+Rcpp::List pooled_min_counts_cpp(const Rcpp::NumericVector& m_obs, const Rcpp::NumericVector& m_perm, int n_cores);
+RcppExport SEXP _cacoa_pooled_min_counts_cpp(SEXP m_obsSEXP, SEXP m_permSEXP, SEXP n_coresSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type m_obs(m_obsSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type m_perm(m_permSEXP);
+    Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
+    rcpp_result_gen = Rcpp::wrap(pooled_min_counts_cpp(m_obs, m_perm, n_cores));
+    return rcpp_result_gen;
+END_RCPP
+}
+// scan_call_counts_std_cpp
+Rcpp::IntegerVector scan_call_counts_std_cpp(const Rcpp::NumericVector& s_obs, const Rcpp::NumericMatrix& sp, double alpha, int n_cores);
+RcppExport SEXP _cacoa_scan_call_counts_std_cpp(SEXP s_obsSEXP, SEXP spSEXP, SEXP alphaSEXP, SEXP n_coresSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type s_obs(s_obsSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericMatrix& >::type sp(spSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< int >::type n_cores(n_coresSEXP);
+    rcpp_result_gen = Rcpp::wrap(scan_call_counts_std_cpp(s_obs, sp, alpha, n_cores));
+    return rcpp_result_gen;
+END_RCPP
+}
 // colwiseBinaryDistance
 NumericMatrix colwiseBinaryDistance(IntegerMatrix mat);
 RcppExport SEXP _cacoa_colwiseBinaryDistance(SEXP matSEXP) {
@@ -579,6 +664,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_estimateExpressionShiftsPairsLM", (DL_FUNC) &_cacoa_estimateExpressionShiftsPairsLM, 9},
     {"_cacoa_applyMedianFilterES", (DL_FUNC) &_cacoa_applyMedianFilterES, 4},
     {"_cacoa_adjustedZScoresMaxStat", (DL_FUNC) &_cacoa_adjustedZScoresMaxStat, 8},
+    {"_cacoa_chebyshev_smooth_cpp", (DL_FUNC) &_cacoa_chebyshev_smooth_cpp, 6},
     {"_cacoa_fit_and_randomize", (DL_FUNC) &_cacoa_fit_and_randomize, 34},
     {"_cacoa_knn_neighbourhoods", (DL_FUNC) &_cacoa_knn_neighbourhoods, 3},
     {"_cacoa_neighbourhood_counts", (DL_FUNC) &_cacoa_neighbourhood_counts, 4},
@@ -591,6 +677,11 @@ static const R_CallMethodDef CallEntries[] = {
     {"_cacoa_permuted_contrast_stats_w", (DL_FUNC) &_cacoa_permuted_contrast_stats_w, 16},
     {"_cacoa_permuted_term_stats_w", (DL_FUNC) &_cacoa_permuted_term_stats_w, 13},
     {"_cacoa_weighted_contrast_fit", (DL_FUNC) &_cacoa_weighted_contrast_fit, 11},
+    {"_cacoa_scan_call_counts_cpp", (DL_FUNC) &_cacoa_scan_call_counts_cpp, 3},
+    {"_cacoa_pooled_scan_step_cpp", (DL_FUNC) &_cacoa_pooled_scan_step_cpp, 4},
+    {"_cacoa_scan_call_counts_raw_cpp", (DL_FUNC) &_cacoa_scan_call_counts_raw_cpp, 5},
+    {"_cacoa_pooled_min_counts_cpp", (DL_FUNC) &_cacoa_pooled_min_counts_cpp, 3},
+    {"_cacoa_scan_call_counts_std_cpp", (DL_FUNC) &_cacoa_scan_call_counts_std_cpp, 4},
     {"_cacoa_colwiseBinaryDistance", (DL_FUNC) &_cacoa_colwiseBinaryDistance, 1},
     {NULL, NULL, 0}
 };

@@ -275,12 +275,12 @@ scanDensityScales <- function(graph, sample.per.cell, sample.model, scale, beta 
     st <- stats::setNames(as.numeric(d$stat.obs), cells); ef <- stats::setNames(as.numeric(d$effect), cells); rm(d)
     if (post == "averaged") { av <- averageOverNeighbours(st, sp, graph, effect = ef); st <- av$stat; sp <- av$stats.perm; ef <- av$effect; rm(av) }
     if (!is.null(groups)) gt[j] <- list(tryCatch(groupPermutationTest(st, sp, groups, alternative = if (alternative == "two-sided") "two.sided" else "greater"), error = function(e) NULL))
-    if (is.null(n.all)) n.all <- matrix(0L, nrow(sp) + 1L, K); n.all[, j] <- scanCallCounts(st, sp, tail = tail.stat)   # calls of every data set, for the test of the chosen scale
-    ps <- pooledScanStep(st, sp, tail.stat); rm(sp)
+    if (is.null(n.all)) n.all <- matrix(0L, nrow(sp) + 1L, K); n.all[, j] <- scanCallCounts(st, sp, tail = tail.stat, n.cores = n.cores)   # calls of every data set, for the test of the chosen scale
+    ps <- pooledScanStep(st, sp, tail.stat, n.cores = n.cores); rm(sp)
     P[, j] <- ps$p; Q[, j] <- ps$q; E[, j] <- ef; m.perm <- if (is.null(m.perm)) ps$pp else pmin(m.perm, ps$pp); rm(ps); invisible(gc())
   }
   m.obs <- apply(P, 1, min); best <- max.col(-P, ties.method = "first")
-  sc <- pooledMinPFDR(m.obs, m.perm, B); rm(m.perm)
+  sc <- pooledMinPFDR(m.obs, m.perm, B, n.cores = n.cores); rm(m.perm)
   auto <- autoScaleTest(n.all[1, ], n.all[-1, , drop = FALSE], sum(rowSums(is.finite(Q)) > 0))   # the test of the automatically chosen scale
   list(q = stats::setNames(sc$q, cells), p = stats::setNames(sc$p, cells), best = stats::setNames(best, cells), P = P, E = E, Q = Q, scales = info, group.test = gt, cells = cells, B = B, auto = auto,
        time = as.numeric(difftime(Sys.time(), t0, units = "secs")))
@@ -316,15 +316,36 @@ chooseScanScale <- function(sc, alpha = 0.1, saturated = 0.9, top = 0.01) {
 #' @param alpha level of the calls (default 0.1)
 #' @param tail function mapping the statistic to its extreme tail
 #' @param standardize standardize every cell over the B + 1 data sets (default FALSE)
+#' @param n.cores threads of the compiled path (option `cacoa.cpp.pooled`, default TRUE; the R path gives the same result)
 #' @return integer vector of length B + 1: the observed data set first
 #' @keywords internal
-scanCallCounts <- function(s.obs, sp, alpha = 0.1, tail = identity, standardize = FALSE) {
+scanCallCounts <- function(s.obs, sp, alpha = 0.1, tail = identity, standardize = FALSE, n.cores = 1) {
+  if (isTRUE(getOption("cacoa.cpp.pooled", TRUE)) && !is.na(tc <- tailCode(tail)) && (!standardize || tc == 0L)) {   # built and counted in C++ without R copies
+    if (!is.double(sp)) storage.mode(sp) <- "double"
+    return(if (standardize) scan_call_counts_std_cpp(as.numeric(s.obs), sp, alpha, as.integer(max(1L, n.cores)))
+           else scan_call_counts_raw_cpp(as.numeric(s.obs), sp, tc, alpha, as.integer(max(1L, n.cores)))) }
   B <- nrow(sp); S <- rbind(tail(s.obs), tail(sp)); bad <- !is.finite(S[1, ])
   if (standardize) { mu <- colMeans(S); sdv <- sqrt(pmax(colMeans(S^2) - mu^2, 0) * (B + 1) / B); bad <- bad | !is.finite(sdv) | sdv <= 0; S <- sweep(sweep(S, 2, mu), 2, sdv, "/") }
-  S[, bad] <- -Inf; S[!is.finite(S)] <- -Inf; ps <- sort(as.vector(S), method = "radix"); Nn <- length(ps)
-  vapply(seq_len(B + 1), function(r) { m <- sort(S[r, ], decreasing = TRUE, method = "radix"); m <- m[is.finite(m)]; if (!length(m)) return(0L)
+  S[, bad] <- -Inf; S[!is.finite(S)] <- -Inf
+  if (isTRUE(getOption("cacoa.cpp.pooled", TRUE))) { storage.mode(S) <- "double"; return(scan_call_counts_cpp(S, alpha, as.integer(max(1L, n.cores)))) }   # the same counts, sorted once and counted on threads
+  sv <- as.vector(S); oa <- order(sv, method = "radix"); ps <- sv[oa]; Nn <- length(ps)
+  # number of pooled values strictly below each value (findInterval(x, ps, left.open = TRUE)), from the one sort of the pool:
+  # a value's count is the position of the first copy of it in the sorted pool, minus one. findInterval() would check that
+  # the pool is sorted at every call, once per relabeling, which dominated the run time on many cells.
+  below <- integer(Nn); below[oa] <- match(ps, ps) - 1L; below <- matrix(below, nrow = nrow(S)); rm(sv, oa)
+  vapply(seq_len(B + 1), function(r) { o <- order(S[r, ], decreasing = TRUE, method = "radix"); m <- S[r, o]; cnt <- below[r, o]
+    fin <- is.finite(m); m <- m[fin]; cnt <- cnt[fin]; if (!length(m)) return(0L)
     R <- length(m) - findInterval(m, rev(m), left.open = TRUE)                       # own values at or above each value
-    fdr <- (Nn - findInterval(m, ps, left.open = TRUE) - R) / B / R; k <- which(fdr < alpha); if (length(k)) as.integer(R[k[length(k)]]) else 0L }, integer(1))
+    fdr <- (Nn - cnt - R) / B / R; k <- which(fdr < alpha); if (length(k)) as.integer(R[k[length(k)]]) else 0L }, integer(1))
+}
+
+#' Code of a tail function for the compiled pooled helpers (0 identity, 1 abs, 2 negation; NA for any other function)
+#' @param tail function
+#' @return integer code or NA
+#' @keywords internal
+tailCode <- function(tail) {
+  x <- c(-2, -0.5, 0, 1.5, Inf, -Inf, NA); y <- suppressWarnings(tail(x))
+  if (identical(y, x)) 0L else if (identical(y, abs(x))) 1L else if (identical(y, -x)) 2L else NA_integer_
 }
 
 #' Test of the automatically chosen scale of a scan
@@ -353,10 +374,18 @@ autoScaleTest <- function(n.obs, n.perm, tested, saturated = 0.9) {
 #' @param s.obs observed per-cell statistics
 #' @param sp permuted statistics (relabelings x cells)
 #' @param tail function mapping the statistic to its extreme tail (`abs` for two-sided, `identity` for greater)
+#' @param n.cores threads of the compiled path (option `cacoa.cpp.pooled`, default TRUE; the R path gives the same result)
 #' @return list with `p` (per cell), `pp` (relabelings x cells) and `q`
 #' @keywords internal
-pooledScanStep <- function(s.obs, sp, tail = abs) {
-  B <- nrow(sp); N <- ncol(sp); a <- tail(as.vector(sp)); a[!is.finite(a)] <- -Inf; Nn <- length(a); so <- sort(a, method = "radix", index.return = TRUE); rm(a)
+pooledScanStep <- function(s.obs, sp, tail = abs, n.cores = 1) {
+  B <- nrow(sp); N <- ncol(sp)
+  if (isTRUE(getOption("cacoa.cpp.pooled", TRUE)) && !is.na(tc <- tailCode(tail))) {   # the same pooled p-values from one threaded sort and binary searches
+    if (!is.double(sp)) storage.mode(sp) <- "double"
+    r <- pooled_scan_step_cpp(as.numeric(s.obs), sp, tc, as.integer(max(1L, n.cores))); dim(r$pp) <- c(B, N)
+    R <- findInterval(r$p, sort(r$p)); fdr <- pmin(1, (r$ge / B) / R); o <- order(r$p, decreasing = TRUE); q <- fdr; q[o] <- cummin(fdr[o])   # pooledMinPFDR(p, pp, B)$q without the second sort
+    return(list(p = r$p, pp = r$pp, q = q))
+  }
+  a <- tail(as.vector(sp)); a[!is.finite(a)] <- -Inf; Nn <- length(a); so <- sort(a, method = "radix", index.return = TRUE); rm(a)
   first <- cummax(ifelse(c(TRUE, so$x[-1] != so$x[-Nn]), seq_len(Nn), 0L))      # first position of each value's tie block (-Inf ties included)
   pp <- numeric(Nn); pp[so$ix] <- (Nn - first + 2) / (Nn + 1); dim(pp) <- c(B, N)
   s <- tail(s.obs); s[!is.finite(s)] <- -Inf; p <- (Nn - findInterval(s, so$x, left.open = TRUE) + 1) / (Nn + 1)
@@ -371,9 +400,16 @@ pooledScanStep <- function(s.obs, sp, tail = abs) {
 #' @param m.obs observed per-cell values
 #' @param m.perm permuted values (relabelings x cells, or any vector)
 #' @param B number of relabelings
+#' @param n.cores threads of the compiled path (option `cacoa.cpp.pooled`, default TRUE; the R path gives the same result)
 #' @return list with `q` and `p` (the pooled permutation p of the value)
 #' @keywords internal
-pooledMinPFDR <- function(m.obs, m.perm, B) {
+pooledMinPFDR <- function(m.obs, m.perm, B, n.cores = 1) {
+  if (isTRUE(getOption("cacoa.cpp.pooled", TRUE)) && !anyNA(m.obs)) {   # the same counts from a threaded sort (NA permuted values dropped, as sort() does)
+    mp <- as.vector(m.perm); if (anyNA(mp)) mp <- mp[!is.na(mp)]
+    r <- pooled_min_counts_cpp(as.numeric(m.obs), as.numeric(mp), as.integer(max(1L, n.cores))); rm(mp)
+    fdr <- pmin(1, (r$cnt / B) / r$R); o <- order(m.obs, decreasing = TRUE); q <- fdr; q[o] <- cummin(fdr[o])
+    return(list(q = q, p = (r$cnt + 1) / (r$Nn + 1)))
+  }
   ps <- sort(as.vector(m.perm), method = "radix"); Nn <- length(ps)
   cnt <- findInterval(m.obs, ps); V <- cnt / B; R <- findInterval(m.obs, sort(m.obs))
   fdr <- pmin(1, V / R); o <- order(m.obs, decreasing = TRUE); q <- fdr; q[o] <- cummin(fdr[o])

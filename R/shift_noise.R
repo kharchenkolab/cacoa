@@ -88,10 +88,14 @@ fitShiftNoiseCurves <- function(cm, lib, sample.per.cell, nns.per.cell, scale, n
                lam_grid = m1$lam.grid, s_grid = m1$s.grid, V1 = m1$V1)
   pairs <- matrix(0L, 0, 2)
   td <- list()
-  for (r in cf_unit_profiles(cm, spcI, lapply(nns.per.cell[units], as.integer), lib, n.s, as.integer(min.n.obs.per.samp), pairs, opts)) {
-    pres <- as.integer(r$present) + 1L; if (length(pres) < 3) next
-    x <- r$x[, pres, drop = FALSE]; v <- r$v[, pres, drop = FALSE]
-    td[[length(td) + 1]] <- cbind(as.numeric(r$mu), matrixStats::rowVars(x) - rowMeans(v))
+  # units in batches: each unit's profiles are dense genes x samples matrices, so holding all of them at once dominated the
+  # memory of the shift map on cohorts with many samples (the result is the same, in the same order)
+  for (bt in split(units, ceiling(seq_along(units) / 16))) {
+    for (r in cf_unit_profiles(cm, spcI, lapply(nns.per.cell[bt], as.integer), lib, n.s, as.integer(min.n.obs.per.samp), pairs, opts)) {
+      pres <- as.integer(r$present) + 1L; if (length(pres) < 3) next
+      x <- r$x[, pres, drop = FALSE]; v <- r$v[, pres, drop = FALSE]
+      td[[length(td) + 1]] <- cbind(as.numeric(r$mu), matrixStats::rowVars(x) - rowMeans(v))
+    }
   }
   td <- do.call(rbind, td); ftau <- binnedNoiseCurve(td[, 1], td[, 2], mu.grid)
   list(mu.grid = mu.grid, phi = fphi$curve, tau2 = ftau$curve, scale = scale, n.units = length(units), bins = list(phi = fphi$bins, tau2 = ftau$bins))

@@ -53,6 +53,10 @@ adjustedZScoresMaxStat <- function(z_obs, alt, max_vals_in, min_vals_in, wins = 
     .Call(`_cacoa_adjustedZScoresMaxStat`, z_obs, alt, max_vals_in, min_vals_in, wins, smooth, nn_ids, non_zero_ids)
 }
 
+chebyshev_smooth_cpp <- function(lap, X, l_max, coeffs, n_steps, n_cores) {
+    .Call(`_cacoa_chebyshev_smooth_cpp`, lap, X, l_max, coeffs, n_steps, n_cores)
+}
+
 fit_and_randomize <- function(X, Y, contrast, Z = NULL, perm_groups = NULL, n_randomizations = 100L, alternative = "two-sided", return_residuals = TRUE, return_sampled_fits = FALSE, return_sampled_stats = FALSE, robust = "none", huber_k = 1.345, huber_maxit = 8L, huber_tol = 1e-6, na_mode = "drop", na_weight = 1e-4, na_center = "mean", illcond_rcond = 1e-12, pinv_tol = 0.0, n_cores = 1L, perm_matrix = NULL, statistic = "t", pooled = FALSE, z_grid = as.numeric( c()), use_abs = TRUE, group = as.integer( c()), average = FALSE, nn_graph = NULL, closed_form = TRUE, pooled_standardize = FALSE, prior_var = as.numeric( c()), prior_df = 0, perm_units = as.integer( c()), perm_slots = as.integer( c())) {
     .Call(`_cacoa_fit_and_randomize`, X, Y, contrast, Z, perm_groups, n_randomizations, alternative, return_residuals, return_sampled_fits, return_sampled_stats, robust, huber_k, huber_maxit, huber_tol, na_mode, na_weight, na_center, illcond_rcond, pinv_tol, n_cores, perm_matrix, statistic, pooled, z_grid, use_abs, group, average, nn_graph, closed_form, pooled_standardize, prior_var, prior_df, perm_units, perm_slots)
 }
@@ -99,6 +103,26 @@ permuted_term_stats_w <- function(G, Xf, Xr, Zf, Zr, w, P, freedman_lane, w_fl, 
 
 weighted_contrast_fit <- function(G, X, Z, base, cvec, znum, zden, bias_correct = TRUE, robust = 0L, k = 1.345, maxit = 5L) {
     .Call(`_cacoa_weighted_contrast_fit`, G, X, Z, base, cvec, znum, zden, bias_correct, robust, k, maxit)
+}
+
+scan_call_counts_cpp <- function(S, alpha, n_cores) {
+    .Call(`_cacoa_scan_call_counts_cpp`, S, alpha, n_cores)
+}
+
+pooled_scan_step_cpp <- function(s_obs, sp, tail, n_cores) {
+    .Call(`_cacoa_pooled_scan_step_cpp`, s_obs, sp, tail, n_cores)
+}
+
+scan_call_counts_raw_cpp <- function(s_obs, sp, tail, alpha, n_cores) {
+    .Call(`_cacoa_scan_call_counts_raw_cpp`, s_obs, sp, tail, alpha, n_cores)
+}
+
+pooled_min_counts_cpp <- function(m_obs, m_perm, n_cores) {
+    .Call(`_cacoa_pooled_min_counts_cpp`, m_obs, m_perm, n_cores)
+}
+
+scan_call_counts_std_cpp <- function(s_obs, sp, alpha, n_cores) {
+    .Call(`_cacoa_scan_call_counts_std_cpp`, s_obs, sp, alpha, n_cores)
 }
 
 colwiseBinaryDistance <- function(mat) {

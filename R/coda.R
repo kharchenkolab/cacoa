@@ -112,54 +112,55 @@ lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), rando
   ## Total variance in ILR space (common denominator)
   B.centered <- scale(B.ilr, center = TRUE, scale = FALSE)
   total.ss   <- sum(B.centered^2)
-  
-  ## 2) Linear model + permutations in ILR space
-  fit <- performLMPermutations(model, B.ilr, perm.method = perm.method,
-                               return.sampled.stats = TRUE,
-                               return.sampled.fits  = FALSE, ...)
-  
+  if (is.null(contrast.vec)) stop("Contrast vector for perm.method='", perm.method, "' is missing in model.")
+
+  ## 2) Linear model + randomizations on the clr coordinates (one column per cell type), in the compiled fitter. The clr
+  ##    coordinates are the ILR coordinates mapped by the basis, so a least-squares fit gives the loadings l = Psi eta directly, with
+  ##    their standard errors and studentized statistics on every randomized data set; a robust fit weights each cell type's log
+  ##    ratio on its own, and nothing depends on the choice of the ILR basis.
+  Yc <- B.ilr %*% t(psi); dimnames(Yc) <- list(rownames(B.ilr), cell.types)
+  fit <- performLMPermutations(model, Yc, perm.method = perm.method, return.sampled.stats = TRUE, return.sampled.fits = FALSE, ...)
   # coefficients in F space (level means of the tested factor in ILR coordinates) for predictions and adjusted ILR
   coef.mat <- qr.coef(qr(design), B.ilr); coef.mat[is.na(coef.mat)] <- 0
   dimnames(coef.mat) <- list(colnames(design), colnames(B.ilr))
-  fit$coef <- coef.mat
-  stat.obs     <- as.numeric(fit$effect)        # length K: contrast effect in ILR space (the loadings are built from effects, not from the test statistic)
-  stats.perm   <- as.matrix(fit$effects.perm)   # n_perm × K: the same under relabeling
-  
-  n.coef     <- nrow(coef.mat)
-  n.perm     <- nrow(stats.perm)
-  
-  ## --------------------------------------------------------
-  ## 3) USER-DEFINED CONTRAST
-  ##    - uses contrast in the *same space* as coef_mat
-  ## --------------------------------------------------------
-  if (is.null(contrast.vec))
-    stop("Contrast vector for perm.method='", perm.method, "' is missing in model.")
-  
-  beta.contrast.obs  <- stat.obs              # length K (ILR-space contrast effect)
-  beta.contrast.perm <- stats.perm            # n_perm × K
-  
-  # Cell-type loadings for contrast
-  ell.contrast.obs  <- drop(psi %*% beta.contrast.obs)          # D
-  ell.contrast.perm <- psi %*% t(beta.contrast.perm)            # D × n_perm
-  rownames(ell.contrast.perm) <- cell.types
-  
-  # Per-cell p-values (reference-free, two-sided)
-  ex <- isTRUE(fit$exhaustive)   # all distinct relabelings enumerated: the observed labeling is one of them (relabelingPValue())
-  p.contrast.cell <- relabelingPValue(rowSums(abs(ell.contrast.perm) >= abs(ell.contrast.obs) - 1e-12), n.perm, ex)
-  names(p.contrast.cell) <- cell.types
-  # With `statistic = "t"` (the default) the cell types are tested by the studentized loading, recomputed on every relabeled data set
-  # (contrastPermutationTest(); the same relabelings as the fit). The unstudentized loading is not a valid statistic when the model
-  # has covariates. Robust fits keep the fitter's own relabeled effects.
-  p.statistic <- "coef"
-  if (identical((list(...)$statistic %||% "t")[1], "t") && identical((list(...)$robust.method %||% "none")[1], "none") && !is.null(fit$P) && !use.rnd) {
-    ct <- tryCatch({ Yc <- B.ilr %*% t(psi); colnames(Yc) <- cell.types; contrastPermutationTest(Yc, design, contrast.vec, fit$P, scheme = perm.method) }, error = function(e) NULL)
-    if (!is.null(ct) && all(is.finite(ct$t)) && max(abs(ct$est - ell.contrast.obs)) < 1e-6 * max(1, max(abs(ell.contrast.obs)))) {
-      # the null loadings shown as a band and used by the reference block and the contrast tree: the relabeled t statistics at the
-      # observed standard errors (what the loading would be without a change, at the precision of the observed fit)
-      ell.contrast.perm <- ct$t.perm * ct$se; bad <- !is.finite(ell.contrast.perm); ell.contrast.perm[bad] <- ct$est.perm[bad]; rownames(ell.contrast.perm) <- cell.types; n.perm <- ncol(ct$t.perm)
-      p.contrast.cell <- setNames(relabelingPValue(rowSums(abs(ct$t.perm) >= abs(ct$t) - 1e-12), n.perm, ex), cell.types); p.statistic <- "t"
+  n.coef <- nrow(coef.mat)
+
+  # Robust fits are not used for cell types observed in very few samples (non-zero counts in fewer than 3 samples, or in fewer than 2
+  # on either side of the contrast): down-weighting the samples that hold such a cell type leaves its pseudocounts, whose log ratio
+  # follows the change of the other cell types and gives spurious calls. These cell types get the plain fit on the same randomizations.
+  robust.skipped <- character(0); rb <- as.character((list(...)$robust.method %||% "none")[1])
+  if (!identical(rb, "none") && !use.rnd) {
+    aw <- drop(design %*% (MASS::ginv(crossprod(design)) %*% contrast.vec)); tol <- 1e-8 * max(abs(aw)); nz <- cnts[rownames(design), , drop = FALSE] > 0
+    rare <- colSums(nz) < 3 | colSums(nz[aw > tol, , drop = FALSE]) < 2 | colSums(nz[aw < -tol, , drop = FALSE]) < 2
+    robust.skipped <- cell.types[rare]
+    if (length(robust.skipped)) {
+      dots <- list(...); dots$robust.method <- "none"; dots$seed <- NULL
+      f0 <- do.call(performLMPermutations, c(list(model, Yc[, robust.skipped, drop = FALSE], perm.method = perm.method, return.sampled.stats = TRUE,
+                                                  return.sampled.fits = FALSE, P = fit$P, perm.cells = fit$perm.cells), dots[setdiff(names(dots), c("P", "perm.cells"))]))
+      j <- match(robust.skipped, cell.types)
+      fit$effect[j] <- f0$effect; fit$se[j] <- f0$se; fit$stat.obs[j] <- f0$stat.obs
+      fit$stats.perm[, j] <- f0$stats.perm; fit$effects.perm[, j] <- f0$effects.perm
+      message(sprintf("lmCoda(): %d cell type(s) observed in too few samples for a robust fit (%s); they were fitted without robust weights",
+                      length(robust.skipped), paste(utils::head(robust.skipped, 5), collapse = ", ")))
     }
   }
+  ell.contrast.obs <- setNames(as.numeric(fit$effect), cell.types)           # D: cell-type loadings (clr contrast effects)
+  eff.perm <- t(as.matrix(fit$effects.perm)); rownames(eff.perm) <- cell.types # D x n_perm: the same on the randomized data sets
+  n.perm <- ncol(eff.perm)
+  ex <- isTRUE(fit$exhaustive)   # all distinct randomizations enumerated: the observed labeling is one of them (relabelingPValue())
+  # With `statistic = "t"` (the default) each cell type is tested by its studentized loading. The unstudentized loading is not a valid
+  # statistic when the model has covariates. The null loadings shown as a band and used by the reference block and the contrast tree are
+  # the randomized t statistics at the observed standard errors (what the loading would be without a change, at the observed precision).
+  p.statistic <- fit$statistic
+  if (p.statistic == "t") {
+    t.obs <- setNames(as.numeric(fit$stat.obs), cell.types); t.perm <- t(as.matrix(fit$stats.perm)); rownames(t.perm) <- cell.types
+    ell.contrast.perm <- t.perm * fit$se; bad <- !is.finite(ell.contrast.perm); ell.contrast.perm[bad] <- eff.perm[bad]
+    p.contrast.cell <- setNames(relabelingPValue(rowSums(abs(t.perm) >= abs(t.obs) - 1e-12, na.rm = TRUE), n.perm, ex), cell.types)
+  } else {
+    ell.contrast.perm <- eff.perm
+    p.contrast.cell <- setNames(relabelingPValue(rowSums(abs(eff.perm) >= abs(ell.contrast.obs) - 1e-12, na.rm = TRUE), n.perm, ex), cell.types)
+  }
+  beta.contrast.obs <- drop(crossprod(psi, ell.contrast.obs))   # K: the ILR-space contrast effect (the loadings projected on the clr subspace)
 
   # Grouping term `(1 | g)` of the model: a random intercept per level of g for every cell type's log ratio. The loadings are the
   # generalized least-squares estimates (variance ratio per cell type), tested by their t statistics against relabeled data sets on
@@ -177,28 +178,23 @@ lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), rando
     p.statistic <- "t"
     rnd$global <- list(stat = sum(rnd$t^2), stat_perm = colSums(rnd$t.perm^2)); rnd$global$p <- (sum(rnd$global$stat_perm >= rnd$global$stat) + 1) / (n.perm + 1)
     rnd$group <- model$random.vars; rnd$icc <- rnd$theta / (1 + rnd$theta)
+    beta.contrast.obs <- drop(crossprod(psi, ell.contrast.obs))
   }
   padj.contrast.cell <- p.adjust(p.contrast.cell, method = "fdr")
   
-  ## Global stat for contrast = variance explained in ILR space
-  # NOTE: contrast.vec must live in same space (F or X) as 'design'
-  z      <- as.numeric(design %*% contrast.vec)  # n_samples
-  sum.z2 <- sum(z^2)
-  scale.contrast <- sum.z2 / total.ss           # scaling factor
-  
-  # variance explained (observed + permuted)
-  T.contrast.obs  <- scale.contrast * sum(beta.contrast.obs^2)
-  T.contrast.perm <- scale.contrast * rowSums(beta.contrast.perm^2)
-  
-  # p-value (same ordering, now in var-expl units)
-  p.contrast.global <- relabelingPValue(sum(T.contrast.perm >= T.contrast.obs * (1 - 1e-12)), length(T.contrast.perm), ex)
-  var.expl <- T.contrast.obs; global.statistic <- "variance explained in ILR space"
+  ## Global statistic: the sum of the squared studentized loadings (`statistic = "t"`), or the variance explained in ILR space by the
+  ## contrast (`statistic = "coef"`); the variance explained is reported in either case as the size of the change
+  z <- as.numeric(design %*% contrast.vec); scale.contrast <- sum(z^2) / total.ss
+  var.expl <- scale.contrast * sum(beta.contrast.obs^2)
   if (!is.null(rnd)) { T.contrast.obs <- rnd$global$stat; T.contrast.perm <- rnd$global$stat_perm; p.contrast.global <- rnd$global$p; global.statistic <- "sum of squared t statistics of the cell types" }
-  else if (p.statistic == "t") {   # the global test from the studentized loadings as well: the unstudentized variance explained is not a valid statistic with covariates
-    T.contrast.obs <- sum(ct$t^2); T.contrast.perm <- colSums(ct$t.perm^2); T.contrast.perm[!is.finite(T.contrast.perm)] <- Inf
+  else if (p.statistic == "t") {
+    T.contrast.obs <- sum(t.obs^2); T.contrast.perm <- colSums(t.perm^2); T.contrast.perm[!is.finite(T.contrast.perm)] <- Inf
     p.contrast.global <- relabelingPValue(sum(T.contrast.perm >= T.contrast.obs - 1e-12), length(T.contrast.perm), ex); global.statistic <- "sum of squared t statistics of the cell types"
+  } else {
+    T.contrast.obs <- var.expl; T.contrast.perm <- scale.contrast * colSums(crossprod(psi, eff.perm)^2)
+    p.contrast.global <- relabelingPValue(sum(T.contrast.perm >= T.contrast.obs * (1 - 1e-12)), length(T.contrast.perm), ex); global.statistic <- "variance explained in ILR space"
   }
-  
+
   # Reference cell types for the presentation of the loadings: the largest block of cell types unchanged relative to each
   # other (the default), or the cell types with the weakest evidence of a change relative to the geometric mean
   ref <- if (ref.method == "block") referenceBlock(ell.contrast.obs, ell.contrast.perm, p.thresh = ref.block.thresh, size.frac = ref.size.frac)
@@ -214,7 +210,8 @@ lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), rando
     cc <- sum(cvp * (XtXi[seq_len(qd$rank), seq_len(qd$rank), drop = FALSE] %*% cvp))
     Yc <- B.ilr %*% t(psi); colnames(Yc) <- cell.types; rs <- qr.resid(qd, Yc)
     rr <- if (length(ref$celltypes)) rs - rowMeans(rs[, ref$celltypes, drop = FALSE]) else rs
-    list(se = sqrt(cc * colSums(rs^2) / df.res), se.ref = sqrt(cc * colSums(rr^2) / df.res), df = df.res)
+    se <- sqrt(cc * colSums(rs^2) / df.res); if (all(is.finite(fit$se)) && length(fit$se) == length(se)) se <- setNames(as.numeric(fit$se), cell.types)   # the fitter's: equal for a plain fit, with the robust weights otherwise
+    list(se = se, se.ref = sqrt(cc * colSums(rr^2) / df.res), df = df.res)
   }, error = function(e) NULL)
   # dependence on the pseudocount: the largest change of each loading when the pseudocount is halved or doubled, in standard errors
   pc.shift <- tryCatch({
@@ -305,7 +302,7 @@ lmCoda <- function(cnts, model, perm.method = c("block", "freedman-lane"), rando
        coef = coef.mat,              # F-space coefficients (level means in ILR space)
        random = if (!is.null(rnd)) list(group = rnd$group, theta = rnd$theta, icc = rnd$icc, global = rnd$global) else NULL,   # random intercept: variance ratio and share of variance between groups, per cell type
        reference = ref, model = model,
-       settings = list(zero.pseudocount = zero.pseudocount, scale.pseudocount = scale.pseudocount, per.celltype.statistic = p.statistic, basis.type = basis.type, perm.method = perm.method, ref.method = ref.method,
+       settings = list(zero.pseudocount = zero.pseudocount, scale.pseudocount = scale.pseudocount, per.celltype.statistic = p.statistic, robust.skipped = robust.skipped, basis.type = basis.type, perm.method = perm.method, ref.method = ref.method,
                        ref.block.thresh = ref.block.thresh, ref.size.frac = ref.size.frac, ref.p.thresh = ref.p.thresh, ref.min.size = ref.min.size,
                        ref.max.size = ref.max.size, n.permutations = n.perm))
   out$cnts <- cnts

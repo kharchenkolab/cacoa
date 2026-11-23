@@ -1472,11 +1472,8 @@ plotCodaCellTypes <- function(x, coef = c("contrast"), value = c("predicted", "r
     psi <- x$psi
     
     if (identical(coef, "contrast")) {
-      if (is.null(x$fit$stats.perm)) {
-        stop("No stats.perm found in x$fit; cannot build null for contrast.")
-      }
-      beta.perm <- as.matrix(x$fit$stats.perm)  # n_perm × K
-      ell.perm  <- psi %*% t(beta.perm)         # D × n_perm
+      ell.perm <- x$contrast$loadings$perm      # D × n_perm: the null loadings of the randomized data sets
+      if (is.null(ell.perm)) stop("No null loadings found (contrast$loadings$perm); cannot build null for contrast.")
       ref.idx  <- x$reference$idx
       ref.mean <- mean(loadings[ref.idx])
       ell.perm.ref <- ell.perm - ref.mean       # natural-log scale

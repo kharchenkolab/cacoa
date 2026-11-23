@@ -355,21 +355,35 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
     arma::mat Q; if (!qr_basis(grp0.X_sub, Q)) Rcpp::stop("closed form: design factorization failed");
     const arma::uword pq0 = Q.n_cols, qz0 = has_Z ? grp0.Qz.n_cols : 0, pq = pq0 + qz0; const int B_ = n_randomizations;   // Freedman-Lane: the relabeled fit includes Z again
     const double kap = grp0.kappa, skap = std::sqrt(kap);
-    arma::mat AlphaP(n, B_); arma::mat Qstack(B_ * pq, n);
-    for (int b = 0; b < B_; ++b) { arma::uvec q = induced_perm(Pm.col(b), grp0.perm_units_global, grp0.perm_blocks, pu, ps); AlphaP.col(b) = alpha.elem(q); Qstack.rows(b * pq, b * pq + pq0 - 1) = Q.rows(q).t();
-      if (qz0) Qstack.rows(b * pq + pq0, (b + 1) * pq - 1) = grp0.Qz.rows(q).t(); }
-    const arma::mat AlphaPt = AlphaP.t();
+    // permuted contrast weights (columns of AlphaP) and permuted design bases (pq columns per randomization in QstackT), built in
+    // parallel; stored by columns so that every write is contiguous
+    arma::mat AlphaP(n, B_); arma::mat QstackT(n, (arma::uword)B_ * pq);
+    cacoa::parallelFor(0, B_, [&](int b) {
+      const arma::uvec q = induced_perm(Pm.col(b), grp0.perm_units_global, grp0.perm_blocks, pu, ps); AlphaP.col(b) = alpha.elem(q);
+      QstackT.cols((arma::uword)b * pq, (arma::uword)b * pq + pq0 - 1) = Q.rows(q);
+      if (qz0) QstackT.cols((arma::uword)b * pq + pq0, (arma::uword)(b + 1) * pq - 1) = grp0.Qz.rows(q);
+    }, n_cores, false);
     const arma::uword blk = std::max<arma::uword>(32, std::min<arma::uword>(2048, (arma::uword)(4.0e6 / ((double)B_ * (double)pq)))); const int n_blk = (int)((m + blk - 1) / blk);
+    // with fewer column blocks than threads (few responses, e.g. the cell types of a composition) the randomizations are split
+    // across the threads instead of the columns
+    const bool split_b = n_cores > 1 && n_blk < n_cores;
+    auto products = [&](const arma::mat& Yb, arma::mat& Num, arma::mat& Proj) {   // B x mb permuted estimates and projected sums of squares
+      const arma::uword mb = Yb.n_cols; Num.set_size(B_, mb); Proj.zeros(B_, mb);
+      const int nch = split_b ? std::min(B_, 4 * n_cores) : 1, csz = (B_ + nch - 1) / nch;
+      cacoa::parallelFor(0, nch, [&](int ic) {
+        const int b0 = ic * csz, b1 = std::min(B_, b0 + csz); if (b0 >= b1) return;
+        Num.rows(b0, b1 - 1) = AlphaP.cols(b0, b1 - 1).t() * Yb;
+        const arma::mat R2 = arma::square(QstackT.cols((arma::uword)b0 * pq, (arma::uword)b1 * pq - 1).t() * Yb);   // ((b1 - b0) pq) x mb
+        for (int b = b0; b < b1; ++b) Proj.row(b) = arma::sum(R2.rows((arma::uword)(b - b0) * pq, (arma::uword)(b - b0 + 1) * pq - 1), 0);
+      }, split_b ? n_cores : 1, false);
+    };
     cacoa::parallelFor(0, n_blk, [&](int ib) {
       const arma::uword c0 = (arma::uword)ib * blk, c1 = std::min(m, c0 + blk) - 1, mb = c1 - c0 + 1;
       const arma::mat Yb = Yw.cols(c0, c1);
       const arma::rowvec yy = arma::sum(arma::square(Yb), 0), ysc = arma::max(arma::abs(Yb), 0);
       const arma::rowvec eff = alpha.t() * Yb; const arma::mat QY = Q.t() * Yb;
       const arma::rowvec rss = yy - arma::sum(arma::square(QY), 0);
-      const arma::mat Num = AlphaPt * Yb;                                   // B x mb permuted contrast estimates
-      arma::mat R2 = arma::square(Qstack * Yb);                             // (B pq) x mb
-      arma::mat Proj(B_, mb, arma::fill::zeros);
-      for (int b = 0; b < B_; ++b) Proj.row(b) = arma::sum(R2.rows(b * pq, (b + 1) * pq - 1), 0);
+      arma::mat Num, Proj; products(Yb, Num, Proj);
       for (arma::uword t = 0; t < mb; ++t) {
         const arma::uword j = c0 + t; Df[j] = grp0.df + (moderated ? prior_df : 0.0);
         const double pv0 = moderated ? prior_df * prior_var[j] : 0.0, dfm = grp0.df + (moderated ? prior_df : 0.0);
@@ -391,7 +405,7 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
         if (acc) acc->add(j, stat_obs, sp);
         else if (cfg.ret_stats) { SampledStats.col(j) = sp; if (use_t) SampledEffects.col(j) = ep; }
       }
-    }, n_cores, false);
+    }, split_b ? 1 : n_cores, false);
   }
 
   if (!fast) cacoa::parallelFor(0, (int)jobs.size(), [&](int k) {

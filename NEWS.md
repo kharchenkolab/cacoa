@@ -7,6 +7,7 @@
 - Cell types observed in fewer than 3 samples, or in fewer than 2 on either side of the contrast, are fitted without robust weights (`settings$robust.skipped`, with a message): down-weighting the few samples that hold such a cell type leaves its pseudocounts, whose log ratio follows the change of the other cell types and gave spurious calls (PF example: a cell type present in one sample, q = 0.02 robust vs 0.99 plain).
 - The closed-form path of the compiled fitter (complete responses, no robust weights) builds the permuted designs in parallel and, with fewer column blocks than threads (e.g. the cell types of a composition), splits the randomizations across threads: 1,000 samples, 30 cell types, 9,999 randomizations in 1.2 s on 8 threads instead of 3.1 s, with identical results.
 - The null-distribution violin of `plotCellLoadings()` uses the stored null loadings (`contrast$loadings$perm`).
+- Robust fits with the moderated statistic: the compiled fitter's general path (robust weights, missing values) applies the label-free variance prior as the closed form does, (RSS + d0 s0^2) / (df + d0), for the observed and every randomized fit. A robust density map (`estimateDiffCellDensity(robust.method = "huber" | "winsor")`, which moderates by default) stopped with "the moderated permutation statistic needs the closed-form path"; it now runs. Without robust weights the general path gives the closed-form values (test).
 
 ## Intervals, small counts, sample diagnostics and grouping terms (2026-11)
 

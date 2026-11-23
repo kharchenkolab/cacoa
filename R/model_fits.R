@@ -103,7 +103,7 @@ moderationPrior <- function(Y, Z, mode = "none", d0 = 3, d0.max = Inf) {
 #' @param moderate.perm moderated statistic inside the permutation test: `"none"` (default), `"fixed"` (residual variances
 #'   shrunk towards the median label-free variance with `moderate.d0` prior degrees of freedom), `"squeeze"` (prior fitted by
 #'   limma's `fitFDist` on the label-free variances) or `"trend"` (the same, prior variance a trend on the response mean);
-#'   label-free = after removing only the nuisance design, so the test stays exact (closed-form path only)
+#'   label-free = after removing only the nuisance design, so the test stays exact (also with robust fits and missing values)
 #' @param moderate.d0 prior degrees of freedom of `"fixed"` (default 3)
 #' @param moderate.d0.max cap on the estimated prior degrees of freedom of `"squeeze"` and `"trend"` (default `Inf`; see [fitFPrior()])
 #' @return list: `coef` (`p x m`), `effect` and `se` (contrast estimate and standard error), `df`, `stat.obs` (the

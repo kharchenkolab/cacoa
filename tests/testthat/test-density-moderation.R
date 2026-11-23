@@ -38,5 +38,26 @@ test_that("moderated permutation statistic: formula, exactness and the unmoderat
   rfl <- cacoa:::performLMPermutations(desc, Y, perm.method = "freedman-lane", n.permutations = 99, seed = 3, moderate.perm = "fixed")
   expect_true(all(is.finite(rfl$pval)))
   # robust fits do not use the closed form: moderation is refused
-  expect_error(cacoa:::performLMPermutations(des, Y, perm.method = "block", n.permutations = 9, robust.method = "huber", moderate.perm = "fixed"), "closed-form")
+  # robust fits accept the moderated statistic (general fitter path; 2026-11-23, previously an error)
+  expect_true(all(is.finite(cacoa:::performLMPermutations(des, Y, perm.method = "block", n.permutations = 9, robust.method = "huber", moderate.perm = "fixed")$stat.obs)))
+})
+
+test_that("the moderated statistic of the general fitter path equals the closed form, and robust fits accept it", {
+  set.seed(11); n <- 16; m <- 60
+  meta <- data.frame(row.names = sprintf("s%02d", 1:n), cond = factor(rep(c("A", "B"), each = n / 2)), age = round(runif(n, 30, 70)))
+  Y <- matrix(rnorm(n * m, sd = rep(exp(rnorm(m, 0, 0.5)), each = n)), n, m, dimnames = list(rownames(meta), paste0("c", 1:m))); Y[meta$cond == "B", 1:5] <- Y[meta$cond == "B", 1:5] + 1.5
+  for (f in list(~ cond, ~ cond + age)) {
+    md <- suppressMessages(buildCacoaModel(meta, formula = f, test = "cond")); pm <- md$tests[[1]]$permutation$scheme; if (is.null(pm)) pm <- "block"
+    mp <- cacoa:::modelPermutations(md, scheme = pm, n.permutations = 199, seed = 3)
+    a <- cacoa:::performLMPermutations(md, Y, perm.method = pm, P = mp$P, perm.cells = mp$cells, moderate.perm = "trend", closed.form = TRUE)
+    b <- cacoa:::performLMPermutations(md, Y, perm.method = pm, P = mp$P, perm.cells = mp$cells, moderate.perm = "trend", closed.form = FALSE)
+    expect_true(a$closed.form); expect_false(b$closed.form)
+    expect_lt(max(abs(a$stat.obs - b$stat.obs)), 1e-8, label = paste(deparse(f), "observed"))
+    expect_lt(max(abs(a$stats.perm - b$stats.perm), na.rm = TRUE), 1e-8, label = paste(deparse(f), "randomized"))
+    expect_equal(a$df, b$df)
+    for (rb in c("huber", "winsor")) {
+      r <- cacoa:::performLMPermutations(md, Y, perm.method = pm, P = mp$P, perm.cells = mp$cells, moderate.perm = "trend", robust.method = rb)
+      expect_true(all(is.finite(r$pval))); expect_lt(max(r$pval[1:5]), 0.05, label = rb)
+    }
+  }
 })

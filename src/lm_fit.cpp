@@ -52,10 +52,11 @@ struct DesignGroup {
 
 struct Job { arma::uword col_idx; int group_idx; };
 
-// Standard error of the contrast: sqrt(sigma2 * c' (X'WX)^-1 c) with sigma2 = sum(w r^2) / df (w empty: unweighted).
+// Standard error of the contrast: sqrt(sigma2 * c' (X'WX)^-1 c) with sigma2 = sum(w r^2) / df (w empty: unweighted), or the moderated
+// (sum(w r^2) + d0 s0^2) / (df + d0).
 // `invXtX`, when given, is (X'WX)^-1 of the design passed in.
 static inline double contrast_se(const arma::mat& X, const arma::vec& y, const arma::vec& beta, const arma::vec& w,
-                                 const arma::vec& c, int df, const arma::mat* invXtX = nullptr) {
+                                 const arma::vec& c, int df, const arma::mat* invXtX = nullptr, double pv0 = 0.0, double d0 = 0.0) {
   if (df < 1) return datum::nan;
   arma::vec r = y - X * beta;
   double rss = w.n_elem ? arma::dot(w, arma::square(r)) : arma::dot(r, r);
@@ -67,7 +68,7 @@ static inline double contrast_se(const arma::mat& X, const arma::vec& y, const a
     if (!arma::solve(v, M, c, arma::solve_opts::likely_sympd + arma::solve_opts::no_approx)) v = arma::pinv(M) * c;
     cvar = arma::dot(c, v);
   }
-  double se2 = rss / df * cvar;
+  double se2 = (rss + pv0) / (df + d0) * cvar;   // moderated (label-free prior: pv0 = d0 s0^2, d0 prior degrees of freedom) when d0 > 0
   return (se2 >= 0.0 && std::isfinite(se2)) ? std::sqrt(se2) : datum::nan;
 }
 
@@ -347,7 +348,6 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
   // variance of the observed and of every permuted fit is shrunk the same way, (rss + d0 s0^2) / (df + d0), so the test stays exact
   const bool moderated = prior_df > 0;
   if (moderated && (int)prior_var.size() != (int)m) Rcpp::stop("prior_var must have one value per column of Y");
-  if (moderated && !fast) Rcpp::stop("the moderated permutation statistic needs the closed-form path (complete responses, no robust fit)");
   if (fast) {
     const DesignGroup& grp0 = designs[0];
     arma::mat Yw = has_Z ? project_out_Q(grp0.Qz, Y) : Y;
@@ -412,7 +412,9 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
     const Job& job = jobs[k]; const DesignGroup& grp = designs[job.group_idx];
     const arma::uword j = job.col_idx;
     if (!grp.valid_design) return;
-    Df[j] = grp.df;
+    // moderated statistic (as the closed form): the residual variance of the observed and of every permuted fit shrunk by the label-free prior
+    const double d0j = moderated ? prior_df : 0.0, pv0j = moderated ? prior_df * prior_var[j] : 0.0;
+    Df[j] = grp.df + d0j;
 
     // response for this column: observed rows (drop) or all rows with the missing ones filled (impute_weak);
     // residualized on Z when Z is given
@@ -446,8 +448,8 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
     else beta = grp.B * y_work;
     if (!beta.is_finite()) return;
     const double effect = arma::dot(beta, contrast);
-    const double se = is_huber ? contrast_se(Xobs, y_work, beta, w_fin, contrast, grp.df)
-                               : contrast_se(Xobs, is_winsor ? ystar : y_work, beta, no_w, contrast, grp.df, &grp.invXtX);
+    const double se = is_huber ? contrast_se(Xobs, y_work, beta, w_fin, contrast, grp.df, nullptr, pv0j, d0j)
+                               : contrast_se(Xobs, is_winsor ? ystar : y_work, beta, no_w, contrast, grp.df, &grp.invXtX, pv0j, d0j);
     const double ysc = y_work.n_elem ? arma::abs(y_work).max() : 0.0;
     const double stat_obs = use_t ? studentize(effect, se, ysc) : effect;
     Coef.col(j) = beta; Effect[j] = effect; Se[j] = se; Stat[j] = stat_obs;
@@ -478,16 +480,16 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
         if (is_huber) {
           arma::vec wf; b_p = huber_irls(grp.X_sub, y_perm, no_w, arma::vec(grp.B * y_perm), cfg, wf);
           eff_p = arma::dot(b_p, contrast);
-          s_p = use_t ? studentize(eff_p, contrast_se(grp.X_sub, y_perm, b_p, wf, contrast, grp.df), ysc) : eff_p;
+          s_p = use_t ? studentize(eff_p, contrast_se(grp.X_sub, y_perm, b_p, wf, contrast, grp.df, nullptr, pv0j, d0j), ysc) : eff_p;
         } else if (is_winsor) {
           arma::vec ys; b_p = winsor_fit(grp.X_sub, y_perm, arma::vec(grp.B * y_perm), cfg.huber_k, &grp.B, ys);
           eff_p = arma::dot(b_p, contrast);
-          s_p = use_t ? studentize(eff_p, contrast_se(grp.X_sub, ys, b_p, no_w, contrast, grp.df, &grp.invXtX), ysc) : eff_p;
+          s_p = use_t ? studentize(eff_p, contrast_se(grp.X_sub, ys, b_p, no_w, contrast, grp.df, &grp.invXtX, pv0j, d0j), ysc) : eff_p;
         } else if (alpha.n_elem) {
           eff_p = s_p = arma::dot(alpha, y_perm);
         } else {
           b_p = grp.B * y_perm; eff_p = arma::dot(b_p, contrast);
-          s_p = use_t ? studentize(eff_p, contrast_se(grp.X_sub, y_perm, b_p, no_w, contrast, grp.df, &grp.invXtX), ysc) : eff_p;
+          s_p = use_t ? studentize(eff_p, contrast_se(grp.X_sub, y_perm, b_p, no_w, contrast, grp.df, &grp.invXtX, pv0j, d0j), ysc) : eff_p;
         }
       } else {
         // impute_weak: the weights stay with the response rows; the (residualized) design rows are permuted instead
@@ -501,14 +503,14 @@ Rcpp::List fit_and_randomize(const arma::mat& X, const arma::mat& Y, const arma:
         if (is_huber) {
           arma::vec wf; b_p = huber_irls(Xq, yc, grp.weights, ols_free(Xqw, yw), cfg, wf);
           eff_p = arma::dot(b_p, contrast);
-          s_p = use_t ? studentize(eff_p, contrast_se(Xq, yc, b_p, wf, contrast, grp.df), ysc) : eff_p;
+          s_p = use_t ? studentize(eff_p, contrast_se(Xq, yc, b_p, wf, contrast, grp.df, nullptr, pv0j, d0j), ysc) : eff_p;
         } else if (is_winsor) {
           arma::vec ys; b_p = winsor_fit(Xqw, yw, ols_free(Xqw, yw), cfg.huber_k, nullptr, ys);
           eff_p = arma::dot(b_p, contrast);
-          s_p = use_t ? studentize(eff_p, contrast_se(Xqw, ys, b_p, no_w, contrast, grp.df), ysc) : eff_p;
+          s_p = use_t ? studentize(eff_p, contrast_se(Xqw, ys, b_p, no_w, contrast, grp.df, nullptr, pv0j, d0j), ysc) : eff_p;
         } else {
           b_p = ols_free(Xqw, yw); eff_p = arma::dot(b_p, contrast);
-          s_p = use_t ? studentize(eff_p, contrast_se(Xqw, yw, b_p, no_w, contrast, grp.df), ysc) : eff_p;
+          s_p = use_t ? studentize(eff_p, contrast_se(Xqw, yw, b_p, no_w, contrast, grp.df, nullptr, pv0j, d0j), ysc) : eff_p;
         }
       }
       stats_perm[r] = s_p; effects_perm[r] = eff_p;
